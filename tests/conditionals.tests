@@ -1,0 +1,25 @@
+Conditional expressions
+if (true) "yes" else "no"
+stdout : "yes" : String
+
+Typing of the test
+if (3) "yes" else "no"
+stderr : @.*
+exit : 1
+
+Typing of both branches
+if (true) "yes" else 41
+stderr : @.*
+exit : 1
+
+Conditionals in polymorphic functions
+(fun (a, b, c) { if (a) [b] else [c] })(true, "three", "four")
+stdout : ["three"] : [String]
+
+Logical operators
+true && (false || true)
+stdout : true : Bool
+
+Logical operator short-circuiting
+(true || (1 / 0) == 0, false && (1 / 0) == 0)
+stdout : (true, false) : (Bool, Bool)

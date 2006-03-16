@@ -1,0 +1,27 @@
+#!/home/jeremy/code/links/cvs/links/links -w 
+
+fun completions(p) server {
+  db = database ("postgresql:links:localhost:5432:www-data:");
+  if (p == "") [] 
+  else for w <- Table "wordlist" with {word : String, type : String, meaning : String} order [word : asc] from db
+       where (w.word beginswith p) in [(w.word, w.type, w.meaning)]
+}
+
+fun main(suggestions) client {
+<html>
+ <body>
+   <form l:onkeyup="{main(completions(word))}">
+    <input style="width: 500px" l:name="word" autocomplete="off" />
+    <div align="left" class="box" id="autocomplete" style="width:500px;background-color:#ccccff">{
+      for suggestion <- suggestions in
+         <span><strong>{enxml(suggestion.1)}</strong>
+                    <i>{enxml(suggestion.2)}</i>:
+                       {enxml(suggestion.3)}<br/>
+       </span>
+    }</div>
+   </form>
+ </body>
+</html>
+}
+
+main([])

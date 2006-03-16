@@ -1,0 +1,52 @@
+Lexical scoping at top-level
+x = 3; fun y(a) { x + a }; x = 4; y(10)
+stdout : 13 : Int
+stderr : @.*
+
+Nested scopes
+{ x = 3; ({ x = 4; x }, x)}
+stdout : (4, 3) : (Int, Int)
+
+Non-recursive top-level fucntions:
+f = fun(x) { f(x) }
+stderr : @..*
+exit : 1
+
+Non-recursive block-scope fucntions:
+{ f = fun(x) { f(x) }; () }
+stderr : @..*
+exit : 1
+
+Mutually recursive top-level functions
+fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20)
+stdout : true : Bool
+exit : 0
+
+Mutually recurisve nested functions
+{ fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20) }
+stdout : true : Bool
+exit : 0
+        
+Closures using anonymous functions
+fun addn(n) { fun(x) { x + n } }; addn(3)(4)
+stdout : 7 : Int
+exit : 0
+
+Closures using named functions
+fun addn(n) { fun f(x) { x + n } f }; addn(3)(4)
+stdout : 7 : Int
+exit : 0
+
+Closures where the environment contains a closure from a different scope
+fun add(x,y){x+y}; fun baz(z, w) {z + w}; fun foo(f, x) { fun bar(y) { f(3, y) } bar(x) }; foo(add,4)
+stdout : 7 : Int
+exit : 0
+
+handle HTML with VAR -> HANDLER construction
+handle <html>{string_of_cont(handler)}</html> with rslt -> rslt
+stdout : <html>hJWmvgAAAC4AAAAOAAAAKwAAACigkrCgoCZyZXR1cm6gAg1zZ9dAQCRyc2x0l6AkcnNsdLCwQXt7oAI3x4LzTUBA</html> : XML
+
+No value recursion
+fun f() { g() }; x = f(); fun g() { x }
+stderr : @.
+exit : 1

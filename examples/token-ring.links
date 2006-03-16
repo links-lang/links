@@ -1,0 +1,22 @@
+fun pass_to_main(prevpid) {
+  send(prevpid)(recv())
+}
+
+fun pass_it_on(pid) {
+  send(pid)(recv())
+}
+
+fun create_processes(n, prevpid) {
+  if (n == 0) { spawn(fun(){pass_to_main(prevpid)})() }
+  else { 
+   thispid = spawn(fun (){pass_it_on(prevpid)})(); 
+   create_processes(n-1, thispid) 
+  }
+}
+
+{
+  last_pid = create_processes(200000, self());
+  send(last_pid)(Message);
+  recv();
+  alert("the end!");
+}

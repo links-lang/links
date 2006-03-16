@@ -1,0 +1,66 @@
+Arbitrary precision arithmetic
+{ fun fact(n) { if (n == 0) 1 else n * fact(n-1) } fact(100)}
+stdout : @93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000 .*
+
+Truncating integer division
+2/3 + 1/3
+stdout : @0 .*
+
+Incompatibility of float and int types
+1 + 2.0
+stderr : @.
+exit : 1
+
+Incompatibility with everything else
+1 == "two"
+stderr : @.
+exit : 1
+
+Conversions between float and int types
+float_of_int(3)
+stdout : @3\..*
+
+Integer literals
+200300400500600700200300400500600700200300400500600703
+stdout : @200300400500600700200300400500600700200300400500600703 .*
+
+Floating point literals
+3.14
+stdout : @3.14.*
+
+Unary negation [1]
+{x = 3; -x}
+stdout : @-3 .*
+
+Unary negation [2]
+{x = 21342; x == --x}
+stdout : @true .*
+
+Prefix arithmetic operators
+{plus = (+); plus(1)((+)(2)(3))};;
+stdout : 6 : Int
+
+Partial application of arithmetic operators
+{plus1 = (+)(1); plus1(plus1(10)) + plus1(12)}
+stdout : 25 : Int
+
+Operator precedence [1]
+(2 + 3 * 4 == 14) && (2 * 3 + 4 == 10)
+stdout : true : Bool
+
+Error on division by zero
+{x = 10; x / (x - 10)}
+stderr : @.
+exit : 1
+
+Equality and comparisons [integer comparison]
+({x = 100000230 * 102300000; x << x + 1}) && ({x = 1032452430 * 102300234234; x >> x - 1})
+stdout : @true .*
+
+Equality and comparisons [integer equality]
+({x = 100000230 * 102300000; x == 10230023529000000}) && ({x = 1032452430 * 102300234234; x == 105620125424462488620})
+stdout : @true .*
+
+Equality and comparisons [floating comparison]
+(-.10.0 << -.9.5 && 10.0 >> 9.5 && 10.0 >> -.9.5 && -.10.0 << 9.5)
+stdout : @true .*

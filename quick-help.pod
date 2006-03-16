@@ -1,0 +1,232 @@
+=pod
+
+=head1 LINKS SYNTAX
+
+=head2 Comments
+
+Comments are introduced by a hash mark, C<#>, and continue for the
+rest of the line.
+
+=head2 Literals
+
+Numbers: C<2>, C<7>, C<14.5>.
+
+Booleans: C<true>, C<false>.
+
+Strings: C<"Twain">, C<"\"I've dropped the toothpaste,\" Tom said,
+crestfallen.">.
+
+Characters: C<'a'>, C<'9'>, C<'\012'>.
+
+=head2 Pairs, Tuples, and Records
+
+A tuple is a finite sequence of values, possibly of different
+types. An n-tuple is constructed by enclosing n expressions in
+parenthesis and separating them with commas:
+
+   (a, "OK")
+   
+   (7)
+   
+   (true, "a string", 42)
+
+A 1-tuple is distinct from the value it contains (FIXME: is this
+true?) but this rarely occurs in practice.
+
+TBD: talk about records.
+
+=head2 Variants
+
+TBD: talk about variants.
+
+=head2 XML Quasiquotes
+
+Also called "quasis." Introduced by an XML start-tag such as
+C<E<lt>fooE<gt>>. Links code enclosed within braces { } will be
+evaluated, and inserted, when the quasi is evaluated.
+
+    <html>
+        <ul>
+            <li> First item: {item1} </li>
+            <li> Second item: {item2} </li>
+        </ul>
+    </html>
+
+=head2 Comparisons and Boolean Expressions
+
+Comparisons are binary operations that yield a true/false value. 
+
+=over 4
+
+=item * ==
+
+True iff the operands evaluate to the same value.
+
+=item * <>
+
+True iff the operands evaluate to different values.
+
+=item * <<
+
+True iff the left operand's value is less than the right operand's
+(only valid on numbers (?))
+
+=item * >>
+
+True iff the right operand's value is less than the left operand's
+(only valid on numbers (?))
+
+=item * <=
+
+True iff the left operand's value is less than or equal to the right
+operand's (only valid on numbers (?))
+
+=item * >=
+
+True iff the right operand's value is less than or equal to the left
+operand's (only valid on numbers (?))
+
+=back
+
+Boolean expressions can be combined using the boolean operators:
+
+=over 4
+
+=item * &&
+
+=item * ||
+
+=item * !
+
+=back
+
+=head2 Conditionals
+
+A conditional expression has a condition, a consequent, and an else
+clause. None of the three may be omitted.
+
+    if (x == y)
+        do_something()
+    else
+        do_something_else()
+
+Curly braces can be wrapped either clause, no matter how many
+sub-expressions they contain, and I<must> be so wrapped if you want
+the clause to consist of more than one semicolon-separated expression.
+
+=head2 Blocks
+
+A sequence of assignments separated by semicolons is evaluated in
+turn, binding each value to the corresponding name in what
+follows. Variables are assigned only once per scope, and succeeding
+assignments will mask preceding ones:
+
+    x = 1;
+    y = 2;
+    x = 2;
+    z = x + y;    # z is now bound to 4
+
+The scope of an assignment is strictly within its immediate
+block. Thus in this expression:
+
+    x = 0;
+    if (a == b)
+        x = 1;
+    else
+        x = 2;
+    alert(x);
+
+The value printed by C<alert> will be 0. That's because the other two
+assignments only create new bindings for x within the corresponding
+clauses of the conditional. This may come as a surprise to programmers
+from some languages.
+
+Any semicolon-separated sequence of expressions can be wrapped in
+squiggly braces without changing the meaning of the sequence per se;
+this may of course change its meaning in context:
+
+    (example)
+    
+=head2 Collections: Bags, Sets, and Lists
+
+A list is a finite sequence of values. A list can be created by
+wrapping a series of expressions in brackets:
+
+    [1, 4, 9, 16]
+    
+    ["apple", "banana", "pear"]
+
+    x = true;
+    [true, false, x, true]
+
+Note that all elements of a list must be of the same type.
+
+Lists support the "concatenate" operation, denoted by two plus
+characters:
+
+    [1, 2] ++ [3, 4, 5] == [1, 2, 3, 4, 5]
+
+TBD: Talk about bags, lists.
+
+=head2 Functions
+
+Functions can be named or anonymous. Named functions look like
+
+    fun foo(x, y, z)
+    {
+        # ... body 
+    }
+
+Anonymous functions just omit the name: C<fun (x) { x + 1 }> is an
+expression that evaluates to an anonymous function value.
+
+Function values, whether named or anonymous, are lexical closures; any
+variables free in the body must refer to bindings from a surrounding
+lexical scope. The smallest surrounding scope is chosen.
+
+A function can be called by using its name, followed by a list of
+arguments in parentheses:
+
+    foo(1, 2, 7)
+
+This works whether C<foo> is a function defined with a name, as C<fun
+foo(...) {...}>, or a variable bound to a functional value, as
+
+    inc = fun (x) {x + 1};
+    inc(7)                 # returns 8
+
+=head2 Loops
+
+The principal loop construct in Links is the list comprehension:
+
+    for var <- source in
+       body
+
+The body should be an expression that evaluates to a bag, set, or
+list.
+
+A comprehension produces a list which is the concatenation of all the
+collections produced by evaluating the body, once for each element of
+source, and binding that element to the name C<var>. For example:
+
+    source_list = [1, 2, 3];
+    for x <- source_list in
+        [ x*x ]
+
+constructs a list of the squares of the values in C<source_list>. Note
+that more than one value can be included in the body list:
+
+    source_list = [2, 3, 7, 8, 9, 55];
+    for x <- source_list in
+        if (odd(x))
+           [x, x+1]
+        else
+           [x]
+
+This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
+
+And of course, any expression is valid as the body, as long as its
+type is a collection type.
+
+=cut
+

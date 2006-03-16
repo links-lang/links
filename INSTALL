@@ -1,0 +1,29 @@
+INSTALLING PREREQUISITES
+
+Choose the right value of OCAML_LIBDIR:
+
+(/sw/lib/ocaml/site-lib on MacOS X with Fink)
+
+OCAML PACKAGES
+
+* findlib
+
+* equeue
+
+* curl
+
+* postgresql
+
+Use Markus Mottl's version (search for postgresql ocaml mottl on Google).
+
+* pcre
+
+* ocamlnet
+
+  ./configure -libdir ~/lib/ocamlnet -without-nethttpd -disable-findlib \
+              -I $OCAML_LIBDIR/equeue -I $OCAML_LIBDIR/pcre
+
+Finally, to use Links interactively in the OCaml REPL, you'll need to
+extend your LD_LIBRARY_PATH, as follows:
+
+  export LD_LIBRARY_PATH=$OCAML_LIBDIR/postgresql:$OCAML_LIBDIR/pcre

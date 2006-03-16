@@ -1,0 +1,184 @@
+BUGS
+
+* Trailing final semicolon is not allowed
+
+* .cache files are written right alongside the .cgi script, a location
+  which typically won't be writable (webservers writing to the CGI dir
+  is often seen as a security hole).
+
+* JavaScript generation assumes that jslib.js and json.js are
+  alongside the generated program; in /cgi-bin/ they won't be
+  executable, and hence not accessible. We need to be able control how
+  they are located.
+
+* "where" clause on comprehensions forces *list* type upon the
+  body. We need a polymorphic empty-collection object, I think (eekc)
+
+* A bare loop variable is not rewritten in a loop body:
+
+      for x <- (...) in
+        for y <- (...) in
+          [(x, y)]
+
+  fails at rt with "Undefined variable y". Only projects (like 
+  y.field) work
+
+* A lot of code takes care with bindings, but ignores l:name bindings.
+  (is there a test case here?)
+
+* Partial applications of primitive functions are not serialized
+  correctly. (Can we have a test case?)
+
+* "insert into ..." seems to fail if some value is the empty string
+  (eekc: I'm not observing this (on MacOS) as of 10 Feb 06; maybe it 
+  was shaken out?)
+
+* Syntax for type of a record is subtly different from syntax for a
+  record value.
+  (jdy: how is this a bug?)
+  (eekc: maybe it's a to-do! I just don't like it... what do you think?)
+
+* Database does not report certain errors (e.g., inserting into
+  non-existent table is allowed)
+
+* Some database errors are returned as a list of chars, when the
+  result is expected to be a list of records, leading to runtime
+  errors in strange places later on.
+
+* Queries against distinct databases would be joined, yielding a
+  broken query.
+
+* Wrong arg-type error messages are misleading. Given 
+
+      fun foo(f, x) { ... }
+
+  the application foo(add) produces:
+
+      `add ' has type (Int, Int) -> Int and cannot be passed as an argument to 
+      `foo ', which has type ((Int, a) -> b, a) -> b
+
+  It's bad because add *can* be passed as an arg to foo, we're just missing 
+  the second arg.
+
+* Getting the web request into the library layer is HACKed
+  ugly. Instead we should create a real value that represents the
+  request and force you to pass it around in the language. (?)
+
+* Type errors don't always give the (right) line number.
+
+* Test cases for continuations are fragile wrt the ser'zd rep'n
+
+TODO
+
+* CDATA literals are not handled in XML quasis.
+
+* XML amp-encoding is only aware of basic entities (&amp; and
+  &lt;). See [1] for a full list in DTD form. We should probably just
+  import DTDs.
+
+  [1] http://www.w3.org/TR/2002/REC-xhtml1-20020801/dtds.html#a_dtd_Latin-1_characters
+
+* We could make better (i.e. some!) use of the Parsing module within
+  sl_parser.mly.  Could we manage without storing positions in tokens
+  in the lexer?
+
+* Instead of this twice-binding Record_selection construct, let's have
+  simple projection operations: Record_projection(x, a) has as value
+  the field `a' of x, and Record_removal(x, a) has a record value: all
+  the fields of x except the field labelled a. Neither one binds.
+
+* Attributes of an XML node are mixed together with contents--could
+  cause trouble.  (Could someone clarify this?)
+
+* Given a function "foo" from a module "moo", I want 
+
+    url_of(moo:foo, [args])
+
+  To give a URL which would act as the invocation of that function on
+  those args.
+
+* Automatically inject any value into the XML type when used w/in a
+  quasiquote.
+
+* Deal with unnaturalness of [XML] flattening in XML construction and
+  [Char] getting boxed as XML Text Node (Could we have an example?
+  What's unnatural?)
+
+* Split Char & Byte, choose a Unicode representation
+
+* Some kind of defect-tracking system. Anything other than this file...
+
+* No way to access CGI query variables at the Links toplevel.
+
+* postgres dependency lingers, in the form of the get_database
+  parameter passed to the deserialization functions. An idea to remove
+  it: give every type a "reanimator" function, dual to Java's
+  finalizers; the reanimator function T_r for a type T is run when an
+  object of that type is deserialized and put into a
+  program-to-be-run.
+
+* Erlang backend: compile Links to Erlang.
+
+* Default to Content-type: text/xml+html (Ezra)
+
+* Should be able to treat a form post as a record, in addition to
+  treating its fields as free variables.
+
+* Ability to do a redirect to a Links continuation or arbitrary URL.
+
+* Cookies, status codes.
+
+* Ability to read/send arbitrary HTTP request/response headers.
+
+* XQuery database implementations
+
+* Pluggable lightweight persistent data
+
+* A way to create db interfaces in Links-space
+  -- foreign function interface
+  -- arbitrary socket primitives?
+  -- "binary" objects as primitive data types (a la Erlang)
+
+* Implicit conversions between Int <-> String to support easy HTML.
+  (jdy: Every language I know that does this gets it badly wrong.
+   Examples:
+     Javascript: "2" + 3 = "23"; "2" * 3 = 6
+     Java: + is no longer associative:
+           ("2" + (3 + 4)) == "27"
+           (("2" + 3) + 4) == "234".
+     Perl: "one" + "one" == 0
+     C:  "24" + 1 == "4"      // ;-)
+     etc.     
+   At the moment, I'm pretty convinced that this is the wrong thing to
+   do.  We do need something nicer than string_of_int, though.)
+  (eekc: I didn't mean supporting arithmetic on decimal strings. I
+         just meant that if I use    {my_age} in an XML quasiquote, 
+         it ought to just promote the int to a string. Why not?)
+  (jdy: ah, ok: Int -> String, not the other way.
+         I agree that this would be useful (essential, even), but I
+         think we need something like typeclasses to do it while 
+         retaining/introducing sanity in the type system)
+  (eekc: Some form of typewise dispatch is absolutely necessary, imho;
+         maybe type classes, maybe something else.)
+
+* Better syntax for comprehensions?
+
+* Ability to import values from another file (module system? #include?)
+  (jdy: we have this.  namespace n = "file://other-file.links")
+
+* Tests for the web-interface logic
+
+* Think about tuples vs. records: syntax and representation. Unify
+  them? Distinctly separate them?
+
+* Add XML attributes as first-class values (to enable code like this:)
+    <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
+
+* More unit tests for JavaScript generation.
+
+* XML unicode character literals  (e.g. &318;).
+
+* Find a way to import tables' types from the DDL, or export DDL from 
+  table-type declarations
+
+* Handle non-inline Table values.

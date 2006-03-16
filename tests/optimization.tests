@@ -1,0 +1,4 @@
+Pattern matching failure in query.ml (2006-02-01)
+fun (p, conn) { for r <- (Table "o" with {q : Int} from conn) in if (r.q == p) bag[r] else bag[] }
+stdout : @.*
+exit : 0

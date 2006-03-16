@@ -1,0 +1,196 @@
+fun all(p, l) { 
+   if (l == []) true
+   else p(hd(l)) && all(p, tl(l))
+}
+
+fun and(l) { 
+   if (l == []) true
+   else hd(l) && and(tl(l))
+}
+
+fun and(l) { 
+   if (l == []) false
+   else hd(l) || and(tl(l))
+}
+
+fun any(p, l) {
+   if (l == []) false
+   else p(hd(l)) || any(p,tl(l))
+}
+
+fun odd(i)  { mod(i)(2) == 1 }
+fun even(i) { mod(i)(2) == 0 }
+
+fun null(l) { l == [] }
+
+fun fold_left(p, u, l) {
+  if (l == []) u
+  else fold_left(p, p(u, hd(l)), tl(l))
+}
+
+fun fold_left1(p, l) {
+  fold_left(p, hd(l), tl(l))
+}
+
+fun fold_right(f, u, l) {
+  if (l == []) u
+  else f(hd(l), fold_right(f, u, tl(l)))
+}
+
+fun fold_right1(f, l) {
+  fold_right(f, hd(l), tl(l))
+}
+
+fun zip(l) {
+  if (l == []) ([],[])
+  else {
+    (a,b) = hd(l);
+    (c,d) = zip(tl(l));
+    ([a] ++ c, [b] ++ d)
+  }
+}
+
+fun replicate(n, l) {
+  if (n == 0) []
+  else [l] ++ replicate(n-1, l)
+}
+
+fun filter(p, l) {
+  for x <- l in if (p(x)) [x] else []
+}
+
+fun drop(n, l) {
+  if (n == 0 || l == []) l
+  else drop(n-1, tl(l))
+}
+
+fun flip(f) {
+  fun(x,y) { f(y,x) }
+}
+
+fun curry(f) {
+  fun (x)(y) { f(x,y) }
+}
+
+fun uncurry(f) {
+  fun (x, y) { f(x)(y) }
+}
+
+fun compose(f, g) {
+  fun (x) { f(g(x)) }
+}
+
+fun id(x) { x }
+
+fun concatMap(f,l) {
+  for x <- l in f(x)
+}
+
+fun first(p)   { p.1 }
+fun second(p)  { p.2 }
+fun third(p)   { p.3 }
+fun fourth(p)  { p.4 }
+fun fifth(p)   { p.5 }
+fun sixth(p)   { p.6 }
+fun seventh(p) { p.7 }
+fun eighth(p)  { p.8 }
+fun ninth(p)   { p.9 }
+fun tenth(p)   { p.10 }
+
+fun sum(ns) {
+  fold_left(uncurry((+)), 0, ns)
+}
+
+fun product(ns) {
+  fold_left(uncurry((*)), 1, ns)
+}
+
+fun map(f, l) {
+  if (l == []) []
+  else [f(hd(l))] ++ map(f, tl(l))
+}
+
+fun max(l, r) {
+  if (l >> r) l
+  else r
+}
+
+fun min(l, r) {
+  if (l << r) l
+  else r
+}
+
+fun maximum(ls) {
+  fold_left1(max, ls)
+}
+
+fun minimum(ls) {
+  fold_left1(min, ls)
+}
+
+fun reverse(l) {
+  fun aux(l,o) {
+    if (l == []) o
+    else aux(tl(l), [hd(l)] ++ o)
+  }
+  aux(l, [])
+}
+
+# break :: (a -> Bool) -> [a] -> ([a],[a])
+# concat :: [[a]] -> [a]
+# const :: const :: a -> b -> a
+# dropWhile :: (a -> Bool) -> [a] -> [a]
+# elemBy :: (a -> a -> Bool) -> a -> [a] -> Bool
+# notElemBy :: (a -> a -> Bool) -> a -> [a] -> Bool
+# span :: (a -> Bool) -> [a] -> ([a],[a])
+# splitAt :: Int -> [a] -> ([a],[a])
+# take :: Int -> [a] -> [a]
+# takeWhile :: (a -> Bool) -> [a] -> [a]
+# until :: (a -> Bool) -> (a -> a) -> a -> a
+# zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+
+# div :: Int -> Int -> Int
+# gcd :: Int -> Int -> Int
+# rem :: Int -> Int -> Int
+# lcm :: Int -> Int -> Int
+# subtract :: Int -> Int -> Int
+# quot :: Int -> Int -> Int
+# signum :: Int -> Int
+# abs :: Int -> Int
+
+# init :: [a] -> [a]
+# last :: [a] -> a
+
+# lines :: String -> [String]
+# unlines :: [String] -> String
+# unwords :: [String] -> String
+# words :: String -> [String]
+
+# ceiling :: Float -> Int
+# cos :: Float -> Float
+# exp :: Float -> Float
+# floor :: Float -> Int
+# fromInt :: Int -> Float
+# log :: Float -> Float
+# pi :: Float
+# round :: Float -> Int
+# signumFloat :: Float -> Int
+# sin :: Float -> Float
+# sqrt :: Float -> Float
+# tan :: Float -> Float
+# truncate :: Float -> Int
+# (**.) :: Float -> Float -> Float
+# (*.) :: Float -> Float -> Float
+# (/.) :: Float -> Float -> Float
+# (+.) :: Float -> Float -> Float
+# (-.) :: Float -> Float -> Float
+# (^.) :: Float -> Int -> Float
+# (/=.) :: Float -> Float -> Bool
+# (==.) :: Float -> Float -> Bool
+
+
+# pi :: Float
+# signumFloat :: Float -> Int
+# round :: Float -> Int
+# truncate :: Float -> Int
+

@@ -1,0 +1,30 @@
+Escape expressions
+escape e in {2+2}
+stdout : 4 : Int
+
+Nested escapes
+escape return in {1+(escape e in {2+2})}
+stdout : 5 : Int
+
+Invoking escapes
+escape return in {1+(escape e in {return(2+2)})}
+stdout : 4 : Int
+
+Continuation typing [1]
+escape e in {if (false) 1+e else 2}
+stderr : @.*
+exit : 1
+
+Continuation typing [2]
+escape e in { e(1) }
+stdout : 1 : Int
+
+string_of_cont typing [1]
+fun () { string_of_cont(3+1) }
+stderr : @.*
+exit : 1
+
+string_of_cont typing [2]
+fun () { string_of_cont((+)) }
+stderr : @.*
+exit : 1

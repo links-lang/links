@@ -1,0 +1,4 @@
+Function typing bug (see jdy's blog, 2005-10-24)
+(fun (x,y) { [x] ++ [y] }) ([1],"a")
+stderr : @.*
+exit : 1

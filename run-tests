@@ -1,0 +1,4 @@
+#!/bin/sh
+
+make test | perl -lne '($f) = /(\d+) failures/; $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'
+

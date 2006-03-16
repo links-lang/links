@@ -1,0 +1,88 @@
+#!/usr/bin/env python2.4
+
+links = './links'
+
+import sys, re
+from subprocess import Popen, PIPE
+
+successes = failures = 0
+
+def FAIL(name, msg):
+    return ('  error: %s' % name,'      (%s)' % msg)
+
+def OK(name):
+    global successes
+    successes+=1
+    print ' SUCCESS: %s' % name
+
+def parse(stream):
+    """Read test information separated by blank lines.  The first line
+    is the test name; the second is the test code; the remaining lines
+    are auxiliary options"""
+    def tests():
+        tests = []
+        for line in file.readlines(stream):
+            if not str.strip(line) and tests[-1]:
+                yield tests
+                tests = []
+            else:
+                tests.append(line)
+        yield tests
+    for test in tests():
+        if not test:
+            print >> sys.stderr, 'WARNING: empty test'
+        else:
+            name = str.strip(test.pop(0))
+            code = str.strip(test.pop(0))
+            opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in
+test])
+            yield name, code, opts                
+
+def check_expected(name, item, got, expected, errors):
+    """Check some data against an expected value or predicate.  If it
+    matches, return True.  Otherwise, display an error and return
+    False.
+    """
+    got, expected = got.rstrip(), expected.rstrip()
+    if expected.startswith('@'):
+        if not re.match(expected[1:], got, re.DOTALL):
+            errors.append(FAIL(name, "Unexpected %s: expected `%s' (regex); got `%s'" %
+                               (item, expected[1:], got)))
+            return False
+        else:
+            return True
+    elif expected <> got:
+        errors.append(FAIL(name, "Unexpected %s: expected `%s'; got `%s'" % (item, expected, got)))
+        return False
+    else:
+        return True
+
+def evaluate(name, code, stdout='', stderr='', exit = '0', env = None):
+    proc = Popen((links, '-e', code), stdout=PIPE, stderr=PIPE, env=env)
+    passed = True
+    errors = []
+    passed &= check_expected(name, 'return code', str(proc.wait()), exit, errors)
+    passed &= check_expected(name, 'stdout', file.read(proc.stdout), stdout, errors)
+    passed &= check_expected(name, 'stderr', file.read(proc.stderr), stderr, errors)
+    if passed:
+        OK(name)
+    else:
+        global failures
+        failures += 1
+        print '!FAILURE  %s' % name
+        for i, j in errors:
+            print i
+            print j
+
+def main():
+    try:
+        filename = sys.argv[1]
+    except IndexError:
+        raise SystemExit, 'Usage: run <filename>'
+    for name, code, opts in parse(open(filename)):
+        evaluate(name, code, **opts)
+    print "%d failures\n%d successes" % (failures, successes)
+
+if __name__ == '__main__':
+    main()
+

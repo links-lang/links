@@ -1,0 +1,15 @@
+/bindings.tests/1.10/Mon Mar 13 10:14:31 2006//
+/booleans.tests/1.1/Mon Oct 31 11:00:41 2005//
+/collections.tests/1.5/Thu Jan 19 16:56:48 2006//
+/conditionals.tests/1.3/Fri Oct 21 16:51:20 2005//
+/continuations.tests/1.10/Thu Dec  1 11:38:20 2005//
+/functions.tests/1.2/Thu Oct 27 01:29:30 2005//
+/numbers.tests/1.5/Tue Feb 14 13:18:26 2006//
+/optimization.tests/1.3/Fri Feb 24 14:08:53 2006//
+/polymorphism.tests/1.4/Wed Feb 15 13:31:16 2006//
+/strings.tests/1.5/Tue Feb 28 21:16:48 2006//
+/tuples.tests/1.2/Mon Oct 17 11:59:55 2005//
+/xml.tests/1.4/Wed Nov 30 17:24:52 2005//
+/records.tests/1.6/Thu Mar 16 12:40:12 2006//
+/variants.tests/1.15/Thu Mar 16 15:44:43 2006//
+D

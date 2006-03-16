@@ -1,0 +1,44 @@
+Record printing
+(x=1, y="two") 
+stdout : (x=1,y="two") : (x:Int,y:String)
+
+Record comparisons
+(x=1, y="two") == (y="two", x=1)
+stdout : true : Bool
+
+Record extension
+{z = (y="three"); (x=4|z) }
+stdout : (x=4,y="three") : (x:Int,y:String)
+
+Let pattern matching
+{(x=a,y=(z=b)) = (y=(z=3),x="four"); a}
+stdout : "four" : String
+
+Lambda pattern matching
+(fun((x=a,y=(z=b))) { a }) ((y=(z=3),x="four"))
+stdout : "four" : String
+
+Projection of absent field
+(x="1").y;;
+stderr : @.
+exit : 1
+
+Projections
+(y=(z=3),x="four").y.z
+stdout : 3 : Int
+
+Projection sections
+(.x)((y=(z=3),x="four"))
+stdout : "four" : String
+
+Passing two different closed rows to an open-row function arg
+fun foo(x) { x.a }; (foo((a="a", b=2)), foo((a=1, c=3)))
+stdout : ("a", 1) : (String, Int)
+
+Passing two different list types to a polymorphic function
+fun foo(x) { hd(x) }; (foo([1,2]), foo("abc"))
+stdout : (1, 'a') : (Int, Char)
+
+Row types preserved across functions
+(fun (x) { (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
+stdout : 4 : Int
