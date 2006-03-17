@@ -99,9 +99,6 @@ let uniquify_expression : RewriteSyntax.rewriter =
                                    cvar', rename_var cvar cvar' cbody, 
                                    var',  rename_var var var' body,
                                    data))
-    | Variant_selection_empty (e, l, v, b, data) -> 
-        let name = gensym () in 
-          Some (Variant_selection_empty (e, l, name, rename_var v name b, data))
     | Escape (v, b, data) -> 
         let name = gensym () in
           Some (Escape (name, rename_var v name b, data))
@@ -160,8 +157,7 @@ let renaming : RewriteSyntax.rewriter =
       | Let (v, _, _, _)
       | Abstr (v, _, _)
       | Define (v, _, _, _)
-      | Escape (v, _, _)
-      | Variant_selection_empty (_, _, v, _, _) when v = var -> true
+      | Escape (v, _, _) when v = var -> true
       | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
       | Rec (bindings, _, _) when mem var (map fst bindings) -> true

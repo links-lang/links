@@ -821,23 +821,14 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
 
       let final_node = Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None)) in
         final_node
-  | Variant_selection_empty (value, case_label, case_variable, case_body, pos) ->
+  | Variant_selection_empty (value, pos) ->
+
       let value = w env value in
-      let case_tvar = ITO.new_type_variable () in
-      let _ = unify (node_kind value, `Variant (ITO.make_singleton_closed_row (case_label, `Present (case_tvar)))) in
-(*      let unif_value = unify (node_kind value, `Variant [`Field_present (case_label, ITO.new_type_variable ())]) in *)
-
-      let case_var_type = case_tvar in
-
-      let value_type = node_kind value in
-      let case_equiv = case_variable, ([], case_var_type) in
-
-      let case_env = case_equiv :: env in
-      let case_body = w case_env case_body in
-
-      let case_body_type = node_kind case_body in
-      let node' = 
-	Variant_selection_empty (value, case_label, case_variable, case_body, (pos, case_body_type, None)) in
+      let new_row_type = `Variant (ITO.make_empty_closed_row()) in
+        unify(new_row_type, node_kind value);
+        
+        let node' = 
+	  Variant_selection_empty (value, (pos, ITO.new_type_variable (), None)) in
         node'
   | Collection_empty (ctype, pos) ->
       Collection_empty (ctype,

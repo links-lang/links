@@ -48,8 +48,7 @@ type 'data expression' =
   | Variant_selection of ('data expression' * 
 			    string * string * 'data expression' * 
 			    string * 'data expression' * 'data)
-  | Variant_selection_empty of ('data expression' * string * 
-				string * 'data expression' * 'data)
+  | Variant_selection_empty of ('data expression' * 'data)
   | Collection_empty of (collection_type * 'data)
   | Collection_single of ('data expression' * collection_type * 'data)
   | Collection_union of ('data expression' * 'data expression' * 'data)
@@ -121,9 +120,8 @@ and show t : 'a expression' -> string = function
       "case " ^ show t value ^ " of " ^ case_label ^ "=" 
       ^ case_variable ^ " in " ^ (show t case_body) ^ " | " 
       ^ variable ^ " in " ^ show t body ^ t data
-  | Variant_selection_empty (value, case_label, case_variable, case_body, data) ->
-      "case " ^ show t value ^ " of " ^ case_label ^ "=" 
-      ^ case_variable ^ " in " ^ show t case_body ^  t data
+  | Variant_selection_empty (value, data) ->
+      show t value ^ " is wrong " ^ t data
   | Collection_empty (`List, data)              -> "[]" ^ t data
   | Collection_empty (ctype, data)              -> coll_name ctype ^ "[]" ^ t data
   | Collection_single (elem, ctype, data)       -> coll_name ctype ^ "[" ^ show t elem ^ "]" ^ t data
@@ -191,9 +189,8 @@ let rec ppexpr t : 'a expression' -> string = function
       "case " ^ ppexpr t value ^ " of < " ^ case_label ^ "=" 
       ^ case_variable ^ "> in " ^ (ppexpr t case_body) ^ " | " 
       ^ variable ^ " in " ^ ppexpr t body ^ t data
-  | Variant_selection_empty (value, case_label, case_variable, case_body, data) ->
-      "(case " ^ ppexpr t value ^ " of < " ^ case_label ^ "=" 
-      ^ case_variable ^ "> in " ^ ppexpr t case_body ^ ")" ^ t data
+  | Variant_selection_empty (value, data) ->
+      show t value ^ " is wrong" ^ t data
   | Collection_empty (`List, data)              -> "[]" ^ t data
   | Collection_empty (ctype, data)              -> coll_name ctype ^ "[]" ^ t data
   | Collection_single (elem, ctype, data)       -> coll_name ctype ^ "[" ^ ppexpr t elem ^ "]" ^ t data
@@ -259,7 +256,7 @@ let rec serialise_expression : ('data expression' serialiser)
         | Record_selection_empty v  -> serialise3 'H' (exp, exp, data) v
         | Variant_injection v       -> serialise3 'I' (string, exp, data) v
         | Variant_selection v       -> serialise7 'J' (exp, string, string, exp, string, exp, data) v
-        | Variant_selection_empty v -> serialise5 'K' (exp, string, string, exp, data) v
+        | Variant_selection_empty v -> serialise1 'K' (data) v
         | Collection_empty v        -> serialise2 'O' (serialise_colltype, data) v
         | Collection_single v       -> serialise3 'P' (exp, serialise_colltype, data) v
         | Collection_union v        -> serialise3 'Q' (exp, exp, data) v
@@ -295,7 +292,7 @@ and deserialise_expression : (expression deserialiser)
            | 'H' -> Record_selection_empty (deserialise3 (exp, exp, poskind) obj)
            | 'I' -> Variant_injection (deserialise3 (string, exp, poskind) obj)
            | 'J' -> Variant_selection (deserialise7 (exp, string, string, exp, string, exp, poskind) obj)
-           | 'K' -> Variant_selection_empty (deserialise5 (exp, string, string, exp, poskind) obj)
+           | 'K' -> Variant_selection_empty (deserialise2 (exp, poskind) obj)
            | 'O' -> Collection_empty (deserialise2 (deserialise_colltype, poskind) obj)
            | 'P' -> Collection_single (deserialise3 (exp, deserialise_colltype, poskind) obj)
            | 'Q' -> Collection_union (deserialise3 (exp, exp, poskind) obj)
@@ -426,9 +423,7 @@ let visit_expressions'
                                                        and e2, data2 = visitor visit_children (e2, data)
                                                        and e3, data3 = visitor visit_children (e3, data) in
         Variant_selection ( e1, s1, s2, e2, s3, e3, d), combiner (combiner data1 data2) data3
-    | Variant_selection_empty (e1, s1, s2, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
-                                                     and e2, data2 = visitor visit_children (e2, data) in
-        Variant_selection_empty ( e1, s1, s2, e2, d), combiner data1 data2
+    | Variant_selection_empty (d) -> Variant_selection_empty (d), unit data
     | Collection_empty (c, d) -> Collection_empty (c, d), unit data
 
     | Collection_single (e, c, d) -> let e, data = visitor visit_children (e, data) in
@@ -471,8 +466,6 @@ let freevars : 'a expression' -> string list =
               expr, childvars (value, vars) @ childvars (body, labvar :: var :: vars)
           | Variant_selection (value, _, cvar, cbody, var, body, _) ->
               expr, childvars (value, vars) @ childvars (cbody, cvar::vars) @ childvars (body, var::vars)
-          | Variant_selection_empty (value, _, cvar, cbody, _) ->
-              expr, childvars (value, vars) @ childvars (cbody, cvar :: vars)
           | Rec (bindings, body, _) ->
               let vars = map fst bindings @ vars in  
                 expr, List.concat (map (fun value -> (childvars (value, vars))) (map snd bindings)) @ childvars (body, vars)
@@ -505,7 +498,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Record_selection_empty (a, b, data) -> Record_selection_empty (redecorate f a, redecorate f b, f data)
   | Variant_injection (a, b, data) -> Variant_injection (a, redecorate f b, f data)
   | Variant_selection (a, b, c, d, e, g, data) -> Variant_selection (redecorate f a, b, c, redecorate f d, e, redecorate f g, f data)
-  | Variant_selection_empty (a, b, c, d, data) -> Variant_selection_empty (redecorate f a, b, c, redecorate f d, f data)
+  | Variant_selection_empty (value, data) -> Variant_selection_empty (redecorate f value, f data)
   | Collection_empty (a, data) -> Collection_empty (a, f data)
   | Collection_single (a, b, data) -> Collection_single (redecorate f a, b, f data)
   | Collection_union (a, b, data) -> Collection_union (redecorate f a, redecorate f b, f data)
@@ -546,6 +539,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Collection_empty _
                | Variable _ -> []
 
+               | Variant_selection_empty (e, _)
                | Define (_, e, _, _)
                | Abstr (_, e, _)
                | Sort (_, e, _)
@@ -563,8 +557,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_selection_empty (e1, e2, _)
                | Collection_union (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
-               | Collection_extension (e1, _, e2, _)
-               | Variant_selection_empty (e1, _, _, e2, _) ->  [visitor visit_children e1; visitor visit_children e2]
+               | Collection_extension (e1, _, e2, _) ->
+                   [visitor visit_children e1; visitor visit_children e2]
                    
                | Condition (e1, e2, e3, _)
                | Variant_selection (e1, _, _, e2, _, e3, _) -> [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
@@ -614,15 +608,14 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
       | Table (e, a, b, c)                         -> passto [e] (fun [e] -> Table (e, a, b, c))
       | Escape (a, e, b)                           -> passto [e] (fun [e] -> Escape (a, e, b))
+      | Variant_selection_empty (e, d)             -> passto [e] (fun [e] -> Variant_selection_empty (e, d))
+
       | Apply (e1, e2, a)                          -> passto [e1; e2] (fun [e1; e2] -> Apply (e1, e2, a))
-
-
       | Comparison (e1, a, e2, b)                  -> passto [e1; e2] (fun [e1; e2] -> Comparison (e1, a, e2, b))
       | Let (a, e1, e2, b)                         -> passto [e1; e2] (fun [e1; e2] -> Let (a, e1, e2, b))
       | Record_extension (a, e1, e2, b)            -> passto [e1; e2] (fun [e1; e2] -> Record_extension (a, e1, e2, b))
       | Record_selection (a, b, c, e1, e2, d)      -> passto [e1; e2] (fun [e1; e2] -> Record_selection (a, b, c, e1, e2, d))
       | Record_selection_empty (e1, e2, a)         -> passto [e1; e2] (fun [e1; e2] -> Record_selection_empty (e1, e2, a))
-      | Variant_selection_empty (e1, a, b, e2, c)  -> passto [e1; e2] (fun [e1; e2] -> Variant_selection_empty (e1, a, b, e2, c))
       | Collection_union (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Collection_union (e1, e2, a))
       | Collection_extension (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> Collection_extension (e1, a, e2, b))
       | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
@@ -669,6 +662,7 @@ let perhaps_process_children_bindings
       | Float _
       | Variable _
       | Collection_empty _
+      | Variant_selection_empty _
       | Record_empty _ -> None
           
       (* fixed children *)
@@ -700,8 +694,6 @@ let perhaps_process_children_bindings
         Record_selection (a, var1, var2, e1, e2, d))
       | Record_selection_empty (e1, e2, a)         -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
         Record_selection_empty (e1, e2, a))
-      | Variant_selection_empty (e1, a, var, e2, c)-> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
-        Variant_selection_empty (e1, a, var, e2, c))
       | Collection_union (e1, e2, a)               -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
         Collection_union (e1, e2, a))
       | Collection_extension (e1, var, e2, b)      -> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
@@ -740,7 +732,7 @@ let expression_data : ('a expression' -> 'a) = function
 	| Record_selection_empty (_, _, data) -> data
 	| Variant_injection (_, _, data) -> data
 	| Variant_selection (_, _, _, _, _, _, data) -> data
-	| Variant_selection_empty (_, _, _, _, data) -> data
+	| Variant_selection_empty (_, data) -> data
 	| Collection_empty (_, data) -> data
 	| Collection_single (_, _, data) -> data
 	| Collection_union (_, _, data) -> data
@@ -758,47 +750,3 @@ let node_kind : (expression -> kind) = snd3 @@ expression_data
 and node_pos  : (expression -> position) = fst3 @@ expression_data 
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 
-open Num
-open List
-
-open Sl_utility
-open Sl_kind
-
-let expression_data : ('a expression' -> 'a) = function 
-	| Define (_, _, _, data) -> data
-	| Boolean (_, data) -> data
-	| Integer (_, data) -> data
-	| Float (_, data) -> data
-        | Char (_, data) -> data
-        | String (_, data) -> data
-	| Variable (_, data) -> data
-	| Apply (_, _, data) -> data
-	| Condition (_, _, _, data) -> data
-	| Comparison (_, _, _, data) -> data
-	| Abstr (_, _, data) -> data
-	| Let (_, _, _, data) -> data
-	| Rec (_, _, data) -> data
-	| Xml_node (_, _, _, data) -> data
-	| Record_empty (data) -> data
-	| Record_extension (_, _, _, data) -> data
-	| Record_selection (_, _, _, _, _, data) -> data
-	| Record_selection_empty (_, _, data) -> data
-	| Variant_injection (_, _, data) -> data
-	| Variant_selection (_, _, _, _, _, _, data) -> data
-	| Variant_selection_empty (_, _, _, _, data) -> data
-	| Collection_empty (_, data) -> data
-	| Collection_single (_, _, data) -> data
-	| Collection_union (_, _, data) -> data
-	| Collection_extension (_, _, _, data) -> data
-	| Sort (_, _, data) -> data
-	| Database (_, data) -> data
-	| Table (_, _, _, data) -> data
-	| Escape (_, _, data) -> data
-
-let fst3 (a, _, _) = a
-and snd3 (_, b, _) = b
-and thd3 (_, _, c) = c
-
-let node_kind : (expression -> kind) = snd3 @@ expression_data
-and node_pos  : (expression -> position) = fst3 @@ expression_data 
-and untyped_pos  : (untyped_expression -> position) = expression_data 

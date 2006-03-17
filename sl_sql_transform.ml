@@ -180,6 +180,7 @@ let rec sep_assgmts (bindings:bindings) (expr:Sl_syntax.expression) : (bindings 
 	(sep_assgmts (`Selected {field_name = label; field_var = label_variable; etc_var = variable; source_var = name} :: bindings) body)
     | Sl_syntax.Record_selection (label, label_variable, variable, source, body, _) ->
 	(sep_assgmts bindings body)
+          (* FIXME: This next case is unused. Why is it here? *)
     | Sl_syntax.Record_selection (_, label_variable, variable, _, body, _) ->
 	(sep_assgmts (`Unavailable variable :: bindings) body)
     | expr -> (bindings, expr)

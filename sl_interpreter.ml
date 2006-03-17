@@ -14,8 +14,6 @@ open Sl_library
 
 (* Environment handling *)
 
-(* Environment handling *)
-
 (** bind env var value 
     Extends `env' with a binding of `var' to `value'.
 *)
@@ -231,7 +229,7 @@ fun cont value ->
                    apply_cont globals cont (Queue.pop mqueue)
                  else 
                    begin
-                     Hashtbl.add Sl_library.blocked_processes !Sl_library.current_pid (cont, value, !Sl_library.current_pid);
+                     Hashtbl.add Sl_library.blocked_processes !Sl_library.current_pid (Recv locals::cont, value, !Sl_library.current_pid);
                      switch_context globals
                    end
            | (FuncArg(param, locals)) ->
@@ -471,8 +469,8 @@ fun globals locals expr cont ->
        eval value (UnopApply(locals, MkVariant(label)) :: cont)
   | Sl_syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
       eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, Some variable, Some body)) :: cont)
-  | Sl_syntax.Variant_selection_empty (value, case_label, case_variable, case_body, _) ->
-      eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, None, None)) :: cont)
+  | Sl_syntax.Variant_selection_empty (_) ->
+      failwith("internal error: attempt to evaluate empty closed case expression")
   | Sl_syntax.Collection_empty (coll_type, _) ->
       apply_cont globals cont (`Collection (coll_type, []))
   | Sl_syntax.Collection_single (elem, coll_type, _) ->

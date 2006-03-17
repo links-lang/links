@@ -178,33 +178,35 @@ let env : (string * (result * Sl_kind.assumption)) list = map
   ("recv",
    (primfun "recv"
       (fun _ -> 
-	 let mqueue = Hashtbl.find messages !current_pid in
-	   if Queue.is_empty mqueue then (
-	     `Variant ("None", `Record []))
-	   else (`Variant ("Some", Queue.pop mqueue))),
+         (* this function is not used, as its application is a special
+            case in the interpreter. But we need it here, for now,
+            because of its type.  Ultimately we should probably not
+            special-case it, but rather provide a way to implement
+            this primitive from here. *)
+         assert(false)),
     let (`RowVar r) = fresh_row_variable () in
       ([`RowVar r], make_unit () --> `Variant (TypeOps.make_empty_open_row_with_var r))));
 
   ("send",
    (primfun "send"
       (function
-	 | `Primitive (`Int pid)  -> 
+	 | `Primitive (`Int dest_pid)  -> 
 	     continuationize_primfn (
 	       primfun "send..."
 		 (fun msg -> 
-                    let pid = int_of_num pid in
+                    let dest_pid = int_of_num dest_pid in
                       (try
-                        Queue.push msg (Hashtbl.find messages pid);
-                      with Not_found -> failwith ("Error while sending message: no mailbox for " ^ string_of_int pid));
+                         Queue.push msg (Hashtbl.find messages dest_pid);
+                       with Not_found -> failwith ("Internal error while sending message: no mailbox for " ^ string_of_int dest_pid));
                       (try
-                         Queue.push (Hashtbl.find blocked_processes pid) suspended_processes;
-                         Hashtbl.remove blocked_processes pid
+                         Queue.push (Hashtbl.find blocked_processes dest_pid) suspended_processes;
+                         Hashtbl.remove blocked_processes dest_pid
                        with Not_found -> ());
 		      `Record []))
-	 | _ -> failwith "bang (send)"),
+	 | _ -> failwith "Internal error (argument to send)"),
     let (`RowVar r) = fresh_row_variable () in
       ([`RowVar r], `Primitive `Int --> (`Variant (TypeOps.make_empty_open_row_with_var r) --> make_unit ()))));
-         
+  
   ("spawn",
    (primfun "spawn"
       (fun f ->
@@ -216,8 +218,8 @@ let env : (string * (result * Sl_kind.assumption)) list = map
 		let new_pid = fresh_pid () in
 		  Hashtbl.add messages new_pid (Queue.create ());
                   Queue.push (FuncApply(f, []) :: [], p, new_pid) suspended_processes;
-(*                  prerr_endline ("suspended processes : " ^ string_of_int (Queue.length suspended_processes));
-                  prerr_endline ("blocked processes : " ^ string_of_int (Hashtbl.length blocked_processes));*)
+(*                   debug ("suspended processes : " ^ string_of_int (Queue.length suspended_processes)); *)
+(*                   debug ("blocked processes : " ^ string_of_int (Hashtbl.length blocked_processes)); *)
                   `Primitive (`Int (num_of_int new_pid))))),
     let a = fresh_type_variable () in
       ([a], (a --> make_unit ()) --> (a --> `Primitive `Int))));
@@ -317,7 +319,11 @@ let env : (string * (result * Sl_kind.assumption)) list = map
       (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
     ([], string --> make_unit ())));
    
-
+  ("print", (* destructive *)
+   (primfun "print"
+      (fun message -> print_endline (unbox_string message); flush stdout; `Record []),
+    ([], string --> make_unit ())));
+   
   ("insertrow", (* destructive *)
    (primfun "insertrow"
       (fun (table : result) -> 
@@ -501,15 +507,6 @@ continuationize_primfn (
       ([u; v],
        (u --> v))));
 
-  ("spawn",
-   (primfun "spawn"
-      (function thunk -> 
-	 failwith("spawn not implemented on server")
-      ),
-    let u = fresh_type_variable () in
-    let v = fresh_type_variable () in
-      ([u; v],
-       ((u --> v) --> make_unit()))));
 
   (* some char functions *)
   char_test_op "isAlpha" (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);

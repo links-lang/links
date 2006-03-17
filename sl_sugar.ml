@@ -123,11 +123,13 @@ let variant_selection : (untyped_expression -> (string * pattern * untyped_expre
 let closed_variant_selection (value : untyped_expression) (selects : (string * pattern * untyped_expression) list) (pos : position) : untyped_expression =
   let rec one_more value = function
     | (case_label, Bind case_var, case_body) :: [] ->
-	Variant_selection_empty (value, case_label, case_var, case_body, pos)
+        Variant_selection (value, case_label, case_var, case_body,
+                           "x", Variant_selection_empty(Variable("x", pos), pos), pos)
     | (case_label, case_patt, case_body) :: [] ->
 	let case_var = (unique_name ()) in
 	let case_var_expr = (Variable (case_var, pos)) in
-	  Variant_selection_empty (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, pos)
+	  debug(string_of_expression(Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, "x", Variant_selection_empty(Variable("x", pos), pos), pos)));
+	  Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, "x", Variant_selection_empty(Variable("x", pos), pos), pos)
     | (case_label, Bind case_var, case_body) :: selects ->
 	let new_var = (unique_name ()) in
 	let new_var_expr = (Variable (new_var, pos)) in

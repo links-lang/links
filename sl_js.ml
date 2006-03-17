@@ -256,7 +256,8 @@ let generate_stub = function
                            (Sl_utility.fromTo 1 (1 + List.length arglist))
                            arglist
                        )])))]
-| e                         -> failwith ("Cannot generate stub for " ^ string_of_expression e)
+  | e
+    -> failwith ("Cannot generate stub for " ^ string_of_expression e)
 
 let trivial_cps expr = 
   Fn(["kappa"], Call(Var "kappa", [expr]))
