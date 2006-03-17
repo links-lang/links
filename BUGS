@@ -1,10 +1,10 @@
 BUGS
-
-* Trailing final semicolon is not allowed
-
+ 
 * .cache files are written right alongside the .cgi script, a location
   which typically won't be writable (webservers writing to the CGI dir
   is often seen as a security hole).
+
+* Trailing final semicolon is not allowed
 
 * JavaScript generation assumes that jslib.js and json.js are
   alongside the generated program; in /cgi-bin/ they won't be
