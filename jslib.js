@@ -196,12 +196,16 @@ function __registerFormEventHandlers(id, actions) {
 var __evContinuations = {};
 
 // library functions
-var int_of_string = Number;
-function string_of_int(kappa) { 
-  return function (x) {
-    kappa(String(x))
-  }
-};
+function __continuationize(f) {
+    return function (kappa) {
+        return function () {
+            return kappa(f.apply(f, arguments));
+        };
+    };
+}
+var int_of_string = __continuationize(parseInt);
+var string_of_int = __continuationize(String);
+
 function not(x) { return !x; }
 function hd(kappa) {return function(list) { kappa(list[0]); } }
 function tl(list) { return list.slice(1); }
@@ -323,7 +327,7 @@ var isComplete = 4;
 
 function __remoteCallHandler(kappa, request) {
   return function() {
-    if (request.readyState == 4) {
+    if (request.readyState == isComplete) {
      // TBD: this apparently triggers if we leave the page.
      var serverResponse = JSON.parse(__base64decode(request.responseText.replace('\n', '')));
       if ((serverResponse instanceof Object) && ('__continuation' in serverResponse)) {
@@ -375,12 +379,6 @@ function __focus() {
 }
 
 var javascript = true;
-
-function __foobar() {
-   // put the contents of the fields in a special place
-  // stick 'em back in
-}
-
 
 // identity: a "toplevel" continuation
 function __idy(x) {
