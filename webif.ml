@@ -140,6 +140,5 @@ let serve_requests filename =
 	      print_endline (Sl_result.string_of_result (snd (Sl_interpreter.run_program global_env [expression])))
       end
   with
-      Parse_failure (x, y) -> Sl_errors.display_error (Parse_failure (x, y)) ("Why does display_error want to be passed the line to print?")
     | Type_error (x, y) -> Sl_errors.display_error (Type_error (x, y)) ("Why does display_error want to be passed the line to print?")
 
