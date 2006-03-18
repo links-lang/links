@@ -84,7 +84,7 @@ let read (infun : string -> int -> int) (name : string) : Sl_syntax.untyped_expr
     try
       List.map
 	(Sl_sugar.desugar (lookup code))
-	(Sl_parser.parse_links (Sl_lexer.lexer name) lexbuf)
+	(Sl_parser.parse_links (Sl_lexer.lexer ()) lexbuf)
     with 
       | Parsing.Parse_error -> 
 	  let line, position = find_line code lexbuf.lex_curr_p in

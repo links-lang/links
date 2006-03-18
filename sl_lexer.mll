@@ -177,10 +177,7 @@ and attrlex lexers = parse
   | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 {
 
-let initialize_lexbuf (file_path : string) (lexbuf : lexbuf) = 
-  {lexbuf with lex_curr_p={pos_fname=file_path; pos_lnum=1; pos_bol=0; pos_cnum=0}}
-
-let lexer lexbuf = 
+let lexer () = 
   let lexers = (Stack.create () : (Lexing.lexbuf -> Sl_parser.token) Stack.t) in
     Stack.push (lex lexers) lexers;
     (* This flag, which records when we should insert an extra
