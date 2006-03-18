@@ -1,56 +1,13 @@
 %{
 
-open Num
-open Sl_kind
 open Sl_sugar
-open Parsing
 
-(*
-val symbol_start, symbol_end : unit -> int
-
-  symbol_start and Parsing.symbol_end are to be called in the action
-  part of a grammar rule only. They return the offset of the string that
-  matches the left-hand side of the rule: symbol_start() returns the
-  offset of the first character; symbol_end() returns the offset after
-  the last character. The first character in a file is at offset 0.
-
-val rhs_start, rhs_end : int -> int
-
-  Same as Parsing.symbol_start and Parsing.symbol_end, but return the
-  offset of the string matching the nth item on the right-hand side of
-  the rule, where n is the integer parameter to rhs_start and
-  rhs_end. n is 1 for the leftmost item.
-
-val symbol_start_pos, symbol_end_pos : unit -> Lexing.position
-
-  Same as symbol_start, symbol_end, but return a position instead of an offset.
-
-val rhs_start_pos, rhs_end_pos : int -> Lexing.position
-
-  Same as rhs_start, rhs_end_pos, but return a position instead of an offset.
-
-val clear_parser : unit -> unit
-
-  Empty the parser stack. Call it just after a parsing function has
-  returned, to remove all pointers from the parser stack to structures
-  that were built by semantic actions during parsing. This is
-  optional, but lowers the memory requirements of the programs.
-
-exception Parse_error
-
-  Raised when a parser encounters a syntax error. Can also be raised
-  from the action part of a grammar rule, to initiate error recovery.
-*)
-
-let parse_error msg = 
-  failwith "Syntax error"
-    (*raise (Sl_syntax.Parse_failure (!curr_pos, "Syntax error:"))*)
-
-let ensure_match (opening : string) (closing : string) = function
+let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> failwith ("Closing tag " ^ opening ^ " does not match closing tag " ^ closing)
+  | _ -> raise (ParseError ("Closing tag " ^ closing ^ " does not match start tag " ^ opening,
+			    (start, finish)))
 
-let pos () = symbol_start_pos (), symbol_end_pos ()
+let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 %}
 
@@ -144,7 +101,7 @@ constructor_expression:
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { Section $2, pos() }
 | LPAREN DOT VARIABLE RPAREN                                   { Section (`Project $3), pos() }
-| LPAREN DOT UINTEGER RPAREN                                   { Section (`Project (string_of_num $3)), pos() }
+| LPAREN DOT UINTEGER RPAREN                                   { Section (`Project (Num.string_of_num $3)), pos() }
 | LPAREN RPAREN                                                { RecordLit ([], None), pos() }
 | LPAREN labeled_exps VBAR exp RPAREN                          { RecordLit ($2, Some $4), pos() }
 | LPAREN labeled_exps RPAREN                                   { RecordLit ($2, None),               pos() }
@@ -254,11 +211,11 @@ attr_val:
 
 xml_tree:
 | LXML SLASHRXML                                               { Xml ($1, [], []), pos() } 
-| LXML RXML ENDTAG                                             { ensure_match $1 $3 (Xml ($1, [], []), pos()) } 
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match $1 $4 (Xml ($1, [], $3), pos()) } 
-| LXML attr_list RXML ENDTAG                                   { ensure_match $1 $4 (Xml ($1, $2, []), pos()) } 
+| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (Xml ($1, [], []), pos()) } 
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (Xml ($1, [], $3), pos()) } 
+| LXML attr_list RXML ENDTAG                                   { ensure_match (pos()) $1 $4 (Xml ($1, $2, []), pos()) } 
 | LXML attr_list SLASHRXML                                     { Xml ($1, $2, []), pos() } 
-| LXML attr_list RXML xml_contents_list ENDTAG                 { ensure_match $1 $5 (Xml ($1, $2, $4), pos()) } 
+| LXML attr_list RXML xml_contents_list ENDTAG                 { ensure_match (pos()) $1 $5 (Xml ($1, $2, $4), pos()) } 
 
 xml_contents_list:
 | xml_contents                                                 { [$1] }
@@ -360,7 +317,7 @@ labeled_exps:
 
 record_label:
 | VARIABLE                                                     { $1 } 
-| UINTEGER                                                     { string_of_num $1 }
+| UINTEGER                                                     { Num.string_of_num $1 }
 
 provider:
 | patt LARROW exp                                              { $1, $3 }
@@ -387,6 +344,6 @@ field:
 | VARIABLE COLON MINUS                                         { ($1, `Absent) }
 
 labeled_kinds:
-| field COMMA labeled_kinds                                    { TypeOps.set_field $1 $3 }
-| field                                                        { TypeOps.make_singleton_closed_row $1 }
-| TVARIABLE                                                    { TypeOps.make_empty_open_row_with_var $1 }
+| field COMMA labeled_kinds                                    { Sl_kind.TypeOps.set_field $1 $3 }
+| field                                                        { Sl_kind.TypeOps.make_singleton_closed_row $1 }
+| TVARIABLE                                                    { Sl_kind.TypeOps.make_empty_open_row_with_var $1 }

@@ -198,8 +198,6 @@ let rec substitute predicate replacement
 	if predicate first then replacement :: rest
 	else first::(substitute predicate replacement rest)
 
-let mapstrcat glue f lyst = String.concat glue (map f lyst)
-
 let explode : string -> char list = 
 let rec explode' list n string = 
   if n = String.length string then list
@@ -209,7 +207,15 @@ in  compose List.rev (explode' [] 0)
 let implode : char list -> string = 
   compose (String.concat "") (map (String.make 1))
 
-let mapstrcat glue f lyst = String.concat glue (map f lyst)
+(* Find all occurrences of a character within a string *)
+let find_char (s : string) (c : char) : int list =
+  let rec aux offset occurrences = 
+    try let index = String.index_from s offset c in
+      aux (index + 1) (index :: occurrences)
+    with Not_found -> occurrences
+  in List.rev (aux 0 [])
+
+let mapstrcat glue f list = String.concat glue (map f list)
 
 let numberp s = try ignore (int_of_string s); true with _ -> false
 

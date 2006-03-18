@@ -5,6 +5,7 @@ open Sl_sugar
 open Lexing
 
 exception Type_error of (Sl_syntax.position * string)
+exception SyntaxError of string
 
 let mistyped_application pos (fn, fntype) (param, paramtype)
     = match fntype with 
@@ -59,6 +60,7 @@ let invalid_name pos name message =
 
 
 let format_exception = function
+  | SyntaxError s -> s
   | Type_error (pos, s) -> "*** Type error at " ^ string_of_pos pos ^ ": \n   " ^ s
   | Sl_result.Runtime_failure s -> "*** Runtime failure: " ^ s
   | Sl_result.Runtime_exception s -> "*** Runtime exception: " ^ s

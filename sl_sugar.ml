@@ -5,6 +5,8 @@ open Query
 open Sl_utility
 open Sl_syntax
 
+exception ParseError of (string * (Lexing.position * Lexing.position))
+
 let _DUMMY_POS = Sl_syntax.dummy_position
 
 let base_value = ref 0
@@ -246,9 +248,6 @@ and ppattern = Pattern of phrase (* parse patterns as phrases, then convert late
 let _DUMMY_PHRASE = TupleLit [], (Lexing.dummy_pos, Lexing.dummy_pos)
 let _DUMMY_PATTERN = Pattern _DUMMY_PHRASE
 
-let lookup_pos : pposition -> Sl_syntax.position =
-  fun (start, fin) -> (start, "<unknown>", "<unknown>")
-
 let rec curried_apply (head : untyped_expression) (pos : position) : untyped_expression list -> untyped_expression = function 
   | [expr] -> Apply (head, expr, pos)
   | expr :: exprs -> curried_apply (Apply (head, expr, pos)) pos exprs 
@@ -260,8 +259,10 @@ let uncompare : comparison_binop -> string =
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
 (* Convert a syntax tree as returned by the parser into core syntax *)
-let rec desugar ((s, pos') : phrase) : Sl_syntax.untyped_expression = 
+let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression = 
   let pos = lookup_pos pos' in 
+  let desugar = desugar lookup_pos
+  and patternize = patternize lookup_pos in
     match s with
   | FloatLit f  -> Float (f, pos)
   | IntLit i    -> Integer (i, pos)
@@ -378,10 +379,10 @@ let rec desugar ((s, pos') : phrase) : Sl_syntax.untyped_expression =
   | XmlForest []  -> Collection_empty  (`List, pos)
   | XmlForest [x] -> desugar x
   | XmlForest (x::xs) -> Collection_union (desugar x, desugar (XmlForest xs, pos'), pos)
-and patternize : ppattern -> pattern = function
+and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
        should convert directly from phrases to patterns *)
-  | Pattern p -> patternize' (desugar p)
+  | Pattern p -> patternize' (desugar lookup_pos p)
 
 
 (* (\* project_subset *)
