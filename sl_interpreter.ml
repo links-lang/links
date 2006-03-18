@@ -147,12 +147,11 @@ let rec less l r =
 
 let less_or_equal l r = equal l r || less l r
         
-let rec normalise_query (env:environment) (qry:query) : query =
-  let rec normalise_expression (env:environment) (expr:Query.expression) : Query.expression = (
-    match expr with
+let rec normalise_query (toplevel:environment) (env:environment) (qry:query) : query =
+  let rec normalise_expression : Query.expression -> Query.expression = function
       | Query.Variable name ->
           (try
-             match assoc name env with
+             match lookup toplevel env name with
                | `Primitive(`Bool value) -> Query.Boolean value
                | `Primitive(`Int value) -> Query.Integer value
                | `Primitive(`Float value) -> Query.Float value
@@ -160,19 +159,19 @@ let rec normalise_query (env:environment) (qry:query) : query =
                  -> Query.Text (Postgresql.escape_string (charlist_as_string c))
                | `Collection (`List, []) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
-           with Not_found -> failwith("internal error: undefined query variable '" ^ name ^ "'"))
+           with Not_found -> failwith ("Internal error: undefined query variable '" ^ name ^ "'"))
             (* UGLY HACK BELOW *)
       | Query.Binary_op ("concat", left, right) ->
-          (match normalise_expression env left, normalise_expression env right with
+          (match normalise_expression left, normalise_expression right with
               Query.Text lstr, Query.Text rstr -> Query.Text (lstr ^ rstr))
       | Query.Binary_op (symbol, left, right) ->
-          Binary_op (symbol, normalise_expression env left, normalise_expression env right)
+          Binary_op (symbol, normalise_expression left, normalise_expression right)
       | Query.Unary_op (symbol, expr) ->
-          Unary_op (symbol, normalise_expression env expr)
+          Unary_op (symbol, normalise_expression expr)
       | Query.Query qry ->
-          Query {qry with condition = normalise_expression env qry.condition}
-      | _ -> expr)
-  in {qry with condition = normalise_expression env qry.condition}
+          Query {qry with condition = normalise_expression qry.condition}
+      | expr -> expr
+  in {qry with condition = normalise_expression qry.condition}
 
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function
@@ -322,7 +321,7 @@ fun cont value ->
                       let result = 
                         match value with
                           | `Database (db, _) ->
-       	                      let query_string = string_of_query (normalise_query locals query) in
+       	                      let query_string = string_of_query (normalise_query globals locals query) in
 		                prerr_endline("RUNNING QUERY:\n" ^ query_string);
 		                let result = execute_select kind query_string db in
                                 (* debug("    result:" ^ string_of_result result); *)
