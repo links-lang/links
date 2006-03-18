@@ -20,6 +20,11 @@ Rejection of incorrectly typed attributes
 stderr : @.*
 exit : 1
 
+Rejection of incorrectly typed l:attributes
+{x = 3; <a l:href="{x}"><c/></a>}
+stderr : @.*
+exit : 1
+
 Looping in XML quasis
 things = [1, 2]; <ul>{for x <- things in <br/>}</ul>
 stdout : <ul><br/><br/></ul> : XML
