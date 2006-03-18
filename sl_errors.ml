@@ -61,6 +61,7 @@ let invalid_name pos name message =
 
 let format_exception = function
   | SyntaxError s -> s
+  | Getopt.Error s -> s
   | Type_error (pos, s) -> "*** Type error at " ^ string_of_pos pos ^ ": \n   " ^ s
   | Sl_result.Runtime_failure s -> "*** Runtime failure: " ^ s
   | Sl_result.Runtime_exception s -> "*** Runtime exception: " ^ s

@@ -66,5 +66,5 @@ let options : opt list =
 
 (* main *)
 let _ =
-  parse_cmdline options (ignore -<- evaluate Parse.parse_file stdenvs);
+  Sl_errors.display_errors_fatal stderr (parse_cmdline options) (ignore -<- evaluate Parse.parse_file stdenvs);
   if !interacting then interact stdenvs
