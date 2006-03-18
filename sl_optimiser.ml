@@ -484,8 +484,8 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
       and y = gensym () in
         Some (Let (x, e2, 
                    Let (y, e1,
-                        Apply (Apply (Variable ("take", d1), Variable (x, d1), d2), 
-                               Apply (Apply (Variable ("drop", d3), Variable (y, d1), 
+                        Apply (Apply (Variable ("take", d1), Variable (y, d1), d2), 
+                               Apply (Apply (Variable ("drop", d3), Variable (x, d1), 
                                              d4), e3, d5),
                                d6), d1), d1))
   | Apply (Apply (Variable (("take"|"drop"), _), (Variable _ |Integer _), _), _ , _) -> None
@@ -497,12 +497,11 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
   | _ -> None
 
 (*
-  take e1 (drop e2 (Table (... q ...))) ~>  
-  take e1 (drop e2 (Table (... {q with offset = e2; limit = e1} ...)))
+  take e1 (drop e2 (Table (... q ...))) ~> Table (... {q with offset = e2; limit = e1} ...)
      where e1 and e2 are variables or integer literals
 
-  take e1 (Table (... q ...)) ~> take e1 (Table (... {q with limit  = e1} ...))
-  drop e1 (Table (... q ...)) ~> drop e1 (Table (... {q with offset = e1} ...))
+  take e1 (Table (... q ...)) ~> Table (... {q with limit  = e1} ...)
+  drop e1 (Table (... q ...)) ~> Table (... {q with offset = e1} ...)
      where e1 is a variable or integer literal
 *)
 
@@ -515,20 +514,15 @@ let push_takedrop : RewriteSyntax.rewriter =
       | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as e1), d2), 
                Apply (Apply (Variable ("drop", d3), (Variable _|Integer _ as e2), d4), 
                       Table (e, s, q, d5), d6), d7) ->
-          Some (Apply (Apply (Variable ("take", d1), e1, d2), 
-                       Apply (Apply (Variable ("drop", d3), e2, d4), 
-                              Table (e, s, {q with
-                                              Query.max_rows = Some (queryize e1);
-                                              Query.offset   = queryize e2},
-                                     d5), d6), d7))
-  | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3) as f1,
+          Some (Table (e, s, {q with
+                                Query.max_rows = Some (queryize e1);
+                                Query.offset   = queryize e2}, d5))
+  | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3),
            Table (e, s, q, d4), d5) -> 
-      Some (Apply (f1,
-                   Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4), d5))
+      Some (Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4))
   | Apply (Apply (Variable ("drop", d1), (Variable _|Integer _ as n), d3) as f1,
            Table (e, s, q, d4), d5) -> 
-      Some (Apply (f1,
-                   Table (e, s, {q with Query.offset = queryize n}, d4), d5))
+      Some (Table (e, s, {q with Query.offset = queryize n}, d4))
   | _ -> None
 
      
