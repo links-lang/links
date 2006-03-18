@@ -121,7 +121,7 @@ let serve_requests filename =
       (* Print headers *)
     print_endline "Content-type: text/html\n";
 
-    if true (* is_client_program global_env *)
+    if is_client_program global_env 
     then
        print_endline (Sl_js.generate_program filename global_env expression)
     else
