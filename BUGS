@@ -1,5 +1,8 @@
 BUGS
- 
+
+* Some demos and comments in the code refer to l:action.
+  The code now uses l:onsubmit instead.
+
 * .cache files are written right alongside the .cgi script, a location
   which typically won't be writable (webservers writing to the CGI dir
   is often seen as a security hole).
@@ -175,6 +178,8 @@ TODO
     <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
 
 * More unit tests for JavaScript generation.
+
+* Unit tests for everything.
 
 * XML unicode character literals  (e.g. &318;).
 
