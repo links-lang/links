@@ -33,7 +33,11 @@ and string_of_query (qry:query) : string =
                                                                | `Asc (db, col)  -> db ^"."^ col ^" ASC" 
                                                                | `Desc (db, col) -> db ^"."^ col ^" DESC") 
 							  orders)))
-     ^ ""
+     ^ (match qry.max_rows with
+          | None   -> ""
+          | Some m -> " limit " ^ string_of_expression m)
+     ^ " offset " ^ string_of_expression qry.offset
+
 and string_of_condition cond = match string_of_expression cond with
   | "true" -> ""
   | where  -> " WHERE " ^ where
@@ -94,24 +98,28 @@ and deserialise_expression : (expression deserialiser) =
 
 and serialise_query : (query serialiser) =
   function 
-    | s -> serialise5 'Q' (serialise_bool, 
+    | s -> serialise7 'Q' (serialise_bool, 
                            serialise_list serialise_column,
                            serialise_list serialise_table,
                            serialise_expression,
-                           serialise_list serialise_ordering)
-                          (s.distinct_only, s.result_cols, s.tables,
-					    s.condition, s.sortings)
+                           serialise_list serialise_ordering,
+                           serialise_option serialise_expression,
+                           serialise_expression)
+        (s.distinct_only, s.result_cols, s.tables,
+	 s.condition, s.sortings, s.max_rows, s.offset)
 and deserialise_query : (query deserialiser) =
   fun s ->
     let t, obj, rest = extract_object s in 
-    let (d,r,t,c,s) = (match t with
-               | 'Q' -> deserialise5 (deserialise_bool, 
+    let (d,r,t,c,s,m,o) = (match t with
+               | 'Q' -> deserialise7 (deserialise_bool, 
                                       deserialise_list deserialise_column,
                                       deserialise_list deserialise_table,
                                       deserialise_expression,
-                                      deserialise_list deserialise_ordering) obj
+                                      deserialise_list deserialise_ordering,
+                                      deserialise_option deserialise_expression,
+                                      deserialise_expression) obj
                | _ -> failwith "Error deserialising query")
-    in {distinct_only=d;result_cols=r;tables=t;condition=c;sortings=s}, rest
+    in {distinct_only=d;result_cols=r;tables=t;condition=c;sortings=s;max_rows=m;offset=o}, rest
 and serialise_column : column serialiser
     = fun b -> serialise4 'B' (serialise_string, serialise_string, serialise_string, Sl_kind.serialise_kind) (b.table_renamed, b.name, b.renamed, b.col_type)
 and deserialise_column : column deserialiser

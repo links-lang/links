@@ -171,7 +171,12 @@ let rec normalise_query (toplevel:environment) (env:environment) (qry:query) : q
       | Query.Query qry ->
           Query {qry with condition = normalise_expression qry.condition}
       | expr -> expr
-  in {qry with condition = normalise_expression qry.condition}
+  in {qry with
+        condition = normalise_expression qry.condition;
+        offset = normalise_expression qry.offset;
+        max_rows = (match qry.max_rows with 
+                      | None   -> None
+                      | Some s -> Some (normalise_expression s))}
 
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function

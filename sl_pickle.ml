@@ -43,6 +43,16 @@ let serialise_float, deserialise_float = primitive_serialisers 'f' string_of_flo
 let null_serialiser s = ""
 and null_deserialiser obj s = (obj, s)
 
+let serialise_option (serialise : 'a serialiser) : 'a option serialiser = function
+  | None   -> "n"
+  | Some s -> "s" ^ serialise s
+and deserialise_option (deserialise : 'a deserialiser) : 'a option deserialiser = 
+  fun s ->
+    match s.[0], StringLabels.sub s ~pos:1 ~len:(String.length s - 1) with
+      | 'n', rest -> None, rest
+      | 's', rest -> (let obj, rest = deserialise rest in 
+                        Some obj, rest)
+
 (* Why, /yes/, I /would/ like generic tuple facilities. Why do you ask? *)
 let serialise0 tipe () () : string
     = add_header tipe ""

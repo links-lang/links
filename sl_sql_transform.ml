@@ -31,11 +31,8 @@ let rec project (projs:string list) (query:query) : query =
 	  if (mem col.renamed projs) then
 	    col :: (filter_selects (filter (fun proj -> proj <> col.renamed) projs) result_cols)
 	  else (filter_selects (filter (fun proj -> proj <> col.renamed) projs) result_cols)
-  ) in {distinct_only = query.distinct_only;
-        result_cols = filter_selects projs query.result_cols;
-        tables = query.tables;
-	condition = query.condition;
-	sortings = query.sortings}
+  ) in {query with 
+        result_cols = filter_selects projs query.result_cols}
 
 
 type projection_source = {field_name : string; field_var : string;
@@ -322,11 +319,7 @@ let rec select ((positives, negatives):(expression list * expression list)) (que
       | Boolean false as where -> where 
       | _ -> Binary_op ("AND", pos_and_neg (positives, negatives), 
 			query.condition)
-  ) in {distinct_only = query.distinct_only;
-        result_cols = query.result_cols;
-        tables = query.tables;
-        condition = where;
-        sortings = query.sortings}
+  ) in {query with condition = where}
          
 (** rename_uniquely
     Takes two lists of column names and produces a list of
@@ -366,7 +359,13 @@ let rec join ((positives, negatives):(expression list * expression list))
         result_cols   = columns;
         tables        = left.tables @ right.tables;
         condition     = where;
-        sortings      = left.sortings @ right.sortings})
+        sortings      = left.sortings @ right.sortings;
+       max_rows      = (match left.max_rows, right.max_rows with
+                          | None, None -> None
+                          | _ -> failwith "Not yet implemented: take/drop for joined tables");
+       offset        = (match left.offset, right.offset with
+                          | Integer (Num.Int 0), Integer (Num.Int 0) -> Integer (Num.Int 0)
+                          | _ -> failwith "Not yet implemented: take/drop for joined tables")})
 
 (** Projects the query on the empty set.
     @param query The query to nullify.

@@ -17,37 +17,14 @@ module RewriteSyntax =
           type rewriter = t -> t option
           let process_children = Sl_syntax.perhaps_process_children
         end))
-
-module type Thing = 
-sig
-  type a
-end
-
-module RewriteSyntax' (A : Thing) =
-  Rewrite
-    (SimpleRewrite
-       (struct
-          type t = A.a Sl_syntax.expression'
-          type rewriter = t -> t option
-          let process_children = Sl_syntax.perhaps_process_children
-        end))
-
-(*module RewriteUntypedSyntax = RewriteSyntax (struct
-					       type a = Sl_syntax.position expression
-					     end)
-*)
     
-(* Not currently used. *)
-(*module RewriteSyntaxBindings = 
-  Rewrite
-    (PassingRewrite
-       (struct
-          type t = Sl_syntax.expression
-          type data = string list
-          type rewriter = data -> t -> t option
-          let process_children = Sl_syntax.perhaps_process_children_bindings
-        end))
-*)
+let gensym = 
+  let counter = ref 0 in 
+    function () -> 
+      begin
+        incr counter;
+        "_take" ^ string_of_int !counter
+      end
 
 (* uniquify_expression
 
@@ -57,14 +34,7 @@ module RewriteSyntax' (A : Thing) =
    After this, we can be much less careful about scope.
 *)
 let uniquify_expression : RewriteSyntax.rewriter = 
-  let gensym = 
-    let counter = ref 0 in 
-      function () -> 
-        begin
-          incr counter;
-          "_" ^ string_of_int !counter
-        end in
-    (* Rename a variable, entirely ignoring any intervening bindings *)
+  (* Rename a variable, entirely ignoring any intervening bindings *)
   let rename_var orig repl e = 
     let rename_one = function
       | Variable (v, data) when v = orig -> Some (Variable (repl, data))
@@ -279,15 +249,6 @@ let sql_projections (env:Sl_kind.environment) : RewriteSyntax.rewriter =
 						    | `Absent -> labels) field_env []
 		   in
 		     merge_needed [Fields fields]
-(*
-                   merge_needed 
-                     (let rec get_fields = function
-                        | [] -> []
-                        | `Row_variable _          :: fields ->         get_fields fields
-                        | `Field_present (name, _) :: fields -> name :: get_fields fields
-                        | `Field_absent _          :: fields ->         get_fields fields
-                      in [Fields (get_fields fields)])
-*)
                | `TypeVar _ -> All
                | _ -> failwith "OP448")
         | Record_selection (label, _, variable, Variable (name, _), body, _) when name = var ->
@@ -352,10 +313,6 @@ let rec substitute_projections new_src renamings expr bindings =
     fold_right (fun ren expr ->
                   simple_visit (subst_projection ren) expr
                ) renamings expr
-(* traversing a different way: *)
-(*     simple_visit (fun visit_chn expr ->  *)
-(*                     (fold_right (fun ren expr -> subst_projection ren visit_chn expr) renamings expr)) expr *)
-
 	
 (** check_join
     Inspects an expression for possible collection extension
@@ -495,6 +452,86 @@ let rec sql_joins : RewriteSyntax.rewriter =
 
  *)
 	  
+
+
+(* take/drop optimization.  Push calls to take and drop that surround
+   queries into the query.
+
+   [N.B. these rewrite rules play fast and loose with the `data'
+    component of expression nodes.  Don't assume anything about the
+    data after these have run.]
+*)
+
+(*
+  offset n limit m corresponds to take m (drop n ...) 
+  (but not to drop n (take ...))
+*)
+
+(*
+   take e1 (drop e2 e3) ~>  {x = e2; y = e1; take y (drop x e3)}
+      (Not performed if both e1 and e2 are variables or integer literals)
+
+   take e1 e2 ~> {x = e1; take x e2}
+   drop e1 e2 ~> {x = e1; drop x e2}
+      (Not performed if e1 is a variable or integer literal)
+*)
+let simplify_takedrop : RewriteSyntax.rewriter = function
+  | Apply (Apply (Variable ("take", _), (Variable _|Integer _), _), 
+           Apply (Apply (Variable ("drop", d3), ((Variable _| Integer _) as e2), d2), e3, d5), d6) -> None
+  | Apply (Apply (Variable ("take", d1), e1, d2), 
+           Apply (Apply (Variable ("drop", d3), e2, d4), e3, d5), d6) ->
+      let x = gensym () 
+      and y = gensym () in
+        Some (Let (x, e2, 
+                   Let (y, e1,
+                        Apply (Apply (Variable ("take", d1), Variable (x, d1), d2), 
+                               Apply (Apply (Variable ("drop", d3), Variable (y, d1), 
+                                             d4), e3, d5),
+                               d6), d1), d1))
+  | Apply (Apply (Variable (("take"|"drop"), _), (Variable _ |Integer _), _), _ , _) -> None
+  | Apply (Apply (Variable ("take"|"drop" as f, d1), e1, d2), e2, d3) ->
+      let var = gensym () in
+        Some (Let (var, e1, 
+                   Apply (Apply (Variable (f, d1), 
+                                 Variable (var, d1), d2), e2, d3), d1))
+  | _ -> None
+
+(*
+  take e1 (drop e2 (Table (... q ...))) ~>  
+  take e1 (drop e2 (Table (... {q with offset = e2; limit = e1} ...)))
+     where e1 and e2 are variables or integer literals
+
+  take e1 (Table (... q ...)) ~> take e1 (Table (... {q with limit  = e1} ...))
+  drop e1 (Table (... q ...)) ~> drop e1 (Table (... {q with offset = e1} ...))
+     where e1 is a variable or integer literal
+*)
+
+let push_takedrop : RewriteSyntax.rewriter = 
+  let queryize = function
+    | Variable (v, _) -> Query.Variable v
+    | Integer  (n, _) -> Query.Integer n
+    | _ -> failwith "Internal error during take optimization" in 
+    function
+      | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as e1), d2), 
+               Apply (Apply (Variable ("drop", d3), (Variable _|Integer _ as e2), d4), 
+                      Table (e, s, q, d5), d6), d7) ->
+          Some (Apply (Apply (Variable ("take", d1), e1, d2), 
+                       Apply (Apply (Variable ("drop", d3), e2, d4), 
+                              Table (e, s, {q with
+                                              Query.max_rows = Some (queryize e1);
+                                              Query.offset   = queryize e2},
+                                     d5), d6), d7))
+  | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3) as f1,
+           Table (e, s, q, d4), d5) -> 
+      Some (Apply (f1,
+                   Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4), d5))
+  | Apply (Apply (Variable ("drop", d1), (Variable _|Integer _ as n), d3) as f1,
+           Table (e, s, q, d4), d5) -> 
+      Some (Apply (f1,
+                   Table (e, s, {q with Query.offset = queryize n}, d4), d5))
+  | _ -> None
+
+     
 let ops = ["==", (=);
            "<>", (<>);
            "<=", (<=);
@@ -521,6 +558,7 @@ let rewriters env = [
 (*  RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
 *)
+  RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
 (*  RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup (inference_rw env);
@@ -593,22 +631,7 @@ let test () =
 	       "x",
 	       Table
 		 (Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
-		  {Query.distinct_only = false;
-		   Query.result_cols =
-		      [{Query.table_renamed = "Table_11"; Query.name = "a";
-			Query.renamed = "a"; Query.col_type = `Primitive `Int};
-		       {Query.table_renamed = "Table_11"; Query.name = "b";
-			Query.renamed = "b"; Query.col_type = `Primitive `Int};
-		       {Query.table_renamed = "Table_12"; Query.name = "c";
-			Query.renamed = "c"; Query.col_type = `Primitive `Int};
-		       {Query.table_renamed = "Table_12"; Query.name = "d";
-			Query.renamed = "d"; Query.col_type = `Primitive `Int}];
-		   Query.tables = [("foo", "Table_11"); ("frump", "Table_12")];
-		   Query.condition =
-		      Query.Binary_op
-			("=", Query.Field ("Table_11", "a"),
-			 Query.Field ("Table_12", "c"));
-		   Query.sortings = []},
+		  failwith "This is broken.  Optimization tests should use pattern matching, not structural equality.",
 		  ()),
 	       ()),
 	    ())))
@@ -658,30 +681,9 @@ let test () =
                "x",
                Sl_syntax.Table
                  (Sl_syntax.Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
-                  {Query.distinct_only = false;
-                   Query.result_cols =
-                      [{Query.table_renamed = "Table_94"; Query.name = "a";
-                        Query.renamed = "a"; Query.col_type = `Primitive `Int};
-                       {Query.table_renamed = "Table_94"; Query.name = "b";
-                        Query.renamed = "b"; Query.col_type = `Primitive `Int};
-                       {Query.table_renamed = "Table_95"; Query.name = "c";
-                        Query.renamed = "c"; Query.col_type = `Primitive `Int};
-                       {Query.table_renamed = "Table_95"; Query.name = "d";
-                        Query.renamed = "d"; Query.col_type = `Primitive `Int};
-                       {Query.table_renamed = "Table_96"; Query.name = "e";
-                        Query.renamed = "e"; Query.col_type = `Primitive `Int}];
-                   Query.tables =
-                      [("foo", "Table_94"); ("frump", "Table_95"); ("frozz", "Table_96")];
-                   Query.condition = Query.Boolean true; Query.sortings = []},
+                  failwith "This is broken.  Optimization tests should use pattern matching, not structural equality.",
                   ()),
                ()),
             ())))
   ;
-  
-(*   opt_map Sl_syntax.string_of_expression (opt_map *)
-(*                                     strip (RewriteSyntax.bottomup sql_joins (parse_and_type Sl_library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) bag[(x.b, y.d)] else bag[]}"))) *)
-
-
-(* "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db)      where (x.b == z.e && x.a == y.c) in        bag[(x.b, y.d)]}" *)
-
 

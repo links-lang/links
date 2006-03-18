@@ -308,7 +308,9 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression =
             tables = [(name, table_name)];
             condition = Query.Boolean true;
             sortings = List.map (function | `Asc field -> `Asc (table_name, field)
-                                          | `Desc field -> `Desc (table_name, field)) orders} in
+                                          | `Desc field -> `Desc (table_name, field)) orders;
+            max_rows = None;
+            offset = Query.Integer (Num.Int 0)} in
          Table (desugar db, name, db_query name pos kind unique order, pos))
   | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
   | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)

@@ -1,12 +1,9 @@
-open Num
-
-(** A SQL expression to be used as the condition for a query.
-	@version 1.0 *)
+(** A SQL expression to be used as the condition for a query. *)
 type expression =
   | Field of (string (* table name (as) *) * string (* field name (real) *))
   | Variable of string
   | Null
-  | Integer of num
+  | Integer of Num.num
   | Float of float
   | Boolean of bool
   | Text of string
@@ -24,12 +21,15 @@ type expression =
       {li A list of colums to be ordered formated as `Asc (table renaming, column name) for ascending ordering,
          `Desc (table renaming, column name) for descending ordering. If the list is empty, no ordering is done.}}
     @version 1.0 *)
-
 and query = {distinct_only : bool;
              result_cols : column list;
              tables : table_instance list;
              condition : expression;
-             sortings : sorting list}
+             sortings : sorting list;
+             max_rows : expression option; (* The maximum number of rows to be returned *)
+             offset : expression; (* The row in the table to start from *)
+            }
+
 
 and table_instance = string * string (* (real_name, as_name) *)
 
@@ -64,3 +64,6 @@ let rec replace_var name expr = function
 
 and query_replace_var var expr query =
   {query with condition = replace_var var expr query.condition}
+
+
+
