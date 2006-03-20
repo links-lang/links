@@ -85,7 +85,7 @@ LIBDIRS = $(AUXLIB_DIRS)
 include $(OCAMLMAKEFILE)
 
 test: $(RESULT)
-	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
+	@for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
 
 fixmes:
 	@grep FIXME *.ml*
