@@ -1,3 +1,15 @@
+Braced XML
+<f>{for i <- [] in <br/>}</f>
+stdout : <f/> : XML
+
+Top-level-bound XML object
+x = for i <- [] in <br/>; <f>{x}</f>
+stdout : <f/> : XML
+
+Let-bound XML object
+{x = for i <- [] in <br/>; <f>{x}</f>}
+stdout : <f/> : XML
+
 Whitespace preservation
 <a b="c"> <d/> </a>
 stdout : <a b="c"> <d/> </a> : XML
