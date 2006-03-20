@@ -1,50 +1,5 @@
 // Links js runtime.
 
-var __mailboxes = {};
-var __blocked_procs = {};
-//var __suspended_procs = [];
-var __current_pid;
-
-var sched_pause = 10;
-
-function __wakeup(pid) {
-  setTimeout(__blocked_procs[pid], sched_pause);
-  delete __blocked_procs[pid];
-}
-
-function send(kappa) {
-  return function(pid) {
-    return function (msg) {
-      __mailboxes[pid].push(msg);
-      __wakeup(pid);
-      kappa(1);
-    }
-  }
-}
-
-function __block_proc(pid, its_cont) {
-  __blocked_procs[pid] = its_cont;
-}
-
-function recv(kappa) {
-  if ( __mailboxes[__current_pid].length() > 0) {
-    kappa(__mailboxes[__current_pid].pop());
-  } else {
-    __block_proc(__current_pid, kappa);
-  }
-}
-
-function __scheduler() {
-  
-}
-
-var __yieldCount = 0;
-
-// yield: give up control for another "thread" to work
-function __yield(my_cont) {
-  setTimeout(my_cont, sched_pause);
-}
-
 /// sequences: 
 
 //var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0');
@@ -140,6 +95,12 @@ function __extend(object, label, value) {
 //    project a field of a record
 function __project(object, name) { return object[name]; }
 
+function __vrntLbl(object) { return object['label']}
+function __vrntVal(object) { return object['value']}
+
+function __fail(str) {
+  alert("Internal error: " + str);
+}
 
 // Page update
 
@@ -385,11 +346,81 @@ function __idy(x) {
   return x;
 }
 
-var __pid = 0;
+var __maxPid = 0;
+var __currentPid = 0;
 
-function spawn(k) {
+function spawn(kCurry) {
   return function (f) {
-    setTimeout(f(__applyChanges), 2000);
-    k(++__pid);
+    alert("spawn got " + f);
+    kCurry(function (kappa) {
+      alert("spawn got its 2nd contn ");
+      return function (arg) {
+        alert("spawning to " + f + " with " + arg);
+        var childPid = ++__maxPid;
+        setTimeout(function () { 
+                     __currentPid = childPid;
+                     f(__applyChanges)(arg) 
+                   }, 200);
+        kappa(childPid);
+      };
+    });
+  }
+}
+
+
+var __mailboxes = {};
+var __blocked_procs = {};
+//var __suspended_procs = [];
+var __current_pid;
+
+var sched_pause = 10;
+
+function __wakeup(pid) {
+  setTimeout(__blocked_procs[pid], sched_pause);
+  delete __blocked_procs[pid];
+}
+
+function send(kappa) {
+  return function(pid) {
+    return function (msg) {
+      alert("sending");
+      __mailboxes[pid].push(msg);
+      __wakeup(pid);
+      kappa(1);
+    }
+  }
+}
+
+function __block_proc(pid, its_cont) {
+  __blocked_procs[pid] = its_cont;
+}
+
+function recv(kappa) {
+  return function() {
+    alert("receiving");
+    if ( __mailboxes[__current_pid].length() > 0) {
+      kappa(__mailboxes[__current_pid].pop());
+    } else {
+      __block_proc(__current_pid, kappa);
+    }
+  }
+}
+
+function __scheduler() {
+  
+}
+
+var __yieldCount = 0;
+
+// yield: give up control for another "thread" to work
+function __yield(my_cont) {
+  setTimeout(my_cont, sched_pause);
+}
+
+
+function print(kappa) {
+  return function(str) {
+    alert(str);
+    kappa(0);
   }
 }

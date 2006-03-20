@@ -18,12 +18,12 @@ module RewriteSyntax =
           let process_children = Sl_syntax.perhaps_process_children
         end))
     
-let gensym = 
-  let counter = ref 0 in 
-    function () -> 
+let gensym =
+  let counter = ref 0 in
+    function () ->
       begin
         incr counter;
-        "_take" ^ string_of_int !counter
+        "_g" ^ string_of_int !counter
       end
 
 (* uniquify_expression
@@ -536,7 +536,8 @@ let ops = ["==", (=);
 let fold_constant : RewriteSyntax.rewriter = 
   (* TODO: Also arithmetic, etc. *)
   let constantp = function
-    | Boolean _ | Integer _ | Char _ | String _ | Float _ | Record_empty _ | Collection_empty _ -> true
+    | Boolean _ | Integer _ | Char _ | String _ 
+    | Float _ | Record_empty _ | Collection_empty _ -> true
     | _ -> false 
   in function 
 	(* Is this safe without unboxing? *)
@@ -552,7 +553,7 @@ let rewriters env = [
 (*  RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
 *)
-  RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
+(*   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop); *)
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
 (*  RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup (inference_rw env);

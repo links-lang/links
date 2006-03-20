@@ -363,8 +363,12 @@ let rec generate : 'a expression' -> code =
       reduce_collection c
 (*  | Collection_union (l, r, _)         -> Call (Var "__concat", [generate l; generate r])*)
       (* CPS me*)
-  | Collection_extension (e, v, b, _)  -> failwith "coll. ext. not impl "; 
-      trivial_cps (Iter (v, generate_noncps b, generate_noncps e))
+  | Collection_extension (e, v, b, _)  -> 
+      let b_cps = generate b in
+      let e_cps = generate e in
+        Fn(["kappa"],
+           Call(b_cps, [Fn(["b"],
+                Call(Var "kappa", [Iter (v, Var "b", generate_noncps e)]))]))
       
   | Xml_node _ as xml when islform xml -> laction_transformation xml
   | Xml_node _ as xml when islhref xml -> lhref_transformation xml
@@ -461,7 +465,6 @@ let rec generate : 'a expression' -> code =
                                    Call(b_cps, [Var "kappa"]))))))]))
 
   | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv ->
-      failwith "non impl: record selection";
       (* Could use dot-notation instead of project call *)
       let v_cps = generate v in
         Fn(["kappa"],
@@ -469,10 +472,13 @@ let rec generate : 'a expression' -> code =
                 Call(Var "kappa", 
                      [Call (Var "__project", [strlit l; Var "v"])]))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      failwith "non impl: record selection";
-      trivial_cps (Bind (lv,
-	                 Call (Var "__project", [strlit l; generate_noncps v]),
-	                 generate_noncps b))
+      let v_cps = generate_noncps v in
+      let b_cps = generate_noncps b in
+        Fn(["kappa"],
+           Call(v_cps, [Fn(["v"], 
+                Bind (lv,
+	              Call (Var "__project", [strlit l; Var "v"]),
+                      Call(b_cps, [Var "kappa"])))]))
   (* Variants *)
   | Variant_injection (l, e, _) -> 
       let content_cps = generate e in
@@ -481,9 +487,29 @@ let rec generate : 'a expression' -> code =
                                  Call(Var "kappa", 
                                       [Dict [("label", strlit l);
                                              ("value", Var "content")]]))]))
-  | Variant_selection _
-  | Variant_selection_empty _
-  (* DB stuff *)
+  | Variant_selection_empty (e, _) ->
+      Fn(["kappa"], Call(Var "__fail",
+                         [strlit "closed switch got value out of range"]))
+  | Variant_selection (src, case_label, case_var, case_body, 
+                       else_var, else_body, _) ->
+      let src_cps = generate src in
+      let case_body_cps = generate case_body in
+      let else_body_cps = generate else_body in
+        Fn(["kappa"],
+          Call(src_cps, [Fn(["src"],
+                            Cond(Binop(Call(Var "__vrntLbl", [Var "src"]),
+                                       "==",
+                                       strlit case_label),
+                                 Bind(case_var,
+                                      Call(Var "__vrntVal", [Var "src"]),
+                                      Call(case_body_cps, [Var "kappa"])),
+                                 Bind(else_var,
+                                      Var "src",
+                                      Call(else_body_cps, [Var "kappa"]))
+                                )
+                           )]))
+
+  (* Unimplemented stuff *)
   | Sort _
   | Database _
   | Table _
@@ -708,7 +734,7 @@ let rec simplify_completely expr =
 let gen = 
   Sl_utility.perhaps_apply Sl_optimiser.uniquify_expression
   ->- generate 
-(*   ->- simplify_completely *)
+  ->- simplify_completely 
   ->- show
 
  (* TODO: imports *)

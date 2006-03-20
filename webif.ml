@@ -72,7 +72,6 @@ let handle_client_call unevaled_env f args =
   let env = clientize_unevaled_env unevaled_env in
   let f, args = Netencoding.Base64.decode f, Netencoding.Base64.decode args in
     let continuation = [Sl_result.FuncApply (List.assoc f env, [])] in
-      prerr_endline("A connection was accepted in handle_client_call");
     let result = (Sl_interpreter.apply_cont_safe env continuation
 		    (untuple_single (Jsonparse.parse_json 
 				       Jsonlex.jsonlex (Lexing.from_string args)))) in
@@ -94,7 +93,6 @@ let decode_continuation (cont : string) : Sl_result.continuation =
 let serve_requests filename = 
   try
   Performance.measuring := true;
-    prerr_endline("A connection was accepted in serve_requests");
     Pervasives.flush(Pervasives.stderr);
   let global_env = read_file_cache filename in
     (* TBD: Allow multiple expressions; execute them all in turn. *)

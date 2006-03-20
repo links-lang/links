@@ -222,7 +222,8 @@ let env : (string * (result * Sl_kind.assumption)) list = map
 (*                   debug ("blocked processes : " ^ string_of_int (Hashtbl.length blocked_processes)); *)
                   `Primitive (`Int (num_of_int new_pid))))),
     let a = fresh_type_variable () in
-      ([a], (a --> make_unit ()) --> (a --> `Primitive `Int))));
+    let b = fresh_type_variable () in
+      ([a], (a --> b) --> (a --> `Primitive `Int))));
 
   ("self",
    (primfun "self"

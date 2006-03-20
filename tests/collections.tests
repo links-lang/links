@@ -10,6 +10,10 @@ Set collection
 for i <- set[1,2,3,4,5] in if (i==3) set[] else set[i,i];;
 stdout : Set[1, 2, 4, 5] : Set[Int]
 
+Bag where clause
+for i <- bag[1,2,3,4,5] where (i <> 3) in bag[i, i]
+stdout : bag[1, 1, 2, 2, 4, 4, 5, 5] : Bag[Int]
+
 Concatenation/union
 [1,2,3] ++ [4,5]
 stdout : [1, 2, 3, 4, 5] : [Int]
