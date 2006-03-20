@@ -46,7 +46,10 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
     else
       let point = Unionfind.fresh id in
 	point, IntMap.add id point rec_vars in
-    function
+    
+    fun (t1, t2) ->
+      (debug ("Unifying "^string_of_kind t1^" with "^string_of_kind t2);
+       match t1, t2 with   
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
       | `Primitive x, `Primitive y when x = y -> ()
 (*      | `TypeVar lid, `TypeVar rid when lid = rid -> () *)
@@ -85,19 +88,12 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
           unify' rec_vars (lbody, rbody)
       | `Record l, `Record r -> unify_row' rec_vars (l, r)
       | `Variant l, `Variant r -> unify_row' rec_vars (l, r)
-(*
-      | `Recursive (lid, lbody), `Recursive (rid, rbody) ->
-	  unify' rec_vars (`TypeVar lid, `TypeVar rid);
-	  unify' rec_vars (lbody, rbody)
-      | `Recursive (id, body), kind' | kind', `Recursive (id, body) ->
-	  unify' rec_vars (body, kind')
-*)
-      | `Collection (`List, `Primitive `XMLitem), `Collection (`List, `Primitive `XMLitem) -> ()
-      | `Collection (`List, l), `Collection (`List, `Primitive `XMLitem) -> unify' rec_vars (l, `Primitive `Char)
 
-      | `Collection (`Set, l),  `Collection (`Set, r)  -> unify' rec_vars (l, r)
-      | `Collection (`Bag, l),  `Collection (`Bag, r)  -> unify' rec_vars (l, r)
-      | `Collection (`List, l), `Collection (`List, r) -> unify' rec_vars (l, r)
+      | `Collection (`List, `Primitive `XMLitem), `Collection (`List, `Primitive `XMLitem) -> ()
+
+      | `Collection (`Set, t),  `Collection (`Set, t')  -> unify' rec_vars (t, t')
+      | `Collection (`Bag, t),  `Collection (`Bag, t')  -> unify' rec_vars (t, t')
+      | `Collection (`List, t), `Collection (`List, t') -> unify' rec_vars (t, t')
 
       | `Collection (`MetaCollectionVar lpoint, lelems), `Collection (`MetaCollectionVar rpoint, relems) ->
 	  unify' rec_vars (lelems, relems);
@@ -137,7 +133,7 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
 *)
       | `DB, `DB -> ()
       | l, r ->
-          raise (Unify_failure ("Couldn't match "^ string_of_kind l ^" against "^ string_of_kind r))
+          raise (Unify_failure ("Couldn't match "^ string_of_kind l ^" against "^ string_of_kind r)))
 
 (* Unifies two rows which produces a substitution which, when
  * applied will transform both rows into a single row.  The algorithm
@@ -326,53 +322,53 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
       if generics = [] then
 	t
       else
-    let _ = debug ("Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
+	let _ = debug ("Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
 (*    let kind = inference_type_to_type t in *)
 
-    let tenv, renv, cenv = List.fold_left
-      (fun (tenv, renv, cenv) -> function
-	 | `TypeVar id -> IntMap.add id (ITO.new_type_variable ()) tenv, renv, cenv
-	 | `RowVar id -> tenv, IntMap.add id (ITO.new_row_variable ()) renv, cenv
-	 | `CtypeVar id -> tenv, renv, IntMap.add id (ITO.new_collection_variable ()) cenv
-      ) (IntMap.empty, IntMap.empty, IntMap.empty) generics in
-      
-    let rec inst : type_var_set -> inference_type -> inference_type = fun rec_vars typ ->
-      match typ with
-	 | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-	 | `Primitive _  -> typ
-	 | `TypeVar id -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
-	 | `MetaTypeVar point ->
-	     let t = Unionfind.find point in
-	       (match t with
-		  | `TypeVar id ->
-		      if IntMap.mem id tenv then
-			IntMap.find id tenv
-		      else
-			typ
-(*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
-		  | `Recursive (id, t) ->
-		      debug ("rec (instantiate): " ^(string_of_int id));
-		      if IntSet.mem id rec_vars then
-			typ
-		      else
-			inst (IntSet.add id rec_vars) t
-		  | _ -> inst rec_vars t)
+	let tenv, renv, cenv = List.fold_left
+	  (fun (tenv, renv, cenv) -> function
+	     | `TypeVar id -> IntMap.add id (ITO.new_type_variable ()) tenv, renv, cenv
+	     | `RowVar id -> tenv, IntMap.add id (ITO.new_row_variable ()) renv, cenv
+	     | `CtypeVar id -> tenv, renv, IntMap.add id (ITO.new_collection_variable ()) cenv
+	  ) (IntMap.empty, IntMap.empty, IntMap.empty) generics in
+	  
+	let rec inst : type_var_set -> inference_type -> inference_type = fun rec_vars typ ->
+	  match typ with
+	    | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+	    | `Primitive _  -> typ
+	    | `TypeVar id -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
+	    | `MetaTypeVar point ->
+		let t = Unionfind.find point in
+		  (match t with
+		     | `TypeVar id ->
+			 if IntMap.mem id tenv then
+			   IntMap.find id tenv
+			 else
+			   typ
+			     (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
+		     | `Recursive (id, t) ->
+			 debug ("rec (instantiate): " ^(string_of_int id));
+			 if IntSet.mem id rec_vars then
+			   typ
+			 else
+			   inst (IntSet.add id rec_vars) t
+		     | _ -> inst rec_vars t)
 (*	     
 	     (match subst with
 		| [] -> kind
 		| Var_equiv (var_id, var_kind) :: substs when id = var_id -> var_kind
 		| _ :: substs -> substitute substs kind)
 *)
-	 | `Function (var, body) -> `Function (inst rec_vars var, inst rec_vars body)
-	 | `Record row -> `Record (inst_row rec_vars row)
-	 | `Variant row ->  `Variant (inst_row rec_vars row)
-	 | `Recursive (id, t) ->
-	     assert(false)
-	     (*`Recursive (id, inst (IntSet.add id rec_vars) t) *)
-	 | `Collection (collection_type, elem_type) ->
-	     `Collection (inst_collection_type collection_type, inst rec_vars elem_type)
-(* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
-	 | `DB -> `DB
+	    | `Function (var, body) -> `Function (inst rec_vars var, inst rec_vars body)
+	    | `Record row -> `Record (inst_row rec_vars row)
+	    | `Variant row ->  `Variant (inst_row rec_vars row)
+	    | `Recursive (id, t) ->
+		assert(false)
+		  (*`Recursive (id, inst (IntSet.add id rec_vars) t) *)
+	    | `Collection (collection_type, elem_type) ->
+		`Collection (inst_collection_type collection_type, inst rec_vars elem_type)
+		  (* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
+	    | `DB -> `DB
 
 (*
     and inst_row_var : type_var_set -> inference_row_var -> inference_row =
@@ -395,38 +391,38 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      assert(false)
 *)
 
-    and inst_row : type_var_set -> inference_row -> inference_row = fun rec_vars row ->
-      let field_env, row_var = flatten_row row in
+	and inst_row : type_var_set -> inference_row -> inference_row = fun rec_vars row ->
+	  let field_env, row_var = flatten_row row in
+	    
+	  let is_closed = (row_var = `RowVar None) in
+	    
+	  let field_env' = StringMap.fold
+	    (fun label field_spec field_env' ->
+	       match field_spec with
+		 | `Present t -> StringMap.add label (`Present (inst rec_vars t)) field_env'
+		 | `Absent ->
+		     if is_closed then field_env'
+		     else StringMap.add label `Absent field_env'
+	    ) field_env StringMap.empty in
 
-      let is_closed = (row_var = `RowVar None) in
-
-      let field_env' = StringMap.fold
-	(fun label field_spec field_env' ->
-	   match field_spec with
-	     | `Present t -> StringMap.add label (`Present (inst rec_vars t)) field_env'
-	     | `Absent ->
-		 if is_closed then field_env'
-		 else StringMap.add label `Absent field_env'
-	 ) field_env StringMap.empty in
-
-      let row_var' =
-	match row_var with
-	  | `MetaRowVar point ->
-	      (match Unionfind.find point with
-		 | (env, `RowVar (Some var)) ->
-		     (* assert(StringMap.is_empty env); *)
-		       if IntMap.mem var renv then
-			 IntMap.find var renv
-		       else
-			 row_var
-		 | (_, `RowVar None)
-		 | (_, `MetaRowVar _) -> assert(false))
-	  | `RowVar None ->
-	      `RowVar None
-	  | `RowVar (Some _) ->
-	      assert(false)
-      in
-	field_env', row_var'
+	  let row_var' =
+	    match row_var with
+	      | `MetaRowVar point ->
+		  (match Unionfind.find point with
+		     | (env, `RowVar (Some var)) ->
+			 (* assert(StringMap.is_empty env); *)
+			 if IntMap.mem var renv then
+			   IntMap.find var renv
+			 else
+			   row_var
+		     | (_, `RowVar None)
+		     | (_, `MetaRowVar _) -> assert(false))
+	      | `RowVar None ->
+		  `RowVar None
+	      | `RowVar (Some _) ->
+		  assert(false)
+	  in
+	    field_env', row_var'
 	
 (*
       let row_var_field_env, row_var' = inst_row_var rec_vars row_var in
@@ -445,18 +441,18 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	(field_env'', row_var')
 *)
 
-    and inst_collection_type : inference_collection_type -> inference_collection_type = function
-      | `Set | `Bag | `List as k -> k
-      | `CtypeVar id as k ->
-	  if IntMap.mem id cenv then
-	    IntMap.find id cenv
-	  else
-	    `MetaCollectionVar (Unionfind.fresh k)
-      | `MetaCollectionVar point ->
-	  inst_collection_type (Unionfind.find point)
+	and inst_collection_type : inference_collection_type -> inference_collection_type = function
+	  | `Set | `Bag | `List as k -> k
+	  | `CtypeVar id as k ->
+	      if IntMap.mem id cenv then
+		IntMap.find id cenv
+	      else
+		`MetaCollectionVar (Unionfind.fresh k)
+	  | `MetaCollectionVar point ->
+	      inst_collection_type (Unionfind.find point)
 
-    in
-      inst IntSet.empty t
+	in
+	  inst IntSet.empty t
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
@@ -491,48 +487,7 @@ let instantiate : environment -> string -> kind = fun env var ->
 let rec get_quantifiers : type_var_set -> inference_type -> quantifier list = 
   fun used_vars -> 
     let is_used_var var = IntSet.mem var used_vars in 
-                          (*exists ((=)id) vars_in_env*)
-(*
-	  let rec vars_in_row fields = flatten (map (function
-                                                       | `Row_variable _ -> []
-                                                       | `Field_present (label, kind) -> vars_in_kind kind
-                                                       | `Field_absent _ -> [])
-                                                  fields)
-*)
-(*
-	 let rec vars_in_row (field_env, row_var) =
-	   let vars_in_field_env =
-	     StringMap.fold (fun label field_spec vars ->
-			       match field_spec with
-				 | `Present t -> (vars_in_kind t) @ vars
-				 | `Absent -> vars
-			    ) field_env []
-	   in
-	     match row_var with
-	       | `RowVar (Some id) -> id :: vars_in_field_env
-	       | `RowVar (None) -> vars_in_field_env
-	     
-         and vars_in_kind = (function
-                               | `Not_typed -> failwith "Internal error: `Not_typed' passed to unify"
-                               | `Primitive _ -> [] 
-                               | `TypeVar id as kind -> [id]
-                               | `Function (var, body) -> vars_in_kind var @ vars_in_kind body
-                               | `Record row -> vars_in_row row
-                               | `Variant row -> vars_in_row row
-			       | `Recursive (id, body) -> List.filter ((<>) id) (vars_in_kind body)
-                               | `Collection (_, elems) -> vars_in_kind elems
-                               | `DB -> []) in
-	   *)
 
-(* 
-     let free_row_vars : field -> quantifier list =
-        function
-          | `Row_variable id when used_in_env id -> []
-          | `Row_variable id -> [`RowVar id]
-          | `Field_present (label, kind) -> fst (assumptionize env kind)
-          | `Field_absent _ -> [] in
-      let row_generics fields : quantifier list = unduplicate (=) (concat_map free_row_vars fields) in
-*)
   let free_field_spec_vars : inference_field_spec -> quantifier list =
     function
       | `Present t -> get_quantifiers used_vars t
@@ -558,7 +513,6 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
       | `TypeVar id as kind -> [`TypeVar id]
       | `MetaTypeVar point ->
 	  get_quantifiers used_vars (Unionfind.find point)
-(*	  failwith ("get_quantifiers MetaTypeVar: not implemented yet")*)
 	  
       | `Function (var, body) ->
           let var_gens = get_quantifiers used_vars var
@@ -666,11 +620,11 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
   | Let (variable, _, _, pos) when qnamep variable -> invalid_name pos variable "qualified names (containing ':') cannot be bound"
   | Let (variable, value, body, pos) ->
       let value = w env value in
-(*      let _ = debug ("Environment env: " ^ (string_of_environment env)) in *)
+(*       let _ = debug ("Environment env: " ^ (string_of_environment env)) in *)
       let body_env = (variable, (assumptionize env (node_kind value))) :: env in
-(*      let _ = debug ("Environment body_env: " ^ (string_of_environment body_env)) in*)
+(*       let _ = debug ("Environment body_env: " ^ (string_of_environment body_env)) in *)
       let body = w body_env body in
-(*      let _ = debug ("Environment body_env': " ^ (string_of_environment body_env)) in*)
+(*       let _ = debug ("Environment body_env': " ^ (string_of_environment body_env)) in *)
 
 (*
       let _ = Printf.printf "Type for Let: \"%s\" \n" (string_of_kind (node_kind body)) in
@@ -718,11 +672,11 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
                                    node_kind trimmed_node) in (* ?? *) *)
         add_attrs special_attrs trimmed_node
   | Xml_node (s, atts, cs, pos) as x ->
-      let elem_bits = map (w env) cs
-      and attr_bits = map (fun (k,v) -> k, w env v) atts in
-      let attr_type = if islhref x then Sl_kind.xml else Sl_kind.string in
-      let unified_elems = map (fun node -> unify (node_kind node , `Collection (`List, `Primitive `XMLitem))) elem_bits
-      and unified_atts = map (fun (s, node) -> unify (node_kind node, attr_type)) attr_bits in
+      let elem_bits = map (w env) cs in
+      let attr_bits = map (fun (k,v) -> k, w env v) atts in
+      let attr_type = if islhref x then	Sl_kind.xml else Sl_kind.string in
+      let unified_elems = map (fun node -> unify (node_kind node, `Collection (`List, `Primitive `XMLitem))) elem_bits in
+      let unified_atts = map (fun (s, node) -> unify (node_kind node, attr_type)) attr_bits in
         Xml_node (s, 
                   attr_bits,
                   elem_bits,
