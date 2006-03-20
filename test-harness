@@ -69,7 +69,7 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', env = None):
     else:
         global failures
         failures += 1
-        print '!FAILURE  %s' % name
+        print '!FAILURE: %s' % name
         for i, j in errors:
             print i
             print j
