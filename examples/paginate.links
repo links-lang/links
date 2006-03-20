@@ -3,11 +3,10 @@
 results_per_page = 10;
 
 fun query(n) {
-   for result <- take(results_per_page) (
+  take(results_per_page) (
      drop(results_per_page * (n-1)) (
-          Table "wordlist" with { word: String,  meaning : String } order [ word : asc ] 
-           from database "postgresql:links:localhost:5432:www-data:"
-   )) in <li>{enxml(result.word ++ " : " ++ result.meaning)}</li>
+         Table "wordlist" with {word: String,  meaning: String } order [word: asc] 
+         from database "postgresql:links:localhost:5432:www-data:"))
 }
 
 
@@ -18,7 +17,7 @@ fun page(n) {
     <body>
        <h1>{title}</h1>
        <ul>
-          {query(n)}
+          {for result <- query(n) in <li>{enxml(result.word ++ " : " ++ result.meaning)}</li>}
        </ul>
        {if (n <> 1) <a l:href="{page(n-1)}">previous</a> else <span/>}
        <a l:href="{page(n+1)}">next</a>
