@@ -5,5 +5,5 @@ val grab_url : string -> string
 
 (* Find all import directives within a file and return the
 corresponding lists of value and type environments *)
-val import_modules : Sl_syntax.expression list
-                  -> (string * Sl_result.environment * Sl_kind.environment) list
+val import_modules : Syntax.expression list
+                  -> (string * Result.environment * Kind.environment) list

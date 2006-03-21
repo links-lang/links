@@ -1,6 +1,6 @@
-open Sl_syntax
-open Sl_kind
-open Sl_result
+open Syntax
+open Kind
+open Result
 
 (** <form> manipulation **)
 (* Is an expression a <form l:action ... > expression? *)

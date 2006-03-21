@@ -34,8 +34,8 @@
 {
 
 open Lexing
-open Sl_utility
-open Sl_parser
+open Utility
+open Parser
 
 let bump_lines lexbuf n = 
   lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_lnum = lexbuf.lex_curr_p.pos_lnum + n}
@@ -178,7 +178,7 @@ and attrlex lexers = parse
 {
 
 let lexer () = 
-  let lexers = (Stack.create () : (Lexing.lexbuf -> Sl_parser.token) Stack.t) in
+  let lexers = (Stack.create () : (Lexing.lexbuf -> Parser.token) Stack.t) in
     Stack.push (lex lexers) lexers;
     (* This flag, which records when we should insert an extra
     SEMICOLON token before the END, is a workaround for an

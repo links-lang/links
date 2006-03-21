@@ -13,11 +13,11 @@ open Num
 open Netencoding
 open List
 
-open Sl_pickle
-open Sl_forms
-open Sl_utility
-open Sl_kind
-open Sl_syntax
+open Pickle
+open Forms
+open Utility
+open Kind
+open Syntax
 
 let gensym =
   let counter = ref 0 in 
@@ -51,7 +51,7 @@ let gensym =
   __continuations
     Table of continuation functions, indexed by id.
 
-  Also, any `builtin' functions from Sl_library.value_env.
+  Also, any `builtin' functions from Library.value_env.
  *)
 
 
@@ -253,7 +253,7 @@ let generate_stub = function
                       [strlit n; Dict (
                          List.map2
                            (fun n v -> string_of_int n, Var v) 
-                           (Sl_utility.fromTo 1 (1 + List.length arglist))
+                           (Utility.fromTo 1 (1 + List.length arglist))
                            arglist
                        )])))]
   | e
@@ -549,7 +549,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   *)
   let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
   let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
-  let vars = Sl_forms.lname_bound_vars xml in
+  let vars = Forms.lname_bound_vars xml in
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left
                             (fun expr var -> Bind (var, Call (Var "__val", [strlit var]), expr))
@@ -593,8 +593,8 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
      3. Add onFocus handlers
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
-  let attrs = ("onfocus", Sl_syntax.String ("__focused = this.id",
-                                            (Sl_sugar._DUMMY_POS, `Not_typed, None)))
+  let attrs = ("onfocus", Syntax.String ("__focused = this.id",
+                                            (Sugar._DUMMY_POS, `Not_typed, None)))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
@@ -732,7 +732,7 @@ let rec simplify_completely expr =
       simplify_completely expr2
 
 let gen = 
-  Sl_utility.perhaps_apply Sl_optimiser.uniquify_expression
+  Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
   ->- simplify_completely 
   ->- show
@@ -749,25 +749,25 @@ let generate_program filename environment expression =
 (*   Hereafter tests   *)
 
 
-(* FIXME: The tests below create an unnecessary dependency on Sl_inference (maybe other modules to?
+(* FIXME: The tests below create an unnecessary dependency on Inference (maybe other modules to?
    I'd like to remove this. Can we move the tests into a different module?
 *)
 
-open Sl_inference
+open Inference
 
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 
 let rhino_output linkscode = 
   let gen = show
         -<- generate
-        -<- (Sl_utility.perhaps_apply Sl_optimiser.uniquify_expression)
-        -<- List.hd -<- snd -<- Sl_inference.type_program Sl_library.type_env -<- Parse.parse_string in
+        -<- (Utility.perhaps_apply Optimiser.uniquify_expression)
+        -<- List.hd -<- snd -<- Inference.type_program Library.type_env -<- Parse.parse_string in
   let tempfile = Filename.temp_file "linkstest" ".js" in
   let cleanup () = (try Sys.remove tempfile with _ -> ()) in
     try
       let channel = open_out tempfile in 
       let s = gen linkscode in
-        Sl_utility.debug ("generated code for " ^ linkscode ^ ":\n" ^ s ^ "\n");
+        Utility.debug ("generated code for " ^ linkscode ^ ":\n" ^ s ^ "\n");
         output_string channel s ;
         flush channel;
         let output = process_output ("rhino < " ^ tempfile ^ " 2>&1 | sed '1d;s/^ *js>//'") in

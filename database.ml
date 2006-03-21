@@ -1,11 +1,11 @@
 open Num
 open List
 
-open Sl_utility
-open Sl_result
-open Sl_sql
-open Sl_kind
-open Sl_syntax
+open Utility
+open Result
+open Sql
+open Kind
+open Syntax
 
 class virtual db_args from_str = object
   val strval : string = from_str
@@ -13,11 +13,11 @@ class virtual db_args from_str = object
 end
 
 let value_from_db_string (value:string) = function
-  | BoolField -> Sl_result.bool (value = "true")
-  | TextField -> Sl_result.string_as_charlist value
-  | IntField  -> Sl_result.int (num_of_string value)
-  | FloatField -> (if value = "" then Sl_result.float 0.00      (* HACK HACK *)
-                   else Sl_result.float (float_of_string value))
+  | BoolField -> Result.bool (value = "true")
+  | TextField -> Result.string_as_charlist value
+  | IntField  -> Result.int (num_of_string value)
+  | FloatField -> (if value = "" then Result.float 0.00      (* HACK HACK *)
+                   else Result.float (float_of_string value))
 
 let kind_from_db_type = function
   | BoolField -> `Primitive `Bool

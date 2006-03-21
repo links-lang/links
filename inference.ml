@@ -1,11 +1,11 @@
 open List
 
-open Sl_utility
-open Sl_syntax
-open Sl_kind
+open Utility
+open Syntax
+open Kind
 open Inferencetypes
-open Sl_forms
-open Sl_errors
+open Forms
+open Errors
 
 exception Unify_failure of string
 exception UndefinedVariable of string
@@ -643,13 +643,13 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       and bindings = lname_bound_vars xml in
       let special_attrs = filter (fst ->- is_special) atts in
         (* Assume each l:name-bound variable has type string *)
-      let augenv = fold_right (fun s env -> (s, ([], Sl_kind.string)) :: env) bindings env in
+      let augenv = fold_right (fun s env -> (s, ([], Kind.string)) :: env) bindings env in
       let result = map (fun (name, expr) -> (name, w augenv expr)) special_attrs in
       let special_attrs = result in
         (* Check that the bound expressions have type XML *)
         (* TBD: figure out what the right type for these is *)
 (*      let _ =
-	List.iter (fun (_, expr) -> unify(node_kind expr, ITO.new_type_variable ()(*Sl_kind.xml*))) special_attrs in*)
+	List.iter (fun (_, expr) -> unify(node_kind expr, ITO.new_type_variable ()(*Kind.xml*))) special_attrs in*)
       let trimmed_node =
  (* send it round again, without the bound expression attributes *)
         (w env (Xml_node ("form", trim atts, cs, pos))) in
@@ -661,7 +661,7 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let typecheck_pairs alist = alistmap (w env) alist in
       let special_attrs = typecheck_pairs special_attrs in
         (* Check that the bound expressions have type XML *)
-(*       let _ = (List.iter (fun (_, expr) -> unify(node_kind expr, Sl_kind.xml)) *)
+(*       let _ = (List.iter (fun (_, expr) -> unify(node_kind expr, Kind.xml)) *)
 (*                  special_attrs) in *)
       let nonspecial_attrs = trim atts in
       let trimmed_node =
@@ -674,7 +674,7 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
   | Xml_node (s, atts, cs, pos) as x ->
       let elem_bits = map (w env) cs in
       let attr_bits = map (fun (k,v) -> k, w env v) atts in
-      let attr_type = if islhref x then	Sl_kind.xml else Sl_kind.string in
+      let attr_type = if islhref x then	Kind.xml else Kind.string in
       let unified_elems = map (fun node -> unify (node_kind node, `Collection (`List, `Primitive `XMLitem))) elem_bits in
       let unified_atts = map (fun (s, node) -> unify (node_kind node, attr_type)) attr_bits in
         Xml_node (s, 
@@ -876,7 +876,7 @@ and
           match node_kind expr' with
             | `Function _ -> ((label, ([], (node_kind expr'))) :: env,
                               (label, expr') :: result)
-            | kind -> Sl_errors.letrec_nonfunction (node_pos expr') (expr', kind)
+            | kind -> Errors.letrec_nonfunction (node_pos expr') (expr', kind)
       in
       let var_env = (map (fun (name, expr) ->
 			     (name, ([], ITO.new_type_variable ())))

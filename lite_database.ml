@@ -1,5 +1,5 @@
 open Sqlite
-open Sl_result
+open Result
 
 
 let error_as_string = function

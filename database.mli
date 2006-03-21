@@ -1,6 +1,6 @@
-open Sl_kind
-open Sl_sql
-open Sl_result
+open Kind
+open Sql
+open Result
 
 class virtual db_args : string -> object 
   val strval : string

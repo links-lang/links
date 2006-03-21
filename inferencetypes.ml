@@ -1,19 +1,19 @@
-open Sl_utility
+open Utility
 
 type type_var_set = IntSet.t
 
 type inference_type = [
-  | (inference_type, inference_row, inference_collection_type) Sl_kind.type_basis
+  | (inference_type, inference_row, inference_collection_type) Kind.type_basis
   | `MetaTypeVar of inference_type Unionfind.point ]
 and inference_collection_type = [
-  | Sl_kind.collection_type
+  | Kind.collection_type
   | `MetaCollectionVar of inference_collection_type Unionfind.point ]
-and inference_field_spec = inference_type Sl_kind.field_spec_basis
+and inference_field_spec = inference_type Kind.field_spec_basis
 and inference_field_spec_map = inference_field_spec StringMap.t
 and inference_row_var = [
-  | Sl_kind.row_var
+  | Kind.row_var
   | `MetaRowVar of inference_row Unionfind.point ]
-and inference_row = (inference_type, inference_row_var) Sl_kind.row_basis
+and inference_row = (inference_type, inference_row_var) Kind.row_basis
 
 let type_vars, row_type_vars =
   let rec type_vars' : type_var_set -> inference_type -> int list = fun rec_vars ->
@@ -39,7 +39,7 @@ let type_vars, row_type_vars =
       | `DB                      -> []
       | `MetaTypeVar point       -> type_vars' rec_vars (Unionfind.find point)
   and row_type_vars' : type_var_set -> inference_row -> int list = fun rec_vars (field_env, row_var) ->
-    let field_vars = List.concat (List.map (fun (_, t) -> type_vars' rec_vars t) (Sl_kind.get_present_fields field_env)) in
+    let field_vars = List.concat (List.map (fun (_, t) -> type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
     let row_vars =
       match row_var with
 	| `RowVar (Some var) -> [var]
@@ -48,16 +48,16 @@ let type_vars, row_type_vars =
     in
       field_vars @ row_vars
   in
-    ((fun t -> Sl_utility.unduplicate (=) (type_vars' IntSet.empty t)),
-     (fun t -> Sl_utility.unduplicate (=) (row_type_vars' IntSet.empty t)))
+    ((fun t -> Utility.unduplicate (=) (type_vars' IntSet.empty t)),
+     (fun t -> Utility.unduplicate (=) (row_type_vars' IntSet.empty t)))
 
-type inference_assumption = inference_type Sl_kind.assumption_basis
-type inference_environment = inference_type Sl_kind.environment_basis
+type inference_assumption = inference_type Kind.assumption_basis
+type inference_environment = inference_type Kind.environment_basis
 
 
 
 module BasicInferenceTypeOps :
-  (Sl_kind.BASICTYPEOPS with type typ = inference_type
+  (Kind.BASICTYPEOPS with type typ = inference_type
 			and type row_var' = inference_row_var
 			and type collection_type' = inference_collection_type) =
 struct
@@ -65,9 +65,9 @@ struct
   type row_var' = inference_row_var
   type collection_type' = inference_collection_type
 
-  type field_spec = typ Sl_kind.field_spec_basis
-  type field_spec_map = typ Sl_kind.field_spec_map_basis
-  type row = (typ, row_var') Sl_kind.row_basis
+  type field_spec = typ Kind.field_spec_basis
+  type field_spec_map = typ Kind.field_spec_map_basis
+  type row = (typ, row_var') Kind.row_basis
 
   let empty_field_env = StringMap.empty
   let closed_row_var = `RowVar None
@@ -135,18 +135,18 @@ let get_row_var : inference_row -> inference_row_var = snd @@ flatten_row
 
 
 module InferenceTypeOps :
-  (Sl_kind.TYPEOPS
+  (Kind.TYPEOPS
    with type typ = inference_type
    and type row_var = inference_row_var
-   and type collection_type = inference_collection_type) = Sl_kind.TypeOpsGen(BasicInferenceTypeOps)
+   and type collection_type = inference_collection_type) = Kind.TypeOpsGen(BasicInferenceTypeOps)
 module ITO = InferenceTypeOps
 
 
-let row_to_inference_row' (r: Sl_kind.row) = (r: Sl_kind.row :> inference_row)
+let row_to_inference_row' (r: Kind.row) = (r: Kind.row :> inference_row)
 
-let type_to_inference_type' (t : Sl_kind.kind) = (t : Sl_kind.kind :> inference_type)
+let type_to_inference_type' (t : Kind.kind) = (t : Kind.kind :> inference_type)
 
-let rec type_to_inference_type : Sl_kind.kind -> inference_type = function
+let rec type_to_inference_type : Kind.kind -> inference_type = function
   | `Not_typed -> `Not_typed
   | `Primitive p -> `Primitive p
   | `TypeVar var -> `MetaTypeVar (Unionfind.fresh (`TypeVar var))
@@ -168,7 +168,7 @@ and collection_type_to_inference_collection_type = function
   | `CtypeVar var -> `MetaCollectionVar (Unionfind.fresh (`CtypeVar var))
 
 
-let rec inference_type_to_type : type_var_set -> inference_type -> Sl_kind.kind = fun rec_vars ->
+let rec inference_type_to_type : type_var_set -> inference_type -> Kind.kind = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
@@ -216,20 +216,20 @@ let inference_field_spec_to_field_spec = inference_field_spec_to_field_spec IntS
 let inference_row_to_row = inference_row_to_row IntSet.empty
 
 
-let assumption_to_inference_assumption : Sl_kind.assumption -> inference_assumption = function
+let assumption_to_inference_assumption : Kind.assumption -> inference_assumption = function
   | (quantifiers, t) -> (quantifiers, type_to_inference_type t)
-let inference_assumption_to_assumption : inference_assumption -> Sl_kind.assumption = function
+let inference_assumption_to_assumption : inference_assumption -> Kind.assumption = function
   | (quantifiers, t) -> (quantifiers, inference_type_to_type t)
 
 
-let environment_to_inference_environment : Sl_kind.environment -> inference_environment =
+let environment_to_inference_environment : Kind.environment -> inference_environment =
   List.map (fun (name, assumption) -> (name, assumption_to_inference_assumption assumption))
-let inference_environment_to_environment : inference_environment -> Sl_kind.environment =
+let inference_environment_to_environment : inference_environment -> Kind.environment =
   List.map (fun (name, assumption) -> (name, inference_assumption_to_assumption assumption))
 
-let string_of_kind = Sl_kind.string_of_kind @@ inference_type_to_type
-let string_of_kind_raw = Sl_kind.string_of_kind_raw @@ inference_type_to_type
-let string_of_row : inference_row -> string = Sl_kind.string_of_row @@ inference_row_to_row
+let string_of_kind = Kind.string_of_kind @@ inference_type_to_type
+let string_of_kind_raw = Kind.string_of_kind_raw @@ inference_type_to_type
+let string_of_row : inference_row -> string = Kind.string_of_row @@ inference_row_to_row
 
-let string_of_assumption = Sl_kind.string_of_assumption @@ inference_assumption_to_assumption
-let string_of_environment = Sl_kind.string_of_environment @@ inference_environment_to_environment
+let string_of_assumption = Kind.string_of_assumption @@ inference_assumption_to_assumption
+let string_of_environment = Kind.string_of_environment @@ inference_environment_to_environment

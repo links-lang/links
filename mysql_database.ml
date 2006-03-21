@@ -1,4 +1,4 @@
-open Sl_result
+open Result
 open Mysql
 
 let string_of_error_code = function
@@ -197,7 +197,7 @@ let string_of_error_code = function
 | Wrong_value_count_on_row         -> "Wrong value count on row"
 | Yes                              -> "Yes"
 
-class otherfield (thing : Mysql.dbty) : Sl_result.otherfield =
+class otherfield (thing : Mysql.dbty) : Result.otherfield =
 object
   method show = pretty_type thing
 end
@@ -213,7 +213,7 @@ class mysql_result (result: result) db = object
   inherit dbresult
   val rows = 
     let toList row = 
-      List.map (Sl_utility.fromOption "!!NULL!!") (Array.to_list row) in
+      List.map (Utility.fromOption "!!NULL!!") (Array.to_list row) in
       List.map toList (slurp fetch result)
   method status : db_status = 
     match status db with 
@@ -222,16 +222,16 @@ class mysql_result (result: result) db = object
   method nfields : int = 
     fields result
   method fname  n : string = 
-    (Sl_utility.valOf (fetch_field_dir result n)).name
+    (Utility.valOf (fetch_field_dir result n)).name
   method ftype  n : db_field_type = 
-    match (Sl_utility.valOf (fetch_field_dir result n)).ty with
+    match (Utility.valOf (fetch_field_dir result n)).ty with
       | IntTy | Int64Ty -> IntField
       | StringTy -> TextField
       | other -> SpecialField (new otherfield other)
   method get_all_lst : string list list = 
     rows
   method error : string = 
-    Sl_utility.valOf (errmsg db)
+    Utility.valOf (errmsg db)
 end
 
 class mysql_database spec = object
@@ -242,7 +242,7 @@ class mysql_database spec = object
 end
 
 let parse_args (args : string) : db =
-  match Sl_utility.split_string args ':' with 
+  match Utility.split_string args ':' with 
     | (name::host::port::user::pass::others) ->
         (try
           {

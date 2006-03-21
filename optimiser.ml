@@ -2,10 +2,10 @@
 
 open List
 
-open Sl_utility
+open Utility
 open Rewrite
-open Sl_syntax
-open Sl_sql_transform
+open Syntax
+open Sql_transform
 
 let optimising = ref false
 
@@ -13,9 +13,9 @@ module RewriteSyntax =
   Rewrite
     (SimpleRewrite
        (struct
-          type t = Sl_syntax.expression
+          type t = Syntax.expression
           type rewriter = t -> t option
-          let process_children = Sl_syntax.perhaps_process_children
+          let process_children = Syntax.perhaps_process_children
         end))
     
 let gensym =
@@ -103,7 +103,7 @@ let pure : expression -> bool =
 *)
 (*
 let inference_rw env : RewriteSyntax.rewriter = fun input -> 
-  let output = snd (Sl_inference.type_expression env (erase input)) in
+  let output = snd (Inference.type_expression env (erase input)) in
     if input = output then None
     else Some output
 *)
@@ -182,11 +182,11 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     | Let (variable, value, body, data) ->
         let (positive, negative, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Let (variable, value, body, data), origin)
-    | Record_selection (label, label_variable, variable, Sl_syntax.Variable (name, vdata), body, data) ->
+    | Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data) ->
         let trace_data = `Selected{field_name=label; field_var=label_variable;
                                    etc_var = variable; source_var = name} in
         let (positive, negative, body, origin) = extract_tests (trace_data :: bindings) body in
-          (positive, negative, Record_selection (label, label_variable, variable, Sl_syntax.Variable (name, vdata), body, data), origin)
+          (positive, negative, Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data), origin)
     | Record_selection (label, label_variable, variable, value, body, data) ->
         let positive, negative, body, origin = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Record_selection (label, label_variable, variable, value, body, data), origin)
@@ -223,7 +223,7 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     used in the selection's body. *)
 type fieldset = All
               | Fields of (string list)
-let sql_projections (env:Sl_kind.environment) : RewriteSyntax.rewriter =
+let sql_projections (env:Kind.environment) : RewriteSyntax.rewriter =
   let merge_needed : fieldset list -> fieldset =
     let merge2 = function
       | All, _ | _, All -> All
@@ -237,7 +237,7 @@ let sql_projections (env:Sl_kind.environment) : RewriteSyntax.rewriter =
                match apply with
                  | Variable (name, _) -> snd (assoc name env)
                  | Abstr _ ->
-                     (match snd (Sl_inference.type_expression env (erase apply)) with
+                     (match snd (Inference.type_expression env (erase apply)) with
                         | Abstr (_, _, (_, kind, _)) -> kind
                         | _ -> failwith "OP442")
                  | _ -> failwith "OP437"
@@ -406,7 +406,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                   should be handled the same as 2-join, 3-join, etc. *)
                let (pos, neg, body, proj_srcs) = extract_tests bindings body in
                  (* This positive/negatives business is retarded, I think *)
-               debug("extract_tests returned " ^ String.concat " AND " (map Sl_sql.string_of_expression pos) ^ " AND NOT " ^ String.concat " AND " (map Sl_sql.string_of_expression neg));
+               debug("extract_tests returned " ^ String.concat " AND " (map Sql.string_of_expression pos) ^ " AND NOT " ^ String.concat " AND " (map Sql.string_of_expression neg));
                  if (pos <> [] || neg <> []) then
                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in
                      Some (Collection_extension(body, outer_var, 
@@ -566,7 +566,7 @@ let rewriters env = [
   RewriteSyntax.bottomup fold_constant;
 ]
 
-let run_optimisers : Sl_kind.environment -> RewriteSyntax.rewriter
+let run_optimisers : Kind.environment -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise env expr =
@@ -579,9 +579,9 @@ let optimise_program (env, exprs) =
 
 
 let parse = Parse.parse_string
-let parse_and_type env = List.hd -<- snd -<- Sl_inference.type_program env -<- parse
+let parse_and_type env = List.hd -<- snd -<- Inference.type_program env -<- parse
 
-let strip = Sl_syntax.redecorate (fun _ -> ());;
+let strip = Syntax.redecorate (fun _ -> ());;
 
 let test () =
   assert(opt_map strip (RewriteSyntax.bottomup fold_constant (parse_and_type [] "if (true) 3 else 4"))
@@ -596,14 +596,14 @@ let test () =
   ;
   (* tests a bug where all subtrees of a node were reversed in order. *)
   assert (opt_map
-	    strip (RewriteSyntax.bottomup (fun x -> Some x) (parse_and_type Sl_library.type_env "2 + 3"))
-	    = Some (Sl_syntax.Apply
-		      (Sl_syntax.Apply
-			 (Sl_syntax.Variable ("+", ()), Sl_syntax.Integer (Num.Int 2, ()), ()),
-		       Sl_syntax.Integer (Num.Int 3, ()), ())))
+	    strip (RewriteSyntax.bottomup (fun x -> Some x) (parse_and_type Library.type_env "2 + 3"))
+	    = Some (Syntax.Apply
+		      (Syntax.Apply
+			 (Syntax.Variable ("+", ()), Syntax.Integer (Num.Int 2, ()), ()),
+		       Syntax.Integer (Num.Int 3, ()), ())))
   ;
   assert (opt_map
-	    strip (RewriteSyntax.bottomup sql_joins (parse_and_type Sl_library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) bag[(x.b, y.d)] else bag[]}"))
+	    strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) bag[(x.b, y.d)] else bag[]}"))
 	  =
       Some
 	(Let
@@ -631,51 +631,51 @@ let test () =
 	       ()),
 	    ())))
   ;
-  assert(opt_map strip (RewriteSyntax.bottomup sql_joins (parse_and_type Sl_library.type_env  "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db) in if (x.b == z.e && x.a == y.c)         bag[(x.b, y.d)] else bag[]}"))
+  assert(opt_map strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env  "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db) in if (x.b == z.e && x.a == y.c)         bag[(x.b, y.d)] else bag[]}"))
          =
       Some
-        (Sl_syntax.Let
-           ("db", Sl_syntax.Database (Sl_syntax.String ("Rubbish", ()), ()),
-            Sl_syntax.Collection_extension
-              (Sl_syntax.Condition
-                 (Sl_syntax.Condition
-                    (Sl_syntax.Comparison
-                       (Sl_syntax.Record_selection
-                          ("b", "g97", "g98", Sl_syntax.Variable ("x", ()),
-                           Sl_syntax.Variable ("g97", ()), ()),
+        (Syntax.Let
+           ("db", Syntax.Database (Syntax.String ("Rubbish", ()), ()),
+            Syntax.Collection_extension
+              (Syntax.Condition
+                 (Syntax.Condition
+                    (Syntax.Comparison
+                       (Syntax.Record_selection
+                          ("b", "g97", "g98", Syntax.Variable ("x", ()),
+                           Syntax.Variable ("g97", ()), ()),
                         "==",
-                        Sl_syntax.Record_selection
-                          ("e", "g99", "g100", Sl_syntax.Variable ("x", ()),
-                           Sl_syntax.Variable ("g99", ()), ()),
+                        Syntax.Record_selection
+                          ("e", "g99", "g100", Syntax.Variable ("x", ()),
+                           Syntax.Variable ("g99", ()), ()),
                         ()),
-                     Sl_syntax.Comparison
-                       (Sl_syntax.Record_selection
-                          ("a", "g101", "g102", Sl_syntax.Variable ("x", ()),
-                           Sl_syntax.Variable ("g101", ()), ()),
+                     Syntax.Comparison
+                       (Syntax.Record_selection
+                          ("a", "g101", "g102", Syntax.Variable ("x", ()),
+                           Syntax.Variable ("g101", ()), ()),
                         "==",
-                        Sl_syntax.Record_selection
-                          ("c", "g103", "g104", Sl_syntax.Variable ("x", ()),
-                           Sl_syntax.Variable ("g103", ()), ()),
+                        Syntax.Record_selection
+                          ("c", "g103", "g104", Syntax.Variable ("x", ()),
+                           Syntax.Variable ("g103", ()), ()),
                         ()),
-                     Sl_syntax.Boolean (false, ()), ()),
-                  Sl_syntax.Collection_single
-                    (Sl_syntax.Record_extension
+                     Syntax.Boolean (false, ()), ()),
+                  Syntax.Collection_single
+                    (Syntax.Record_extension
                        ("1",
-                        Sl_syntax.Record_selection
-                          ("b", "g105", "g106", Sl_syntax.Variable ("x", ()),
-                           Sl_syntax.Variable ("g105", ()), ()),
-                        Sl_syntax.Record_extension
+                        Syntax.Record_selection
+                          ("b", "g105", "g106", Syntax.Variable ("x", ()),
+                           Syntax.Variable ("g105", ()), ()),
+                        Syntax.Record_extension
                           ("2",
-                           Sl_syntax.Record_selection
-                             ("d", "g107", "g108", Sl_syntax.Variable ("x", ()),
-                              Sl_syntax.Variable ("g107", ()), ()),
-                           Sl_syntax.Record_empty (), ()),
+                           Syntax.Record_selection
+                             ("d", "g107", "g108", Syntax.Variable ("x", ()),
+                              Syntax.Variable ("g107", ()), ()),
+                           Syntax.Record_empty (), ()),
                         ()),
                      `Bag, ()),
-                  Sl_syntax.Collection_empty (`Bag, ()), ()),
+                  Syntax.Collection_empty (`Bag, ()), ()),
                "x",
-               Sl_syntax.Table
-                 (Sl_syntax.Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
+               Syntax.Table
+                 (Syntax.Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
                   failwith "This is broken.  Optimization tests should use pattern matching, not structural equality.",
                   ()),
                ()),

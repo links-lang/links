@@ -1,12 +1,12 @@
 open Postgresql
-open Sl_utility
-open Sl_result
+open Utility
+open Result
 
 (* Pg_database 
-   Implements the Sl_result.database interface
+   Implements the Result.database interface
    for Postgresql back ends *)
 
-class otherfield (thing : Postgresql.ftype) : Sl_result.otherfield =
+class otherfield (thing : Postgresql.ftype) : Result.otherfield =
 object (self)
   method show = match thing with
     | BOOL -> "bool"
@@ -112,7 +112,7 @@ end
 let driver_name = "postgresql"
     
 let get_pg_database_by_string args =
-  match Sl_utility.split_string args ':' with
+  match Utility.split_string args ':' with
     | (name::host::port::user::pass::others) ->
         (new pg_database host port name user pass, reconstruct_db_string (driver_name, args))
     | _ -> failwith "Insufficient arguments when establishing postgresql connection"

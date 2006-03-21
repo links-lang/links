@@ -21,11 +21,11 @@ open List
 open Num
 open Netencoding
 
-open Sl_utility
-open Sl_sugar
-open Sl_syntax
-open Sl_kind
-open Sl_result
+open Utility
+open Sugar
+open Syntax
+open Kind
+open Result
 
 
 (** "Runtime" services: handling continuation objects during evaluation **)
@@ -92,7 +92,7 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (_DUMMY_POS, Sl_kind.string, None))
+  String (s, (_DUMMY_POS, Kind.string, None))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");
@@ -119,7 +119,7 @@ let xml_transform env : expression -> expression =
                  (* l:handler denotes an expression which should eval
                     to a continuation value; so this is broken *)
              | Right lhandler -> [hidden_input "continuation%"
-                                    (Base64.encode (Sl_syntax.serialise_expression lhandler))] in
+                                    (Base64.encode (Syntax.serialise_expression lhandler))] in
              (* FIXME: replace l:handler too *)
              Xml_node ("form", substitute (((=)"l:onsubmit") @@ attrname) ("action", string "#") attrs, new_fields @ contents, data)
          with Not_found -> form)
@@ -138,12 +138,12 @@ let xml_transform env : expression -> expression =
 
 (* Everything from here on down handles remote calls from the client *)
 
-open Sl_pickle
+open Pickle
 
 (* Just a temporary measure to allow units through *)
 let serialise_unit, deserialise_unit = primitive_serialisers 'z' (fun () -> "") (fun _ -> ())
 
-let rec primitive_picklers (kind : Sl_kind.kind) : result serialiser * result deserialiser = match kind with
+let rec primitive_picklers (kind : Kind.kind) : result serialiser * result deserialiser = match kind with
   | `Primitive `Bool  -> serialise_bool  @@ unbox_bool,  (fun s -> let v, r = deserialise_bool s in box_bool v, r)
   | `Primitive `Int   -> serialise_int   @@ unbox_int,   (fun s -> let v, r = deserialise_int s in box_int v, r)
   | `Primitive `Float -> serialise_float @@ unbox_float, (fun s -> let v, r = deserialise_float s in box_float v, r)
@@ -151,7 +151,7 @@ let rec primitive_picklers (kind : Sl_kind.kind) : result serialiser * result de
   | `Primitive `XMLitem -> serialise_item   @@ unbox_xml,   (fun s -> let v, r = deserialise_item s in box_xml v, r)
   | `Record (field_env, `RowVar None) when StringMap.is_empty field_env -> (fun _ -> "z0+"), (fun s -> let v, r = deserialise_unit s in `Record [], r)
   | `Collection (`List, `Primitive `Char) ->
-      ((fun r -> serialise_string (Sl_result.charlist_as_string r)),
+      ((fun r -> serialise_string (Result.charlist_as_string r)),
        (fun s -> let v, r = deserialise_string s in (string_as_charlist v), r))
   | `Collection (`List, element_type) -> 
       ((function
@@ -166,9 +166,9 @@ and primitive_deserialiser v = snd (primitive_picklers v)
 (* string_dict_to_charlist_dict: a utility routine *)
 
 let string_dict_to_charlist_dict =
-  dict_map Sl_result.string_as_charlist
+  dict_map Result.string_as_charlist
 
-let rec decode_parameters : Sl_kind.kind list * string -> Sl_result.result list = function 
+let rec decode_parameters : Kind.kind list * string -> Result.result list = function 
   | [], "" -> []
   | [], _ -> failwith "Insufficient number of types for the parameter list in remote call"
   | _, "" -> failwith "Too many types for the parameter list in remote call"
@@ -213,7 +213,7 @@ let is_remote_call params =
   mem_assoc "__name" params && mem_assoc "__args" params (* && mem_assoc "t" params*)
 
 let rec apply_fn
-    (interpreter : environment -> environment -> Sl_syntax.expression -> Sl_result.result) = function
+    (interpreter : environment -> environment -> Syntax.expression -> Result.result) = function
       | (`Function (var, locals, globals, body) as f) -> 
           (function
              | [one] -> interpreter globals ((var,one) :: locals)  body

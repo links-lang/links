@@ -94,8 +94,8 @@ let rec sql_sort : optimiser = fun expr ->
       | Condition (condition, t, e, data) ->
           (match push_sort up t, push_sort up e with
              | (None, None) -> None
-             | (None, Some e) -> Some (Condition (condition, Sort (up, t, (Sl_sugar._DUMMY_POS, `Not_typed, None)), e, data))
-             | (Some t, None) -> Some (Condition (condition, t, Sort (up, e, (Sl_sugar._DUMMY_POS, `Not_typed, None)), data))
+             | (None, Some e) -> Some (Condition (condition, Sort (up, t, (Sugar._DUMMY_POS, `Not_typed, None)), e, data))
+             | (Some t, None) -> Some (Condition (condition, t, Sort (up, e, (Sugar._DUMMY_POS, `Not_typed, None)), data))
              | (Some t, Some e) -> Some (Condition (condition, t, e, data)))
       | Let (variable, value, body, data) ->
           (match push_sort up body with
@@ -116,8 +116,8 @@ let rec sql_sort : optimiser = fun expr ->
       | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
           (match push_sort up case_body, push_sort up body with
              | (None, None) -> None
-             | (None, Some body) -> Some (Variant_selection (value, case_label, case_variable, Sort (up, case_body, (Sl_sugar._DUMMY_POS, `Not_typed, None)), variable, body, data))
-             | (Some case_body, None) -> Some (Variant_selection (value, case_label, case_variable, case_body, variable, Sort (up, body, (Sl_sugar._DUMMY_POS, `Not_typed, None)), data))
+             | (None, Some body) -> Some (Variant_selection (value, case_label, case_variable, Sort (up, case_body, (Sugar._DUMMY_POS, `Not_typed, None)), variable, body, data))
+             | (Some case_body, None) -> Some (Variant_selection (value, case_label, case_variable, case_body, variable, Sort (up, body, (Sugar._DUMMY_POS, `Not_typed, None)), data))
              | (Some case_body, Some body) -> Some (Variant_selection (value, case_label, case_variable, case_body, variable, body, data)))
       | Variant_selection_empty (value, case_label, case_variable, case_body, data) ->
           (match push_sort up case_body with
@@ -137,7 +137,7 @@ let rec sql_sort : optimiser = fun expr ->
 			      Table (db, s,
 				     {query with 
 					Query.sortings = (new_sortings @ query.Query.sortings)},
-				     (Sl_sugar._DUMMY_POS, `Not_typed, None)), 
+				     (Sugar._DUMMY_POS, `Not_typed, None)), 
                               data))
              | `Found raw_order ->
                  let new_sortings = (map (
@@ -147,7 +147,7 @@ let rec sql_sort : optimiser = fun expr ->
                                     ) raw_order) in 
                  let query = {query with Query.sortings = (new_sortings @ query.Query.sortings)} in
                    Some (Collection_extension (listify expr, variable, 
-                                                Table (db, s, query, (Sl_sugar._DUMMY_POS, `Not_typed, None)),
+                                                Table (db, s, query, (Sugar._DUMMY_POS, `Not_typed, None)),
                                                 data)))
       | Collection_extension _ -> None (* IMPROVABLE? *)
       | Sort (inner_up, list, _) when inner_up = up -> Some list  (* IMPROVABLE this sort really does not bring anyting *)

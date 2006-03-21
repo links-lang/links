@@ -1,6 +1,6 @@
 (* Tools for rewriting trees *)
 
-open Sl_utility
+open Utility
 
 module type RewritePrimitives =
 sig

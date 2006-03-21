@@ -56,7 +56,7 @@ let parse_into
 		   Hashtbl.add code.lines 
 		     (Hashtbl.length code.lines)
 		     (linepos + Buffer.length code.text)) 
-	(Sl_utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
+	(Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
       Buffer.add_substring code.text buffer 0 nchars;
       nchars
 
@@ -66,7 +66,7 @@ let find_line (code : source_code) (pos : position) : (string * int) =
    pos.pos_cnum - Hashtbl.find code.lines (pos.pos_lnum -1) - 1)
 
 (* Create a `lookup function' that given start and finish positions
-   returns an Sl_syntax.position
+   returns an Syntax.position
 *)
 let lookup code =
   fun (start, finish) ->
@@ -77,24 +77,24 @@ let lookup code =
 (* Read and parse Links source code from the source named `name' via
    the function `infun'.
 *)
-let read (infun : string -> int -> int) (name : string) : Sl_syntax.untyped_expression list =
+let read (infun : string -> int -> int) (name : string) : Syntax.untyped_expression list =
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
  		with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
       List.map
-	(Sl_sugar.desugar (lookup code))
-	(Sl_parser.parse_links (Sl_lexer.lexer ()) lexbuf)
+	(Sugar.desugar (lookup code))
+	(Parser.parse_links (Lexer.lexer ()) lexbuf)
     with 
       | Parsing.Parse_error -> 
 	  let line, position = find_line code lexbuf.lex_curr_p in
 	    raise
-	      (Sl_errors.SyntaxError
+	      (Errors.SyntaxError
 		 ("*** Parse error: " ^ name ^ ":"
 		  ^ string_of_int lexbuf.lex_curr_p.pos_lnum
 		  ^"\n   " ^ line ^ "\n"
 		  ^ String.make (position + 3) ' ' ^ "^"))
-      | Sl_sugar.ParseError (msg, (start, finish)) ->
+      | Sugar.ParseError (msg, (start, finish)) ->
 	  let linespec = 
 	    if start.pos_lnum = finish.pos_lnum 
 	    then string_of_int start.pos_lnum
@@ -102,15 +102,15 @@ let read (infun : string -> int -> int) (name : string) : Sl_syntax.untyped_expr
 		  ^ string_of_int finish.pos_lnum) in
 	  let line, position = find_line code finish in
 	    raise 
-	      (Sl_errors.SyntaxError
+	      (Errors.SyntaxError
 		 ("*** Parse error: " ^ name ^ ":"
 		  ^ linespec ^ "\n"
 		  ^ msg ^ "\n   " ^ line ^ "\n"
 		  ^ String.make (position + 3) ' ' ^ "^"))
-      | Sl_lexer.LexicalError (lexeme, position) ->
+      | Lexer.LexicalError (lexeme, position) ->
 	  let line = extract_line code position.pos_lnum in
 	    raise
-	      (Sl_errors.SyntaxError
+	      (Errors.SyntaxError
 		 ("*** Lexical error: " ^ name ^ ":"
 		  ^ string_of_int position.pos_lnum
 		  ^ "\nIn line:\n   " ^ line ^ "\n"

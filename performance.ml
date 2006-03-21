@@ -67,7 +67,7 @@ type stat = {
 let measuring = ref false
 
 let notify_gc () = 
-  Sl_utility.debug ("Completing GC cycle")
+  Utility.debug ("Completing GC cycle")
 
 let measure_diff obtain diff f a = 
   let start = obtain () in

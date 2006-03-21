@@ -2,8 +2,8 @@
 
 open List
 
-open Sl_pickle
-open Sl_utility
+open Pickle
+open Utility
 
 (* Types for kinds *)
 

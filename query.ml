@@ -37,7 +37,7 @@ and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;
               name : string;
               renamed : string;
-              col_type : Sl_kind.kind}
+              col_type : Kind.kind}
 
 let get_renaming col = col.renamed
 

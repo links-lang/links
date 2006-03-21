@@ -2,15 +2,15 @@ open Sys
 open Num
 open List
 
-open Sl_kind
-open Sl_result
-open Sl_utility
+open Kind
+open Result
+open Utility
 
 type pid = int
 
-let suspended_processes = (Queue.create () : (Sl_result.continuation * Sl_result.result * pid) Queue.t)
-and blocked_processes = (Hashtbl.create 10000 : (pid, (Sl_result.continuation * Sl_result.result * pid)) Hashtbl.t)
-and messages = (Hashtbl.create 10000  : (int, Sl_result.result Queue.t) Hashtbl.t)
+let suspended_processes = (Queue.create () : (Result.continuation * Result.result * pid) Queue.t)
+and blocked_processes = (Hashtbl.create 10000 : (pid, (Result.continuation * Result.result * pid)) Hashtbl.t)
+and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 
 let _ =   Hashtbl.add messages 0 (Queue.create ())
@@ -31,12 +31,12 @@ let (-->) x y = `Function (x,y)
 
 (* let xml = `Collection (`List, `Primitive `XMLitem) *)
 
-type primop = (Sl_result.result -> Sl_result.result)
+type primop = (Result.result -> Result.result)
 
 let continuationize_fn : 
-    (Sl_result.result -> Sl_result.result)
-->  ((Sl_result.continuation -> Sl_result.result -> Sl_result.result) * Sl_result.continuation * Sl_result.result)
-->  Sl_result.result = 
+    (Result.result -> Result.result)
+->  ((Result.continuation -> Result.result -> Result.result) * Result.continuation * Result.result)
+->  Result.result = 
   fun prim ->
     fun (applycont, cont, arg) ->
       applycont cont (prim arg)
@@ -134,7 +134,7 @@ and row_values = function
 and delete_condition = function
   | `Collection(`List, rows) -> "("^ (String.concat " OR " (map single_match rows)) ^")"
   | _ -> failwith "Internal error: forming query from non-row"
-and updates : Sl_result.result -> string = function
+and updates : Result.result -> string = function
   | `Record fields -> 
       let field (k, v) = (k ^" = "^ value_as_string v) in
         (String.concat ", " (map field fields))
@@ -148,7 +148,7 @@ open Netencoding
 (* value_env = [string * 'conn result]
    type_env = [string * ((int list) * kind)]
 *)
-let env : (string * (result * Sl_kind.assumption)) list = map
+let env : (string * (result * Kind.assumption)) list = map
   (fun (name, (fn, kind)) -> (name, (continuationize_primfn fn, kind))) [
 (* arithmetic operators *)
   intop "+" (+/);
@@ -164,16 +164,16 @@ let env : (string * (result * Sl_kind.assumption)) list = map
   floatop "^^" ( ** );
 
   conversion "string_of_float" (conversion_op box_string unbox_float string_of_float) 
-    Sl_kind.string (`Primitive `Float);
+    Kind.string (`Primitive `Float);
 
   conversion "float_of_int" (conversion_op box_float unbox_int float_of_num) 
     (`Primitive `Float) (`Primitive `Int);
 
   conversion "string_of_int" (conversion_op box_string unbox_int string_of_num) 
-    Sl_kind.string (`Primitive `Int);
+    Kind.string (`Primitive `Int);
 
   conversion "int_of_string" (conversion_op box_int unbox_string num_of_string) 
-    (`Primitive `Int)  Sl_kind.string;
+    (`Primitive `Int)  Kind.string;
 
   ("recv",
    (primfun "recv"
@@ -336,7 +336,7 @@ let env : (string * (result * Sl_kind.assumption)) list = map
                     continuationize_primfn (
                     primfun ("insert into (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (row : result) ->
-                         Sl_database.execute_select
+                         Database.execute_select
                            (`Collection (`List, make_unit ()))
                            (prerr_endline("*RUNNING SQL: " ^ "insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")");
                             ("insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")"))
@@ -357,7 +357,7 @@ let env : (string * (result * Sl_kind.assumption)) list = map
                 | `Database (db, _) as database ->
                     continuationize_primfn (primfun ("delete from (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (rows : result) ->
-                         Sl_database.execute_select
+                         Database.execute_select
                            (`Collection (`List, make_unit ()))
                            ("delete from " ^ table ^ " where " ^ delete_condition rows)
                            db))
@@ -381,7 +381,7 @@ continuationize_primfn (
                           (List.iter (fun row -> 
 (*                                         debug("update " ^ table ^ " set " ^ *)
 (*                                                 updates row  ^ " where " ^ single_match (map (fst -<- pair_as_ocaml_pair) row)); *)
-                                        ignore(Sl_database.execute_select
+                                        ignore(Database.execute_select
                                                  (`Collection (`List, make_unit ()))
                                                  ("update " ^ table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
                                                  db))
@@ -399,8 +399,8 @@ continuationize_primfn (
 (*
     let Row_variable v = fresh_row_variable () in
     let Row_variable u = fresh_row_variable () in
-    let pair = `Record [Sl_kind.Field_present ("1", `Record [Row_variable u]);
-                        Sl_kind.Field_present ("2", `Record [Row_variable v])] 
+    let pair = `Record [Kind.Field_present ("1", `Record [Row_variable u]);
+                        Kind.Field_present ("2", `Record [Row_variable v])] 
 *)
     in
       ([`RowVar v],
@@ -450,9 +450,9 @@ continuationize_primfn (
 (*          with Not_found ->  *)
 (*            `Variant ("not_found", make_unit ())), *)
 (*     let `Row_variable v = fresh_row_variable () in *)
-(*       ([`RowVar v], Sl_kind.string -->  *)
+(*       ([`RowVar v], Kind.string -->  *)
 (*          `Variant ([`Row_variable v; *)
-(*                      `Field_present ("fullname", Sl_kind.string); *)
+(*                      `Field_present ("fullname", Kind.string); *)
 (*                      `Field_present ("not_found", make_unit ())])))); *)
 
   ("query_param",           (* Get query parameters from the web environment
@@ -469,7 +469,7 @@ continuationize_primfn (
 	       Not_found -> string_as_charlist "" 
       ),
     ([],
-     (Sl_kind.string --> Sl_kind.string))));
+     (Kind.string --> Kind.string))));
 
   ("get_cookie",
    (primfun "get_cookie"
@@ -479,7 +479,7 @@ continuationize_primfn (
 	   string_as_charlist(cookie_header)
       ),
     ([],
-     Sl_kind.string --> Sl_kind.string))
+     Kind.string --> Kind.string))
   );
   
 
@@ -488,7 +488,7 @@ continuationize_primfn (
       (function msg -> failwith (unbox_string msg)),
     let v = fresh_type_variable () in
       ([v],
-       (Sl_kind.string --> v))));
+       (Kind.string --> v))));
 
   ("sleep",
    (primfun "sleep"
@@ -575,7 +575,7 @@ let kosherize_primfunc = function
 
 let kosherize_primenv env = split (map kosherize_primfunc env)
 
-let envs environment : (Sl_result.environment * Sl_kind.environment) = 
+let envs environment : (Result.environment * Kind.environment) = 
   split (map (fun (name, (value, kind)) -> (name, value), (name, kind)) environment)
 
 let primvalue_env, type_env = envs env

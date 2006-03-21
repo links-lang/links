@@ -4,11 +4,11 @@
 
 open Num
 open List
-open Sl_kind
-open Sl_sql
+open Kind
+open Sql
 open Query
 
-open Sl_utility (* for debug *)
+open Utility (* for debug *)
 
 let single_table_from_query (qry:query) : string option =
 	match qry.tables with
@@ -49,7 +49,7 @@ type binding = [
     (** The variable comes from a record selection operation with {ol
         {li the extracted field,} {li the variable bound to the field,}
         {li the variable bound to the row,} {li the source variable.} } *)
-| `Calculated of (string * Sl_syntax.expression)
+| `Calculated of (string * Syntax.expression)
     (** The variable is calculated (that is, NOT a simple record selection 
         on a variable) *)
 | `Unavailable of string
@@ -167,18 +167,18 @@ let rec trace_variable (name:string) (bindings:bindings) : origin =
     @param bindings The bindings available where the expression occures.
     @return {i true} if the expression can be used, {i false} otherwise. *)
 (*  TODO: Support calculated variables *)
-let rec sep_assgmts (bindings:bindings) (expr:Sl_syntax.expression) : (bindings * Sl_syntax.expression) =
+let rec sep_assgmts (bindings:bindings) (expr:Syntax.expression) : (bindings * Syntax.expression) =
   match expr with
-    | Sl_syntax.Let (variable, Sl_syntax.Variable (name, _), body, _) as expr ->
+    | Syntax.Let (variable, Syntax.Variable (name, _), body, _) as expr ->
 	failwith "TR115 (renaming declarations should have been removed by earlier optimisations)"
-    | Sl_syntax.Let (variable, _, body, _) ->
+    | Syntax.Let (variable, _, body, _) ->
 	(sep_assgmts (`Unavailable variable :: bindings) body)
-    | Sl_syntax.Record_selection (label, label_variable, variable, Sl_syntax.Variable (name, _), body, _) as expr ->
+    | Syntax.Record_selection (label, label_variable, variable, Syntax.Variable (name, _), body, _) as expr ->
 	(sep_assgmts (`Selected {field_name = label; field_var = label_variable; etc_var = variable; source_var = name} :: bindings) body)
-    | Sl_syntax.Record_selection (label, label_variable, variable, source, body, _) ->
+    | Syntax.Record_selection (label, label_variable, variable, source, body, _) ->
 	(sep_assgmts bindings body)
           (* FIXME: This next case is unused. Why is it here? *)
-    | Sl_syntax.Record_selection (_, label_variable, variable, _, body, _) ->
+    | Syntax.Record_selection (_, label_variable, variable, _, body, _) ->
 	(sep_assgmts (`Unavailable variable :: bindings) body)
     | expr -> (bindings, expr)
 
@@ -196,11 +196,11 @@ let rec is_free var expr = mem var (freevars expr)
 *)
 let make_sql bindings expr =
   match expr with
-    | Sl_syntax.Boolean (value, _) -> Some (Boolean value, [])
-    | Sl_syntax.Integer (value, _) -> Some (Integer value, [])
-    | Sl_syntax.Float (value, _) -> Some (Float value, [])
-    | Sl_syntax.String (value, _) -> Some (Text value, [])
-    | Sl_syntax.Variable (name, _) ->
+    | Syntax.Boolean (value, _) -> Some (Boolean value, [])
+    | Syntax.Integer (value, _) -> Some (Integer value, [])
+    | Syntax.Float (value, _) -> Some (Float value, [])
+    | Syntax.String (value, _) -> Some (Text value, [])
+    | Syntax.Variable (name, _) ->
 	(match (trace_variable name bindings) with
 	   | `Table_field (table, field) ->
 	       Some (Field (table, field), [])
@@ -237,13 +237,13 @@ let make_binop_sql oper left_value right_value =
         the free vars of the Query should be properly bound. Returns 
         None if it can't create such a result. *)
 (*  TODO: Support calculated variables *)
-let rec condition_to_sql (expr:Sl_syntax.expression) (bindings:bindings)
+let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
     : (Query.expression * projection_source list) option =
   let (bindings, expr) = (sep_assgmts bindings expr) in
     match expr with
-      | Sl_syntax.Boolean(true, _) -> Some (Boolean true, [])
-      | Sl_syntax.Boolean(false, _) -> Some (Boolean false, [])
-      | Sl_syntax.Condition(c, t, e, _) ->
+      | Syntax.Boolean(true, _) -> Some (Boolean true, [])
+      | Syntax.Boolean(false, _) -> Some (Boolean false, [])
+      | Syntax.Condition(c, t, e, _) ->
           (* perhaps this is just an AST-traversal with state?? *)
           let csql = condition_to_sql c bindings in
           let tsql = condition_to_sql t bindings in
@@ -254,11 +254,11 @@ let rec condition_to_sql (expr:Sl_syntax.expression) (bindings:bindings)
                                  conjunction[negation csql; esql]]),
                     corigins @ torigins @ eorigins (* is this at all right?? *))
             else None
-      | Sl_syntax.Variable (var, _) -> 
+      | Syntax.Variable (var, _) -> 
           (match make_sql bindings expr with
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))
-      | Sl_syntax.Comparison (left_value, oper, right_value, _) ->
+      | Syntax.Comparison (left_value, oper, right_value, _) ->
           let (left_binds, left_value) = (sep_assgmts bindings left_value) in
           let (right_binds, right_value)=(sep_assgmts bindings right_value) in
             (match (make_sql left_binds left_value,
@@ -269,7 +269,7 @@ let rec condition_to_sql (expr:Sl_syntax.expression) (bindings:bindings)
                | _ -> None)
       | _ -> None
       
-let dummyData = (Sl_sugar._DUMMY_POS, `Not_typed, None)
+let dummyData = (Sugar._DUMMY_POS, `Not_typed, None)
 
 (** select_by_origin
     Adds the origin selections before an expression.
@@ -278,20 +278,20 @@ let dummyData = (Sl_sugar._DUMMY_POS, `Not_typed, None)
     @return The query with the added origin. *)
 (* TODO: Support conditions on records *)
 (*
-let rec select_by_origin (origin:(string * string * string * string) list) (expr:Sl_syntax.expression) : Sl_syntax.expression =
+let rec select_by_origin (origin:(string * string * string * string) list) (expr:Syntax.expression) : Syntax.expression =
   match origin with
     | (field, field_variable, variable, source) :: remaining ->
-	Sl_syntax.Record_selection (field, field_variable, variable, 
-                                    Sl_syntax.Variable (source, dummyData),
+	Syntax.Record_selection (field, field_variable, variable, 
+                                    Syntax.Variable (source, dummyData),
                                     select_by_origin remaining expr, dummyData)
     | [] -> expr
 *)
 
 let select_by_origin origin expr = 
   fold_left (fun expr origin -> 
-               Sl_syntax.Record_selection(origin.field_name, origin.field_var,
+               Syntax.Record_selection(origin.field_name, origin.field_var,
                                           origin.etc_var, 
-                                          Sl_syntax.Variable(origin.source_var, dummyData),
+                                          Syntax.Variable(origin.source_var, dummyData),
                                           expr, dummyData)
             ) expr origin
 
@@ -303,13 +303,13 @@ let pos_and_neg (positives, negatives) =
   conjunction (negation (disjunction negatives) :: positives)
 
 (* TBD: Move this to a simple utility in query.ml *)
-(** Adds conditions to a query. If the {! Sl_sql_transform.selectable} method is called on every positive and negative condition provided,
+(** Adds conditions to a query. If the {! Sql_transform.selectable} method is called on every positive and negative condition provided,
     this function should not fail.
     @param positives Conditions that whould be satisfied by any element of the result.
     @param negatives Conditions that should not be satisfied by any element of the result.
     @param query The original query.
     @return The query with the added conditions.
-    @raise Failure A general programming error has occured. Passing conditions that where not selectable with {! Sl_sql_transform.selectable}
+    @raise Failure A general programming error has occured. Passing conditions that where not selectable with {! Sql_transform.selectable}
     might cause such exceptions. *)
 (* TODO: Support conditions on records *)
 let rec select ((positives, negatives):(expression list * expression list)) (query:query) : query =
@@ -328,12 +328,12 @@ let rec select ((positives, negatives):(expression list * expression list)) (que
     `left` values are already distinct anyway.
 *)
 let append_uniquely left right : (column list * (column * string) list) =
-  let right = map ( fun x -> (x, {x with renamed = Sl_sugar.col_unique_name()}) ) right in
+  let right = map ( fun x -> (x, {x with renamed = Sugar.col_unique_name()}) ) right in
     (left @ map snd right, map (fun (x, y) -> (x, get_renaming y)) right)
   
 (** join
     Joins two queries into one, over the given condtions. If the
-    {! Sl_sql_transform.selectable} method is called on every positive and
+    {! Sql_transform.selectable} method is called on every positive and
     negative condition provided, this function should not fail.
     @param positives Conditions that whould be satisfied by any element of 
        the result.
@@ -344,7 +344,7 @@ let append_uniquely left right : (column list * (column * string) list) =
     @return The join between queries with the added conditions.
     @raise Failure A general programming error has occured. Passing 
         conditions that where not selectable with 
-    {! Sl_sql_transform.selectable} might cause such exceptions. *)
+    {! Sql_transform.selectable} might cause such exceptions. *)
 let rec join ((positives, negatives):(expression list * expression list))
     ((left, right) : query * query)
     : ((column * string) list * query) =

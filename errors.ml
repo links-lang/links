@@ -1,10 +1,10 @@
-(*open Sl_kind *)
+(*open Kind *)
 open Inferencetypes
-open Sl_syntax
-open Sl_sugar
+open Syntax
+open Sugar
 open Lexing
 
-exception Type_error of (Sl_syntax.position * string)
+exception Type_error of (Syntax.position * string)
 exception SyntaxError of string
 
 let mistyped_application pos (fn, fntype) (param, paramtype)
@@ -63,8 +63,8 @@ let format_exception = function
   | SyntaxError s -> s
   | Getopt.Error s -> s
   | Type_error (pos, s) -> "*** Type error at " ^ string_of_pos pos ^ ": \n   " ^ s
-  | Sl_result.Runtime_failure s -> "*** Runtime failure: " ^ s
-  | Sl_result.Runtime_exception s -> "*** Runtime exception: " ^ s
+  | Result.Runtime_failure s -> "*** Runtime failure: " ^ s
+  | Result.Runtime_exception s -> "*** Runtime exception: " ^ s
   | Parse_failure (pos, s) -> "*** Parse failure at " ^ string_of_pos pos ^ ": " ^ s
   | Failure msg -> "*** Fatal error : " ^ msg
   | exn -> "*** Error: " ^ Printexc.to_string exn

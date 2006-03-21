@@ -1,6 +1,6 @@
 %{
 
-open Sl_sugar
+open Sugar
 
 let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -44,8 +44,8 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %right RARROW
 %start parse_links
 
-%type <Sl_sugar.phrase list> parse_links
-%type <Sl_sugar.phrase> xml_tree
+%type <Sugar.phrase list> parse_links
+%type <Sugar.phrase> xml_tree
 
 %%
 
@@ -224,7 +224,7 @@ xml_contents_list:
 xml_contents:
 | block                                                        { $1 }
 | xml_tree                                                     { $1 }
-| CDATA                                                        { TextNode (Sl_utility.xml_unescape $1), pos() }
+| CDATA                                                        { TextNode (Utility.xml_unescape $1), pos() }
 
 conditional_expression:
 | db_expression                                                { $1 }
@@ -293,7 +293,7 @@ perhaps_semi:
 |                                                              {}
 
 exp:
-| amper_expression                                             { ($1 : Sl_sugar.phrase) }
+| amper_expression                                             { ($1 : Sugar.phrase) }
 
 unique:
 | UNIQUE                                                       { true }
@@ -344,6 +344,6 @@ field:
 | VARIABLE COLON MINUS                                         { ($1, `Absent) }
 
 labeled_kinds:
-| field COMMA labeled_kinds                                    { Sl_kind.TypeOps.set_field $1 $3 }
-| field                                                        { Sl_kind.TypeOps.make_singleton_closed_row $1 }
-| TVARIABLE                                                    { Sl_kind.TypeOps.make_empty_open_row_with_var $1 }
+| field COMMA labeled_kinds                                    { Kind.TypeOps.set_field $1 $3 }
+| field                                                        { Kind.TypeOps.make_singleton_closed_row $1 }
+| TVARIABLE                                                    { Kind.TypeOps.make_empty_open_row_with_var $1 }

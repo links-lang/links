@@ -2,11 +2,11 @@
 open Num
 open List
 
-open Sl_pickle
-open Sl_kind
+open Pickle
+open Kind
 open Query
-open Sl_syntax
-open Sl_utility
+open Syntax
+open Utility
 
 exception Runtime_failure of string
 exception Runtime_exception of string
@@ -309,7 +309,7 @@ let rec char_of_primchar = function
 and charlist_as_string chlist = 
   match chlist with
     | `Collection (`List, elems) -> 
-        Sl_utility.implode (map char_of_primchar elems)
+        Utility.implode (map char_of_primchar elems)
     | _ -> raise (Match("Non-string " ^ string_of_result chlist
                         ^ " used as string."))
 
@@ -384,7 +384,7 @@ and serialise_result : result serialiser =
              let globals = globals (*List.filter (function (_, `Primitive _) -> false 
                                           | _ -> true) globals *) in
              let name = rassq f globals in
-             let v = name, var, locals, Sl_utility.rremove_assq f globals, expr
+             let v = name, var, locals, Utility.rremove_assq f globals, expr
              in
                serialise5 'f' (string, string, serialise_environment, 
                                serialise_environment, serialise_expression) v

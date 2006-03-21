@@ -1,10 +1,10 @@
 open Num
 open List
 
-open Sl_utility
-open Sl_pickle
-open Sl_kind
-open Sl_sql
+open Utility
+open Pickle
+open Kind
+open Sql
 
 (*type position = { line : int; character : int; abschar : int }*)
 type position = Lexing.position * (* source line : *) string * (* expression source: *) string
@@ -708,8 +708,8 @@ let perhaps_process_children_bindings
 open Num
 open List
 
-open Sl_utility
-open Sl_kind
+open Utility
+open Kind
 
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data

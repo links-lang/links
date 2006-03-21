@@ -3,14 +3,14 @@ open Num
 open List
 open Lexing
 
-open Sl_utility
-open Sl_kind
-open Sl_result
-open Sl_sql
+open Utility
+open Kind
+open Result
+open Sql
 open Query
-open Sl_syntax
-open Sl_database
-open Sl_library
+open Syntax
+open Database
+open Library
 
 (* Environment handling *)
 
@@ -41,7 +41,7 @@ let bind_rec globals locals defs =
      variables for now *)
   let make_placeholder env (variable, value) =
     match value with
-      | Sl_syntax.Abstr (var, body, _) ->
+      | Syntax.Abstr (var, body, _) ->
           bind env variable (`Function (var, [], [], body))
   in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
@@ -81,7 +81,7 @@ let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
   let make_placeholder = (fun env (variable, value) ->
                             (match value with
-                               | Sl_syntax.Abstr (var, body, _) ->
+                               | Syntax.Abstr (var, body, _) ->
                                    bind env variable (`Function (var, [], [] (*globals*), body))
                                | _ -> raise (Runtime_failure "TF146"))) in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
@@ -194,30 +194,30 @@ let collect ctype = function elements ->
   | _ -> raise (Runtime_failure "Abstract collection type used concretely")
 
 exception CollExtnWithWeirdSrc
-exception TopLevel of (Sl_result.environment * Sl_result.result)
+exception TopLevel of (Result.environment * Result.result)
 
 let stepper = ref 0
 let switch_granularity = 5
 
 let rec switch_context globals = 
-  if not (Queue.is_empty Sl_library.suspended_processes) then 
-    let cont, p, pid = Queue.pop Sl_library.suspended_processes in
-      Sl_library.current_pid := pid;
+  if not (Queue.is_empty Library.suspended_processes) then 
+    let cont, p, pid = Queue.pop Library.suspended_processes in
+      Library.current_pid := pid;
       apply_cont globals cont p
   else exit 0
 and apply_cont globals : continuation -> result -> result = 
 fun cont value ->
-(*  prerr_endline ("processes : " ^ (string_of_int (Queue.length Sl_library.suspended_processes)));
-  prerr_endline ("blocked processes : " ^ (string_of_int (Hashtbl.length Sl_library.blocked_processes)));*)
+(*  prerr_endline ("processes : " ^ (string_of_int (Queue.length Library.suspended_processes)));
+  prerr_endline ("blocked processes : " ^ (string_of_int (Hashtbl.length Library.blocked_processes)));*)
   incr stepper;
   if (!stepper mod switch_granularity == 0) then 
     begin
-      Queue.push (cont, value, !current_pid) Sl_library.suspended_processes;
+      Queue.push (cont, value, !current_pid) Library.suspended_processes;
       switch_context globals
     end
   else
     (match cont with
-       | [] -> (if !Sl_library.current_pid == 0 then raise (TopLevel(globals, value))
+       | [] -> (if !Library.current_pid == 0 then raise (TopLevel(globals, value))
 		else switch_context globals)
        | (frame::cont) -> match frame with
 	   | (Definition(env, name)) -> 
@@ -228,12 +228,12 @@ fun cont value ->
                   Otherwise, suspend the continuation (in the blocked_processes table)
                *)
 (*               prerr_endline "recvcont";*)
-               let mqueue = Hashtbl.find Sl_library.messages !Sl_library.current_pid in
+               let mqueue = Hashtbl.find Library.messages !Library.current_pid in
                  if not (Queue.is_empty mqueue) then
                    apply_cont globals cont (Queue.pop mqueue)
                  else 
                    begin
-                     Hashtbl.add Sl_library.blocked_processes !Sl_library.current_pid (Recv locals::cont, value, !Sl_library.current_pid);
+                     Hashtbl.add Library.blocked_processes !Library.current_pid (Recv locals::cont, value, !Library.current_pid);
                      switch_context globals
                    end
            | (FuncArg(param, locals)) ->
@@ -262,7 +262,7 @@ fun cont value ->
                         (* this primitive's implementation was
                            deserialized away; should be able to get it
                            from the global env. *)
-                        let func = (Sl_library.get_prim name) in
+                        let func = (Library.get_prim name) in
 			  func (apply_cont globals, cont, value)
 		 )
 	     | `Continuation (cont) ->
@@ -398,7 +398,7 @@ fun cont value ->
                            | `Primitive (`XML x) :: etc ->
                                map xmlitem_of elems
                            | `Primitive (`Char x) :: etc ->
-                               [ Sl_result.Text(charlist_as_string value) ]
+                               [ Result.Text(charlist_as_string value) ]
                            | _ -> raise(Match_failure("",0,0)))
                     | _ -> raise(Match_failure("",0,0))
                 in
@@ -423,74 +423,74 @@ and
 fun globals locals expr cont ->
   let eval = interpret globals locals in
   match expr with
-  | Sl_syntax.Define (name, expr, _, _) -> interpret globals [] expr (Definition (globals, name) :: cont)
-(*  | Sl_syntax.Define (name, value, _, _) -> failwith "DF 245"*)
-  | Sl_syntax.Boolean (value, _) -> apply_cont globals cont (bool value)
-  | Sl_syntax.Integer (value, _) -> apply_cont globals cont (int value)
-  | Sl_syntax.String (value, _) -> apply_cont globals cont (string_as_charlist value)
-  | Sl_syntax.Float (value, _) -> apply_cont globals cont (float value)
-  | Sl_syntax.Char (value, _) -> apply_cont globals cont (char value)
-  | Sl_syntax.Variable(name, _) -> 
+  | Syntax.Define (name, expr, _, _) -> interpret globals [] expr (Definition (globals, name) :: cont)
+(*  | Syntax.Define (name, value, _, _) -> failwith "DF 245"*)
+  | Syntax.Boolean (value, _) -> apply_cont globals cont (bool value)
+  | Syntax.Integer (value, _) -> apply_cont globals cont (int value)
+  | Syntax.String (value, _) -> apply_cont globals cont (string_as_charlist value)
+  | Syntax.Float (value, _) -> apply_cont globals cont (float value)
+  | Syntax.Char (value, _) -> apply_cont globals cont (char value)
+  | Syntax.Variable(name, _) -> 
       let varval = (lookup globals locals name) in
 	apply_cont globals cont varval
-  | Sl_syntax.Abstr (variable, body, _) ->
+  | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, [] (*globals*), body))
-  | Sl_syntax.Apply (Variable ("recv", _), Record_empty _, _) ->
+  | Syntax.Apply (Variable ("recv", _), Record_empty _, _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
-  | Sl_syntax.Apply (fn, param, _) ->
+  | Syntax.Apply (fn, param, _) ->
       eval fn (FuncArg(param, locals) :: cont)
-  | Sl_syntax.Condition (condition, if_true, if_false, _) ->
+  | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
-  | Sl_syntax.Comparison (l, oper, r, _) ->
+  | Syntax.Comparison (l, oper, r, _) ->
       eval l (BinopRight(locals, binopFromOpString oper, r) :: cont)
-  | Sl_syntax.Let (variable, value, body, _) ->
+  | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
-  | Sl_syntax.Rec (variables, body, _) ->
+  | Syntax.Rec (variables, body, _) ->
       let new_env = bind_rec globals locals variables in
         interpret globals new_env body cont
-  | Sl_syntax.Xml_node _ as xml when Sl_forms.islform xml ->
-      eval (Sl_forms.xml_transform locals xml) cont
-  | Sl_syntax.Xml_node _ as xml when Sl_forms.isinput xml -> 
-      eval (Sl_forms.xml_transform locals xml) cont
-  | Sl_syntax.Xml_node _ as xml when Sl_forms.islhref xml ->
-      eval (Sl_forms.xml_transform locals xml) cont
+  | Syntax.Xml_node _ as xml when Forms.islform xml ->
+      eval (Forms.xml_transform locals xml) cont
+  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
+      eval (Forms.xml_transform locals xml) cont
+  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
+      eval (Forms.xml_transform locals xml) cont
 
-  | Sl_syntax.Xml_node (tag, [], [], _) -> 
+  | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
-  | Sl_syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
+  | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
-  | Sl_syntax.Xml_node (tag, [], (child::children), _) -> 
+  | Syntax.Xml_node (tag, [], (child::children), _) -> 
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
 
-  | Sl_syntax.Record_empty _ -> apply_cont globals cont (`Record [])
-  | Sl_syntax.Record_extension (label, value, record, _) ->
+  | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
+  | Syntax.Record_extension (label, value, record, _) ->
       eval record (BinopRight(locals, RecExtOp label, value) :: cont)
-  | Sl_syntax.Record_selection (label, label_variable, variable, value, body, (pos, kind, lbl)) ->
+  | Syntax.Record_selection (label, label_variable, variable, value, body, (pos, kind, lbl)) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
-  | Sl_syntax.Record_selection_empty (value, body, _) ->
+  | Syntax.Record_selection_empty (value, body, _) ->
       eval value (Ignore(locals, body) :: cont)
-  | Sl_syntax.Variant_injection (label, value, _) ->
+  | Syntax.Variant_injection (label, value, _) ->
        eval value (UnopApply(locals, MkVariant(label)) :: cont)
-  | Sl_syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
+  | Syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
       eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, Some variable, Some body)) :: cont)
-  | Sl_syntax.Variant_selection_empty (_) ->
+  | Syntax.Variant_selection_empty (_) ->
       failwith("internal error: attempt to evaluate empty closed case expression")
-  | Sl_syntax.Collection_empty (coll_type, _) ->
+  | Syntax.Collection_empty (coll_type, _) ->
       apply_cont globals cont (`Collection (coll_type, []))
-  | Sl_syntax.Collection_single (elem, coll_type, _) ->
+  | Syntax.Collection_single (elem, coll_type, _) ->
       eval elem (UnopApply(locals, MkColl(coll_type)) :: cont)
-  | Sl_syntax.Collection_union (l, r, _) ->
+  | Syntax.Collection_union (l, r, _) ->
       eval l (BinopRight(locals, UnionOp(`Set (*FIXME*)), r) :: cont)
 
-  | Sl_syntax.Collection_extension (expr, var, value, _) as c ->
+  | Syntax.Collection_extension (expr, var, value, _) as c ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
-  | Sl_syntax.Sort (up, list, _) ->
+  | Syntax.Sort (up, list, _) ->
       eval list (UnopApply(locals, SortOp up) :: cont)
-  | Sl_syntax.Database (params, _) ->
+  | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-  | Sl_syntax.Table (database, s, query, (_, kind, _)) ->
+  | Syntax.Table (database, s, query, (_, kind, _)) ->
       eval database (UnopApply(locals, QueryOp(query, kind)) :: cont)
-  | Sl_syntax.Escape (var, body, _) ->
+  | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
       interpret globals locals body cont
 

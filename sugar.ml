@@ -2,12 +2,12 @@ open Num
 open List
 
 open Query
-open Sl_utility
-open Sl_syntax
+open Utility
+open Syntax
 
 exception ParseError of (string * (Lexing.position * Lexing.position))
 
-let _DUMMY_POS = Sl_syntax.dummy_position
+let _DUMMY_POS = Syntax.dummy_position
 
 let base_value = ref 0
 
@@ -66,13 +66,13 @@ type pattern =
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
 let rec patternize' = function 
-  | Sl_syntax.Variable ("_", _) ->  Bind (unique_name ())
-  | Sl_syntax.Variable (name, _) -> Bind (name)
-  | Sl_syntax.Record_empty _ -> Empty_record
-  | Sl_syntax.Record_extension (name, value, record, _) -> Record_extension (name, patternize' value, patternize' record)
+  | Syntax.Variable ("_", _) ->  Bind (unique_name ())
+  | Syntax.Variable (name, _) -> Bind (name)
+  | Syntax.Record_empty _ -> Empty_record
+  | Syntax.Record_extension (name, value, record, _) -> Record_extension (name, patternize' value, patternize' record)
   (* See note above `amper' *)
-  | Sl_syntax.Apply(Sl_syntax.Variable("&", _), Apply(Sl_syntax.Variable (var, _), expr, _), _) -> Bind_using(var, patternize' expr)
-  | other -> raise (Parse_failure (_DUMMY_POS, Sl_syntax.string_of_expression other ^ " cannot appear in a pattern"))
+  | Syntax.Apply(Syntax.Variable("&", _), Apply(Syntax.Variable (var, _), expr, _), _) -> Bind_using(var, patternize' expr)
+  | other -> raise (Parse_failure (_DUMMY_POS, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
   fun pat pos value body ->
@@ -194,7 +194,7 @@ type logical_binop = [`And | `Or]
 type binop = [comparison_binop | logical_binop | arith_binop | `Concat]
 
 type operator = [ unary_op | binop | `Project of name ]
-type location = Sl_syntax.location
+type location = Syntax.location
 
 
 type order = [`Asc of string | `Desc of string]
@@ -210,7 +210,7 @@ type phrasenode =
   | CharLit of (char)
   | Var of (name)
   | FunLit of (name option * ppattern list * phrase)
-  | CollectionLit of (Sl_kind.collection_type * phrase list)
+  | CollectionLit of (Kind.collection_type * phrase list)
   | SortExp of (bool * phrase)
   | NamespaceDecl of (name * url)
   | Definition of (name * phrase * location)
@@ -234,7 +234,7 @@ type phrasenode =
   | Switch of (phrase * ((name * ppattern * phrase) list) * (name * phrase) option)
 (* Database operations *)
   | DatabaseLit of (string)
-  | TableLit of (string * Sl_kind.kind * bool (* unique *) * order list * phrase)
+  | TableLit of (string * Kind.kind * bool (* unique *) * order list * phrase)
   | DBUpdate of (string * phrase * phrase)
   | DBDelete of (string * phrase * phrase)
   | DBInsert of (string * phrase * phrase)
@@ -259,7 +259,7 @@ let uncompare : comparison_binop -> string =
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
 (* Convert a syntax tree as returned by the parser into core syntax *)
-let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression = 
+let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
   let pos = lookup_pos pos' in 
   let desugar = desugar lookup_pos
   and patternize = patternize lookup_pos in
@@ -279,7 +279,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression =
   | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
   | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
   | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
-  | Escape (name, e) -> Sl_syntax.Escape (name, desugar e, pos)
+  | Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
   | Section (#arith_binop as a) -> Variable (unarith a, pos)
   | Section (`Project name) -> (let var = unique_name () in
 				  desugar (FunLit (None, [Pattern (Var var, pos')], 
@@ -290,11 +290,11 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression =
   | SortExp (d, e) -> Sort (d, desugar e, pos)
   | NamespaceDecl (name, url) -> Directive (Namespace (name, url), pos)
   | TableLit (name, kind, unique, order, db) -> 
-      (let db_query (name:string) (pos:position) (kind:Sl_kind.kind) (unique:bool) (orders:[`Asc of string | `Desc of string] list) : Query.query =
+      (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) (orders:[`Asc of string | `Desc of string] list) : Query.query =
          let table_name = (db_unique_name ()) in
          let selects = match kind with
            | `Record (field_env, `RowVar row_var) ->
-	       let present_fields, absent_fields = Sl_kind.split_fields field_env in
+	       let present_fields, absent_fields = Kind.split_fields field_env in
 	         if row_var = None && absent_fields = [] then
 	           List.map (fun
 		               (field_name, field_kind) ->
@@ -302,7 +302,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression =
 			          name=field_name; renamed=field_name; col_type = field_kind})
                      present_fields
 	         else raise (Parse_failure (pos, "Table kinds are records with only field present elements"))
-           | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Sl_kind.string_of_kind kind)) in
+           | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Kind.string_of_kind kind)) in
            {distinct_only = unique;
             result_cols = selects;
             tables = [(name, table_name)];
@@ -322,12 +322,12 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Sl_syntax.untyped_expression =
   | DBInsert (table, db, rows) -> curried_apply (Variable("insertrow",  pos)) pos [String (table, pos); desugar db; desugar rows]
   | DatabaseLit s -> Database (String (s, pos), pos)
   | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
-  | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Sl_syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
-  | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Sl_syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
+  | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
+  | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
   | TupleLit [field] -> desugar field
   | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
-  | HandleWith (e1, name, e2) -> Sl_syntax.Escape ("return", 
-                                                   Let (name, Sl_syntax.Escape ("handler",  
+  | HandleWith (e1, name, e2) -> Syntax.Escape ("return", 
+                                                   Let (name, Syntax.Escape ("handler",  
                                                                                 Apply (Variable ("return", pos), 
                                                                                        desugar e1, pos), pos), desugar e2, pos), pos)
   | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
@@ -407,12 +407,12 @@ and patternize lookup_pos : ppattern -> pattern = function
 
 let d = (_DUMMY_POS, `Not_typed, None)
 
-let project_subset (fields : (string * string) list) (source : Sl_syntax.expression) : Sl_syntax.expression =
+let project_subset (fields : (string * string) list) (source : Syntax.expression) : Syntax.expression =
   let dummy = unique_name () in
     (* generate a fresh variable for each (old, noo) pair in the input *)
   let variables = map (fun (old, noo) -> (unique_name (), old, noo)) fields in
-  let recext_builder (var, old, noo) record = Sl_syntax.Record_extension(noo, Sl_syntax.Variable(var, d), record, d) in
-  let select (label_var, old, noo) body = Sl_syntax.Record_selection(old, label_var, dummy, source, body, d) in
+  let recext_builder (var, old, noo) record = Syntax.Record_extension(noo, Syntax.Variable(var, d), record, d) in
+  let select (label_var, old, noo) body = Syntax.Record_selection(old, label_var, dummy, source, body, d) in
     (* build a record using the free variables we named above *)
   let record_extension = fold_right recext_builder variables (Record_empty d) in
     (* project out the source record into the free variables *)

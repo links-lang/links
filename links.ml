@@ -1,5 +1,5 @@
 open Getopt
-open Sl_utility
+open Utility
 
 (* Whether to run the interactive loop *)
 let interacting = ref true
@@ -11,37 +11,37 @@ let printing_types = ref true
 let ps1 = "links> "
 
 (* Builtin environments *)
-let stdenvs = Sl_library.value_env, Sl_library.type_env
+let stdenvs = Library.value_env, Library.type_env
 
 (* Run unit tests *)
 let run_tests () = 
   interacting := false;
-  Sl_optimiser.test () ;
-  Sl_js.test ()
+  Optimiser.test () ;
+  Js.test ()
 
 (* Print a result, including its type if `printing_types' is true. *)
 let print_result rtype result = 
-  print_string (Sl_result.string_of_result result);
-  print_endline (if !printing_types then " : "^ Sl_kind.string_of_kind rtype
+  print_string (Result.string_of_result result);
+  print_endline (if !printing_types then " : "^ Kind.string_of_kind rtype
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
-let rec evaluate ?(handle_errors=Sl_errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
+let rec evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
   interacting := false;
   handle_errors
     (fun input ->
        let exprs =          Performance.measure "parse" parse input in 
-       let typeenv, exprs = Performance.measure "type_program" (Sl_inference.type_program typeenv) exprs in
-       let exprs =          Performance.measure "optimise_program" Sl_optimiser.optimise_program (typeenv, exprs) in
-       let valenv, result = Performance.measure "run_program" (Sl_interpreter.run_program valenv) exprs in
-         print_result (Sl_syntax.node_kind (last exprs)) result;
+       let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
+       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+       let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
+         print_result (Syntax.node_kind (last exprs)) result;
          (valenv, typeenv), result
     ) input
 
 
 (* Interactive loop *)
 let rec interact envs = 
-  let error_handler = Sl_errors.display_errors stderr (fun _ -> envs, `Record []) in
+  let error_handler = Errors.display_errors stderr (fun _ -> envs, `Record []) in
     print_string ps1; flush stdout; 
     interact (fst (evaluate ~handle_errors:error_handler Parse.parse_channel envs (stdin, "<stdin>")))
 let web_program filename = 
@@ -55,8 +55,8 @@ let web_program filename =
     
 let options : opt list = 
     [
-      ('d',     "debug",               set Sl_utility.debugging    true,  None);
-      ('O',     "optimize",            set Sl_optimiser.optimising true,  None);
+      ('d',     "debug",               set Utility.debugging    true,  None);
+      ('O',     "optimize",            set Optimiser.optimising true,  None);
       (noshort, "measure-performance", set Performance.measuring   true,  None);
       ('n',     "no-types",            set printing_types          false, None);
       ('e',     "evaluate",            None,                              Some (ignore -<- evaluate Parse.parse_string stdenvs));
@@ -67,5 +67,5 @@ let options : opt list =
 
 (* main *)
 let _ =
-  Sl_errors.display_errors_fatal stderr (parse_cmdline options) (ignore -<- evaluate Parse.parse_file stdenvs);
+  Errors.display_errors_fatal stderr (parse_cmdline options) (ignore -<- evaluate Parse.parse_file stdenvs);
   if !interacting then interact stdenvs
