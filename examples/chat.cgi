@@ -37,15 +37,12 @@ fun startPoll() {
 }
 
 fun thelink(a, b) {
-    [AppendChild((id = "log",
-                  replacement = <li>salut  {enxml(string_of_int(a))}</li>)),
-
-     ReplaceElement((id = "bar",
-                     replacement = <a id="bar" l:href="{thelink(a+1, b)}">say "salut"</a>))]
+    say("salut " ++ string_of_int(a));
+    domutate([ReplaceElement((id = "bar",
+                  replacement = <a id="bar" l:href="{thelink(a+1, b)}">say "salut"</a>))]);
 }
 
 fun say(text) server {
-#  domutate([AppendChild((id = "log", replacement = <li>{enxml(text)}</li>))]);
   db = database "postgresql:chat:localhost:5432:s0567141:";
   insert into ("chatlog", db) values (line = text)
 }
