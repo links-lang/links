@@ -1,0 +1,32 @@
+#!/home/jeremy/links-svn/links/trunk/links -w
+
+# Spawn a ring of n processes.
+# Pass an integer around the ring, incrementing it each time it passes
+# through a process.  Print out the result when it gets back to main.
+
+fun f(pid) client {
+  switch recv() {
+    Message (n) -> {
+        print("received : f");
+        send(pid)(Message(n+1))
+    }
+  }
+}
+
+fun myspawn(pid, n) {
+  if (n == 0) pid
+  else myspawn(spawn(f)(pid), n-1)
+}
+
+fun main() client {
+  pid = myspawn(self(), 150);
+  send(pid)(Message 3);
+  switch recv() {
+    Message (n) -> {  
+          print("received : main");
+          <html>Hi, mom: {enxml(string_of_int(n))}</html> }
+  }
+}
+
+
+main()
