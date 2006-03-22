@@ -62,7 +62,6 @@ let options : opt list =
       ('e',     "evaluate",            None,                              Some (ignore -<- evaluate Parse.parse_string stdenvs));
       ('t',     "run-tests",           Some run_tests,                    None);
       ('w',     "web",                 None,                              Some web_program);
-      (noshort, "",                    None,                              Some web_program)
     ]
 
 (* main *)
