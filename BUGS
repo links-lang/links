@@ -1,5 +1,7 @@
 BUGS
 
+* We can't pass XML through JSON.
+
 * There's no check that order fields are present in the table.
   The following ought to be rejected:
      Table "foo" with { a : String } order [ b : asc ] from db
