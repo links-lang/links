@@ -19,8 +19,8 @@ fun page(n) {
        <ul>
           {for result <- query(n) in <li>{enxml(result.word ++ " : " ++ result.meaning)}</li>}
        </ul>
-       {if (n <> 1) <a l:href="{page(n-1)}">previous</a> else <span/>}
-       <a l:href="{page(n+1)}">next</a>
+       {if (n <> 1) <a l:onclick="{page(n-1)}">previous</a> else <span/>}
+       <a l:onclick="{page(n+1)}">next</a>
     </body>
   </html>
 }

@@ -39,7 +39,7 @@ fun startPoll() {
 fun thelink(a, b) {
     say("salut " ++ string_of_int(a));
     domutate([ReplaceElement((id = "bar",
-                  replacement = <a id="bar" l:href="{thelink(a+1, b)}">say "salut"</a>))]);
+                  replacement = <a id="bar" l:onclick="{thelink(a+1, b)}">say "salut"</a>))]);
 }
 
 fun say(text) server {
@@ -52,7 +52,7 @@ fun page(a, b) client {
     <head>
       <title>Chat Server (Demo for Links)</title>
     </head>
-    <a id="bar" l:href="{thelink(a, b)}">say "salut"</a>
+    <a id="bar" l:onclick="{thelink(a, b)}">say "salut"</a>
     <form l:onsubmit="{say(text)}">
       <input type="text" l:name="text" />
       <input type="submit" value="Say it" />

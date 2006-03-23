@@ -499,6 +499,7 @@ let run_program (globals : environment) exprs : (environment * result)=
     interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs));
     failwith "boom"
   ) with
+    | Not_found -> failwith("Internal error: Something was 'not found' while interpreting")
     | TopLevel s -> s
 
 let apply_cont_safe x y z = 

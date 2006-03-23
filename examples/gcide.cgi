@@ -11,7 +11,7 @@ fun assoc(d, a, l) {
 }
 
 fun lookup_data(word) server {
-  db = database("postgresql:gcide:localhost:5432:s0567141:");
+  db = database "postgresql:gcide:localhost:5432:s0567141:";
   for defn <- Table "dict"
                with { word : String, definition : String }
               order [ word : asc ]
@@ -25,17 +25,17 @@ fun lookup(word) client {
   defn = lookup_data(word);
   for defn <- defn in
   <html>
-     <h1>{word}</h1>
+     <h1>{enxml(word)}</h1>
     <div>
-      {word ++ ": " ++ defn}
+      {enxml(word ++ ": " ++ defn)}
     </div>
-    <a l:href="{main([])}">Preform another lookup</a>
+    <a l:onclick="{main([])}">Perform another lookup</a>
   </html>
 }
 
 fun main(suggestions) client {
   sugg_links = for suggestion <- suggestions in
-    <a l:href="{lookup(suggestion)}">{enxml(suggestion)}</a><br />;
+    <a l:onclick="{lookup(suggestion)}">{enxml(suggestion)}</a><br />;
 <html>
 <body>
 Look up a word's definition: <br />
@@ -75,7 +75,7 @@ fun prefixof(p, str) {
 }
 
 fun completions(p) server {
-  db = database("postgresql:gcide:localhost:5432:s0567141:");
+  db = database "postgresql:gcide:localhost:5432:s0567141:";
   if (p == "") [] else {
     results = for w <- Table "dict"
                         with { word : String, definition : String }

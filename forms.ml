@@ -50,7 +50,8 @@ let lname_bound_vars : 'a expression' -> string list =
     | _ -> [] 
   in function
     | Xml_node ("form", _, contents, _)  -> map desyntax (concat (map lnames contents))
-    | _ ->  failwith "lname_bound_vars is only applicable to <form> xml elements"
+    | Xml_node (_, _, _, _)  -> []
+(*     | _ ->  failwith "lname_bound_vars is only applicable to <form> xml elements" *)
 
 let rec intersects l = function
     [] -> false
@@ -79,7 +80,7 @@ let isinput : 'data expression' -> bool = function
 let add_attrs new_attrs = function
    | Xml_node (tag, attrs, c, d) ->
        Xml_node (tag, attrs @ new_attrs, c, d)
-   | o -> failwith ("Non-XML structure passed to add_attrs : " ^ 
+   | o -> failwith ("Non-XML structure passed to add_attrs : " ^
                       string_of_expression o)
 
 let is_special_param (k, _) = 

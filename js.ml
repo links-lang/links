@@ -369,9 +369,8 @@ let rec generate : 'a expression' -> code =
            Call(b_cps, [Fn(["b"],
                 Call(Var "kappa", [Iter (v, Var "b", generate_noncps e)]))]))
       
-  | Xml_node _ as xml when islform xml -> laction_transformation xml
-  | Xml_node _ as xml when islhref xml -> lhref_transformation xml
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
+  | Xml_node _ as xml -> laction_transformation xml
   | Xml_node (tag, attrs, children, _)   -> 
       let attrs_cps = map (fun (k,e) -> (k, gensym(), generate e)) attrs in
       let children_cps = map (fun e -> (gensym(), generate e)) children in
@@ -546,10 +545,19 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
      7. need to add the continuation function name to the top level
         (actually not, JavaScript's odd scoping, but it would be nice) 
   *)
+  let essentialAttrs = 
+    match tag with
+        "form" -> ["action", strlit "#";
+                   "method", strlit "post"]
+      | "a" -> ["href", strlit "#"]
+      | _ -> []
+  in
+    
   let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
   let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
   let vars = Forms.lname_bound_vars xml in
-  let handlerInvoker (evName, _) = (evName, strlit ("__applyChanges(__evContinuations['" ^ evName ^ "'][this.id]()); return false")) in
+  let handlerInvoker (evName, _) = 
+    (evName, strlit ("__applyChanges(__evContinuations['" ^ evName ^ "'][this.id](event)); return false")) in
   let elem_id = 
     try 
       match (assoc "id" attrs) with
@@ -569,11 +577,11 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                                                      Dict(["evName", strlit evName;
                                                            "handler", Fn (["event"], code)]))
                                                 handlers)]);
-                             "action", strlit "#";
-                             "method", strlit "post"]
+                            ]
+                            @ essentialAttrs
                             @ map handlerInvoker handlers)
       children_cps [] tag
-      
+
 (* Specialness:
    
    Add onFocus handlers that save the current field in a global
@@ -599,43 +607,6 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
     :: attrs in
     generate (Xml_node (tag, attrs, children, d))
 
-(* href transformation is a simplified version of the form transformation *)
-and lhref_transformation (Xml_node (tag, attrs, children, d) as xml) = 
-  let handler, attrs = (assoc "l:href" attrs, remove_assoc "l:href" attrs) in
-    
-  let elem_id = 
-    try 
-      match (assoc "id" attrs) with
-	  String(idStr, _) -> strlit idStr
-    with Not_found -> Lit "0" in
-
-  let registration = Call(Var "__registerFormEventHandlers",
-                          [elem_id;
-                           Lst [Dict ["evName", strlit "onclick";
-                                      "handler", Fn(["event"],
-                                                    (Call(generate handler,
-                                                          [Var "__applyChanges"])))]]]) in
-    
-  let regAttr = if mem "id" (map fst attrs) then "dummy" else "id" in
-  let core_attrs = [regAttr, registration;
-                    "onclick", strlit ("__evContinuations['onclick'][this.id](event); return false");
-                    "href", strlit "#";
-                   ] in
-  let attrs_cps = map (fun (k, v) -> (gensym(), k, generate v)) attrs in
-  let innermost = 
-    Dict(fold_right (fun (var, aname, _) (attrs:(string*code)list) -> (aname, Var var) :: attrs)
-	   attrs_cps core_attrs )
-  in
-  let attributes = 
-    fold_right (fun (var, aname, attr_cps) expr ->
-                  Call(attr_cps, [Fn([var], expr)])
-               ) attrs_cps innermost 
-  in
-    Fn(["kappa"],
-       Call (Call(Var ("__XML"), [Var "kappa"]),
-             [strlit tag; 
-              attributes;
-              Lst (map generate_noncps children)]))
 
 (* generate_noncps: generates CPS code for expr and immediately 
   gives idy as the cont. *)

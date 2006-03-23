@@ -638,51 +638,36 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let node' = Rec (vars, body, (pos, node_kind body, None)) in
         node'  
 
-  | Xml_node ("form", atts, cs, pos) as xml when islform xml -> 
-      let trim = filter (not -<- is_special -<- fst)
-      and bindings = lname_bound_vars xml in
-      let special_attrs = filter (fst ->- is_special) atts in
-        (* Assume each l:name-bound variable has type string *)
-      let augenv = fold_right (fun s env -> (s, ([], Kind.string)) :: env) bindings env in
-      let result = map (fun (name, expr) -> (name, w augenv expr)) special_attrs in
-      let special_attrs = result in
+  | Xml_node (tag, atts, cs, pos) as xml -> 
+      let separate = partition (is_special -<- fst) in
+      let (special_attrs, nonspecial_attrs) = separate atts in
+      let bindings = lname_bound_vars xml in
+        (* "event" is always in scope for the event handlers *)
+      let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
+        (* extend the env with each l:name bound variable *)
+      let attr_env = fold_right (fun s env -> (s, ([], Kind.string)) :: env) bindings attr_env in
+      let special_attrs = map (fun (name, expr) -> (name, w attr_env expr)) special_attrs in
         (* Check that the bound expressions have type XML *)
         (* TBD: figure out what the right type for these is *)
 (*      let _ =
 	List.iter (fun (_, expr) -> unify(node_kind expr, ITO.new_type_variable ()(*Kind.xml*))) special_attrs in*)
+      let contents = map (w env) cs in
+      let nonspecial_attrs = map (fun (k,v) -> k, w env v) nonspecial_attrs in
+(*      let attr_type = if islhref xml then Kind.xml else Kind.string in *)
+      let attr_type = Kind.string in
+        (* force contents to be XML, attrs to be strings
+           unify is for side effect only! *)
+      let unified_cs = map (fun node -> unify (node_kind node, `Collection (`List, `Primitive `XMLitem))) contents in
+      let unified_atts = map (fun (s, node) -> unify (node_kind node, attr_type)) nonspecial_attrs in
       let trimmed_node =
- (* send it round again, without the bound expression attributes *)
-        (w env (Xml_node ("form", trim atts, cs, pos))) in
-(*      let unification = unify (substitute subst (node_kind trimmed_node), node_kind trimmed_node) in (* ?? *) *)
-        add_attrs special_attrs trimmed_node
-  | Xml_node ("a", atts, cs, pos) as xml when islhref xml ->
-      let trim = filter (not -<- is_special -<- fst) in
-      let special_attrs = filter (fst ->- is_special) atts in
-      let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
-      let typecheck_pairs alist = alistmap (w attr_env) alist in
-      let special_attrs = typecheck_pairs special_attrs in
-        (* Check that the bound expressions have type XML *)
-(*       let _ = (List.iter (fun (_, expr) -> unify(node_kind expr, Kind.xml)) *)
-(*                  special_attrs) in *)
-      let nonspecial_attrs = trim atts in
-      let trimmed_node =
- (* send it round again, without the bound expression attributes *)
-          (w env (Xml_node ("a", nonspecial_attrs, cs, pos)))
-      in
-        (*let unification = unify (substitute subst (node_kind trimmed_node), 
-                                   node_kind trimmed_node) in (* ?? *) *)
-        add_attrs special_attrs trimmed_node
-  | Xml_node (s, atts, cs, pos) as x ->
-      let elem_bits = map (w env) cs in
-      let attr_bits = map (fun (k,v) -> k, w env v) atts in
-      let attr_type = if islhref x then	Kind.xml else Kind.string in
-      let unified_elems = map (fun node -> unify (node_kind node, `Collection (`List, `Primitive `XMLitem))) elem_bits in
-      let unified_atts = map (fun (s, node) -> unify (node_kind node, attr_type)) attr_bits in
-        Xml_node (s, 
-                  attr_bits,
-                  elem_bits,
+        Xml_node (tag, 
+                  nonspecial_attrs,         (* v-- up here I mean *)
+                  contents,
                   (pos, `Collection (`List, `Primitive `XMLitem), None))
-              
+      in
+        (* could just tack these on up there --^ *)
+        add_attrs special_attrs trimmed_node
+
   | Record_empty (pos) ->
       Record_empty (pos, `Record (ITO.make_empty_closed_row ()), None)
   | Record_extension (label, value, record, pos) ->
