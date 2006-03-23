@@ -553,7 +553,6 @@ let rewriters env = [
 (*  RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
 *)
-(*   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop); *)
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
 (*  RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup (inference_rw env);
@@ -564,6 +563,7 @@ let rewriters env = [
 (*  optimiser2rewriter sql_sort;
   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
+  RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
 ]
 
 let run_optimisers : Kind.environment -> RewriteSyntax.rewriter
