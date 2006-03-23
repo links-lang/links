@@ -658,7 +658,8 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
   | Xml_node ("a", atts, cs, pos) as xml when islhref xml ->
       let trim = filter (not -<- is_special -<- fst) in
       let special_attrs = filter (fst ->- is_special) atts in
-      let typecheck_pairs alist = alistmap (w env) alist in
+      let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
+      let typecheck_pairs alist = alistmap (w attr_env) alist in
       let special_attrs = typecheck_pairs special_attrs in
         (* Check that the bound expressions have type XML *)
 (*       let _ = (List.iter (fun (_, expr) -> unify(node_kind expr, Kind.xml)) *)
