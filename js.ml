@@ -343,7 +343,6 @@ let rec generate : 'a expression' -> code =
            Call(l_cps, [Fn(["l"],
               Call(r_cps, [Fn(["r"],
                  Call(Var "kappa", [Call(Var "__eq", [Var "l"; Var "r"])]))]))]))
-
   | Comparison (l, op, r, _)           -> 
       let l_cps = generate l in
       let r_cps = generate r in
@@ -550,17 +549,17 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
   let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
   let vars = Forms.lname_bound_vars xml in
-  let make_code_for_handler (evName, code) = 
-    strip_lcolon evName, (fold_left
-                            (fun expr var -> Bind (var, Call (Var "__val", [strlit var]), expr))
-                            (end_thread(generate code))
-                            vars) in
   let handlerInvoker (evName, _) = (evName, strlit ("__applyChanges(__evContinuations['" ^ evName ^ "'][this.id]()); return false")) in
   let elem_id = 
     try 
       match (assoc "id" attrs) with
 	  String(idStr, _) -> strlit idStr
     with Not_found -> Lit "0" in
+  let make_code_for_handler (evName, code) = 
+    strip_lcolon evName, (fold_left
+                            (fun expr var -> Bind (var, Call (Var "__val", [strlit var]), expr))
+                            (end_thread(generate code))
+                            vars) in
   let handlers = map make_code_for_handler handlers in
   let attrs_cps = map (fun (k, e) -> (k, gensym(), generate e)) attrs in
   let children_cps = map (fun e -> (gensym(), generate e)) children in
@@ -568,7 +567,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                                         [elem_id;
                                          Lst (map (fun (evName, code) -> 
                                                      Dict(["evName", strlit evName;
-                                                           "handler", Fn ([], code)]))
+                                                           "handler", Fn (["event"], code)]))
                                                 handlers)]);
                              "action", strlit "#";
                              "method", strlit "post"]
@@ -611,15 +610,17 @@ and lhref_transformation (Xml_node (tag, attrs, children, d) as xml) =
     with Not_found -> Lit "0" in
 
   let registration = Call(Var "__registerFormEventHandlers",
-			  [elem_id; Lst [Dict ["evName", strlit "onclick";
-				      "handler", jsthunk (Call(generate handler,
-							       [Var "__applyChanges"]))]]]) in
+                          [elem_id;
+                           Lst [Dict ["evName", strlit "onclick";
+                                      "handler", Fn(["event"],
+                                                    (Call(generate handler,
+                                                          [Var "__applyChanges"])))]]]) in
     
   let regAttr = if mem "id" (map fst attrs) then "dummy" else "id" in
   let core_attrs = [regAttr, registration;
-                  "onclick", strlit ("__evContinuations['onclick'][this.id](); return false");
-                  "href", strlit "#";
-                 ] in
+                    "onclick", strlit ("__evContinuations['onclick'][this.id](event); return false");
+                    "href", strlit "#";
+                   ] in
   let attrs_cps = map (fun (k, v) -> (gensym(), k, generate v)) attrs in
   let innermost = 
     Dict(fold_right (fun (var, aname, _) (attrs:(string*code)list) -> (aname, Var var) :: attrs)
@@ -734,7 +735,7 @@ let rec simplify_completely expr =
 let gen = 
   Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
-  ->- simplify_completely 
+(*   ->- simplify_completely  *)
   ->- show
 
  (* TODO: imports *)
