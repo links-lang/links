@@ -79,7 +79,12 @@ BUGS
 
 TODO
 
+* Add XML attributes as first-class values (to enable code like this:)
+    <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
+
 * CDATA literals are not handled in XML quasis.
+
+* XML amp-encoding should support numeric unicode entities. This is easy.
 
 * XML amp-encoding is only aware of basic entities (&amp; and
   &lt;). See [1] for a full list in DTD form. We should probably just
@@ -87,18 +92,20 @@ TODO
 
   [1] http://www.w3.org/TR/2002/REC-xhtml1-20020801/dtds.html#a_dtd_Latin-1_characters
 
-* We could make better (i.e. some!) use of the Parsing module within
-  sl_parser.mly.  Could we manage without storing positions in tokens
-  in the lexer?
-
 * Instead of this twice-binding Record_selection construct, let's have
   simple projection operations: Record_projection(x, a) has as value
   the field `a' of x, and Record_removal(x, a) has a record value: all
   the fields of x except the field labelled a. Neither one binds.
 
 * Attributes of an XML node are mixed together with contents--could
-  cause trouble.  (Could someone clarify this?)
-
+  cause trouble.
+  (Could someone clarify this?)
+  (Yes! This is in the interpreter, when it's evaluating the XMLCont
+   instruction. It is written so that either an attr or a content 
+   element can pop out at any time. This is weird. I think it's 
+   related to the problem that an attribute (as a name-value pair) 
+   cannot be a value in Links)
+  
 * Given a function "foo" from a module "moo", I want 
 
     url_of(moo:foo, [args])
@@ -113,9 +120,7 @@ TODO
   [Char] getting boxed as XML Text Node (Could we have an example?
   What's unnatural?)
 
-* Split Char & Byte, choose a Unicode representation
-
-* Some kind of defect-tracking system. Anything other than this file...
+* Split Char & Byte types, choose a Unicode representation
 
 * No way to access CGI query variables at the Links toplevel.
 
@@ -179,9 +184,6 @@ TODO
 
 * Think about tuples vs. records: syntax and representation. Unify
   them? Distinctly separate them?
-
-* Add XML attributes as first-class values (to enable code like this:)
-    <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
 
 * More unit tests for JavaScript generation.
 
