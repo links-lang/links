@@ -67,9 +67,9 @@ let rec lookup_qname toplevel locals =
         | [name] -> lookup_simple_name name
         | namespace :: names -> 
 	    (match lookup_simple_name namespace with
-                                   | `Environment (url, env) -> lookup_qname env locals names 
-                                   | _ -> failwith (namespace ^ " is not a namespace"))
-
+               | `Environment (url, env) -> lookup_qname env locals names 
+               | _ -> failwith (namespace ^ " is not a namespace"))
+              
 let lookup toplevel locals name = 
   try
     lookup_qname toplevel locals (split_string name ':')

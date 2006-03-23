@@ -126,7 +126,7 @@ let serve_requests filename =
       let global_env, _ = (Interpreter.run_program Library.value_env) global_env in
       begin
 	(* Are we being called via a continuation? *)
-	match Forms.cont_from_params (flip List.assoc global_env) cgi_args  with
+	match Forms.cont_from_params (flip List.assoc global_env) cgi_args with
 	  | Some (Forms.ContParams (cont, params)) -> 
 	      debug("in env:" ^ Result.string_of_environment_ez global_env);
 	      print_endline

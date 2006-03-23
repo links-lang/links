@@ -2,12 +2,12 @@
 
 /// sequences: 
 
-//var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
-//function __debug(msg) {
-//   __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
-//}
-//__alert = __debug;
-__alert = function () { }
+var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
+function __debug(msg) {
+   __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
+}
+__alert = __debug;
+alert = __alert;
 
 function __applyChanges(changes) {
   for (var i in changes) {
@@ -294,7 +294,7 @@ function __remoteCallHandler(kappa, request) {
     if (request.readyState == isComplete) {
      // TBD: this apparently triggers if we leave the page.
      var serverResponse = JSON.parse(__base64decode(request.responseText.replace('\n', '')));
-      if ((serverResponse instanceof Object) && ('__continuation' in serverResponse)) {
+     if ((serverResponse instanceof Object) && ('__continuation' in serverResponse)) {
         // it's a continuation
         var result = window[serverResponse.__name].apply(null, __tuple_as_list(serverResponse.__arg));
         request.open('POST', '#', false);

@@ -55,13 +55,13 @@ let web_program filename =
     
 let options : opt list = 
     [
-      ('d',     "debug",               set Utility.debugging    true,  None);
-      ('O',     "optimize",            set Optimiser.optimising true,  None);
-      (noshort, "measure-performance", set Performance.measuring   true,  None);
-      ('n',     "no-types",            set printing_types          false, None);
-      ('e',     "evaluate",            None,                              Some (ignore -<- evaluate Parse.parse_string stdenvs));
-      ('t',     "run-tests",           Some run_tests,                    None);
-      ('w',     "web",                 None,                              Some web_program);
+      ('d',     "debug",               set Utility.debugging     true,  None);
+      ('O',     "optimize",            set Optimiser.optimising  true,  None);
+      (noshort, "measure-performance", set Performance.measuring true,  None);
+      ('n',     "no-types",            set printing_types        false, None);
+      ('e',     "evaluate",            None,                            Some (ignore -<- evaluate Parse.parse_string stdenvs));
+      ('t',     "run-tests",           Some run_tests,                  None);
+      ('w',     "web",                 None,                            Some web_program);
     ]
 
 (* main *)
