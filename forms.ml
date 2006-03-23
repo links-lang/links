@@ -56,13 +56,11 @@ let rec intersects l = function
     [] -> false
   | (h::t) -> mem h l || intersects l t
 
-let special_attributes = ["l:onsubmit"; "l:handler"; "l:onkeyup"; "l:onclick"; "l:href"]
-
-let is_special x = mem x special_attributes 
+let is_special x = String.length x > 2 && String.sub x 0 2 = "l:"
 
 let islform : 'data expression' -> bool = function
   | Xml_node ("form", attrs, _, _) 
-      when intersects special_attributes (map fst attrs) -> true
+      when List.exists (is_special -<- fst) attrs -> true
   | _ -> false
 
 (* should be something like is_transformable_anchor *)
