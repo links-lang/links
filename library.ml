@@ -315,8 +315,8 @@ let env : (string * (result * Kind.assumption)) list = map
     ([], 
      string --> xml))); 
 
-  ("alert", (* destructive *)
-   (primfun "alert"
+  ("debug", (* destructive *)
+   (primfun "debug"
       (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
     ([], string --> make_unit ())));
    
