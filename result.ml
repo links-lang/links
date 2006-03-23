@@ -26,7 +26,7 @@ let string_of_db_field_type = function
   | FloatField -> "float"
   | SpecialField ft -> ft # show
 
-type db_status = QueryOk | QueryError
+type db_status = QueryOk | QueryError of string
 
 class virtual dbresult = object
   method virtual status : db_status

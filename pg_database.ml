@@ -75,19 +75,18 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   inherit dbresult
   val original = pgresult
   method status : db_status = match original#status with
-                                Command_ok 
+      Command_ok 
     | Tuples_ok -> QueryOk
-
-  | Empty_query     -> debug ("String sent to the backend was empty"); QueryError
-  | Command_ok      -> debug ("Successful completion of a command returning no data"); QueryError
-  | Tuples_ok       -> debug ("The query successfully executed"); QueryError
-  | Copy_out        -> debug ("Copy Out (from server) data transfer started"); QueryError
-  | Copy_in         -> debug ("Copy In (to server) data transfer started"); QueryError
-  | Bad_response    -> debug ("Bad_response : The server's response was not understood"); QueryError
-  | Nonfatal_error    -> debug ("Nonfatal_error : The server's response was not understood"); QueryError
-  | Fatal_error    -> debug ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")"); QueryError
-
-
+        
+    | Empty_query     -> QueryError ("String sent to the backend was empty"); 
+    | Command_ok      -> QueryError ("Successful completion of a command returning no data"); 
+    | Tuples_ok       -> QueryError ("The query successfully executed")
+    | Copy_out        -> QueryError ("Copy Out (from server) data transfer started")
+    | Copy_in         -> QueryError ("Copy In (to server) data transfer started")
+    | Bad_response    -> QueryError ("Bad_response : The server's response was not understood")
+    | Nonfatal_error  -> QueryError ("Nonfatal_error : The server's response was not understood")
+    | Fatal_error     -> QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
+        
   method nfields : int = original#nfields
   method fname : int -> string = original#fname
   method ftype : int -> db_field_type = 

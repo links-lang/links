@@ -66,8 +66,8 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
            else
              `Collection (coll_type, 
 			  map (fun row ->
-                            `Record (map2 (fun (name, db_type) value -> 
-			                         name, value_from_db_string value db_type)
-                                       row_fields row))
+                                 `Record (map2 (fun (name, db_type) value -> 
+			                          name, value_from_db_string value db_type)
+                                            row_fields row))
                             result#get_all_lst)
-       | QueryError -> raise (Runtime_exception ("An error occurred executing the query " ^ query)))
+       | QueryError msg -> raise (Runtime_exception ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
