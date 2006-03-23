@@ -293,6 +293,42 @@ let env : (string * (result * Kind.assumption)) list = map
       ([v],
        (`Collection (`List, v) --> `Collection (`List, v)))));
 
+  ("attribute",
+   (primfun "attribute"
+      (function
+         | `Record (elems) -> (let elem = List.assoc "1" elems
+                               and attr = charlist_as_string (List.assoc "2" elems)
+                               and none = `Variant ("None", `Record []) in
+                                 (match elem with 
+                                    | `Collection (_, `Primitive (`XML (Node (tag, children)))::_) -> 
+                                        (try
+                                           (match (List.find (function
+                                                                | Attr (k, v) when k = attr -> true
+                                                                | _ -> false) children) with
+                                              | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
+                                              | _ -> failwith "boom")
+                                         with Not_found -> none)
+                                    | _ -> none))
+         | _ -> failwith "Internal error: bad arguments to attribute"),
+    let pair = `Record (TypeOps.set_field ("1", `Present xml)
+	                  (TypeOps.set_field ("2", `Present string)
+	                     (TypeOps.make_empty_closed_row ()))) in
+      ([],
+       pair --> 
+         `Variant (TypeOps.set_field ("Some", `Present string)
+                     (TypeOps.set_field ("None", `Present (`Record (TypeOps.make_empty_closed_row ())))
+                        (TypeOps.make_empty_closed_row ()))))));
+
+  ("elementById",
+   (primfun "elementById"
+      (fun _ -> failwith "elementById not implemented in the server"),
+    let pair = `Record (TypeOps.set_field ("1", `Present xml)
+	                  (TypeOps.set_field ("2", `Present string)
+	                     (TypeOps.make_empty_closed_row ()))) in
+      ([],
+       string --> `Variant (TypeOps.set_field ("Some", `Present xml)
+                              (TypeOps.set_field ("None", `Present ((`Record (TypeOps.make_empty_closed_row ())):kind))
+                                 (TypeOps.make_empty_closed_row ()))))));
 
   ("string_of_cont",
    (primfun "string_of_cont"

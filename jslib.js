@@ -2,17 +2,18 @@
 
 /// sequences: 
 
-var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
-function __debug(msg) {
-   __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
-}
-alert = __debug;
+//var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
+//function __debug(msg) {
+//   __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
+//}
+//__alert = __debug;
+__alert = function () { }
 
 function __applyChanges(changes) {
   for (var i in changes) {
     var change = changes[i];
     var element = document.getElementById(change.value.id);
-    if (!element) alert("element " + change.value.id + " does not exist")
+    if (!element) __alert("element " + change.value.id + " does not exist")
     else {
       if (change.label == 'ReplaceElement') {
           element.parentNode.replaceChild(change.value.replacement[0], element);
@@ -99,7 +100,7 @@ function __vrntLbl(object) { return object['label']}
 function __vrntVal(object) { return object['value']}
 
 function __fail(str) {
-  alert("Internal error: " + str);
+  __alert("Internal error: " + str);
 }
 
 // Page update
@@ -130,7 +131,7 @@ function __start(tree) {
   
   // hmm.
   __focus();
-  alert(time() - start_time + ' milliseconds');
+  __alert(time() - start_time + ' milliseconds');
 
 }
 
@@ -449,12 +450,34 @@ function __yield(my_cont) {
 
 function print(kappa) {
   return function(str) {
-    alert(str);
+    __alert(str);
     kappa(0);
   }
 }
 
+function elementById(kappa) {
+   return function(id) {
+      var elem = document.getElementById(id);
+      if (elem != null) kappa({'label':'Some', 'value':[elem]});
+      else kappa({label:'None', 'value':({})});
+   }
+}
+
+function attribute(kappa) {
+   return function(xml, attr) {
+      var val = xml[0].attributes[attr];
+      if (val == undefined) kappa({label:'None', 'value':({})});
+      else kappa({'label':'Some', 'value':val.value});
+   }
+}
 
 function time () { return  (new Date()).getTime() }
 
 var start_time = time();
+
+function debug(kappa) {
+  return function(msg) {
+     alert(msg);
+     return kappa();
+  }
+}

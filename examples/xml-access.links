@@ -1,0 +1,23 @@
+#!/home/jeremy/code/links/svn/links/trunk/links -w
+
+fun showAttr(id, attr) client {
+  switch elementById(id) {
+   Some s ->  switch attribute(s, attr) {
+                  Some s -> debug("show " ++ id ++ " : found an element whose " ++ attr ++ " attribute is " ++s)
+                  None   -> debug("show " ++ id ++ " : found an element, but no " ++ attr ++ " attribute")
+               }
+   None   ->  debug("show " ++ id ++ " : couldn't find an element")
+  }   
+}
+
+<body>
+<ul>
+  <li id="foo" style="width: 120px">foo item</li>
+  <li id="bar" style="width: 130px">bar item</li>
+  <li id="baz">bar item</li>
+</ul>
+<a l:href="{showAttr("foo", "style")}">Show foo's style</a>
+<a l:href="{showAttr("bar", "style")}">Show bar's style</a>
+<a l:href="{showAttr("baz", "style")}">Show baz's style</a>
+<a l:href="{showAttr("quuz", "style")}">Show quuz's style</a>
+</body>
