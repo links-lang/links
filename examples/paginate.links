@@ -1,28 +1,39 @@
-#!/home/fire/build/links/links -w
+#!/home/jeremy/code/links/svn/links/trunk/links -w
 
 results_per_page = 10;
 
-fun query(n) {
+fun query(n,c) {
   take(results_per_page) (
        drop(results_per_page * (n-1)) (
-            Table "wordlist" with {word: String,  meaning: String } order [word: desc]
-             from database "postgresql:dictionary::5432:www-data:"))
+            for r <- Table "wordlist" with {word: String,  meaning: String } order [word: asc]
+             from database "postgresql:links:localhost:5432:www-data:"
+             where (r.word beginswith c) in
+                [r]))
 }
 
-fun page(n) {
+fun page(n, c) {
   title = enxml("Results: page "++ string_of_int(n));
   <html>
     <head><title>{title}</title></head>
     <body>
        <h1>{title}</h1>
        <dl>
-          {for result <- query(n) in
+          {for result <- query(n, c) in
                <dt><b>{enxml(result.word)}</b></dt><dd>{enxml(result.meaning)}</dd>}
        </dl>
-       {if (n <> 1) <a l:href="{page(n-1)}">previous</a> else <span/>}
-       <a l:href="{page(n+1)}">next</a>
+       {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
+       <a l:href="{page(n+1,c)}">next</a>
     </body>
   </html>
 }
 
-page(1)
+<html>
+  <head><title>Dictionary browser</title></head>
+  <body>
+    <h1>Dictionary browser</h1>
+     <ul>
+      {for c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" in 
+        <li><a l:href="{page(1, [c])}">Words beginning with {enxml([c])}</a></li>}
+     </ul>
+  </body>
+</html>
