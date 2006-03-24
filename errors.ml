@@ -8,14 +8,16 @@ exception Type_error of (Syntax.position * string)
 exception SyntaxError of string
 
 let mistyped_application pos (fn, fntype) (param, paramtype)
-    = match fntype with 
-      | `Function _ -> raise (Type_error (pos, "`" ^ prettyprint param
-                                            ^"' has type " ^ string_of_kind paramtype
-                                            ^" and cannot be passed as an argument to `"^ string_of_expression fn
-                                            ^"', which has type "^ string_of_kind fntype))
-      | _ -> raise (Type_error (pos,
-                                "`"^ string_of_expression fn ^"' is not a function (it has type "^ string_of_kind fntype
-                                ^") and cannot be applied to `"^ string_of_expression param ^"'"))                           
+    = let ((fpos, _, fexpr),_,_), ((ppos, _, pexpr),_,_) = expression_data fn, expression_data param in
+      match fntype with 
+        | `Function _ -> 
+            raise (Type_error (pos, "`" ^ pexpr
+                                 ^"' has type " ^ string_of_kind paramtype
+                                 ^" and cannot be passed as an argument to `"^ fexpr
+                                 ^"', which has type "^ string_of_kind fntype))
+        | _ -> raise (Type_error (pos,
+                                  "`"^ fexpr ^"', which has type "^ string_of_kind fntype
+                                  ^", cannot be applied to `"^ pexpr ^"', of type " ^ string_of_kind paramtype))
                
 
 let mistyped_union pos coll_type l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
@@ -41,19 +43,8 @@ let letrec_nonfunction pos (form, formtype)
                               ^"' is not a function form"))
 
 let string_of_pos ((pos : Lexing.position), line, expr) = 
-  Printf.sprintf "%s:%d: some error" pos.pos_fname pos.pos_lnum
+  Printf.sprintf "%s:%d:\nexpression: %s" pos.pos_fname pos.pos_lnum expr
 
-
-let display_error error line =
-  let show_place position = failwith "FIXME (showing place)" in
-  match error with
-    | Type_error (position, msg) ->
-        prerr_endline ("*** " ^ string_of_pos position ^ "\n    " ^  msg);
-        show_place position
-    | Parse_failure (position, msg) ->
-          prerr_endline ("*** " ^ string_of_pos position ^ "\n    " ^ msg);
-        show_place position
-    | _ -> prerr_endline "Generic error..."; ()
 
 let invalid_name pos name message = 
   raise (Parse_failure (pos, "`"^ name ^"' is an invalid name: " ^ message))
@@ -62,7 +53,7 @@ let invalid_name pos name message =
 let format_exception = function
   | SyntaxError s -> s
   | Getopt.Error s -> s
-  | Type_error (pos, s) -> "*** Type error at " ^ string_of_pos pos ^ ": \n   " ^ s
+  | Type_error ((pos,line,expr), s) -> Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
   | Result.Runtime_failure s -> "*** Runtime failure: " ^ s
   | Result.Runtime_exception s -> "*** Runtime exception: " ^ s
   | Parse_failure (pos, s) -> "*** Parse failure at " ^ string_of_pos pos ^ ": " ^ s

@@ -456,34 +456,6 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
-(*
-	
-    let renamer = (function
-                     | `TypeVar gen -> [Var_equiv (gen, TypeOps.new_type_variable ())]
-                     | `RowVar gen -> [Row_equiv (gen, TypeOps.make_empty_open_row ())]
-                     | `CtypeVar gen -> [Colltype_equiv (gen, TypeOps.new_collection_variable ())])
-    in
-    let substs = map renamer generics in
-    let kind' =
-      fold_left (fun kind subst -> (substitute subst kind)) kind substs
-    in
-      type_to_inference_type kind'
-  with Not_found ->
-    raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
-*)
-(*
-let instantiate : environment -> string -> kind = fun env var ->
-  try
-    let generics, kind = lookup var env in
-    let renamer = (function
-                     | `TypeVar gen -> [Var_equiv (gen, new_variable ())]
-                     | `RowVar gen -> [Row_equiv (gen, (StringMap.empty, new_row_variable ()))]
-                     | `CtypeVar gen -> [Colltype_equiv (gen, new_coll_variable ())])
-    in
-    let substs = map renamer generics in
-      fold_left (fun kind subst -> (substitute subst kind)) kind substs
-*)
-
 let rec get_quantifiers : type_var_set -> inference_type -> quantifier list = 
   fun used_vars -> 
     let is_used_var var = IntSet.mem var used_vars in 
@@ -574,11 +546,7 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let return_type = ITO.new_type_variable () in
       let _ =
 	try unify (`Function(node_kind p, return_type), f_type)
-	with Unify_failure _ -> 
-          mistyped_application
-            (node_pos p)
-            (f, f_type)
-            (p, node_kind p)
+	with Unify_failure _ -> mistyped_application pos (f, f_type) (p, node_kind p)
       in
 	Apply (f, p, (pos, return_type, None))
   | Condition (if_, then_, else_, pos) as c ->

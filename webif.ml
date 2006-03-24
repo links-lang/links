@@ -1,4 +1,3 @@
-open Unix
 open Utility
 
 (* Does at least one of the functions have to run on the client? *)
@@ -12,7 +11,7 @@ let read_file_cache filename : (Syntax.expression list) =
   Performance.measuring := false; (* temp *)
   let cachename = filename ^ ".cache" in
     try
-      if ((Unix.stat cachename).st_mtime > (Unix.stat filename).st_mtime) then
+      if ((Unix.stat cachename).Unix.st_mtime > (Unix.stat filename).Unix.st_mtime) then
         let infile = open_in cachename in
         let program = Marshal.from_channel infile in
           close_in infile;
@@ -91,7 +90,6 @@ let decode_continuation (cont : string) : Result.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let serve_requests filename = 
-  try
   Performance.measuring := true;
     Pervasives.flush(Pervasives.stderr);
   let global_env = read_file_cache filename in
@@ -137,6 +135,7 @@ let serve_requests filename =
               debug("parsed program is " ^ Syntax.string_of_expression expression);
 	      print_endline (Result.string_of_result (snd (Interpreter.run_program global_env [expression])))
       end
-  with
-    | Type_error (x, y) -> Errors.display_error (Type_error (x, y)) ("Why does display_error want to be passed the line to print?")
 
+let serve_requests filename =
+  Errors.display_errors_fatal stderr
+    serve_requests filename
