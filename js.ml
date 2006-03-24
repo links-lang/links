@@ -210,6 +210,10 @@ let rename_prefixed name = Str.global_replace (Str.regexp ":") "___" name
 let untuple_def =
   let rec arglist argvar = 
     (function
+	 (* This is very fragile.  We shouldn't assume that the
+	    argument destructuring is in a particular form, as this
+	    code does.  Rather, we should define a normal form for our
+	    AST and make sure it's in that form by this point.  *)
        | Record_selection (lab, 
 			   labvar, 
 			   restvar, 
@@ -222,15 +226,25 @@ let untuple_def =
 	     (* and restvar is not free in body *)
 	     ->  (let vars, body = arglist restvar body in
 		    x :: vars, body)
+       | Record_selection (lab, 
+			   labvar, 
+			   restvar, 
+			   Variable (avar, _), 
+			   body,_)
+	   when numberp lab
+	     && argvar = avar
+	     (* and restvar is not free in body *)
+	     ->  (let vars, body = arglist restvar body in
+		    labvar :: vars, body)
        | Record_selection_empty (Variable (avar, _), body, _) 
 	   when avar = argvar 
 	     -> [], body
-       | _ -> failwith "Error unpacking arglist") in
+       | e -> failwith ("Error unpacking arglist [2]" ^ show_expression e)) in
     function
       | Abstr (var, (Record_selection _ as body), _) -> arglist var body
       | Abstr (var, (Record_selection_empty _ as body), _) -> [], body
       | Abstr (var, body, _) -> [var], body
-      | _ -> failwith "Error unpacking arglist"
+      | e -> failwith ("Error unpacking arglist [1] " ^ show_expression e)
 
 (* Convert an application of a function to a tuple into an application
    of a function to several arguments *)

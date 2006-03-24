@@ -1,13 +1,11 @@
 // Links js runtime.
 
 /// sequences: 
-
 var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
 function __debug(msg) {
    __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
 }
 __alert = __debug;
-alert = __alert;
 
 function __applyChanges(changes) {
   for (var i in changes) {
