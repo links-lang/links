@@ -77,7 +77,6 @@ let uniquify_expression : RewriteSyntax.rewriter =
      we need to replace bindings from the inside out *)
   in RewriteSyntax.bottomup rewrite_node
 
-
 (* pure
 
    Checkes whether the evaluation of an expression is known to be free
@@ -93,7 +92,10 @@ let pure : expression -> bool =
      replace `x = f(3); 4' with `4' if `f' is a continuation.
   *)
   let pure default = function 
-    | Apply _ -> false
+    | Apply _    -> false
+    | Table _    -> false
+    | Database _ -> false
+    | Escape _   -> false
     | e       -> default e
   and combiner l = fold_right (&&) l true in
     reduce_expression pure (combiner -<- snd)
@@ -527,8 +529,8 @@ let push_takedrop : RewriteSyntax.rewriter =
 
 
 let trivial_extensions : RewriteSyntax.rewriter = function
-  | Collection_extension (Collection_single (Variable (v1, _), _, _), v2, Table t, _) 
-      when v1 = v1 -> Some (Table t)
+  | Collection_extension (Collection_single (Variable (v1, _), _, _), v2, e, _)
+      when v1 = v1 -> Some e
   | _ -> None
      
 let ops = ["==", (=);
@@ -573,8 +575,10 @@ let run_optimisers : Kind.environment -> RewriteSyntax.rewriter
 
 let optimise env expr =
   match run_optimisers env expr with
-      None -> expr
-    | Some expr -> expr
+      None -> debug ("Optimization had no effect"); expr
+    | Some expr' -> (debug ("Before optimization : " ^ show_expression expr
+			    ^ "\nAfter optimization  : " ^ show_expression expr');
+		     expr')
 
 let optimise_program (env, exprs) = 
   map (optimise env) exprs
