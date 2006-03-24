@@ -476,7 +476,7 @@ let label_of_expression expr =
 let result_to_xml = function
   | `Primitive (`XML r) -> r
   | `Collection _ as r -> (charlist_as_string r) 
-  | `Continuation cont -> Base64.encode(serialise_continuation cont)
+  | `Continuation cont -> Utility.base64encode (serialise_continuation cont)
   | _ -> "NOT IMPLEMENTED"
 
 

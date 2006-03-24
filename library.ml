@@ -335,7 +335,7 @@ let env : (string * (result * Kind.assumption)) list = map
       (fun cont ->
 	 match cont with
 	     `Continuation cont -> 
-	       box_string(Base64.encode(serialise_continuation cont))
+	       box_string(Utility.base64encode(serialise_continuation cont))
 	   | _ -> failwith "string_of_cont applied to non-continuation" ),(*TYPEME!*)
     let v = fresh_type_variable () and
         u = fresh_type_variable () 

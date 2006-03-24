@@ -33,7 +33,7 @@ let read_file_cache filename : (Syntax.expression list) =
 
 
 let encode_continuation (cont : Result.continuation) : string =
-  Netencoding.Base64.encode (Marshal.to_string cont [Marshal.Closures])
+  Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
 let serialize_call_to_client (continuation, name, arg) =
   Json.jsonize_result
@@ -61,7 +61,7 @@ let clientize_unevaled_env env =
 	    (name, 
              Some (fun (_, cont, arg) -> 
                      let call = serialize_call_to_client (cont, name, arg) in
-                       (print_endline ("Content-type: text/plain\n\n" ^ Netencoding.Base64.encode call);
+                       (print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode call);
                         exit 0)),
              []))) in
   let server_env, client_env = List.partition is_server_fun env in
@@ -70,12 +70,12 @@ let clientize_unevaled_env env =
 
 let handle_client_call unevaled_env f args = 
   let env = clientize_unevaled_env unevaled_env in
-  let f, args = Netencoding.Base64.decode f, Netencoding.Base64.decode args in
+  let f, args = Utility.base64decode f, Utility.base64decode args in
     let continuation = [Result.FuncApply (List.assoc f env, [])] in
     let result = (Interpreter.apply_cont_safe env continuation
 		    (untuple_single (Jsonparse.parse_json 
 				       Jsonlex.jsonlex (Lexing.from_string args)))) in
-      print_string ("Content-type: text/plain\n\n" ^ Netencoding.Base64.encode (Json.jsonize_result result));
+      print_string ("Content-type: text/plain\n\n" ^ Utility.base64encode (Json.jsonize_result result));
       exit 0
 
 open Errors
@@ -88,7 +88,7 @@ let decode_continuation (cont : string) : Result.continuation =
   (* At some point, '+' gets replaced with ' ' in our base64-encoded
      string.  Here we put it back as it was. *)
     Str.global_replace (Str.regexp " ") "+" 
-  in Marshal.from_string (Netencoding.Base64.decode (fixup_cont cont)) 0
+  in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let serve_requests filename = 
   try
@@ -107,11 +107,11 @@ let serve_requests filename =
       begin
         let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string in
         let continuation = decode_continuation  (List.assoc "__continuation" cgi_args) 
-        and arg = parse_json (Netencoding.Base64.decode (List.assoc "__result" cgi_args))
+        and arg = parse_json (Utility.base64decode (List.assoc "__result" cgi_args))
         and env = clientize_unevaled_env global_env in
           debug("continuation is " ^ Syntax.string_of_expression expression);
         let result = Interpreter.apply_cont_safe env continuation (untuple_single arg) in
-          print_endline ("Content-type: text/plain\n\n" ^ Netencoding.Base64.encode (Result.string_of_result result));
+          print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode (Result.string_of_result result));
           exit 0
       end
     else 

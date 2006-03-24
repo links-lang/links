@@ -27,7 +27,6 @@ open Syntax
 open Kind
 open Result
 
-
 (** "Runtime" services: handling continuation objects during evaluation **)
 type query_record = (string * result) list
 
@@ -113,12 +112,12 @@ let xml_transform env : expression -> expression =
            let laction = either_assoc "l:onsubmit" "l:handler" attrs in
            let new_fields = match laction with 
                (* l:action denotes a frozen expression *)
-             | Left laction -> [hidden_input "expression%" (Base64.encode (serialise_result (expr_to_thunk laction)));
-                                hidden_input "environment%" (Base64.encode (pickle_environment env))]
+             | Left laction -> [hidden_input "expression%" (Utility.base64encode (serialise_result (expr_to_thunk laction)));
+                                hidden_input "environment%" (Utility.base64encode (pickle_environment env))]
                  (* l:handler denotes an expression which should eval
                     to a continuation value; so this is broken *)
              | Right lhandler -> [hidden_input "continuation%"
-                                    (Base64.encode (Syntax.serialise_expression lhandler))] in
+                                    (Utility.base64encode (Syntax.serialise_expression lhandler))] in
              (* FIXME: replace l:handler too *)
              Xml_node ("form", substitute (((=)"l:onsubmit") @@ attrname) ("action", string "#") attrs, new_fields @ contents, data)
          with Not_found -> form)
@@ -129,8 +128,8 @@ let xml_transform env : expression -> expression =
          with Not_found -> input)
     | Xml_node ("a", attrs, contents, data) ->
         let href = assoc "l:href" attrs in
-        let ser_expr = Base64.encode (serialise_result (expr_to_thunk href)) 
-        and ser_env = Base64.encode (pickle_environment (retain (freevars href) env)) in
+        let ser_expr = Utility.base64encode (serialise_result (expr_to_thunk href)) 
+        and ser_env = Utility.base64encode (pickle_environment (retain (freevars href) env)) in
         let new_value = "?environment%=" ^ ser_env ^ "&expression%=" ^ ser_expr in
         let new_attributes = substitute (((=)"l:href") @@ attrname) ("href", string new_value) attrs in
           Xml_node ("a", new_attributes, contents, data)
@@ -183,7 +182,7 @@ let cont_from_params primitive_lookup params =
     and params = filter (not @@ is_special_param) params in
     let continuation = 
       (deserialise_continuation primitive_lookup
-         (Base64.decode pickled_continuation))
+         (Utility.base64decode pickled_continuation))
     in
       Some(ContParams(continuation, string_dict_to_charlist_dict params))
         
@@ -197,8 +196,8 @@ let cont_from_params primitive_lookup params =
       if pickled_environment = "" then
         []
       else
-        fst (deserialise_environment primitive_lookup (Base64.decode pickled_environment))
-    and expression = (match fst (deserialise_result primitive_lookup (Base64.decode pickled_expression)) with
+        fst (deserialise_environment primitive_lookup (Utility.base64decode pickled_environment))
+    and expression = (match fst (deserialise_result primitive_lookup (Utility.base64decode pickled_expression)) with
                           | `Function (_, _, _, p) -> p
                           | _ -> failwith "Type error unpickling expression")
     in
@@ -226,13 +225,13 @@ let remote_call_info interpreter toplevel_env type_env primitive_lookup params p
     | `Function (_, (`Function _ as next)) -> fn_return_type next
     | `Function (_, t) -> t 
     | _ -> failwith "internal error : extract return type of non-function" in
-  let function_name = Base64.decode (assoc "f" params)
-  and params = Base64.decode (assoc "p" params)
-  and types = Base64.decode (assoc "t" params)
+  let function_name = Utility.base64decode (assoc "f" params)
+  and params = Utility.base64decode (assoc "p" params)
+  and types = Utility.base64decode (assoc "t" params)
   in match assoc function_name toplevel_env with
     | `Function _ as f ->
         debug ("remote call of " ^ function_name);
         let parameters = decode_parameters (fst (deserialise_list deserialise_kind types),  params) in
           (* TODO: Doesn't handle polymorphism: need to pass return type back as well *)
-          print (Base64.encode (primitive_serialiser (fn_return_type (snd (assoc function_name type_env))) (apply_fn interpreter f parameters)))
+          print (Utility.base64encode (primitive_serialiser (fn_return_type (snd (assoc function_name type_env))) (apply_fn interpreter f parameters)))
     | _ -> failwith "Remote call of non-function"
