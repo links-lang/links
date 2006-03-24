@@ -140,7 +140,7 @@ let add_header tag obj =
 let primitve_pickler (tag : char) (stringize : 'a -> string) (obj : 'a) =
   return (add_header tag (stringize obj))
 
-let pickle_string : string pickler  = primitve_pickler 'h' Sl_utility.identity  
+let pickle_string : string pickler  = primitve_pickler 'h' Utility.identity  
 and pickle_bool   : bool pickler    = primitve_pickler 'b' string_of_bool
 and pickle_int    : Num.num pickler = primitve_pickler 'i' Num.string_of_num
 and pickle_oint   : int pickler     = primitve_pickler 's' string_of_int
