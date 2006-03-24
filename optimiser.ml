@@ -550,16 +550,12 @@ let fold_constant : RewriteSyntax.rewriter =
     | _ -> None 
 
 let rewriters env = [
-(*  RewriteSyntax.bottomup renaming;
+  RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
-*)
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
-(*  RewriteSyntax.bottomup sql_selections;
-  RewriteSyntax.bottomup (inference_rw env);
+  RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.bottomup (sql_projections env);
-  RewriteSyntax.bottomup (inference_rw env);
-*)
 (*  optimiser2rewriter sql_sort;
   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
