@@ -6,7 +6,7 @@ fun query(n,c) {
   take(results_per_page) (
        drop(results_per_page * (n-1)) (
             for r <- Table "wordlist" with {word: String,  meaning: String } order [word: asc]
-             from database "postgresql:links:localhost:5432:www-data:"
+                     from database "postgresql:dictionary::5432:www-data:"
              where (r.word beginswith c) in
                 [r]))
 }
