@@ -59,6 +59,66 @@ type 'data expression' =
   | Table of ('data expression' * string * Query.query * 'data)
   | Escape of (string * 'data expression' * 'data)
 
+
+
+
+let s0 () () =
+  "()"
+let s1 (s1) (e1) =
+  "(" ^ s1 e1 ^ ")"
+let s2 (s1, s2) (e1, e2) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2  ^ ")"
+let s3 (s1, s2, s3) (e1, e2, e3) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ ")"
+let s4 (s1, s2, s3, s4) (e1, e2, e3, e4) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ ")"
+let s5 (s1, s2, s3, s4, s5) (e1, e2, e3, e4, e5) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ ")"
+let s6 (s1, s2, s3, s4, s5, s6) (e1, e2, e3, e4, e5, e6) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^ ")"
+let s7 (s1, s2, s3, s4, s5, s6, s7) (e1, e2, e3, e4, e5, e6, e7) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^  "," ^ s7 e7 ^ ")"
+
+let null = fun _ -> "_"
+
+let slist s l = 
+  "[" ^ String.concat "," (map s l) ^ "]"
+
+
+let rec show_expression = 
+  let exp = show_expression in
+    function
+  | Define v -> "Define " ^ s4 (identity, show_expression, null, null) v
+  | Directive v -> "Directive " ^ s2 (null, null) v
+  | Boolean v -> "Boolean " ^ s2 (string_of_bool, null) v
+  | Integer v -> "Integer " ^ s2 (string_of_num, null) v
+  | Char v -> "Char " ^ s2 (String.make 1, null) v
+  | String v -> "String " ^ s2 (identity, null) v
+  | Float v -> "Float " ^ s2 (string_of_float, null) v
+  | Variable v -> "Variable " ^ s2 (identity, null) v
+  | Apply v -> "Apply " ^ s3 (exp, exp, null) v
+  | Condition v -> "Condition " ^ s4 (exp, exp, exp, null) v
+  | Comparison v -> "Comparison " ^ s4 (exp, identity, exp, null) v
+  | Abstr v -> "Abstr " ^ s3 (identity, exp, null) v
+  | Let v -> "Let " ^ s4 (identity, exp, exp, null) v
+  | Rec v -> "Rec " ^ s3 (slist (s2 (identity, exp)), exp, null) v
+  | Xml_node v -> "Xml_node " ^ s4 (identity, slist (s2 (identity, exp)), slist exp, null) v
+  | Record_empty v -> "Record_empty " ^ s1 (null) v
+  | Record_extension v -> "Record_extension " ^ s4 (identity, exp, exp, null) v
+  | Record_selection v -> "Record_selection " ^ s6 (identity, identity, identity, exp, exp, null) v
+  | Record_selection_empty v -> "Record_selection_empty " ^ s3 (exp, exp, null) v
+  | Variant_injection v -> "Variant_injection " ^ s3 (identity, exp, null) v
+  | Variant_selection v -> "Variant_selection " ^ s7 (exp, identity, identity, exp, identity, exp, null) v
+  | Variant_selection_empty v -> "Variant_selection_empty " ^ s2 (exp, null) v
+  | Collection_empty v -> "Collection_empty " ^ s2 (coll_name, null) v
+  | Collection_single v -> "Collection_single " ^ s3 (exp, coll_name, null) v
+  | Collection_union v -> "Collection_union " ^ s3 (exp, exp, null) v
+  | Collection_extension v -> "Collection_extension " ^ s4 (exp, identity, exp, null) v
+  | Sort v -> "Sort " ^ s3 (string_of_bool, exp, null) v
+  | Database v -> "Database " ^ s2 (exp, null) v
+  | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
+  | Escape v -> "Escape " ^ s3 (identity, exp, null) v
+
 type expression = (position * kind * string option (* label *)) expression'
 type untyped_expression = position expression'
 
