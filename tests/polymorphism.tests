@@ -3,12 +3,12 @@ Let polymorphism
 stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
 
 Monomorphic lambda bindings
-(fun (p) -> (p('a'), p(13)))(fun (x) -> (x,x))
+(fun (p) { (p('a'), p(13))})(fun (x) { (x,x) })
 stderr : @.
 exit : 1
 
 No polymorphic recursion
-fun f(x) { if x then f(false) else f("true") }
+fun f(x) { if x f(false) f("true") }
 stderr : @.
 exit : 1
 
