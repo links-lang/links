@@ -7,7 +7,7 @@ open Rewrite
 open Syntax
 open Sql_transform
 
-let optimising = ref false
+let optimising = ref true
 
 module RewriteSyntax = 
   Rewrite
@@ -109,16 +109,12 @@ let inference_rw env : RewriteSyntax.rewriter = fun input ->
     if input = output then None
     else Some output
 *)
-let replace_var var expr : RewriteSyntax.rewriter = 
+let rename_var var repl : RewriteSyntax.rewriter = 
   (* Blindly replace occurrences of a variable with an expression,
      ignoring bindings *)
-  (* FIXME: ignores free variables in query expressions;
-     OK for now since we're doing sql_joins top down & thus shouldn't 
-       create free vars in query expressions.
-  *)
   let rewrite = function
-    | Variable (v, _) when v = var -> Some expr
-(*     | Table (db, s, q, data) -> Some(Table(db, s, Query.query_replace_var var expr q, data)) *)
+    | Variable (v, d) when v = var -> Some (Variable (repl, d))
+    | Table (db, s, q, data) -> Some (Table (db, s, Query.query_replace_var var (Query.Variable repl)  q, data)) 
     | _                            -> None
   in RewriteSyntax.topdown rewrite
 
@@ -143,7 +139,7 @@ let renaming : RewriteSyntax.rewriter =
   | Let (y, Variable (x,  _), body,  _) when bound_in x body || bound_in y body
       -> None (* Could do better: does the binding shadow? *)
   | Let (y, Variable (x, d1), body, _)
-      -> Some (fromOption body (replace_var y (Variable (x, d1)) body))
+      -> Some (fromOption body (rename_var y x body))
   | _ -> None
 
 (** Remove all let bindings where the name is not used in the body.
