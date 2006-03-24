@@ -72,7 +72,7 @@ let rec patternize' = function
   | Syntax.Record_extension (name, value, record, _) -> Record_extension (name, patternize' value, patternize' record)
   (* See note above `amper' *)
   | Syntax.Apply(Syntax.Variable("&", _), Apply(Syntax.Variable (var, _), expr, _), _) -> Bind_using(var, patternize' expr)
-  | other -> raise (Parse_failure (_DUMMY_POS, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
+  | other -> raise (Parse_failure (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
   fun pat pos value body ->

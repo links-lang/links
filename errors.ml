@@ -56,7 +56,7 @@ let format_exception = function
   | Type_error ((pos,line,expr), s) -> Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
   | Result.Runtime_failure s -> "*** Runtime failure: " ^ s
   | Result.Runtime_exception s -> "*** Runtime exception: " ^ s
-  | Parse_failure (pos, s) -> "*** Parse failure at " ^ string_of_pos pos ^ ": " ^ s
+  | Parse_failure ((pos,line,expr), s) -> Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
   | Failure msg -> "*** Fatal error : " ^ msg
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
