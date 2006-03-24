@@ -517,14 +517,19 @@ let push_takedrop : RewriteSyntax.rewriter =
           Some (Table (e, s, {q with
                                 Query.max_rows = Some (queryize e1);
                                 Query.offset   = queryize e2}, d5))
-  | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3),
-           Table (e, s, q, d4), d5) -> 
-      Some (Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4))
-  | Apply (Apply (Variable ("drop", d1), (Variable _|Integer _ as n), d3) as f1,
-           Table (e, s, q, d4), d5) -> 
-      Some (Table (e, s, {q with Query.offset = queryize n}, d4))
-  | _ -> None
+      | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3),
+               Table (e, s, q, d4), d5) -> 
+	  Some (Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4))
+      | Apply (Apply (Variable ("drop", d1), (Variable _|Integer _ as n), d3) as f1,
+               Table (e, s, q, d4), d5) -> 
+	  Some (Table (e, s, {q with Query.offset = queryize n}, d4))
+      | _ -> None
 
+
+let trivial_extensions : RewriteSyntax.rewriter = function
+  | Collection_extension (Collection_single (Variable (v1, _), _, _), v2, Table t, _) 
+      when v1 = v1 -> Some (Table t)
+  | _ -> None
      
 let ops = ["==", (=);
            "<>", (<>);
@@ -559,6 +564,7 @@ let rewriters env = [
 (*  optimiser2rewriter sql_sort;
   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
+  RewriteSyntax.topdown trivial_extensions;
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
 ]
 
