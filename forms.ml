@@ -50,11 +50,6 @@ let lname_bound_vars : 'a expression' -> string list =
   in function
     | Xml_node ("form", _, contents, _)  -> map desyntax (concat (map lnames contents))
     | Xml_node (_, _, _, _)  -> []
-(*     | _ ->  failwith "lname_bound_vars is only applicable to <form> xml elements" *)
-
-let rec intersects l = function
-    [] -> false
-  | (h::t) -> mem h l || intersects l t
 
 let is_special x = String.length x > 2 && String.sub x 0 2 = "l:"
 
@@ -134,45 +129,10 @@ let xml_transform env : expression -> expression =
         let new_attributes = substitute (((=)"l:href") @@ attrname) ("href", string new_value) attrs in
           Xml_node ("a", new_attributes, contents, data)
 
-(* Everything from here on down handles remote calls from the client *)
-
-open Pickle
-
-(* Just a temporary measure to allow units through *)
-let serialise_unit, deserialise_unit = primitive_serialisers 'z' (fun () -> "") (fun _ -> ())
-
-let rec primitive_picklers (kind : Kind.kind) : result serialiser * result deserialiser = match kind with
-  | `Primitive `Bool  -> serialise_bool  @@ unbox_bool,  (fun s -> let v, r = deserialise_bool s in box_bool v, r)
-  | `Primitive `Int   -> serialise_int   @@ unbox_int,   (fun s -> let v, r = deserialise_int s in box_int v, r)
-  | `Primitive `Float -> serialise_float @@ unbox_float, (fun s -> let v, r = deserialise_float s in box_float v, r)
-  | `Primitive `Char  -> serialise_char  @@ unbox_char,  (fun s -> let v, r = deserialise_char s in box_char v, r)
-  | `Primitive `XMLitem -> serialise_item   @@ unbox_xml,   (fun s -> let v, r = deserialise_item s in box_xml v, r)
-  | `Record (field_env, `RowVar None) when StringMap.is_empty field_env -> (fun _ -> "z0+"), (fun s -> let v, r = deserialise_unit s in `Record [], r)
-  | `Collection (`List, `Primitive `Char) ->
-      ((fun r -> serialise_string (Result.charlist_as_string r)),
-       (fun s -> let v, r = deserialise_string s in (string_as_charlist v), r))
-  | `Collection (`List, element_type) -> 
-      ((function
-          | `Collection (_, items) -> serialise_list (fst (primitive_picklers element_type)) items
-          | r -> failwith "Internal error: Unexpected result type (expected a list, got "^ string_of_result r ^")"),
-       (fun s -> let v, r = deserialise_list (snd (primitive_picklers element_type)) s in `Collection (`List, v), r))
-  | _ -> failwith ("Cannot create pickler for " ^ string_of_kind kind)
-
-let primitive_serialiser v = fst (primitive_picklers v)
-and primitive_deserialiser v = snd (primitive_picklers v)
-
 (* string_dict_to_charlist_dict: a utility routine *)
 
 let string_dict_to_charlist_dict =
   dict_map Result.string_as_charlist
-
-let rec decode_parameters : Kind.kind list * string -> Result.result list = function 
-  | [], "" -> []
-  | [], _ -> failwith "Insufficient number of types for the parameter list in remote call"
-  | _, "" -> failwith "Too many types for the parameter list in remote call"
-  | kind :: kinds, parameters ->
-      let arg, rest = primitive_deserialiser kind parameters in
-        arg :: decode_parameters (kinds, rest)
 
 (* Extract continuation or expression from the parameters passed in over CGI.*)
 let cont_from_params primitive_lookup params =
@@ -209,29 +169,3 @@ let cont_from_params primitive_lookup params =
 
 let is_remote_call params = 
   mem_assoc "__name" params && mem_assoc "__args" params (* && mem_assoc "t" params*)
-
-let rec apply_fn
-    (interpreter : environment -> environment -> Syntax.expression -> Result.result) = function
-      | (`Function (var, locals, globals, body) as f) -> 
-          (function
-             | [one] -> interpreter globals ((var,one) :: locals)  body
-             | first :: rest -> apply_fn interpreter (apply_fn interpreter f [first]) rest)
-      | otherwise -> failwith "Internal error: attempt to apply (deserialised) non-function"
-
-
-(* Return the information corresponding to a from-JavaScript call *)
-let remote_call_info interpreter toplevel_env type_env primitive_lookup params print = 
-  let rec fn_return_type = function
-    | `Function (_, (`Function _ as next)) -> fn_return_type next
-    | `Function (_, t) -> t 
-    | _ -> failwith "internal error : extract return type of non-function" in
-  let function_name = Utility.base64decode (assoc "f" params)
-  and params = Utility.base64decode (assoc "p" params)
-  and types = Utility.base64decode (assoc "t" params)
-  in match assoc function_name toplevel_env with
-    | `Function _ as f ->
-        debug ("remote call of " ^ function_name);
-        let parameters = decode_parameters (fst (deserialise_list deserialise_kind types),  params) in
-          (* TODO: Doesn't handle polymorphism: need to pass return type back as well *)
-          print (Utility.base64encode (primitive_serialiser (fn_return_type (snd (assoc function_name type_env))) (apply_fn interpreter f parameters)))
-    | _ -> failwith "Remote call of non-function"

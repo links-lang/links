@@ -32,8 +32,6 @@ type webcontinuation = ContParams of continuation * query_record
 		       | ExprEnv of expression * environment
 
 (* Extract a continuation or expression from the parameters passed in over CGI. *)
-
-(* Like continuation_from_params, but for continuations. *)
 val cont_from_params : (*(string -> string -> string -> 
 			  string -> string -> database) -> *)
   (string -> result) -> (string * string) list -> (webcontinuation) option
@@ -41,15 +39,6 @@ val cont_from_params : (*(string -> string -> string ->
 (** Handling remote calls (from JavaScript) **)
 (* Are we being called from JavaScript? *)
 val is_remote_call : (string * string) list -> bool
-
-(* Return the information corresponding to a from-JavaScript call *)
-val remote_call_info : (environment -> environment -> expression -> result) ->
-                       (string * result) list ->
-                       (string * ('a * kind)) list ->
-                       'c ->
-                       (string * string) list ->
-                       (string -> 'd) ->
-                       'd
 
 val is_special : string -> bool
 
