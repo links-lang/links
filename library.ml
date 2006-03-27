@@ -267,6 +267,25 @@ let env : (string * (result * Kind.assumption)) list = map
     let a = fresh_type_variable () in
       ([a], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
 
+
+  ("childNodes",
+   (primfun "childNodes"
+      ((function
+         | `Collection(_, [elem]) ->
+             (match elem with 
+                  `Primitive(`XML(Node(tag, children))) -> 
+                    let children = filter (function (Node x) -> true | _ -> false) children in
+                      (`Collection(`List, map (fun x -> `Primitive(`XML x)) children) : Result.result)
+                | _ -> failwith ("non-XML given to childNodes")
+             )
+         | _ -> failwith ("non-XML given to childNodes")
+       ) : Result.result -> Result.result
+      ),
+   ([],
+       xml --> xml)
+   )
+  );
+
   ("drop",
    (primfun "drop"
       (function 
