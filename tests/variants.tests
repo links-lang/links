@@ -75,3 +75,7 @@ stdout : @fun : \(mu . rec[0-9]* \([A:rec[0-9]* | [0-9]*]\)\)-> mu . rec[0-9]* \
 Rows preserved across functions
 fun f(x) { switch x { Foo -> (Bar) s -> s } }
 stdout : @fun : \(\[Bar:\(\) | Foo:\(\) | [0-9]*\]\) -> \[Bar:\(\) | [0-9]*\]
+
+Nullary variants with cases
+switch None { None -> None Some x -> Some x }
+stdout : None () : [None:() | Some:a | 31]
