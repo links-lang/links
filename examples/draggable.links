@@ -1,0 +1,71 @@
+#!/home/s0567141/links/links -w
+
+fun attrStr(a, b) { 
+  switch (attribute(a,b)) {
+    None -> error("no attribute")
+    Some s -> s
+  }
+}
+
+fun rearrange(list, item, replacement) {
+  if (list == []) []
+  else {
+    h = hd(list);
+    if (attrStr([h], "id") == item) elemById(replacement) ++elemById(item) ++ rearrange(tl(list), item, replacement)
+    else if (attrStr([h], "id") == replacement) rearrange(tl(list), item, replacement)
+      else [h] ++ rearrange(tl(list), item, replacement)
+  }
+}
+
+fun elemById(item) {
+   switch elementById(item) { 
+      None -> error (item ++ " does not exist")
+      Some s -> s
+   }
+}
+
+fun mapp(f, l) {
+  if (l == []) []
+  else f(hd(l)) ++ mapp(f, tl(l))
+}
+
+fun f(x) { <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{enxml(x)}</li> }
+
+fun makeList(items) {
+   <ul id="list" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)">
+   {items}
+   </ul>
+}
+
+fun dragList(draggedElem) {
+  switch (recv()) {
+     MouseUp           -> dragList(None)
+     MouseDown  target -> dragList(Some target)
+     MouseMoved target ->
+        switch draggedElem {
+          None -> dragList(None)
+          Some draggedElem -> {
+             domutate([ReplaceElement(id="list", 
+                    replacement=makeList(rearrange(childNodes(elemById("list")),
+                                                   draggedElem, target)))]) ;
+             dragList(Some draggedElem)
+          }
+        }
+    }
+}
+
+fun draggableList (items) client {
+  listMgr = spawn(dragList)(None);
+  <div
+      l:onmousedown="{send(listMgr)(MouseDown(attrStr(event.target, "id")))}"
+      l:onmouseup="{send(listMgr)(MouseUp)}"
+      l:onmouseout="{send(listMgr)(MouseUp)}"
+      l:onmousemove="{send(listMgr)(MouseMoved(attrStr(event.target, "id")))}">
+    {makeList(mapp(f, items))}
+  </div>
+}
+
+<body>
+  <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+  {draggableList(["Pooh", "Paddington", "Rupert", "Edward"])}
+</body>
