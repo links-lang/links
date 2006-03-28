@@ -403,11 +403,7 @@ let rec generate : 'a expression' -> code =
                 Call(r_cps, [Fn(["r"],
                      Call(Var "kappa",
                           [Binop (Var "l", binop_name op, Var "r")]))]))]))
-(*   | Apply (Variable ("enxml", _), p, _) -> Fn(["kappa"],  *)
-(*                                           Call(generate p, [Var "kappa"])) *)
 
-  | Apply (Variable ("enxml", _), p, _) -> generate p
-      
   | Apply (Variable ("domutate", _), p, _) -> 
       let p_cps = generate p in
         Fn(["kappa"], 

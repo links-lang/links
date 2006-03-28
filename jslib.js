@@ -65,13 +65,8 @@ function __XML(kappa) {
    }
    for (var i = 0; i < body.length; i++) {
        var child = body[i];
-       if (typeof(child) == 'string') {
-           node.appendChild(document.createTextNode(child));
-       } else {
-           for (var j = 0; j < child.length; j++) {
-              node.appendChild(child[j]);
-           }
-       }
+       for (var j = 0; j < child.length; j++)
+          node.appendChild(child[j]);
    }
    kappa([node]);
   }
@@ -180,7 +175,7 @@ function __le(l,r)     {   return l <= r ; }
 function __ge(l,r)     {   return l >= r ; }
 function __gt(l,r)     {   return l >  r ; }
 
-function enxml(body) { return body }
+function enxml(kappa) { return function (body) { return kappa([document.createTextNode(body)]); }}
 var javascript = true;
 
 
