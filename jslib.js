@@ -1,5 +1,75 @@
 // Links js runtime.
 
+var DEBUG = function () {
+ function is_instance(value, type, constructor) {
+    return value != undefined
+        && (typeof value == type || value instanceof Object && value.constructor == constructor)
+ }
+ function xmldump(xml) {
+   return (new XMLSerializer()).serializeToString(xml)
+ }
+ return {
+ assert : function(value) {
+   if (value != true) {
+     try {  
+        throw new Error() // throw an exception so that we can retrieve the stack (via the 'stack' property)
+     }
+     catch (e) {  
+       var msg = "<b>ASSERTION FAILED!</b> in function " + arguments.callee.caller + "<br/><b>Stack</b>: " + e.stack;
+       alert(msg.replace('@', '<br/><b>=> </b> ', 'g'));
+       throw new Error("assertion failed (check debug output)");
+    }
+   }
+ },
+ is_number : function(value) {
+  return is_instance(value, 'number', Number);
+ },
+ is_string : function(value) {
+   return is_instance(value, 'string', String);
+ },
+ is_boolean : function(value) {
+   return is_instance(value, 'boolean', Boolean);
+ },
+ is_xmlnode : function(value) {
+   return is_instance(value, -1, Node)
+ },
+ is_array : function(value) {
+   return is_instance(value, -1, Array);
+ },
+ is_event : function(value) {
+   return is_instance(value, -1, Event)
+ },
+ is_textnode : function(value) {
+   return DEBUG.is_xmlnode(value) && value.nodeType == document.TEXT_NODE;
+ },
+ is_undefined : function(value) {
+   return value == undefined && String(value) == 'undefined';
+ },
+ is_null : function(value) {
+   return value == null && String(value) == 'null';
+ },
+ type : function(value) {
+    if      (DEBUG.is_number (value))    return 'number';
+    else if (DEBUG.is_string (value))    return 'string';
+    else if (DEBUG.is_boolean (value))   return 'boolean';
+    else if (DEBUG.is_textnode (value))  return 'textnode';
+    else if (DEBUG.is_xmlnode (value))   return 'xmlnode';
+    else if (DEBUG.is_array (value))     return 'array';
+    else if (DEBUG.is_event (value))     return 'event';
+    else if (DEBUG.is_undefined (value)) return 'undefined';
+    else if (DEBUG.is_null (value))      return 'null';
+    else if (typeof(value) == 'object' && 'constructor' in value) return new String(constructor);
+    else return 'UNKNOWN TYPE'
+ },
+ // could also add type-predicates for Array, Error, Function, Date, etc.
+ show : function(value) {
+    if (DEBUG.is_xmlnode(value)) return xmldump(value)
+    else return JSON.stringify(value)
+ },
+}
+}();
+
+
 /// sequences: 
 var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
 function __debug(msg) {
@@ -163,9 +233,10 @@ function __continuationize(f) {
 var int_of_string = __continuationize(parseInt);
 var string_of_int = __continuationize(String);
 
-function not(x) { return !x; }
-function hd(kappa) {return function(list) { kappa(list[0]); } }
-function tl(list) { return list.slice(1); }
+function not(kappa) { return function(x) { return kappa(!x); }}
+function empty(kappa) { return function(list) { kappa(list.length == 0); } }
+function hd(kappa) { return function(list) { kappa(list[0]); } }
+function tl(kappa) { return function(list) { kappa(list.slice(1)); } }
 function __minus(l)  { return function (r) { return l -  r ; }}
 function __plus(l)   { return function (r) { return l +  r ; }}
 function __times(l)  { return function (r) { return l *  r ; }}
