@@ -287,6 +287,7 @@ amper_expression:
 block:
 | LBRACE bindings exp perhaps_semi RBRACE                      { Block ($2, $3), pos() }
 | LBRACE exp perhaps_semi RBRACE                               { $2 }
+| LBRACE perhaps_semi RBRACE                                   { Block ([], (TupleLit [], pos())), pos() }
 
 perhaps_semi:
 | SEMICOLON                                                    {}
