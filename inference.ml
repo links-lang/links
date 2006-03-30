@@ -766,13 +766,9 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let expr_env = (var, ([], value_tvar)) :: env in
       let expr = w expr_env expr in
       let _ = unify (node_kind expr, `Collection (collvar, expr_tvar)) in
-        (match node_kind expr with
-           | `Collection (ctype, _) ->
-               let type' = `Collection (ctype, expr_tvar) in
-               let value = value in
-               let node = Collection_extension (expr, var, value, (pos, type', None)) in
-                 node
-           | _ -> failwith "Internal error: error substituting collection kind")
+      let type' = node_kind expr in
+      let node = Collection_extension (expr, var, value, (pos, type', None)) in
+        node
   | Escape(var, body, pos) -> 
       let exprtype = ITO.new_type_variable () in
       let contrettype = ITO.new_type_variable () in
