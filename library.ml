@@ -71,6 +71,8 @@ and floatop name op  =
   (name, ((primfun name (binary_op box_float unbox_float op name)),
           ([], (`Primitive `Float -->
 		  (`Primitive `Float --> `Primitive `Float)))))
+
+
     
 (* template for builtin conversion functions *)
 let conversion_op box unbox op : primop = 
@@ -312,6 +314,32 @@ let env : (string * (result * Kind.assumption)) list = map
       ([v],
        (`Collection (`List, v) --> `Collection (`List, v)))));
 
+  ("childNodes",
+   (primfun "childNodes"
+      ((function
+         | `Collection(_, [elem]) ->
+             (match elem with 
+                  `Primitive(`XML(Node(tag, children))) -> 
+                    let children = filter (function (Node x) -> true | _ -> false) children in
+                      (`Collection(`List, map (fun x -> `Primitive(`XML x)) children) : Result.result)
+                | _ -> failwith ("non-XML given to childNodes")
+             )
+         | _ -> failwith ("non-XML given to childNodes")
+       ) : Result.result -> Result.result
+      ),
+   ([],
+       xml --> xml)
+   )
+  );
+
+  ("objectType",
+   (primfun "objectType"
+      (fun obj ->
+         failwith("objectType not implemented for server-side code.")),
+    let u = fresh_type_variable() in
+    ([u], u --> string)
+   ));
+
   ("attribute",
    (primfun "attribute"
       (function
@@ -329,7 +357,7 @@ let env : (string * (result * Kind.assumption)) list = map
                                          with Not_found -> none)
                                     | _ -> none))
          | _ -> failwith "Internal error: bad arguments to attribute"),
-    let pair = `Record (TypeOps.set_field ("1", `Present xml)
+    let pair = `Record (TypeOps.set_field ("1", `Present (`Primitive `XMLitem))
 	                  (TypeOps.set_field ("2", `Present string)
 	                     (TypeOps.make_empty_closed_row ()))) in
       ([],
@@ -374,6 +402,24 @@ let env : (string * (result * Kind.assumption)) list = map
    (primfun "debug"
       (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
     ([], string --> make_unit ())));
+   
+  ("debugObj", (* destructive *)
+   (primfun "debugObj"
+      (fun message -> failwith("no debugObj on server")),
+    let u = fresh_type_variable() in 
+    ([u], u --> make_unit ())));
+
+  ("dump", (* destructive *)
+   (primfun "dump"
+      (fun message -> failwith("no dump on server")),
+    let u = fresh_type_variable() in 
+    ([u], u --> make_unit ())));
+
+  ("textContent",
+   (primfun "textContent"
+      (fun _ -> failwith("textContent is not implemented on the server side")),
+    let u = fresh_type_variable() in 
+      ([u], u --> string)));
    
   ("print", (* destructive *)
    (primfun "print"
@@ -556,7 +602,7 @@ continuationize_primfn (
 
   ("domutate",
    (primfun "domutate"
-      (function duration ->
+      (function mutations ->
          failwith("domutate not implemented on server side.")),
     let u = fresh_type_variable () in
     let v = fresh_type_variable () in

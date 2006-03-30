@@ -1,5 +1,7 @@
 // Links js runtime.
 
+var __dwindow = open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes');
+
 var DEBUG = function () {
  function is_instance(value, type, constructor) {
     return value != undefined
@@ -70,27 +72,127 @@ var DEBUG = function () {
 }();
 
 
-/// sequences: 
-var __dwindow = open('', 'debugwindow','width=400,height=400,toolbar=0,scrollbars=yes');
 function __debug(msg) {
    __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
 }
 __alert = __debug;
 
-function __applyChanges(changes) {
-  for (var i in changes) {
-    var change = changes[i];
-    var element = document.getElementById(change.value.id);
-    if (!element) __alert("element " + change.value.id + " does not exist")
-    else {
-      if (change.label == 'ReplaceElement') {
-          element.parentNode.replaceChild(change.value.replacement[0], element);
+// utilities (NOT CPS'd)
+function isEmpty(list) { return (list.length == 0); }
+function isarray(obj) {
+  return typeof(obj) == 'object' && obj.constructor == Array
+}
+
+// library functions (CPS'd)
+function __continuationize(f) {
+    return function (kappa) {
+        return function () {
+            return kappa(f.apply(f, arguments));
+        };
+    };
+}
+var int_of_string = __continuationize(parseInt);
+var string_of_int = __continuationize(String);
+//function not(x) { return !x; }
+function not(kappa) { return function(x) { kappa( !x ); } }
+function empty(kappa) { return function(list) { kappa(list.length == 0); } }
+function hd(kappa) { return function(list) { kappa(list[0]); } }
+function tl(kappa) { return function(list) { kappa(list.slice(1)); } }
+
+// library functions (NOT CPS'd)
+function __minus(l)  { return function (r) { return l -  r ; }}
+function __plus(l)   { return function (r) { return l +  r ; }}
+function __times(l)  { return function (r) { return l *  r ; }}
+function __divide(l) { return function (r) { return l /  r ; }}
+function __eq(l,r)     { 
+  if (typeof(l) == 'object' && l.constructor == Array && 
+      typeof(r) == 'object' && r.constructor == Array) {
+    return l.length == 0 && r.length == 0
+  }
+  else return (l == r)
+ }
+function __le(l,r)     {   return l <= r ; }
+function __ge(l,r)     {   return l >= r ; }
+function __gt(l,r)     {   return l >  r ; }
+
+// Links-level debugging routines
+function debug(kappa) {
+  return function(msg) {
+     __debug(msg);
+     return kappa();
+  }
+}
+
+function debugObj(kappa) {
+  return function(obj) {
+     if (obj == undefined) {
+       alert(obj + " : undefined");
+     } else {
+       alert(obj + " : " + typeof(obj) + (typeof(obj) == 'object' ? obj.constructor : ''));
+     }
+     return kappa();
+  }
+}
+
+dump = __continuationize(
+  function (obj) {
+    if (obj == undefined)
+      __debug(obj + " : undefined");
+    else
+      __debug("==TYPE== " + typeof(obj) + " " + 
+        (typeof(obj) == 'object' ? obj.constructor : ""));
+      for (var i in obj) {
+        try {
+          __debug(i + "=" + obj[i]);
+        } catch (e) {
+          __debug(i + " (died)");
+        } 
       }
-      else if (change.label == 'AppendChild') {
+  }
+);
+
+function error(kappa) {
+  return function(msg) {
+    alert(msg);
+    throw ("Error: " + msg);
+  }
+}
+
+/// ???
+function __xmldump(xml) {
+   return (new XMLSerializer()).serializeToString(xml)
+}
+
+function __applyChanges(changes) {
+  if (isarray(changes)) {
+    for (var i in changes) {
+      var change = changes[i];
+      var element = document.getElementById(change.value.id);
+      if (!element) error("element " + change.value.id + 
+                          ", referenced in DOM mutation, does not exist")
+      else {
+//        __debug("replacing " + change.value.id + " with " + __xmldump(change.value.replacement[0]));
+        if (change.label == 'ReplaceElement') {
+          element.parentNode.replaceChild(change.value.replacement[0], element);
+          newexample = document.getElementById(change.value.id);
+        }
+        else if (change.label == 'AppendChild') {
           element.appendChild(change.value.replacement[0]);
-      }  
+        }  
+      }
     }
   }
+}
+
+function see(x) { return x.innerHTML }
+
+function cmap(f, glue, l) {
+  if (l.length <= 0) return '';
+  temp = f(l[0]);
+  for (var i = 1; i < l.length; i++) {
+    temp += glue + f(l[i]);
+  }
+  return temp;
 }
 
 //  __concat(a, b)
@@ -104,8 +206,12 @@ function __concat () {
     return rv;
   }
   else {
-    var rv = [];
-    for (var i = 0; i < arguments.length; i++) {
+//    __debug("concatenating " + arguments.length + " lists");
+    if (arguments.length == 0) return [];
+    var rv = arguments[0];
+    for (var i = 1; i < arguments.length; i++) {
+//      __debug("concatenating " + cmap(see, ", ", rv) + 
+//              " with " + cmap(see, ", ", arguments[i]));
       rv = rv.concat(arguments[i]);
     }
     return rv;
@@ -113,20 +219,37 @@ function __concat () {
 }
 
 //  __accum(f, i)
-//    concatMap: apply f to every element of the sequence `i' and concatenate the results.
-function __accum (fn, list) {
-  var rv = [];
-  for (var i = 0; i < list.length; i++) {
-      rv = rv.concat(fn(list[i]));
+//    concatMap: apply f to every element of `list'
+//    and concatenate the results.
+function __accumAux(kappa) {
+  return function(fn, list, result) {
+    if (isEmpty(list)) kappa(result)
+    else {
+      // instead of cps hd/tl, should use js ops directly
+      hd(function(x) {
+           fn(function(ximg) {
+                tl(function (rest) {
+                     __accumAux(kappa)(fn, rest, result.concat(ximg))
+                   })(list)
+              } )(x);
+         })(list)
+    }
   }
-  return rv;
+}
+
+function __accum(kappa) {
+  return function(fn, list) {
+    __accumAux(kappa)(fn, list, []);
+  }
 }
 
 /// XML
 //  __XML(tag, attrs, children)
 //    create a DOM node with name `tag'
 //                       and attributes `attrs' (a dictionary)
-//                       and children `children' (a sequence of DOM nodes and strings)    
+//                       and children `children' (a sequence of DOM 
+//                       nodes and strings)    
+
 function __XML(kappa) {
   return function(tag, attrs, body) { 
    var node = document.createElement(tag);
@@ -134,9 +257,14 @@ function __XML(kappa) {
       node.setAttribute(name, attrs[name]);
    }
    for (var i = 0; i < body.length; i++) {
-       var child = body[i];
-       for (var j = 0; j < child.length; j++)
+     var child = body[i];
+     if (typeof(child) == 'string') {
+       node.appendChild(document.createTextNode(child));
+     } else {
+       for (var j = 0; j < child.length; j++) {
           node.appendChild(child[j]);
+       }
+     }
    }
    kappa([node]);
   }
@@ -171,7 +299,6 @@ function __fail(str) {
 //  __start(tree)
 //    Replace the current page with `tree'.
 function __start(tree) {
-
   // save here
   var __saved_fieldvals = [];
   var inputFields = document.getElementsByTagName("input");
@@ -180,7 +307,8 @@ function __start(tree) {
      __saved_fieldvals.push({'field' : current.id, 'value' : current.value});
   }
   var d = document.documentElement;
-  for (var i = 0; i <= d.childNodes.length; i++) {
+  var l = d.childNodes.length;
+  for (var i = 0; i < l; i++) {
      d.removeChild( d.childNodes[0] );
   }
   d.appendChild( tree[0] );
@@ -189,7 +317,8 @@ function __start(tree) {
      var current = __saved_fieldvals[i];
      var elem = document.getElementById(current.field);
      if (elem) {
-     elem.value = current.value; }
+        elem.value = current.value; 
+     }
   }
   
   // hmm.
@@ -213,38 +342,15 @@ function __registerFormEventHandlers(id, actions) {
    the_id = id != 0 ? id : __id++;
    for (var i = 0; i < actions.length; i++) {
      var action = actions[i];
+        // FIXME: clone this ??
 
-     if (!__evContinuations[action.evName])
-       __evContinuations[action.evName] = [];
-     __evContinuations[action.evName][the_id] = action.handler
+     if (!__eventHandlers[action.evName])
+       __eventHandlers[action.evName] = [];
+     __eventHandlers[action.evName][the_id] = action.handler;
    }
    return the_id;
 }
-var __evContinuations = {};
-
-// library functions
-function __continuationize(f) {
-    return function (kappa) {
-        return function () {
-            return kappa(f.apply(f, arguments));
-        };
-    };
-}
-var int_of_string = __continuationize(parseInt);
-var string_of_int = __continuationize(String);
-
-function not(kappa) { return function(x) { return kappa(!x); }}
-function empty(kappa) { return function(list) { kappa(list.length == 0); } }
-function hd(kappa) { return function(list) { kappa(list[0]); } }
-function tl(kappa) { return function(list) { kappa(list.slice(1)); } }
-function __minus(l)  { return function (r) { return l -  r ; }}
-function __plus(l)   { return function (r) { return l +  r ; }}
-function __times(l)  { return function (r) { return l *  r ; }}
-function __divide(l) { return function (r) { return l /  r ; }}
-function __eq(l,r)     {   return String(l) == String(r) ; }
-function __le(l,r)     {   return l <= r ; }
-function __ge(l,r)     {   return l >= r ; }
-function __gt(l,r)     {   return l >  r ; }
+var __eventHandlers = {};
 
 function enxml(kappa) { return function (body) { return kappa([document.createTextNode(body)]); }}
 var javascript = true;
@@ -467,7 +573,6 @@ function send(kCurry) {
   }
 }
 
-
 function __dictlength(x) {
   var length = 0;
   for (var prop in x) { 
@@ -478,14 +583,17 @@ function __dictlength(x) {
 
 
 function __block_proc(pid, its_cont) {
-  var current_pid = __current_pid;
+  // FIXME: const?? is this OK?
+  const current_pid = __current_pid;
   __blocked_procs[pid] = function () { __current_pid = current_pid;  its_cont() };
+  // discard stack
 }
 
 function recv(kappa) {
   return function() {
     if ( __mailboxes[__current_pid].length > 0) {
-      kappa(__mailboxes[__current_pid].pop());
+      msg = __mailboxes[__current_pid].pop()
+      kappa(msg);
     } else {
       __block_proc(__current_pid, function () { recv(kappa)() });
     }
@@ -497,18 +605,24 @@ function __scheduler() {
 }
 
 var __yieldCount = 0;
-var __yieldGranularity = 20;
+var __yieldGranularity = 100;
 
 // yield: give up control for another "thread" to work
 function __yield(my_cont) {
   ++__yieldCount;
   if ((__yieldCount % __yieldGranularity) == 0) {
     var current_pid = __current_pid;
-    setTimeout((function() { __current_pid = current_pid; my_cont()}), sched_pause);
+    setTimeout((function() { __current_pid = current_pid; my_cont()}),
+               sched_pause);
   }
   else {
     my_cont();
   }
+}
+
+// __call: using this would make compiled js code easier to read.
+function __call(f, args, kappa) {
+  __yield(function() { it = f(kappa); it.apply(it, args) });
 }
 
 
@@ -529,9 +643,39 @@ function elementById(kappa) {
 
 function attribute(kappa) {
    return function(xml, attr) {
-      var val = xml[0].attributes[attr];
+   // FIXME: we need to straighten out the XML/XMLitem distinction.
+//     if (xml.length == 0 ) { return kappa({label:'None', 'value':({})});}
+//      obj = xml[0];
+      obj = xml;
+      if (obj == undefined) {
+         return kappa({label:'None', 'value':({})}); 
+      }
+
+      //  Take note!!!
+      if (attr == 'class') attr = 'className';
+
+      var val = obj[attr];
+
       if (val == undefined) kappa({label:'None', 'value':({})});
-      else kappa({'label':'Some', 'value':val.value});
+      else kappa({'label':'Some', 'value':val});
+   }
+}
+
+function objectType(kappa) {
+  return function(obj) {
+    obj = obj[0];
+    kappa(typeof(obj) == 'object' ? obj.constructor : typeof(obj))
+  }
+}
+
+function childNodes(kappa) {
+   return function(elem) {
+      var result = [];
+      for (var i=0; i<elem[0].childNodes.length; i++) {
+        result.push(elem[0].childNodes[i].cloneNode(true));
+//        result.push(elem[0].childNodes[i]);
+      }
+      kappa(result);
    }
 }
 
@@ -539,9 +683,12 @@ function time () { return  (new Date()).getTime() }
 
 var start_time = time();
 
-function debug(kappa) {
-  return function(msg) {
-     alert(msg);
-     return kappa();
+function isDefined(kappa) {
+  return function(obj) {
+    kappa(obj == undefined);
   }
 }
+
+textContent = __continuationize(function (node) {
+  try { return node.innerHTML } catch (e) { return "" }
+});

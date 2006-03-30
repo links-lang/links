@@ -20,10 +20,10 @@ module RewriteSyntax =
     
 let gensym =
   let counter = ref 0 in
-    function () ->
+    function str ->
       begin
         incr counter;
-        "_g" ^ string_of_int !counter
+        str ^ "_g" ^ string_of_int !counter
       end
 
 (* uniquify_expression
@@ -42,35 +42,35 @@ let uniquify_expression : RewriteSyntax.rewriter =
       fromOption e (RewriteSyntax.topdown rename_one e) in
   let rewrite_node = function
     | Abstr (v, b, data) -> 
-        let name = gensym () in
+        let name = gensym v in
           Some (Abstr (name, rename_var v name b, data))
     | Let (v, e, b, data) -> 
-        let name = gensym () in
+        let name = gensym v in
           Some (Let (name, e, rename_var v name b, data))
     | Rec (vs, b, data) -> 
-        let bindings = List.map (fun (name, _) -> (name, gensym ())) vs in
+        let bindings = List.map (fun (name, _) -> (name, gensym name)) vs in
         let rename = List.fold_right (uncurry rename_var) bindings in
           Some(Rec(List.map (fun (n, v) -> (List.assoc n bindings, rename v)) vs,
                      rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
-        let lvar' = gensym ()
-        and var'  = gensym () in
+        let lvar' = gensym lvar
+        and var'  = gensym var in
           Some(Record_selection(lab, lvar', var', value, 
                                 rename_var var var' (rename_var lvar lvar' body),
                                 data))
     | Collection_extension (b, v, src, data) -> 
-        let name = gensym () in
+        let name = gensym v in
           Some (Collection_extension
                   (rename_var v name b, name, src, data))
     | Variant_selection (value, clab, cvar, cbody, var, body, data) ->
-        let cvar' = gensym ()
-        and var'  = gensym () in
+        let cvar' = gensym cvar
+        and var'  = gensym var in
           Some (Variant_selection (value, clab, 
                                    cvar', rename_var cvar cvar' cbody, 
                                    var',  rename_var var var' body,
                                    data))
     | Escape (v, b, data) -> 
-        let name = gensym () in
+        let name = gensym v in
           Some (Escape (name, rename_var v name b, data))
     | _ -> None
   (* Note that this will only work bottomup, not topdown, since
@@ -478,8 +478,8 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
            Apply (Apply (Variable ("drop", d3), ((Variable _| Integer _) as e2), d2), e3, d5), d6) -> None
   | Apply (Apply (Variable ("take", d1), e1, d2), 
            Apply (Apply (Variable ("drop", d3), e2, d4), e3, d5), d6) ->
-      let x = gensym () 
-      and y = gensym () in
+      let x = gensym "" 
+      and y = gensym "" in
         Some (Let (x, e2, 
                    Let (y, e1,
                         Apply (Apply (Variable ("take", d1), Variable (y, d1), d2), 
@@ -488,7 +488,7 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
                                d6), d1), d1))
   | Apply (Apply (Variable (("take"|"drop"), _), (Variable _ |Integer _), _), _ , _) -> None
   | Apply (Apply (Variable ("take"|"drop" as f, d1), e1, d2), e2, d3) ->
-      let var = gensym () in
+      let var = gensym "" in
         Some (Let (var, e1, 
                    Apply (Apply (Variable (f, d1), 
                                  Variable (var, d1), d2), e2, d3), d1))

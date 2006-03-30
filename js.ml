@@ -19,11 +19,20 @@ open Utility
 open Kind
 open Syntax
 
-let gensym =
-  let counter = ref 0 in 
-    function () -> 
-      incr counter ;
-      "__jsv" ^ (string_of_int !counter)
+(* Intermediate language *)
+type code = | Var   of string
+            | Lit   of string
+            | Defs  of ((string * code) list)
+            | Fn    of (string list * code)
+            | Call  of (code * code list)
+            | Binop of (code * string * code)
+            | Cond  of (code * code * code)
+            | Dict  of ((string * code) list)
+            | Lst   of (code list)
+            | Bind  of (string * code * code)
+            | Seq   of (code * code)
+            | Nothing
+
 
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
@@ -54,23 +63,13 @@ let gensym =
   Also, any `builtin' functions from Library.value_env.
  *)
 
-
-(* Intermediate language *)
-type code = | Var   of string
-            | Lit   of string
-            | Defs  of ((string * code) list)
-            | Fn    of (string list * code)
-            | Call  of (code * code list)
-            | Binop of (code * string * code)
-            | Cond  of (code * code * code)
-            | Dict  of ((string * code) list)
-            | Lst   of (code list)
-            | Iter  of (string * code (*input*) * code (*output*))
-            | Bind  of (string * code * code)
-            | Seq   of (code * code)
-            | Nothing
-
 let jsthunk expr = Fn([], expr)
+
+let gensym =
+  let counter = ref 0 in 
+    function str -> 
+      incr counter ;
+      str ^ "_j" ^ (string_of_int !counter)
 
 (* local_names
 
@@ -88,7 +87,6 @@ let rec local_names : code -> string list = function
   | Lst  cs -> List.concat (map local_names cs)
   | Binop (l, _, r)
   | Seq (l, r) -> local_names l @ local_names r
-  | Iter  (_, c, _) -> local_names c (* the `output' code is in an inner scope  *) 
   | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
   | Defs (bs) -> map fst bs
 
@@ -125,11 +123,9 @@ let rec show : code -> string =
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
-      | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> name ^ " : " ^ show value) elems) ^ "}"
+      | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> "'" ^ name ^ "' : " ^ show value) elems) ^ "}"
       | Lst [] -> "[]"
       | Lst elems -> "[" ^ arglist elems ^ "]"
-      | Iter (var, input, output) -> "__accum(" ^
-          show_func "" (Fn ([var], output)) ^ ","^ show input ^")"
       | Bind (name, value, body) -> "("^ name ^" = "^ 
           show value ^", "^ show body ^")"
       | Seq (l, r) -> "(" ^ show l ^ ", " ^ show r ^ ")"
@@ -279,8 +275,8 @@ let trivial_cps expr =
 (* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("__idy")
 
-let yield_and_call(func, args, kappa) =
-  Call(Var("__yield"), [jsthunk(Call(Call(func, [kappa]), args))])
+(* let yield_and_call(func, args, kappa) = *)
+(*   Call(Var("__yield"), [jsthunk(Call(Call(func, [kappa]), args))]) *)
 
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
@@ -348,7 +344,11 @@ let rec generate : 'a expression' -> code =
   | Let (v, e, b, _)                   -> 
       let e' = generate e in
       let b' = generate b in
-        Fn(["kappa"], Call(e', [Fn([v], Call(b', [Var "kappa"]))]))
+      let x = gensym v in
+        Fn(["kappa"], 
+           Call(e', [Fn([x], 
+                        Bind (v, Var x,
+                              Call(b', [Var "kappa"])))]))
   | Variable (v, _)                    -> trivial_cps (Var v)
   | Comparison (l, "==", r, _)         -> 
       let l_cps = generate l in
@@ -377,17 +377,21 @@ let rec generate : 'a expression' -> code =
 (*  | Collection_union (l, r, _)         -> Call (Var "__concat", [generate l; generate r])*)
       (* CPS me*)
   | Collection_extension (e, v, b, _)  -> 
+(*       failwith("for loops not implemented on client side"); *)
       let b_cps = generate b in
       let e_cps = generate e in
+      let x = gensym "" in
         Fn(["kappa"],
            Call(b_cps, [Fn(["b"],
-                Call(Var "kappa", [Iter (v, Var "b", generate_noncps e)]))]))
-      
+                           Call(Call(Var "__accum", [Var "kappa"]),
+                                [Fn(["kappa"], 
+                                    Fn([v], Call(e_cps, [Var "kappa"])));
+                                 Var "b"]))]))
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
   | Xml_node (tag, attrs, children, _)   -> 
-      let attrs_cps = map (fun (k,e) -> (k, gensym(), generate e)) attrs in
-      let children_cps = map (fun e -> (gensym(), generate e)) children in
+      let attrs_cps = map (fun (k,e) -> (k, gensym "", generate e)) attrs in
+      let children_cps = map (fun e -> (gensym "", generate e)) children in
         make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
@@ -414,16 +418,20 @@ let rec generate : 'a expression' -> code =
   | Apply (f, p, _  ) -> 
       let kappa = Var("kappa") in
       let f_cps = generate f in
-      let f_name = gensym() in
+      let f_name = gensym "" in
       let arglist = untuple_call p in
       let cps_args = map generate arglist in
-      let arg_names = map (gensym -<- ignore) arglist in
+      let arg_names = map (fun e -> gensym "") arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
       in
-      let innermost_call = yield_and_call(Var f_name,
-                                          map (fun name -> Var name) arg_names,
-                                          kappa
+      let innermost_call = Call(Var "__call",
+                                [Var f_name; 
+                                 Lst(map (fun name -> Var name) arg_names); 
+                                 kappa]
+(*                                   yield_and_call(Var f_name, *)
+(*                                                  map (fun name -> Var name) arg_names, *)
+(*                                                  kappa *)
                                          ) in
       let arg_tower = fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call in
         
@@ -461,7 +469,7 @@ let rec generate : 'a expression' -> code =
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
-      let name = gensym () in
+      let name = gensym "r" in
         Fn(["kappa"],
            Call(r_cps, [Fn (["r"], 
                 (Bind (name, Var "r", 
@@ -566,8 +574,10 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
   let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
   let vars = Forms.lname_bound_vars xml in
+    (* handlerInvoker generates onFoo="..." attributes--the first 
+       thing invoked when that event occurs. *)
   let handlerInvoker (evName, _) = 
-    (evName, strlit ("__applyChanges(__evContinuations['" ^ evName ^ "'][this.id](event)); return false")) in
+    (evName, strlit ("__eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
   let elem_id = 
     try 
       match (assoc "id" attrs) with
@@ -579,14 +589,16 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                             (end_thread(generate code))
                             vars) in
   let handlers = map make_code_for_handler handlers in
-  let attrs_cps = map (fun (k, e) -> (k, gensym(), generate e)) attrs in
-  let children_cps = map (fun e -> (gensym(), generate e)) children in
-    make_xml_cps attrs_cps (["id", Call(Var "__registerFormEventHandlers",
-                                        [elem_id;
-                                         Lst (map (fun (evName, code) -> 
-                                                     Dict(["evName", strlit evName;
-                                                           "handler", Fn (["event"], code)]))
-                                                handlers)]);
+  let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
+  let children_cps = map (fun e -> (gensym "", generate e)) children in
+    make_xml_cps attrs_cps (["id", 
+                             Call(Var "__registerFormEventHandlers",
+                                  [elem_id;
+                                   Lst (map (fun (evName, code) -> 
+                                               Dict(["evName", strlit evName;
+                                                     "handler", 
+                                                        Fn (["event"], code)]))
+                                          handlers)]);
                             ]
                             @ essentialAttrs
                             @ map handlerInvoker handlers)
@@ -643,7 +655,6 @@ let rec freevars = function
   | Cond(a, b, c) -> StringSet.union (StringSet.union (freevars a) (freevars b)) (freevars c)
   | Dict(terms) -> fold_left StringSet.union StringSet.empty (map snd (alistmap freevars terms))
   | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars terms)
-  | Iter(var, src, body)
   | Bind(var, src, body) -> StringSet.union (freevars src) (StringSet.remove var (freevars body))
   | Seq(first, rest) -> StringSet.union (freevars first) (freevars rest)
   | _ -> StringSet.empty
@@ -653,12 +664,13 @@ let rec replace' var replcmt fvs = function
   | Var  x when x = var -> replcmt
   | Defs defs -> Defs(alistmap (replace' var replcmt (freevars replcmt)) defs)
   | Fn(args, body) when not(mem var args) -> 
-(*      let body = 
+      (* this may be unnecessary, if whole expr. is uniquified previously *)
+     let args, body =
         if StringSet.is_empty (StringSet.inter (set_from_list args) fvs)
-        then body else
-          uniquify_args(Fn(args, body))
-      in
-*)        Fn(args, replace' var replcmt fvs body)
+        then (args, body) else
+          uniquify_args(args, body)
+     in
+        Fn(args, replace' var replcmt fvs body)
   | Call(func, args) -> Call(replace' var replcmt fvs func,
                              map (replace' var replcmt fvs) args)
   | Binop(lhs, op, rhs) -> Binop(replace' var replcmt fvs lhs, op,
@@ -668,10 +680,6 @@ let rec replace' var replcmt fvs = function
                                  replace' var replcmt fvs no)
   | Dict(terms) -> Dict(alistmap (replace' var replcmt fvs) terms)
   | Lst(terms) -> Lst(map (replace' var replcmt fvs) terms)
-  | Iter(iter_var, src, body)  -> Iter(iter_var, replace' var replcmt fvs src, 
-                                       if iter_var <> var then
-                                         replace' var replcmt fvs body
-                                       else body)
   | Bind(name, expr, body) -> Bind(name, replace' var replcmt fvs expr, 
                                    if name <> var then
                                      replace' var replcmt fvs body
@@ -681,12 +689,12 @@ let rec replace' var replcmt fvs = function
   | simple_expr -> simple_expr
 and replace var expr body = replace' var expr (freevars expr) body
 and uniquify_args = function
-    (Fn(args, body)) ->
-      let subst = map (fun x -> (x, gensym())) args in
-        Fn(map snd subst,
-           fold_right (fun (old, noo) body ->
-                         replace' old (Var noo) (StringSet.singleton noo) body)
-             subst body)
+    (args, body) ->
+      let subst = map (fun x -> (x, gensym x)) args in
+        (map snd subst,
+         fold_right (fun (old, noo) body ->
+                       replace' old (Var noo) (StringSet.singleton noo) body)
+           subst body)
 
 let rec simplify = function
   | Call(Fn([formal_arg], body), [actual_arg]) ->
@@ -701,7 +709,6 @@ let rec simplify = function
   | Cond(test, yes, no) ->  Cond(simplify test, simplify yes, simplify no)
   | Dict(terms) -> Dict(alistmap (simplify) terms)
   | Lst(terms) -> Lst(map (simplify) terms)
-  | Iter(iter_var, src, body)  -> Iter(iter_var, simplify src, simplify body)
   | Bind(name, expr, body) -> Bind(name, simplify expr, simplify body)
   | Seq(first, second) -> Seq(simplify first, simplify second)
   | simple_expr -> simple_expr
@@ -716,7 +723,7 @@ let rec simplify_completely expr =
 let gen = 
   Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
-(*   ->- simplify_completely  *)
+  ->- simplify_completely
   ->- show
 
  (* TODO: imports *)
@@ -731,19 +738,36 @@ let generate_program filename environment expression =
 (*   Hereafter tests   *)
 
 
-(* FIXME: The tests below create an unnecessary dependency on Inference (maybe other modules to?
-   I'd like to remove this. Can we move the tests into a different module?
+(* FIXME: The tests below create an unnecessary dependency on
+   Inference (maybe other modules to? I'd like to remove this. Can we
+   move the tests into a different module?
 *)
 
+let simplify_test() = 
+  let src = Fn(["x"],
+               Call(Fn(["y"], 
+                       Fn(["x"], Binop(Var "x", "+", Var "y"))),
+                    [Binop(Var "x", "+", Lit "1")]))
+  in
+  let obj = Fn(["x"],
+               Fn(["x_j1"],
+                  Binop(Var "x_j1", "+", Binop(Var "x", "+", Lit "1"))
+                 )) in
+  if (simplify_completely(src) = obj)
+  then
+    print_endline("ok")
+  else
+    print_endline("test failed")
+      
 open Inference
 
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 
 let rhino_output linkscode = 
   let gen = show
-        -<- generate
-        -<- (Utility.perhaps_apply Optimiser.uniquify_expression)
-        -<- List.hd -<- snd -<- Inference.type_program Library.type_env -<- Parse.parse_string in
+    -<- generate
+    -<- (Utility.perhaps_apply Optimiser.uniquify_expression)
+    -<- List.hd -<- snd -<- Inference.type_program Library.type_env -<- Parse.parse_string in
   let tempfile = Filename.temp_file "linkstest" ".js" in
   let cleanup () = (try Sys.remove tempfile with _ -> ()) in
     try
