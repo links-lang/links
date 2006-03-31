@@ -1,13 +1,6 @@
-(* 
-FIXME:
-  1. lhref transformation
+(* js.ml
+    JavaScript generation.
 *)
-
-
-(*
-  JavaScript generation.
-*)
-
 
 open Num
 open Netencoding
@@ -734,31 +727,68 @@ let generate_program filename environment expression =
  ^ gen expression
  ^ boiler_3)
 
-(* ******************* *)
-(*   Hereafter tests   *)
-
-
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
    move the tests into a different module?
 *)
 
-let simplify_test() = 
-  let src = Fn(["x"],
-               Call(Fn(["y"], 
-                       Fn(["x"], Binop(Var "x", "+", Var "y"))),
-                    [Binop(Var "x", "+", Lit "1")]))
-  in
-  let obj = Fn(["x"],
-               Fn(["x_j1"],
-                  Binop(Var "x_j1", "+", Binop(Var "x", "+", Lit "1"))
-                 )) in
-  if (simplify_completely(src) = obj)
-  then
-    print_endline("ok")
-  else
-    print_endline("test failed")
-      
+(* *************************************** *)
+(*        A simple testing framework       *)
+(*                                         *)
+(*  usage: add_qtest("links code",         *)
+(*                 fun(p) -> false/true    *)
+(* p is the gen'd javascript (type `code') *)
+
+let links2js = (Parse.parse_string
+                ->- Inference.type_program (alistmap snd Library.env) ->- snd
+                  ->- map ((Utility.perhaps_apply Optimiser.uniquify_expression)
+                           ->- generate 
+                             ->- simplify_completely))
+  
+let test_list = ref []
+let add_test test = test_list := test :: !test_list
+let add_qtest (program, pred) =
+  add_test (program, 
+            fun () ->
+              let rslt = links2js program in
+              try pred rslt
+              with Match_failure _ ->
+                prerr_endline("test failed: " ^ 
+                                program ^ " compiled to\n" ^ 
+                                String.concat "\n" (map show rslt));
+                false
+           )
+let run_tests() =
+  ignore(map (fun (name, code) -> 
+                if code() then print_endline(name ^ ": ok")
+                else print_endline(name ^ ": failed")
+             ) !test_list)
+
+
+(* ******************* *)
+(*   Hereafter tests   *)
+
+let _ = add_qtest("1+1",
+                  fun rslt ->
+                   match rslt with
+                       [Fn(["kappa"], 
+                           Call(Var "kappa", [Binop(Lit "1", "+", Lit "1")]))] -> true
+                 )
+
+let _ = add_qtest("fun f(x) { x+1 } f(1)",
+                  fun rslt ->
+                   match rslt with
+                       Defs([_, Bind(fname, Fn(["kappa"], Fn([xname], 
+                                  Call(Var "kappa",
+                                       [Binop(Var xname2, "+", Lit "1")]))),
+                                     Var fname2)])::etc
+                         when fname = fname2
+                           && xname = xname2
+                           -> true
+                 )
+
+
+
 open Inference
 
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)

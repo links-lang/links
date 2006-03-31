@@ -16,8 +16,9 @@ let stdenvs = Library.value_env, Library.type_env
 (* Run unit tests *)
 let run_tests () = 
   interacting := false;
-  Optimiser.test () ;
-  Js.test ()
+(*   Optimiser.test () ; *)
+(*   Js.test () *)
+  Js.run_tests ()
 
 (* Print a result, including its type if `printing_types' is true. *)
 let print_result rtype result = 
