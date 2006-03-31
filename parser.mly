@@ -242,6 +242,8 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH exp LBRACE cases default_case RBRACE                  { Switch ($2, $4, Some $5), pos() }
 | SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None),    pos() }
+| RECEIVE LBRACE cases default_case RBRACE                     { Receive ($3, Some $4), pos() }
+| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None),    pos() }
 
 default_case :
 | VARIABLE RARROW exp                                          { ($1, $3) }

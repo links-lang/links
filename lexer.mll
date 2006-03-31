@@ -61,7 +61,7 @@ let keywords = [
 "Float"  , TFLOAT; "String"   ,  TSTRING;  "Table"     , TABLE;
 "from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;
-"desc"   , DESC;   "database" ,  DATABASE;
+"desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
 ] 
 
 exception LexicalError of (string * Lexing.position)

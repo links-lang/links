@@ -232,6 +232,7 @@ type phrasenode =
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
   | Switch of (phrase * ((name * ppattern * phrase) list) * (name * phrase) option)
+  | Receive of (((name * ppattern * phrase) list) * (name * phrase) option)
 (* Database operations *)
   | DatabaseLit of (string)
   | TableLit of (string * Kind.kind * bool (* unique *) * order list * phrase)
@@ -368,6 +369,9 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 						  pos
 						  name
 						  (desugar e2))
+  | Receive (patterns, final) -> desugar (Switch ((FnAppl ((Var "recv", pos'), [TupleLit [], pos']), pos'),
+                                                  patterns, final), pos')
+
       (* (\* TBD: We should die if the XML text literal has bare ampersands or *)
       (*    is otherwise ill-formed. It should also be made to properly handle *)
       (*    CDATA. *)
