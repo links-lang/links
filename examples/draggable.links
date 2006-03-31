@@ -13,11 +13,11 @@ fun dragging(elem) client {
      MouseUp           -> waiting()
      MouseDown  target -> dragging(target)
      MouseOut relatedTarget -> {
-         if (relatedTarget.tagName == "LI")
-            domutate([SwapNodes(first=relatedTarget,second=elem)])
-         else ()
-         ; 
-         dragging(elem)
+         if (relatedTarget.tagName == "LI") {
+            domutate([SwapNodes(first=relatedTarget,second=elem)]);
+            dragging(elem)
+         }
+         else waiting()
     }
   }
 }
