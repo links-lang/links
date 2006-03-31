@@ -75,8 +75,8 @@ let def_qname = (def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
-let xml_text = [^ '<' '{']
 let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
+
 
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
@@ -159,7 +159,9 @@ and starttag lexers = parse
   | eof                                 { END }
   | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 and xmllex lexers = parse
-  | [^ '{' '<' ]* as cdata              { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
+  | "\\{"                               { CDATA "{" }
+  | '\\'                                { CDATA "\\" }
+  | [^ '{' '<' '\\' ]* as cdata              { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex lexers) lexers; LBRACE }
   | "</" (def_qname as var) '>'         { (* fall back *)

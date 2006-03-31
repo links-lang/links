@@ -2,6 +2,14 @@ Braced XML
 <f>{for i <- [] in <br/>}</f>
 stdout : <f/> : XML
 
+Escaped braces
+<p>A left: \{ and a right: }</p>
+stdout : <p>A left: { and a right: }</p> : XML
+
+Backslashes
+<p>A backslash \ </p>
+stdout : <p>A backslash \ </p> : XML
+
 Top-level-bound XML object
 x = for i <- [] in <br/>; <f>{x}</f>
 stdout : <f/> : XML
@@ -57,3 +65,4 @@ stdout : <xml>this &amp; that</xml> : XML
 Looping in XML quasis, with multiple content elements.
 things = [1, 2];<ul>{for x <- things in <li>{enxml(string_of_int(x))}</li><li>1</li>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : XML
+
