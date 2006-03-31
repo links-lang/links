@@ -2,6 +2,13 @@
 
 var __dwindow = open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes');
 
+ Node.prototype.swapNode = function (node) {
+    var nextSibling = this.nextSibling;
+    var parentNode = this.parentNode;
+    node.parentNode.replaceChild(this, node);
+    parentNode.insertBefore(node, nextSibling);
+ }
+
 var DEBUG = function () {
  function is_instance(value, type, constructor) {
     return value != undefined
@@ -164,23 +171,23 @@ function __xmldump(xml) {
 }
 
 function __applyChanges(changes) {
-  if (isarray(changes)) {
-    for (var i in changes) {
-      var change = changes[i];
-      var element = document.getElementById(change.value.id);
-      if (!element) error("element " + change.value.id + 
-                          ", referenced in DOM mutation, does not exist")
-      else {
-//        __debug("replacing " + change.value.id + " with " + __xmldump(change.value.replacement[0]));
-        if (change.label == 'ReplaceElement') {
+  for (var i in changes) {
+    var change = changes[i];
+    if (change.label == 'ReplaceElement') {
+    var element = document.getElementById(change.value.id);
+    if (!element) __alert("element " + change.value.id + " does not exist");
           element.parentNode.replaceChild(change.value.replacement[0], element);
-          newexample = document.getElementById(change.value.id);
-        }
-        else if (change.label == 'AppendChild') {
-          element.appendChild(change.value.replacement[0]);
-        }  
-      }
     }
+    else if (change.label == 'AppendChild') {
+        var element = document.getElementById(change.value.id);
+        if (!element) __alert("element " + change.value.id + " does not exist");
+        element.appendChild(change.value.replacement[0]);
+    }  
+    else if (change.label == 'SwapNodes') {
+          var one = change.value.first;
+          var two = change.value.second;
+          one.swapNode(two);
+    }  
   }
 }
 
