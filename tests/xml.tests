@@ -22,12 +22,20 @@ Whitespace preservation
 <a b="c"> <d/> </a>
 stdout : <a b="c"> <d/> </a> : XML
 
-Element splicing
+Element splicing [1]
 {x = "three"; <a b="c">{enxml(x)}</a>}
 stdout : <a b="c">three</a> : XML
 
-Attribute splicing
+Element splicing [2]
+{x = "hre"; <a b="c">t{enxml(x)}e</a>}
+stdout : <a b="c">three</a> : XML
+
+Attribute splicing [1]
 {x = "three"; <a b="{x}"><c/></a>}
+stdout : <a b="three"><c/></a> : XML
+
+Attribute splicing [2]
+{x = "three"; <a b="a{x}b"><c/></a>}
 stdout : <a b="three"><c/></a> : XML
 
 Rejection of incorrectly nested elements
@@ -65,4 +73,3 @@ stdout : <xml>this &amp; that</xml> : XML
 Looping in XML quasis, with multiple content elements.
 things = [1, 2];<ul>{for x <- things in <li>{enxml(string_of_int(x))}</li><li>1</li>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : XML
-

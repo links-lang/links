@@ -377,11 +377,14 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
       (*    CDATA. *)
       (*    Where's a good place to do so? *)
   | TextNode s -> Apply (Variable ("enxml", pos), String (s, pos), pos)
-  | Xml (tag, attrs, subnodes) -> let desugar_attr = function
-      | [] -> String ("", pos)
-      | [x] -> desugar x
-      | xs -> desugar (CollectionLit (`List, xs), pos') in
-      Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
+  | Xml (tag, attrs, subnodes) -> 
+      let concat a b = 
+        Collection_union (desugar a, b, pos) in
+      let desugar_attr = function
+        | [] -> String ("", pos)
+        | [x] -> desugar x
+        | xs  -> (fold_right concat xs (Collection_empty (`List, pos))) in
+        Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
   | XmlForest []  -> Collection_empty  (`List, pos)
   | XmlForest [x] -> desugar x
   | XmlForest (x::xs) -> Collection_union (desugar x, desugar (XmlForest xs, pos'), pos)
