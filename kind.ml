@@ -5,6 +5,9 @@ open List
 open Pickle
 open Utility
 
+type type_var_set = IntSet.t
+
+
 (* Types for kinds *)
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem ]
@@ -107,11 +110,11 @@ let coll_name : collection_type -> string = function
   | `Bag          -> "Bag"
   | `List         -> "List"
   | `CtypeVar id  -> "{"^ string_of_int id ^"}"
-and coll_prefix vars : collection_type -> string = function
+and coll_prefix var_names : collection_type -> string = function
   | `Set          -> "Set"
   | `Bag          -> "Bag"
   | `List         -> ""
-  | `CtypeVar id  -> "{"^ assoc id vars ^"}"
+  | `CtypeVar id  -> "{"^ IntMap.find id var_names ^"}"
 and string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  | `XMLitem -> "XMLitem"
 
@@ -142,7 +145,7 @@ let rec string_of_kind' vars : kind -> string =
     function
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
-      | `TypeVar id      -> assoc id vars
+      | `TypeVar id      -> IntMap.find id vars
       | `Function (`Record _ as f,t)  -> string_of_kind' vars f ^ " -> " ^ string_of_kind' vars t
       | `Function (f,t)  -> "(" ^ string_of_kind' vars f ^ ") -> " ^ string_of_kind' vars t
       | `Record row      -> (if is_tuple row then string_of_tuple row
@@ -150,9 +153,7 @@ let rec string_of_kind' vars : kind -> string =
 			       "(" ^ string_of_row' "," vars row ^ ")")
       | `Variant row    -> "[" ^ string_of_row' " | " vars row ^ "]"
       | `Recursive (id, body) ->
-	  let name = Printf.sprintf "rec%d" id
-	  in
-	    "mu . " ^ name ^ " (" ^ string_of_kind' ((id, name) :: vars) body ^ ")"
+	  "mu " ^ IntMap.find id vars ^ " . " ^ string_of_kind' vars body
       | `DB             ->                   "Database"
       | `Collection (`List, `Primitive `Char) -> "String"
       | `Collection (`List, `Primitive `XMLitem) -> "XML"
@@ -178,6 +179,7 @@ and string_of_row = string_of_row' []*)
 
 (* Making readable names for printing type variables.  (This can't be
    done at generation time because we don't have the whole type then.) *)
+(*
 let letters =
   ["a"; "b"; "c"; "d"; "e"; "f"; "g"; "h"; "i"; "j"; "k"; "l"; "m"; 
    "n"; "o"; "p"; "q"; (*"r";*) "s"; "t"; "u"; "v"; "w"; "x"; "y"; "z"]
@@ -189,10 +191,31 @@ let rec next_name = function
 
 let make_names items =
   let rec aux (suffix, names) = function
-    | item :: items -> let name, names, suffix = next_name (suffix, names) in
-        (item, name) :: aux (suffix, names) items
+    | item :: items ->
+	let name, names, suffix = next_name (suffix, names) in
+          (item, name) :: aux (suffix, names) items
     | [] -> []
   in aux (0, letters) items       
+*)
+
+let make_names vars =
+  let first_letter = int_of_char 'a' in
+  let last_letter = int_of_char 'z' in
+  let num_letters = last_letter - first_letter + 1 in
+    
+  let string_of_ascii n = Char.escaped (char_of_int n) in
+
+  let rec num_to_letters n =
+    let letter = string_of_ascii (first_letter + (n mod num_letters)) in
+      letter ^
+	(if n >= num_letters then (num_to_letters (n / num_letters))
+	 else "")
+  in
+    
+  let (_, name_map) = 
+    IntSet.fold (fun var (n, name_map) -> (n+1, IntMap.add var (num_to_letters n) name_map)) vars (0, IntMap.empty)
+  in
+    name_map
 
 let rec type_vars items = let rec aux = function
   | `Not_typed               -> []
@@ -214,14 +237,41 @@ and row_type_vars (field_env, `RowVar row_var) =
   in
     field_type_vars @ row_var
 
+let rec free_bound_type_vars = function
+  | `Not_typed               -> IntSet.empty
+  | `Primitive _             -> IntSet.empty
+  | `TypeVar var             -> IntSet.singleton var
+  | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
+  | `Record row              -> free_bound_row_type_vars row
+  | `Variant row             -> free_bound_row_type_vars row
+  | `Recursive (id, body)    -> IntSet.add id (free_bound_type_vars body)
+  | `Collection (`CtypeVar var, kind) -> IntSet.add var (free_bound_type_vars kind)
+  | `Collection (_, kind)    -> free_bound_type_vars kind
+  | `DB                      -> IntSet.empty
+
+and free_bound_row_type_vars (field_env, `RowVar row_var) =
+  let field_type_vars = 
+    List.fold_right IntSet.union
+      (List.map (fun (_, t) -> free_bound_type_vars t) (get_present_fields field_env))
+      IntSet.empty
+  in
+  let row_var = match row_var with
+    | Some var -> IntSet.singleton var
+    | None -> IntSet.empty
+  in
+    IntSet.union field_type_vars row_var
+
+
 let string_of_kind kind = 
-  string_of_kind' (make_names (type_vars kind)) kind
+  string_of_kind' (make_names (free_bound_type_vars kind)) kind
 
 let string_of_kind_raw kind = 
-  string_of_kind' (map (fun id -> (id, string_of_int id)) (type_vars kind)) kind
+  string_of_kind' (IntSet.fold
+		     (fun id name_map -> IntMap.add id (string_of_int id) name_map)
+		     (free_bound_type_vars kind) IntMap.empty) kind
 
 let string_of_row row = 
-  string_of_row' "," (make_names (row_type_vars row)) row
+  string_of_row' "," (make_names (free_bound_row_type_vars row)) row
 (*  string_of_row' "," (make_names (List.concat (map field_type_vars row))) row *)
 
 (*

@@ -49,14 +49,28 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
     
     fun (t1, t2) ->
       (debug ("Unifying "^string_of_kind t1^" with "^string_of_kind t2);
-       match t1, t2 with   
+       (match (t1, t2) with
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
       | `Primitive x, `Primitive y when x = y -> ()
 (*      | `TypeVar lid, `TypeVar rid when lid = rid -> () *)
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  (match (Unionfind.find lpoint, Unionfind.find rpoint) with
-	     | `TypeVar id, t -> Unionfind.union lpoint rpoint
-	     | t, `TypeVar id -> Unionfind.union rpoint lpoint
+	     | `TypeVar lid, `TypeVar rid ->
+		   Unionfind.union lpoint rpoint
+	     | `TypeVar id, t ->
+		 (if var_is_free_in_type id t then
+		    (debug ("rec intro1 (" ^ (string_of_int id) ^ ")");
+		     Unionfind.change rpoint (`Recursive (id, t)))
+		 else
+		   ());
+		 Unionfind.union lpoint rpoint
+	     | t, `TypeVar id ->
+		 (if var_is_free_in_type id t then
+		    (debug ("rec intro2 (" ^ (string_of_int id) ^ ")");
+		     Unionfind.change lpoint (`Recursive (id, t)))
+		  else
+		    ());
+		 Unionfind.union rpoint lpoint
 	     | `Recursive (id, t), `Recursive (id', t') ->
 		 debug ("rec (" ^ (string_of_int id) ^ "," ^ (string_of_int id') ^")");
 		 let point, rec_vars = make_point id rec_vars in
@@ -74,10 +88,11 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
 	  (match (Unionfind.find point) with
 	     | `TypeVar id ->
 		 if var_is_free_in_type id t then
-   		   let _ = debug ("rec intro (" ^ (string_of_int id) ^ ")") in
-		     Unionfind.change point (`Recursive (id, t))
+   		   (let _ = debug ("rec intro3 ("^string_of_int id^","^string_of_kind t^")") in
+		     Unionfind.change point (`Recursive (id, t)))
 		 else
-		   Unionfind.change point t
+		   (debug ("non-rec (" ^ string_of_int id ^ ")");
+		   Unionfind.change point t)
 	     | `Recursive (id, t') ->
    		 debug ("rec (" ^ (string_of_int id) ^ ")");
 		 let point, rec_vars = make_point id rec_vars in
@@ -132,8 +147,10 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
             compose_subst [var_subst; unify (lelems, relems)]
 *)
       | `DB, `DB -> ()
-      | l, r ->
-          raise (Unify_failure ("Couldn't match "^ string_of_kind l ^" against "^ string_of_kind r)))
+      | _, _ ->
+          raise (Unify_failure ("Couldn't match "^ string_of_kind t1 ^" against "^ string_of_kind t2)));
+      debug ("Unified types: " ^ string_of_kind t1)
+      )
 
 (* Unifies two rows which produces a substitution which, when
  * applied will transform both rows into a single row.  The algorithm
@@ -309,9 +326,11 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
       in
 	debug ("Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
 
-let unify = unify' IntMap.empty
+let unify (t1, t2) =
+  (unify' IntMap.empty (t1, t2);
+   debug ("Unified types: " ^ string_of_kind t1))
 
-
+type rec_type_map = (inference_type Unionfind.point) IntMap.t
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
@@ -332,7 +351,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	     | `CtypeVar id -> tenv, renv, IntMap.add id (ITO.new_collection_variable ()) cenv
 	  ) (IntMap.empty, IntMap.empty, IntMap.empty) generics in
 	  
-	let rec inst : type_var_set -> inference_type -> inference_type = fun rec_vars typ ->
+	let rec inst : rec_type_map -> inference_type -> inference_type = fun rec_env typ ->
 	  match typ with
 	    | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
 	    | `Primitive _  -> typ
@@ -347,26 +366,57 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 			   typ
 			     (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
 		     | `Recursive (id, t) ->
-			 debug ("rec (instantiate): " ^(string_of_int id));
+			 debug ("rec (instantiate)1: " ^(string_of_int id));
+
+			 if IntMap.mem id rec_env then
+			   (`MetaTypeVar (IntMap.find id rec_env))
+			 else
+			   (
+			    let id' = new_raw_variable () in
+			    let point' = Unionfind.fresh (`TypeVar id') in
+			    let t' = inst (IntMap.add id point' rec_env) t in
+			    let _ = Unionfind.change point' (`Recursive (id', t')) in
+			    `MetaTypeVar point'
+			   )
+(*			    
 			 if IntSet.mem id rec_vars then
 			   typ
 			 else
 			   inst (IntSet.add id rec_vars) t
-		     | _ -> inst rec_vars t)
+*)
+		     | _ -> inst rec_env t)
 (*	     
 	     (match subst with
 		| [] -> kind
 		| Var_equiv (var_id, var_kind) :: substs when id = var_id -> var_kind
 		| _ :: substs -> substitute substs kind)
 *)
-	    | `Function (var, body) -> `Function (inst rec_vars var, inst rec_vars body)
-	    | `Record row -> `Record (inst_row rec_vars row)
-	    | `Variant row ->  `Variant (inst_row rec_vars row)
+	    | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
+	    | `Record row -> `Record (inst_row rec_env row)
+	    | `Variant row ->  `Variant (inst_row rec_env row)
 	    | `Recursive (id, t) ->
-		assert(false)
+		(*assert(false)*)
+		debug ("rec (instantiate)2: " ^(string_of_int id));
+
+		if IntMap.mem id rec_env then
+		  (`MetaTypeVar (IntMap.find id rec_env))
+		else
+		  (
+		    let id' = new_raw_variable () in
+		    let point' = Unionfind.fresh (`TypeVar id') in
+		    let t' = inst (IntMap.add id point' rec_env) t in
+		    let _ = Unionfind.change point' (`Recursive (id', t')) in
+		      `MetaTypeVar point'
+		  )
+(*
+		if IntSet.mem id rec_vars then
+		  typ
+		else
+		  inst (IntSet.add id rec_vars) t
+*)
 		  (*`Recursive (id, inst (IntSet.add id rec_vars) t) *)
 	    | `Collection (collection_type, elem_type) ->
-		`Collection (inst_collection_type collection_type, inst rec_vars elem_type)
+		`Collection (inst_collection_type collection_type, inst rec_env elem_type)
 		  (* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
 	    | `DB -> `DB
 
@@ -391,7 +441,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      assert(false)
 *)
 
-	and inst_row : type_var_set -> inference_row -> inference_row = fun rec_vars row ->
+	and inst_row : rec_type_map -> inference_row -> inference_row = fun rec_env row ->
 	  let field_env, row_var = flatten_row row in
 	    
 	  let is_closed = (row_var = `RowVar None) in
@@ -399,7 +449,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	  let field_env' = StringMap.fold
 	    (fun label field_spec field_env' ->
 	       match field_spec with
-		 | `Present t -> StringMap.add label (`Present (inst rec_vars t)) field_env'
+		 | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
 		 | `Absent ->
 		     if is_closed then field_env'
 		     else StringMap.add label `Absent field_env'
@@ -452,7 +502,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      inst_collection_type (Unionfind.find point)
 
 	in
-	  inst IntSet.empty t
+	  inst IntMap.empty t
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
@@ -712,6 +762,26 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
 (*      let type' = `Variant ([`Field_present (label, node_kind value) ; new_row_variable ()]) in *)
         Variant_injection (label, value, (pos, type', None))
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, pos) ->
+      let value = w env value in
+      let value_type = node_kind value in
+      
+      let case_var_type = ITO.new_type_variable() in
+      let body_row = ITO.make_empty_open_row () in
+      let body_var_type = `Variant body_row in
+      let variant_type = `Variant (ITO.set_field (case_label, `Present case_var_type) body_row) in
+
+      let _ = unify (variant_type, value_type) in
+
+      let case_body = w ((case_variable, ([], case_var_type)) :: env) case_body in
+      let body = w ((variable, ([], body_var_type)) :: env) body in
+
+      let case_type = node_kind case_body in
+      let body_type = node_kind body in
+      let _ = unify (case_type, body_type) in
+
+      let node = Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None)) in
+        node      
+(*
       let alpha = `Variant (ITO.make_empty_open_row ()) in
       let body = w ((variable, ([], alpha)) :: env) body in
 
@@ -722,13 +792,13 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let _ = unify(body_type, node_kind case_body) in
 
       let new_row_type = `Variant (ITO.set_field (case_label, `Present beta) (extract_row alpha)) in
-(*      let new_row_type = row_with (case_label, beta') alpha' in *)
       let value = w env value in
 
       let _ = unify(new_row_type, node_kind value) in
 
       let final_node = Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None)) in
         final_node
+*)
   | Variant_selection_empty (value, pos) ->
 
       let value = w env value in
@@ -817,9 +887,43 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
 (* end "w" *)
 
 (** m
-    Companion to "w"; does mutual type-inference 
+    Companion to "w"; does mutual type-inference
+
+    [QUESTIONS]
+      - what are the constraints on the definitions?
+      - do the functions have to be recursive?
 *)
 and
+    m env (defns : (string * untyped_expression) list) =
+      let var_env = (map (fun (name, expr) ->
+	                      (name, ([], ITO.new_type_variable ())))
+		       defns) in
+      let env' = (var_env @ env) in
+
+      let type_check result (name, expr) = 
+        let expr = w env' expr in
+	let expr_type = node_kind expr in
+          match expr_type with
+            | `Function _ ->(
+		(*
+		  this unification breaks let polymorphism
+		  (for non-recursive types the type will
+		  be assigned in the assumptionization phase
+		  below)
+		  
+		  unify (snd (assoc name var_env), expr_type)
+		*)
+		  (name, expr) :: result)
+            | kind -> Errors.letrec_nonfunction (node_pos expr) (expr, kind) in
+
+      let defns = fold_left type_check [] defns in
+      let defns = rev defns in
+
+      let env = (alistmap (fun value -> 
+			     (assumptionize env' (node_kind value))) defns
+		 @ env) in 
+        env, defns
+(*
     m env (defns : (string * untyped_expression) list) =
       let type_check (env, result) (label, expr) = 
         let expr' = w env expr in
@@ -835,19 +939,12 @@ and
       let env', defns = fold_left type_check (initial_env, []) defns in
       let defns = rev defns in
 
-(*      let rec_substs = compose_subst (map2 (fun var_kind (label, expr) -> 
-                                              try
-                                                unify (node_kind expr, substitute var_subst var_kind)
-                                              with
-                                                  Unify_failure msg -> 
-                                                    raise(Type_error(node_pos expr, msg)))
-                                        var_kinds defns) in
-*)
+
       let env = (alistmap (fun value -> 
 			     (assumptionize initial_env (node_kind value))) defns
 		 @ env') in 
         env, defns
-            
+*)        
 
 (** Find the cliques in a group of functions.  Whenever there's mutual
     recursion we need to type all the functions in the cycle as
@@ -909,7 +1006,10 @@ let type_expression : environment -> untyped_expression -> (environment * expres
     let env', exp' =
       match untyped_expression with
 	| Define (variable, value, loc, pos) ->
-	    let value = w env value in 
+	    (*let var_type = ITO.new_type_variable () in*)
+	    let value = w env value in
+	    let value_type = node_kind value in
+	    (*let _ = unify (var_type, value_type) in*)
               ((variable, (assumptionize env (node_kind value))) :: env),
     	       Define (variable, value, loc, (pos, node_kind value, None))
 	| expr -> let value = w env expr in env, value

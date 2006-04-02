@@ -1,4 +1,8 @@
-Let polymorphism
+Let polymorphism [1]
+fun pair(x) { (x, x) }; (pair('a'), pair(13))
+stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
+
+Let polymorphism [2]
 {fun pair(x) { (x, x) } (pair('a'), pair(13))}
 stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
 

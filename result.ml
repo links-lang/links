@@ -321,10 +321,10 @@ and string_of_result : result -> string = function
                        with Not_tuple ->
                          "(" ^ (String.concat "," (map (function (label, value) -> label ^ "=" ^ (string_of_result value)) fields)) ^ ")")
   | `Variant (label, value) -> label ^ " " ^ string_of_result value
-  | `Collection (coll_type, []) -> coll_prefix [] coll_type ^ "[]"
+  | `Collection (coll_type, []) -> coll_prefix IntMap.empty coll_type ^ "[]"
   | `Collection (`List, `Primitive(`Char _)::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `Collection (`List, (`Primitive(`XML _)::_ as elems))  -> String.concat "" (map string_of_xresult elems)
-  | `Collection (coll_type, elems) -> coll_prefix [] coll_type ^ "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
+  | `Collection (coll_type, elems) -> coll_prefix IntMap.empty coll_type ^ "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment_ez env
   | `Continuation cont -> pp_continuation cont
