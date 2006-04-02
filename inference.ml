@@ -213,9 +213,12 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 	    | `MetaRowVar point ->
 		(* point should be a row variable *)
 		(match Unionfind.find point with
-		   | (env, `RowVar (Some _)) ->
+		   | (env, `RowVar (Some var)) ->
 		       assert(not (contains_present_fields env));
-		       Unionfind.change point extension_row
+		       if mem var (row_type_vars extension_row) then
+			 failwith "Not implemented recursive row variables yet"
+		       else
+			 Unionfind.change point extension_row
 		   | _ -> assert(false))
 	    | `RowVar _ -> assert(false) in
 	
@@ -292,7 +295,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 	    let row_var = ITO.new_row_variable() in	      
               (* each row can contain fields missing from the other; 
                  thus we call extend_field_env once in each direction *)
-	    let rextension = extend_field_env lfield_env rfield_env in
+	    let rextension =
+	      extend_field_env lfield_env rfield_env in
 	      extend_row_var (rrow_var, (rextension, row_var));
 	      let lextension = extend_field_env rfield_env lfield_env in
 		extend_row_var (lrow_var, (lextension, row_var)) in
