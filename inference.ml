@@ -898,21 +898,14 @@ and
       let var_env = (map (fun (name, expr) ->
 	                      (name, ([], ITO.new_type_variable ())))
 		       defns) in
-      let env' = (var_env @ env) in
+      let inner_env = (var_env @ env) in
 
       let type_check result (name, expr) = 
-        let expr = w env' expr in
+        let expr = w inner_env expr in
 	let expr_type = node_kind expr in
           match expr_type with
             | `Function _ ->(
-		(*
-		  this unification breaks let polymorphism
-		  (for non-recursive types the type will
-		  be assigned in the assumptionization phase
-		  below)
-		  
 		  unify (snd (assoc name var_env), expr_type);
-		*)
 		  (name, expr) :: result)
             | kind -> Errors.letrec_nonfunction (node_pos expr) (expr, kind) in
 
@@ -920,8 +913,8 @@ and
       let defns = rev defns in
 
       let env = (alistmap (fun value -> 
-			     (assumptionize env' (node_kind value))) defns
-		 @ env) in 
+			     (assumptionize env (node_kind value))) defns
+		 @ env) in
         env, defns
 (*
     m env (defns : (string * untyped_expression) list) =
