@@ -911,7 +911,7 @@ and
 		  be assigned in the assumptionization phase
 		  below)
 		  
-		  unify (snd (assoc name var_env), expr_type)
+		  unify (snd (assoc name var_env), expr_type);
 		*)
 		  (name, expr) :: result)
             | kind -> Errors.letrec_nonfunction (node_pos expr) (expr, kind) in
