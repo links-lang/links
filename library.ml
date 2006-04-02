@@ -445,7 +445,7 @@ let env : (string * (result * Kind.assumption)) list = map
                            db))
                 | _ -> failwith "Internal error: insert row into non-database"))),
     (* FIXME: reboxing of `RowVar <-> Row_variable *)
-    let `RowVar (Some v) = TypeOps.new_row_variable () in
+    let v = new_raw_variable () in
       ([`RowVar v],
        (string --> (`DB --> (make_empty_record_with_row_var v --> make_unit ()))))));
 
@@ -463,7 +463,7 @@ let env : (string * (result * Kind.assumption)) list = map
                            ("delete from " ^ table ^ " where " ^ delete_condition rows)
                            db))
                 | _ -> failwith "Internal error: delete row from non-database"))),
-    let `RowVar(Some v) = TypeOps.new_row_variable () in
+    let v = new_raw_variable () in
       ([`RowVar v],
        (string --> (`DB --> (`Collection (`List, make_empty_record_with_row_var v) --> make_unit ()))))));
 
@@ -490,8 +490,8 @@ continuationize_primfn (
                           `Record []
                      | _ -> failwith "Internal error: non-list passed to UPDATE"))
             | _ -> failwith "Internal error: update row in non-database"))),
-    let `RowVar (Some v) = TypeOps.new_row_variable () in
-    let `RowVar (Some u) = TypeOps.new_row_variable () in
+    let v = new_raw_variable () in
+    let u = new_raw_variable () in
 
     let pair = `Record
       (TypeOps.set_field ("1", `Present (make_empty_record_with_row_var u))

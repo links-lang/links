@@ -220,7 +220,7 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 		       else
 			 Unionfind.change point extension_row
 		   | _ -> assert(false))
-	    | `RowVar _ -> assert(false) in
+	    | `RowVar _ | `RecRowVar _ -> assert(false) in
 	
       let unify_both_closed (lrow, rrow) =
 	let get_present_labels field_env =
@@ -469,12 +469,15 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 			   IntMap.find var renv
 			 else
 			   row_var
-		     | (_, `RowVar None)
-		     | (_, `MetaRowVar _) -> assert(false))
+		     | (_, `RowVar None) | (_, `MetaRowVar _) -> assert(false)
+		     | (_, `RecRowVar (var, rec_row)) ->
+			 failwith "inst_row [1]: not implemented recursive row variables yet")
 	      | `RowVar None ->
 		  `RowVar None
 	      | `RowVar (Some _) ->
 		  assert(false)
+	      | `RecRowVar (var, rec_row) ->
+		  failwith "inst_row [2]: not implemented recursive row variables yet"
 	  in
 	    field_env', row_var'
 	
@@ -529,6 +532,7 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 	| `RowVar (Some var) when is_used_var var -> []
 	| `RowVar (Some var) -> [`RowVar var]
 	| `RowVar (None) -> []
+	| `RecRowVar (var, rec_row) -> failwith "row_generics: not implemented recursive row variables yet"
 	| `MetaRowVar point -> row_generics (Unionfind.find point) in
       field_vars @ row_vars
   in

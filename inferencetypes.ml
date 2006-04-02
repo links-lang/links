@@ -11,7 +11,7 @@ and inference_collection_type = [
 and inference_field_spec = inference_type Kind.field_spec_basis
 and inference_field_spec_map = inference_field_spec StringMap.t
 and inference_row_var = [
-  | Kind.row_var
+  | inference_row Kind.row_var_basis
   | `MetaRowVar of inference_row Unionfind.point ]
 and inference_row = (inference_type, inference_row_var) Kind.row_basis
 
@@ -44,6 +44,7 @@ let type_vars, row_type_vars =
       match row_var with
 	| `RowVar (Some var) -> [var]
 	| `RowVar None -> []
+	| `RecRowVar (var, row) -> var :: (row_type_vars' (IntSet.add var rec_vars) row)
 	| `MetaRowVar point -> row_type_vars' rec_vars (Unionfind.find point)
     in
       field_vars @ row_vars
@@ -79,6 +80,7 @@ struct
   let rec is_closed_row = function
     | (_, `RowVar (Some _)) -> false
     | (_, `RowVar None) -> true
+    | (_, `RecRowVar _) -> true
     | (_, `MetaRowVar point) ->
 	is_closed_row (Unionfind.find point)
 end
@@ -102,9 +104,13 @@ let is_flattened_row = function
 	 | (field_env', `RowVar None) -> false
 	 | (field_env', `RowVar (Some _)) ->
 	     not (contains_present_fields field_env')
+	 | (field_env', `RecRowVar (var, rec_row)) ->
+	     failwith "is_flattened_row: not implemented recursive rows yet"
 	 | (field_env', `MetaRowVar _) -> false)
   | (field_env, `RowVar (Some _ )) -> false
   | (field_env, `RowVar None) -> true
+  | (field_env, `RecRowVar (var, rec_row)) ->
+      failwith "is_flattened_row: not implemented recursive rows yet"
 	
 let rec flatten_row : inference_row -> inference_row =
   fun row ->
@@ -118,6 +124,8 @@ let rec flatten_row : inference_row -> inference_row =
 		 | (field_env', `RowVar (Some _)) ->
 		     assert(not (contains_present_fields field_env'));
 		     row
+		 | (field_env', `RecRowVar (var, rec_row)) ->
+		     failwith "flatten_row: not implemented recursive rows yet"
 		 | (_, `MetaRowVar _) ->
 		     let field_env', row_var' = flatten_row row' in
 		       field_env_union (field_env, field_env'), row_var')
@@ -193,6 +201,15 @@ let type_to_inference_type : Kind.kind -> inference_type = fun kind ->
 	    in
 	      row_var_map := IntMap.add var point (!row_var_map);
 	      (field_env, `MetaRowVar point)
+    | fields, `RecRowVar (var, rec_row) ->
+	failwith "row_to_inference_row: not implemented recursive row vars yet"
+(*
+	let field_env : inference_field_spec_map = StringMap.map field_spec_to_inference_field_spec fields
+	in
+	  if IntMap.mem var (!row_var_map) then
+	    (field_env, `MetaRowVar (Int
+	`RecRowVar )	
+*)
   and collection_type_to_inference_collection_type = function
     | `Set -> `Set | `Bag -> `Bag | `List -> `List
     | `CtypeVar var ->
@@ -247,11 +264,15 @@ and inference_row_to_row = fun rec_vars row ->
 		 assert(not (contains_present_fields env));
 (*		 assert(StringMap.is_empty env); *)
 		 `RowVar var
+	     | (env, `RecRowVar (var, rec_row)) ->
+		 failwith "inference_row_to_row: not implemented recursive row vars yet"
 	     | (_, `MetaRowVar _) -> assert(false))
       | `RowVar None ->
 	  `RowVar None
       | `RowVar (Some _) ->
 	  assert(false)
+      | `RecRowVar (var, rec_row) ->
+	  failwith "inference_row_to_row: not implemented recursive row vars yet"
   in
     field_env', row_var'
 and inference_collection_to_collection = function

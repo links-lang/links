@@ -28,11 +28,14 @@ type ('typ, 'row, 'ctype) type_basis = [
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
 type 'typ field_spec_map_basis = ('typ field_spec_basis) StringMap.t
 type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
-type row_var = [ `RowVar of int option ]
+type 'row row_var_basis =
+    [ `RowVar of int option 
+    | `RecRowVar of int * 'row ]
 
 type kind = (kind, row, collection_type) type_basis
 and field_spec = kind field_spec_basis
 and field_spec_map = kind field_spec_map_basis
+and row_var = row row_var_basis
 and row = (kind, row_var) row_basis
 
 			  
@@ -135,18 +138,21 @@ let rec string_of_kind' vars : kind -> string =
 		    else
 		      0) 1 present_fields) <> 0
 	| _ -> false in
-  let string_of_tuple (field_env, `RowVar row_var) =
-    let present_fields = get_present_fields field_env in
-    let row_var_string = match row_var with
-      |	Some var -> [string_of_int var]
-      | None -> [] in
-    let strings = (List.map (fun (_, t) -> string_of_kind' vars t) present_fields) @ row_var_string in
-      "(" ^ String.concat ", " strings ^ ")" in
+  let string_of_tuple (field_env, row_var) =
+    match row_var with
+      | `RecRowVar _ -> assert(false)
+      | `RowVar row_var ->
+	  let present_fields = get_present_fields field_env in
+	  let row_var_string = match row_var with
+	    |	Some var -> [string_of_int var]
+	    | None -> [] in
+	  let strings = (List.map (fun (_, t) -> string_of_kind' vars t) present_fields) @ row_var_string in
+	    "(" ^ String.concat ", " strings ^ ")" in
     function
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
       | `TypeVar id      -> IntMap.find id vars
-      | `Function (`Record _ as f,t)  -> string_of_kind' vars f ^ " -> " ^ string_of_kind' vars t
+      | `Function (`Record _ as f,t) -> string_of_kind' vars f ^ " -> " ^ string_of_kind' vars t
       | `Function (f,t)  -> "(" ^ string_of_kind' vars f ^ ") -> " ^ string_of_kind' vars t
       | `Record row      -> (if is_tuple row then string_of_tuple row
 			     else
@@ -158,13 +164,14 @@ let rec string_of_kind' vars : kind -> string =
       | `Collection (`List, `Primitive `Char) -> "String"
       | `Collection (`List, `Primitive `XMLitem) -> "XML"
       | `Collection (coll_type, elems)           ->  coll_prefix vars coll_type ^"["^ string_of_kind' vars elems ^"]"
-and string_of_row' sep vars (field_env, `RowVar row_var) =
+and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_kind' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
   let row_var_string = match row_var with
-      |	Some var -> [string_of_int var]
-      | None -> [] in
+      |	`RowVar (Some var) -> [string_of_int var]
+      | `RowVar None -> []
+      | `RecRowVar _ -> ["recrowvar"] in
     String.concat sep (present_strings @ absent_strings @ row_var_string)
 (*
   String.concat sep (map (function
@@ -249,15 +256,16 @@ let rec free_bound_type_vars = function
   | `Collection (_, kind)    -> free_bound_type_vars kind
   | `DB                      -> IntSet.empty
 
-and free_bound_row_type_vars (field_env, `RowVar row_var) =
+and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
       (List.map (fun (_, t) -> free_bound_type_vars t) (get_present_fields field_env))
       IntSet.empty
   in
   let row_var = match row_var with
-    | Some var -> IntSet.singleton var
-    | None -> IntSet.empty
+    | `RowVar (Some var) -> IntSet.singleton var
+    | `RowVar None -> IntSet.empty
+    | `RecRowVar (var, row) -> IntSet.add var (free_bound_row_type_vars row)
   in
     IntSet.union field_type_vars row_var
 
@@ -492,6 +500,7 @@ struct
   let is_closed_row = function
     | (_, `RowVar (Some _)) -> false
     | (_, `RowVar None) -> true
+    | (_, `RecRowVar _) -> true
 end
 
 module TypeOpsGen(BasicOps: BASICTYPEOPS) :
