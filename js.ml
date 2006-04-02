@@ -391,7 +391,10 @@ let rec generate : 'a expression' -> code =
   | Abstr _ as a -> 
       let arglist, body = untuple_def a
       in Fn(["kappa"], 
-            Fn (arglist, Call(generate body, [Var "kappa"])))
+            Call(Var "kappa", 
+		 [Fn(["kappa"],
+		     Fn (arglist, Call(generate body, [Var "kappa"])))]))
+
   | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
       let l_cps = generate l in
       let r_cps = generate r in
@@ -422,24 +425,27 @@ let rec generate : 'a expression' -> code =
                                 [Var f_name; 
                                  Lst(map (fun name -> Var name) arg_names); 
                                  kappa]
-(*                                   yield_and_call(Var f_name, *)
-(*                                                  map (fun name -> Var name) arg_names, *)
-(*                                                  kappa *)
-                                         ) in
+                               ) in
       let arg_tower = fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call in
         
         Fn (["kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 
   (* Binding *)
   | Define (_, _, `Server, _) as d      -> generate_stub d
-  | Define (n, e, (`Client|`Unknown), _)-> Defs ([n, generate e])
+  | Define (n, e, (`Client|`Unknown), _)-> 
+      Defs ([n, Call(generate e,
+		     [Var "__idy"])])   (* definitions are always top 
+					   level, right? *)
   | Rec (bindings, body, _) ->
-      (fold_right 
-         (fun (v, e) body ->
-            Bind (v, generate e, body))
-         bindings
-         (Call(generate body, [Var "__idy"]))) (* extra complexity *)
-        (* Records *)
+      Fn(["kappa"],
+	 (fold_right 
+            (fun (v, e) body ->
+	       Call(generate e, [Fn(["e"],
+				    Bind (v, Var "e", body))]))
+            bindings
+            (Call (generate body, [Var "kappa"]))))
+        
+  (* Records *)
   | Record_empty _                    -> trivial_cps (Dict [])
   | Record_extension (n, v, r, _)     -> 
       let r_cps = generate r in
