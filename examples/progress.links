@@ -1,0 +1,35 @@
+#!/home/jeremy/links-svn/links/trunk/links -w 
+
+fun compute(count, total) server {
+ if (count << total) {
+  showProgress(count, total);
+  compute(count+1, total);
+ } else 42;
+}
+
+fun showProgress(count, total) client {
+ percent = 100.0 *. float_of_int(count) /. float_of_int(total);
+ domutate([ReplaceElement(
+  id="bar",
+  replacement=<div id="bar"
+       style="width:{string_of_float(percent)}%; background-color: black">|</div>
+ )])
+}
+
+fun showAnswer(answer) client {
+ domutate([ReplaceElement(
+  id="bar",
+  replacement=<div>{enxml(string_of_int(answer))}</div>
+ )])
+}
+
+
+<html>
+ <body>
+  <form l:onsubmit="{showAnswer(compute(0, int_of_string(n)))}">
+   <input type="text" l:name="n"/>
+   <input type="submit"/>
+  </form>
+  <div id="bar"/>
+ </body>
+</html>
