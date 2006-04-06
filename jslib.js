@@ -98,6 +98,8 @@ function __continuationize(f) {
         };
     };
 }
+var float_of_int = __continuationize(Number);
+var string_of_float = __continuationize(String);
 var int_of_string = __continuationize(parseInt);
 var string_of_int = __continuationize(String);
 //function not(x) { return !x; }
@@ -473,11 +475,16 @@ function __remoteCallHandler(kappa, request) {
      var serverResponse = JSON.parse(__base64decode(request.responseText.replace('\n', '')));
      if ((serverResponse instanceof Object) && ('__continuation' in serverResponse)) {
         // it's a continuation
-        var result = window[serverResponse.__name].apply(null, __tuple_as_list(serverResponse.__arg));
-        request.open('POST', '#', false);
-        request.onReadyStateChange = __remoteCallHandler(kappa, req);
-        request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        request.send("__continuation=" + serverResponse.__continuation + "&__result=" + __base64encode(JSON.stringify(result)));
+        var _res = null;
+        var cont = function(r) { res = r; }
+        var f = window[serverResponse.__name](cont);
+        f.apply(f, __tuple_as_list(serverResponse.__arg));
+//        __alert('result : ' + _res)
+        var request_ = new XMLHttpRequest();
+        request_.open('POST', '#', true);
+        request_.onreadystatechange = __remoteCallHandler(kappa, request_);
+        request_.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        request_.send("__continuation=" + serverResponse.__continuation + "&__result=" + __base64encode(JSON.stringify(_res)));
       }
       else {
         // it's the final result: return it.
@@ -591,7 +598,7 @@ function __dictlength(x) {
 
 function __block_proc(pid, its_cont) {
   // FIXME: const?? is this OK?
-  const current_pid = __current_pid;
+  var current_pid = __current_pid;
   __blocked_procs[pid] = function () { __current_pid = current_pid;  its_cont() };
   // discard stack
 }
