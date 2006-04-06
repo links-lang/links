@@ -19,7 +19,7 @@ fun showProgress(count, total) client {
 fun showAnswer(answer) client {
  domutate([ReplaceElement(
   id="bar",
-  replacement=<div>{enxml(string_of_int(answer))}</div>
+  replacement=<div id="bar">{enxml(string_of_int(answer))}</div>
  )])
 }
 
