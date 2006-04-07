@@ -225,6 +225,7 @@ type phrasenode =
   | InfixAppl of (binop * phrase * phrase)
   | UnaryAppl of (unary_op * phrase)
   | FnAppl of (phrase * phrase list)
+  | Send of (phrase * phrase)
 (* Record operations *)
   | TupleLit of (phrase list)
   | RecordLit of ((name * phrase) list * phrase option)
@@ -334,6 +335,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
   | FnAppl (fn, [p]) -> Apply (desugar fn, desugar p, pos)
   | FnAppl (fn, ps)  -> Apply (desugar fn, desugar (TupleLit ps, pos'), pos)
+  | Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), [l]), pos'), [r]), pos')
 
   | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
   | FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],

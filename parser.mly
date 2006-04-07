@@ -30,7 +30,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token CLIENT SERVER NAMESPACE
 %token SEMICOLON
 %token TRUE FALSE
-%token BARBAR AMPAMP NOT
+%token BARBAR AMPAMP BANG
 %token <Num.num> UINTEGER
 %token <float> UFLOAT 
 %token <string> STRING CDATA
@@ -171,10 +171,15 @@ logical_expression:
 | comparison_expression                                        { $1 }
 | logical_expression BARBAR comparison_expression              { InfixAppl (`Or, $1, $3), pos() }
 | logical_expression AMPAMP comparison_expression              { InfixAppl (`And, $1, $3), pos() }
-| NOT addition_expression                                      { UnaryAppl (`Not, $2), pos() }
+/*| NOT addition_expression                                    { UnaryAppl (`Not, $2), pos() }*/
+
+send_expression:
+| logical_expression                                           { $1 }
+| logical_expression BANG logical_expression                   { Send ($1, $3), pos() }
+
 
 union_expression:
-| logical_expression                                           { $1 }
+| send_expression                                              { $1 }
 | union_expression PLUSPLUS logical_expression                 { InfixAppl (`Concat, $1, $3), pos() }
 
 db_expression:

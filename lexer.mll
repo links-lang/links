@@ -123,7 +123,7 @@ rule lex lexers = parse
   | ']'                                 { RBRACKET }
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
-  | "!"                                 { NOT }
+  | "!"                                 { BANG }
   | '|'                                 { VBAR }
   | '&'                                 { AMPER }
   | ','                                 { COMMA }
