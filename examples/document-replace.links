@@ -1,0 +1,17 @@
+#!/home/jeremy/links-svn/links/trunk/links -w
+
+fun change() client {
+  dom ! Document(
+   <html>
+    <body> 
+       new page
+    </body>
+   </html>
+  )
+}
+
+<html>
+<body>
+<a l:onclick="{change()}">change</a>
+</body>
+</html>

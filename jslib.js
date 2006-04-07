@@ -189,6 +189,9 @@ function __applyChanges(changes) {
           var two = change.value.second;
           one.swapNode(two);
     }  
+    else if (change.label == 'Document') {
+          __start(change.value);
+    }  
   }
 }
 
