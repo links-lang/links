@@ -517,6 +517,11 @@ continuationize_primfn (
          | _ -> failwith "Internal error: non-boolean passed to `not'"),
     ([], `Primitive `Bool))); 
 
+  ("dom",
+   (primfun "dom"
+      (function _ -> failwith "dom not implemented on server"),
+    ([], `Primitive `Int)));
+
   ("not", 
    (primfun "not" 
       (function 

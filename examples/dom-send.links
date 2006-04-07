@@ -1,0 +1,14 @@
+#!/home/jeremy/links-svn/links/trunk/links -w
+
+fun f() client { }
+
+fun add() {
+  dom ! AppendChild(id="foo", replacement=<p>stuff</p>)
+}
+
+
+<html>
+<body id="foo">
+<a l:onclick="{add()}">add</a>
+</body>
+</html>
