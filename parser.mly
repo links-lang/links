@@ -259,8 +259,8 @@ table_expression:
 
 iteration_expression:
 | table_expression                                             { $1 }
-| FOR provider IN exp                                          { Iteration (fst $2, snd $2, $4, None),    pos() }
-| FOR provider WHERE exp IN exp                                { Iteration (fst $2, snd $2, $6, Some $4), pos() }
+| FOR provider exp                                             { Iteration (fst $2, snd $2, $3, None),    pos() }
+| FOR provider WHERE LPAREN exp RPAREN exp                     { Iteration (fst $2, snd $2, $7, Some $5), pos() }
 
 escape_expression:
 | iteration_expression                                         { $1 }
@@ -328,7 +328,7 @@ record_label:
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 provider:
-| patt LARROW exp                                              { $1, $3 }
+| LPAREN patt LARROW exp RPAREN                                { $2, $4 }
 
 patt:
 | exp                                                          { Pattern $1 }

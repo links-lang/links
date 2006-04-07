@@ -36,15 +36,15 @@ switch L 3 { L x -> x M y -> y}
 stdout : 3 : Int
 
 Variant matching - Closed case in function [1]
-fun (f) { switch f { A a -> !a B b -> b} }
+fun (f) { switch f { A a -> not(a) B b -> b} }
 stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Variant matching - Closed case in function [2]
-fun (f) { switch f { A a -> !a B b -> true } }
+fun (f) { switch f { A a -> not(a) B b -> true } }
 stdout : @fun : .*A:Bool.*B:a.* -> Bool
 
 Variant matching - Closed case in function [3]
-fun (f) { switch f { B a -> !a A b -> b} }
+fun (f) { switch f { B a -> not(a) A b -> b} }
 stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Variant matching : Closed case type error

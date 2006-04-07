@@ -1,5 +1,5 @@
 Braced XML
-<f>{for i <- [] in <br/>}</f>
+<f>{for (i <- []) <br/>}</f>
 stdout : <f/> : XML
 
 Escaped braces
@@ -11,11 +11,11 @@ Backslashes
 stdout : <p>A backslash \ </p> : XML
 
 Top-level-bound XML object
-x = for i <- [] in <br/>; <f>{x}</f>
+x = for (i <- []) <br/>; <f>{x}</f>
 stdout : <f/> : XML
 
 Let-bound XML object
-{x = for i <- [] in <br/>; <f>{x}</f>}
+{x = for (i <- []) <br/>; <f>{x}</f>}
 stdout : <f/> : XML
 
 Whitespace preservation
@@ -54,7 +54,7 @@ stderr : @.*
 exit : 1
 
 Looping in XML quasis
-things = [1, 2]; <ul>{for x <- things in <br/>}</ul>
+things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
 stdout : <ul><br/><br/></ul> : XML
 
 Amp-encoding (OK)
@@ -71,5 +71,5 @@ x = "this & that"; <xml>{enxml(x)}</xml>
 stdout : <xml>this &amp; that</xml> : XML
 
 Looping in XML quasis, with multiple content elements.
-things = [1, 2];<ul>{for x <- things in <li>{enxml(string_of_int(x))}</li><li>1</li>}</ul>
+things = [1, 2];<ul>{for (x <- things) <li>{enxml(string_of_int(x))}</li><li>1</li>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : XML
