@@ -184,7 +184,10 @@ let rec extract_tests (bindings:bindings) (expr:expression)
         let trace_data = `Selected{field_name=label; field_var=label_variable;
                                    etc_var = variable; source_var = name} in
         let (positive, negative, body, origin) = extract_tests (trace_data :: bindings) body in
-          (positive, negative, Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data), origin)
+          (positive, negative,
+	   Record_selection (label, label_variable, variable, 
+			     Syntax.Variable (name, vdata), body, data), 
+	   origin)
     | Record_selection (label, label_variable, variable, value, body, data) ->
         let positive, negative, body, origin = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Record_selection (label, label_variable, variable, value, body, data), origin)
@@ -532,7 +535,7 @@ let trivial_extensions : RewriteSyntax.rewriter = function
 let ops = ["==", (=);
            "<>", (<>);
            "<=", (<=);
-           "<<", (<)]
+           "<",  (<)]
 
 (* Evaluate expressions involving only constants and pure functions at
  * compile time. *)

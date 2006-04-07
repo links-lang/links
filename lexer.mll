@@ -95,9 +95,9 @@ rule lex lexers = parse
   | "->"                                { RARROW }
   | "=="                                { EQEQ }
   | "<="                                { LESSEQUAL }
-  | "<<"                                { LESS }
+  | "<"                                 { LESS }
   | ">="                                { MOREEQUAL }
-  | ">>"                                { MORE }
+  | ">"                                 { MORE }
   | "<>"                                { DIFFERENT }
   | '+'                                 { PLUS }
   | '-'                                 { MINUS }

@@ -183,7 +183,7 @@ let binopFromOpString = function
     | "==" -> EqEqOp
     | "<>" -> NotEqOp
     | "<=" -> LessEqOp
-    | "<<" -> LessOp
+    | "<"  -> LessOp
     | "beginswith" -> BeginsWithOp
     | opstr -> raise(Runtime_failure("Evaluating unknown operator "^opstr))
 

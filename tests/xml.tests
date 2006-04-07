@@ -36,7 +36,7 @@ stdout : <a b="three"><c/></a> : XML
 
 Attribute splicing [2]
 {x = "three"; <a b="a{x}b"><c/></a>}
-stdout : <a b="three"><c/></a> : XML
+stdout : <a b="athreeb"><c/></a> : XML
 
 Rejection of incorrectly nested elements
 <a><b></a></b>

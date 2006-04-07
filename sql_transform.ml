@@ -215,7 +215,7 @@ let make_binop_sql oper left_value right_value =
   match oper with
     | "==" -> Binary_op ("=", left_value, right_value)
     | "<=" -> Binary_op ("<=", left_value, right_value)
-    | "<<" -> Binary_op ("<", left_value, right_value)
+    | "<"  -> Binary_op ("<", left_value, right_value)
     | "<>" -> Binary_op ("<>", left_value, right_value)
     | "beginswith" -> 
         Binary_op("like", left_value, Binary_op("concat", right_value, Text "%"))

@@ -257,7 +257,7 @@ let rec curried_apply (head : untyped_expression) (pos : position) : untyped_exp
 
 let uncompare : comparison_binop -> string = 
   (* FIXME: this is buggy: should eliminate greater, greatereq *)
-  flip List.assoc [`Eq, "=="; `Less, "<<"; `LessEq, "<="; `Greater, ">>"; `GreaterEq, ">="; `NotEq, "<>"; `BeginsWith, "beginswith"]
+  flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `BeginsWith, "beginswith"]
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
 (* Convert a syntax tree as returned by the parser into core syntax *)

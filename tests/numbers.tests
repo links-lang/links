@@ -54,7 +54,7 @@ stderr : @.
 exit : 1
 
 Equality and comparisons [integer comparison]
-({x = 100000230 * 102300000; x << x + 1}) && ({x = 1032452430 * 102300234234; x >> x - 1})
+({x = 100000230 * 102300000; x < x + 1}) && ({x = 1032452430 * 102300234234; x > x - 1})
 stdout : @true .*
 
 Equality and comparisons [integer equality]
@@ -62,5 +62,5 @@ Equality and comparisons [integer equality]
 stdout : @true .*
 
 Equality and comparisons [floating comparison]
-(-.10.0 << -.9.5 && 10.0 >> 9.5 && 10.0 >> -.9.5 && -.10.0 << 9.5)
+(-.10.0 < -.9.5 && 10.0 > 9.5 && 10.0 > -.9.5 && -.10.0 < 9.5)
 stdout : @true .*

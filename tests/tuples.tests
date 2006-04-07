@@ -11,11 +11,11 @@ Tuple inequality
 stdout : false : Bool
 
 Tuple comparisons [exhaustive]
-((1,"foo") << (2, "foo")) || ((1,"foo") >> (2, "foo")) || ((1,"foo") == (2, "foo"))
+((1,"foo") < (2, "foo")) || ((1,"foo") > (2, "foo")) || ((1,"foo") == (2, "foo"))
 stdout : true : Bool
 
 Tuple comparisons [exclusive]
-(((1,"foo") << (2, "foo")) == false) || (((1,"foo") >> (2, "foo")) == false)
+(((1,"foo") < (2, "foo")) == false) || (((1,"foo") > (2, "foo")) == false)
 stdout : @true .*
 
 Tuple patterns [match]
