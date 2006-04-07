@@ -13,7 +13,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 %token END
 %token EQ IN 
-%token FUN RARROW 
+%token FUN RARROW VAR
 %token IF ELSE
 %token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT BEGINSWITH
 %token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
@@ -60,6 +60,7 @@ toplevel:
 | exp SEMICOLON                                                { $1 }
 | namespace_decl                                               { $1 }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
+| VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
 namespace_decl:
@@ -279,6 +280,7 @@ parenthesized_pattern:
 | parenthesized_thing                                          { Pattern $1 }
 
 binding:
+| VAR patt EQ exp SEMICOLON                                    { Binding ($2, $4), pos() }
 | patt EQ exp SEMICOLON                                        { Binding ($1, $3), pos() }
 | exp SEMICOLON                                                { $1 }
 | FUN VARIABLE arg_list block                                  { FunLit (Some $2, $3, $4), pos() }
