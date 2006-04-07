@@ -677,6 +677,11 @@ function attribute(kappa) {
    }
 }
 
+function is_integer(s) {
+  return s.match(/^[0-9]+$/) != null;
+}
+is_integer = __continuationize(is_integer);
+
 function objectType(kappa) {
   return function(obj) {
     obj = obj[0];

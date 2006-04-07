@@ -546,6 +546,12 @@ continuationize_primfn (
     ([],
      (`Primitive `Float --> `Primitive `Float))));
 
+  ("is_integer", 
+   (primfun "is_integer" 
+      (fun s -> `Primitive (`Bool (Str.string_match (Str.regexp "^[0-9]+$") (charlist_as_string s) 0))),
+    ([],
+     (Kind.string --> `Primitive `Bool))));
+
 (*   ("fullname", *)
 (*    (primfun "fullname" *)
 (*       (function uid -> *)
