@@ -305,7 +305,7 @@ let rec generate : 'a expression' -> code =
                Call(l_cps, [Fn(["l"],
                    Call(r_cps, [Fn(["r"],
                         Call(Var "kappa", 
-                             [Call (Var "__concat", [Var "l"; Var "r"])]))]))]))
+                             [Call (Var "__concat", [Var "l"; Var "r"])]))]))])) 
       | Collection_union (Collection_single (l,_,_), r, _) -> 
           failwith "unimpl"; 
 	  (match reduce_collection r with
@@ -426,7 +426,9 @@ let rec generate : 'a expression' -> code =
                                  Lst(map (fun name -> Var name) arg_names); 
                                  kappa]
                                ) in
-      let arg_tower = fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call in
+      let arg_tower = fold_right wrap_cps_terms 
+                                 (combine cps_args arg_names)
+                                 innermost_call in
         
         Fn (["kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 

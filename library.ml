@@ -6,12 +6,23 @@ open Kind
 open Result
 open Utility
 
+(* Data structures/utilities for proc mgmt *)
+
 type pid = int
 
-let suspended_processes = (Queue.create () : (Result.continuation * Result.result * pid) Queue.t)
-and blocked_processes = (Hashtbl.create 10000 : (pid, (Result.continuation * Result.result * pid)) Hashtbl.t)
+type proc_state = Result.continuation * Result.result 
+
+let suspended_processes = (Queue.create () : (proc_state * pid) Queue.t)
+and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtbl.t)
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
+
+let debug_process_status () =
+  prerr_endline("processes : " ^ 
+                  string_of_int (Queue.length suspended_processes));
+  prerr_endline ("blocked processes : " ^ 
+                   string_of_int (Hashtbl.length blocked_processes))
+
 
 let _ =   Hashtbl.add messages 0 (Queue.create ())
 
@@ -22,6 +33,8 @@ let fresh_pid =
 	incr current_pid;
 	!current_pid
       end
+
+(* Utilities for types *)
 
 let fresh_type_variable () = `TypeVar (new_raw_variable ())
 let fresh_row_variable () = `RowVar (new_raw_variable ())
@@ -219,9 +232,7 @@ let env : (string * (result * Kind.assumption)) list = map
                 (* Push the new process onto the queue. *)
 		let new_pid = fresh_pid () in
 		  Hashtbl.add messages new_pid (Queue.create ());
-                  Queue.push (FuncApply(f, []) :: [], p, new_pid) suspended_processes;
-(*                   debug ("suspended processes : " ^ string_of_int (Queue.length suspended_processes)); *)
-(*                   debug ("blocked processes : " ^ string_of_int (Hashtbl.length blocked_processes)); *)
+                  Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
                   `Primitive (`Int (num_of_int new_pid))))),
     let a = fresh_type_variable () in
     let b = fresh_type_variable () in

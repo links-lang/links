@@ -196,225 +196,231 @@ let collect ctype = function elements ->
 exception CollExtnWithWeirdSrc
 exception TopLevel of (Result.environment * Result.result)
 
-let stepper = ref 0
+let process_steps = ref 0
 let switch_granularity = 5
 
 let rec switch_context globals = 
   if not (Queue.is_empty Library.suspended_processes) then 
-    let cont, p, pid = Queue.pop Library.suspended_processes in
+    let (cont, value), pid = Queue.pop Library.suspended_processes in
       Library.current_pid := pid;
-      apply_cont globals cont p
+      apply_cont globals cont value
   else exit 0
-and apply_cont globals : continuation -> result -> result = 
-fun cont value ->
-(*  prerr_endline ("processes : " ^ (string_of_int (Queue.length Library.suspended_processes)));
-  prerr_endline ("blocked processes : " ^ (string_of_int (Hashtbl.length Library.blocked_processes)));*)
-  incr stepper;
-  if (!stepper mod switch_granularity == 0) then 
+
+and scheduler globals state stepf = 
+  incr process_steps;
+  if (!process_steps mod switch_granularity == 0) then 
     begin
-      Queue.push (cont, value, !current_pid) Library.suspended_processes;
+      process_steps := 0;
+      Queue.push (state, !current_pid) Library.suspended_processes;
       switch_context globals
     end
   else
-    (match cont with
-       | [] -> (if !Library.current_pid == 0 then raise (TopLevel(globals, value))
-		else switch_context globals)
-       | (frame::cont) -> match frame with
-	   | (Definition(env, name)) -> 
-	       apply_cont (bind env name value) cont value
-           | Recv (locals) ->
-               (*prerr_endline "recv continuation";*)
-               (* If there are any messages, apply the continuation and continue.
-                  Otherwise, suspend the continuation (in the blocked_processes table)
-               *)
-(*               prerr_endline "recvcont";*)
-               let mqueue = Hashtbl.find Library.messages !Library.current_pid in
-                 if not (Queue.is_empty mqueue) then
-                   apply_cont globals cont (Queue.pop mqueue)
-                 else 
-                   begin
-                     Hashtbl.add Library.blocked_processes !Library.current_pid (Recv locals::cont, value, !Library.current_pid);
-                     switch_context globals
-                   end
-           | (FuncArg(param, locals)) ->
-	       (* just evaluate param; "value" is in fact a function
-	          value which will later be applied *)
-               interpret globals locals param
-	         (FuncApply(value, locals) :: cont)
-           | (FuncApply(func, locals)) -> 
-               (match func with
-                  | `Function (var, fnlocals, fnglobals, body) ->
-		      (* Interpret the body in the following environments:
-		         locals are augmented with function locals and
-		         function binding (binding takes precedence)
-		         toplevel environment in which the function
-		         was defined takes precedence over the real current
-                         globals. Is there a semanticist in the house? *)
-(*                 let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
-                 let locals = bind (trim_env (fnlocals @ locals)) var value in
-                   interpret globals locals body cont
-		     
-             | `Primitive (`PFunction (name, impl, pargs)) ->
-		 (match impl with
-		    | Some func ->
-                        func (apply_cont globals, cont, value)
-		    | None -> 
-                        (* this primitive's implementation was
-                           deserialized away; should be able to get it
-                           from the global env. *)
-                        let func = (Library.get_prim name) in
-			  func (apply_cont globals, cont, value)
-		 )
-	     | `Continuation (cont) ->
-		 (* Here we throw out the other continuation. *)
-		 apply_cont globals cont value
-             | _ -> raise (Runtime_failure ("Applied non-function value: " ^
-                                              string_of_result func)))
-           | (LetCont(locals, variable, body)) ->
-	       interpret globals (bind locals variable value) body cont
-           | (BranchCont(locals, true_branch, false_branch)) ->
-	       (match value with
-                  | `Primitive (`Bool true)  -> 
-	              interpret globals locals true_branch cont
-                  | `Primitive (`Bool false) -> 
-	              interpret globals locals false_branch cont
-                  | _ -> raise (Runtime_failure("Attempt to test a non-boolean value: "
-					        ^ string_of_result value)))
-           | (BinopRight(locals, op, rhsExpr)) ->
-	       interpret globals locals rhsExpr
-                 (BinopApply(locals, op, value) :: cont)
-           | (BinopApply(locals, op, lhsVal)) ->
-	       let result = 
-                 (match op with
-                    | EqEqOp -> bool (equal lhsVal value)
-                    | NotEqOp -> bool (not (equal lhsVal value))
-                    | LessEqOp -> bool (less_or_equal lhsVal value)
-                    | LessOp -> bool (less lhsVal value)
-                    | BeginsWithOp -> failwith("Beginswith not implemented except when pushable into SQL")
-	            | UnionOp(ctype) -> (match lhsVal, value with
-		          `Collection (`Set, l),   `Collection (`Set, r)   -> `Collection (`Set, (unduplicate equal (l @ r)))
-	                | `Collection (`Bag, l),   `Collection (`Bag, r)   -> `Collection (`Bag, (l @ r))
-	                | `Collection (`List, l),  `Collection (`List, r)  -> `Collection (`List, (l @ r))
-	                | _ -> raise (Runtime_failure ("Union of non-collection types: " ^ string_of_result lhsVal ^ " and " ^ string_of_result value))
-				        )
-	            | RecExtOp(label) -> 
-		        (match lhsVal with
-		           | `Record fields -> 
-		               `Record ((label, value) :: fields)
-		           | _ -> raise (Runtime_failure "TF077"))
-	         )
-	       in
-	         apply_cont globals cont result
-           | UnopApply (locals, op) ->
-               (match op with
-                    MkColl(coll_type) -> apply_cont globals cont (`Collection (coll_type, [(value)]))
-	          | MkVariant(label) -> 
-	              apply_cont globals cont (`Variant (label, value))
-                  | VrntSelect(case_label, case_variable, case_body, variable, body) ->
-	              (match value with
-                         | `Variant (label, value) when label = case_label ->
-                             (interpret globals (bind locals case_variable value) case_body cont)
-                         | `Variant (_) as value ->
-		             (interpret globals (bind locals (valOf variable) value)
-		                (valOf body) cont)
-                         | _ -> raise (Runtime_failure "TF181"))
-	          | MkDatabase ->
-	              apply_cont globals cont (let args = charlist_as_string value in
-                                               let driver, params = parse_db_string args in
-                                                 `Database (db_connect driver params))
-                  | QueryOp(query, kind) ->
-                      let result = 
-                        match value with
-                          | `Database (db, _) ->
-       	                      let query_string = string_of_query (normalise_query globals locals query) in
-		                prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                let result = execute_select kind query_string db in
-                                (* debug("    result:" ^ string_of_result result); *)
-                                  result
-                                (* disable actual queries *)
-(*                                   `Collection(`List, []) *)
-                          | x -> raise (Runtime_failure ("TF309 : " ^ string_of_result x))
-                      in
-                        apply_cont globals cont result
-	          | SortOp(up) ->
-	              apply_cont globals cont
-		        (match value with
-		           | `Collection(_, results) ->
-		               let cmp = (if up then less_to_cmp less
-                                          else curry (compose (~-) (uncurry (less_to_cmp less)))) in
-		                 listval(List.sort cmp results)
-		           | _ -> raise (Runtime_failure "TF223"))
-	       )
-           | RecSelect (locals, label, label_var, variable, body) ->
-	       let field, remaining = crack_row label (recfields value) in
-               let new_env = trim_env (bind (bind locals variable
-					       (`Record remaining))
-				         label_var field) in
-                 interpret globals new_env body cont
-                   
-           | StartCollExtn (locals, variable, expr) -> 
-	       (match value with
-                  | `Collection (source_coll_type, source_elems) ->
-	              (match source_elems with
-		           [] -> apply_cont globals cont (`Collection(source_coll_type, []))
-	                 | (first_elem::other_elems) ->
-	                     (* bind 'var' to the first element, save the others for later *)
-		             interpret globals (bind locals variable first_elem) expr
-		               (CollExtn(locals, source_coll_type, 
-                                         variable, expr, [], other_elems) :: cont))
-	          | x -> raise (Runtime_failure ("TF197 : " ^ string_of_result x)))
-	         
-           | CollExtn (locals, ctype, var, expr, rslts, inputs) ->
-               (let new_results = match value with
-                    (* Check that value's a collection, and extract its contents: *)
-                  | `Collection (expr_coll_type, expr_elems) -> expr_elems
-                  | r -> raise (Runtime_failure ("TF183 : " ^ string_of_result r))
+    stepf()
+
+and apply_cont globals : continuation -> result -> result = 
+  fun cont value ->
+    let stepf() = 
+      match cont with
+        | [] -> (if !Library.current_pid == 0 then
+                   raise (TopLevel(globals, value))
+	         else switch_context globals)
+        | (frame::cont) -> match frame with
+	    | (Definition(env, name)) -> 
+	        apply_cont (bind env name value) cont value
+            | Recv (locals) ->
+                (* If there are any messages, apply the continuation
+                   and continue.  Otherwise, suspend the continuation
+                   (in the blocked_processes table) *)
+                let mqueue = Hashtbl.find Library.messages !Library.current_pid in
+                  if not (Queue.is_empty mqueue) then
+                    apply_cont globals cont (Queue.pop mqueue)
+                  else 
+                    begin
+                      Hashtbl.add Library.blocked_processes
+                        !Library.current_pid
+                        ((Recv locals::cont, value), !Library.current_pid);
+                      switch_context globals
+                    end
+            | (FuncArg(param, locals)) ->
+	        (* just evaluate param; "value" is in fact a function
+	           value which will later be applied *)
+                interpret globals locals param
+	          (FuncApply(value, locals) :: cont)
+            | (FuncApply(func, locals)) -> 
+                (match func with
+                   | `Function (var, fnlocals, fnglobals, body) ->
+		       (* Interpret the body in the following environments:
+		          locals are augmented with function locals and
+		          function binding (binding takes precedence)
+		          toplevel environment in which the function
+		          was defined takes precedence over the real current
+                          globals. Is there a semanticist in the house? *)
+                       (*                 let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
+                       let locals = bind (trim_env (fnlocals @ locals)) var value in
+                         interpret globals locals body cont
+		           
+                   | `Primitive (`PFunction (name, impl, pargs)) ->
+		       (match impl with
+		          | Some func ->
+                              func (apply_cont globals, cont, value)
+		          | None -> 
+                              (* this primitive's implementation was
+                                 deserialized away; should be able to get it
+                                 from the global env. *)
+                              let func = (Library.get_prim name) in
+			        func (apply_cont globals, cont, value)
+		       )
+	           | `Continuation (cont) ->
+		       (* Here we throw out the other continuation. *)
+		       apply_cont globals cont value
+                   | _ -> raise (Runtime_failure ("Applied non-function value: " ^
+                                                    string_of_result func)))
+            | (LetCont(locals, variable, body)) ->
+	        interpret globals (bind locals variable value) body cont
+            | (BranchCont(locals, true_branch, false_branch)) ->
+	        (match value with
+                   | `Primitive (`Bool true)  -> 
+	               interpret globals locals true_branch cont
+                   | `Primitive (`Bool false) -> 
+	               interpret globals locals false_branch cont
+                   | _ -> raise (Runtime_failure("Attempt to test a non-boolean value: "
+					         ^ string_of_result value)))
+            | (BinopRight(locals, op, rhsExpr)) ->
+	        interpret globals locals rhsExpr
+                  (BinopApply(locals, op, value) :: cont)
+            | (BinopApply(locals, op, lhsVal)) ->
+	        let result = 
+                  (match op with
+                     | EqEqOp -> bool (equal lhsVal value)
+                     | NotEqOp -> bool (not (equal lhsVal value))
+                     | LessEqOp -> bool (less_or_equal lhsVal value)
+                     | LessOp -> bool (less lhsVal value)
+                     | BeginsWithOp -> failwith("Beginswith not implemented except when pushable into SQL")
+	             | UnionOp(ctype) -> (match lhsVal, value with
+		                              `Collection (`Set, l),   `Collection (`Set, r)   -> `Collection (`Set, (unduplicate equal (l @ r)))
+	                                    | `Collection (`Bag, l),   `Collection (`Bag, r)   -> `Collection (`Bag, (l @ r))
+	                                    | `Collection (`List, l),  `Collection (`List, r)  -> `Collection (`List, (l @ r))
+	                                    | _ -> raise (Runtime_failure ("Union of non-collection types: " ^ string_of_result lhsVal ^ " and " ^ string_of_result value))
+				         )
+	             | RecExtOp(label) -> 
+		         (match lhsVal with
+		            | `Record fields -> 
+		                `Record ((label, value) :: fields)
+		            | _ -> raise (Runtime_failure "TF077"))
+	          )
 	        in
-                let join = match ctype with (* FIXME: use this! *)
-		    `Set  -> fun (a,b) -> unduplicate equal (a@b)
-		    | `Bag | `List -> (fun (a,b) -> a@b)
-		    | _ -> failwith("Internal error: comprhnsn src is non-collection") in
-	          (* Extend rslts with the newest list of results. *)
-                let rslts = rslts @ new_results in
-	          match inputs with
-		      [] -> (* no more inputs, collect results & continue *)
-		        apply_cont globals cont (collect ctype rslts)
-		    | (next_input_expr::inputs) ->
-		        (* Evaluate next input, continuing with given results: *)
-		        interpret globals (bind locals var next_input_expr) expr
-		          (CollExtn(locals, ctype, var, expr, 
-				    rslts, inputs) :: cont)
-	       )
-                 
-           | XMLCont (locals, tag, attrtag, children, attrs, elems) ->
-               (let new_children = 
-                  match attrtag, value with 
-                      (* FIXME: multiple attrs resulting from one expr? *)
-                    | Some attrtag, (`Collection (`List, _) as s) -> 
-                        [Attr (attrtag, charlist_as_string s)]
-                    | None, (`Collection (`List, elems)) ->
-                        (match elems with
-                           | [] -> []
-                           | `Primitive (`XML x) :: etc ->
-                               map xmlitem_of elems
-                           | `Primitive (`Char x) :: etc ->
-                               [ Result.Text(charlist_as_string value) ]
-                           | _ -> raise(Match_failure("",0,0)))
-                    | _ -> raise(Match_failure("",0,0))
-                in
-                let children = children @ new_children in
-                  match attrs, elems with
-                    | [], [] -> 
-                        let result = (`Collection (`List, [`Primitive (`XML (Node (tag, children)))])) in
-                          apply_cont globals cont result
-                    | ((k,v)::attrs), _ -> 
-                        interpret globals locals v (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
-                    | _, (elem::elems) -> 
-                        interpret globals locals elem (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
-               )
-           | Ignore (locals, expr) ->
-	       interpret globals locals expr cont
-    )
+	          apply_cont globals cont result
+            | UnopApply (locals, op) ->
+                (match op with
+                     MkColl(coll_type) -> apply_cont globals cont (`Collection (coll_type, [(value)]))
+	           | MkVariant(label) -> 
+	               apply_cont globals cont (`Variant (label, value))
+                   | VrntSelect(case_label, case_variable, case_body, variable, body) ->
+	               (match value with
+                          | `Variant (label, value) when label = case_label ->
+                              (interpret globals (bind locals case_variable value) case_body cont)
+                          | `Variant (_) as value ->
+		              (interpret globals (bind locals (valOf variable) value)
+		                 (valOf body) cont)
+                          | _ -> raise (Runtime_failure "TF181"))
+	           | MkDatabase ->
+	               apply_cont globals cont (let args = charlist_as_string value in
+                                                let driver, params = parse_db_string args in
+                                                  `Database (db_connect driver params))
+                   | QueryOp(query, kind) ->
+                       let result = 
+                         match value with
+                           | `Database (db, _) ->
+       	                       let query_string = string_of_query (normalise_query globals locals query) in
+		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
+		                 let result = execute_select kind query_string db in
+                                   (* debug("    result:" ^ string_of_result result); *)
+                                   result
+                                     (* disable actual queries *)
+                                     (*                                   `Collection(`List, []) *)
+                           | x -> raise (Runtime_failure ("TF309 : " ^ string_of_result x))
+                       in
+                         apply_cont globals cont result
+	           | SortOp(up) ->
+	               apply_cont globals cont
+		         (match value with
+		            | `Collection(_, results) ->
+		                let cmp = (if up then less_to_cmp less
+                                           else curry (compose (~-) (uncurry (less_to_cmp less)))) in
+		                  listval(List.sort cmp results)
+		            | _ -> raise (Runtime_failure "TF223"))
+	        )
+            | RecSelect (locals, label, label_var, variable, body) ->
+	        let field, remaining = crack_row label (recfields value) in
+                let new_env = trim_env (bind (bind locals variable
+					        (`Record remaining))
+				          label_var field) in
+                  interpret globals new_env body cont
+                    
+            | StartCollExtn (locals, variable, expr) -> 
+	        (match value with
+                   | `Collection (source_coll_type, source_elems) ->
+	               (match source_elems with
+		            [] -> apply_cont globals cont (`Collection(source_coll_type, []))
+	                  | (first_elem::other_elems) ->
+	                      (* bind 'var' to the first element, save the others for later *)
+		              interpret globals (bind locals variable first_elem) expr
+		                (CollExtn(locals, source_coll_type, 
+                                          variable, expr, [], other_elems) :: cont))
+	           | x -> raise (Runtime_failure ("TF197 : " ^ string_of_result x)))
+	          
+            | CollExtn (locals, ctype, var, expr, rslts, inputs) ->
+                (let new_results = match value with
+                     (* Check that value's a collection, and extract its contents: *)
+                   | `Collection (expr_coll_type, expr_elems) -> expr_elems
+                   | r -> raise (Runtime_failure ("TF183 : " ^ string_of_result r))
+	         in
+                 let join = match ctype with (* FIXME: use this! *)
+		     `Set  -> fun (a,b) -> unduplicate equal (a@b)
+		     | `Bag | `List -> (fun (a,b) -> a@b)
+		     | _ -> failwith("Internal error: comprhnsn src is non-collection") in
+	           (* Extend rslts with the newest list of results. *)
+                 let rslts = rslts @ new_results in
+	           match inputs with
+		       [] -> (* no more inputs, collect results & continue *)
+		         apply_cont globals cont (collect ctype rslts)
+		     | (next_input_expr::inputs) ->
+		         (* Evaluate next input, continuing with given results: *)
+		         interpret globals (bind locals var next_input_expr) expr
+		           (CollExtn(locals, ctype, var, expr, 
+				     rslts, inputs) :: cont)
+	        )
+                  
+            | XMLCont (locals, tag, attrtag, children, attrs, elems) ->
+                (let new_children = 
+                   match attrtag, value with 
+                       (* FIXME: multiple attrs resulting from one expr? *)
+                     | Some attrtag, (`Collection (`List, _) as s) -> 
+                         [Attr (attrtag, charlist_as_string s)]
+                     | None, (`Collection (`List, elems)) ->
+                         (match elems with
+                            | [] -> []
+                            | `Primitive (`XML x) :: etc ->
+                                map xmlitem_of elems
+                            | `Primitive (`Char x) :: etc ->
+                                [ Result.Text(charlist_as_string value) ]
+                            | _ -> raise(Match_failure("",0,0)))
+                     | _ -> raise(Match_failure("",0,0))
+                 in
+                 let children = children @ new_children in
+                   match attrs, elems with
+                     | [], [] -> 
+                         let result = (`Collection (`List, [`Primitive (`XML (Node (tag, children)))])) in
+                           apply_cont globals cont result
+                     | ((k,v)::attrs), _ -> 
+                         interpret globals locals v (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
+                     | _, (elem::elems) -> 
+                         interpret globals locals elem (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
+                )
+            | Ignore (locals, expr) ->
+	        interpret globals locals expr cont
+    in
+      scheduler globals (cont, value) stepf
 
 and
     interpret
