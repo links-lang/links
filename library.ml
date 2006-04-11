@@ -34,14 +34,6 @@ let fresh_pid =
 	!current_pid
       end
 
-(* Utilities for types *)
-
-let fresh_type_variable () = `TypeVar (new_raw_variable ())
-let fresh_row_variable () = `RowVar (new_raw_variable ())
-let fresh_collection_variable () = `CtypeVar (new_raw_variable ())
-
-let (-->) x y = `Function (x,y)
-
 (* let xml = `Collection (`List, `Primitive `XMLitem) *)
 
 type primop = (Result.result -> Result.result)

@@ -54,6 +54,7 @@ type 'typ environment_basis = ((string * 'typ assumption_basis) list)
 type assumption = kind assumption_basis
 type environment = kind environment_basis
 
+let (-->) x y = `Function (x,y)
 
 let get_equivalence_variable = function
   | Var_equiv (var, _) -> var
@@ -563,6 +564,10 @@ module TypeOps :
 let make_unit () = `Record (TypeOps.make_empty_closed_row ())
 let make_empty_record_with_row_var var = `Record (TypeOps.make_empty_open_row_with_var var)
 
-                 
+(* From library.ml; there's probably another name for these *)
+let fresh_type_variable () = `TypeVar (new_raw_variable ())
+let fresh_row_variable () = `RowVar (new_raw_variable ())
+let fresh_collection_variable () = `CtypeVar (new_raw_variable ())
+
 (* Functions on environments *)
 let lookup : string -> 'typ environment_basis -> 'typ assumption_basis = assoc
