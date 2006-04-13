@@ -97,12 +97,14 @@ let expr_to_thunk expr = `Function ("_", [], [], expr)
 let attrname = fst
 let attrval = snd
 
-(* Serialise the continuation and environment, and adjust the form accordingly *)
-let xml_transform env : expression -> expression = 
-  let pickle_environment env = serialise_environment (filter (not @@ is_pfunc) env)
+let pickle_environment env =
+  serialise_environment (filter (not @@ is_pfunc) env)
 
-  in function 
+(* Serialise the continuation and environment, and adjust the form accordingly *)
+let xml_transform env eval : expression -> expression = 
+  function 
     | Xml_node ("form", attrs, contents, data) as form ->
+        prerr_endline "arrived xml_transform";
         (try 
            let laction = either_assoc "l:onsubmit" "l:handler" attrs in
            let new_fields = match laction with 
@@ -111,10 +113,19 @@ let xml_transform env : expression -> expression =
                                 hidden_input "environment%" (Utility.base64encode (pickle_environment env))]
                  (* l:handler denotes an expression which should eval
                     to a continuation value; so this is broken *)
-             | Right lhandler -> [hidden_input "continuation%"
-                                    (Utility.base64encode (Syntax.serialise_expression lhandler))] in
-             (* FIXME: replace l:handler too *)
-             Xml_node ("form", substitute (((=)"l:onsubmit") @@ attrname) ("action", string "#") attrs, new_fields @ contents, data)
+             | Right lhandler -> 
+                 (match eval lhandler [] with
+                      `Continuation c ->
+                        [hidden_input "continuation%"
+                           (Utility.base64encode (Result.serialise_continuation c))]
+                    | _ -> failwith "Internal error: l:handler was not a continuation")
+           in
+             Xml_node ("form",
+                       substitute (fun attr ->
+                                     let name = attrname attr in
+                                       (name = "l:onsubmit" || name = "l:handler"))
+                         ("action", string "#") attrs, 
+                       new_fields @ contents, data)
          with Not_found -> form)
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with 
@@ -161,7 +172,7 @@ let cont_from_params primitive_lookup params =
                           | `Function (_, _, _, p) -> p
                           | _ -> failwith "Type error unpickling expression")
     in
-      debug $ string_of_environment_ez environment;
+      debug $ string_of_environment environment;
       Some (ExprEnv (expression, string_dict_to_charlist_dict params
                        @ environment))
         

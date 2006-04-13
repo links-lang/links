@@ -326,7 +326,7 @@ and string_of_result : result -> string = function
   | `Collection (`List, (`Primitive(`XML _)::_ as elems))  -> String.concat "" (map string_of_xresult elems)
   | `Collection (coll_type, elems) -> coll_prefix IntMap.empty coll_type ^ "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
   | `Database (_, params) -> "(database " ^ params ^")"
-  | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment_ez env
+  | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment env
   | `Continuation cont -> pp_continuation cont
 and string_of_primitive : primitive -> string = function
   | `Bool value -> string_of_bool value
@@ -351,8 +351,9 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 and string_of_binding : binding -> string = function (name, expr) ->
   name ^ " = " ^ (string_of_result expr)
 
-and string_of_environment_ez : binding list -> string = fun env ->
+and string_of_environment : binding list -> string = fun env ->
                             String.concat ", " (map (string_of_binding) env)
+
 and string_of_xresult = function 
   | `Primitive (`Char c) -> String.make 1 c
   | otherwise -> string_of_result otherwise

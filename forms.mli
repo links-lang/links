@@ -22,7 +22,7 @@ val islhref : 'data expression' -> bool
 val lname_bound_vars : 'data expression' -> string list
 
 (* Serialise the continuation and environment, and adjust the form accordingly *)
-val xml_transform : environment -> expression -> expression
+val xml_transform : environment -> (expression -> continuation -> result) -> expression -> expression
 
 (** "Runtime" services: handling continuation objects during evaluation **)
 

@@ -89,12 +89,14 @@ let decode_continuation (cont : string) : Result.continuation =
     Str.global_replace (Str.regexp " ") "+" 
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
+let is_define = function Syntax.Define _ -> true | _ -> false
+
 let serve_requests filename = 
   Performance.measuring := true;
     Pervasives.flush(Pervasives.stderr);
   let global_env = read_file_cache filename in
     (* TBD: Allow multiple expressions; execute them all in turn. *)
-  let global_env, [expression] = List.partition (function Syntax.Define _ -> true | _ -> false) global_env in
+  let global_env, [expression] = List.partition is_define global_env in
   let cgi_args = Cgi.parse_args () in
     if Forms.is_remote_call cgi_args then 
       handle_client_call
@@ -123,17 +125,17 @@ let serve_requests filename =
     else
       let global_env, _ = (Interpreter.run_program Library.value_env) global_env in
       begin
-	(* Are we being called via a continuation? *)
-	match Forms.cont_from_params (flip List.assoc global_env) cgi_args with
-	  | Some (Forms.ContParams (cont, params)) -> 
-	      debug("in env:" ^ Result.string_of_environment_ez global_env);
-	      print_endline
-		(Result.string_of_result (Interpreter.apply_cont_safe global_env cont (`Record params)))
-	  | Some (Forms.ExprEnv(expr, env)) ->
-	      print_endline (Result.string_of_result (snd (Interpreter.run_program (global_env @ env) [expr])))
-	  | None -> 
-              debug("parsed program is " ^ Syntax.string_of_expression expression);
-	      print_endline (Result.string_of_result (snd (Interpreter.run_program global_env [expression])))
+        let rresult = 
+	  match Forms.cont_from_params (flip List.assoc global_env) cgi_args with
+	      (* Are we being called via a continuation? *)
+	    | Some (Forms.ContParams (cont, params)) -> 
+                Interpreter.apply_cont_safe global_env cont (`Record params)
+            | Some (Forms.ExprEnv(expr, env)) ->
+                snd (Interpreter.run_program (global_env @ env) [expr])
+            | None -> 
+                snd (Interpreter.run_program global_env [expression])
+        in
+          print_endline (Result.string_of_result rresult)
       end
 
 let serve_requests filename =
