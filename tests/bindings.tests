@@ -7,12 +7,12 @@ Nested scopes
 { x = 3; ({ x = 4; x }, x)}
 stdout : (4, 3) : (Int, Int)
 
-Non-recursive top-level fucntions:
+Non-recursive top-level functions:
 f = fun(x) { f(x) }
 stderr : @..*
 exit : 1
 
-Non-recursive block-scope fucntions:
+Non-recursive block-scope functions:
 { f = fun(x) { f(x) }; () }
 stderr : @..*
 exit : 1
@@ -43,8 +43,8 @@ stdout : 7 : Int
 exit : 0
 
 handle HTML with VAR -> HANDLER construction
-handle <html>{string_of_cont(handler)}</html> with rslt -> rslt
-stdout : <html>hJWmvgAAAC4AAAAOAAAAKwAAACigkrCgoCZyZXR1cm6gAg1zZ9dAQCRyc2x0l6AkcnNsdLCwQXt7oAI3x4LzTUBA</html> : XML
+handle <html>{enxml(string_of_cont(handler))}</html> with r -> r
+stdout : @<html>.*</html> : XML
 
 No value recursion
 fun f() { g() }; x = f(); fun g() { x }
