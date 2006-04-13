@@ -83,9 +83,13 @@ LIBDIRS = $(AUXLIB_DIRS)
 
 include $(OCAMLMAKEFILE)
 
+test-raw:
+	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
+
 tests:
 test: $(RESULT)
-	@for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
+	@./run-tests
+	@perl -MTest::Harness -e 'Test::Harness::runtests("tests/web-tests.pl")'
 
 fixmes:
 	@grep FIXME *.ml*
