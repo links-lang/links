@@ -76,6 +76,9 @@ BUGS
 
 TODO
 
+* Why do we bother to write name="..." as l:name="..." ? Couldn't we
+  just create variables for all named input fields?
+
 * Add XML attributes as first-class values (to enable code like this:)
     <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
   (eekc: Maybe these should be implemented as Variants? e.g.)

@@ -42,3 +42,6 @@ val is_remote_call : (string * string) list -> bool
 
 val is_special : string -> bool
 
+(* TBD: this ought to go somewhere else *)
+val serialize_exprenv : expression -> environment -> string * string
+

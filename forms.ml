@@ -58,8 +58,8 @@ let islform : 'data expression' -> bool = function
       when List.exists (is_special -<- fst) attrs -> true
   | _ -> false
 
-(* should be something like is_transformable_anchor *)
-
+(** islhref
+    should be something like is_transformable_anchor *)
 let islhref : 'data expression' -> bool = function
   | Xml_node ("a", attrs, _, _) 
       when exists (fun (k,_) -> Str.string_match (Str.regexp "l:") k 0) attrs -> true
@@ -100,19 +100,24 @@ let attrval = snd
 let pickle_environment env =
   serialise_environment (filter (not @@ is_pfunc) env)
 
+let serialize_exprenv expr env =
+  (Utility.base64encode (serialise_result (expr_to_thunk expr)),
+   Utility.base64encode (pickle_environment (retain (freevars expr) env)))
+
 (* Serialise the continuation and environment, and adjust the form accordingly *)
 let xml_transform env eval : expression -> expression = 
   function 
     | Xml_node ("form", attrs, contents, data) as form ->
-        prerr_endline "arrived xml_transform";
         (try 
            let laction = either_assoc "l:onsubmit" "l:handler" attrs in
            let new_fields = match laction with 
                (* l:action denotes a frozen expression *)
-             | Left laction -> [hidden_input "expression%" (Utility.base64encode (serialise_result (expr_to_thunk laction)));
-                                hidden_input "environment%" (Utility.base64encode (pickle_environment env))]
-                 (* l:handler denotes an expression which should eval
-                    to a continuation value; so this is broken *)
+             | Left laction -> 
+                 (* TBD: consolidate these into one thing *)
+                 let expr_str, env_str = serialize_exprenv laction env in
+                   [hidden_input "expression%" expr_str;
+                    hidden_input "environment%" env_str]
+
              | Right lhandler -> 
                  (match eval lhandler [] with
                       `Continuation c ->
@@ -128,15 +133,15 @@ let xml_transform env eval : expression -> expression =
                        new_fields @ contents, data)
          with Not_found -> form)
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
-        (try match assoc "l:name" attrs with 
+        (try match assoc "l:name" attrs with
            | String (name, _) -> Xml_node (tag, substitute (((=)"l:name") @@ attrname) ("name", string name) attrs, contents, data)
            | _ -> failwith "Internal error transforming xml"
          with Not_found -> input)
     | Xml_node ("a", attrs, contents, data) ->
         let href = assoc "l:href" attrs in
-        let ser_expr = Utility.base64encode (serialise_result (expr_to_thunk href)) 
-        and ser_env = Utility.base64encode (pickle_environment (retain (freevars href) env)) in
-        let new_value = "?environment%=" ^ ser_env ^ "&expression%=" ^ ser_expr in
+        let ser_expr, ser_env = serialize_exprenv href env in
+        let new_value = ("?environment%=" ^ ser_env ^
+                           "&expression%=" ^ ser_expr) in
         let new_attributes = substitute (((=)"l:href") @@ attrname) ("href", string new_value) attrs in
           Xml_node ("a", new_attributes, contents, data)
 

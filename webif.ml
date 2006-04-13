@@ -51,8 +51,9 @@ let clientize_unevaled_env env =
 			 | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
 			 | Syntax.Define (_, _, `Client, _) -> false
 			 | e  -> failwith ("Unexpected non-definition in environment : " 
-					   ^ Syntax.string_of_expression e)) 
-  and def_as_client_fun = function 
+					   ^ Syntax.string_of_expression e))
+  in 
+  let def_as_client_fun = function 
     | Syntax.Define (name, _, _, _) -> 
       (name,
        `Primitive
@@ -70,13 +71,13 @@ let clientize_unevaled_env env =
 let handle_client_call unevaled_env f args = 
   let env = clientize_unevaled_env unevaled_env in
   let f, args = Utility.base64decode f, Utility.base64decode args in
-    let continuation = [Result.FuncApply (List.assoc f env, [])] in
-    let result = (Interpreter.apply_cont_safe env continuation
-		    (untuple_single (Jsonparse.parse_json 
-				       Jsonlex.jsonlex (Lexing.from_string args)))) in
-      print_string ("Content-type: text/plain\n\n" ^ Utility.base64encode (Json.jsonize_result result));
-      exit 0
-
+  let continuation = [Result.FuncApply (List.assoc f env, [])] in
+  let result = (Interpreter.apply_cont_safe env continuation
+		  (untuple_single (Jsonparse.parse_json 
+				     Jsonlex.jsonlex (Lexing.from_string args)))) in
+    print_string ("Content-type: text/plain\n\n" ^ Utility.base64encode (Json.jsonize_result result));
+    exit 0
+      
 open Errors
 open Syntax (* needed for Parse_failure exception *)
 (* really error handling should happen at a different level than
@@ -93,7 +94,7 @@ let is_define = function Syntax.Define _ -> true | _ -> false
 
 let serve_requests filename = 
   Performance.measuring := true;
-    Pervasives.flush(Pervasives.stderr);
+  Pervasives.flush(Pervasives.stderr);
   let global_env = read_file_cache filename in
     (* TBD: Allow multiple expressions; execute them all in turn. *)
   let global_env, [expression] = List.partition is_define global_env in
@@ -106,7 +107,7 @@ let serve_requests filename =
     else if List.mem_assoc "__continuation" cgi_args then
       begin
         let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string in
-        let continuation = decode_continuation  (List.assoc "__continuation" cgi_args) 
+        let continuation = decode_continuation (List.assoc "__continuation" cgi_args) 
         and arg = parse_json (Utility.base64decode (List.assoc "__result" cgi_args))
         and env = clientize_unevaled_env global_env in
           debug("continuation is " ^ Syntax.string_of_expression expression);
@@ -127,7 +128,7 @@ let serve_requests filename =
       begin
         let rresult = 
 	  match Forms.cont_from_params (flip List.assoc global_env) cgi_args with
-	      (* Are we being called via a continuation? *)
+              (* TBD: consolidate these two entry points into one? *)
 	    | Some (Forms.ContParams (cont, params)) -> 
                 Interpreter.apply_cont_safe global_env cont (`Record params)
             | Some (Forms.ExprEnv(expr, env)) ->

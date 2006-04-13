@@ -407,5 +407,5 @@ let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 let base64decode s = 
   try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
   with Invalid_argument "Netencoding.Base64.decode" 
-      -> raise (Invalid_argument ("base64decode " ^ s))
+      -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
 and base64encode s = Netencoding.Base64.encode s
