@@ -92,9 +92,7 @@ let bind_rec globals locals defs =
                                    label, `Function (var, (retain (freevars body) new_env), globals, body)
                                | _ -> (label, result)))
   in
-    trim_env (map fill_placeholder new_env) 
-
-
+    trim_env (map fill_placeholder new_env)
 
 let rec crack_row : (string -> ((string * result) list) -> (result * (string * result) list)) = fun ref_label -> function
         | [] -> raise (Runtime_failure("Internal error: no field '" ^ ref_label ^ "' in record"))
@@ -255,7 +253,7 @@ and apply_cont globals : continuation -> result -> result =
 		          toplevel environment in which the function
 		          was defined takes precedence over the real current
                           globals. Is there a semanticist in the house? *)
-                       (*                 let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
+                       (*let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
                        let locals = bind (trim_env (fnlocals @ locals)) var value in
                          interpret globals locals body cont
 		           
@@ -273,7 +271,7 @@ and apply_cont globals : continuation -> result -> result =
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
 		       apply_cont globals cont value
-                   | _ -> raise (Runtime_failure ("Applied non-function value: " ^
+                   | _ -> raise (Runtime_failure ("Applied non-function value: "^
                                                     string_of_result func)))
             | (LetCont(locals, variable, body)) ->
 	        interpret globals (bind locals variable value) body cont
@@ -296,12 +294,16 @@ and apply_cont globals : continuation -> result -> result =
                      | LessEqOp -> bool (less_or_equal lhsVal value)
                      | LessOp -> bool (less lhsVal value)
                      | BeginsWithOp -> failwith("Beginswith not implemented except when pushable into SQL")
-	             | UnionOp(ctype) -> (match lhsVal, value with
-		                              `Collection (`Set, l),   `Collection (`Set, r)   -> `Collection (`Set, (unduplicate equal (l @ r)))
-	                                    | `Collection (`Bag, l),   `Collection (`Bag, r)   -> `Collection (`Bag, (l @ r))
-	                                    | `Collection (`List, l),  `Collection (`List, r)  -> `Collection (`List, (l @ r))
-	                                    | _ -> raise (Runtime_failure ("Union of non-collection types: " ^ string_of_result lhsVal ^ " and " ^ string_of_result value))
-				         )
+	             | UnionOp(ctype) -> 
+                         (match lhsVal, value with
+		              `Collection (`Set, l), `Collection (`Set, r)
+                                -> `Collection (`Set, (unduplicate equal (l @ r)))
+	                    | `Collection (`Bag, l), `Collection (`Bag, r)
+                                -> `Collection (`Bag, (l @ r))
+	                    | `Collection (`List, l), `Collection (`List, r)
+                                -> `Collection (`List, (l @ r))
+	                    | _ -> raise (Runtime_failure ("Union of non-collection types: " ^ string_of_result lhsVal ^ " and " ^ string_of_result value))
+			 )
 	             | RecExtOp(label) -> 
 		         (match lhsVal with
 		            | `Record fields -> 
@@ -424,8 +426,7 @@ and apply_cont globals : continuation -> result -> result =
 
 and
     interpret
-    : environment -> environment -> expression -> 
-  continuation -> result =
+      : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
   let eval = interpret globals locals in
   match expr with
@@ -455,11 +456,11 @@ fun globals locals expr cont ->
       let new_env = bind_rec globals locals variables in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
-      eval (Forms.xml_transform locals xml) cont
+      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
   | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
-      eval (Forms.xml_transform locals xml) cont
+      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
   | Syntax.Xml_node _ as xml when Forms.islhref xml ->
-      eval (Forms.xml_transform locals xml) cont
+      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
 
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
@@ -498,7 +499,14 @@ fun globals locals expr cont ->
       eval database (UnopApply(locals, QueryOp(query, kind)) :: cont)
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
-      interpret globals locals body cont
+        interpret globals locals body cont
+
+          (* Note: no way to suspend threading *)
+and interpret_safe globals locals expr cont =
+  try 
+    interpret globals locals expr cont
+  with
+    | TopLevel s -> snd s
 
 let run_program (globals : environment) exprs : (environment * result)= 
   try (
