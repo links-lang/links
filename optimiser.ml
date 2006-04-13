@@ -164,13 +164,12 @@ let unused_variables : RewriteSyntax.rewriter = function
     @param bindings Bindings from variables to database fields.
     @param expr The expression from which the test must be extracted.
     @return A tuple (positive, negative, result, origin).
-        `positive' and `negative' 
-        are query expressions. `result' is the input expression with these 
-        tests removed. `origin` is a list of record selections that need to
-        be applied (Q: understand/explain this better)
-    Q: is there any reason why positive and negative should be kept separate?
+        `positive' and `negative' are query expressions. `result' is the 
+        input expression with these tests removed. `origin` is a list of 
+        record selections that need to be applied.
  *)
-(* TODO: The calculated expression for the collection extension case
+(*TODO: Is there any reason why positive and negative should be kept separate? *)
+(*TODO: The calculated expression for the collection extension case
    is not valid *)
 let rec extract_tests (bindings:bindings) (expr:expression)
     : (Query.expression list * Query.expression list * expression * projection_source list) =
@@ -180,6 +179,7 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     | Let (variable, value, body, data) ->
         let (positive, negative, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Let (variable, value, body, data), origin)
+
     | Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data) ->
         let trace_data = `Selected{field_name=label; field_var=label_variable;
                                    etc_var = variable; source_var = name} in
@@ -191,6 +191,7 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     | Record_selection (label, label_variable, variable, value, body, data) ->
         let positive, negative, body, origin = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Record_selection (label, label_variable, variable, value, body, data), origin)
+
     | Condition (condition, t, ((Collection_empty _) as e), data)  ->
         let positive, negative, t, origin = extract_tests bindings t in
           (match condition_to_sql condition bindings with
@@ -320,8 +321,10 @@ let rec substitute_projections new_src renamings expr bindings =
     operators that can be joined with some outer comprhsn, the
     variable of the outer comprhsn indicated by the `loop_var' param.
 
-    @param forbid Variables that if used in the body of an inner extension prevent the optimisation
-    @param db The name of the outter database. Only tables of the same database can be joined.
+    @param forbid Variables that if used in the body of an inner 
+      extension prevent the optimisation
+    @param db The name of the outter database. Only tables of the 
+      same database can be joined.
     @param bindings Bindings of variables to rows or fields from a table.
     @param expr The expression to inspect.
     @return Either None or Some of a tuple containing: 
@@ -354,19 +357,6 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
                          origin, variable, expr))
       | _ -> None
 
-(*
-(** project
-*)
-  let project (var:string) (ref_var:string) : RewriteSyntax.rewriter = 
-    RewriteSyntax.bottomup
-      (* This duplicates what was here before, but I think it's wrong (e.g. what about intervening bindings?) *)
-      (function 
-         | Record_selection (label, label_variable, variable, Variable (name, vdata), body, data) when name = var ->
-             Some (Record_selection (label, label_variable, variable, Variable (ref_var, vdata), body, data))
-         | other -> None)
-  in
-*)
-	  
 (** sql_joins
     When a collection extension has a table as source, explore the
     body expression for other collection extensions on tables from the
@@ -377,7 +367,6 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 let rec sql_joins : RewriteSyntax.rewriter = 
   function
     | Collection_extension (body, outer_var, (Table (db, s, query, tdata) as table), data) ->
-        debug("\nrewriting " ^ string_of_expression(Collection_extension(body, outer_var, table, data)));
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var "dummy" bindings body with
            | Some (positives, negatives, inner_query, origins, inner_var, body) ->
@@ -393,10 +382,10 @@ let rec sql_joins : RewriteSyntax.rewriter =
                                                outer_var, 
                                                Table (db, s, query, tdata), 
                                                data) in
-                 (* finally, wrap the whole expression in the 
-                    projections returned from check_join;
-                    TBD: Does this need to go somewhere? Inside the loop? *)
-                 (*let expr = select_by_origin origins expr in *)
+(*                (\* finally, wrap the whole expression in the  *)
+(*                   projections returned from check_join; *)
+(*                   TBD: Does this need to go somewhere? Inside the loop? *\) *)
+(*                let expr = select_by_origin origins expr in *)
                  
                  Some expr
 
