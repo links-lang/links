@@ -8,6 +8,7 @@ open Sql
 
 (*type position = { line : int; character : int; abschar : int }*)
 type position = Lexing.position * (* source line : *) string * (* expression source: *) string
+
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
 exception Parse_failure of position * string

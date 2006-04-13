@@ -378,17 +378,25 @@ let decode_escapes s =
       | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Pcre.substitute ~pat:"\\\\\"|\\\\\\\\|\\\\[0-3][0-7][0-7]|\\\\[xX][0-9a-fA-F][0-9a-fA-F]" ~subst:unquoter s
 
+(** xml_escape
+    xml_unescape
+    Escape/unescape for XML escape sequences (e.g. &amp;)
+*)
+
 let xml_escape s = 
-  Str.global_replace (Str.regexp "<") "&lt;" (Str.global_replace (Str.regexp "&") "&amp;" s)
+  Str.global_replace (Str.regexp "<") "&lt;" 
+    (Str.global_replace (Str.regexp "&") "&amp;" s)
 
 let xml_unescape s =
-  Str.global_replace (Str.regexp "&amp;") "&" (Str.global_replace (Str.regexp "&lt;") "<" s)
+  Str.global_replace (Str.regexp "&amp;") "&"
+    (Str.global_replace (Str.regexp "&lt;") "<" s)
 
 let ocaml_version_number = (map int_of_string
                               (split_string Sys.ocaml_version '.'))
 
 (* TBD: make me a fold *)
 (* [SL]: best not as we don't necessarily need to look at all elements in the list *)
+(* Ocaml team says string comparison would work here. Do we believe them? *)
 let rec version_atleast a b =
   match a, b with
       _, [] -> true

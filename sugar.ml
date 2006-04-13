@@ -71,7 +71,9 @@ let rec patternize' = function
   | Syntax.Record_empty _ -> Empty_record
   | Syntax.Record_extension (name, value, record, _) -> Record_extension (name, patternize' value, patternize' record)
   (* See note above `amper' *)
-  | Syntax.Apply(Syntax.Variable("&", _), Apply(Syntax.Variable (var, _), expr, _), _) -> Bind_using(var, patternize' expr)
+  | Syntax.Apply(Syntax.Variable("&", _),
+                 Apply(Syntax.Variable (var, _), expr, _), _) -> 
+      Bind_using(var, patternize' expr)
   | other -> raise (Parse_failure (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
@@ -328,10 +330,11 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
   | TupleLit [field] -> desugar field
   | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
-  | HandleWith (e1, name, e2) -> Syntax.Escape ("return", 
-                                                   Let (name, Syntax.Escape ("handler",  
-                                                                                Apply (Variable ("return", pos), 
-                                                                                       desugar e1, pos), pos), desugar e2, pos), pos)
+  | HandleWith (e1, name, e2) -> 
+      Syntax.Escape ("return", 
+                     Let (name, Syntax.Escape ("handler",  
+                                               Apply (Variable ("return", pos), 
+                                                      desugar e1, pos), pos), desugar e2, pos), pos)
   | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
   | FnAppl (fn, [p]) -> Apply (desugar fn, desugar p, pos)
   | FnAppl (fn, ps)  -> Apply (desugar fn, desugar (TupleLit ps, pos'), pos)
@@ -414,7 +417,10 @@ and patternize lookup_pos : ppattern -> pattern = function
 (* *\) *)
 
 
-let d = (_DUMMY_POS, `Not_typed, None)
+let no_expr_data = (_DUMMY_POS, `Not_typed, None)
+
+(* d: internal shorthand for nowhere_pos *)
+let d = no_expr_data
 
 let project_subset (fields : (string * string) list) (source : Syntax.expression) : Syntax.expression =
   let dummy = unique_name () in

@@ -83,6 +83,7 @@ LIBDIRS = $(AUXLIB_DIRS)
 
 include $(OCAMLMAKEFILE)
 
+tests:
 test: $(RESULT)
 	@for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
 

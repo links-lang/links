@@ -291,7 +291,7 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
 (** generate
     Generate javascript code for a Links expression
     
-    With CPS transform, result of generate is always (a -> w) -> b
+    With CPS transform, result of generate is always : (a -> w) -> b
 *)
 let rec generate : 'a expression' -> code = 
   let rec reduce_collection : 'a expression' -> code = 
@@ -368,9 +368,7 @@ let rec generate : 'a expression' -> code =
   | (Collection_union _) as c          -> 
       reduce_collection c
 (*  | Collection_union (l, r, _)         -> Call (Var "__concat", [generate l; generate r])*)
-      (* CPS me*)
   | Collection_extension (e, v, b, _)  -> 
-(*       failwith("for loops not implemented on client side"); *)
       let b_cps = generate b in
       let e_cps = generate e in
       let x = gensym "" in
@@ -489,8 +487,9 @@ let rec generate : 'a expression' -> code =
                 Call(Var "kappa", 
                      [Call (Var "__project", [strlit l; Var "v"])]))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      let v_cps = generate_noncps v in
-      let b_cps = generate_noncps b in
+      failwith("record selection not implemented");
+      let v_cps = generate v in
+      let b_cps = generate b in
         Fn(["kappa"],
            Call(v_cps, [Fn(["v"], 
                 Bind (lv,
@@ -605,30 +604,18 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                             @ map handlerInvoker handlers)
       children_cps [] tag
 
-(* Specialness:
-   
-   Add onFocus handlers that save the current field in a global
-   variable so that we can restore it when the page is reconstructed.
-   Add name and id attributes.
-
-   <input ...> 
-
-   is translated as 
-   
-   <input name="..." id="..." onFocus="__focused = this.id" ...>
-*)
 and lname_transformation (Xml_node (tag, attrs, children, d)) = 
   (* 1. Remove l:name from the attrs
      2. Add appropriate id and name to the attrs
      3. Add onFocus handlers
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
-  let attrs = ("onfocus", Syntax.String ("__focused = this.id",
-                                            (Sugar._DUMMY_POS, `Not_typed, None)))
+  let attrs = 
+    ("onfocus", Syntax.String ("__focused = this.id", Sugar.no_expr_data))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
-    generate (Xml_node (tag, attrs, children, d))
+    generate (Xml_node (tag, attrs, children, Sugar.no_expr_data))
 
 
 (* generate_noncps: generates CPS code for expr and immediately 

@@ -23,7 +23,6 @@ let debug_process_status () =
   prerr_endline ("blocked processes : " ^ 
                    string_of_int (Hashtbl.length blocked_processes))
 
-
 let _ =   Hashtbl.add messages 0 (Queue.create ())
 
 let fresh_pid =
