@@ -4,41 +4,39 @@
 
 open Num
 open List
+
+open Utility
 open Kind
 open Sql
 open Query
 
-open Utility (* for debug *)
-
-let single_table_from_query (qry:query) : string option =
-	match qry.tables with
-		| [(_, rename)] -> Some rename
-		| _ -> None
 
 (** Restricts the columns to be selected from a table query by
-    specifying all columns to keep. Fails if at least one
-    of the column to keep was not selected in the original
-    query.
+      specifying all columns to keep. Fails if at least one
+      of the column to keep was not selected in the original
+      query.
     @param projs A list of the columns to keep in the query.
     @param query The query to modify.
     @return The modified query. *)
 let rec project (projs:string list) (query:query) : query =
-  let rec filter_selects projs result_cols = (
-    match result_cols with
+  let rec filter_selects projs =
+    function
       | [] -> if projs <> [] then failwith "ST022"
-	       else []
+	else []
+      | col :: result_cols when mem col.renamed projs ->
+	  col ::
+            (filter_selects (filter (fun proj -> proj <> col.renamed) projs)
+               result_cols)
       | col :: result_cols ->
-	  if (mem col.renamed projs) then
-	    col :: (filter_selects (filter (fun proj -> proj <> col.renamed) projs) result_cols)
-	  else (filter_selects (filter (fun proj -> proj <> col.renamed) projs) result_cols)
-  ) in {query with 
-        result_cols = filter_selects projs query.result_cols}
+          (filter_selects (filter (fun proj -> proj <> col.renamed) projs)
+             result_cols)
+  in
+    {query with result_cols = filter_selects projs query.result_cols}
 
+(* Types involved in backtracing variable origins *)
 
 type projection_source = {field_name : string; field_var : string;
                           etc_var : string; source_var : string}
-
-(* Types involved in backtracing variable origins *)
 
 (** A variable declaration stub. *)
 type binding = [
@@ -190,10 +188,6 @@ let rec is_free var expr = mem var (freevars expr)
     `bindings')
 *)
 
-(* Note: `Hard_value and `Table_value can, I believe, be collapsed. Just use an empty list for second arg, when `Table_value would occur
-  `Hard_value(expr, origins)  ->  Some (expr, origins)
-  `Table_value(expr)          ->  None (expr, [])
-*)
 let make_sql bindings expr =
   match expr with
     | Syntax.Boolean (value, _) -> Some (Boolean value, [])
@@ -269,30 +263,18 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
                | _ -> None)
       | _ -> None
       
-let dummyData = (Sugar._DUMMY_POS, `Not_typed, None)
-
 (** select_by_origin
     Adds the origin selections before an expression.
     @param origin The origin to add to the expression.
     @param expr The expression to modify.
     @return The query with the added origin. *)
-(* TODO: Support conditions on records *)
-(*
-let rec select_by_origin (origin:(string * string * string * string) list) (expr:Syntax.expression) : Syntax.expression =
-  match origin with
-    | (field, field_variable, variable, source) :: remaining ->
-	Syntax.Record_selection (field, field_variable, variable, 
-                                    Syntax.Variable (source, dummyData),
-                                    select_by_origin remaining expr, dummyData)
-    | [] -> expr
-*)
-
 let select_by_origin origin expr = 
   fold_left (fun expr origin -> 
                Syntax.Record_selection(origin.field_name, origin.field_var,
-                                          origin.etc_var, 
-                                          Syntax.Variable(origin.source_var, dummyData),
-                                          expr, dummyData)
+                                       origin.etc_var, 
+                                       Syntax.Variable(origin.source_var,
+                                                       Sugar.no_expr_data),
+                                       expr, Sugar.no_expr_data)
             ) expr origin
 
 (** pos_and_neg
@@ -303,14 +285,19 @@ let pos_and_neg (positives, negatives) =
   conjunction (negation (disjunction negatives) :: positives)
 
 (* TBD: Move this to a simple utility in query.ml *)
-(** Adds conditions to a query. If the {! Sql_transform.selectable} method is called on every positive and negative condition provided,
-    this function should not fail.
-    @param positives Conditions that whould be satisfied by any element of the result.
-    @param negatives Conditions that should not be satisfied by any element of the result.
+(** select
+    Adds conditions to a query. If the {! Sql_transform.selectable} method
+     is called on every positive and negative condition provided,
+     this function should not fail.
+    @param positives Conditions that whould be satisfied by any element
+      of the result.
+    @param negatives Conditions that should not be satisfied by any 
+      element of the result.
     @param query The original query.
     @return The query with the added conditions.
-    @raise Failure A general programming error has occured. Passing conditions that where not selectable with {! Sql_transform.selectable}
-    might cause such exceptions. *)
+    @raise Failure A general programming error has occured. Passing 
+      conditions that where not selectable with {! Sql_transform.selectable}
+      might cause such exceptions. *)
 (* TODO: Support conditions on records *)
 let rec select ((positives, negatives):(expression list * expression list)) (query:query) : query =
   let where = (
@@ -360,13 +347,13 @@ let rec join ((positives, negatives):(expression list * expression list))
         tables        = left.tables @ right.tables;
         condition     = where;
         sortings      = left.sortings @ right.sortings;
-       max_rows      = (match left.max_rows, right.max_rows with
-                          | None, None -> None
-                          | _ -> failwith "Not yet implemented: take/drop for joined tables");
-       offset        = (match left.offset, right.offset with
-                          | Integer (Num.Int 0), Integer (Num.Int 0) -> Integer (Num.Int 0)
-                          | _ -> failwith "Not yet implemented: take/drop for joined tables")})
-
+        max_rows      = (match left.max_rows, right.max_rows with
+                           | None, None -> None
+                           | _ -> failwith "Not yet implemented: take/drop for joined tables");
+        offset        = (match left.offset, right.offset with
+                           | Integer (Num.Int 0), Integer (Num.Int 0) -> Integer (Num.Int 0)
+                           | _ -> failwith "Not yet implemented: take/drop for joined tables")})
+        
 (** Projects the query on the empty set.
     @param query The query to nullify.
     @return The nullified query. *)
