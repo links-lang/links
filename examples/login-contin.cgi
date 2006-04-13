@@ -1,4 +1,4 @@
-#!/home/s0567141/links/links -d -w
+#!/home/s0567141/links/links -w
 
 fun login_widget(gotvals, msg) {
     <html>

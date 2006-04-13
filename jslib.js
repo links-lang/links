@@ -714,21 +714,24 @@ textContent = __continuationize(function (node) {
   try { return node.innerHTML } catch (e) { return "" }
 });
 
-function __domproc() {
-   function continuation(msg) {
+function __domproc(k) {
+  return function (arg) {
+    function continuation(msg) {
       __applyChanges([msg]);
       __call(recv, [], continuation);
-   }
-   __alert("dom waiting");
-   __call(recv, [], continuation);
+    }
+    __alert("dom waiting");
+    __call(recv, [], continuation);
+  }
 }
 
 var dom = null;
 
-spawn(function(spawn) {
-       return spawn(function (pid) {
-                      dom = pid;
-                    })([])
-})(__domproc)
+function setDomPid(pid) { 
+            dom = pid 
+          }
 
+spawn(function (partiallyAppliedSpawn) { 
+        partiallyAppliedSpawn(setDomPid)([]) 
+})(__domproc)
 

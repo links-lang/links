@@ -1,4 +1,4 @@
-#!/home/jeremy/links-svn/links/trunk/links -w
+#!/home/s0567141/links/links -w
 
 fun waiting() client {
   switch (recv()) {
@@ -26,7 +26,7 @@ fun format(item) {
     <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{enxml(item)}</li><span/>
 }
 
-fun page(items)
+fun draggableList(items)
 {
   listMgr = spawn(waiting)();
    <ul id="list" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
@@ -34,7 +34,7 @@ fun page(items)
       l:onmousedown = "{send(listMgr)(MouseDown (event.target))}"
       l:onmouseout  = "{send(listMgr)(MouseOut (event.relatedTarget))}"
    >
-    {for item <- items in 
+    {for (item <- items)
          format(item)}
   </ul>
 
@@ -42,9 +42,9 @@ fun page(items)
 
 <body>
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
-{page(["Pooh", "Paddington", "Rupert", "Edward"])}
+{draggableList(["Pooh", "Paddington", "Rupert", "Edward"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
-{page(["Guinness", "Stella Artois", "McEwan"])}
+{draggableList(["Guinness", "Stella Artois", "McEwan"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
-{page(["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
+{draggableList(["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
 </body>
