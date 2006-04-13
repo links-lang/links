@@ -1,6 +1,7 @@
 // Links js runtime.
 
-var __dwindow = open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes');
+var DEBUGGING = false;
+var __dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
 
  Node.prototype.swapNode = function (node) {
     var nextSibling = this.nextSibling;
@@ -79,7 +80,9 @@ var DEBUG = function () {
 }();
 
 function __debug(msg) {
-   __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
+   if (DEBUGGING) {
+     __dwindow.document.write('<b>' + __current_pid + '</b> : ' + msg + '<br/>');
+   }
 }
 __alert = __debug;
 
