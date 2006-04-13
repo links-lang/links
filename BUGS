@@ -1,10 +1,9 @@
 BUGS
 
-* JSON infinitely loops on XML objects (and others: events)
+* There is no way to add an external stylesheet to the doc produced by
+  a Links program.
 
-* There's no check that order fields are present in the table.
-  The following ought to be rejected:
-     Table "foo" with { a : String } order [ b : asc ] from db
+* JSON infinitely loops on XML objects (and others, e.g. events)
 
 * Some demos and comments in the code refer to l:action.
   The code now uses l:onsubmit instead.
@@ -50,10 +49,6 @@ BUGS
 * Database does not report certain errors (e.g., inserting into
   non-existent table is allowed)
 
-* Some database errors are returned as a list of chars, when the
-  result is expected to be a list of records, leading to runtime
-  errors in strange places later on.
-
 * Queries against distinct databases would be joined, yielding a
   broken query.
 
@@ -75,16 +70,23 @@ BUGS
 
 * Type errors don't always give the (right) line number.
 
-* Test cases for continuations are fragile wrt the ser'zd rep'n
+* There's no check that order fields are present in the table.
+  The following ought to be rejected:
+     Table "foo" with { a : String } order [ b : asc ] from db
 
 TODO
 
 * Add XML attributes as first-class values (to enable code like this:)
     <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
+  (eekc: Maybe these should be implemented as Variants? e.g.)
+    <option value="1" {if (selected) [Selected "SELECTED"] else []}>
 
 * CDATA literals are not handled in XML quasis.
 
-* XML amp-encoding should support numeric unicode entities. This is easy.
+* Split Char & Byte types, choose a Unicode representation
+
+* XML amp-encoding should support numeric unicode entities. I think
+  this will require us to choose a character encoding and live by it.
 
 * XML amp-encoding is only aware of basic entities (&amp; and
   &lt;). See [1] for a full list in DTD form. We should probably just
@@ -110,8 +112,8 @@ TODO
 
     url_of(moo:foo, [args])
 
-  To give a URL which would act as the invocation of that function on
-  those args.
+  To return a URL which would act as the invocation of that function
+  on those args.
 
 * Automatically inject any value into the XML type when used w/in a
   quasiquote.
@@ -119,8 +121,6 @@ TODO
 * Deal with unnaturalness of [XML] flattening in XML construction and
   [Char] getting boxed as XML Text Node (Could we have an example?
   What's unnatural?)
-
-* Split Char & Byte types, choose a Unicode representation
 
 * No way to access CGI query variables at the Links toplevel.
 
@@ -134,6 +134,7 @@ TODO
 * Erlang backend: compile Links to Erlang.
 
 * Default to Content-type: text/xml+html (Ezra)
+  Are Links programs by default XHTML Transitional or Strict?
 
 * Should be able to treat a form post as a record, in addition to
   treating its fields as free variables.
@@ -174,8 +175,6 @@ TODO
          retaining/introducing sanity in the type system)
   (eekc: Some form of typewise dispatch is absolutely necessary, imho;
          maybe type classes, maybe something else.)
-
-* Better syntax for comprehensions?
 
 * Ability to import values from another file (module system? #include?)
   (jdy: we have this.  namespace n = "file://other-file.links")
