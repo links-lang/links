@@ -30,3 +30,5 @@ fun showAnswer(answer) client {
   </form>
   <div id="bar"/>
  </body>
+</html>
+
