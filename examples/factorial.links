@@ -1,0 +1,50 @@
+fun request(s) client {
+ dom!Document(
+  <html>
+   <body>
+    <h1>Please type a number</h1>
+     <form l:onsubmit="{response(t)}" #       l:onchange="{request(t)}"
+>
+      <input type="text" value="{s}" l:name="t"
+
+      />
+      {
+#      if (is_integer(s))
+       <input type="submit"/>
+#      else
+#       <input type="submit" disabled="disabled"/>
+      }
+     </form>
+    </body>
+  </html>
+ )
+}
+
+fun response(s) client {
+ var n = int_of_string(s); 
+ dom!Document(
+  <html>
+   <body>
+    <h1>Factorials up to {enxml(string_of_int(n))}</h1>
+    <table>{
+     for ((i,f) <- factorialsUpto(n))
+      <tr>
+       <td>{enxml(string_of_int(i))}</td>
+       <td>{enxml(string_of_int(f))}</td>
+      </tr>
+    }</table>
+   </body>
+  </html>
+ )
+}
+
+fun factorialsUpto(n) server {
+  for (row <- Table "factorials" 
+              with { i : Int, f : Int }
+              order [i : asc]
+              from database "postgresql:factorials::5432:www-data:")
+     where (row.i <= n)
+     [(row.i,row.f)]
+}
+
+request("")    

@@ -1,27 +1,28 @@
-#!/home/jeremy/links-svn/links/trunk/links -w 
-
 fun completions(p) server {
-  db = database "postgresql:winestore::5432:www-data:";
+  var db = database "postgresql:dictionary::5432:www-data:";
   if (p == "") [] 
-  else take(10)(for w <- Table "wordlist" with {word : String, type : String, meaning : String} order [word : asc] from db
-       where (w.word beginswith p) in [(w.word, w.type, w.meaning)])
+  else take(10)(for (w <- Table "wordlist" with {word : String, type : String, meaning : String} order [word : asc] from db)
+       where (w.word beginswith p) [w])
 }
 
 fun main(suggestions) client {
+dom!Document(
 <html>
  <body>
    <form l:onkeyup="{main(completions(word))}">
     <input style="width: 500px" l:name="word" autocomplete="off" />
-    <div align="left" class="box" id="autocomplete" style="width:500px;background-color:#ccccff">{
-      for suggestion <- suggestions in
-         <span><strong>{enxml(suggestion.1)}</strong>
-                    <i>{enxml(suggestion.2)}</i>:
-                       {enxml(suggestion.3)}<br/>
-       </span>
+    <div align="left" CLASS="box" id="autocomplete" style="width:500px;background-color:#ccccff">{
+      for (suggestion <- suggestions)
+        <span>
+          <strong>{enxml(suggestion.word)}</strong>
+               <i>{enxml(suggestion.type)}</i>:
+                  {enxml(suggestion.meaning)}
+               <br/>
+        </span>
     }</div>
    </form>
  </body>
-</html>
+</html>)
 }
 
 main([])

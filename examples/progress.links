@@ -1,26 +1,24 @@
-#!/home/jeremy/links-svn/links/trunk/links -w 
-
 fun compute(count, total) server {
- if (count << total) {
+ if (count < total) {
   showProgress(count, total);
   compute(count+1, total);
- } else 42;
+ } else "done"
 }
 
 fun showProgress(count, total) client {
- percent = 100.0 *. float_of_int(count) /. float_of_int(total);
- domutate([ReplaceElement(
+ var percent = 100.0 *. float_of_int(count) /. float_of_int(total);
+ dom ! ReplaceElement(
   id="bar",
   replacement=<div id="bar"
        style="width:{string_of_float(percent)}%; background-color: black">|</div>
- )])
+ )
 }
 
 fun showAnswer(answer) client {
- domutate([ReplaceElement(
+ dom ! ReplaceElement(
   id="bar",
-  replacement=<div id="bar">{enxml(string_of_int(answer))}</div>
- )])
+  replacement=<div id="bar">{enxml(answer)}</div>
+ )
 }
 
 
@@ -32,4 +30,3 @@ fun showAnswer(answer) client {
   </form>
   <div id="bar"/>
  </body>
-</html>
