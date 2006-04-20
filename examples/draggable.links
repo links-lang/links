@@ -1,5 +1,5 @@
 fun waiting() client {
-  switch (recv()) {
+  receive {
      MouseDown  target -> dragging(target)
      MouseUp           -> waiting()
      MouseOut   target -> waiting()
@@ -7,12 +7,12 @@ fun waiting() client {
 }
 
 fun dragging(elem) client {
-  switch (recv()) {
+  receive {
      MouseUp           -> waiting()
      MouseDown  target -> dragging(target)
      MouseOut relatedTarget -> {
          if (relatedTarget.tagName == "LI") {
-            domutate([SwapNodes(first=relatedTarget,second=elem)]);
+            dom ! SwapNodes(first=relatedTarget,second=elem);
             dragging(elem)
          }
          else waiting()
