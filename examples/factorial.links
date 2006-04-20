@@ -3,16 +3,13 @@ fun request(s) client {
   <html>
    <body>
     <h1>Please type a number</h1>
-     <form l:onsubmit="{response(t)}" #       l:onchange="{request(t)}"
->
-      <input type="text" value="{s}" l:name="t"
-
-      />
+     <form l:onsubmit="{response(t)}" l:onkeyup="{request(t)}">
+      <input type="text" value="{s}" l:name="t"/>
       {
-#      if (is_integer(s))
+      if (is_integer(s))
        <input type="submit"/>
-#      else
-#       <input type="submit" disabled="disabled"/>
+      else
+       <input type="submit" disabled="disabled"/>
       }
      </form>
     </body>
