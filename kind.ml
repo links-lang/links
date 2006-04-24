@@ -173,7 +173,7 @@ and string_of_row' sep vars (field_env, row_var) =
       |	`RowVar (Some var) -> [string_of_int var]
       | `RowVar None -> []
       | `RecRowVar (var, row) -> 
-	  ["mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row] in
+	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"] in
 (*["recrowvar"] in*)
     String.concat sep (present_strings @ absent_strings @ row_var_string)
 (*
@@ -227,20 +227,23 @@ let make_names vars =
   in
     name_map
 
-let rec type_vars items = let rec aux = function
-  | `Not_typed               -> []
-  | `Primitive _             -> []
-  | `TypeVar var             -> [var]
-  | `Function (from, into)   -> aux from @ aux into
-  | `Record row              -> row_type_vars row
-  | `Variant row             -> row_type_vars row
-  | `Recursive (id, body)    -> List.filter ((<>) id) (aux body)
-  | `Collection (`CtypeVar id, kind)    -> id :: aux kind
-  | `Collection (_, kind)    -> aux kind
-  | `DB                      -> []
-in unduplicate (=) (aux items)
+(* Might be broken according to Sam *)
+let rec type_vars items = 
+  let rec aux = function
+    | `Not_typed               -> []
+    | `Primitive _             -> []
+    | `TypeVar var             -> [var]
+    | `Function (from, into)   -> aux from @ aux into
+    | `Record row              -> row_type_vars row
+    | `Variant row             -> row_type_vars row
+    | `Recursive (id, body)    -> List.filter ((<>) id) (aux body)
+    | `Collection (`CtypeVar id, kind)    -> id :: aux kind
+    | `Collection (_, kind)    -> aux kind
+    | `DB                      -> []
+  in unduplicate (=) (aux items)
 and row_type_vars (field_env, `RowVar row_var) =
-  let field_type_vars = List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in
+  let field_type_vars =
+    List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in
   let row_var = match row_var with
     | Some var -> [var]
     | None -> []

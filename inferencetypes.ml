@@ -38,16 +38,20 @@ let type_vars, row_type_vars =
       | `Collection (_, kind)    -> type_vars' rec_vars kind
       | `DB                      -> []
       | `MetaTypeVar point       -> type_vars' rec_vars (Unionfind.find point)
-  and row_type_vars' : type_var_set -> inference_row -> int list = fun rec_vars (field_env, row_var) ->
-    let field_vars = List.concat (List.map (fun (_, t) -> type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
-    let row_vars =
-      match row_var with
-	| `RowVar (Some var) -> [var]
-	| `RowVar None -> []
-	| `RecRowVar (var, row) -> var :: (row_type_vars' (IntSet.add var rec_vars) row)
-	| `MetaRowVar point -> row_type_vars' rec_vars (Unionfind.find point)
-    in
-      field_vars @ row_vars
+  and row_type_vars' : type_var_set -> inference_row -> int list = 
+    fun rec_vars (field_env, row_var) ->
+      let field_vars = List.concat (List.map (fun (_, t) -> type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
+      let row_vars =
+        match row_var with
+	  | `RowVar (Some var) -> [var]
+	  | `RowVar None -> []
+	  | `RecRowVar (var, row) -> if IntSet.mem var rec_vars then
+	      []
+	    else
+              (row_type_vars' (IntSet.add var rec_vars) row)
+	  | `MetaRowVar point -> row_type_vars' rec_vars (Unionfind.find point)
+      in
+        field_vars @ row_vars
   in
     ((fun t -> Utility.unduplicate (=) (type_vars' IntSet.empty t)),
      (fun t -> Utility.unduplicate (=) (row_type_vars' IntSet.empty t)))
