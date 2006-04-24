@@ -2,6 +2,9 @@ BUGS
 
 * There is no way to add an external stylesheet to the doc produced by
   a Links program.
+  Proposal: Generate as much of the page as possible on the server, 
+  before serving it to the browser. This should include at least the 
+  <head>.
 
 * JSON infinitely loops on XML objects (and others, e.g. events)
 
@@ -18,9 +21,6 @@ BUGS
   alongside the generated program; in /cgi-bin/ they won't be
   executable, and hence not accessible. We need to be able control how
   they are located.
-
-* "where" clause on comprehensions forces *list* type upon the
-  body. We need a polymorphic empty-collection object, I think (eekc)
 
 * A bare loop variable is not rewritten in a loop body:
 
@@ -86,16 +86,28 @@ TODO
 
 * CDATA literals are not handled in XML quasis.
 
-* Split Char & Byte types, choose a Unicode representation
-
-* XML amp-encoding should support numeric unicode entities. I think
-  this will require us to choose a character encoding and live by it.
-
 * XML amp-encoding is only aware of basic entities (&amp; and
   &lt;). See [1] for a full list in DTD form. We should probably just
   import DTDs.
 
   [1] http://www.w3.org/TR/2002/REC-xhtml1-20020801/dtds.html#a_dtd_Latin-1_characters
+
+* Split Char & Byte types, choose an internal Unicode representation
+
+* XML amp-encoding should support numeric unicode entities. In what
+  encoding do we output XML? Do we always use entities for non-ASCII
+  characters? The XML spec says:
+
+  "In the absence of information provided by an external transport
+  protocol (e.g. HTTP or MIME), it is an error for an entity including
+  an encoding declaration to be presented to the XML processor in an
+  encoding other than that named in the declaration, for an encoding
+  declaration to occur other than at the beginning of an external
+  entity, or for an entity which begins with neither a Byte Order Mark
+  nor an encoding declaration to use an encoding other than
+  UTF-8. Note that since ASCII is a subset of UTF-8, ordinary ASCII
+  entities do not strictly need an encoding declaration."
+  <http://www.w3.org/TR/1998/REC-xml-19980210#charencoding>
 
 * Instead of this twice-binding Record_selection construct, let's have
   simple projection operations: Record_projection(x, a) has as value
@@ -191,7 +203,7 @@ TODO
 
 * Unit tests for everything.
 
-* XML unicode character literals  (e.g. &318;).
+* XML unicode character literals  (e.g. &#318; and &#xD7E8;).
 
 * Find a way to import tables' types from the DDL, or export DDL from 
   table-type declarations
