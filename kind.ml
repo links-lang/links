@@ -172,7 +172,9 @@ and string_of_row' sep vars (field_env, row_var) =
   let row_var_string = match row_var with
       |	`RowVar (Some var) -> [string_of_int var]
       | `RowVar None -> []
-      | `RecRowVar _ -> ["recrowvar"] in
+      | `RecRowVar (var, row) -> 
+	  ["mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row] in
+(*["recrowvar"] in*)
     String.concat sep (present_strings @ absent_strings @ row_var_string)
 (*
   String.concat sep (map (function

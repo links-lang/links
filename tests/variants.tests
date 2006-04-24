@@ -66,15 +66,15 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Recursive variant types [1]
 fun (x) { switch x { A a -> a y -> x } }
-stdout : @fun : \(mu [a-z]+ \. [A:[a-z]+ | [a-z0-9]+]\)-> mu [a-z]+ \. [A:[a-z]+ | [a-z0-9]+]
+stdout : @fun : \(mu [a-z]+ \. \[A:[a-z]+ | [a-z0-9]+\]\)-> mu [a-z]+ \. \[A:[a-z]+ | [a-z0-9]+\]
 
 Recursive variant types [2]
 fun increment(x) { switch x { Zero -> Succ (Zero) Succ n -> Succ (increment(n))}}
-stdout : @fun : UNKNOWN
+stdout : @fun : \(mu [a-z]+ \. \[Succ:[a-z]+ | Zero:\(\)\]\) -> \[Zero:\(\) | mu [0-9]+ \. Succ:\[Zero:\(\) | [0-9]+\] | [0-9]+\]
 
 Recursive variant types [3]
-#fun rev(x, r) { switch x { Empty -> r Cons(a, b) -> rev(b, Cons(a, r)) }}
-stdout : @fun : UNKNOWN
+fun rev(x, r) { switch x { Empty -> r Cons(a, b) -> rev(b, Cons(a, r)) }}
+stdout : @fun : \(mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | Empty:\(\)\], mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | [0-9]+\]\) -> mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | [0-9]+\]
 
 Rows preserved across functions
 fun f(x) { switch x { Foo -> (Bar) s -> s } }
