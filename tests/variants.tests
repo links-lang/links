@@ -70,7 +70,11 @@ stdout : @fun : \(mu [a-z]+ \. [A:[a-z]+ | [a-z0-9]+]\)-> mu [a-z]+ \. [A:[a-z]+
 
 Recursive variant types [2]
 fun increment(x) { switch x { Zero -> Succ (Zero) Succ n -> Succ (increment(n))}}
-stdout : @fun : \(mu [a-z]+ \. [A:[a-z]+ | [a-z0-9]+]\)-> mu [a-z]+ \. [A:[a-z]+ | [a-z0-9]+]
+stdout : @fun : UNKNOWN
+
+Recursive variant types [3]
+#fun rev(x, r) { switch x { Empty -> r Cons(a, b) -> rev(b, Cons(a, r)) }}
+stdout : @fun : UNKNOWN
 
 Rows preserved across functions
 fun f(x) { switch x { Foo -> (Bar) s -> s } }
