@@ -61,28 +61,6 @@ let get_equivalence_variable = function
   | Row_equiv (var, _) -> var
   | Colltype_equiv (var, _) -> var
 
-(* remove a variable from a type substitution *)
-let restrict_substitution substs var = List.filter (fun equiv -> (get_equivalence_variable equiv) <> var) substs
-
-
-(* lookup the type of type variable from a type substitution *)
-(*
-let lookup_substitution_kind var = function
-  | (Var_equiv (id, kind)) :: subst when id=var -> Some kind
-  | equiv :: subst -> lookup_substitution_kind var subst
-  | [] -> None
-*)
-
-(*
-let is_rowvar = function
-  | `Row_variable _ -> true
-  | _              -> false
-and fields_present : field list -> (string * kind) list = fold_left 
-  (fun labels -> function 
-     | `Row_variable _ | `Field_absent _ -> labels
-     | `Field_present s -> s :: labels) []
-*)
-
 (* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
    so we need to reverse the result generated.
 *)
@@ -174,7 +152,6 @@ and string_of_row' sep vars (field_env, row_var) =
       | `RowVar None -> []
       | `RecRowVar (var, row) -> 
 	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"] in
-(*["recrowvar"] in*)
     String.concat sep (present_strings @ absent_strings @ row_var_string)
 (*
   String.concat sep (map (function
@@ -227,8 +204,10 @@ let make_names vars =
   in
     name_map
 
-(* Might be broken according to Sam *)
-let rec type_vars items = 
+(* [TODO]
+      change the return type to be IntSet.t
+*)
+let rec type_vars : kind -> int list = fun kind ->
   let rec aux = function
     | `Not_typed               -> []
     | `Primitive _             -> []
@@ -240,13 +219,16 @@ let rec type_vars items =
     | `Collection (`CtypeVar id, kind)    -> id :: aux kind
     | `Collection (_, kind)    -> aux kind
     | `DB                      -> []
-  in unduplicate (=) (aux items)
-and row_type_vars (field_env, `RowVar row_var) =
+  in unduplicate (=) (aux kind)
+and row_type_vars (field_env, row_var) =
   let field_type_vars =
     List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in
-  let row_var = match row_var with
-    | Some var -> [var]
-    | None -> []
+
+  let row_var =
+      match row_var with
+	| `RowVar (Some var) -> [var]
+	| `RowVar None -> []
+	| `RecRowVar (var, row) -> List.filter ((<>) var) (row_type_vars row)
   in
     field_type_vars @ row_var
 

@@ -15,8 +15,12 @@ and inference_row_var = [
   | `MetaRowVar of inference_row Unionfind.point ]
 and inference_row = (inference_type, inference_row_var) Kind.row_basis
 
-let type_vars, row_type_vars =
-  let rec type_vars' : type_var_set -> inference_type -> int list = fun rec_vars ->
+(* [TODO]
+      change the return type of these functions to be IntSet.t
+*)
+let
+    free_type_vars, free_row_type_vars =
+  let rec free_type_vars' : type_var_set -> inference_type -> int list = fun rec_vars ->
     function
       | `Not_typed               -> []
       | `Primitive _             -> []
@@ -25,22 +29,22 @@ let type_vars, row_type_vars =
 	    []
 	  else
 	    [var]
-      | `Function (from, into)   -> type_vars' rec_vars from @ type_vars' rec_vars into
-      | `Record row              -> row_type_vars' rec_vars row
-      | `Variant row             -> row_type_vars' rec_vars row
+      | `Function (from, into)   -> free_type_vars' rec_vars from @ free_type_vars' rec_vars into
+      | `Record row              -> free_row_type_vars' rec_vars row
+      | `Variant row             -> free_row_type_vars' rec_vars row
       | `Recursive (id, body)    ->
 	  if IntSet.mem id rec_vars then
 	    []
 	  else
-	    type_vars' (IntSet.add id rec_vars) body
-      | `Collection (`CtypeVar id, kind)             -> id :: type_vars' rec_vars kind
-      | `Collection (`MetaCollectionVar point, kind) -> type_vars' rec_vars (`Collection (Unionfind.find point, kind))
-      | `Collection (_, kind)    -> type_vars' rec_vars kind
+	    free_type_vars' (IntSet.add id rec_vars) body
+      | `Collection (`CtypeVar id, kind)             -> id :: free_type_vars' rec_vars kind
+      | `Collection (`MetaCollectionVar point, kind) -> free_type_vars' rec_vars (`Collection (Unionfind.find point, kind))
+      | `Collection (_, kind)    -> free_type_vars' rec_vars kind
       | `DB                      -> []
-      | `MetaTypeVar point       -> type_vars' rec_vars (Unionfind.find point)
-  and row_type_vars' : type_var_set -> inference_row -> int list = 
+      | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
+  and free_row_type_vars' : type_var_set -> inference_row -> int list = 
     fun rec_vars (field_env, row_var) ->
-      let field_vars = List.concat (List.map (fun (_, t) -> type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
+      let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
       let row_vars =
         match row_var with
 	  | `RowVar (Some var) -> [var]
@@ -48,13 +52,13 @@ let type_vars, row_type_vars =
 	  | `RecRowVar (var, row) -> if IntSet.mem var rec_vars then
 	      []
 	    else
-              (row_type_vars' (IntSet.add var rec_vars) row)
-	  | `MetaRowVar point -> row_type_vars' rec_vars (Unionfind.find point)
+              (free_row_type_vars' (IntSet.add var rec_vars) row)
+	  | `MetaRowVar point -> free_row_type_vars' rec_vars (Unionfind.find point)
       in
         field_vars @ row_vars
   in
-    ((fun t -> Utility.unduplicate (=) (type_vars' IntSet.empty t)),
-     (fun t -> Utility.unduplicate (=) (row_type_vars' IntSet.empty t)))
+    ((fun t -> Utility.unduplicate (=) (free_type_vars' IntSet.empty t)),
+     (fun t -> Utility.unduplicate (=) (free_row_type_vars' IntSet.empty t)))
 
 type inference_assumption = inference_type Kind.assumption_basis
 type inference_environment = inference_type Kind.environment_basis
@@ -215,25 +219,12 @@ let unwrap_row : inference_row -> inference_row =
   in
     unwrap_row' IntMap.empty
 
-
-let get_field_env : inference_row -> inference_field_spec_map = fst @@ flatten_row
-let get_row_var : inference_row -> inference_row_var = snd @@ flatten_row
-
-
-
-
-
 module InferenceTypeOps :
   (Kind.TYPEOPS
    with type typ = inference_type
    and type row_var = inference_row_var
    and type collection_type = inference_collection_type) = Kind.TypeOpsGen(BasicInferenceTypeOps)
 module ITO = InferenceTypeOps
-
-(*
-let row_to_inference_row' (r: Kind.row) = (r: Kind.row :> inference_row)
-let type_to_inference_type' (t : Kind.kind) = (t : Kind.kind :> inference_type)
-*)
 
 let type_to_inference_type : Kind.kind -> inference_type = fun kind ->
   let type_var_map : (inference_type Unionfind.point) IntMap.t ref = ref IntMap.empty in
@@ -346,14 +337,12 @@ and inference_row_to_row = fun rec_vars row ->
 	  (match Unionfind.find point with
 	     | (env, `RowVar var) ->
 		 assert(not (contains_present_fields env));
-(*		 assert(StringMap.is_empty env); *)
 		 `RowVar var
 	     | (env, `RecRowVar (var, rec_row)) ->
 		 if IntSet.mem var rec_vars then
 		   `RowVar (Some var)
 		 else
 		   `RecRowVar (var, inference_row_to_row (IntSet.add var rec_vars) rec_row)
-(*		 failwith "inference_row_to_row: not implemented recursive row vars yet" *)
 	     | (_, `MetaRowVar _) -> assert(false))
       | `RowVar None ->
 	  `RowVar None

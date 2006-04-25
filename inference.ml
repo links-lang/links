@@ -37,7 +37,7 @@ let rec extract_row : inference_type -> inference_row = function
   | t -> failwith
       ("Internal error: attempt to extract a row from a kind that is not a record or variant: " ^ (string_of_kind t))
 
-let var_is_free_in_type var typ = mem var (type_vars typ)
+let var_is_free_in_type var typ = mem var (free_type_vars typ)
 
 let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_type) -> unit = fun rec_vars ->
   let make_point id rec_vars =
@@ -52,7 +52,6 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
        (match (t1, t2) with
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
       | `Primitive x, `Primitive y when x = y -> ()
-(*      | `TypeVar lid, `TypeVar rid when lid = rid -> () *)
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  (match (Unionfind.find lpoint, Unionfind.find rpoint) with
 	     | `TypeVar lid, `TypeVar rid ->
@@ -142,12 +141,6 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
 			      ("Couldn't match "^
 				 string_of_kind (`Collection (ctype, elem_type)) ^" against "^
 				 string_of_kind (`Collection (ctype', elem_type)))))    
-(*    
-      | `Collection (`CtypeVar id, lelems), `Collection (reftype, relems) 
-      | `Collection (reftype, lelems), `Collection (`CtypeVar id, relems) ->
-          let var_subst = [Colltype_equiv (id, reftype)] in 
-            compose_subst [var_subst; unify (lelems, relems)]
-*)
       | `DB, `DB -> ()
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_kind t1 ^" against "^ string_of_kind t2)));
@@ -217,9 +210,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 		(match Unionfind.find point with
 		   | (env, `RowVar (Some var)) ->
 		       assert(not (contains_present_fields env));
-		       if mem var (row_type_vars extension_row) then
+		       if mem var (free_row_type_vars extension_row) then
 			 Unionfind.change point (env, `RecRowVar (var, extension_row))
-(*			 failwith "Not implemented recursive row variables yet" *)
 		       else
 			 Unionfind.change point extension_row
 		   | _ -> assert(false))
@@ -250,8 +242,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 	    unify_compatible_field_environments (lfield_env, rfield_env)
 	  else
 	    raise (Unify_failure ("Closed rows\n "^ string_of_row lrow
-				 ^"\nand\n "^ string_of_row rrow
-				 ^"\n could not be unified because they have different fields")) in
+				  ^"\nand\n "^ string_of_row rrow
+				  ^"\n could not be unified because they have different fields")) in
 
 
       let unify_one_closed (closed_row, open_row) =
@@ -276,15 +268,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 	(* check that the closed row contains no absent fields *)
 (*          fail_on_absent_fields closed_field_env; *)
 		 
-	let open_extension = extend_field_env closed_field_env open_field_env in
-(*
-	  debug ("Flattened rows: " ^ (string_of_row closed_row) ^ " and: " ^ (string_of_row open_row));
-
-	  debug ("Extension: " ^ (string_of_row (open_extension, `RowVar None)));
-	  debug ("Open row var: " ^ (string_of_row (ITO.empty_field_env, open_row_var)));
-*)
-	  extend_row_var (open_row_var, (open_extension, `RowVar None));
-(*	  debug ("Unified flattened rows: " ^ (string_of_row closed_row) ^ " and: " ^ (string_of_row open_row))*) in
+	  let open_extension = extend_field_env closed_field_env open_field_env in
+	    extend_row_var (open_row_var, (open_extension, `RowVar None)) in
 
       let unify_both_open (lrow, rrow) =
 	let rec row_var_eq = function
@@ -358,8 +343,8 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
       if generics = [] then
 	t
       else
+	(
 	let _ = debug ("Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
-(*    let kind = inference_type_to_type t in *)
 
 	let tenv, renv, cenv = List.fold_left
 	  (fun (tenv, renv, cenv) -> function
@@ -396,19 +381,8 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 			       let _ = Unionfind.change point' (`Recursive (id', t')) in
 				 `MetaTypeVar point'
 			   )
-(*			    
-			 if IntSet.mem id rec_vars then
-			   typ
-			 else
-			   inst (IntSet.add id rec_vars) t
-*)
+
 		       | _ -> inst rec_env t)
-(*	     
-	     (match subst with
-		| [] -> kind
-		| Var_equiv (var_id, var_kind) :: substs when id = var_id -> var_kind
-		| _ :: substs -> substitute substs kind)
-*)
 	      | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
 	      | `Record row -> `Record (inst_row rec_env row)
 	      | `Variant row ->  `Variant (inst_row rec_env row)
@@ -426,39 +400,12 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 		      let _ = Unionfind.change point' (`Recursive (id', t')) in
 			`MetaTypeVar point'
 		    )
-(*
-		if IntSet.mem id rec_vars then
-		  typ
-		else
-		  inst (IntSet.add id rec_vars) t
-*)
+
 		  (*`Recursive (id, inst (IntSet.add id rec_vars) t) *)
 	      | `Collection (collection_type, elem_type) ->
 		  `Collection (inst_collection_type collection_type, inst rec_env elem_type)
 		  (* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
 	      | `DB -> `DB
-
-(*
-    and inst_row_var : type_var_set -> inference_row_var -> inference_row =
-      fun rec_vars ->
-	function
-	  | `MetaRowVar point ->
-	      let row_var = Unionfind.find point in
-		(match row_var with
-		   | `RowVar (Some var) -> 
-		       if IntMap.mem var renv then
-			 ITO.empty_field_env, IntMap.find var renv
-		       else
-			 ITO.empty_field_env, row_var
-		  (*		ITO.empty_field_env, `MetaRowVar (Unionfind.fresh (ITO.empty_field_env, row_var)) *)
-		   | `RowVar None -> ITO.make_empty_closed_row ()
-		   | `MetaRowVar _ -> inst_row_var rec_vars row_var)
-	  | `RowVar None ->
-	      ITO.make_empty_closed_row ()
-	  | `RowVar (Some _) ->
-	      assert(false)
-*)
-
 	and inst_row : rec_maps -> inference_row -> inference_row = fun rec_env row ->
 	  let rec_type_env, rec_row_env = rec_env in
 	  let field_env, row_var = flatten_row row in
@@ -496,47 +443,15 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 			     let _ = Unionfind.change point' (field_env, `RecRowVar (var', rec_row')) in
 			       `MetaRowVar point'
 			   ))
-
-(*
-			 if IntMap.mem var renv then
-			   (`MetaRowVar (IntMap.find var rec_row_env))
-			 else
-			   (
-			    let var' = new_raw_variable () in
-			    let point' = Unionfind.fresh (`RowVar (Some var')) in
-			    let rec_row' = inst_row (IntMap.add var point' rec_row_env) rec_row in
-			    let _ = Unionfind.change point' (`RecRowVar (var', rec_row')) in
-			    `MetaRowVar point'
-			   ))
-*)
-(*		 failwith "inst_row [1]: not implemented recursive row variables yet")*)
 	      | `RowVar None ->
 		  `RowVar None
 	      | `RowVar (Some _) ->
 		  assert(false)
 	      | `RecRowVar (var, rec_row) ->
 		  assert(false)
-(*		  failwith "inst_row [2]: not implemented recursive row variables yet"*)
 	  in
 	    field_env', row_var'
 	
-(*
-      let row_var_field_env, row_var' = inst_row_var rec_vars row_var in
-      let is_closed = ITO.is_closed_row (row_var_field_env, row_var') in
-
-      let field_env' = StringMap.fold
-	(fun label field_spec field_env' ->
-	   match field_spec with
-	     | `Present t -> StringMap.add label (`Present (inst rec_vars t)) field_env'
-	     | `Absent ->
-		 if is_closed then field_env'
-		 else StringMap.add label `Absent field_env'
-	 ) field_env StringMap.empty in
-	
-      let field_env'' = field_env_union (row_var_field_env, field_env') in
-	(field_env'', row_var')
-*)
-
 	and inst_collection_type : inference_collection_type -> inference_collection_type = function
 	  | `Set | `Bag | `List as k -> k
 	  | `CtypeVar id as k ->
@@ -548,7 +463,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      inst_collection_type (Unionfind.find point)
 
 	in
-	  inst (IntMap.empty, IntMap.empty) t
+	  inst (IntMap.empty, IntMap.empty) t)
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
@@ -598,14 +513,12 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 	| `Record row -> row_generics bound_vars row
 	| `Variant row -> row_generics bound_vars row
 	| `Recursive (id, body) ->
-	    debug ("rec (assumptionize): " ^(string_of_int id));
+	    debug ("rec (get_quantifiers): " ^(string_of_int id));
 	    if IntSet.mem id bound_vars then
 	      []
 	    else
 	      get_quantifiers (IntSet.add id bound_vars) body
-(*	      assumptionize (substitute_environment [Var_equiv (id, kind)] env) body *)
 	| `Collection (collection_type, elem_type) ->
-(* [BUG] surely we need to generalise collection vars as well! *)
 	    let collection_vars =
 	      (match collection_type with
 		 | `MetaCollectionVar point ->
@@ -621,18 +534,18 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 	      collection_vars @ elem_vars
 	| `DB -> []
 
-(** assumptionize: 
+(** generalize: 
     Universally quantify any free type variables in the expression.
-    TBD: Rename this to `generalize'? *)
-let assumptionize : inference_environment -> inference_type -> inference_assumption = 
+*)
+let generalize : inference_environment -> inference_type -> inference_assumption = 
   fun env t ->
-    let vars_in_env = concat_map (type_vars -<- snd) (vals env) in
+    let vars_in_env = concat_map (free_type_vars -<- snd) (vals env) in
     let bound_vars = intset_of_list vars_in_env in
     let quantifiers = get_quantifiers bound_vars t in
-      debug ("Assumptionized: " ^ (string_of_assumption (quantifiers, t)));
+      debug ("Generalized: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t)
 
-let rec w (env : inference_environment) : (untyped_expression -> inference_expression) = fun expression ->
+let rec type_check (env : inference_environment) : (untyped_expression -> inference_expression) = fun expression ->
   try
     debug ("Typechecking expression: " ^ (string_of_expression expression));
     match expression with
@@ -645,8 +558,8 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
   | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
   | Variable (name, pos) -> Variable (name, (pos, instantiate env name, None))
   | Apply (f, p, pos) ->
-      let f = w env f in
-      let p = w env p in
+      let f = type_check env f in
+      let p = type_check env p in
       let f_type = node_kind f in
       let return_type = ITO.new_type_variable () in
       let _ =
@@ -655,11 +568,11 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       in
 	Apply (f, p, (pos, return_type, None))
   | Condition (if_, then_, else_, pos) as c ->
-      let if_ = w env if_ in
+      let if_ = type_check env if_ in
       let _ = (try unify (node_kind if_, `Primitive `Bool)
                with Unify_failure _ -> mistype (node_pos if_) (if_, node_kind if_) (`Primitive `Bool)) in
-      let then_expr = w env then_ in
-      let else_expr = w env else_ in
+      let then_expr = type_check env then_ in
+      let else_expr = type_check env else_ in
       let _ = try 
         unify (node_kind then_expr, node_kind else_expr)
           (* FIXME: This can't be right!*)
@@ -674,43 +587,26 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
                              )) in
         node'
   | Comparison (l, oper, r, pos) ->
-      let l = w env l in
-      let r = w env r in
-      let _ = unify (node_kind l, node_kind r) in
+      let l = type_check env l in
+      let r = type_check env r in
+	unify (node_kind l, node_kind r);
         Comparison (l, oper, r, (pos, `Primitive `Bool, None))
   | Abstr (variable, body, pos) ->
       let variable_type = ITO.new_type_variable () in
       let body_env = (variable, ([], variable_type)) :: env in
-(*      let (b, k) = hd body_env in *)
-      let body = w body_env body in
+      let body = type_check body_env body in
       let type' = `Function (variable_type, node_kind body) in
-(*
-      let _ = Printf.printf "Type for Abstr: \"%s\" \n" (string_of_kind type') in
-      let _ = Printf.printf "Substition: %s \n" (string_of_substitution body_subst) in
-*)
-      let node' = Abstr (variable, body, (pos, type', None)) in
-        node'
+	Abstr (variable, body, (pos, type', None))
   | Let (variable, _, _, pos) when qnamep variable -> invalid_name pos variable "qualified names (containing ':') cannot be bound"
   | Let (variable, value, body, pos) ->
-      let value = w env value in
-(*       let _ = debug ("Environment env: " ^ (string_of_environment env)) in *)
-      let body_env = (variable, (assumptionize env (node_kind value))) :: env in
-(*       let _ = debug ("Environment body_env: " ^ (string_of_environment body_env)) in *)
-      let body = w body_env body in
-(*       let _ = debug ("Environment body_env': " ^ (string_of_environment body_env)) in *)
-
-(*
-      let _ = Printf.printf "Type for Let: \"%s\" \n" (string_of_kind (node_kind body)) in
-      let _ = Printf.printf "Substition: %s \n" (string_of_substitution body_subst) in
-*)
-      let node' = Let (variable, value, body, (pos, node_kind body, None)) in
-	node'
+      let value = type_check env value in
+      let body_env = (variable, (generalize env (node_kind value))) :: env in
+      let body = type_check body_env body in
+	Let (variable, value, body, (pos, node_kind body, None))
   | Rec (variables, body, pos) ->
-      let best_env, vars = m env variables in
-      let body = w best_env body in
-      let node' = Rec (vars, body, (pos, node_kind body, None)) in
-        node'  
-
+      let best_env, vars = type_check_mutually env variables in
+      let body = type_check best_env body in
+	Rec (vars, body, (pos, node_kind body, None))
   | Xml_node (tag, atts, cs, pos) as xml -> 
       let separate = partition (is_special -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
@@ -719,13 +615,13 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
       let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
         (* extend the env with each l:name bound variable *)
       let attr_env = fold_right (fun s env -> (s, ([], Kind.string)) :: env) bindings attr_env in
-      let special_attrs = map (fun (name, expr) -> (name, w attr_env expr)) special_attrs in
+      let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in
         (* Check that the bound expressions have type XML *)
         (* TBD: figure out what the right type for these is *)
 (*      let _ =
 	List.iter (fun (_, expr) -> unify(node_kind expr, ITO.new_type_variable ()(*Kind.xml*))) special_attrs in*)
-      let contents = map (w env) cs in
-      let nonspecial_attrs = map (fun (k,v) -> k, w env v) nonspecial_attrs in
+      let contents = map (type_check env) cs in
+      let nonspecial_attrs = map (fun (k,v) -> k, type_check env v) nonspecial_attrs in
 (*      let attr_type = if islhref xml then Kind.xml else Kind.string in *)
       let attr_type = Kind.string in
         (* force contents to be XML, attrs to be strings
@@ -744,176 +640,109 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
   | Record_empty (pos) ->
       Record_empty (pos, `Record (ITO.make_empty_closed_row ()), None)
   | Record_extension (label, value, record, pos) ->
-      let value = w env value in
-      let record = w env record in
+      let value = type_check env value in
+      let record = type_check env record in
       let unif_kind = `Record (ITO.make_singleton_open_row (label, `Absent)) in
-      let _ = unify (node_kind record, unif_kind) in
+	unify (node_kind record, unif_kind);
 
-      let record_row = extract_row (node_kind record) in
-      let value_type = node_kind value in
-        (* We think this is redundant! *)
-(*
-      let _ =
-	if not (is_absent_from_row label (record_row)) then
-	  raise (UndefinedVariable ("Label "^ label ^" should be absent"))
-	else
-          () in
-*)
-
-      let type' = `Record (ITO.set_field (label, `Present value_type) record_row) in
-(* row_extend_absent label (`Present value_type) record_type in *)
-(* `Record (`Field_present (label, value_type) :: (row_except_absent label (extract_fields record_type))) in *)
-(*
-      let _ = Printf.printf "Type for Record_extension: \"%s\" \n" (string_of_kind type') in
-      let _ = Printf.printf "Substition: %s \n" (string_of_substitution subst) in
-*)
-      let node' = Record_extension (label, value, record, (pos, type', None)) in
-        node'
+	let record_row = extract_row (node_kind record) in
+	let value_type = node_kind value in
+	  
+	let type' = `Record (ITO.set_field (label, `Present value_type) record_row) in
+	  Record_extension (label, value, record, (pos, type', None))
   | Record_selection (label, label_variable, variable, value, body, pos) ->
-      let value = w env value in
-(*      let _ = Printf.printf "Substition A: %s \n" (string_of_substitution subst) in *)
-
-(*      let _ = debug ("Environment A: " ^ (string_of_environment env)) in*)
-(*      let _ = Printf.printf "Environment B: %s \n" (string_of_environment value_subst_env) in *)
+      let value = type_check env value in
       let label_variable_type = ITO.new_type_variable () in
-(*
-      let row_var = new_raw_variable () in
-      let row = make_singleton_open_row_with_row_var label (`Present (label_variable_type)) `RowVar (Some (row_var)) in
-      let unification = unify (node_kind value, `Record row in
-*)
-      let _ = unify (node_kind value, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type)))) in
-(*      let _ = Printf.printf "Substition B: %s \n" (string_of_substitution subst) in*)
+	unify (node_kind value, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type))));
 
-      let value_row = extract_row (node_kind value) in
-      let label_var_equiv = label_variable, ([], label_variable_type) in
-      let var_equiv = variable, ([], `Record (ITO.set_field (label, `Absent) value_row)) in
-
-(*(`Record ((`Field_absent label) :: (row_except label value_fields)))) in*)
-
-      let body_env = label_var_equiv :: var_equiv :: env in
-(*      let _ = debug ("Environment C: " ^ (string_of_environment env)) in *)
-
-(*      let _ = Printf.printf "Environment C: %s \n" (string_of_environment body_env) in*)
-      let body = w body_env body in
-(*      let _ = Printf.printf "Substition C: %s \n" (string_of_substitution subst) in*)
-
-      let body_type = node_kind body in
-(*
-      let _ = Printf.printf "Type for Record_selection: \"%s\" \n" (string_of_kind body_type) in
-      let _ = Printf.printf "Substition: %s \n" (string_of_substitution subst) in
-*)
-      let node' = Record_selection (label, label_variable, variable, value, body, (pos, body_type, None)) in
-        node'
+	let value_row = extract_row (node_kind value) in
+	let label_var_equiv = label_variable, ([], label_variable_type) in
+	let var_equiv = variable, ([], `Record (ITO.set_field (label, `Absent) value_row)) in
+	  
+	let body_env = label_var_equiv :: var_equiv :: env in
+	let body = type_check body_env body in
+	let body_type = node_kind body in
+	  Record_selection (label, label_variable, variable, value, body, (pos, body_type, None))
   | Record_selection_empty (value, body, pos) ->
-      let value = w env value in
-      let _ = debug ("Environment E: " ^ (string_of_environment env)) in
-      let _ = unify (`Record (ITO.make_empty_closed_row ()), node_kind value) in
-      let _ = debug ("Environment F: " ^ (string_of_environment env)) in
-      let body = w env body in
-        Record_selection_empty (value, body, (pos, node_kind body, None))
+      let value = type_check env value in
+	unify (`Record (ITO.make_empty_closed_row ()), node_kind value);
+	let body = type_check env body in
+          Record_selection_empty (value, body, (pos, node_kind body, None))
   | Variant_injection (label, value, pos) ->
-      let value = w env value in
+      let value = type_check env value in
       let type' = `Variant (ITO.make_singleton_open_row (label, `Present (node_kind value))) in
-(*      let type' = `Variant ([`Field_present (label, node_kind value) ; new_row_variable ()]) in *)
         Variant_injection (label, value, (pos, type', None))
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, pos) ->
-      let value = w env value in
+      let value = type_check env value in
       let value_type = node_kind value in
       
       let case_var_type = ITO.new_type_variable() in
       let body_row = ITO.make_empty_open_row () in
       let body_var_type = `Variant body_row in
       let variant_type = `Variant (ITO.set_field (case_label, `Present case_var_type) body_row) in
+	unify (variant_type, value_type);
 
-      let _ = unify (variant_type, value_type) in
+	let case_body = type_check ((case_variable, ([], case_var_type)) :: env) case_body in
+	let body = type_check ((variable, ([], body_var_type)) :: env) body in
 
-      let case_body = w ((case_variable, ([], case_var_type)) :: env) case_body in
-      let body = w ((variable, ([], body_var_type)) :: env) body in
-
-      let case_type = node_kind case_body in
-      let body_type = node_kind body in
-      let _ = unify (case_type, body_type) in
-
-      let node = Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None)) in
-        node      
-(*
-      let alpha = `Variant (ITO.make_empty_open_row ()) in
-      let body = w ((variable, ([], alpha)) :: env) body in
-
-      let beta = ITO.new_type_variable() in
-      let case_body = w ((case_variable, ([], beta)) :: env) case_body in
-
-      let body_type = node_kind body in
-      let _ = unify(body_type, node_kind case_body) in
-
-      let new_row_type = `Variant (ITO.set_field (case_label, `Present beta) (extract_row alpha)) in
-      let value = w env value in
-
-      let _ = unify(new_row_type, node_kind value) in
-
-      let final_node = Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None)) in
-        final_node
-*)
+	let case_type = node_kind case_body in
+	let body_type = node_kind body in
+	  unify (case_type, body_type);
+	  Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None))
   | Variant_selection_empty (value, pos) ->
 
-      let value = w env value in
+      let value = type_check env value in
       let new_row_type = `Variant (ITO.make_empty_closed_row()) in
         unify(new_row_type, node_kind value);
-        
-        let node' = 
-	  Variant_selection_empty (value, (pos, ITO.new_type_variable (), None)) in
-        node'
+        Variant_selection_empty (value, (pos, ITO.new_type_variable (), None))
   | Collection_empty (ctype, pos) ->
       Collection_empty (ctype,
 			(pos, `Collection (collection_type_to_inference_collection_type ctype, ITO.new_type_variable ()), None))
   | Collection_single (elem, ctype, pos) ->
-      let elem = w env elem in
+      let elem = type_check env elem in
 	Collection_single (elem, ctype,
 			   (pos, `Collection (collection_type_to_inference_collection_type ctype, node_kind elem), None))
   | Collection_union (l, r, pos) ->
       let tvar = ITO.new_type_variable () in
       let collvar = ITO.new_collection_variable ()in
-      let l = w env l in
-
-      let _ = unify (node_kind l, `Collection (collvar, tvar)) in
-      let r = w env r in
-      let _ = unify (node_kind r, node_kind l) in
-      let type' = `Collection (collvar, tvar) in
-      let node' = Collection_union (l, r, (pos, type', None)) in
-        node'
+      let l = type_check env l in
+	unify (node_kind l, `Collection (collvar, tvar));
+	let r = type_check env r in
+	  unify (node_kind r, node_kind l);
+	  let type' = `Collection (collvar, tvar) in
+	    Collection_union (l, r, (pos, type', None))
   | Collection_extension (expr, var, value, pos) ->
       let value_tvar = ITO.new_type_variable () in
       let expr_tvar = ITO.new_type_variable () in
       let collvar = ITO.new_collection_variable () in
 
-      let value = w env value in
-      let _ = unify (node_kind value, `Collection (collvar, value_tvar)) in
-      let expr_env = (var, ([], value_tvar)) :: env in
-      let expr = w expr_env expr in
-      let _ = unify (node_kind expr, `Collection (collvar, expr_tvar)) in
-      let type' = node_kind expr in
-      let node = Collection_extension (expr, var, value, (pos, type', None)) in
-        node
+      let value = type_check env value in
+	unify (node_kind value, `Collection (collvar, value_tvar));
+	let expr_env = (var, ([], value_tvar)) :: env in
+	let expr = type_check expr_env expr in
+	  unify (node_kind expr, `Collection (collvar, expr_tvar));
+	  let type' = node_kind expr in
+	    Collection_extension (expr, var, value, (pos, type', None))
   | Escape(var, body, pos) -> 
       let exprtype = ITO.new_type_variable () in
       let contrettype = ITO.new_type_variable () in
       let conttype =  `Function (exprtype, contrettype) in
-      let body = w ((var, ([], conttype)):: env) body in
+      let body = type_check ((var, ([], conttype)):: env) body in
 
       let exprtype = exprtype in
-      let _ = unify (exprtype, node_kind body) in
+	unify (exprtype, node_kind body);
         Escape(var, body, (pos, node_kind body, None))
   | Sort (up, list, pos) ->
-      let list = w env list in
-      let _ = unify (node_kind list, `Collection (ITO.new_collection_variable (), ITO.new_type_variable ())) in
-      let new_kind = (match node_kind list
-                      with `Collection(_, e) -> `Collection (`List, e)
-                        | _ -> failwith "Internal error typing sort")
-      in
-        Sort (up, list, (pos, new_kind, None))
+      let list = type_check env list in
+	unify (node_kind list, `Collection (ITO.new_collection_variable (), ITO.new_type_variable ()));
+	let new_kind = (match node_kind list
+			with `Collection(_, e) -> `Collection (`List, e)
+                          | _ -> failwith "Internal error typing sort")
+	in
+          Sort (up, list, (pos, new_kind, None))
   | Database (params, pos) ->
-      let params = w env params in
-        let _ = unify (node_kind params, `Collection(`List, `Primitive `Char)) in
+      let params = type_check env params in
+        unify (node_kind params, `Collection(`List, `Primitive `Char));
         Database (params, (pos, `DB, None))
   | Table (db, s, query, pos) ->
       let row =
@@ -926,37 +755,33 @@ let rec w (env : inference_environment) : (untyped_expression -> inference_expre
                                 else if query.Query.distinct_only then `Set 
                                 else `Bag),
 			       `Record row) in
-(*
-                               `Record (map (fun col -> 
-                                               `Field_present(col.Query.name, col.Query.col_type)) query.Query.result_cols))
-*)
-      let db = w env db in
-      let _ = unify (node_kind db, `DB) in
-      let _ = unify (kind, `Collection (ITO.new_collection_variable (), `Record (ITO.make_empty_open_row ()))) in
+      let db = type_check env db in
+	unify (node_kind db, `DB);
+	unify (kind, `Collection (ITO.new_collection_variable (), `Record (ITO.make_empty_open_row ())));
         Table (db, s, query, (pos, kind, None))
           
   with 
       Unify_failure msg
     | UndefinedVariable msg ->
         raise (Type_error(untyped_pos expression, msg))
-(* end "w" *)
+(* end "type_check" *)
 
-(** m
-    Companion to "w"; does mutual type-inference
+(** type_check_mutually
+    Companion to "type_check"; does mutual type-inference
 
     [QUESTIONS]
       - what are the constraints on the definitions?
       - do the functions have to be recursive?
 *)
 and
-    m env (defns : (string * untyped_expression) list) =
+    type_check_mutually env (defns : (string * untyped_expression) list) =
       let var_env = (map (fun (name, expr) ->
 	                      (name, ([], ITO.new_type_variable ())))
 		       defns) in
       let inner_env = (var_env @ env) in
 
       let type_check result (name, expr) = 
-        let expr = w inner_env expr in
+        let expr = type_check inner_env expr in
 	let expr_type = node_kind expr in
           match expr_type with
             | `Function _ ->(
@@ -968,31 +793,9 @@ and
       let defns = rev defns in
 
       let env = (alistmap (fun value -> 
-			     (assumptionize env (node_kind value))) defns
+			     (generalize env (node_kind value))) defns
 		 @ env) in
-        env, defns
-(*
-    m env (defns : (string * untyped_expression) list) =
-      let type_check (env, result) (label, expr) = 
-        let expr' = w env expr in
-          match node_kind expr' with
-            | `Function _ -> ((label, ([], (node_kind expr'))) :: env,
-                              (label, expr') :: result)
-            | kind -> Errors.letrec_nonfunction (node_pos expr') (expr', kind)
-      in
-      let var_env = (map (fun (name, expr) ->
-			     (name, ([], ITO.new_type_variable ())))
-		       defns) in
-      let initial_env = (var_env @ env) in
-      let env', defns = fold_left type_check (initial_env, []) defns in
-      let defns = rev defns in
-
-
-      let env = (alistmap (fun value -> 
-			     (assumptionize initial_env (node_kind value))) defns
-		 @ env') in 
-        env, defns
-*)        
+        env, defns     
 
 (** Find the cliques in a group of functions.  Whenever there's mutual
     recursion we need to type all the functions in the cycle as
@@ -1033,8 +836,7 @@ let mutually_type_defs
     : environment -> (string * untyped_expression) list -> (environment * (string * expression) list) =
   fun env defs ->
     let env = environment_to_inference_environment env in
-(*    let defs = List.map (fun (name, exp) -> name, expression_to_inference_expression exp) defs in *)
-    let new_type_env, new_defs = m env defs in
+    let new_type_env, new_defs = type_check_mutually env defs in
       inference_environment_to_environment new_type_env,
     List.map (fun (name, exp) -> name, inference_expression_to_expression exp) new_defs
 
@@ -1055,16 +857,14 @@ let type_expression : environment -> untyped_expression -> (environment * expres
       match untyped_expression with
 	| Define (variable, value, loc, pos) ->
 	    (*let var_type = ITO.new_type_variable () in*)
-	    let value = w env value in
+	    let value = type_check env value in
 	    let value_type = node_kind value in
-	    (*let _ = unify (var_type, value_type) in*)
-              ((variable, (assumptionize env (node_kind value))) :: env),
-    	       Define (variable, value, loc, (pos, node_kind value, None))
-	| expr -> let value = w env expr in env, value
+              (((variable, (generalize env (node_kind value))) :: env),
+    	       Define (variable, value, loc, (pos, node_kind value, None)))
+	| expr -> let value = type_check env expr in env, value
     in
       inference_environment_to_environment env', inference_expression_to_expression exp'
 
-(* Is there some missing assumptionization here? *)
 let type_program : environment -> untyped_expression list -> (environment * expression list) =
   fun env exprs ->
     let type_group (env, typed_exprs) : untyped_expression list -> (environment * expression list) = function
