@@ -240,8 +240,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 	  StringMap.equal (fun _ _ -> true) field_env field_env' in
 *)
 
-	let (lfield_env, lrow_var) = flatten_row lrow in
-	let (rfield_env, rrow_var) = flatten_row rrow in
+	let (lfield_env, lrow_var) = unwrap_row lrow in
+	let (rfield_env, rrow_var) = unwrap_row rrow in
 (*
  	  fail_on_absent_fields lfield_env;
 	  fail_on_absent_fields rfield_env;
@@ -255,11 +255,8 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 
 
       let unify_one_closed (closed_row, open_row) =
-	let (closed_field_env, _) as closed_row = flatten_row closed_row in
-	let (open_field_env, open_row_var) as open_row = flatten_row open_row in
-
-	  debug ("Flattened rows: " ^ (string_of_row closed_row) ^ " and: " ^ (string_of_row open_row));
-	  
+	let (closed_field_env, _) as closed_row = unwrap_row closed_row in
+	let (open_field_env, open_row_var) as open_row = unwrap_row open_row in 
 	  (* check that the open row contains no extra fields *)
           StringMap.iter
 	    (fun label field_spec ->
@@ -290,11 +287,21 @@ and unify_row' : (int Unionfind.point) IntMap.t -> ((inference_row * inference_r
 (*	  debug ("Unified flattened rows: " ^ (string_of_row closed_row) ^ " and: " ^ (string_of_row open_row))*) in
 
       let unify_both_open (lrow, rrow) =
-	let lfield_env, lrow_var = flatten_row lrow in
-	let rfield_env, rrow_var = flatten_row rrow in
-	  if lrow_var = rrow_var then
+	let rec row_var_eq = function
+	  | `RowVar None, `RowVar None -> true
+	  | `RowVar (Some var1), `RowVar (Some var2)
+	  | `RecRowVar (var1, _), `RecRowVar (var2, _) -> var1=var2
+	  | `MetaRowVar point, row_var | row_var, `MetaRowVar point ->
+	      row_var_eq (snd (Unionfind.find point), row_var)
+	  | _, _ -> false in
+
+	let (lfield_env, lrow_var) as lrow = flatten_row lrow in
+	let (rfield_env, rrow_var) as rrow = flatten_row rrow in
+	  if row_var_eq (lrow_var, rrow_var) then
 	    unify_both_closed ((lfield_env, `RowVar None), (rfield_env, `RowVar None))
 	  else
+	    let lfield_env, lrow_var = unwrap_row lrow in
+	    let rfield_env, rrow_var = unwrap_row rrow in
 	    let row_var = ITO.new_row_variable() in	      
               (* each row can contain fields missing from the other; 
                  thus we call extend_field_env once in each direction *)

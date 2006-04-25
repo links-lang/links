@@ -81,12 +81,17 @@ struct
   let make_row_var var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
   let make_collection_var var = `MetaCollectionVar (Unionfind.fresh (`CtypeVar var))
 
-  let rec is_closed_row = function
-    | (_, `RowVar (Some _)) -> false
-    | (_, `RowVar None) -> true
-    | (_, `RecRowVar _) -> true
-    | (_, `MetaRowVar point) ->
-	is_closed_row (Unionfind.find point)
+  let is_closed_row =
+    let rec is_closed_row' rec_vars =
+      function
+	| (_, `RowVar (Some var)) -> IntSet.mem var rec_vars
+	| (_, `RowVar None) -> true
+	| (_, `RecRowVar (var, row)) ->
+	     ((IntSet.mem var rec_vars) or (is_closed_row' (IntSet.add var rec_vars) row))
+	| (_, `MetaRowVar point) ->
+	    is_closed_row' rec_vars (Unionfind.find point)
+    in
+      is_closed_row' IntSet.empty
 end
 
 let field_env_union : (inference_field_spec_map * inference_field_spec_map) -> inference_field_spec_map =
@@ -113,16 +118,21 @@ let is_flattened_row : inference_row -> bool =
 	       assert(not (contains_present_fields field_env'));
 	       if IntSet.mem var rec_vars then true
 	       else is_flattened (IntSet.add var rec_vars) rec_row
-(*	       failwith "is_flattened_row: not implemented recursive rows yet"*)
 	   | (field_env', `MetaRowVar _) -> false)
     | (field_env, `RowVar (Some _ )) -> assert(false)
     | (field_env, `RowVar None) -> true
     | (field_env, `RecRowVar (var, rec_row)) ->
 	assert(false)
-(*	failwith "is_flattened_row: not implemented recursive rows yet"*)
   in
     is_flattened IntSet.empty
-	
+
+(* 
+ convert a row to the form (field_env, row_var)
+ where row_var is of the form:
+    `RowVar None
+  | `MetaRowVar (`RowVar (Some var))
+  | `MetaRowVar (`RecRowVar (var, rec_row))
+ *)
 let flatten_row : inference_row -> inference_row =
   let rec flatten_row' : (inference_row Unionfind.point) IntMap.t -> inference_row -> inference_row =
     fun rec_env row ->
@@ -142,13 +152,12 @@ let flatten_row : inference_row -> inference_row =
 		   | (field_env', `RecRowVar (var, rec_row)) ->
 		       assert(not (contains_present_fields field_env'));
 		       if IntMap.mem var rec_env then
-		         (field_env, `MetaRowVar (IntMap.find var rec_env))
+			 field_env, `MetaRowVar (IntMap.find var rec_env)
 		       else
-			 let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
-			 let rec_row' = flatten_row' (IntMap.add var point' rec_env) rec_row in
-			   Unionfind.change point' (field_env', `RecRowVar (var, rec_row'));
-			   (field_env, `MetaRowVar point')
-		       (* failwith "flatten_row: not implemented recursive rows yet" *)
+			 (let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
+			  let rec_row' = flatten_row' (IntMap.add var point' rec_env) rec_row in
+			    Unionfind.change point' (field_env', `RecRowVar (var, rec_row'));
+			    field_env_union (field_env, field_env'), `MetaRowVar point')
 		   | (_, `MetaRowVar _) ->
 		       let field_env', row_var' = flatten_row' rec_env row' in
 			 field_env_union (field_env, field_env'), row_var')
@@ -159,6 +168,53 @@ let flatten_row : inference_row -> inference_row =
 	row'
   in
     flatten_row' IntMap.empty
+
+
+(*
+ As flatten_row except if the flattened row_var is of the form:
+
+  `MetaRowVar (`RecRowVar (var, rec_row))
+
+then it is unwrapped. This ensures that all the fields are exposed
+in field_env.
+ *)
+let unwrap_row : inference_row -> inference_row =
+  let rec unwrap_row' : (inference_row Unionfind.point) IntMap.t -> inference_row -> inference_row =
+    fun rec_env row ->
+      let row' =
+	match row with
+	  | (field_env, `MetaRowVar point) ->
+	      let row' = Unionfind.find point in
+		(match row' with
+		   | (field_env', `RowVar None) ->
+		       field_env_union (field_env, field_env'), `RowVar None
+		   | (field_env', `RowVar (Some var)) ->
+		       assert(not (contains_present_fields field_env'));
+		       if IntMap.mem var rec_env then
+			 (field_env, `MetaRowVar (IntMap.find var rec_env))
+		       else
+		         row
+		   | (field_env', `RecRowVar (var, rec_row)) ->
+		       assert(not (contains_present_fields field_env'));
+		       if IntMap.mem var rec_env then
+			 field_env, `MetaRowVar (IntMap.find var rec_env)
+		       else
+			 (let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
+			  let rec_row' = unwrap_row' (IntMap.add var point' rec_env) rec_row in
+			    Unionfind.change point' (field_env', `RecRowVar (var, rec_row'));
+			    let field_env'', row_var' = rec_row' in
+			      (field_env_union ((field_env_union (field_env, field_env')), field_env''), row_var'))
+		   | (_, `MetaRowVar _) ->
+		       let field_env', row_var' = unwrap_row' rec_env row' in
+			 field_env_union (field_env, field_env'), row_var')
+	  | (field_env, `RowVar None) -> row
+	  | _ -> assert(false)
+      in
+	assert (is_flattened_row row');
+	row'
+  in
+    unwrap_row' IntMap.empty
+
 
 let get_field_env : inference_row -> inference_field_spec_map = fst @@ flatten_row
 let get_row_var : inference_row -> inference_row_var = snd @@ flatten_row
@@ -227,7 +283,6 @@ let type_to_inference_type : Kind.kind -> inference_type = fun kind ->
 	      row_var_map := IntMap.add var point (!row_var_map);
 	      (field_env, `MetaRowVar point)
     | fields, `RecRowVar (var, rec_row) ->
-(*	failwith "row_to_inference_row: not implemented recursive row vars yet"*)
 	let field_env : inference_field_spec_map = StringMap.map field_spec_to_inference_field_spec fields
 	in
 	  if IntMap.mem var (!row_var_map) then
@@ -306,7 +361,6 @@ and inference_row_to_row = fun rec_vars row ->
 	  assert(false)
       | `RecRowVar (var, rec_row) ->
 	  assert(false)
-	  (* failwith "inference_row_to_row: not implemented recursive row vars yet" *)
   in
     field_env', row_var'
 and inference_collection_to_collection = function
