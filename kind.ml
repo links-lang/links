@@ -1,7 +1,5 @@
 (* Representations of types *)
 
-open List
-
 open Pickle
 open Utility
 
@@ -285,15 +283,15 @@ let string_of_quantifier = function
   | `CtypeVar id -> "`" ^ string_of_int id
 let string_of_assumption = function
   | [], kind -> string_of_kind kind
-  | assums, kind -> "forall " ^ (String.concat ", " (map string_of_quantifier assums)) ^" . "^ string_of_kind kind
+  | assums, kind -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_kind kind
 let string_of_environment env =
-  "{ " ^ (String.concat " ; " (map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
+  "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
 
 (* serialisation *) 
 let serialise_colltype : (collection_type serialiser) = function
   | `Set -> "s" | `Bag -> "b" | `List -> "l" | `CtypeVar _ -> "c"
 and deserialise_colltype : (collection_type deserialiser)
-    = fun s -> (assoc (String.sub s 0 1) ["s", `Set; "b", `Bag; "l", `List; "c", `CtypeVar (-1)],
+    = fun s -> (List.assoc (String.sub s 0 1) ["s", `Set; "b", `Bag; "l", `List; "c", `CtypeVar (-1)],
                 String.sub s 1 (String.length s - 1))
 
 let (serialise_primitive : primitive serialiser), 
@@ -306,18 +304,25 @@ let rec serialise_kind : kind serialiser =
     | `Primitive v     -> serialise1 'b' (serialise_primitive) v
     | `TypeVar v       -> serialise1 'c' (serialise_oint) v
     | `Function v      -> serialise2 'd' (serialise_kind, serialise_kind) v
-    | `Record v        -> failwith "serialise_kind: not implemented serialisation for rows yet"
-    | `Variant v       -> failwith "serialise_kind: not implemented serialisation for rows yet"
+    | `Record v        -> serialise_row 'e' v
+    | `Variant v       -> serialise_row 'f' v
     | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_kind) v
     | `Collection v    -> serialise2 'h' (serialise_colltype, serialise_kind) v
     | `DB              -> serialise0 'i' () ()
-(*
-and serialise_row : row serialiser = 
+and serialise_field_spec : field_spec serialiser =
   function
-    | (`RowVar row_var, field_env) ->
-	let present_fields, absent_fields = split_fields field_env in
-	let 
-*)
+    | `Absent -> serialise0 'a' () ()
+    | `Present v -> serialise1 'b' (serialise_kind) v
+and serialise_row_var : row_var serialiser = 
+  function
+    | `RowVar v        -> serialise1 'a' (serialise_option (serialise_oint)) v
+    | `RecRowVar v     -> serialise2 'b' (serialise_oint, serialise_row 'a') v
+and serialise_row : char -> row serialiser = fun t -> serialise2 t
+  ((serialise_list
+     (serialise2 'a' (serialise_string, serialise_field_spec))) -<- assoc_list_of_string_map,
+   serialise_row_var)
+  
+
 and deserialise_kind : kind deserialiser =
   fun s ->
     let t, obj, rest = extract_object s in
@@ -327,29 +332,41 @@ and deserialise_kind : kind deserialiser =
          | 'b'        -> `Primitive (deserialise1 (deserialise_primitive) obj)
          | 'c'        -> `TypeVar (deserialise1 (deserialise_oint) obj)
          | 'd'        -> `Function (deserialise2 (deserialise_kind, deserialise_kind) obj)
-(*
-         | 'e'        -> `Record (deserialise1 (deserialise_list (deserialise_field)) obj)
-         | 'f'        -> `Variant (deserialise1 (deserialise_list (deserialise_field)) obj)
-*)
-         | 'e'        -> failwith "deserialise_kind: not implemented deserialisation for rows yet"
-         | 'f'        -> failwith "deserialise_kind: not implemented deserialisation for rows yet"
+         | 'e'        -> `Record (fst (deserialise_row obj))
+         | 'f'        -> `Variant (fst (deserialise_row obj))
 	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_kind) obj)
          | 'h'        -> `Collection (deserialise2 (deserialise_colltype, deserialise_kind) obj)
          | 'i'        -> (deserialise0 () obj); `DB
          | _          -> failwith ("Unexpected character deserialising kind : " ^ String.make 1 t))
     in r, rest
-(*
-and deserialise_field : field deserialiser =
+and deserialise_field_spec : field_spec deserialiser =
   fun s ->
     let t, obj, rest = extract_object s in
-    let r = 
+    let r =
       (match t with
-         | 'a'        -> `Row_variable (deserialise1 (deserialise_oint) obj)
-         | 'b'        -> `Field_present (deserialise2 (deserialise_string, deserialise_kind) obj)
-         | 'c'        -> `Field_absent (deserialise1 (deserialise_string) obj)
-         | _          -> failwith ("Unexpected character deserialising field : " ^ String.make 1 t))
-    in r, rest
-*)
+	 | 'a' -> `Absent
+	 | 'b' -> `Present (fst (deserialise_kind obj)))
+    in
+      r, rest
+and deserialise_row_var : row_var deserialiser =
+  fun s ->
+    let t, obj, rest = extract_object s in
+    let r =
+      (match t with
+	 | 'a' -> `RowVar (deserialise1 (deserialise_option (deserialise_oint)) obj)
+	 | 'b' -> `RecRowVar (deserialise2 (deserialise_oint, deserialise_row) obj))
+    in
+      r, rest
+and deserialise_row : row deserialiser =
+  fun s ->
+    let _, obj, rest = extract_object s in
+    let r =
+      deserialise2
+	((fun (r, rest) -> string_map_of_assoc_list r, rest) -<-
+	   (deserialise_list (deserialiser2 (deserialise_string, deserialise_field_spec)))
+	,deserialise_row_var) obj
+    in
+      r, rest
 
 let serialise_quantifier : quantifier serialiser
     = function
@@ -557,4 +574,4 @@ let fresh_row_variable () = `RowVar (new_raw_variable ())
 let fresh_collection_variable () = `CtypeVar (new_raw_variable ())
 
 (* Functions on environments *)
-let lookup : string -> 'typ environment_basis -> 'typ assumption_basis = assoc
+let lookup : string -> 'typ environment_basis -> 'typ assumption_basis = List.assoc

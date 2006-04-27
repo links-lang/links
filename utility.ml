@@ -1,9 +1,5 @@
 (**** Various utility functions ****)
 
-open List
-open Pcre
-(*open String*)
-
 (* string environments *)
 module OrderedString =
 struct
@@ -11,6 +7,13 @@ struct
   let compare : string -> string -> int = String.compare
 end
 module StringMap = Map.Make(OrderedString)
+
+let assoc_list_of_string_map env =
+  StringMap.fold (fun x y l -> (x, y) :: l) env []
+
+let string_map_of_assoc_list l =
+  List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 
+
 
 (* int environments *)
 module OrderedInt =
@@ -24,6 +27,8 @@ module IntSet = Set.Make(OrderedInt)
 let intset_of_list lyst = 
   List.fold_right (fun itm set -> IntSet.add itm set) lyst IntSet.empty
 
+
+
 (*** Functional programming ***)
 
 let curry f a b = f (a, b)
@@ -31,7 +36,7 @@ let uncurry f (a, b) = f a b
 let apply f x = f x
 let compose f g x = f (g x)
 let identity x = x
-let notany f = for_all (compose not f)
+let notany f = List.for_all (compose not f)
 let flip f x y = f y x
 
 let (@@)   = compose
@@ -67,7 +72,7 @@ let rec unsnoc =
 let last l = snd (unsnoc l)
 
 let fold_right1 f xs = let butlast, last = unsnoc xs in
-  fold_right f butlast last
+  List.fold_right f butlast last
 
 (** Comparison function from a less-than function *)
 let less_to_cmp less l r = 
@@ -83,12 +88,12 @@ let ordered_unique list =
       | head :: (vice_head :: _ as tail) -> (if head = vice_head then unique_neighbours tail
                                              else head :: unique_neighbours tail)
       | _                                -> list
-  in unique_neighbours (sort compare list)
+  in unique_neighbours (List.sort compare list)
        
 (** Remove duplicates from a list *)
 let rec unduplicate equal = function
   | [] -> []
-  | elem :: elems -> (let _, others = partition (equal elem) elems in
+  | elem :: elems -> (let _, others = List.partition (equal elem) elems in
                         elem :: unduplicate equal others)
 
 (** Unions two ordered unique lists. If the provided lists are not
@@ -105,7 +110,7 @@ let union left right =
 
 (** Unions a list of lists with each other. If the provided lists are
     not already ordered unique they will be transformed. **)
-let union_lists l = ordered_unique (concat l)
+let union_lists l = ordered_unique (List.concat l)
 
 (** Intersects two ordered unique lists. If the provided lists are not
     already ordered unique they will be transformed. **)
@@ -165,25 +170,25 @@ let isok = function `Ko -> false | _ -> true
 let valof = function `Ok x -> x | _ -> raise NONE
 let okmap f = function `Ko -> `Ko | `Ok e -> `Ok(f e)
 let okmap2 f = function `Ko, _ | _, `Ko -> `Ko | `Ok a, `Ok b -> `Ok (f(a, b))
-let allok list = for_all (fun x -> x <> `Ko) list
-let valsof list = try `Ok (map valof list) with NONE -> `Ko
+let allok list = List.for_all (fun x -> x <> `Ko) list
+let valsof list = try `Ok (List.map valof list) with NONE -> `Ko
 let underok x f = okmap f x
 
 (* association list utilities*)
 
 let alistokvals alist =
   try
-    `Ok (map (cross idy valof) alist)
+    `Ok (List.map (cross idy valof) alist)
   with
       NONE -> `Ko
 
-let alistmap f = map (cross idy f)
+let alistmap f = List.map (cross idy f)
 
 (*** Strings ***)
 
 let string_of_char = String.make 1
 
-let string_of_alist = String.concat ", " @@ map (fun (x,y) -> x ^ " => " ^ y)
+let string_of_alist = String.concat ", " @@ List.map (fun (x,y) -> x ^ " => " ^ y)
 
 let rec split_string source delim =
   if String.contains source delim then
@@ -205,7 +210,7 @@ let rec explode' list n string =
 in  compose List.rev (explode' [] 0)
       
 let implode : char list -> string = 
-  compose (String.concat "") (map (String.make 1))
+  compose (String.concat "") (List.map (String.make 1))
 
 (* Find all occurrences of a character within a string *)
 let find_char (s : string) (c : char) : int list =
@@ -215,7 +220,7 @@ let find_char (s : string) (c : char) : int list =
     with Not_found -> occurrences
   in List.rev (aux 0 [])
 
-let mapstrcat glue f list = String.concat glue (map f list)
+let mapstrcat glue f list = String.concat glue (List.map f list)
 
 let numberp s = try ignore (int_of_string s); true with _ -> false
 
@@ -231,7 +236,7 @@ let index pred list =
     | []                  -> -1
   in idx 0 list
 
-let dict_map f =    map (fun (k,v) -> k, f v) 
+let dict_map f = List.map (fun (k,v) -> k, f v) 
 
 (*** Debugging ***)
 let debugging = ref false
@@ -259,7 +264,7 @@ let process_output : string -> string
 (* safe_assoc is like assoc but uses option types instead of
    exceptions to signal absence *)
 
-let safe_assoc lbl alist = try Some(assoc lbl alist) with Not_found -> None
+let safe_assoc lbl alist = try Some(List.assoc lbl alist) with Not_found -> None
 
 (* 
 let opt_map f bottom : ('a option -> 'b) = function
@@ -296,9 +301,9 @@ let option_or = function
 
 let either_assoc lbl1 lbl2 alist =
   try
-    Left(assoc lbl1 alist)
+    Left(List.assoc lbl1 alist)
   with Not_found ->
-    Right(assoc lbl2 alist)
+    Right(List.assoc lbl2 alist)
 
 let option_assoc2 lbl1 lbl2 alist =
   option_or (safe_assoc lbl1 alist,
@@ -391,7 +396,7 @@ let xml_unescape s =
   Str.global_replace (Str.regexp "&amp;") "&"
     (Str.global_replace (Str.regexp "&lt;") "<" s)
 
-let ocaml_version_number = (map int_of_string
+let ocaml_version_number = (List.map int_of_string
                               (split_string Sys.ocaml_version '.'))
 
 (* TBD: make me a fold *)
