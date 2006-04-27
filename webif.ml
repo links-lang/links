@@ -47,11 +47,11 @@ let untuple_single = function
   | r -> r
 
 let clientize_unevaled_env env = 
-  let is_server_fun = (function
-			 | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
-			 | Syntax.Define (_, _, `Client, _) -> false
-			 | e  -> failwith ("Unexpected non-definition in environment : " 
-					   ^ Syntax.string_of_expression e))
+  let is_server_fun = function
+    | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
+    | Syntax.Define (_, _, `Client, _) -> false
+    | e  -> failwith ("Unexpected non-definition in environment : " 
+		      ^ Syntax.string_of_expression e)
   in 
   let def_as_client_fun = function 
     | Syntax.Define (name, _, _, _) -> 
@@ -61,7 +61,8 @@ let clientize_unevaled_env env =
 	    (name, 
              Some (fun (_, cont, arg) -> 
                      let call = serialize_call_to_client (cont, name, arg) in
-                       (print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode call);
+                       (print_endline ("Content-type: text/plain\n\n" ^ 
+                                         Utility.base64encode call);
                         exit 0)),
              []))) in
   let server_env, client_env = List.partition is_server_fun env in
@@ -74,10 +75,12 @@ let handle_client_call unevaled_env f args =
   let continuation = [Result.FuncApply (List.assoc f env, [])] in
   let result = (Interpreter.apply_cont_safe env continuation
 		  (untuple_single (Jsonparse.parse_json 
-				     Jsonlex.jsonlex (Lexing.from_string args)))) in
-    print_string ("Content-type: text/plain\n\n" ^ Utility.base64encode (Json.jsonize_result result));
+				     Jsonlex.jsonlex (Lexing.from_string args))))
+  in
+    print_string ("Content-type: text/plain\n\n" ^ 
+                    Utility.base64encode (Json.jsonize_result result));
     exit 0
-      
+
 open Errors
 open Syntax (* needed for Parse_failure exception *)
 (* really error handling should happen at a different level than
@@ -100,10 +103,10 @@ let serve_requests filename =
   let global_env, [expression] = List.partition is_define global_env in
   let cgi_args = Cgi.parse_args () in
     if Forms.is_remote_call cgi_args then 
-      handle_client_call
-        global_env
-        (List.assoc "__name" cgi_args) 
-        (List.assoc "__args" cgi_args)
+       handle_client_call
+         global_env
+         (List.assoc "__name" cgi_args) 
+         (List.assoc "__args" cgi_args)
     else if List.mem_assoc "__continuation" cgi_args then
       begin
         let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string in
@@ -112,7 +115,8 @@ let serve_requests filename =
         and env = clientize_unevaled_env global_env in
           debug("continuation is " ^ Syntax.string_of_expression expression);
         let result = Interpreter.apply_cont_safe env continuation (untuple_single arg) in
-          print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode (Result.string_of_result result));
+          print_endline ("Content-type: text/plain\n\n" ^ 
+                           Utility.base64encode(Result.string_of_result result));
           exit 0
       end
     else 

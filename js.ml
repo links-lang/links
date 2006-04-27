@@ -30,27 +30,27 @@ type code = | Var   of string
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
 
-  __concat(a, b)
+  _concat(a, b)
      concatenate two sequences: either strings or lists
-  __accum(f, i)
+  _accum(f, i)
     concatMap: apply f to every element of the sequence `i' and concatenate the results.
-  __plus, __minus, etc.
+  _plus, _minus, etc.
     curried function versions of the standard arithmetic operators
-  __XML(tag, attrs, children)
+  _XML(tag, attrs, children)
     create a DOM node with name `tag'
                        and attributes `attrs' (a dictionary)
                        and children `children' (a sequence of DOM nodes and strings)    
-  __extend(record, tag, value)
+  _extend(record, tag, value)
     extend a record (dictionary) with a new field (label `tag'; value `value').
     Don't update the old record.
-  __project(record, tag, value)
+  _project(record, tag, value)
     project a field of a record
 
-  __start(tree)
+  _start(tree)
     Replace the current page with `tree'.
-  __registerFormAction(continuation)
+  _registerFormAction(continuation)
     Register a continuation function; return an id.
-  __continuations
+  _continuations
     Table of continuation functions, indexed by id.
 
   Also, any `builtin' functions from Library.value_env.
@@ -112,7 +112,7 @@ let rec show : code -> string =
       | Lit s -> s
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
-      | Call (Var "__project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+      | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
@@ -135,7 +135,7 @@ let strlit s = Lit (string_quote s)
 
    * Top-level boilerplate code to replace the root element and reset the focus
 
-     The special function __start takes an html page as a string and
+     The special function _start takes an html page as a string and
      replaces the currently displayed page with that one.
 
      Some of the other functions are equivalents to Links builtins
@@ -150,20 +150,20 @@ let boiler_1 = "<html>
           <script type='text/javascript'><!-- \n"
 and boiler_2 =    "\n--> </script>
       </head>
-      <body><script type='text/javascript'>(" 
-and  boiler_3 = ")(__start)</script></body>
+      <body><script type='text/javascript'>" 
+and  boiler_3 = "</script></body>
    </html>"
 
 (* Operators are represented as functions in the interpreter, but
    operator names aren't valid JS function names.*)
-let builtins = ["+", "__plus";
-                "+.", "__plus";
-                "-", "__minus";
-                "-.", "__minus";
-                "*", "__times";
-                "*.", "__times";
-                "/", "__divide";
-                "/.", "__divide"]
+let builtins = ["+", "_plus";
+                "+.", "_plus";
+                "-", "_minus";
+                "-.", "_minus";
+                "*", "_times";
+                "*.", "_times";
+                "/", "_divide";
+                "/.", "_divide"]
 
 let binop_name op = 
   try
@@ -251,8 +251,8 @@ let strip_lcolon evName =
 let generate_stub = function
   | Define (n, Rec ([_, (Abstr _ as f)], Variable _, _), `Server, _) ->
       let arglist, _ = untuple_def f in
-        Defs [n, Fn(["kappa"], Fn (arglist, 
-                 Call(Call (Var "__remoteCall", [Var "kappa"]),
+        Defs [n, Fn(["__kappa"], Fn (arglist, 
+                 Call(Call (Var "_remoteCall", [Var "__kappa"]),
                       [strlit n; Dict (
                          List.map2
                            (fun n v -> string_of_int n, Var v) 
@@ -263,18 +263,18 @@ let generate_stub = function
     -> failwith ("Cannot generate stub for " ^ string_of_expression e)
 
 let trivial_cps expr = 
-  Fn(["kappa"], Call(Var "kappa", [expr]))
+  Fn(["__kappa"], Call(Var "__kappa", [expr]))
 
 (* let idy_js = Fn(["x"], Var "x")*)
-let idy_js = Var("__idy")
+let idy_js = Var("_idy")
 
 (* let yield_and_call(func, args, kappa) = *)
-(*   Call(Var("__yield"), [jsthunk(Call(Call(func, [kappa]), args))]) *)
+(*   Call(Var("_yield"), [jsthunk(Call(Call(func, [kappa]), args))]) *)
 
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
-    Call(Call (Var "__XML",
-               [Var "kappa"]),
+    Call(Call (Var "_XML",
+               [Var "__kappa"]),
          [strlit tag;
           Dict (attrs_noncps @ map (fun (k, n, _) -> (k, Var n)) attrs_cps);
           Lst (children_noncps @ map (fun (n, _) -> Var n) children_cps)])
@@ -285,7 +285,7 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
   let tower = fold_right (fun (aname, vname, item) expr ->
                             Call(item, [Fn([vname], expr)])
                          ) attrs_cps tower in
-    Fn(["kappa"], tower)
+    Fn(["__kappa"], tower)
       
 
 (** generate
@@ -301,21 +301,21 @@ let rec generate : 'a expression' -> code =
       | Collection_union (l, r, _) ->
           let l_cps = generate l in
           let r_cps = generate r in
-            Fn(["kappa"],
-               Call(l_cps, [Fn(["l"],
-                   Call(r_cps, [Fn(["r"],
-                        Call(Var "kappa", 
-                             [Call (Var "__concat", [Var "l"; Var "r"])]))]))])) 
+            Fn(["__kappa"],
+               Call(l_cps, [Fn(["__l"],
+                   Call(r_cps, [Fn(["__r"],
+                        Call(Var "__kappa", 
+                             [Call (Var "_concat", [Var "__l"; Var "__r"])]))]))])) 
       | Collection_union (Collection_single (l,_,_), r, _) -> 
           failwith "unimpl"; 
 	  (match reduce_collection r with
 	     | Lst items -> Lst (generate_noncps l :: items)
-	     | c         -> Call (Var "__concat", [Lst [generate_noncps l]; c]))
+	     | c         -> Call (Var "_concat", [Lst [generate_noncps l]; c]))
       | Collection_union (l, Collection_single (r,_,_), _) -> 
           failwith "unimpl"; 
 	  (match reduce_collection l with
 	     | Lst items -> Lst (items @ [generate_noncps r])
-	     | c         -> Call (Var "__concat", [c; Lst [generate_noncps r]]))
+	     | c         -> Call (Var "_concat", [c; Lst [generate_noncps r]]))
       | e ->          
           (* failwith "unimpl"; *)
           generate e
@@ -329,97 +329,96 @@ let rec generate : 'a expression' -> code =
       let i_cps = generate i in
       let t_cps = generate t in
       let e_cps = generate e in
-        Fn(["kappa"], 
-           Call(i_cps, [Fn(["i"], Cond (Var "i",
-                                        Call(t_cps, [Var "kappa"]),
-                                        Call(e_cps, [Var "kappa"])))]))
+        Fn(["__kappa"], 
+           Call(i_cps, [Fn(["__i"], Cond (Var "__i",
+                                        Call(t_cps, [Var "__kappa"]),
+                                        Call(e_cps, [Var "__kappa"])))]))
                           
   | Let (v, e, b, _)                   -> 
       let e' = generate e in
       let b' = generate b in
-      let x = gensym v in
-        Fn(["kappa"], 
+      let x = gensym ("__" ^ v) in
+        Fn(["__kappa"], 
            Call(e', [Fn([x], 
-                        Bind (v, Var x,
-                              Call(b', [Var "kappa"])))]))
+                        Bind(v, Var x,
+                             Call(b', [Var "__kappa"])))]))
   | Variable (v, _)                    -> trivial_cps (Var v)
   | Comparison (l, "==", r, _)         -> 
       let l_cps = generate l in
       let r_cps = generate r in
-        Fn(["kappa"],
-           Call(l_cps, [Fn(["l"],
-              Call(r_cps, [Fn(["r"],
-                 Call(Var "kappa", [Call(Var "__eq", [Var "l"; Var "r"])]))]))]))
+        Fn(["__kappa"],
+           Call(l_cps, [Fn(["__l"],
+              Call(r_cps, [Fn(["__r"],
+                 Call(Var "__kappa", [Call(Var "_eq", [Var "__l"; Var "__r"])]))]))]))
   | Comparison (l, op, r, _)           -> 
       let l_cps = generate l in
       let r_cps = generate r in
-        Fn(["kappa"],
-           Call(l_cps, [Fn(["l"], 
-                Call(r_cps, [Fn(["r"],
-                     Call(Var "kappa", 
-                          [Binop(Var "l", binop_name op, Var "r")]))]))]))
+        Fn(["__kappa"],
+           Call(l_cps, [Fn(["__l"], 
+                Call(r_cps, [Fn(["__r"],
+                     Call(Var "__kappa", 
+                          [Binop(Var "__l", binop_name op, Var "__r")]))]))]))
       (* Should strings be handled differently at this level? *)
   | Collection_empty _                 -> trivial_cps (Lst [])
   | Collection_single (e, _, _)        -> 
       let content_cps = generate e in
-        Fn(["kappa"],
-           (Call(content_cps, [Fn(["x"], 
-                                  (Call(Var "kappa", [Lst [Var "x"]])))])))
+        Fn(["__kappa"],
+           (Call(content_cps, [Fn(["__x"], 
+                                  (Call(Var "__kappa", [Lst [Var "__x"]])))])))
   | (Collection_union _) as c          -> 
       reduce_collection c
-(*  | Collection_union (l, r, _)         -> Call (Var "__concat", [generate l; generate r])*)
+(*  | Collection_union (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
   | Collection_extension (e, v, b, _)  -> 
       let b_cps = generate b in
       let e_cps = generate e in
-      let x = gensym "" in
-        Fn(["kappa"],
-           Call(b_cps, [Fn(["b"],
-                           Call(Call(Var "__accum", [Var "kappa"]),
-                                [Fn(["kappa"], 
-                                    Fn([v], Call(e_cps, [Var "kappa"])));
-                                 Var "b"]))]))
+        Fn(["__kappa"],
+           Call(b_cps, [Fn(["__b"],
+                           Call(Call(Var "_accum", [Var "__kappa"]),
+                                [Fn(["__kappa"], 
+                                    Fn([v], Call(e_cps, [Var "__kappa"])));
+                                 Var "__b"]))]))
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
   | Xml_node (tag, attrs, children, _)   -> 
-      let attrs_cps = map (fun (k,e) -> (k, gensym "", generate e)) attrs in
-      let children_cps = map (fun e -> (gensym "", generate e)) children in
+      let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
+      let children_cps = map (fun e -> (gensym "__", generate e)) children in
         make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
   | Abstr _ as a -> 
       let arglist, body = untuple_def a
-      in Fn(["kappa"], 
-            Call(Var "kappa", 
-		 [Fn(["kappa"],
-		     Fn (arglist, Call(generate body, [Var "kappa"])))]))
+      in Fn(["__kappa"], 
+            Call(Var "__kappa", 
+		 [Fn(["__kappa"],
+		     Fn (arglist, Call(generate body, [Var "__kappa"])))]))
 
   | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
       let l_cps = generate l in
       let r_cps = generate r in
-        Fn(["kappa"], 
-           Call(l_cps, [Fn(["l"],
-                Call(r_cps, [Fn(["r"],
-                     Call(Var "kappa",
-                          [Binop (Var "l", binop_name op, Var "r")]))]))]))
+        Fn(["__kappa"], 
+           Call(l_cps, [Fn(["__l"],
+                Call(r_cps, [Fn(["__r"],
+                     Call(Var "__kappa",
+                          [Binop (Var "__l", binop_name op, Var "__r")]))]))]))
 
   | Apply (Variable ("domutate", _), p, _) -> 
       let p_cps = generate p in
-        Fn(["kappa"], 
-           Call(p_cps, [Fn(["p"],
-                          Call(Var "kappa",
-                               [Call(Var "__applyChanges", [Var "p"])]))]))
+        Fn(["__kappa"], 
+           Call(p_cps, [Fn(["__p"],
+                          Call(Var "__kappa",
+                               [Call(Var "_applyChanges", [Var "__p"])]))]))
 
   | Apply (f, p, _  ) -> 
-      let kappa = Var("kappa") in
+      let kappa = Var("__kappa") in
       let f_cps = generate f in
-      let f_name = gensym "" in
+      let f_name = gensym "__f" in
       let arglist = untuple_call p in
       let cps_args = map generate arglist in
-      let arg_names = map (fun e -> gensym "") arglist in
+      let arg_names = map (fun e -> gensym "__f") arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
       in
-      let innermost_call = Call(Var "__call",
+      let innermost_call = Call(Var "_call",
                                 [Var f_name; 
                                  Lst(map (fun name -> Var name) arg_names); 
                                  kappa]
@@ -428,33 +427,33 @@ let rec generate : 'a expression' -> code =
                                  (combine cps_args arg_names)
                                  innermost_call in
         
-        Fn (["kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
+        Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 
   (* Binding *)
   | Define (_, _, `Server, _) as d      -> generate_stub d
   | Define (n, e, (`Client|`Unknown), _)-> 
       Defs ([n, Call(generate e,
-		     [Var "__idy"])])   (* definitions are always top 
+		     [Var "_idy"])])   (* definitions are always top 
 					   level, right? *)
   | Rec (bindings, body, _) ->
-      Fn(["kappa"],
+      Fn(["__kappa"],
 	 (fold_right 
             (fun (v, e) body ->
-	       Call(generate e, [Fn(["e"],
-				    Bind (v, Var "e", body))]))
+	       Call(generate e, [Fn(["__e"],
+				    Bind (v, Var "__e", body))]))
             bindings
-            (Call (generate body, [Var "kappa"]))))
+            (Call (generate body, [Var "__kappa"]))))
         
   (* Records *)
   | Record_empty _                    -> trivial_cps (Dict [])
   | Record_extension (n, v, r, _)     -> 
       let r_cps = generate r in
       let v_cps = generate v in
-      let extension_val = Call (Var "__extend", [Var "r"; strlit n; Var "v"])
+      let extension_val = Call (Var "_extend", [Var "__r"; strlit n; Var "__v"])
       in
-        Fn(["kappa"], Call(r_cps, [Fn(["r"], 
-                      Call(v_cps, [Fn(["v"],
-                                  Call(Var "kappa",
+        Fn(["__kappa"], Call(r_cps, [Fn(["__r"], 
+                      Call(v_cps, [Fn(["__v"],
+                                  Call(Var "__kappa",
                                        [extension_val])
                                      )]))]))
   | Record_selection_empty (Variable _, b, _)  -> 
@@ -462,66 +461,66 @@ let rec generate : 'a expression' -> code =
   | Record_selection_empty (v, b, _)  -> 
       let v_cps = generate v in
       let b_cps = generate b in
-        Fn(["kappa"], Call(v_cps, [Fn(["ignored"], 
-                      Call(b_cps, [Fn(["b"],
-                      Call(Var "kappa", [Var "b"]))]))]))
+        Fn(["__kappa"], Call(v_cps, [Fn(["ignored"], 
+                                        Call(b_cps, [Fn(["__b"],
+                                                        Call(Var "__kappa", [Var "__b"]))]))]))
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
-      let name = gensym "r" in
-        Fn(["kappa"],
-           Call(r_cps, [Fn (["r"], 
-                (Bind (name, Var "r", 
+      let name = gensym "__r" in
+        Fn(["__kappa"],
+           Call(r_cps, [Fn (["__r"], 
+                (Bind (name, Var "__r", 
                        Bind (lv, 
-                             Call (Var "__project",
+                             Call (Var "_project",
                                    [strlit l; Var name]),
                              Bind (etcv, 
                                    Var name,
-                                   Call(b_cps, [Var "kappa"]))))))]))
+                                   Call(b_cps, [Var "__kappa"]))))))]))
 
   | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv ->
       (* Could use dot-notation instead of project call *)
       let v_cps = generate v in
-        Fn(["kappa"],
-           Call(v_cps, [Fn(["v"],
-                Call(Var "kappa", 
-                     [Call (Var "__project", [strlit l; Var "v"])]))]))
+        Fn(["__kappa"],
+           Call(v_cps, [Fn(["__v"],
+                Call(Var "__kappa", 
+                     [Call (Var "_project", [strlit l; Var "__v"])]))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
       failwith("record selection not implemented");
       let v_cps = generate v in
       let b_cps = generate b in
-        Fn(["kappa"],
-           Call(v_cps, [Fn(["v"], 
+        Fn(["__kappa"],
+           Call(v_cps, [Fn(["__v"], 
                 Bind (lv,
-	              Call (Var "__project", [strlit l; Var "v"]),
-                      Call(b_cps, [Var "kappa"])))]))
+	              Call (Var "_project", [strlit l; Var "__v"]),
+                      Call(b_cps, [Var "__kappa"])))]))
   (* Variants *)
   | Variant_injection (l, e, _) -> 
       let content_cps = generate e in
-        Fn(["kappa"], 
-           Call(content_cps, [Fn(["content"],
-                                 Call(Var "kappa", 
+        Fn(["__kappa"], 
+           Call(content_cps, [Fn(["__content"],
+                                 Call(Var "__kappa", 
                                       [Dict [("label", strlit l);
-                                             ("value", Var "content")]]))]))
+                                             ("value", Var "__content")]]))]))
   | Variant_selection_empty (e, _) ->
-      Fn(["kappa"], Call(Var "__fail",
+      Fn(["__kappa"], Call(Var "_fail",
                          [strlit "closed switch got value out of range"]))
   | Variant_selection (src, case_label, case_var, case_body, 
                        else_var, else_body, _) ->
       let src_cps = generate src in
       let case_body_cps = generate case_body in
       let else_body_cps = generate else_body in
-        Fn(["kappa"],
-          Call(src_cps, [Fn(["src"],
-                            Cond(Binop(Call(Var "__vrntLbl", [Var "src"]),
+        Fn(["__kappa"],
+          Call(src_cps, [Fn(["__src"],
+                            Cond(Binop(Call(Var "_vrntLbl", [Var "__src"]),
                                        "==",
                                        strlit case_label),
                                  Bind(case_var,
-                                      Call(Var "__vrntVal", [Var "src"]),
-                                      Call(case_body_cps, [Var "kappa"])),
+                                      Call(Var "_vrntVal", [Var "__src"]),
+                                      Call(case_body_cps, [Var "__kappa"])),
                                  Bind(else_var,
-                                      Var "src",
-                                      Call(else_body_cps, [Var "kappa"]))
+                                      Var "__src",
+                                      Call(else_body_cps, [Var "__kappa"]))
                                 )
                            )]))
 
@@ -544,7 +543,7 @@ let rec generate : 'a expression' -> code =
         _continuation_form1 = null;
         function f(x) { 
            return (_continuation_form1 = function () { foo(x) },
-                   '<form name="form1" action="#" onSubmit="__start(_continuation_form1()); return false">...</form>')
+                   '<form name="form1" action="#" onSubmit="_start(_continuation_form1()); return false">...</form>')
         }
 
    The continuation can't be left in the action attribute because it
@@ -577,7 +576,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
     (* handlerInvoker generates onFoo="..." attributes--the first 
        thing invoked when that event occurs. *)
   let handlerInvoker (evName, _) = 
-    (evName, strlit ("__eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
+    (evName, strlit ("_eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
   let elem_id = 
     try 
       match (assoc "id" attrs) with
@@ -585,14 +584,14 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
     with Not_found -> Lit "0" in
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left
-                            (fun expr var -> Bind (var, Call (Var "__val", [strlit var]), expr))
+                            (fun expr var -> Bind (var, Call (Var "_val", [strlit var]), expr))
                             (end_thread(generate code))
                             vars) in
   let handlers = map make_code_for_handler handlers in
   let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
   let children_cps = map (fun e -> (gensym "", generate e)) children in
     make_xml_cps attrs_cps (["id", 
-                             Call(Var "__registerFormEventHandlers",
+                             Call(Var "_registerFormEventHandlers",
                                   [elem_id;
                                    Lst (map (fun (evName, code) -> 
                                                Dict(["evName", strlit evName;
@@ -611,7 +610,7 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
   let attrs = 
-    ("onfocus", Syntax.String ("__focused = this.id", Sugar.no_expr_data))
+    ("onfocus", Syntax.String ("_focused = this.id", Sugar.no_expr_data))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
@@ -626,7 +625,7 @@ and end_thread expr = Call(expr, [idy_js])
    accept a continuation kappa and immediately pass the result to 
    kappa. should only be used on trivial expressions--w/o subexprs *)
 and generate_easy_cps expr = 
-        Fn(["kappa"], Call(Var "kappa", [generate expr]))
+        Fn(["__kappa"], Call(Var "__kappa", [generate expr]))
       
 module StringSet = Set.Make(String)
 
@@ -649,7 +648,7 @@ let rec freevars = function
 
 (* FIXME: There is some problem with this whereby variables are captured *)
 let rec replace' var replcmt fvs = function
-  | Var  x when x = var -> replcmt
+  | Var x when x = var -> replcmt
   | Defs defs -> Defs(alistmap (replace' var replcmt (freevars replcmt)) defs)
   | Fn(args, body) when not(mem var args) -> 
       (* this may be unnecessary, if whole expr. is uniquified previously *)
@@ -669,7 +668,7 @@ let rec replace' var replcmt fvs = function
   | Dict(terms) -> Dict(alistmap (replace' var replcmt fvs) terms)
   | Lst(terms) -> Lst(map (replace' var replcmt fvs) terms)
   | Bind(name, expr, body) -> Bind(name, replace' var replcmt fvs expr, 
-                                   if name <> var then
+                                   if name <> var then (* NOT CORRECT! *)
                                      replace' var replcmt fvs body
                                    else body)
   | Seq(first, second) -> Seq(replace' var replcmt fvs first,
@@ -684,11 +683,37 @@ and uniquify_args = function
                        replace' old (Var noo) (StringSet.singleton noo) body)
            subst body)
 
+
+(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
+let rec rename' renamer = function
+  | Var x -> Var (renamer x)
+  | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
+  | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
+  | Call(func, args) -> Call(rename' renamer func,
+                             map (rename' renamer) args)
+  | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
+                                 rename' renamer rhs)
+  | Cond(test, yes, no) ->  Cond(rename' renamer test,
+                                 rename' renamer yes,
+                                 rename' renamer no)
+  | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
+  | Lst(terms) -> Lst(map (rename' renamer) terms)
+  | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
+                                   rename' renamer body)
+  | Seq(first, second) -> Seq(rename' renamer first,
+                              rename' renamer second)
+  | simple_expr -> simple_expr
+and rename renamer body = rename' renamer body
+
 let rec simplify = function
-  | Call(Fn([formal_arg], body), [actual_arg]) ->
-      debug("replacing " ^ formal_arg ^ " with " ^ (show actual_arg)); 
+  | Call(Fn([formal_arg], body), [actual_arg]) 
+      when Str.string_match (Str.regexp "^__") formal_arg 0
+    ->
       replace formal_arg actual_arg body
-  | Call(Var "__idy", [arg]) -> arg
+
+  | Call(Var "_idy", [arg]) -> arg
+      
+      (* The other cases are just compatible closure *)
   | Call(f, args) -> Call(simplify f, map (simplify) args )
   | Defs defs -> Defs(alistmap (simplify) defs)
   | Fn(args, body) -> Fn(args, simplify body)
@@ -708,10 +733,14 @@ let rec simplify_completely expr =
     else
       simplify_completely expr2
 
+let rec eliminate_admin_redexes = 
+  simplify_completely (* ->-
+     rename (Str.global_replace (Str.regexp "\*\(.*\\)\*") "\1") *)
+
 let gen = 
   Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
-  ->- simplify_completely
+  ->- eliminate_admin_redexes
   ->- show
 
  (* TODO: imports *)
@@ -719,7 +748,7 @@ let generate_program filename environment expression =
   (boiler_1
  ^ String.concat "\n" (map gen environment)
  ^ boiler_2
- ^ gen expression
+ ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
  ^ boiler_3)
 
 (* FIXME: The tests below create an unnecessary dependency on
@@ -766,15 +795,15 @@ let run_tests() =
 let _ = add_qtest("1+1",
                   fun rslt ->
                    match rslt with
-                       [Fn(["kappa"], 
-                           Call(Var "kappa", [Binop(Lit "1", "+", Lit "1")]))] -> true
+                       [Fn(["__kappa"], 
+                           Call(Var "__kappa", [Binop(Lit "1", "+", Lit "1")]))] -> true
                  )
 
 let _ = add_qtest("fun f(x) { x+1 } f(1)",
                   fun rslt ->
                    match rslt with
-                       Defs([_, Bind(fname, Fn(["kappa"], Fn([xname], 
-                                  Call(Var "kappa",
+                       Defs([_, Bind(fname, Fn(["__kappa"], Fn([xname], 
+                                  Call(Var "__kappa",
                                        [Binop(Var xname2, "+", Lit "1")]))),
                                      Var fname2)])::etc
                          when fname = fname2
