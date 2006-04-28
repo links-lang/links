@@ -40,12 +40,12 @@ let rec extract_row : inference_type -> inference_row = function
 let var_is_free_in_type var typ = mem var (free_type_vars typ)
 
 let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_type) -> unit = fun rec_vars ->
-  let make_point id rec_vars =
-    if IntMap.mem id rec_vars then
-      IntMap.find id rec_vars, rec_vars
+  let make_point var rec_vars =
+    if IntMap.mem var rec_vars then
+      IntMap.find var rec_vars, rec_vars
     else
-      let point = Unionfind.fresh id in
-	point, IntMap.add id point rec_vars in
+      let point = Unionfind.fresh var in
+	point, IntMap.add var point rec_vars in
     
     fun (t1, t2) ->
       (debug ("Unifying "^string_of_kind t1^" with "^string_of_kind t2);
@@ -54,49 +54,49 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
       | `Primitive x, `Primitive y when x = y -> ()
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  (match (Unionfind.find lpoint, Unionfind.find rpoint) with
-	     | `TypeVar lid, `TypeVar rid ->
+	     | `TypeVar lvar, `TypeVar rvar ->
 		   Unionfind.union lpoint rpoint
-	     | `TypeVar id, t ->
-		 (if var_is_free_in_type id t then
-		    (debug ("rec intro1 (" ^ (string_of_int id) ^ ")");
-		     Unionfind.change rpoint (`Recursive (id, t)))
+	     | `TypeVar var, t ->
+		 (if var_is_free_in_type var t then
+		    (debug ("rec intro1 (" ^ (string_of_int var) ^ ")");
+		     Unionfind.change rpoint (`Recursive (var, t)))
 		 else
 		   ());
 		 Unionfind.union lpoint rpoint
-	     | t, `TypeVar id ->
-		 (if var_is_free_in_type id t then
-		    (debug ("rec intro2 (" ^ (string_of_int id) ^ ")");
-		     Unionfind.change lpoint (`Recursive (id, t)))
+	     | t, `TypeVar var ->
+		 (if var_is_free_in_type var t then
+		    (debug ("rec intro2 (" ^ (string_of_int var) ^ ")");
+		     Unionfind.change lpoint (`Recursive (var, t)))
 		  else
 		    ());
 		 Unionfind.union rpoint lpoint
-	     | `Recursive (id, t), `Recursive (id', t') ->
-		 debug ("rec (" ^ (string_of_int id) ^ "," ^ (string_of_int id') ^")");
-		 let point, rec_vars = make_point id rec_vars in
-		 let point', rec_vars = make_point id' rec_vars in
+	     | `Recursive (var, t), `Recursive (var', t') ->
+		 debug ("rec (" ^ (string_of_int var) ^ "," ^ (string_of_int var') ^")");
+		 let point, rec_vars = make_point var rec_vars in
+		 let point', rec_vars = make_point var' rec_vars in
 		   if Unionfind.equivalent point point' then
 		     ()
 		   else
-		     (assert(id <> id');
+		     (assert(var <> var');
 		      Unionfind.union point point';
 		      unify' rec_vars (t, t'))
-	     | `Recursive (id, t'), t | t, `Recursive (id, t')->
-		 debug ("rec (" ^ (string_of_int id) ^ ")");
-		 let point, rec_vars = make_point id rec_vars in
+	     | `Recursive (var, t'), t | t, `Recursive (var, t')->
+		 debug ("rec (" ^ (string_of_int var) ^ ")");
+		 let point, rec_vars = make_point var rec_vars in
 		   unify' rec_vars (t, t')
 	     | t, t' -> unify' rec_vars (t, t'); Unionfind.union lpoint rpoint)
       | `MetaTypeVar point, t | t, `MetaTypeVar point ->
 	  (match (Unionfind.find point) with
-	     | `TypeVar id ->
-		 if var_is_free_in_type id t then
-   		   (let _ = debug ("rec intro3 ("^string_of_int id^","^string_of_kind t^")") in
-		     Unionfind.change point (`Recursive (id, t)))
+	     | `TypeVar var ->
+		 if var_is_free_in_type var t then
+   		   (let _ = debug ("rec intro3 ("^string_of_int var^","^string_of_kind t^")") in
+		     Unionfind.change point (`Recursive (var, t)))
 		 else
-		   (debug ("non-rec (" ^ string_of_int id ^ ")");
+		   (debug ("non-rec (" ^ string_of_int var ^ ")");
 		   Unionfind.change point t)
-	     | `Recursive (id, t') ->
-   		 debug ("rec (" ^ (string_of_int id) ^ ")");
-		 let point, rec_vars = make_point id rec_vars in
+	     | `Recursive (var, t') ->
+   		 debug ("rec (" ^ (string_of_int var) ^ ")");
+		 let point, rec_vars = make_point var rec_vars in
 		   unify' rec_vars (t, t')
 	     | t' -> unify' rec_vars (t, t'))
       | `Function (lvar, lbody), `Function (rvar, rbody) ->
@@ -115,8 +115,8 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
 	  unify' rec_vars (lelems, relems);
 	  let elem_type = lelems in
 	    (match (Unionfind.find lpoint, Unionfind.find rpoint) with
-	       | `CtypeVar id, ctype -> Unionfind.union lpoint rpoint
-	       | ctype, `CtypeVar id -> Unionfind.union rpoint lpoint
+	       | `CtypeVar var, ctype -> Unionfind.union lpoint rpoint
+	       | ctype, `CtypeVar var -> Unionfind.union rpoint lpoint
 	       | ctype, ctype' -> 
 		   if ctype = ctype' then
 		     ()
@@ -131,7 +131,7 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
 	  unify' rec_vars (elems, elems');
 	  let elem_type = elems in
 	    (match (Unionfind.find point, ctype) with
-	       | `CtypeVar id, ctype -> 
+	       | `CtypeVar var, ctype -> 
 		   Unionfind.change point ctype
 	       | ctype', ctype ->
 		   if ctype = ctype' then
@@ -348,9 +348,9 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 
 	let tenv, renv, cenv = List.fold_left
 	  (fun (tenv, renv, cenv) -> function
-	     | `TypeVar id -> IntMap.add id (ITO.new_type_variable ()) tenv, renv, cenv
-	     | `RowVar id -> tenv, IntMap.add id (ITO.new_row_variable ()) renv, cenv
-	     | `CtypeVar id -> tenv, renv, IntMap.add id (ITO.new_collection_variable ()) cenv
+	     | `TypeVar var -> IntMap.add var (ITO.new_type_variable ()) tenv, renv, cenv
+	     | `RowVar var -> tenv, IntMap.add var (ITO.new_row_variable ()) renv, cenv
+	     | `CtypeVar var -> tenv, renv, IntMap.add var (ITO.new_collection_variable ()) cenv
 	  ) (IntMap.empty, IntMap.empty, IntMap.empty) generics in
 	  
 	let rec inst : rec_maps -> inference_type -> inference_type = fun rec_env typ ->
@@ -358,27 +358,27 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	    match typ with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
 	      | `Primitive _  -> typ
-	      | `TypeVar id -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
+	      | `TypeVar var -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
 	      | `MetaTypeVar point ->
 		  let t = Unionfind.find point in
 		    (match t with
-		       | `TypeVar id ->
-			   if IntMap.mem id tenv then
-			     IntMap.find id tenv
+		       | `TypeVar var ->
+			   if IntMap.mem var tenv then
+			     IntMap.find var tenv
 			   else
 			     typ
 			       (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
-		       | `Recursive (id, t) ->
-			   debug ("rec (instantiate)1: " ^(string_of_int id));
+		       | `Recursive (var, t) ->
+			   debug ("rec (instantiate)1: " ^(string_of_int var));
 
-			   if IntMap.mem id rec_type_env then
-			     (`MetaTypeVar (IntMap.find id rec_type_env))
+			   if IntMap.mem var rec_type_env then
+			     (`MetaTypeVar (IntMap.find var rec_type_env))
 			   else
 			     (
-			       let id' = new_raw_variable () in
-			       let point' = Unionfind.fresh (`TypeVar id') in
-			       let t' = inst (IntMap.add id point' rec_type_env, rec_row_env) t in
-			       let _ = Unionfind.change point' (`Recursive (id', t')) in
+			       let var' = new_raw_variable () in
+			       let point' = Unionfind.fresh (`TypeVar var') in
+			       let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+			       let _ = Unionfind.change point' (`Recursive (var', t')) in
 				 `MetaTypeVar point'
 			   )
 
@@ -386,22 +386,22 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
 	      | `Record row -> `Record (inst_row rec_env row)
 	      | `Variant row ->  `Variant (inst_row rec_env row)
-	      | `Recursive (id, t) ->
+	      | `Recursive (var, t) ->
 		  (*assert(false)*)
-		  debug ("rec (instantiate)2: " ^(string_of_int id));
+		  debug ("rec (instantiate)2: " ^(string_of_int var));
 
-		  if IntMap.mem id rec_type_env then
-		    (`MetaTypeVar (IntMap.find id rec_type_env))
+		  if IntMap.mem var rec_type_env then
+		    (`MetaTypeVar (IntMap.find var rec_type_env))
 		  else
 		    (
-		      let id' = new_raw_variable () in
-		      let point' = Unionfind.fresh (`TypeVar id') in
-		      let t' = inst (IntMap.add id point' rec_type_env, rec_row_env) t in
-		      let _ = Unionfind.change point' (`Recursive (id', t')) in
+		      let var' = new_raw_variable () in
+		      let point' = Unionfind.fresh (`TypeVar var') in
+		      let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+		      let _ = Unionfind.change point' (`Recursive (var', t')) in
 			`MetaTypeVar point'
 		    )
 
-		  (*`Recursive (id, inst (IntSet.add id rec_vars) t) *)
+		  (*`Recursive (var, inst (IntSet.add var rec_vars) t) *)
 	      | `Collection (collection_type, elem_type) ->
 		  `Collection (inst_collection_type collection_type, inst rec_env elem_type)
 		  (* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
@@ -454,9 +454,9 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	
 	and inst_collection_type : inference_collection_type -> inference_collection_type = function
 	  | `Set | `Bag | `List as k -> k
-	  | `CtypeVar id as k ->
-	      if IntMap.mem id cenv then
-		IntMap.find id cenv
+	  | `CtypeVar var as k ->
+	      if IntMap.mem var cenv then
+		IntMap.find var cenv
 	      else
 		`MetaCollectionVar (Unionfind.fresh k)
 	  | `MetaCollectionVar point ->
@@ -501,8 +501,8 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
       function
 	| `Not_typed -> raise (Failure "Programming error (TY313)")
 	| `Primitive _ as kind -> []
-	| `TypeVar id as kind when IntSet.mem id bound_vars -> []
-	| `TypeVar id as kind -> [`TypeVar id]
+	| `TypeVar var as kind when IntSet.mem var bound_vars -> []
+	| `TypeVar var as kind -> [`TypeVar var]
 	| `MetaTypeVar point ->
 	    get_quantifiers bound_vars (Unionfind.find point)
 	      
@@ -512,19 +512,19 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
               unduplicate (=) (var_gens @ body_gens)
 	| `Record row -> row_generics bound_vars row
 	| `Variant row -> row_generics bound_vars row
-	| `Recursive (id, body) ->
-	    debug ("rec (get_quantifiers): " ^(string_of_int id));
-	    if IntSet.mem id bound_vars then
+	| `Recursive (var, body) ->
+	    debug ("rec (get_quantifiers): " ^(string_of_int var));
+	    if IntSet.mem var bound_vars then
 	      []
 	    else
-	      get_quantifiers (IntSet.add id bound_vars) body
+	      get_quantifiers (IntSet.add var bound_vars) body
 	| `Collection (collection_type, elem_type) ->
 	    let collection_vars =
 	      (match collection_type with
 		 | `MetaCollectionVar point ->
 		     (match Unionfind.find point with
-			| `CtypeVar id when IntSet.mem id bound_vars -> []
-			| `CtypeVar id -> [`CtypeVar id]
+			| `CtypeVar var when IntSet.mem var bound_vars -> []
+			| `CtypeVar var -> [`CtypeVar var]
 			| `MetaCollectionVar _ -> assert false
 			| _ -> [])
 		 | `CtypeVar _ -> assert false

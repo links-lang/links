@@ -629,8 +629,8 @@ and generate_easy_cps expr =
       
 module StringSet = Set.Make(String)
 
-let set_from_list lyst =
-  fold_left StringSet.union StringSet.empty (map (StringSet.singleton) lyst)
+let set_from_list l =
+  fold_left StringSet.union StringSet.empty (map (StringSet.singleton) l)
 
 let rec freevars = function
   | Var x -> StringSet.singleton x

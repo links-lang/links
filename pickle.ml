@@ -23,8 +23,8 @@ let extract_object s : (char * string * string) =
       t, l, n_bytes s (int_of_string l) (2 + String.length l) in
   let t, l, v = tlv s in 
     t, v, Str.string_after s (1 + String.length l + 1 + String.length v)
-and add_header tipe obj = 
-  (String.make 1 tipe) ^ string_of_int (String.length obj) ^ "+" ^ obj
+and add_header typ obj = 
+  (String.make 1 typ) ^ string_of_int (String.length obj) ^ "+" ^ obj
 
 let primitive_serialisers (header : char) (convin : 'a -> string) (convout : string -> 'a) 
     : ('a serialiser * 'a deserialiser) =
@@ -54,26 +54,26 @@ and deserialise_option (deserialise : 'a deserialiser) : 'a option deserialiser 
                         Some obj, rest)
 
 (* Why, /yes/, I /would/ like generic tuple facilities. Why do you ask? *)
-let serialise0 tipe () () : string
-    = add_header tipe ""
-and serialise1 tipe (s1) (t1) : string
-    = add_header tipe (s1 t1)
-and serialise2 tipe (s1, s2) (t1, t2) : string
-    = add_header tipe (s1 t1 ^ s2 t2)
-and serialise3 tipe (s1, s2, s3) (t1, t2, t3) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3)
-and serialise4 tipe (s1, s2, s3, s4) (t1, t2, t3, t4) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4)
-and serialise5 tipe (s1, s2, s3, s4, s5) (t1, t2, t3, t4, t5) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5)
-and serialise6 tipe (s1, s2, s3, s4, s5, s6) (t1, t2, t3, t4, t5, t6) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6)
-and serialise7 tipe (s1, s2, s3, s4, s5, s6, s7) (t1, t2, t3, t4, t5, t6, t7) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7)
-and serialise8 tipe (s1, s2, s3, s4, s5, s6, s7, s8) (t1, t2, t3, t4, t5, t6, t7, t8) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7 ^ s8 t8)
-and serialise9 tipe (s1, s2, s3, s4, s5, s6, s7, s8, s9) (t1, t2, t3, t4, t5, t6, t7, t8, t9) : string
-    = add_header tipe (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7 ^ s8 t8 ^ s9 t9)
+let serialise0 typ () () : string
+    = add_header typ ""
+and serialise1 typ (s1) (t1) : string
+    = add_header typ (s1 t1)
+and serialise2 typ (s1, s2) (t1, t2) : string
+    = add_header typ (s1 t1 ^ s2 t2)
+and serialise3 typ (s1, s2, s3) (t1, t2, t3) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3)
+and serialise4 typ (s1, s2, s3, s4) (t1, t2, t3, t4) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4)
+and serialise5 typ (s1, s2, s3, s4, s5) (t1, t2, t3, t4, t5) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5)
+and serialise6 typ (s1, s2, s3, s4, s5, s6) (t1, t2, t3, t4, t5, t6) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6)
+and serialise7 typ (s1, s2, s3, s4, s5, s6, s7) (t1, t2, t3, t4, t5, t6, t7) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7)
+and serialise8 typ (s1, s2, s3, s4, s5, s6, s7, s8) (t1, t2, t3, t4, t5, t6, t7, t8) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7 ^ s8 t8)
+and serialise9 typ (s1, s2, s3, s4, s5, s6, s7, s8, s9) (t1, t2, t3, t4, t5, t6, t7, t8, t9) : string
+    = add_header typ (s1 t1 ^ s2 t2 ^ s3 t3 ^ s4 t4 ^ s5 t5 ^ s6 t6 ^ s7 t7 ^ s8 t8 ^ s9 t9)
 and deserialiser0 () s = 
   (), s
 and deserialiser1 (d1) s =

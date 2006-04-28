@@ -32,12 +32,12 @@ let
       | `Function (from, into)   -> free_type_vars' rec_vars from @ free_type_vars' rec_vars into
       | `Record row              -> free_row_type_vars' rec_vars row
       | `Variant row             -> free_row_type_vars' rec_vars row
-      | `Recursive (id, body)    ->
-	  if IntSet.mem id rec_vars then
+      | `Recursive (var, body)    ->
+	  if IntSet.mem var rec_vars then
 	    []
 	  else
-	    free_type_vars' (IntSet.add id rec_vars) body
-      | `Collection (`CtypeVar id, kind)             -> id :: free_type_vars' rec_vars kind
+	    free_type_vars' (IntSet.add var rec_vars) body
+      | `Collection (`CtypeVar var, kind)             -> var :: free_type_vars' rec_vars kind
       | `Collection (`MetaCollectionVar point, kind) -> free_type_vars' rec_vars (`Collection (Unionfind.find point, kind))
       | `Collection (_, kind)    -> free_type_vars' rec_vars kind
       | `DB                      -> []

@@ -24,8 +24,8 @@ end
 module IntMap = Map.Make(OrderedInt)
 module IntSet = Set.Make(OrderedInt)
 
-let intset_of_list lyst = 
-  List.fold_right (fun itm set -> IntSet.add itm set) lyst IntSet.empty
+let intset_of_list l = 
+  List.fold_right (fun itm set -> IntSet.add itm set) l IntSet.empty
 
 
 

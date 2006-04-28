@@ -89,12 +89,12 @@ let coll_name : collection_type -> string = function
   | `Set          -> "Set"
   | `Bag          -> "Bag"
   | `List         -> "List"
-  | `CtypeVar id  -> "{"^ string_of_int id ^"}"
+  | `CtypeVar var  -> "{"^ string_of_int var ^"}"
 and coll_prefix var_names : collection_type -> string = function
   | `Set          -> "Set"
   | `Bag          -> "Bag"
   | `List         -> ""
-  | `CtypeVar id  -> "{"^ IntMap.find id var_names ^"}"
+  | `CtypeVar var  -> "{"^ IntMap.find var var_names ^"}"
 and string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  | `XMLitem -> "XMLitem"
 
@@ -128,15 +128,15 @@ let rec string_of_kind' vars : kind -> string =
     function
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
-      | `TypeVar id      -> IntMap.find id vars
+      | `TypeVar var      -> IntMap.find var vars
       | `Function (`Record _ as f,t) -> string_of_kind' vars f ^ " -> " ^ string_of_kind' vars t
       | `Function (f,t)  -> "(" ^ string_of_kind' vars f ^ ") -> " ^ string_of_kind' vars t
       | `Record row      -> (if is_tuple row then string_of_tuple row
 			     else
 			       "(" ^ string_of_row' "," vars row ^ ")")
       | `Variant row    -> "[" ^ string_of_row' " | " vars row ^ "]"
-      | `Recursive (id, body) ->
-	  "mu " ^ IntMap.find id vars ^ " . " ^ string_of_kind' vars body
+      | `Recursive (var, body) ->
+	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_kind' vars body
       | `DB             ->                   "Database"
       | `Collection (`List, `Primitive `Char) -> "String"
       | `Collection (`List, `Primitive `XMLitem) -> "XML"
@@ -153,7 +153,7 @@ and string_of_row' sep vars (field_env, row_var) =
     String.concat sep (present_strings @ absent_strings @ row_var_string)
 (*
   String.concat sep (map (function
-			    | `Row_variable id -> string_of_int id
+			    | `Row_variable var -> string_of_int var
 			    | `Field_present (label, kind) -> label ^":"^ string_of_kind' vars kind
 			    | `Field_absent label -> label ^ " -")
 		       fields)
@@ -213,8 +213,8 @@ let rec type_vars : kind -> int list = fun kind ->
     | `Function (from, into)   -> aux from @ aux into
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
-    | `Recursive (id, body)    -> List.filter ((<>) id) (aux body)
-    | `Collection (`CtypeVar id, kind)    -> id :: aux kind
+    | `Recursive (var, body)    -> List.filter ((<>) var) (aux body)
+    | `Collection (`CtypeVar var, kind)    -> var :: aux kind
     | `Collection (_, kind)    -> aux kind
     | `DB                      -> []
   in unduplicate (=) (aux kind)
@@ -237,7 +237,7 @@ let rec free_bound_type_vars = function
   | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
-  | `Recursive (id, body)    -> IntSet.add id (free_bound_type_vars body)
+  | `Recursive (var, body)    -> IntSet.add var (free_bound_type_vars body)
   | `Collection (`CtypeVar var, kind) -> IntSet.add var (free_bound_type_vars kind)
   | `Collection (_, kind)    -> free_bound_type_vars kind
   | `DB                      -> IntSet.empty
@@ -255,32 +255,22 @@ and free_bound_row_type_vars (field_env, row_var) =
   in
     IntSet.union field_type_vars row_var
 
-
+(* string conversions *)
 let string_of_kind kind = 
   string_of_kind' (make_names (free_bound_type_vars kind)) kind
 
 let string_of_kind_raw kind = 
   string_of_kind' (IntSet.fold
-		     (fun id name_map -> IntMap.add id (string_of_int id) name_map)
+		     (fun var name_map -> IntMap.add var (string_of_int var) name_map)
 		     (free_bound_type_vars kind) IntMap.empty) kind
 
 let string_of_row row = 
   string_of_row' "," (make_names (free_bound_row_type_vars row)) row
-(*  string_of_row' "," (make_names (List.concat (map field_type_vars row))) row *)
-
-(*
-let string_of_equivalence = function
-  | Var_equiv (id, kind)       -> "Var_equiv '"^ string_of_int id ^" => "^ string_of_kind kind
-  | Row_equiv (id, fields)     -> "Row_equiv '"^ string_of_int id ^ " => { "^ string_of_row fields ^" }"
-  | Colltype_equiv (id, ctype) -> "Colltype_equiv '"^ string_of_int id ^" => "^ coll_name ctype
-let string_of_substitution = fun substs ->
-  "{ "^ String.concat " , " (map string_of_equivalence substs) ^" }"
-*)
 
 let string_of_quantifier = function
-  | `TypeVar id -> string_of_int id
-  | `RowVar id -> "'" ^ string_of_int id
-  | `CtypeVar id -> "`" ^ string_of_int id
+  | `TypeVar var -> string_of_int var
+  | `RowVar var -> "'" ^ string_of_int var
+  | `CtypeVar var -> "`" ^ string_of_int var
 let string_of_assumption = function
   | [], kind -> string_of_kind kind
   | assums, kind -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_kind kind
@@ -443,12 +433,6 @@ sig
   val make_singleton_closed_row : (string * field_spec) -> row
   val make_singleton_open_row : (string * field_spec) -> row
   val make_singleton_open_row_with_var : (string * field_spec) -> int -> row
-
-  (* empty record constructors *)
-(*
-  val make_unit : unit -> typ
-  val make_empty_record_with_row_var : int -> typ
-*)
 
   (* row predicates *)
   val is_closed_row : row -> bool

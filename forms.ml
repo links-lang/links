@@ -24,7 +24,6 @@ open Netencoding
 open Utility
 open Sugar
 open Syntax
-open Kind
 open Result
 
 (** "Runtime" services: handling continuation objects during evaluation **)

@@ -764,13 +764,15 @@ let perhaps_process_children_bindings
 	Variant_selection (e1, a, var1, e2, var2, e3, d))
       | Condition (e1, e2, e3, a)                  -> passto [bind [],e1; bind [],e2; bind [],e2] (fun [e1;e2;e3] ->
         Condition (e1, e2, e3, a))
-          
-
+  
+(* is this right... doesn't look like it *)        
+(*
 open Num
 open List
 
 open Utility
 open Kind
+*)
 
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
