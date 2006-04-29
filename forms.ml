@@ -84,7 +84,7 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (_DUMMY_POS, Kind.string, None))
+  String (s, (_DUMMY_POS, Kind.string_type, None))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");

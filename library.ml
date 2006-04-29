@@ -170,16 +170,16 @@ let env : (string * (result * Kind.assumption)) list = map
   floatop "^^" ( ** );
 
   conversion "string_of_float" (conversion_op box_string unbox_float string_of_float) 
-    Kind.string (`Primitive `Float);
+    Kind.string_type (`Primitive `Float);
 
   conversion "float_of_int" (conversion_op box_float unbox_int float_of_num) 
     (`Primitive `Float) (`Primitive `Int);
 
   conversion "string_of_int" (conversion_op box_string unbox_int string_of_num) 
-    Kind.string (`Primitive `Int);
+    Kind.string_type (`Primitive `Int);
 
   conversion "int_of_string" (conversion_op box_int unbox_string num_of_string) 
-    (`Primitive `Int)  Kind.string;
+    (`Primitive `Int)  Kind.string_type;
 
   ("recv",
    (primfun "recv"
@@ -339,7 +339,7 @@ let env : (string * (result * Kind.assumption)) list = map
       (fun obj ->
          failwith("objectType not implemented for server-side code.")),
     let u = fresh_type_variable() in
-    ([u], u --> string)
+    ([u], u --> Kind.string_type)
    ));
 
   ("attribute",
@@ -360,11 +360,11 @@ let env : (string * (result * Kind.assumption)) list = map
                                     | _ -> none))
          | _ -> failwith "Internal error: bad arguments to attribute"),
     let pair = `Record (TypeOps.set_field ("1", `Present (`Primitive `XMLitem))
-	                  (TypeOps.set_field ("2", `Present string)
+	                  (TypeOps.set_field ("2", `Present Kind.string_type)
 	                     (TypeOps.make_empty_closed_row ()))) in
       ([],
        pair --> 
-         `Variant (TypeOps.set_field ("Some", `Present string)
+         `Variant (TypeOps.set_field ("Some", `Present Kind.string_type)
                      (TypeOps.set_field ("None", `Present (`Record (TypeOps.make_empty_closed_row ())))
                         (TypeOps.make_empty_closed_row ()))))));
 
@@ -372,10 +372,10 @@ let env : (string * (result * Kind.assumption)) list = map
    (primfun "elementById"
       (fun _ -> failwith "elementById not implemented in the server"),
     let pair = `Record (TypeOps.set_field ("1", `Present xml)
-	                  (TypeOps.set_field ("2", `Present string)
+	                  (TypeOps.set_field ("2", `Present Kind.string_type)
 	                     (TypeOps.make_empty_closed_row ()))) in
       ([],
-       string --> `Variant (TypeOps.set_field ("Some", `Present xml)
+       Kind.string_type --> `Variant (TypeOps.set_field ("Some", `Present xml)
                               (TypeOps.set_field ("None", `Present ((`Record (TypeOps.make_empty_closed_row ())):kind))
                                  (TypeOps.make_empty_closed_row ()))))));
 
@@ -390,7 +390,7 @@ let env : (string * (result * Kind.assumption)) list = map
         u = fresh_type_variable () 
     in 
       ([v; u],
-       (v --> u) --> string)));
+       (v --> u) --> Kind.string_type)));
   
   ("enxml",
    (primfun "enxml"
@@ -398,12 +398,12 @@ let env : (string * (result * Kind.assumption)) list = map
          | `Collection _ as c -> `Collection (`List, [`Primitive (`XML (Text (charlist_as_string c)))])
          | _ -> failwith ("internal error: non-string value passed to xml conversion routine")),
     ([], 
-     string --> xml))); 
+     Kind.string_type --> xml))); 
 
   ("debug", (* destructive *)
    (primfun "debug"
       (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
-    ([], string --> make_unit ())));
+    ([], Kind.string_type --> make_unit ())));
    
   ("debugObj", (* destructive *)
    (primfun "debugObj"
@@ -421,12 +421,12 @@ let env : (string * (result * Kind.assumption)) list = map
    (primfun "textContent"
       (fun _ -> failwith("textContent is not implemented on the server side")),
     let u = fresh_type_variable() in 
-      ([u], u --> string)));
+      ([u], u --> Kind.string_type)));
    
   ("print", (* destructive *)
    (primfun "print"
       (fun message -> print_endline (unbox_string message); flush stdout; `Record []),
-    ([], string --> make_unit ())));
+    ([], Kind.string_type --> make_unit ())));
    
   ("insertrow", (* destructive *)
    (primfun "insertrow"
@@ -449,7 +449,7 @@ let env : (string * (result * Kind.assumption)) list = map
     (* FIXME: reboxing of `RowVar <-> Row_variable *)
     let v = new_raw_variable () in
       ([`RowVar v],
-       (string --> (`DB --> (make_empty_record_with_row_var v --> make_unit ()))))));
+       (Kind.string_type --> (`DB --> (make_empty_record_with_row_var v --> make_unit ()))))));
 
   ("deleterows", (* destructive *)
    (primfun "deleterows"
@@ -467,7 +467,7 @@ let env : (string * (result * Kind.assumption)) list = map
                 | _ -> failwith "Internal error: delete row from non-database"))),
     let v = new_raw_variable () in
       ([`RowVar v],
-       (string --> (`DB --> (`Collection (`List, make_empty_record_with_row_var v) --> make_unit ()))))));
+       (Kind.string_type --> (`DB --> (`Collection (`List, make_empty_record_with_row_var v) --> make_unit ()))))));
 
   ("updaterows", (* destructive *)
    (primfun "updaterows"
@@ -507,7 +507,7 @@ continuationize_primfn (
 *)
     in
       ([`RowVar v],
-       (string --> (`DB --> (`Collection (`List, pair) --> make_unit ()))))));
+       (Kind.string_type --> (`DB --> (`Collection (`List, pair) --> make_unit ()))))));
 
 (*  ("javascript",
    (`Primitive(`Bool false),
@@ -552,7 +552,7 @@ continuationize_primfn (
    (primfun "is_integer" 
       (fun s -> `Primitive (`Bool (Str.string_match (Str.regexp "^[0-9]+$") (charlist_as_string s) 0))),
     ([],
-     (Kind.string --> `Primitive `Bool))));
+     (Kind.string_type --> `Primitive `Bool))));
 
 (*   ("fullname", *)
 (*    (primfun "fullname" *)
@@ -564,9 +564,9 @@ continuationize_primfn (
 (*          with Not_found ->  *)
 (*            `Variant ("not_found", make_unit ())), *)
 (*     let `Row_variable v = fresh_row_variable () in *)
-(*       ([`RowVar v], Kind.string -->  *)
+(*       ([`RowVar v], Kind.string_type -->  *)
 (*          `Variant ([`Row_variable v; *)
-(*                      `Field_present ("fullname", Kind.string); *)
+(*                      `Field_present ("fullname", Kind.string_type); *)
 (*                      `Field_present ("not_found", make_unit ())])))); *)
 
   ("query_param",           (* Get query parameters from the web environment
@@ -583,7 +583,7 @@ continuationize_primfn (
 	       Not_found -> string_as_charlist "" 
       ),
     ([],
-     (Kind.string --> Kind.string))));
+     (Kind.string_type --> Kind.string_type))));
 
   ("get_cookie",
    (primfun "get_cookie"
@@ -593,7 +593,7 @@ continuationize_primfn (
 	   string_as_charlist(cookie_header)
       ),
     ([],
-     Kind.string --> Kind.string))
+     Kind.string_type --> Kind.string_type))
   );
   
 
@@ -602,7 +602,7 @@ continuationize_primfn (
       (function msg -> failwith (unbox_string msg)),
     let v = fresh_type_variable () in
       ([v],
-       (Kind.string --> v))));
+       (Kind.string_type --> v))));
 
   ("sleep",
    (primfun "sleep"

@@ -15,6 +15,8 @@ and inference_row_var = [
   | `MetaRowVar of inference_row Unionfind.point ]
 and inference_row = (inference_type, inference_row_var) Kind.row_basis
 
+let inference_string_type = `Collection (`List, `Primitive `Char)
+
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)

@@ -81,7 +81,7 @@ let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string li
 let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
-let string = `Collection (`List, `Primitive `Char)
+let string_type = `Collection (`List, `Primitive `Char)
 let xml = `Collection (`List, `Primitive `XMLitem)
 
 (* Type printers *)
@@ -507,7 +507,6 @@ struct
   type field_spec_map = BasicOps.field_spec_map
   type row = BasicOps.row
 
-
   let make_type_var = BasicOps.make_type_var
   let make_row_var = BasicOps.make_row_var
   let make_collection_var = BasicOps.make_collection_var
@@ -556,6 +555,10 @@ let make_empty_record_with_row_var var = `Record (TypeOps.make_empty_open_row_wi
 let fresh_type_variable () = `TypeVar (new_raw_variable ())
 let fresh_row_variable () = `RowVar (new_raw_variable ())
 let fresh_collection_variable () = `CtypeVar (new_raw_variable ())
+
+let new_type_variable () = `TypeVar (new_raw_variable ())
+let new_row_variable () = `RowVar (Some (new_raw_variable ()))
+let new_collection_variable () = `CtypeVar (new_raw_variable ())
 
 (* Functions on environments *)
 let lookup : string -> 'typ environment_basis -> 'typ assumption_basis = List.assoc

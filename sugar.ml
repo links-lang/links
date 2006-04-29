@@ -357,7 +357,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Iteration (pattern, from, body, Some exp) -> desugar (Iteration (pattern, from, 
                                                                      (Conditional (exp,
                                                                                    body,
-                                                                                   (CollectionLit (Kind.fresh_collection_variable(),[]), pos')), pos'), None),
+                                                                                   (CollectionLit (
+										      Kind.TypeOps.new_collection_variable(),[]), pos')), pos'), None),
                                                           pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
   | Switch (exp, patterns, None)         -> (closed_variant_selection

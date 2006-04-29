@@ -38,37 +38,37 @@ OCAMLYACC := ocamlyacc
 OCAMLFLAGS=-w Ae
 
 SOURCES = cgi.ml                \
-          utility.ml            \
           unionfind.ml          \
-          graph.ml              \
-          performance.ml        \
+          utility.ml            \
           rewrite.ml            \
           pickle.ml             \
+          performance.ml        \
+          graph.ml              \
           kind.ml               \
           query.ml              \
+          inferencetypes.ml     \
           sql.ml                \
           syntax.ml             \
-          result.ml             \
-          jsonparse.ml          \
-          jsonlex.ml            \
-          json.ml               \
           sugar.ml              \
-          forms.ml              \
-          inferencetypes.ml     \
-          errors.ml             \
-          inference.ml          \
-          database.ml           \
-          pg_database.ml        \
-          $(DB_CODE)            \
-          parser.ml             \
-          lexer.mll             \
-          parse.ml              \
-          library.ml            \
-          interpreter.ml        \
+          result.ml             \
           sql_transform.ml      \
+          pg_database.ml        \
+          parser.mly            \
+          $(DB_CODE)            \
+          jsonparse.mly         \
+          json.ml               \
+          forms.ml              \
+          errors.ml             \
+          database.ml           \
+          library.ml            \
+          lexer.mll             \
+          jsonlex.mll           \
+          inference.ml          \
+          parse.ml              \
+          interpreter.ml        \
           optimiser.ml          \
-          import.ml             \
           js.ml                 \
+          import.ml             \
           webif.ml              \
           links.ml              \
 

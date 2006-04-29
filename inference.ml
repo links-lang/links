@@ -614,7 +614,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
         (* extend the env with each l:name bound variable *)
-      let attr_env = fold_right (fun s env -> (s, ([], Kind.string)) :: env) bindings attr_env in
+      let attr_env = fold_right (fun s env -> (s, ([], inference_string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in
         (* Check that the bound expressions have type XML *)
         (* TBD: figure out what the right type for these is *)
@@ -622,8 +622,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	List.iter (fun (_, expr) -> unify(node_kind expr, ITO.new_type_variable ()(*Kind.xml*))) special_attrs in*)
       let contents = map (type_check env) cs in
       let nonspecial_attrs = map (fun (k,v) -> k, type_check env v) nonspecial_attrs in
-(*      let attr_type = if islhref xml then Kind.xml else Kind.string in *)
-      let attr_type = Kind.string in
+(*      let attr_type = if islhref xml then Kind.xml else Kind.string_type in *)
+      let attr_type = inference_string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
       let unified_cs = map (fun node -> unify (node_kind node, `Collection (`List, `Primitive `XMLitem))) contents in
