@@ -41,10 +41,10 @@ SOURCES = cgi.ml                \
           unionfind.ml          \
           utility.ml            \
           rewrite.ml            \
-          pickle.ml             \
+          pickle.mli pickle.ml  \
           performance.ml        \
           graph.ml              \
-          kind.ml               \
+          kind.mli kind.ml      \
           query.ml              \
           inferencetypes.ml     \
           sql.ml                \
@@ -57,18 +57,18 @@ SOURCES = cgi.ml                \
           $(DB_CODE)            \
           jsonparse.mly         \
           json.ml               \
-          forms.ml              \
+          forms.mli forms.ml    \
           errors.ml             \
-          database.ml           \
+          database.mli database.ml \
           library.ml            \
           lexer.mll             \
           jsonlex.mll           \
-          inference.ml          \
-          parse.ml              \
-          interpreter.ml        \
+          inference.mli inference.ml \
+          parse.mli parse.ml    \
+          interpreter.mli interpreter.ml \
           optimiser.ml          \
-          js.ml                 \
-          import.ml             \
+          js.mli js.ml          \
+          import.mli import.ml  \
           webif.ml              \
           links.ml              \
 
