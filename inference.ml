@@ -11,8 +11,6 @@ exception UndefinedVariable of string
 
 module ITO = InferenceTypeOps
 
-type inference_expression = (position * inference_type * string option (* label *)) expression'
-
 (* extract data from inference_expressions *)
 let type_of_expression : inference_expression -> inference_type =
   fun exp -> let _, t, _ = expression_data exp in t

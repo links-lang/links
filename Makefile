@@ -59,7 +59,7 @@ SOURCES = cgi.ml                \
           jsonparse.mly         \
           json.ml               \
           forms.mli forms.ml    \
-          errors.ml             \
+          errors.mli errors.ml  \
           database.mli database.ml \
           library.ml            \
           lexer.mll             \

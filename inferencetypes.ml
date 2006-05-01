@@ -20,6 +20,8 @@ type quantifier = Type_basis.quantifier
 
 let inference_string_type = `Collection (`List, `Primitive `Char)
 
+type inference_expression = (Syntax.position * inference_type * string option (* label *)) Syntax.expression'
+
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)

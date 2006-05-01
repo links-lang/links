@@ -19,6 +19,8 @@ type quantifier = Type_basis.quantifier
 
 val inference_string_type : inference_type
 
+type inference_expression = (Syntax.position * inference_type * string option (* label *)) Syntax.expression'
+
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)
