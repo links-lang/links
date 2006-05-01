@@ -44,9 +44,10 @@ SOURCES = cgi.ml                \
           pickle.mli pickle.ml  \
           performance.ml        \
           graph.ml              \
+          type_basis.ml type_basis.mli \
           kind.mli kind.ml      \
           query.ml              \
-          inferencetypes.ml     \
+          inferencetypes.mli inferencetypes.ml \
           sql.ml                \
           syntax.ml             \
           sugar.ml              \

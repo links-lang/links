@@ -190,8 +190,8 @@ let env : (string * (result * Kind.assumption)) list = map
             special-case it, but rather provide a way to implement
             this primitive from here. *)
          assert(false)),
-    let (`RowVar r) = fresh_row_variable () in
-      ([`RowVar r], make_unit () --> `Variant (TypeOps.make_empty_open_row_with_var r))));
+    let r', r = fresh_row () in
+      ([r'], unit_type --> `Variant r)));
 
   ("send",
    (primfun "send"
@@ -210,8 +210,8 @@ let env : (string * (result * Kind.assumption)) list = map
                        with Not_found -> ());
 		      `Record []))
 	 | _ -> failwith "Internal error (argument to send)"),
-    let (`RowVar r) = fresh_row_variable () in
-      ([`RowVar r], `Primitive `Int --> (`Variant (TypeOps.make_empty_open_row_with_var r) --> make_unit ()))));
+    let r', r = fresh_row () in
+      ([r'], `Primitive `Int --> (`Variant r --> unit_type))));
   
   ("spawn",
    (primfun "spawn"
@@ -225,14 +225,15 @@ let env : (string * (result * Kind.assumption)) list = map
 		  Hashtbl.add messages new_pid (Queue.create ());
                   Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
                   `Primitive (`Int (num_of_int new_pid))))),
-    let a = fresh_type_variable () in
-    let b = fresh_type_variable () in
-      ([a], (a --> b) --> (a --> `Primitive `Int))));
+    let a', a = fresh_type () in
+    let b', b = fresh_type () in
+      (* Shouldn't b' appear in the list of quantifiers? *)
+      ([a'], (a --> b) --> (a --> `Primitive `Int))));
 
   ("self",
    (primfun "self"
       (fun r -> (`Primitive (`Int (num_of_int !current_pid)))),
-    ([], (make_unit () --> `Primitive `Int))));
+    ([], (unit_type --> `Primitive `Int))));
 
   ("hd", 
    (primfun "hd" 
@@ -242,8 +243,8 @@ let env : (string * (result * Kind.assumption)) list = map
                 | [] -> failwith "Head of empty list"
                 | x :: xs -> x)
          | _ -> failwith "Internal error: head of non-list"),
-    let v = fresh_type_variable () in 
-      ([v],
+    let v', v = fresh_type () in 
+      ([v'],
        (`Collection (`List, v) --> v))
    ));
 
@@ -252,9 +253,9 @@ let env : (string * (result * Kind.assumption)) list = map
       (function
          | `Collection (_, elems) -> `Primitive (`Int (num_of_int (length elems)))
          | _ -> failwith "Internal error: length of non-collection"),
-    let v = fresh_type_variable () in
-    let c = fresh_collection_variable () in
-      ([c; v],
+    let v', v = fresh_type () in
+    let c', c = fresh_collection () in
+      ([c'; v'],
        (`Collection (c, v) --> `Primitive `Int))));
   
   ("take",
@@ -268,8 +269,8 @@ let env : (string * (result * Kind.assumption)) list = map
 		    | `Collection (`List, elems) -> `Collection (`List, take (int_of_num n) elems)
 		    | _ -> failwith "Internal error: non-list passed to take"))
 	 | _ -> failwith "Internal error: non-integer passed to take"),
-    let a = fresh_type_variable () in
-      ([a], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
+    let a', a = fresh_type () in
+      ([a'], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
 
 
   ("childNodes",
@@ -301,8 +302,8 @@ let env : (string * (result * Kind.assumption)) list = map
 		    | `Collection (`List, elems) -> `Collection (`List, drop (int_of_num n) elems)
 		    | _ -> failwith "Internal error: non-list passed to drop"))
 	 | _ -> failwith "Internal error: non-integer passed to drop"),
-    let a = fresh_type_variable () in
-      ([a], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
+    let a', a = fresh_type () in
+      ([a'], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
 
   ("tl", 
    (primfun "tl"
@@ -312,8 +313,8 @@ let env : (string * (result * Kind.assumption)) list = map
            | [] -> failwith "Tail of empty list"
            | x :: xs -> `Collection (`List, xs))
          | _ -> failwith "Internal error: tail of non-list"),
-    let v = fresh_type_variable () in 
-      ([v],
+    let v', v = fresh_type () in 
+      ([v'],
        (`Collection (`List, v) --> `Collection (`List, v)))));
 
   ("childNodes",
@@ -338,8 +339,8 @@ let env : (string * (result * Kind.assumption)) list = map
    (primfun "objectType"
       (fun obj ->
          failwith("objectType not implemented for server-side code.")),
-    let u = fresh_type_variable() in
-    ([u], u --> Kind.string_type)
+    let u', u = fresh_type () in
+    ([u'], u --> Kind.string_type)
    ));
 
   ("attribute",
@@ -386,10 +387,10 @@ let env : (string * (result * Kind.assumption)) list = map
 	     `Continuation cont -> 
 	       box_string(Utility.base64encode(serialise_continuation cont))
 	   | _ -> failwith "string_of_cont applied to non-continuation" ),(*TYPEME!*)
-    let v = fresh_type_variable () and
-        u = fresh_type_variable () 
+    let v', v = fresh_type () and
+        u', u = fresh_type () 
     in 
-      ([v; u],
+      ([v'; u'],
        (v --> u) --> Kind.string_type)));
   
   ("enxml",
@@ -403,30 +404,30 @@ let env : (string * (result * Kind.assumption)) list = map
   ("debug", (* destructive *)
    (primfun "debug"
       (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
-    ([], Kind.string_type --> make_unit ())));
+    ([], Kind.string_type --> unit_type)));
    
   ("debugObj", (* destructive *)
    (primfun "debugObj"
       (fun message -> failwith("no debugObj on server")),
-    let u = fresh_type_variable() in 
-    ([u], u --> make_unit ())));
+    let u', u = fresh_type () in 
+    ([u'], u --> unit_type)));
 
   ("dump", (* destructive *)
    (primfun "dump"
       (fun message -> failwith("no dump on server")),
-    let u = fresh_type_variable() in 
-    ([u], u --> make_unit ())));
+    let u', u = fresh_type () in 
+    ([u'], u --> unit_type)));
 
   ("textContent",
    (primfun "textContent"
       (fun _ -> failwith("textContent is not implemented on the server side")),
-    let u = fresh_type_variable() in 
-      ([u], u --> Kind.string_type)));
+    let u', u = fresh_type () in 
+      ([u'], u --> Kind.string_type)));
    
   ("print", (* destructive *)
    (primfun "print"
       (fun message -> print_endline (unbox_string message); flush stdout; `Record []),
-    ([], Kind.string_type --> make_unit ())));
+    ([], Kind.string_type --> unit_type)));
    
   ("insertrow", (* destructive *)
    (primfun "insertrow"
@@ -440,16 +441,16 @@ let env : (string * (result * Kind.assumption)) list = map
                     primfun ("insert into (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (row : result) ->
                          Database.execute_select
-                           (`Collection (`List, make_unit ()))
+                           (`Collection (`List, unit_type))
                            (prerr_endline("*RUNNING SQL: " ^ "insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")");
                             ("insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")"))
 
                            db))
                 | _ -> failwith "Internal error: insert row into non-database"))),
     (* FIXME: reboxing of `RowVar <-> Row_variable *)
-    let v = new_raw_variable () in
-      ([`RowVar v],
-       (Kind.string_type --> (`DB --> (make_empty_record_with_row_var v --> make_unit ()))))));
+    let r', r = fresh_row () in
+      ([r'],
+       (Kind.string_type --> (`DB --> (`Record r --> unit_type))))));
 
   ("deleterows", (* destructive *)
    (primfun "deleterows"
@@ -461,13 +462,13 @@ let env : (string * (result * Kind.assumption)) list = map
                     continuationize_primfn (primfun ("delete from (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (rows : result) ->
                          Database.execute_select
-                           (`Collection (`List, make_unit ()))
+                           (`Collection (`List, unit_type))
                            ("delete from " ^ table ^ " where " ^ delete_condition rows)
                            db))
                 | _ -> failwith "Internal error: delete row from non-database"))),
-    let v = new_raw_variable () in
-      ([`RowVar v],
-       (Kind.string_type --> (`DB --> (`Collection (`List, make_empty_record_with_row_var v) --> make_unit ()))))));
+    let r', r = fresh_row () in
+      ([r'],
+       (Kind.string_type --> (`DB --> (`Collection (`List, `Record r) --> unit_type))))));
 
   ("updaterows", (* destructive *)
    (primfun "updaterows"
@@ -485,19 +486,19 @@ continuationize_primfn (
 (*                                         debug("update " ^ table ^ " set " ^ *)
 (*                                                 updates row  ^ " where " ^ single_match (map (fst -<- pair_as_ocaml_pair) row)); *)
                                         ignore(Database.execute_select
-                                                 (`Collection (`List, make_unit ()))
+                                                 (`Collection (`List, unit_type))
                                                  ("update " ^ table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
                                                  db))
                              rows);
                           `Record []
                      | _ -> failwith "Internal error: non-list passed to UPDATE"))
             | _ -> failwith "Internal error: update row in non-database"))),
-    let v = new_raw_variable () in
-    let u = new_raw_variable () in
+    let v', v = fresh_row () in
+    let u', u = fresh_row () in
 
     let pair = `Record
-      (TypeOps.set_field ("1", `Present (make_empty_record_with_row_var u))
-	 (TypeOps.set_field ("2", `Present (make_empty_record_with_row_var v))
+      (TypeOps.set_field ("1", `Present (`Record u))
+	 (TypeOps.set_field ("2", `Present (`Record v))
 	    (TypeOps.make_empty_closed_row ())))
 (*
     let Row_variable v = fresh_row_variable () in
@@ -506,8 +507,9 @@ continuationize_primfn (
                         Kind.Field_present ("2", `Record [Row_variable v])] 
 *)
     in
-      ([`RowVar v],
-       (Kind.string_type --> (`DB --> (`Collection (`List, pair) --> make_unit ()))))));
+      (* why isn't u' in the quantifier list? *)
+      ([v'],
+       (Kind.string_type --> (`DB --> (`Collection (`List, pair) --> unit_type))))));
 
 (*  ("javascript",
    (`Primitive(`Bool false),
@@ -562,12 +564,12 @@ continuationize_primfn (
 (*                      box_string (Str.global_replace (Str.regexp ",*$") ""  *)
 (*                                    (Unix.getpwnam (unbox_string uid)).Unix.pw_gecos)) *)
 (*          with Not_found ->  *)
-(*            `Variant ("not_found", make_unit ())), *)
+(*            `Variant ("not_found", unit_type)), *)
 (*     let `Row_variable v = fresh_row_variable () in *)
 (*       ([`RowVar v], Kind.string_type -->  *)
 (*          `Variant ([`Row_variable v; *)
 (*                      `Field_present ("fullname", Kind.string_type); *)
-(*                      `Field_present ("not_found", make_unit ())])))); *)
+(*                      `Field_present ("not_found", unit_type)])))); *)
 
   ("query_param",           (* Get query parameters from the web environment
                                    (Right now only works in CGI environment) *)
@@ -600,8 +602,8 @@ continuationize_primfn (
   ("error",
    (primfun "error"
       (function msg -> failwith (unbox_string msg)),
-    let v = fresh_type_variable () in
-      ([v],
+    let v', v = fresh_type () in
+      ([v'],
        (Kind.string_type --> v))));
 
   ("sleep",
@@ -609,17 +611,17 @@ continuationize_primfn (
       (function duration ->
          Unix.sleep(int_of_num (unbox_int duration));
          `Record []),
-    let v = fresh_type_variable () in
-      ([v],
+    let v', v = fresh_type () in
+      ([v'],
        (`Primitive `Int --> v))));
 
   ("domutate",
    (primfun "domutate"
       (function mutations ->
          failwith("domutate not implemented on server side.")),
-    let u = fresh_type_variable () in
-    let v = fresh_type_variable () in
-      ([u; v],
+    let u', u = fresh_type () in
+    let v', v = fresh_type () in
+      ([u'; v'],
        (u --> v))));
 
 

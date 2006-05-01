@@ -1,45 +1,20 @@
 (* Representations of types *)
 
-type type_var_set = Utility.IntSet.t
+open Type_basis
 
-(* Types for kinds *)
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem ]
+type type_var_set = Type_basis.type_var_set
+type primitive = Type_basis.primitive
 
-type collection_type = [`Set | `Bag | `List | `CtypeVar of int]
-
-type ('typ, 'row, 'ctype) type_basis = [
-  | `Not_typed
-  | `Primitive of primitive
-  | `TypeVar of int
-  | `Function of ('typ * 'typ)
-  | `Record of 'row
-  | `Variant of 'row
-  | `Recursive of (int * 'typ)
-  | `Collection of ('ctype * 'typ)
-  | `DB ]
-
-type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
-type 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t
-type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
-type 'row row_var_basis =
-    [ `RowVar of int option 
-    | `RecRowVar of int * 'row ]
-
+type collection_type = [`Set | `Bag | `List | `CollectionTypeVar of int]
 type kind = (kind, row, collection_type) type_basis
 and field_spec = kind field_spec_basis
 and field_spec_map = kind field_spec_map_basis
 and row_var = row row_var_basis
 and row = (kind, row_var) row_basis
 
-			  
-type equivalence =   Var_equiv of (int * kind) 
-                   | Row_equiv of (int * row)
-                   | Colltype_equiv of (int * collection_type)
-type substitution = (equivalence list)
 
-
-type type_variable = [`TypeVar of int | `RowVar of int | `CtypeVar of int]
-type quantifier = type_variable
+type type_variable = Type_basis.type_variable
+type quantifier = Type_basis.quantifier
 
 type 'typ assumption_basis = ((quantifier list) * 'typ)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
@@ -105,98 +80,21 @@ val deserialise_assumption : assumption Pickle.deserialiser
 val serialise_environment : environment Pickle.serialiser
 val deserialise_environment : environment Pickle.deserialiser
 
-(* Generation of fresh type variables *)
-val new_raw_variable : unit -> int
 
-module type TYPEOPS =
-sig
-  type typ
-  type row_var
-  type collection_type
-
-  type field_spec = typ field_spec_basis
-  type field_spec_map = typ field_spec_map_basis
-  type row = (typ, row_var) row_basis
-
-  val make_type_var : int -> typ
-  val make_row_var : int -> row_var
-  val make_collection_var : int -> collection_type
-
-  (* fresh type variable generation *)
-  val new_type_variable : unit -> typ
-  val new_row_variable : unit -> row_var
-  val new_collection_variable : unit -> collection_type
-
-  (* empty row constructors *)
-  val make_empty_closed_row : unit -> row
-  val make_empty_open_row : unit -> row
-  val make_empty_open_row_with_var : int -> row
-
-  (* singleton row constructors *)
-  val make_singleton_closed_row : (string * field_spec) -> row
-  val make_singleton_open_row : (string * field_spec) -> row
-  val make_singleton_open_row_with_var : (string * field_spec) -> int -> row
-
-  (* row predicates *)
-  val is_closed_row : row -> bool
-  val is_absent_from_row : string -> row -> bool
-
-  (* row update *)
-  val set_field : (string * field_spec) -> row -> row
-
-  (* constants *)
-  val empty_field_env : typ field_spec_map_basis
-  val closed_row_var : row_var
-end
-
-module type BASICTYPEOPS =
-sig
-  type typ
-  type row_var'
-  type collection_type'
- 
-  type field_spec = typ field_spec_basis
-  type field_spec_map = typ field_spec_map_basis
-  type row = (typ, row_var') row_basis
-
-  val make_type_var : int -> typ
-  val make_row_var : int -> row_var'
-  val make_collection_var : int -> collection_type'
-
-  val empty_field_env : typ field_spec_map_basis
-  val closed_row_var : row_var'
-
-  val is_closed_row : row -> bool
-end
 
 module BasicTypeOps :
   (BASICTYPEOPS with type typ = kind
 		and type row_var' = row_var
 		and type collection_type' = collection_type)
 
-module TypeOpsGen(BasicOps: BASICTYPEOPS) :
-  (TYPEOPS
-   with type typ = BasicOps.typ 
-   and type row_var = BasicOps.row_var'
-   and type collection_type = BasicOps.collection_type'
-)
-
 module TypeOps :
   (TYPEOPS with type typ = kind
 	   and type row_var = row_var
 	   and type collection_type = collection_type)
 
-val make_unit : unit -> kind
-val make_empty_record_with_row_var : int -> kind
+val unit_type : kind
 
 (* From library.ml; there's probably another name for these *)
-val fresh_type_variable : unit -> [> `TypeVar of int]
-val fresh_row_variable : unit -> [> `RowVar of int]
-val fresh_collection_variable : unit -> [> `CtypeVar of int]
-
-val new_type_variable : unit -> kind
-val new_row_variable : unit -> row_var
-val new_collection_variable : unit -> collection_type
-
-(* Functions on environments *)
-val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
+val fresh_type : unit -> type_variable * kind
+val fresh_row : unit -> type_variable * row
+val fresh_collection : unit -> type_variable * collection_type

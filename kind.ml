@@ -3,48 +3,21 @@
 open Pickle
 open Utility
 
-type type_var_set = IntSet.t
+open Type_basis
 
+type type_var_set = Type_basis.type_var_set
+type primitive = Type_basis.primitive
 
 (* Types for kinds *)
-
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem ]
-
-type collection_type = [`Set | `Bag | `List | `CtypeVar of int]
-
-type ('typ, 'row, 'ctype) type_basis = [
-  | `Not_typed
-  | `Primitive of primitive
-  | `TypeVar of int
-  | `Function of ('typ * 'typ)
-  | `Record of 'row
-  | `Variant of 'row
-  | `Recursive of (int * 'typ)
-  | `Collection of ('ctype * 'typ)
-  | `DB ]
-
-type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
-type 'typ field_spec_map_basis = ('typ field_spec_basis) StringMap.t
-type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
-type 'row row_var_basis =
-    [ `RowVar of int option 
-    | `RecRowVar of int * 'row ]
-
+type collection_type = [`Set | `Bag | `List | `CollectionTypeVar of int]
 type kind = (kind, row, collection_type) type_basis
 and field_spec = kind field_spec_basis
 and field_spec_map = kind field_spec_map_basis
 and row_var = row row_var_basis
 and row = (kind, row_var) row_basis
-
 			  
-type equivalence =   Var_equiv of (int * kind) 
-                   | Row_equiv of (int * row)
-                   | Colltype_equiv of (int * collection_type)
-type substitution = (equivalence list)
-
-
-type type_variable = [`TypeVar of int | `RowVar of int | `CtypeVar of int]
-type quantifier = type_variable
+type type_variable = Type_basis.type_variable
+type quantifier = Type_basis.quantifier
 
 type 'typ assumption_basis = ((quantifier list) * 'typ)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
@@ -54,15 +27,9 @@ type environment = kind environment_basis
 
 let (-->) x y = `Function (x,y)
 
-let get_equivalence_variable = function
-  | Var_equiv (var, _) -> var
-  | Row_equiv (var, _) -> var
-  | Colltype_equiv (var, _) -> var
-
 (* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
    so we need to reverse the result generated.
 *)
-
 let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
 
 let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list =
@@ -89,12 +56,12 @@ let coll_name : collection_type -> string = function
   | `Set          -> "Set"
   | `Bag          -> "Bag"
   | `List         -> "List"
-  | `CtypeVar var  -> "{"^ string_of_int var ^"}"
+  | `CollectionTypeVar var  -> "{"^ string_of_int var ^"}"
 and coll_prefix var_names : collection_type -> string = function
   | `Set          -> "Set"
   | `Bag          -> "Bag"
   | `List         -> ""
-  | `CtypeVar var  -> "{"^ IntMap.find var var_names ^"}"
+  | `CollectionTypeVar var  -> "{"^ IntMap.find var var_names ^"}"
 and string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  | `XMLitem -> "XMLitem"
 
@@ -214,7 +181,7 @@ let rec type_vars : kind -> int list = fun kind ->
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
     | `Recursive (var, body)    -> List.filter ((<>) var) (aux body)
-    | `Collection (`CtypeVar var, kind)    -> var :: aux kind
+    | `Collection (`CollectionTypeVar var, kind)    -> var :: aux kind
     | `Collection (_, kind)    -> aux kind
     | `DB                      -> []
   in unduplicate (=) (aux kind)
@@ -238,7 +205,7 @@ let rec free_bound_type_vars = function
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
   | `Recursive (var, body)    -> IntSet.add var (free_bound_type_vars body)
-  | `Collection (`CtypeVar var, kind) -> IntSet.add var (free_bound_type_vars kind)
+  | `Collection (`CollectionTypeVar var, kind) -> IntSet.add var (free_bound_type_vars kind)
   | `Collection (_, kind)    -> free_bound_type_vars kind
   | `DB                      -> IntSet.empty
 
@@ -270,7 +237,7 @@ let string_of_row row =
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
   | `RowVar var -> "'" ^ string_of_int var
-  | `CtypeVar var -> "`" ^ string_of_int var
+  | `CollectionTypeVar var -> "`" ^ string_of_int var
 let string_of_assumption = function
   | [], kind -> string_of_kind kind
   | assums, kind -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_kind kind
@@ -279,9 +246,9 @@ let string_of_environment env =
 
 (* serialisation *) 
 let serialise_colltype : (collection_type serialiser) = function
-  | `Set -> "s" | `Bag -> "b" | `List -> "l" | `CtypeVar _ -> "c"
+  | `Set -> "s" | `Bag -> "b" | `List -> "l" | `CollectionTypeVar _ -> "c"
 and deserialise_colltype : (collection_type deserialiser)
-    = fun s -> (List.assoc (String.sub s 0 1) ["s", `Set; "b", `Bag; "l", `List; "c", `CtypeVar (-1)],
+    = fun s -> (List.assoc (String.sub s 0 1) ["s", `Set; "b", `Bag; "l", `List; "c", `CollectionTypeVar (-1)],
                 String.sub s 1 (String.length s - 1))
 
 let (serialise_primitive : primitive serialiser), 
@@ -362,14 +329,14 @@ let serialise_quantifier : quantifier serialiser
     = function
       | `TypeVar i -> serialise1 't' serialise_oint i
       | `RowVar i -> serialise1 'r' serialise_oint i
-      | `CtypeVar i -> serialise1 'c' serialise_oint i
+      | `CollectionTypeVar i -> serialise1 'c' serialise_oint i
 
 let deserialise_quantifier : quantifier deserialiser
     = fun s -> let t, obj, rest = extract_object s in
       match t with 
       | 't' -> `TypeVar (deserialise1 deserialise_oint obj), rest
       | 'r' -> `RowVar (deserialise1 deserialise_oint obj), rest
-      | 'c' -> `CtypeVar (deserialise1 deserialise_oint obj), rest
+      | 'c' -> `CollectionTypeVar (deserialise1 deserialise_oint obj), rest
 
 let serialise_assumption : assumption serialiser 
     = serialise2 'a' (serialise_list (serialise_quantifier), serialise_kind)
@@ -398,78 +365,11 @@ let deserialise_environment : environment deserialiser =
           | 'a' -> deserialise1 (deserialise_list (deserialise_binding)) obj, rest
           | _          -> failwith ("Unexpected character deserialising environment : " ^ String.make 1 t)
 
-(* Generation of fresh type variables *)
-let type_variable_counter = ref 0
-
-let new_raw_variable : unit -> int =
-  function () -> 
-    incr type_variable_counter; !type_variable_counter
-
-module type TYPEOPS =
-sig
-  type typ
-  type row_var
-  type collection_type
-
-  type field_spec = typ field_spec_basis
-  type field_spec_map = typ field_spec_map_basis
-  type row = (typ, row_var) row_basis
-
-  val make_type_var : int -> typ
-  val make_row_var : int -> row_var
-  val make_collection_var : int -> collection_type
-
-  (* fresh type variable generation *)
-  val new_type_variable : unit -> typ
-  val new_row_variable : unit -> row_var
-  val new_collection_variable : unit -> collection_type
-
-  (* empty row constructors *)
-  val make_empty_closed_row : unit -> row
-  val make_empty_open_row : unit -> row
-  val make_empty_open_row_with_var : int -> row
-
-  (* singleton row constructors *)
-  val make_singleton_closed_row : (string * field_spec) -> row
-  val make_singleton_open_row : (string * field_spec) -> row
-  val make_singleton_open_row_with_var : (string * field_spec) -> int -> row
-
-  (* row predicates *)
-  val is_closed_row : row -> bool
-  val is_absent_from_row : string -> row -> bool
-
-  (* row update *)
-  val set_field : (string * field_spec) -> row -> row
-
-  (* constants *)
-  val empty_field_env : typ field_spec_map_basis
-  val closed_row_var : row_var
-end
-
-module type BASICTYPEOPS =
-sig
-  type typ
-  type row_var'
-  type collection_type'
- 
-  type field_spec = typ field_spec_basis
-  type field_spec_map = typ field_spec_map_basis
-  type row = (typ, row_var') row_basis
-
-  val make_type_var : int -> typ
-  val make_row_var : int -> row_var'
-  val make_collection_var : int -> collection_type'
-
-  val empty_field_env : typ field_spec_map_basis
-  val closed_row_var : row_var'
-
-  val is_closed_row : row -> bool
-end
-
 module BasicTypeOps :
-  (BASICTYPEOPS with type typ = kind
-		and type row_var' = row_var
-		and type collection_type' = collection_type) =
+  (Type_basis.BASICTYPEOPS
+   with type typ = kind
+   and type row_var' = row_var
+   and type collection_type' = collection_type) =
 struct
   type typ = kind
   type row_var' = row_var
@@ -479,9 +379,9 @@ struct
   type field_spec_map = typ field_spec_map_basis
   type row = (typ, row_var') row_basis
 
-  let make_type_var var = `TypeVar var
-  let make_row_var var = `RowVar (Some var)
-  let make_collection_var var = `CtypeVar var
+  let make_type_variable var = `TypeVar var
+  let make_row_variable var = `RowVar (Some var)
+  let make_collection_variable var = `CollectionTypeVar var
 
   let empty_field_env = StringMap.empty
   let closed_row_var = `RowVar None
@@ -492,73 +392,26 @@ struct
     | (_, `RecRowVar _) -> true
 end
 
-module TypeOpsGen(BasicOps: BASICTYPEOPS) :
-  (TYPEOPS
-   with type typ = BasicOps.typ 
-   and type row_var = BasicOps.row_var'
-   and type collection_type = BasicOps.collection_type'
-) =
-struct
-  type typ = BasicOps.typ
-  type row_var = BasicOps.row_var'
-  type collection_type = BasicOps.collection_type'
-
-  type field_spec = BasicOps.field_spec
-  type field_spec_map = BasicOps.field_spec_map
-  type row = BasicOps.row
-
-  let make_type_var = BasicOps.make_type_var
-  let make_row_var = BasicOps.make_row_var
-  let make_collection_var = BasicOps.make_collection_var
-
-  let is_closed_row = BasicOps.is_closed_row
-
-  let new_type_variable = make_type_var @@ new_raw_variable
-  let new_row_variable = make_row_var @@ new_raw_variable
-  let new_collection_variable = make_collection_var @@ new_raw_variable
-
-  let empty_field_env = BasicOps.empty_field_env
-  let closed_row_var = BasicOps.closed_row_var
-
-  let make_empty_closed_row () = empty_field_env, closed_row_var
-  let make_empty_open_row () = empty_field_env, new_row_variable ()
-  let make_empty_open_row_with_var var = empty_field_env, make_row_var var
-
-  let make_singleton_closed_row (label, field_spec) =
-    StringMap.add label field_spec empty_field_env, closed_row_var
-  let make_singleton_open_row (label, field_spec) =
-    StringMap.add label field_spec empty_field_env, new_row_variable ()
-  let make_singleton_open_row_with_var (label, field_spec) var =
-    StringMap.add label field_spec empty_field_env, make_row_var var
-
-  let is_absent_from_row label =
-    function
-      | (field_env, row_var) as row ->
-	  if StringMap.mem label field_env then
-	    StringMap.find label field_env = `Absent
-	  else
-	    is_closed_row row
-
-  let set_field (label, f) ((field_env, row_var) as row) =
-    StringMap.add label f field_env, row_var
-end
-
 module TypeOps :
-  (TYPEOPS with type typ = kind
-	   and type row_var = row_var
-	   and type collection_type = collection_type) = TypeOpsGen(BasicTypeOps)
+  (Type_basis.TYPEOPS
+   with type typ = kind
+   and type row_var = row_var
+   and type collection_type = collection_type) = TypeOpsGen(BasicTypeOps)
 
-let make_unit () = `Record (TypeOps.make_empty_closed_row ())
-let make_empty_record_with_row_var var = `Record (TypeOps.make_empty_open_row_with_var var)
+let unit_type = `Record (TypeOps.make_empty_closed_row ())
 
-(* From library.ml; there's probably another name for these *)
-let fresh_type_variable () = `TypeVar (new_raw_variable ())
-let fresh_row_variable () = `RowVar (new_raw_variable ())
-let fresh_collection_variable () = `CtypeVar (new_raw_variable ())
+(* fresh type_variable * type *)
+let fresh_type () =
+  let var = fresh_raw_variable () in
+    `TypeVar var, `TypeVar var
 
-let new_type_variable () = `TypeVar (new_raw_variable ())
-let new_row_variable () = `RowVar (Some (new_raw_variable ()))
-let new_collection_variable () = `CtypeVar (new_raw_variable ())
+(* fresh type_variable * row *)
+let fresh_row () =
+  let var = fresh_raw_variable () in
+    `RowVar var, TypeOps.make_empty_open_row_with_var var
 
-(* Functions on environments *)
-let lookup : string -> 'typ environment_basis -> 'typ assumption_basis = List.assoc
+(* fresh type_variable * collection_type  *)
+let fresh_collection () =
+  let var = fresh_raw_variable () in
+    `CollectionTypeVar var, `CollectionTypeVar var
+

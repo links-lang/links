@@ -1,19 +1,22 @@
 open Utility
 
-type type_var_set = Kind.type_var_set
+type type_var_set = Type_basis.type_var_set
 
 type inference_type = [
-  | (inference_type, inference_row, inference_collection_type) Kind.type_basis
+  | (inference_type, inference_row, inference_collection_type) Type_basis.type_basis
   | `MetaTypeVar of inference_type Unionfind.point ]
 and inference_collection_type = [
   | Kind.collection_type
   | `MetaCollectionVar of inference_collection_type Unionfind.point ]
-and inference_field_spec = inference_type Kind.field_spec_basis
+and inference_field_spec = inference_type Type_basis.field_spec_basis
 and inference_field_spec_map = inference_field_spec StringMap.t
 and inference_row_var = [
-  | inference_row Kind.row_var_basis
+  | inference_row Type_basis.row_var_basis
   | `MetaRowVar of inference_row Unionfind.point ]
-and inference_row = (inference_type, inference_row_var) Kind.row_basis
+and inference_row = (inference_type, inference_row_var) Type_basis.row_basis
+
+type type_variable = Type_basis.type_variable
+type quantifier = Type_basis.quantifier
 
 let inference_string_type = `Collection (`List, `Primitive `Char)
 
@@ -39,7 +42,7 @@ let
 	    []
 	  else
 	    free_type_vars' (IntSet.add var rec_vars) body
-      | `Collection (`CtypeVar var, kind)             -> var :: free_type_vars' rec_vars kind
+      | `Collection (`CollectionTypeVar var, kind)             -> var :: free_type_vars' rec_vars kind
       | `Collection (`MetaCollectionVar point, kind) -> free_type_vars' rec_vars (`Collection (Unionfind.find point, kind))
       | `Collection (_, kind)    -> free_type_vars' rec_vars kind
       | `DB                      -> []
@@ -62,30 +65,31 @@ let
     ((fun t -> Utility.unduplicate (=) (free_type_vars' IntSet.empty t)),
      (fun t -> Utility.unduplicate (=) (free_row_type_vars' IntSet.empty t)))
 
-type inference_assumption = inference_type Kind.assumption_basis
-type inference_environment = inference_type Kind.environment_basis
+type inference_assumption = inference_type Type_basis.assumption_basis
+type inference_environment = inference_type Type_basis.environment_basis
 
 
 
 module BasicInferenceTypeOps :
-  (Kind.BASICTYPEOPS with type typ = inference_type
-			and type row_var' = inference_row_var
-			and type collection_type' = inference_collection_type) =
+  (Type_basis.BASICTYPEOPS
+   with type typ = inference_type
+   and type row_var' = inference_row_var
+   and type collection_type' = inference_collection_type) =
 struct
   type typ = inference_type
   type row_var' = inference_row_var
   type collection_type' = inference_collection_type
 
-  type field_spec = typ Kind.field_spec_basis
-  type field_spec_map = typ Kind.field_spec_map_basis
-  type row = (typ, row_var') Kind.row_basis
+  type field_spec = typ Type_basis.field_spec_basis
+  type field_spec_map = typ Type_basis.field_spec_map_basis
+  type row = (typ, row_var') Type_basis.row_basis
 
   let empty_field_env = StringMap.empty
   let closed_row_var = `RowVar None
 
-  let make_type_var var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
-  let make_row_var var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
-  let make_collection_var var = `MetaCollectionVar (Unionfind.fresh (`CtypeVar var))
+  let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
+  let make_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
+  let make_collection_variable var = `MetaCollectionVar (Unionfind.fresh (`CollectionTypeVar var))
 
   let is_closed_row =
     let rec is_closed_row' rec_vars =
@@ -222,94 +226,98 @@ let unwrap_row : inference_row -> inference_row =
     unwrap_row' IntMap.empty
 
 module InferenceTypeOps :
-  (Kind.TYPEOPS
+  (Type_basis.TYPEOPS
    with type typ = inference_type
    and type row_var = inference_row_var
-   and type collection_type = inference_collection_type) = Kind.TypeOpsGen(BasicInferenceTypeOps)
-module ITO = InferenceTypeOps
+   and type collection_type = inference_collection_type) = Type_basis.TypeOpsGen(BasicInferenceTypeOps)
 
-let type_to_inference_type : Kind.kind -> inference_type = fun kind ->
-  let type_var_map : (inference_type Unionfind.point) IntMap.t ref = ref IntMap.empty in
-  let row_var_map : (inference_row Unionfind.point) IntMap.t ref = ref IntMap.empty in
-  let collection_var_map: (inference_collection_type Unionfind.point) IntMap.t ref = ref IntMap.empty in
+let empty_var_maps : unit ->
+    ((inference_type Unionfind.point) IntMap.t ref *
+     (inference_row Unionfind.point) IntMap.t ref *
+     (inference_collection_type Unionfind.point) IntMap.t ref) =
+  fun () ->
+    let type_var_map : (inference_type Unionfind.point) IntMap.t ref = ref IntMap.empty in
+    let row_var_map : (inference_row Unionfind.point) IntMap.t ref = ref IntMap.empty in
+    let collection_var_map : (inference_collection_type Unionfind.point) IntMap.t ref = ref IntMap.empty in
+      (type_var_map, row_var_map, collection_var_map)
+    
 
-  let rec type_to_inference_type = function
-    | `Not_typed -> `Not_typed
-    | `Primitive p -> `Primitive p
-    | `TypeVar var ->
-	if IntMap.mem var (!type_var_map) then
-	  `MetaTypeVar (IntMap.find var (!type_var_map))
-	else
-	  let point = Unionfind.fresh (`TypeVar var)
-	  in
-	    type_var_map := IntMap.add var point (!type_var_map);
+(*** Conversions ***)
+
+(* implementation *)
+let rec type_to_inference_type = fun ((type_var_map, row_var_map, collection_var_map) as var_maps) -> function
+  | `Not_typed -> `Not_typed
+  | `Primitive p -> `Primitive p
+  | `TypeVar var ->
+      if IntMap.mem var (!type_var_map) then
+	`MetaTypeVar (IntMap.find var (!type_var_map))
+      else
+	let point = Unionfind.fresh (`TypeVar var)
+	in
+	  type_var_map := IntMap.add var point (!type_var_map);
+	  `MetaTypeVar point
+  | `Function (f, t) -> `Function (type_to_inference_type var_maps f, type_to_inference_type var_maps t)
+  | `Record row -> `Record (row_to_inference_row var_maps row)
+  | `Variant row -> `Variant (row_to_inference_row var_maps row)
+  | `Recursive (var, t) ->
+      if IntMap.mem var (!type_var_map) then
+	`MetaTypeVar (IntMap.find var (!type_var_map))
+      else
+	let point = Unionfind.fresh (`TypeVar var)
+	in
+	  type_var_map := IntMap.add var point (!type_var_map);
+	  let t' = `Recursive (var, type_to_inference_type var_maps t) in
+	    Unionfind.change point t';
 	    `MetaTypeVar point
-    | `Function (f, t) -> `Function (type_to_inference_type f, type_to_inference_type t)
-    | `Record row -> `Record (row_to_inference_row row)
-    | `Variant row -> `Variant (row_to_inference_row row)
-    | `Recursive (var, t) ->
-	if IntMap.mem var (!type_var_map) then
-	  `MetaTypeVar (IntMap.find var (!type_var_map))
+  | `Collection (ct, t) -> `Collection (collection_type_to_inference_collection_type var_maps ct,
+					type_to_inference_type var_maps t)
+  | `DB -> `DB
+and field_spec_to_inference_field_spec = fun ((type_var_map, row_var_map, collection_var_map) as var_maps) -> function
+  | `Present t -> `Present (type_to_inference_type var_maps t)
+  | `Absent -> `Absent
+and row_to_inference_row = fun ((type_var_map, row_var_map, collection_var_map) as var_maps) -> function
+  | fields, `RowVar None ->
+      (StringMap.map (field_spec_to_inference_field_spec var_maps) fields, `RowVar None)
+  | fields, `RowVar (Some var) ->
+      let field_env : inference_field_spec_map = StringMap.map (field_spec_to_inference_field_spec var_maps) fields
+      in
+	if IntMap.mem var (!row_var_map) then
+	  (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
 	else
-	  let point = Unionfind.fresh (`TypeVar var)
+	  let point = Unionfind.fresh (StringMap.empty, `RowVar (Some var))
 	  in
-	    type_var_map := IntMap.add var point (!type_var_map);
-	    let t' = `Recursive (var, type_to_inference_type t) in
-	      Unionfind.change point t';
-	      `MetaTypeVar point
-    | `Collection (ct, t) -> `Collection (collection_type_to_inference_collection_type ct, type_to_inference_type t)
-    | `DB -> `DB
-  and field_spec_to_inference_field_spec = function
-    | `Present t -> `Present (type_to_inference_type t)
-    | `Absent -> `Absent
-  and row_to_inference_row = function
-    | fields, `RowVar None ->
-	(StringMap.map field_spec_to_inference_field_spec fields, `RowVar None)
-    | fields, `RowVar (Some var) ->
-	let field_env : inference_field_spec_map = StringMap.map field_spec_to_inference_field_spec fields
-	in
-	  if IntMap.mem var (!row_var_map) then
-	    (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
-	  else
-	    let point = Unionfind.fresh (StringMap.empty, `RowVar (Some var))
-	    in
-	      row_var_map := IntMap.add var point (!row_var_map);
+	    row_var_map := IntMap.add var point (!row_var_map);
+	    (field_env, `MetaRowVar point)
+  | fields, `RecRowVar (var, rec_row) ->
+      let field_env : inference_field_spec_map = StringMap.map (field_spec_to_inference_field_spec var_maps) fields
+      in
+	if IntMap.mem var (!row_var_map) then
+	  (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
+	else
+	  let point = Unionfind.fresh (StringMap.empty, `RecRowVar (var, (StringMap.empty, `RowVar None)))
+	  in
+	    row_var_map := IntMap.add var point (!row_var_map);
+	    let rec_row' = row_to_inference_row var_maps rec_row in
+	      Unionfind.change point (StringMap.empty, `RecRowVar (var, rec_row'));
 	      (field_env, `MetaRowVar point)
-    | fields, `RecRowVar (var, rec_row) ->
-	let field_env : inference_field_spec_map = StringMap.map field_spec_to_inference_field_spec fields
+and collection_type_to_inference_collection_type = fun ((_, _, collection_var_map) as var_maps) -> function
+  | `Set -> `Set | `Bag -> `Bag | `List -> `List
+  | `CollectionTypeVar var ->
+      if IntMap.mem var (!collection_var_map) then
+	`MetaCollectionVar (IntMap.find var (!collection_var_map))
+      else
+	let point = Unionfind.fresh (`CollectionTypeVar var)
 	in
-	  if IntMap.mem var (!row_var_map) then
-	    (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
-	  else
-	    let point = Unionfind.fresh (StringMap.empty, `RecRowVar (var, (StringMap.empty, `RowVar None)))
-	    in
-	      row_var_map := IntMap.add var point (!row_var_map);
-	      let rec_row' = row_to_inference_row rec_row in
-		Unionfind.change point (StringMap.empty, `RecRowVar (var, rec_row'));
-		(field_env, `MetaRowVar point)
-  and collection_type_to_inference_collection_type = function
-    | `Set -> `Set | `Bag -> `Bag | `List -> `List
-    | `CtypeVar var ->
-	if IntMap.mem var (!collection_var_map) then
-	  `MetaCollectionVar (IntMap.find var (!collection_var_map))
-	else
-	  let point = Unionfind.fresh (`CtypeVar var)
-	  in
-	    collection_var_map := IntMap.add var point (!collection_var_map);
-	    `MetaCollectionVar point
-  in
-    type_to_inference_type kind
+	  collection_var_map := IntMap.add var point (!collection_var_map);
+	  `MetaCollectionVar point
 
-(* HACK *)
-let collection_type_to_inference_collection_type ct =
-  let t' = type_to_inference_type (`Collection (ct, `DB))
-  in
-    match t' with 
-      | `Collection (ct', _) -> ct'
-      | _ -> assert (false)
+(* interface *)
+let type_to_inference_type = type_to_inference_type (empty_var_maps ())
+let field_spec_to_inference_field_spec = field_spec_to_inference_field_spec (empty_var_maps ())
+let row_to_inference_row = row_to_inference_row (empty_var_maps ())
+let collection_type_to_inference_collection_type = collection_type_to_inference_collection_type (empty_var_maps ())
 
-
-
+(* implementation *)
 let rec inference_type_to_type : type_var_set -> inference_type -> Kind.kind = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
@@ -323,7 +331,7 @@ let rec inference_type_to_type : type_var_set -> inference_type -> Kind.kind = f
 	  `TypeVar var
 	else
 	  `Recursive (var, inference_type_to_type (IntSet.add var rec_vars) t)
-    | `Collection (ct, t) -> `Collection (inference_collection_to_collection ct, inference_type_to_type rec_vars t)
+    | `Collection (ct, t) -> `Collection (inference_collection_type_to_collection_type ct, inference_type_to_type rec_vars t)
     | `DB -> `DB
     | `MetaTypeVar point -> inference_type_to_type rec_vars (Unionfind.find point)
 and inference_field_spec_to_field_spec = fun rec_vars ->
@@ -354,29 +362,33 @@ and inference_row_to_row = fun rec_vars row ->
 	  assert(false)
   in
     field_env', row_var'
-and inference_collection_to_collection = function
+(* implementation and interface *)
+and inference_collection_type_to_collection_type = function
   | `Set -> `Set | `Bag -> `Bag | `List -> `List
-  | `CtypeVar var -> `CtypeVar var
-  | `MetaCollectionVar point -> inference_collection_to_collection (Unionfind.find point)
+  | `CollectionTypeVar var -> `CollectionTypeVar var
+  | `MetaCollectionVar point -> inference_collection_type_to_collection_type (Unionfind.find point)
 
+(* interface *)
 let inference_type_to_type = inference_type_to_type IntSet.empty
 let inference_field_spec_to_field_spec = inference_field_spec_to_field_spec IntSet.empty
 let inference_row_to_row = inference_row_to_row IntSet.empty
 
 
+(* assumptions *)
 let assumption_to_inference_assumption : Kind.assumption -> inference_assumption = function
   | (quantifiers, t) -> (quantifiers, type_to_inference_type t)
 let inference_assumption_to_assumption : inference_assumption -> Kind.assumption = function
   | (quantifiers, t) -> (quantifiers, inference_type_to_type t)
 
-
+(* environments *)
 let environment_to_inference_environment : Kind.environment -> inference_environment =
   List.map (fun (name, assumption) -> (name, assumption_to_inference_assumption assumption))
 let inference_environment_to_environment : inference_environment -> Kind.environment =
   List.map (fun (name, assumption) -> (name, inference_assumption_to_assumption assumption))
 
-let string_of_kind = Kind.string_of_kind @@ inference_type_to_type
-let string_of_kind_raw = Kind.string_of_kind_raw @@ inference_type_to_type
+(* output as a string *)
+let string_of_type = Kind.string_of_kind @@ inference_type_to_type
+let string_of_type_raw = Kind.string_of_kind_raw @@ inference_type_to_type
 let string_of_row : inference_row -> string = Kind.string_of_row @@ inference_row_to_row
 
 let string_of_assumption = Kind.string_of_assumption @@ inference_assumption_to_assumption
