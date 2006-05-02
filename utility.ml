@@ -1,6 +1,6 @@
 (**** Various utility functions ****)
 
-(* string environments *)
+(*** string environments ***)
 module OrderedString =
 struct
   type t = string
@@ -15,7 +15,7 @@ let string_map_of_assoc_list l =
   List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 
 
 
-(* int environments *)
+(*** int environments ***)
 module OrderedInt =
 struct
   type t = int
@@ -31,18 +31,17 @@ let intset_of_list l =
 
 (*** Functional programming ***)
 
+(* compose operators (arrow indicates direction of composition) *)
+let (-<-) = fun f g x -> f (g x)
+let (->-) f g x = g (f x)
+
+
 let curry f a b = f (a, b)
 let uncurry f (a, b) = f a b
-let apply f x = f x
-let compose f g x = f (g x)
 let identity x = x
-let notany f = List.for_all (compose not f)
+let notany f = List.for_all (not -<- f)
 let flip f x y = f y x
 
-let (@@)   = compose
-let (-<-)  = compose
-let (->-) f g x = g (f x)
-let ($)    = apply
 
 (*** Lists ***)
 
@@ -89,7 +88,7 @@ let ordered_unique list =
                                              else head :: unique_neighbours tail)
       | _                                -> list
   in unique_neighbours (List.sort compare list)
-       
+     
 (** Remove duplicates from a list *)
 let rec unduplicate equal = function
   | [] -> []
@@ -159,36 +158,18 @@ let concat_map f l =
     | f, x :: xs -> f x @ aux (f, xs)
   in aux (f,l)
 
-(* Ok/Ko: Gilles' alternative to Some/None *)
-(* TBD: expunge *)
-
 exception NONE
 
-let cross f g = function (x, y) -> f x, g y
-let idy x = x
-let isok = function `Ko -> false | _ -> true
-let valof = function `Ok x -> x | _ -> raise NONE
-let okmap f = function `Ko -> `Ko | `Ok e -> `Ok(f e)
-let okmap2 f = function `Ko, _ | _, `Ko -> `Ko | `Ok a, `Ok b -> `Ok (f(a, b))
-let allok list = List.for_all (fun x -> x <> `Ko) list
-let valsof list = try `Ok (List.map valof list) with NONE -> `Ko
-let underok x f = okmap f x
-
 (* association list utilities*)
-
-let alistokvals alist =
-  try
-    `Ok (List.map (cross idy valof) alist)
-  with
-      NONE -> `Ko
-
-let alistmap f = List.map (cross idy f)
+let alistmap f =
+  let cross f g = fun (x, y) -> f x, g y in
+    List.map (cross identity f)
 
 (*** Strings ***)
 
 let string_of_char = String.make 1
 
-let string_of_alist = String.concat ", " @@ List.map (fun (x,y) -> x ^ " => " ^ y)
+let string_of_alist = String.concat ", " -<- List.map (fun (x,y) -> x ^ " => " ^ y)
 
 let rec split_string source delim =
   if String.contains source delim then
@@ -207,10 +188,10 @@ let explode : string -> char list =
 let rec explode' list n string = 
   if n = String.length string then list
   else explode' (string.[n] :: list) (n + 1) string
-in  compose List.rev (explode' [] 0)
+in  List.rev -<- (explode' [] 0)
       
 let implode : char list -> string = 
-  compose (String.concat "") (List.map (String.make 1))
+  (String.concat "") -<- (List.map (String.make 1))
 
 (* Find all occurrences of a character within a string *)
 let find_char (s : string) (c : char) : int list =
@@ -244,12 +225,18 @@ let debug msg =
   (if !debugging then prerr_endline msg)
   
 (** http://caml.inria.fr/archives/200001/msg00054.html **)
+(*
+  [QUESTION]
+   This function isn't used. Can we delete it?
+*)
+(*
 let reopen_out outchan filename =
   flush outchan;
   let fd1 = Unix.descr_of_out_channel outchan in
   let fd2 = Unix.openfile filename [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
     Unix.dup2 fd2 fd1;
     Unix.close fd2
+*)
 
 let lines (channel : in_channel) : string list = 
   let rec next_line lines =
@@ -272,6 +259,7 @@ let opt_map f bottom : ('a option -> 'b) = function
   | (Some x) -> f x
 *)
 
+(*** option types ***)
 let opt_map f = function
     None -> None
   | Some x -> Some (f x)
@@ -345,6 +333,8 @@ let opt_sum e =
   | None :: _      -> None
   in aux [] e
 
+(*** character encoding ***)
+
 (* Read a three-digit octal escape sequence and return the
    corresponding char *)
 let read_octal c =
@@ -387,7 +377,6 @@ let decode_escapes s =
     xml_unescape
     Escape/unescape for XML escape sequences (e.g. &amp;)
 *)
-
 let xml_escape s = 
   Str.global_replace (Str.regexp "<") "&lt;" 
     (Str.global_replace (Str.regexp "&") "&amp;" s)
@@ -396,11 +385,18 @@ let xml_unescape s =
   Str.global_replace (Str.regexp "&amp;") "&"
     (Str.global_replace (Str.regexp "&lt;") "<" s)
 
+(* base64 *)
+let base64decode s = 
+  try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
+  with Invalid_argument "Netencoding.Base64.decode" 
+      -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
+and base64encode s = Netencoding.Base64.encode s
+
+
+(*** ocaml versions ***)
 let ocaml_version_number = (List.map int_of_string
                               (split_string Sys.ocaml_version '.'))
 
-(* TBD: make me a fold *)
-(* [SL]: best not as we don't necessarily need to look at all elements in the list *)
 (* Ocaml team says string comparison would work here. Do we believe them? *)
 let rec version_atleast a b =
   match a, b with
@@ -409,8 +405,4 @@ let rec version_atleast a b =
     | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
-let base64decode s = 
-  try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
-  with Invalid_argument "Netencoding.Base64.decode" 
-      -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
-and base64encode s = Netencoding.Base64.encode s
+

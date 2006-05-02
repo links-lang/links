@@ -28,7 +28,7 @@ and add_header typ obj =
 
 let primitive_serialisers (header : char) (convin : 'a -> string) (convout : string -> 'a) 
     : ('a serialiser * 'a deserialiser) =
-  (compose (add_header header) convin,
+  ((add_header header) -<- convin,
    fun s -> match extract_object s with
      | (h, s, rest) when h = header -> (convout s, rest)
      | (h, s, rest) -> failwith ("Error deserialising primitive: expected header "^  (String.make 1 header) ^"; got "^ (String.make 1 h)))

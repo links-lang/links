@@ -119,9 +119,9 @@ struct
 
   let is_closed_row = BasicOps.is_closed_row
 
-  let fresh_type_variable = BasicOps.make_type_variable @@ fresh_raw_variable
-  let fresh_row_variable = BasicOps.make_row_variable @@ fresh_raw_variable
-  let fresh_collection_variable = BasicOps.make_collection_variable @@ fresh_raw_variable
+  let fresh_type_variable = BasicOps.make_type_variable -<- fresh_raw_variable
+  let fresh_row_variable = BasicOps.make_row_variable -<- fresh_raw_variable
+  let fresh_collection_variable = BasicOps.make_collection_variable -<- fresh_raw_variable
 
   let empty_field_env = BasicOps.empty_field_env
   let closed_row_var = BasicOps.closed_row_var

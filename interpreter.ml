@@ -348,7 +348,7 @@ and apply_cont globals : continuation -> result -> result =
 		         (match value with
 		            | `Collection(_, results) ->
 		                let cmp = (if up then less_to_cmp less
-                                           else curry (compose (~-) (uncurry (less_to_cmp less)))) in
+                                           else curry ((~-) -<- (uncurry (less_to_cmp less)))) in
 		                  listval(List.sort cmp results)
 		            | _ -> raise (Runtime_failure "TF223"))
 	        )

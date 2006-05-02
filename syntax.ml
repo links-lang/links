@@ -516,7 +516,7 @@ let freevars : 'a expression' -> string list =
   (* FIXME : doesn't consider variables in the query *)
   fun expression ->
     let rec visit default (expr, vars) = 
-      let childvars = compose snd (visit default) in
+      let childvars = snd -<- (visit default) in
         match expr with
           | Variable (name, _) when mem name vars -> expr, []
           | Variable (name, _) -> expr, [name]
@@ -809,7 +809,7 @@ let fst3 (a, _, _) = a
 and snd3 (_, b, _) = b
 and thd3 (_, _, c) = c
 
-let node_kind : (expression -> kind) = snd3 @@ expression_data
-and node_pos  : (expression -> position) = fst3 @@ expression_data 
+let node_kind : (expression -> kind) = snd3 -<- expression_data
+and node_pos  : (expression -> position) = fst3 -<- expression_data 
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 

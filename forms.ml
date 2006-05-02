@@ -97,7 +97,7 @@ let attrname = fst
 let attrval = snd
 
 let pickle_environment env =
-  serialise_environment (filter (not @@ is_pfunc) env)
+  serialise_environment (filter (not -<- is_pfunc) env)
 
 let serialize_exprenv expr env =
   (Utility.base64encode (serialise_result (expr_to_thunk expr)),
@@ -133,7 +133,7 @@ let xml_transform env eval : expression -> expression =
          with Not_found -> form)
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with
-           | String (name, _) -> Xml_node (tag, substitute (((=)"l:name") @@ attrname) ("name", string name) attrs, contents, data)
+           | String (name, _) -> Xml_node (tag, substitute (((=)"l:name") -<- attrname) ("name", string name) attrs, contents, data)
            | _ -> failwith "Internal error transforming xml"
          with Not_found -> input)
     | Xml_node ("a", attrs, contents, data) ->
@@ -141,7 +141,7 @@ let xml_transform env eval : expression -> expression =
         let ser_expr, ser_env = serialize_exprenv href env in
         let new_value = ("?environment%=" ^ ser_env ^
                            "&expression%=" ^ ser_expr) in
-        let new_attributes = substitute (((=)"l:href") @@ attrname) ("href", string new_value) attrs in
+        let new_attributes = substitute (((=)"l:href") -<- attrname) ("href", string new_value) attrs in
           Xml_node ("a", new_attributes, contents, data)
 
 (* string_dict_to_charlist_dict: a utility routine *)
@@ -154,7 +154,7 @@ let cont_from_params primitive_lookup params =
   try
     let pickled_continuation = (try assoc "continuation%25" params 
                                 with Not_found -> assoc "continuation%" params)
-    and params = filter (not @@ is_special_param) params in
+    and params = filter (not -<- is_special_param) params in
     let continuation = 
       (deserialise_continuation primitive_lookup
          (Utility.base64decode pickled_continuation))
@@ -166,7 +166,7 @@ let cont_from_params primitive_lookup params =
                                with Not_found -> assoc "expression%" params
     and pickled_environment  = try assoc "environment%25"  params 
                                with Not_found -> assoc "environment%"  params 
-    and params = filter (not @@ is_special_param) params in
+    and params = filter (not -<- is_special_param) params in
     let environment = 
       if pickled_environment = "" then
         []
@@ -176,7 +176,7 @@ let cont_from_params primitive_lookup params =
                           | `Function (_, _, _, p) -> p
                           | _ -> failwith "Type error unpickling expression")
     in
-      debug $ string_of_environment environment;
+      debug (string_of_environment environment);
       Some (ExprEnv (expression, string_dict_to_charlist_dict params
                        @ environment))
         

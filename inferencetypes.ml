@@ -389,9 +389,9 @@ let inference_environment_to_environment : inference_environment -> Kind.environ
   List.map (fun (name, assumption) -> (name, inference_assumption_to_assumption assumption))
 
 (* output as a string *)
-let string_of_type = Kind.string_of_kind @@ inference_type_to_type
-let string_of_type_raw = Kind.string_of_kind_raw @@ inference_type_to_type
-let string_of_row : inference_row -> string = Kind.string_of_row @@ inference_row_to_row
+let string_of_type = Kind.string_of_kind -<- inference_type_to_type
+let string_of_type_raw = Kind.string_of_kind_raw -<- inference_type_to_type
+let string_of_row : inference_row -> string = Kind.string_of_row -<- inference_row_to_row
 
-let string_of_assumption = Kind.string_of_assumption @@ inference_assumption_to_assumption
-let string_of_environment = Kind.string_of_environment @@ inference_environment_to_environment
+let string_of_assumption = Kind.string_of_assumption -<- inference_assumption_to_assumption
+let string_of_environment = Kind.string_of_environment -<- inference_environment_to_environment

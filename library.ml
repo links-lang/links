@@ -89,17 +89,17 @@ let conversion name op result from = (name, (primfun name op, ([], from --> resu
 let char_test_op name func =
   (name,
    (primfun name
-      (compose box_bool (compose func unbox_char)),
+      (box_bool -<- func -<- unbox_char),
     ([], `Primitive `Char --> `Primitive `Bool)))
 and char_conversion name func = 
   (name,
    (primfun name
-      (compose box_char (compose func unbox_char)),
+      (box_char -<- func -<- unbox_char),
     ([], `Primitive `Char --> `Primitive `Char)))
 and float_fun name func = 
   (name,
    (primfun name
-      (compose box_float (compose func unbox_float)),
+      (box_float -<- func -<- unbox_float),
     ([], `Primitive `Float --> `Primitive `Float)))
 
 let format_attrs : result -> string = function
@@ -135,7 +135,7 @@ let row_columns = function
   | `Record fields -> String.concat ", " (map fst fields)
   | _ -> failwith "Internal error: forming query from non-row"
 and row_values = function
-  | `Record fields -> String.concat ", " (map (compose value_as_string snd) fields)
+  | `Record fields -> String.concat ", " (map (value_as_string -<- snd) fields)
   | _ -> failwith "Internal error: forming query from non-row"
 and delete_condition = function
   | `Collection(`List, rows) -> "("^ (String.concat " OR " (map single_match rows)) ^")"
@@ -227,12 +227,11 @@ let env : (string * (result * Kind.assumption)) list = map
                   `Primitive (`Int (num_of_int new_pid))))),
     let a', a = fresh_type () in
     let b', b = fresh_type () in
-      (* Shouldn't b' appear in the list of quantifiers? *)
-      ([a'], (a --> b) --> (a --> `Primitive `Int))));
+      ([a'; b'], (a --> b) --> (a --> `Primitive `Int))));
 
   ("self",
    (primfun "self"
-      (fun r -> (`Primitive (`Int (num_of_int !current_pid)))),
+      (fun _ -> (`Primitive (`Int (num_of_int !current_pid)))),
     ([], (unit_type --> `Primitive `Int))));
 
   ("hd", 
@@ -507,8 +506,7 @@ continuationize_primfn (
                         Kind.Field_present ("2", `Record [Row_variable v])] 
 *)
     in
-      (* why isn't u' in the quantifier list? *)
-      ([v'],
+      ([u'; v'],
        (Kind.string_type --> (`DB --> (`Collection (`List, pair) --> unit_type))))));
 
 (*  ("javascript",
@@ -611,9 +609,8 @@ continuationize_primfn (
       (function duration ->
          Unix.sleep(int_of_num (unbox_int duration));
          `Record []),
-    let v', v = fresh_type () in
-      ([v'],
-       (`Primitive `Int --> v))));
+      ([],
+       (`Primitive `Int --> unit_type))));
 
   ("domutate",
    (primfun "domutate"

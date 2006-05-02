@@ -105,7 +105,7 @@ let is_attr = function
   | _      -> false
 
 let attrs = filter is_attr
-and nodes = filter (not @@ is_attr)
+and nodes = filter (not -<- is_attr)
 
 let rec string_of_xml xml : string
     = String.concat "" (map string_of_item xml)
@@ -283,7 +283,7 @@ let deserialise_continuation resolve str =
   debug "unmarshaling contin.";
   Marshal.from_string str 0
 
-let rec pp_continuation = String.concat "=->" @@
+let rec pp_continuation = String.concat "=->" -<-
   map (function
          | FuncArg _ -> "FuncArg"
          | FuncApply _ -> "FuncApply"
