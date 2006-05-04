@@ -45,7 +45,6 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
     (*raise (Runtime_failure ("SQ074 : " ^ (string_of_kind x))) *)
     
   let result = (db#exec query) in
-
     (match result#status with
        | QueryOk -> let row_fields =
 	   (let temp_fields = ref [] in
@@ -64,7 +63,7 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
            if null_query then
              `Collection (coll_type, map (fun row -> `Record []) result#get_all_lst)
            else
-             `Collection (coll_type, 
+              `Collection (coll_type, 
 			  map (fun row ->
                                  `Record (map2 (fun (name, db_type) value -> 
 			                          name, value_from_db_string value db_type)
