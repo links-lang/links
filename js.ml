@@ -145,6 +145,7 @@ let boiler_1 = "<html>
           <script type='text/javascript'><!-- \n"
 and boiler_2 =    "\n--> </script>
       </head>
+      <!-- $Id$ -->
       <body><script type='text/javascript'>" 
 and  boiler_3 = "</script></body>
    </html>"
