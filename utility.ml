@@ -253,21 +253,13 @@ let process_output : string -> string
 
 let safe_assoc lbl alist = try Some(List.assoc lbl alist) with Not_found -> None
 
-(* 
-let opt_map f bottom : ('a option -> 'b) = function
-    None -> bottom
-  | (Some x) -> f x
-*)
-
 (*** option types ***)
 let opt_map f = function
     None -> None
   | Some x -> Some (f x)
 
-exception OptFoundNone
-
 let rec opt_find f = function
-    [] -> raise OptFoundNone
+    [] -> raise Not_found
   | (h::t) ->
       match f h with
           Some x -> x
@@ -390,8 +382,8 @@ let base64decode s =
   try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
   with Invalid_argument "Netencoding.Base64.decode" 
       -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
-and base64encode s = Netencoding.Base64.encode s
 
+and base64encode s = Netencoding.Base64.encode s
 
 (*** ocaml versions ***)
 let ocaml_version_number = (List.map int_of_string
