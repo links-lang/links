@@ -6,7 +6,6 @@ open Pickle
 open Kind
 open Sql
 
-(*type position = { line : int; character : int; abschar : int }*)
 type position = Lexing.position * (* source line : *) string * (* expression source: *) string
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
@@ -36,8 +35,7 @@ type 'data expression' =
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * ('data expression')) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
-                   ('data expression' list) * 
-                   'data)
+                   ('data expression' list) * 'data)
   | Record_empty of 'data
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
 
@@ -59,8 +57,10 @@ type 'data expression' =
   | Database of ('data expression' * 'data)
   | Table of ('data expression' * string * Query.query * 'data)
   | Escape of (string * 'data expression' * 'data)
+  | Placeholder of (string * 'data)
 
 
+let is_define = function Define _ -> true | _ -> false
 
 
 let s0 () () =
@@ -85,6 +85,13 @@ let null = fun _ -> "_"
 let slist s l = 
   "[" ^ String.concat "," (map s l) ^ "]"
 
+let gensym =
+  let counter = ref 0 in
+    function str ->
+      begin
+        incr counter;
+        str ^ "_g" ^ string_of_int !counter
+      end
 
 let rec show_expression = 
   let exp = show_expression in
@@ -325,7 +332,9 @@ let rec serialise_expression : ('data expression' serialiser)
         | Sort v                    -> serialise3 'U' (serialise_bool, exp, data) v
         | Database v                -> serialise2 'V' (exp, data) v
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
-        | Escape v                  -> serialise3 'e' (string, exp, data) v)
+        | Escape v                  -> serialise3 'e' (string, exp, data) v
+        | Placeholder v             -> serialise2 'p' (string, data) v
+      )
 and deserialise_expression : (expression deserialiser)
     = let poskind = null_deserialiser (dummy_position, `Not_typed, None)
       and string = deserialise_string
@@ -361,6 +370,7 @@ and deserialise_expression : (expression deserialiser)
            | 'U' -> Sort (deserialise3 (deserialise_bool, exp, poskind) obj)
            | 'V' -> Database (deserialise2 (exp, poskind) obj)
            | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, poskind) obj)
+           | 'p' -> Placeholder(deserialise2 (string, poskind) obj)
            | x -> failwith ("Unexpected expression type header during deserialisation : "^ (String.make 1  x)))
       in e, rest
 and serialise_recbinding : (string * expression) serialiser
@@ -504,6 +514,7 @@ let visit_expressions'
         Table (e, s, q, d), data
     | Escape (n, e, d) -> let e, data = visitor visit_children (e, data) in
         Escape (n, e, d), data
+    | Placeholder (str, d) -> Placeholder (str, d), unit data
   in visitor visit_children
        
 (* A simplified version which doesn't pass data around *)
@@ -552,7 +563,9 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Let (a, b, c, data) -> Let (a, redecorate f b, redecorate f c, f data)
   | Rec (a, b, data) -> 
       Rec (map (fun (s,e) -> s, redecorate f e) a, redecorate f b, f data)
-  | Xml_node (a, b, c, data) -> Xml_node (a, map (fun (s,e) -> s, redecorate f e) b, map (redecorate f) c, f data)
+  | Xml_node (a, b, c, data) -> 
+      Xml_node (a, map (fun (s,e) -> s, redecorate f e) b, 
+                map (redecorate f) c, f data)
   | Record_empty (data) -> Record_empty (f data)
   | Record_extension (a, b, c, data) -> Record_extension (a, redecorate f b, redecorate f c, f data)
   | Record_selection (a, b, c, d, e, data) -> Record_selection (a, b, c, redecorate f d, redecorate f e, f data)
@@ -580,11 +593,16 @@ let labelize (expr:expression) : expression =
   redecorate 
     (fun (a,b,_) ->
        let label = new_label_str () in
+(*          debug("labelizing " ^ label ^ " at " ^ string_of_expression expr); *)
 	 (a, b, Some label)) expr
 
 let labelize_ut (expr:untyped_expression) : expression = redecorate 
   (fun a ->
      (a, `Not_typed, Some(new_label_str ()))) expr
+
+let labelize_env env = alistmap labelize env
+
+let labelize_program (env, exprs) = (env, map labelize exprs)
 
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =

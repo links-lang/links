@@ -406,18 +406,20 @@ and apply_cont globals : continuation -> result -> result =
                                 map xmlitem_of elems
                             | `Primitive (`Char x) :: etc ->
                                 [ Result.Text(charlist_as_string value) ]
-                            | _ -> raise(Match_failure("",0,0)))
-                     | _ -> raise(Match_failure("",0,0))
+                            | _ -> failwith("Internal error: unexpected contents in XML construction"))
+                     | _ -> failwith("Internal error: unexpected contents in XML construction")
                  in
                  let children = children @ new_children in
                    match attrs, elems with
                      | [], [] -> 
-                         let result = (`Collection (`List, [`Primitive (`XML (Node (tag, children)))])) in
+                         let result = listval [xmlnodeval(tag, children)] in
                            apply_cont globals cont result
                      | ((k,v)::attrs), _ -> 
-                         interpret globals locals v (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
+                         interpret globals locals v
+                           (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
                      | _, (elem::elems) -> 
-                         interpret globals locals elem (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
+                         interpret globals locals elem
+                           (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
                 )
             | Ignore (locals, expr) ->
 	        interpret globals locals expr cont
@@ -456,11 +458,11 @@ fun globals locals expr cont ->
       let new_env = bind_rec globals locals variables in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
-      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
+      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
   | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
-      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
+      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
   | Syntax.Xml_node _ as xml when Forms.islhref xml ->
-      eval (Forms.xml_transform locals (interpret_safe globals locals) xml) cont
+      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
 
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])

@@ -18,23 +18,7 @@ val islhref : 'data Syntax.expression' -> bool
 val lname_bound_vars : 'data Syntax.expression' -> string list
 
 (* Serialise the continuation and environment, and adjust the form accordingly *)
-val xml_transform : Result.environment -> (Syntax.expression -> Result.continuation -> Result.result) -> Syntax.expression -> Syntax.expression
-
-(** "Runtime" services: handling continuation objects during evaluation **)
-
-type query_record = (string * Result.result) list
-
-type webcontinuation = ContParams of Result.continuation * query_record
-		       | ExprEnv of Syntax.expression * Result.environment
-
-(* Extract a continuation or expression from the parameters passed in over CGI. *)
-val cont_from_params : (*(string -> string -> string -> 
-			  string -> string -> database) -> *)
-  (string -> Result.result) -> (string * string) list -> (webcontinuation) option
-
-(** Handling remote calls (from JavaScript) **)
-(* Are we being called from JavaScript? *)
-val is_remote_call : (string * string) list -> bool
+val xml_transform : Result.environment -> (string -> Result.result) -> (Syntax.expression -> Result.continuation -> Result.result) -> Syntax.expression -> Syntax.expression
 
 val is_special : string -> bool
 

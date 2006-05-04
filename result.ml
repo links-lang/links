@@ -199,6 +199,20 @@ and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
 
+let expr_of_prim_val : result -> expression option = function
+    `Primitive(`Bool b) -> Some(Boolean(b, Sugar.no_expr_data))
+  | `Primitive(`Int i) -> Some(Integer(i, Sugar.no_expr_data))
+  | `Primitive(`Char ch) -> Some(Char(ch, Sugar.no_expr_data))
+  | `Primitive(`Float f) -> Some(Float(f, Sugar.no_expr_data))
+  | _ -> None
+
+let prim_val_of_expr : expression -> result option = function
+    Boolean(b, _) -> Some(`Primitive(`Bool b))
+  | Integer(i, _) -> Some(`Primitive(`Int i))
+  | Char(ch, _) -> Some(`Primitive(`Char ch))
+  | Float(f, _) -> Some(`Primitive(`Float f))
+  | _ -> None
+
 let (toplevel: continuation) = [] 
 
 let xmlitem_of : result -> xmlitem = function
@@ -213,6 +227,10 @@ and float f = `Primitive(`Float f)
 and char c = `Primitive(`Char c)
 and listval es = `Collection(`List, es)
 and xmlnodeval contents = `Primitive(`XML(Node contents))
+
+let make_tuple fields = 
+  `Record(List.map2 (fun exp n -> string_of_int n, exp) fields 
+            (fromTo 1 (1 + length fields)))
 
 exception NotARecord of result
  
@@ -235,35 +253,43 @@ let links_snd x = snd (pair_as_ocaml_pair x)
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
+let to_placeholder expr = 
+  let (pos, kind, label) = expression_data expr in
+    match label with
+        Some str -> Placeholder(str, (pos, kind, label))
+      | None -> failwith("Not labeled: " ^ string_of_expression expr)
+
 let rec strip_binding(name, value) = (name, strip_result value)
 and strip_env env = map strip_binding env
 and strip_continuation cont = map strip_cont_frame cont
 and strip_cont_frame = function
-  | FuncArg(expr, env) -> FuncArg(expr, strip_env env)
+  | FuncArg(expr, env) -> FuncArg(to_placeholder expr, strip_env env)
   | FuncApply(func, env) -> FuncApply(strip_result func, strip_env env)
-  | LetCont(env, var, body) -> LetCont(strip_env env, var, body)
+  | LetCont(env, var, body) -> LetCont(strip_env env, var, to_placeholder body)
   | BranchCont(env, conseq, altern) -> BranchCont(strip_env env, 
-                                                  conseq, altern)
-  | BinopRight(env, op, rhs) -> BinopRight(strip_env env, op, rhs)
+                                                  to_placeholder conseq,
+                                                  to_placeholder altern)
+  | BinopRight(env, op, rhs) -> BinopRight(strip_env env, op, to_placeholder rhs)
   | BinopApply(env, op, lhs) -> BinopApply(strip_env env, op, lhs)
   | UnopApply(env, op) -> UnopApply(strip_env env, op)
   | RecSelect(env, var, label, var2, body) -> RecSelect(strip_env env, 
-                                                       var, label, var2, 
-                                                       body)
+                                                        var, label, var2, 
+                                                        to_placeholder body)
   | CollExtn(env, ctype, var, body, results, source) ->
-      CollExtn(strip_env env, ctype, var, body, 
+      CollExtn(strip_env env, ctype, var, to_placeholder body, 
                map strip_result results, map strip_result source)
-  | StartCollExtn(env, var, body) -> StartCollExtn(strip_env env, var, body)
+  | StartCollExtn(env, var, body) -> 
+      StartCollExtn(strip_env env, var, to_placeholder body)
   | XMLCont(env, tagname, attrname, children, attrexprs, childexprs) ->
-      XMLCont(strip_env env, tagname, attrname, children, attrexprs, childexprs)
-  | Ignore(env, body) -> Ignore(strip_env env, body)
+      XMLCont(strip_env env, tagname, attrname, children, 
+              alistmap to_placeholder attrexprs, map to_placeholder childexprs)
+  | Ignore(env, body) -> Ignore(strip_env env, to_placeholder body)
 and strip_result = function
-    (* And now, ladies and gents, the ONE essential case: *)
   | `Primitive(`PFunction(name, impl, pargs)) ->
       `Primitive(`PFunction(name, None, map strip_result pargs))
   | `Primitive(prim) -> `Primitive(prim)
   | `Function(name, locals, globals, body) -> 
-      `Function(name, strip_env locals, strip_env globals, body)
+      `Function(name, strip_env locals, strip_env globals, to_placeholder body)
   | `Record(fields) -> `Record(map strip_binding fields)
   | `Variant(label, value) ->  `Variant(label, strip_result value)
   | `Collection(ctype, elements)-> `Collection(ctype, map strip_result elements)
@@ -280,8 +306,11 @@ let serialise_continuation c = Marshal.to_string (strip_cont c) []
 
 
 let deserialise_continuation resolve str = 
-  debug "unmarshaling contin.";
   Marshal.from_string str 0
+
+
+let delay_expr expr = `Function(gensym "", [], [], expr)
+
 
 let rec pp_continuation = String.concat "=->" -<-
   map (function
@@ -316,10 +345,12 @@ and charlist_as_string chlist =
     
 and string_of_result : result -> string = function
   | `Primitive p -> string_of_primitive p
+  | `Function (_, _, _, Placeholder (str, _)) -> "fun (" ^ str ^ ")"
   | `Function _ -> "fun"
-  | `Record fields -> (try string_of_tuple fields
-                       with Not_tuple ->
-                         "(" ^ (String.concat "," (map (function (label, value) -> label ^ "=" ^ (string_of_result value)) fields)) ^ ")")
+  | `Record fields ->
+      (try string_of_tuple fields
+       with Not_tuple ->
+         "(" ^ (String.concat "," (map (function (label, value) -> label ^ "=" ^ (string_of_result value)) fields)) ^ ")")
   | `Variant (label, value) -> label ^ " " ^ string_of_result value
   | `Collection (coll_type, []) -> coll_prefix IntMap.empty coll_type ^ "[]"
   | `Collection (`List, `Primitive(`Char _)::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
@@ -382,8 +413,8 @@ and serialise_result : result serialiser =
              to be modified.  *)
           (try 
              (* temporarily remove filter to get a demo working *)
-             let globals = globals (*List.filter (function (_, `Primitive _) -> false 
-                                          | _ -> true) globals *) in
+             let globals = globals (*List.filter (function (_, `Primitive _) -> false
+                                     | _ -> true) globals *) in
              let name = rassq f globals in
              let v = name, var, locals, Utility.rremove_assq f globals, expr
              in
@@ -457,6 +488,7 @@ and deserialise_result resolve : result deserialiser =
 	 | 'C' -> `Continuation (deserialise1 (deserialise_continuation resolve) obj)
          | _ -> failwith ("Error deserialising result : unknown prefix " ^ (String.make 1 t)))
     in r, rest
+
 and deserialise_binding resolve :  binding deserialiser = 
   fun s ->
       let t, obj, rest = extract_object s in
@@ -471,8 +503,105 @@ and deserialise_environment resolve : environment deserialiser
           | 'E' -> deserialise1 (deserialise_list (deserialise_binding resolve)) obj, rest
           | x -> failwith ("Error deserialising environment header (expected 'E'; got '" ^ (String.make 1 x) ^ "')")
 
+let deserialise_result_string lookup = fst -<- deserialise_result lookup
+
+let deserialise_result_b64 lookup = fst -<- deserialise_result lookup -<- Utility.base64decode 
+
+(* generic visitation functions for results *)
+
+let rec map_result result_f expr_f contframe_f : result -> result = function
+  | `Primitive(`PFunction(str, impl, pargs)) ->
+      result_f(`Primitive(`PFunction(str, impl, map (map_result result_f expr_f contframe_f) pargs)))
+  | `Primitive x -> result_f(`Primitive x)
+  | `Function (str, globals, locals, body) ->
+      result_f(`Function(str, map_env result_f expr_f contframe_f globals,
+                         map_env result_f expr_f contframe_f locals,
+                         map_expr result_f expr_f contframe_f body))
+  | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
+  | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
+  | `Collection(ctype, elems) -> result_f(`Collection(ctype, map (map_result result_f expr_f contframe_f) elems))
+  | `Environment(ns, bindings) -> result_f(`Environment(ns, alistmap (map_result result_f expr_f contframe_f) bindings))
+  | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
+  | other -> result_f(other)
+and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
+  | FuncArg(arg, env) -> 
+      contframe_f(FuncArg((map_expr result_f expr_f contframe_f) arg, (map_env result_f expr_f contframe_f) env))
+  | FuncApply(f, env) -> 
+      contframe_f(FuncApply((map_result result_f expr_f contframe_f) f, (map_env result_f expr_f contframe_f) env))
+  | LetCont(env, var, body) -> 
+      contframe_f(LetCont((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
+  | BranchCont(env, tru, fls) -> 
+      contframe_f(BranchCont((map_env result_f expr_f contframe_f) env, 
+                             (map_expr result_f expr_f contframe_f) tru, (map_expr result_f expr_f contframe_f) fls))
+  | BinopRight(env, op, rhs) -> 
+      contframe_f(BinopRight((map_env result_f expr_f contframe_f) env, op, (map_expr result_f expr_f contframe_f) rhs))
+  | BinopApply(env, op, lhs) -> 
+      contframe_f(BinopApply((map_env result_f expr_f contframe_f) env, op,
+                             (map_result result_f expr_f contframe_f) lhs))
+  | UnopApply(env, op) -> 
+      contframe_f(UnopApply((map_env result_f expr_f contframe_f) env, op))
+  | RecSelect(env, label, var, label_var, body) -> 
+      contframe_f(RecSelect((map_env result_f expr_f contframe_f) env, label, var, label_var, (map_expr result_f expr_f contframe_f) body))
+  | CollExtn(env, ctype, var, body, results, inputs) ->
+      contframe_f(CollExtn((map_env result_f expr_f contframe_f) env, ctype, var, (map_expr result_f expr_f contframe_f) body, 
+                           map (map_result result_f expr_f contframe_f) results, map (map_result result_f expr_f contframe_f) inputs))
+  | StartCollExtn(env, var, body) ->
+      contframe_f(StartCollExtn((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
+  | XMLCont(env, tag, attr_name, children, attr_exprs, elem_exprs) ->
+      contframe_f(XMLCont((map_env result_f expr_f contframe_f) env, tag, attr_name, children,
+                          alistmap (map_expr result_f expr_f contframe_f) attr_exprs, map (map_expr result_f expr_f contframe_f) elem_exprs))
+  | Ignore(env, next) -> 
+      contframe_f(Ignore((map_env result_f expr_f contframe_f) env, (map_expr result_f expr_f contframe_f) next))
+and map_expr result_f expr_f contframe_f expr =
+  expr_f(simple_visit (fun visit_children expr -> visit_children expr) expr)
+and map_env result_f expr_f contframe_f env =
+  alistmap (map_result result_f expr_f contframe_f) env
+and map_cont result_f expr_f contframe_f kappa =
+  map (map_contframe result_f expr_f contframe_f) kappa
+
+(* resolving labels *)
+
+let label_table program = 
+  reduce_expression (fun visit_children expr ->
+                       let (_, _, Some label) = expression_data expr in
+                         (label, expr) :: visit_children expr
+                    ) (fun (_, lists) -> concat lists) program 
+    
+(** resolve_label
+    Given a program and label, return the expression having the
+    corresponding label. Currently very inefficient because it
+    generates a complete label table for the program each time. We
+    should generate this table once and keep it with the program.
+*)
+let resolve_label program label : 'a expression' =
+  try
+    assoc label (concat_map label_table program) 
+  with
+      Not_found -> (prerr_endline("Placeholder not found: " ^ label);
+                    raise Not_found)
+
+let resolve_placeholder program = function
+    Placeholder(s,d) -> resolve_label program s
+  | x -> x
+      
+let resolve_placeholders_result program rslt = 
+  map_result identity (resolve_placeholder program) identity rslt
+
+let resolve_placeholders_cont program rslt = 
+  map_result identity (resolve_placeholder program) identity rslt
+
+let resolve_placeholders_env program env = 
+  map_env identity (resolve_placeholder program) identity env
+
+let resolve_placeholders_expr program expr = 
+  map_expr identity (resolve_placeholder program) identity expr
+
 let label_of_expression expr =
   let (_, _, label) = expression_data expr in fromOption "TUNLABELED" label
+
+
+(** result_to_xml
+    vestigial? *)
     
 let result_to_xml = function
   | `Primitive (`XML r) -> r

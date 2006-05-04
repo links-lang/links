@@ -1,4 +1,20 @@
 open Utility
+open Result
+
+
+type query_params = (string * result) list
+
+type web_request = ContInvoke of continuation * query_params
+                   | ExprEval of Syntax.expression * environment
+                   | ClientReturn of continuation * result
+                   | RemoteCall of result * result
+                   | CallMain
+
+let print_http_response headers body = 
+  List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
+  print_endline "";
+  print_string body
+
 
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program p =
@@ -42,11 +58,13 @@ let serialize_call_to_client (continuation, name, arg) =
        "__arg", arg
      ])
 
+let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string
+
 let untuple_single = function
   | `Record ["1",arg] -> arg
   | r -> r
 
-let clientize_unevaled_env env = 
+let stubify_client_funcs env = 
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, `Client, _) -> false
@@ -69,17 +87,22 @@ let clientize_unevaled_env env =
   let client_env = List.map def_as_client_fun client_env in
     (fst ((Interpreter.run_program Library.value_env) server_env)) @ client_env
 
-let handle_client_call unevaled_env f args = 
-  let env = clientize_unevaled_env unevaled_env in
-  let f, args = Utility.base64decode f, Utility.base64decode args in
-  let continuation = [Result.FuncApply (List.assoc f env, [])] in
-  let result = (Interpreter.apply_cont_safe env continuation
-		  (untuple_single (Jsonparse.parse_json 
-				     Jsonlex.jsonlex (Lexing.from_string args))))
-  in
-    print_string ("Content-type: text/plain\n\n" ^ 
-                    Utility.base64encode (Json.jsonize_result result));
-    exit 0
+(* let handle_client_call unevaled_env f args =  *)
+(*   let env = stubify_client_funcs unevaled_env in *)
+(*   let f, args = Utility.base64decode f, Utility.base64decode args in *)
+(*   let continuation = [Result.FuncApply (List.assoc f env, [])] in *)
+(*   let result = (Interpreter.apply_cont_safe env continuation *)
+(* 		  (untuple_single (parse_json args))) *)
+(*   in *)
+(*     print_http_response [("Content-type", "text/plain")] *)
+(*       (Utility.base64encode (Json.jsonize_result result)); *)
+(*     exit 0 *)
+
+let get_remote_call_args env cgi_args = 
+  let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
+  let args = Utility.base64decode (List.assoc "__args" cgi_args) in
+  let args = untuple_single (parse_json args) in
+    RemoteCall(List.assoc fname env, args)
 
 open Errors
 open Syntax (* needed for Parse_failure exception *)
@@ -93,56 +116,134 @@ let decode_continuation (cont : string) : Result.continuation =
     Str.global_replace (Str.regexp " ") "+" 
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
-let is_define = function Syntax.Define _ -> true | _ -> false
+let is_special_param (k, _) =
+  List.mem k ["continuation%25"; "continuation%"; 
+              "environment%25"; "environment%";
+              "expression%25"; "expression%"]
+
+let string_dict_to_charlist_dict =
+  dict_map Result.string_as_charlist
+
+let lookup_either a b env = 
+  try List.assoc a env
+  with Not_found -> List.assoc b env
+
+exception Not_thunk
+
+let undelay_expr = function
+  | `Function (_, _, _, p) -> p
+  | _ -> raise Not_thunk
+
+let unpickle_expr_arg lookupf str = undelay_expr (deserialise_result_b64 lookupf str) 
+
+(* Extract continuation from the parameters passed in over CGI.*)
+let contin_invoke_req prim_lookup params =
+  let pickled_continuation = (lookup_either "continuation%25" "continuation%" params) in
+  let params = List.filter (not -<- is_special_param) params in
+  let params = string_dict_to_charlist_dict params in
+  let continuation =
+    (deserialise_continuation prim_lookup
+       (Utility.base64decode pickled_continuation))
+  in
+    ContInvoke(continuation, params)
+
+(* Extract expression/environment pair from the parameters passed in over CGI.*)
+let expr_eval_req prim_lookup params =
+  let pickled_expression = lookup_either "expression%25" "expression%" params in
+  let pickled_environment = lookup_either "environment%25" "environment%"  params in
+  let environment =
+    if pickled_environment = "" then []
+    else
+      fst (deserialise_environment prim_lookup (Utility.base64decode pickled_environment))
+  in 
+  let expression = unpickle_expr_arg prim_lookup pickled_expression in
+  let params = List.filter (not -<- is_special_param) params in
+  let params = string_dict_to_charlist_dict params in
+    ExprEval(expression, params @ environment)
+
+let is_remote_call params =
+  List.mem_assoc "__name" params && List.mem_assoc "__args" params
+
+let is_client_call_return params = 
+  List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
+
+let is_contin_invocation params = 
+  List.mem_assoc "continuation%" params
+
+let is_expr_request params = 
+  List.mem_assoc "expression%" params && List.mem_assoc "environment%" params
+
+let client_return_req env cgi_args = 
+  let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
+  let parse_json_b64 = parse_json -<- Utility.base64decode in
+  let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
+    ClientReturn(continuation, untuple_single arg)
+
+let perform_request program env main req =
+  match req with
+    | ContInvoke (cont, params) -> 
+        prerr_endline "Continuation";
+        print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result (Interpreter.apply_cont_safe env cont (`Record params)))
+    | ExprEval(expr, env) ->
+        prerr_endline "expr/env pair";
+        print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result (snd (Interpreter.run_program (env @ env) [expr])))
+    | ClientReturn(cont, value) ->
+        prerr_endline "client call return";
+        print_http_response [("Content-type", "text/plain")]
+          (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe env cont value)))
+    | RemoteCall(func, arg) ->
+        prerr_endline "server rpc call";
+        let cont = [Result.FuncApply (func, [])] in
+          print_http_response [("Content-type", "text/plain")]
+            (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe env cont arg)))
+    | CallMain -> 
+        if is_client_program program then
+          (prerr_endline "generating js";
+           print_http_response [("Content-type", "text/html")]
+             (Js.generate_program program main)
+          )
+        else (
+          prerr_endline "running main";
+          print_http_response [("Content-type", "text/html")]
+            (Result.string_of_result (snd (Interpreter.run_program env [main])))
+        )
+          
+(*       let result = continue_from_client_call global_env cgi_args in *)
+(*         (print_http_response [("Content-type", "text/plain")]  *)
+(*            (\* FIXME: Why is this not JSON-encoded? *\) *)
+(*            (Utility.base64encode (Result.string_of_result result)); *)
+(*          exit 0) *)
 
 let serve_requests filename = 
   Performance.measuring := true;
   Pervasives.flush(Pervasives.stderr);
-  let global_env = read_file_cache filename in
-    (* TBD: Allow multiple expressions; execute them all in turn. *)
-  let global_env, [expression] = List.partition is_define global_env in
+  let program = read_file_cache filename in
+  let client_prog = is_client_program program in 
+  let global_env, [main] = List.partition is_define program in
+  let global_env = stubify_client_funcs global_env in
   let cgi_args = Cgi.parse_args () in
-    if Forms.is_remote_call cgi_args then 
-       handle_client_call
-         global_env
-         (List.assoc "__name" cgi_args) 
-         (List.assoc "__args" cgi_args)
-    else if List.mem_assoc "__continuation" cgi_args then
-      begin
-        let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string in
-        let continuation = decode_continuation (List.assoc "__continuation" cgi_args) 
-        and arg = parse_json (Utility.base64decode (List.assoc "__result" cgi_args))
-        and env = clientize_unevaled_env global_env in
-          debug("continuation is " ^ Syntax.string_of_expression expression);
-        let result = Interpreter.apply_cont_safe env continuation (untuple_single arg) in
-          print_endline ("Content-type: text/plain\n\n" ^ 
-                           Utility.base64encode(Result.string_of_result result));
-          exit 0
-      end
-    else 
-
-      (* Print headers *)
-    print_endline "Content-type: text/html\n";
-
-    if is_client_program global_env 
-    then
-       print_endline (Js.generate_program filename global_env expression)
+  let request = 
+    if is_remote_call cgi_args then 
+      get_remote_call_args global_env cgi_args
+    else if is_client_call_return cgi_args then
+      client_return_req global_env cgi_args
     else
-      let global_env, _ = (Interpreter.run_program Library.value_env) global_env in
-      begin
-        let rresult = 
-	  match Forms.cont_from_params (flip List.assoc global_env) cgi_args with
-              (* TBD: consolidate these two entry points into one? *)
-	    | Some (Forms.ContParams (cont, params)) -> 
-                Interpreter.apply_cont_safe global_env cont (`Record params)
-            | Some (Forms.ExprEnv(expr, env)) ->
-                snd (Interpreter.run_program (global_env @ env) [expr])
-            | None -> 
-                snd (Interpreter.run_program global_env [expression])
-        in
-          print_endline (Result.string_of_result rresult)
-      end
-
+(*       let global_env, _ = (Interpreter.run_program Library.value_env) global_env in *)
+        if (is_contin_invocation cgi_args) then
+          contin_invoke_req global_env cgi_args 
+        else if (is_expr_request cgi_args) then
+          expr_eval_req (flip List.assoc global_env) cgi_args           
+        else
+          CallMain
+  in
+    perform_request program global_env main request
+(*       let headers, result = perform_request program global_env main request *)
+(*       in *)
+(*         print_http_response headers *)
+(*           (Result.string_of_result result) *)
+          
 let serve_requests filename =
   Errors.display_errors_fatal stderr
     serve_requests filename

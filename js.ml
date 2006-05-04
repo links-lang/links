@@ -58,12 +58,6 @@ type code = | Var   of string
 
 let jsthunk expr = Fn([], expr)
 
-let gensym =
-  let counter = ref 0 in 
-    function str -> 
-      incr counter ;
-      str ^ "_j" ^ (string_of_int !counter)
-
 (* local_names
 
    Retrieve all let bindings within a function.  Don't descend into
@@ -130,6 +124,7 @@ let string_quote s =
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" s) ^ "'"
       
 let strlit s = Lit (string_quote s)
+let chrlit s = Lit (string_quote (string_of_char s))
 
 (* Specialness:
 
@@ -324,6 +319,7 @@ let rec generate : 'a expression' -> code =
   | Integer (v, _)                     -> trivial_cps (Lit (string_of_num v))
   | Float (v, _)                       -> trivial_cps (Lit (string_of_float v))
   | Boolean (v, _)                     -> trivial_cps (Lit (string_of_bool v))
+  | Char (v, _)                        -> trivial_cps (chrlit v)
   | String (v, _)                      -> trivial_cps (strlit v)
   | Condition (i, t, e, _)             -> 
       let i_cps = generate i in
@@ -530,6 +526,7 @@ let rec generate : 'a expression' -> code =
   | Table _
   | Directive _
   | Escape _  as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+  | x -> failwith("unknown ast object " ^ string_of_expression x)
 
 (* Specialness: 
    * Modify the l:action to pass the continuation to the top-level boilerplate
@@ -744,7 +741,7 @@ let gen =
   ->- show
 
  (* TODO: imports *)
-let generate_program filename environment expression = 
+let generate_program environment expression = 
   (boiler_1
  ^ String.concat "\n" (map gen environment)
  ^ boiler_2

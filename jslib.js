@@ -1,6 +1,6 @@
 // Links js runtime.
 
-var DEBUGGING = false;
+var DEBUGGING = true;
 var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
 
  Node.prototype.swapNode = function (node) {
@@ -322,7 +322,10 @@ function _start(tree) {
   for (var i = 0; i < l; i++) {
      d.removeChild( d.childNodes[0] );
   }
-  d.appendChild( tree[0] );
+  for (var i = 0; i < tree[0].childNodes.length; i++) {
+    var it = tree[0].childNodes[i].cloneNode(true);
+    d.appendChild( it );
+  }
   // restore here
   for (var i = 0; i < _saved_fieldvals.length; i++) { 
      var current = _saved_fieldvals[i];

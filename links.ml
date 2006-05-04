@@ -34,6 +34,7 @@ let rec evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (vale
        let exprs =          Performance.measure "parse" parse input in 
        let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
        let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+       let exprs = List.map Syntax.labelize exprs in
        let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
          print_result (Syntax.node_kind (last exprs)) result;
          (valenv, typeenv), result
