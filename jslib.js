@@ -101,7 +101,7 @@ var DEBUG = function () {
     if (DEBUG.is_xmlnode(value)) return xmldump(value)
     else return JSON.stringify(value)
  }//,
-  // [IE] superflous comments aren't allowed
+  // [IE] superflous commas aren't allowed
 }
 }();
 
