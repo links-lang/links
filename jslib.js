@@ -3,12 +3,37 @@
 var DEBUGGING = true;
 var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
 
- Node.prototype.swapNode = function (node) {
+// [IE] these aren't defined in IE
+document.ELEMENT_NODE = 1;
+document.ATTRIBUTE_NODE = 2;
+document.TEXT_NODE = 3;
+document.CDATA_SECTION_NODE = 4;
+document.ENTITY_REFERENCE_NODE = 5;
+document.ENTITY_NODE = 6;
+document.PROCESSING_INSTRUCTION_NODE = 7;
+document.COMMENT_NODE = 8;
+document.DOCUMENT_NODE = 9;
+document.DOCUMENT_TYPE_NODE = 10;
+document.DOCUMENT_FRAGMENT_NODE = 11;
+document.NOTATION_NODE = 12;
+
+
+// [IE] Node isn't defined in IE
+/*
+Node.prototype.swapNode = function (node) {
     var nextSibling = this.nextSibling;
     var parentNode = this.parentNode;
     node.parentNode.replaceChild(this, node);
     parentNode.insertBefore(node, nextSibling);
  }
+*/
+
+_swapNode = function (me, node) {
+  var nextSibling = me.nextSibling;
+  var parentNode = me.parentNode;
+  node.parentNode.replaceChild(me, node);
+  parentNode.insertBefore(node, nextSibling);
+}
 
 var DEBUG = function () {
  function is_instance(value, type, constructor) {
@@ -75,7 +100,8 @@ var DEBUG = function () {
  show : function(value) {
     if (DEBUG.is_xmlnode(value)) return xmldump(value)
     else return JSON.stringify(value)
- },
+ }//,
+  // [IE] superflous comments aren't allowed
 }
 }();
 
@@ -190,7 +216,7 @@ function _applyChanges(changes) {
     else if (change.label == 'SwapNodes') {
           var one = change.value.first;
           var two = change.value.second;
-          one.swapNode(two);
+          _swapNode(one, two);
     }  
     else if (change.label == 'Document') {
           _start(change.value);
@@ -254,6 +280,17 @@ function _accum(kappa) {
   }
 }
 
+// function _constructHandlerCall (the_id, eventName) {
+//   '_eventHandlers['+the_id+']['+eventName+']; return false';
+// }
+
+// function _activateHandler(node, the_id, eventName) {
+//   var e = 'node.'+eventName+' = '+'\'_eventHandlers['+the_id+']['+eventName+']; return false\'';
+// //'+_constructHandlerCall(the_id, eventName);
+//   _alert("activating handler: "+e);
+//   e();
+// }
+
 /// XML
 //  _XML(tag, attrs, children)
 //    create a DOM node with name `tag'
@@ -264,9 +301,35 @@ function _accum(kappa) {
 function _XML(kappa) {
   return function(tag, attrs, body) { 
    var node = document.createElement(tag);
+   _alert("node: "+node.nodeName);
    for (name in attrs) {
+      _alert("attribute name: "+name+"; value: "+attrs[name]);
       node.setAttribute(name, attrs[name]);
    }
+   _alert("boo");
+
+   var the_id = node.getAttribute('id');
+   if(the_id != null) {
+     var hs = _eventHandlers[the_id];
+     for(eventName in hs) {
+       function h(e) {
+         _alert("an event!");
+         //_eventHandlers[the_id][eventName](e);
+       }
+
+
+       switch (eventName) {
+         case 'onsubmit':
+           _alert("Event handler: "+the_id+", "+eventName);
+           node.onsubmit = h;
+           break;
+         default:
+           _alert("Event not supported in jslib.js yet: "+eventName);
+       }
+       //_activateHandler(node, the_id, eventName);
+     }
+   }
+
    for (var i = 0; i < body.length; i++) {
      var child = body[i];
      if (typeof(child) == 'string') {
@@ -305,6 +368,44 @@ function _fail(str) {
   _alert("Internal error: " + str);
 }
 
+
+function isElement(node) {
+  return (node.nodeType == document.ELEMENT_NODE);
+}
+
+function isElementWithTag(node, tag) {
+  return (isElement(node) && (node.tagName.toLowerCase() == 'body'));
+}
+
+
+function _activateHandlers(node) {
+  if(!isElement(node))
+    return;
+
+  var the_id = node.getAttribute('id');
+  if(the_id != null) {
+    var hs = _eventHandlers[the_id];
+    for(eventName in hs) {
+      function h(e) {
+        _alert("an event!");
+        _eventHandlers[the_id][eventName](e);
+	return false;
+      }
+
+      switch (eventName) {
+        case 'onsubmit':
+          _alert("Event handler: "+the_id+", "+eventName);
+          node.onsubmit = h;
+          break;
+        default:
+          _alert("Event not supported in jslib.js yet: "+eventName);
+      }
+      //_activateHandler(node, the_id, eventName);
+    }
+  }
+}
+
+
 // Page update
 
 //  _start(tree)
@@ -317,15 +418,42 @@ function _start(tree) {
      var current = inputFields[i];
      _saved_fieldvals.push({'field' : current.id, 'value' : current.value});
   }
+
+  // delete the DOM except for the html tag and the body
+  // [IE] IE doesn't allow these tags to be deleted
   var d = document.documentElement;
-  var l = d.childNodes.length;
-  for (var i = 0; i < l; i++) {
-     d.removeChild( d.childNodes[0] );
+  var body;
+  while(d.hasChildNodes()) {
+    if(isElementWithTag(d.firstChild, 'body')) {
+      body = d.firstChild;
+      var bodyLength = body.childNodes.length;
+      while (body.hasChildNodes()) {
+        body.removeChild(body.firstChild);
+      }
+      break; // [IE] no more nodes allowed after the body
+    }
+    d.removeChild(d.firstChild);
   }
-  for (var i = 0; i < tree[0].childNodes.length; i++) {
-    var it = tree[0].childNodes[i].cloneNode(true);
-    d.appendChild( it );
+
+  
+  // insert new dom nodes
+  for (var p = tree[0].firstChild; p != null; p = p.nextSibling) {
+    if(isElementWithTag(p, 'body')) {
+     // insert body nodes inside the existing body node
+      for (var q = p.firstChild; q != null; q = q.nextSibling) {
+        var it = q.cloneNode(true);
+        body.appendChild(it);
+        _activateHandlers(it);
+      }
+      break; // [IE] no more nodes allowed after the body
+    }
+    _alert("inserting node: "+p.nodeName);
+    var it = p.cloneNode(true);
+    d.insertBefore(it, body);
+    _activateHandlers(it);
   }
+
+
   // restore here
   for (var i = 0; i < _saved_fieldvals.length; i++) { 
      var current = _saved_fieldvals[i];
@@ -358,9 +486,12 @@ function _registerFormEventHandlers(id, actions) {
      var action = actions[i];
         // FIXME: clone this ??
 
-     if (!_eventHandlers[action.evName])
-       _eventHandlers[action.evName] = [];
-     _eventHandlers[action.evName][the_id] = action.handler;
+//      if (!_eventHandlers[action.evName])
+//        _eventHandlers[action.evName] = [];
+//      _eventHandlers[action.evName][the_id] = action.handler;
+     if (!_eventHandlers[the_id])
+       _eventHandlers[the_id] = [];
+     _eventHandlers[the_id][action.evName] = action.handler;
    }
    return the_id;
 }
@@ -475,6 +606,29 @@ function _tuple_as_list(tuple) {
 var isLoaded = 2;
 var isComplete = 4;
 
+// [IE] XMLHttpRequest is an ActiveXObject in IE
+function _newXMLHttpRequest() {
+  var http_request;
+  if(window.XMLHttpRequest) { // native XMLHttpRequest object (FireFox, etc.)
+    try {
+      http_request = new XMLHttpRequest();
+    } catch(e) {
+      throw ("Failed to create (native) XMLHttpRequest");
+    }
+  } else if(window.ActiveXObject) { //IE
+    try {
+        http_request = new ActiveXObject("Msxml2.XMLHTTP");
+    } catch(e) {
+      try {
+        http_request = new ActiveXObject("Microsoft.XMLHTTP");
+      } catch(e) {
+        throw ("Failed to create (ActiveX) XMLHttpRequest object");
+      }
+    }
+  }
+  return http_request;
+}
+
 function _remoteCallHandler(kappa, request) {
   return function() {
     if (request.readyState == isComplete) {
@@ -487,8 +641,8 @@ function _remoteCallHandler(kappa, request) {
         // FIXME: does window[] necessarily look up functions?
         var f = window[serverResponse.__name](cont);
         f.apply(f, _tuple_as_list(serverResponse.__arg));
-        var request_ = new XMLHttpRequest();
-        request_.open('POST', '#', true);
+        var request_ = _newXMLHttpRequest();
+        request_.open('POST', location.href, true);
         request_.onreadystatechange = _remoteCallHandler(kappa, request_);
         request_.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         request_.send("__continuation=" + serverResponse.__continuation + "&__result=" + _base64encode(JSON.stringify(_res)));
@@ -504,9 +658,17 @@ function _remoteCallHandler(kappa, request) {
 function _remoteCall(kappa) {
   return function(name, arguments) {
 
-    var request = new XMLHttpRequest();
+    _alert("starting xmlhttprequest");
+
+    var request = _newXMLHttpRequest();
     asynch = true;
-    request.open("POST", "#", asynch);
+
+    // [IE] IE mistakenly urlencodes # as %23
+    // whereas Firefox leaves it plain
+    //
+    // so we use location.href instead
+    // which seems to work in both
+    request.open('POST', location.href, asynch);
     request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     request.onreadystatechange = _remoteCallHandler(kappa, request);
 

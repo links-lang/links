@@ -598,7 +598,8 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                                           handlers)]);
                             ]
                             @ essentialAttrs
-                            @ map handlerInvoker handlers)
+                            (* @ map handlerInvoker handlers *)
+			   )
       children_cps [] tag
 
 and lname_transformation (Xml_node (tag, attrs, children, d)) = 
