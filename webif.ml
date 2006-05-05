@@ -37,16 +37,18 @@ let read_file_cache filename : (Syntax.expression list) =
     with (Sys_error _| Unix.Unix_error _) ->
       let program = 
         (Performance.measure "optimise" Optimiser.optimise_program)
-          ((Performance.measure "type" (Inference.type_program Library.type_env))
-             ((Performance.measure "parse" Parse.parse_file) filename)) in 
+          ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
+             ((Performance.measure "type" (Inference.type_program Library.type_env))
+                ((Performance.measure "parse" Parse.parse_file) filename)))
+      in 
 	(try 
 	   let outfile = open_out cachename in 
              Marshal.to_channel outfile program [Marshal.Closures] ;
              close_out outfile
 	 with _ -> ());
         program
-
-
+          
+              
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
@@ -148,7 +150,7 @@ let contin_invoke_req prim_lookup params =
     ContInvoke(continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
-let expr_eval_req prim_lookup params =
+let expr_eval_req program prim_lookup params =
   let pickled_expression = lookup_either "expression%25" "expression%" params in
   let pickled_environment = lookup_either "environment%25" "environment%"  params in
   let environment =
@@ -157,6 +159,7 @@ let expr_eval_req prim_lookup params =
       fst (deserialise_environment prim_lookup (Utility.base64decode pickled_environment))
   in 
   let expression = unpickle_expr_arg prim_lookup pickled_expression in
+  let expression = resolve_placeholders_expr program expression in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
     ExprEval(expression, params @ environment)
@@ -179,25 +182,25 @@ let client_return_req env cgi_args =
   let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
     ClientReturn(continuation, untuple_single arg)
 
-let perform_request program env main req =
+let perform_request program globals main req =
   match req with
     | ContInvoke (cont, params) -> 
         prerr_endline "Continuation";
         print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result (Interpreter.apply_cont_safe env cont (`Record params)))
+          (Result.string_of_result (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
         prerr_endline "expr/env pair";
         print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result (snd (Interpreter.run_program (env @ env) [expr])))
+          (Result.string_of_result (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
         prerr_endline "client call return";
         print_http_response [("Content-type", "text/plain")]
-          (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe env cont value)))
+          (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
         prerr_endline "server rpc call";
         let cont = [Result.FuncApply (func, [])] in
           print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe env cont arg)))
+            (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         if is_client_program program then
           (prerr_endline "generating js";
@@ -207,7 +210,7 @@ let perform_request program env main req =
         else (
           prerr_endline "running main";
           print_http_response [("Content-type", "text/html")]
-            (Result.string_of_result (snd (Interpreter.run_program env [main])))
+            (Result.string_of_result (snd (Interpreter.run_program globals [main])))
         )
           
 (*       let result = continue_from_client_call global_env cgi_args in *)
@@ -234,7 +237,7 @@ let serve_requests filename =
         if (is_contin_invocation cgi_args) then
           contin_invoke_req global_env cgi_args 
         else if (is_expr_request cgi_args) then
-          expr_eval_req (flip List.assoc global_env) cgi_args           
+          expr_eval_req program (flip List.assoc global_env) cgi_args           
         else
           CallMain
   in

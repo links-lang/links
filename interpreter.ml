@@ -74,7 +74,7 @@ let lookup toplevel locals name =
   try
     lookup_qname toplevel locals (split_string name ':')
   with Not_found ->
-    debug ("Not_found during `lookup' : "  ^ name);
+    failwith ("Internal error: variable `"  ^ name ^ "' not defined");
     raise Not_found
 
 let bind_rec globals locals defs =
@@ -502,6 +502,8 @@ fun globals locals expr cont ->
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
+  | Syntax.Placeholder (l, _) -> 
+      failwith("Internal error: Placeholder at runtime")
 
           (* Note: no way to suspend threading *)
 and interpret_safe globals locals expr cont =
