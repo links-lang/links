@@ -206,7 +206,7 @@ function _applyChanges(changes) {
     if (change.label == 'ReplaceElement') {
     var element = document.getElementById(change.value.id);
     if (!element) _alert("element " + change.value.id + " does not exist");
-          element.parentNode.replaceChild(change.value.replacement[0], element);
+        element.parentNode.replaceChild(change.value.replacement[0], element);
     }
     else if (change.label == 'AppendChild') {
         var element = document.getElementById(change.value.id);
@@ -280,17 +280,6 @@ function _accum(kappa) {
   }
 }
 
-// function _constructHandlerCall (the_id, eventName) {
-//   '_eventHandlers['+the_id+']['+eventName+']; return false';
-// }
-
-// function _activateHandler(node, the_id, eventName) {
-//   var e = 'node.'+eventName+' = '+'\'_eventHandlers['+the_id+']['+eventName+']; return false\'';
-// //'+_constructHandlerCall(the_id, eventName);
-//   _alert("activating handler: "+e);
-//   e();
-// }
-
 /// XML
 //  _XML(tag, attrs, children)
 //    create a DOM node with name `tag'
@@ -305,29 +294,6 @@ function _XML(kappa) {
    for (name in attrs) {
       _alert("attribute name: "+name+"; value: "+attrs[name]);
       node.setAttribute(name, attrs[name]);
-   }
-   _alert("boo");
-
-   var the_id = node.getAttribute('id');
-   if(the_id != null) {
-     var hs = _eventHandlers[the_id];
-     for(eventName in hs) {
-       function h(e) {
-         _alert("an event!");
-         //_eventHandlers[the_id][eventName](e);
-       }
-
-
-       switch (eventName) {
-         case 'onsubmit':
-           _alert("Event handler: "+the_id+", "+eventName);
-           node.onsubmit = h;
-           break;
-         default:
-           _alert("Event not supported in jslib.js yet: "+eventName);
-       }
-       //_activateHandler(node, the_id, eventName);
-     }
    }
 
    for (var i = 0; i < body.length; i++) {
@@ -377,7 +343,7 @@ function isElementWithTag(node, tag) {
   return (isElement(node) && (node.tagName.toLowerCase() == 'body'));
 }
 
-
+// bind all the handlers registered to this node id to this DOM node
 function _activateHandlers(node) {
   if(!isElement(node))
     return;
@@ -387,20 +353,12 @@ function _activateHandlers(node) {
     var hs = _eventHandlers[the_id];
     for(eventName in hs) {
       function h(e) {
-        _alert("an event!");
+        _alert("an event: "+eventName);
         _eventHandlers[the_id][eventName](e);
 	return false;
       }
 
-      switch (eventName) {
-        case 'onsubmit':
-          _alert("Event handler: "+the_id+", "+eventName);
-          node.onsubmit = h;
-          break;
-        default:
-          _alert("Event not supported in jslib.js yet: "+eventName);
-      }
-      //_activateHandler(node, the_id, eventName);
+      node[eventName] = h;
     }
   }
 }
