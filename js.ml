@@ -107,6 +107,7 @@ let rec show : code -> string =
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
       | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+      | Call (Var "_call", [f; a; k]) -> "_call(" ^ paren f ^ ", " ^ paren a ^ ",\n" ^ paren k ^ ")"
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"

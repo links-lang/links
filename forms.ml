@@ -107,9 +107,13 @@ let is_trivial_apply = function
   | expr -> is_trivial_apply_aux expr
 
 
+let rec is_variable = function
+    Variable _ -> true
+  | _ -> false
+
 let rec is_simple_apply_aux = function
     Variable(f, _) -> true
-  | Apply(e, _, _) -> is_simple_apply_aux e
+  | Apply(e, a, _) -> is_simple_apply_aux e && (is_variable a(*  || is_tuple a *))
   | _ -> false
 
 let is_simple_apply = function
@@ -164,6 +168,7 @@ let plain_serialise_result = function
   | `Primitive(`Int i) -> string_of_num i
   | `Primitive(`Char ch) -> String.make 1 ch
   | `Primitive(`Float f) -> string_of_float f
+  | `Function _ as f -> serialise_result f
   | _ -> raise UnplainResult
 
 let plain_deserialise_result str = 
@@ -215,14 +220,13 @@ let xml_transform env lookup eval : expression -> expression =
         let href_expr = assoc "l:href" attrs in
         let ser_expr, ser_env = serialize_exprenv href_expr env in
         let href_val = 
-(*           if is_simple_apply href_expr then *)
-(*             let (Variable (func, _)::args) = list_of_appln href_expr in *)
-(*             let arg_vals = map (value_of_simple_expr lookup) args in *)
-(*               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals) *)
-(* (\*               ^ "?environment%=" ^ ser_env *\) *)
-(*           else  *)
-            "?environment%=" ^ ser_env ^
-              "&expression%=" ^ ser_expr
+          if is_simple_apply href_expr then
+            let (Variable (func, _)::args) = list_of_appln href_expr in
+            let arg_vals = map (value_of_simple_expr lookup) args in
+              String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
+(*               ^ "?environment%=" ^ ser_env *)
+          else
+            "?environment%=" ^ ser_env ^ "&expression%=" ^ ser_expr
         in
         let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
         in

@@ -224,7 +224,7 @@ function _applyChanges(changes) {
   }
 }
 
-function see(x) { return x.innerHTML }
+function innerHTML(x) { return x.innerHTML }
 
 function cmap(f, glue, l) {
   if (l.length <= 0) return '';
@@ -262,14 +262,12 @@ function _accumAux(kappa) {
   return function(fn, list, result) {
     if (isEmpty(list)) kappa(result)
     else {
+      h = list[0];
       // instead of cps hd/tl, should use js ops directly
-      hd(function(x) {
-           fn(function(ximg) {
-                tl(function (rest) {
-                     _accumAux(kappa)(fn, rest, result.concat(ximg))
-                   })(list)
-              } )(x);
-         })(list)
+      _call(fn, [h], function(himg) {
+                       t = list.slice(1);
+                       _accumAux(kappa)(fn, t, result.concat(himg))
+                     } );
     }
   }
 }
@@ -369,6 +367,7 @@ function _activateHandlers(node) {
 //  _start(tree)
 //    Replace the current page with `tree'.
 function _start(tree) {
+  if (!tree[0]) return;
   // save here
   var _saved_fieldvals = [];
   var inputFields = document.getElementsByTagName("input");

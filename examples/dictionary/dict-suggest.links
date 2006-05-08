@@ -1,3 +1,5 @@
+#!/home/s0567141/links/links -d
+
 fun lookup(item, list, default) server {
   if (list == []) default
   else {
@@ -26,10 +28,14 @@ fun lowercase(str) server {
 }
 
 fun completions(p) server {
-  var db = database "postgresql:dictionary::5432:www-data:";
-  if (p == "") [] 
-  else take(10)(for (w <- Table "wordlist" with {word : String, type : String, meaning : String} order [word : asc] from db)
-       where (w.word beginswith p) [w])
+  if (p == "") []
+  else {
+    var db = database "postgresql:dictionary::5432:s0567141:";
+    take(10)(for (w <- Table "wordlist" 
+                        with {word : String, type : String, meaning : String} 
+                       order [word : asc] from db)
+             where (w.word beginswith p) [w])
+  }
 }
 
 fun main(suggestions) client {

@@ -167,6 +167,9 @@ let expr_eval_req program prim_lookup params =
 let is_remote_call params =
   List.mem_assoc "__name" params && List.mem_assoc "__args" params
 
+let is_func_appln params =
+  List.mem_assoc "__name" params && List.mem_assoc "__args" params
+
 let is_client_call_return params = 
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
@@ -187,20 +190,26 @@ let perform_request program globals main req =
     | ContInvoke (cont, params) -> 
         prerr_endline "Continuation";
         print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result (Interpreter.apply_cont_safe globals cont (`Record params)))
+          (Result.string_of_result 
+             (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
         prerr_endline "expr/env pair";
         print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result (snd (Interpreter.run_program (globals @ env) [expr])))
+          (Result.string_of_result 
+             (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
         prerr_endline "client call return";
         print_http_response [("Content-type", "text/plain")]
-          (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe globals cont value)))
+          (Utility.base64encode 
+             (Json.jsonize_result 
+                (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
         prerr_endline "server rpc call";
         let cont = [Result.FuncApply (func, [])] in
           print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode (Result.string_of_result (Interpreter.apply_cont_safe globals cont arg)))
+            (Utility.base64encode
+               (Json.jsonize_result 
+                  (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         if is_client_program program then
           (prerr_endline "generating js";
@@ -232,14 +241,12 @@ let serve_requests filename =
       get_remote_call_args global_env cgi_args
     else if is_client_call_return cgi_args then
       client_return_req global_env cgi_args
+    else if (is_contin_invocation cgi_args) then
+      contin_invoke_req global_env cgi_args 
+    else if (is_expr_request cgi_args) then
+      expr_eval_req program (flip List.assoc global_env) cgi_args           
     else
-(*       let global_env, _ = (Interpreter.run_program Library.value_env) global_env in *)
-        if (is_contin_invocation cgi_args) then
-          contin_invoke_req global_env cgi_args 
-        else if (is_expr_request cgi_args) then
-          expr_eval_req program (flip List.assoc global_env) cgi_args           
-        else
-          CallMain
+      CallMain
   in
     perform_request program global_env main request
 (*       let headers, result = perform_request program global_env main request *)
