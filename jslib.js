@@ -196,8 +196,37 @@ function error(kappa) {
 }
 
 /// ???
-function _xmldump(xml) {
-   return (new XMLSerializer()).serializeToString(xml)
+// [IE] the xml property is supposed to work for IE. It
+// doesn't appear to work for DOM nodes created
+// by the global document object, but does work
+// for nodes created by some other document
+// (other documents are created with
+//  new ActiveXObject('Msxml2.DOMDocument.3.0'))...
+//
+// ...it seems that IE has two different kinds of
+// DOM node object: a JScript one, and an ActiveX
+// one. The JScript one is the one used by
+// the DOM for the current document, and does not
+// support serialization.
+//
+// Perhaps we should implement our own serializer
+// at some point if we really need it.
+function _xmldump(xmlNode) {
+  var text = false;
+  try {
+    // Firefox
+    var serializer = new XMLSerializer();
+    text = serializer.serializeToString(xmlNode);
+  }
+  catch (e) {
+    try {
+      // IE
+      text = xmlNode.xml;
+    }
+    catch (e) {}
+  }
+  return text;
+//   return (new XMLSerializer()).serializeToString(xml)
 }
 
 function _applyChanges(changes) {
@@ -206,6 +235,7 @@ function _applyChanges(changes) {
     if (change.label == 'ReplaceElement') {
     var element = document.getElementById(change.value.id);
     if (!element) _alert("element " + change.value.id + " does not exist");
+        _alert("Replacing with: "+escape(_xmldump(change.value.replacement[0])));  
         element.parentNode.replaceChild(change.value.replacement[0], element);
     }
     else if (change.label == 'AppendChild') {
@@ -346,17 +376,15 @@ function _activateHandlers(node) {
   if(!isElement(node))
     return;
 
-  var the_id = node.getAttribute('id');
-  if(the_id != null) {
-    var hs = _eventHandlers[the_id];
-    for(eventName in hs) {
-      function h(e) {
-        _alert("an event: "+eventName);
-        _eventHandlers[the_id][eventName](e);
-	return false;
-      }
-
-      node[eventName] = h;
+  var id = node.getAttribute('id');
+  if(id != null) {
+    var hs = _eventHandlers[id];
+    for(var eventName in hs) {
+      node[eventName] =
+	function (id, name){return function (e) {
+ 	  _eventHandlers[id][name](e);
+	  return false;
+      	}}(id, eventName);
     }
   }
 }
@@ -438,19 +466,19 @@ function _start(tree) {
 var _id = 0;
 
 function _registerFormEventHandlers(id, actions) {
-   the_id = id != 0 ? id : _id++;
+   var id = id != 0 ? id : _id++;
    for (var i = 0; i < actions.length; i++) {
      var action = actions[i];
         // FIXME: clone this ??
 
 //      if (!_eventHandlers[action.evName])
 //        _eventHandlers[action.evName] = [];
-//      _eventHandlers[action.evName][the_id] = action.handler;
-     if (!_eventHandlers[the_id])
-       _eventHandlers[the_id] = [];
-     _eventHandlers[the_id][action.evName] = action.handler;
+//      _eventHandlers[action.evName][id] = action.handler;
+     if (!_eventHandlers[id])
+       _eventHandlers[id] = [];
+     _eventHandlers[id][action.evName] = action.handler;
    }
-   return the_id;
+   return id;
 }
 var _eventHandlers = {};
 
