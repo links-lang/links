@@ -74,13 +74,11 @@ type unop = MkColl
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
             | QueryOp of (query * kind)
-            | SortOp of bool
 
 let string_of_unop = function
   | MkColl -> "MkColl"
   | MkDatabase -> "MkDatabase"
   | MkVariant label -> "MkVariant " ^ label
-  | SortOp up -> "SortOp" ^ if up then "Up" else "Down"
   | QueryOp _ -> "QueryOp(...)"
   | VrntSelect _ -> "VrntSelect(...)"
 

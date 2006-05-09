@@ -213,7 +213,6 @@ type phrasenode =
   | Var of (name)
   | FunLit of (name option * ppattern list * phrase)
   | ListLit of (phrase list)
-  | SortExp of (bool * phrase)
   | Definition of (name * phrase * location)
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option)
   | Escape of (name * phrase)

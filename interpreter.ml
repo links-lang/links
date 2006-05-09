@@ -334,14 +334,6 @@ and apply_cont globals : continuation -> result -> result =
                            | x -> raise (Runtime_failure ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
-	           | SortOp(up) ->
-	               apply_cont globals cont
-		         (match value with
-		            | `List (results) ->
-		                let cmp = (if up then less_to_cmp less
-                                           else curry ((~-) -<- (uncurry (less_to_cmp less)))) in
-		                  listval(List.sort cmp results)
-		            | _ -> raise (Runtime_failure "TF223"))
 	        )
             | RecSelect (locals, label, label_var, variable, body) ->
 	        let field, remaining = crack_row label (recfields value) in
