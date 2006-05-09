@@ -94,5 +94,9 @@ test: $(RESULT)
 fixmes:
 	@grep FIXME *.ml*
 
-docs:
+.PHONY: docs
+
+docs: quick-help.html
+
+quick-help.html: quick-help.pod
 	pod2html quick-help.pod > quick-help.html

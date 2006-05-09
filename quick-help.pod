@@ -1,6 +1,6 @@
 =pod
 
-=head1 LINKS SYNTAX
+=head1 Links Syntax
 
 =head2 Comments
 
@@ -42,15 +42,20 @@ TBD: talk about variants.
 =head2 XML Quasiquotes
 
 Also called "quasis." Introduced by an XML start-tag such as
-C<E<lt>fooE<gt>>. Links code enclosed within braces { } will be
-evaluated, and inserted, when the quasi is evaluated.
+C<E<lt>fooE<gt>>. Inside a quasi, Links code enclosed within braces 
+{ } will be evaluated to an XML forest and include, when the quasi 
+is evaluated.
 
     <html>
-        <ul>
-            <li> First item: {item1} </li>
-            <li> Second item: {item2} </li>
-        </ul>
+      <ul>
+        <li> First item: {item1} </li>
+        <li> Second item: {item2} </li>
+      </ul>
     </html>
+
+Within an XML quasi, a variety of special features can be used to
+handle browser events. See L<Handling Browser Events>, below, for more
+information on these features.
 
 =head2 Comparisons and Boolean Expressions
 
@@ -114,6 +119,42 @@ Curly braces can be wrapped either clause, no matter how many
 sub-expressions they contain, and I<must> be so wrapped if you want
 the clause to consist of more than one semicolon-separated expression.
 
+Note that an C<if>-C<else> expression I<always> returns a value in
+Links; the return values of the two branches must be of the same type,
+and both branches are required.
+
+=head2 Variables
+
+Variables are single-assignment in Links. The form
+
+    x = expr;
+    etc
+
+evaluates C<expr> and binds the name C<x> to the resulting value,
+within the expression C<etc>.
+
+Variable assignments have block scope. The following example
+
+    x = 1;
+    if (condition) {
+      x = 2
+    } else {
+      x = 3
+    };
+    print int_to_string(x);
+
+prints C<1> because the assignments to C<x> within the if clauses only
+bind within those clauses. If you want the value printed to depend on
+the condition, you should assign to C<x> from the result of the whole
+C<if> expression:
+
+    x = if (condition) {
+      x = 2
+    } else {
+      x = 3
+    };
+    print int_to_string(x);
+
 =head2 Blocks
 
 A sequence of assignments separated by semicolons is evaluated in
@@ -141,13 +182,9 @@ assignments only create new bindings for x within the corresponding
 clauses of the conditional. This may come as a surprise to programmers
 from some languages.
 
-Any semicolon-separated sequence of expressions can be wrapped in
-squiggly braces without changing the meaning of the sequence per se;
-this may of course change its meaning in context:
-
-    (example)
-    
 =head2 Collections: Bags, Sets, and Lists
+
+TBD: remove bags and sets.
 
 A list is a finite sequence of values. A list can be created by
 wrapping a series of expressions in brackets:
@@ -193,13 +230,15 @@ This works whether C<foo> is a function defined with a name, as C<fun
 foo(...) {...}>, or a variable bound to a functional value, as
 
     inc = fun (x) {x + 1};
-    inc(7)                 # returns 8
+    inc(7)
 
-=head2 Loops
+This block returns C<8>.
+
+=head2 Loops (List Comprehensions)
 
 The principal loop construct in Links is the list comprehension:
 
-    for var <- source in
+    for (x <- source)
        body
 
 The body should be an expression that evaluates to a bag, set, or
@@ -207,26 +246,147 @@ list.
 
 A comprehension produces a list which is the concatenation of all the
 collections produced by evaluating the body, once for each element of
-source, and binding that element to the name C<var>. For example:
+source, and binding that element to the name C<x>. For example:
 
     source_list = [1, 2, 3];
-    for x <- source_list in
-        [ x*x ]
+    for (n <- source_list)
+        [ n*n ]
 
 constructs a list of the squares of the values in C<source_list>. Note
 that more than one value can be included in the body list:
 
     source_list = [2, 3, 7, 8, 9, 55];
-    for x <- source_list in
-        if (odd(x))
-           [x, x+1]
+    for (n <- source_list)
+        if (odd(n))
+           [n, n+1]
         else
-           [x]
+           [n]
 
 This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
 
 And of course, any expression is valid as the body, as long as its
 type is a collection type.
+
+Other forms of looping can be implemented using tail recursion.
+
+=head2 Spawning Processes
+
+... TBD: describe spawn ...
+
+=head2 Message Passing
+
+... TBD: describe message passing ...
+
+=head1 Features
+
+=head2 Handling Browser Events
+
+A Links program usually runs on a client (browser) and a server. The
+client code can be notified when certain user events take place, such
+as pressing a key on the keyboard or clicking on a hyperlink. The code
+that responds to such events is associated with particular nodes in
+the DOM tree and is expressed through special XML attributes, called
+l-event attributes, attached to the relevant XHTML tags. This section
+defines the attributes and their use.
+
+An l-event attribute begins with the prefix C<l:> and corresponds to
+an event type as defined by the browser. The event type is determined
+by the attribute name simply by stripping off the C<l:>
+prefix. Widely-supported l-event attributes include:
+
+=over 4 
+
+=item * C<l:onmousedown>
+
+=item * C<l:onmouseup>
+
+=item * C<l:onkeyup>
+
+=item * C<l:onkeydown>
+
+=item * C<l:onclick>
+
+=item * C<l:onfocus>
+
+=item * C<l:onchange>
+
+=item * C<l:onload>
+
+=back
+
+When an element containing one of these attributes is installed in the
+current DOM document (see L<Modifying the DOM>), the associated code
+is registered as a handler for the corresponding event type. If the
+element is removed from the DOM, its event handlers become inactive.
+
+The content of one of these attributes should be a Links expression
+enclosed in braces C<{E<nbsp>}>, an expression of type unit (?) which
+may perform side-effects in response to the event. For example:
+
+    <input type="button" value="Add Photo"
+           l:onclick="{dom ! AppendChild({id = "container",
+                                          node = <img src="..."/>})}" />
+
+
+=head3 Interpreting the Event
+
+A variable C<event> is always in scope for l-event code; the value of
+this variable is a record corresponding to the event object passed by
+the browser: it contains a field for each data member of the browser's
+object. (TBD: give refs for IE, Mozilla docs) (NOTE: this is not
+well-defined; need to use functional wrapper.)
+
+=head2 Modifying the DOM
+
+L<XML Quasiquote|XML Quasiquotes> expressions construct XML values;
+but these values are not rendered by a browser until they are
+I<installed> in the I<active document>.
+
+There are two ways to modify the active document:
+
+=over 4
+
+=item 1.
+A value returned by the final expression of a Links program is
+installed as the (initial) active document.
+
+=item 2.
+Messages sent to the special process C<dom> can modify the active
+document.
+
+=back
+
+Elements that are not installed are not visible, nor do events occur
+on them, so their event handlers cannot fire.
+
+=head2 The C<dom> Process
+
+The C<dom> process handles a suite of messages, as follows (TBD: iron
+this out):
+
+=over 4
+
+=item * C<ReplaceElement({id = nodeId, replacement = elem})>
+
+Replaces the element with ID C<nodeId> in the active document with the
+element elem.
+
+=item * C<AppendChild({id = parentId, replacement = elem})>
+
+Appends C<elem> to the list of children of the element with ID
+C<parentId> in the active document.
+
+=item * C<SwapNode({first = elem1, second = elem2})>
+
+Moves C<elem1> to the location in the active document occupied by
+C<elem2> and vice versa.
+
+=item * Document(newDocument)
+
+Replaces the entire active document with C<newDocument>.
+
+=back
+
 
 =cut
 

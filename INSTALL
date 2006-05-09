@@ -1,4 +1,24 @@
-INSTALLING PREREQUISITES
+INSTALLATION OVERVIEW
+
+To install Links, you'll need:
+
+  * OCaml
+  * OCaml packages: findlib, equeue, curl, postgresql, pcre, ocamlnet.
+  * A webserver that can run CGI programs.
+
+INSTALLING OCAML
+
+Visit http://caml.inria.fr/ and look for a "Download" link. Download
+the latest stable OCaml package and follow the instructions provided
+with the OCaml for installing it on your platform.
+
+INSTALLING REQUIRED PACKAGES
+
+First, decide where you want your OCaml libraries to live. This might
+be somewhere in your home directory, or it might be in a more central
+place such as /usr/lib/ocaml/. If you don't have superuser privileges
+on your machine, your home directory is a perfectly good place to
+install the libraries. Once you've picked this directory, 
 
 Choose the right value of OCAML_LIBDIR:
 
@@ -14,16 +34,97 @@ OCAML PACKAGES
 
 * postgresql
 
-Use Markus Mottl's version (search for postgresql ocaml mottl on Google).
+  Use Markus Mottl's version (search for <code>postgresql ocaml
+  mottl</code> on Google).
 
 * pcre
 
 * ocamlnet
 
-  ./configure -libdir ~/lib/ocamlnet -without-nethttpd -disable-findlib \
-              -I $OCAML_LIBDIR/equeue -I $OCAML_LIBDIR/pcre
+    ./configure -libdir ~/lib/ocamlnet -without-nethttpd -disable-findlib \
+                -I $OCAML_LIBDIR/equeue -I $OCAML_LIBDIR/pcre
 
-Finally, to use Links interactively in the OCaml REPL, you'll need to
-extend your LD_LIBRARY_PATH, as follows:
+  Finally, to use Links interactively in the OCaml REPL, you'll need
+  to extend your LD_LIBRARY_PATH, as follows:
 
-  export LD_LIBRARY_PATH=$OCAML_LIBDIR/postgresql:$OCAML_LIBDIR/pcre
+    export LD_LIBRARY_PATH=$OCAML_LIBDIR/postgresql:$OCAML_LIBDIR/pcre
+
+BUILDING LINKS
+
+To start, cd to the Links source directory. Then type:
+
+  % make nc
+
+If this fails, try:
+
+  % make 
+
+This builds the byte-code version of Links, which should work on more
+platforms than the other (native-code) version.
+
+Now you should have an executable in the current directory called
+`links'.
+
+RUNNING LINKS
+
+Start up the interactive interpreter using:
+
+  % ./links
+
+You should see a Links prompt like this:
+
+  links> _
+
+Try evaluating some simple expressions. See the manual for more info
+on writing Links expressions. Use Control-C to exit the interactive
+interpreter.
+
+To run Links web programs, see RUNNING WEB APPLICATIONS, below.
+
+RUNNING THE TESTS
+
+To check whether Links is working under your platform, try running the
+automated tests as follows:
+
+  % make test
+
+This should give you a lot of output. When you give a bug report,
+include the output of this command.
+
+REPORTING BUGS
+
+.....
+
+RUNNING WEB APPLICATIONS
+
+Links works as an ordinary interpreter for CGI programs. To run a
+Links web program, first make sure you have a working web server
+that's configured to run CGI programs. Most web servers are configured
+to do so by default. Refer to the documentation for your web server to
+find out where to install CGI programs. Here, we'll call this
+directory the cgi-bin directory, although it may not be called that on
+your system; this is fine: just use the name of that directory
+whenever we refer to `the cgi-bin directory'. You'll also need to know
+the full path to your Links interpreter, which you built in an earlier
+step of these instructions.
+
+Take an example Links program from the examples/ directory and copy it
+into your cgi-bin directory. Add a line to the top of the file--it
+must be the first line--as follows:
+
+    #!/home/joeboggs/interpreters/links
+
+Where /home/joeboggs/interpreters/links is the full path to your
+interpreter.
+
+Now point your web browser at this program. The URL for the program
+will depend on your web server configuration and the place where the
+Links program (taken from examples/) was installed. Refer to your web
+server documentation to find out how the URL is determined from the
+program's location. It may be something such as
+
+    http://www.example.com/cgi-bin/paginate.links
+
+[TBD: instruct to rename this file to .cgi]
+
+You should see the example right away. Have fun playing with it!
