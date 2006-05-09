@@ -479,8 +479,6 @@ fun globals locals expr cont ->
 
   | Syntax.For (expr, var, value, _) as c ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
-  | Syntax.Sort (up, list, _) ->
-      eval list (UnopApply(locals, SortOp up) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
   | Syntax.Table (database, s, query, (_, kind, _)) ->

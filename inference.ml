@@ -660,14 +660,6 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let exprtype = exprtype in
 	unify (exprtype, type_of_expression body);
         Escape(var, body, (pos, type_of_expression body, None))
-  | Sort (up, list, pos) ->
-      let list = type_check env list in
-	unify (type_of_expression list, `List (ITO.fresh_type_variable ()));
-	let new_kind = (match type_of_expression list
-			with `List (e) -> `List (e)
-                          | _ -> failwith "Internal error typing sort")
-	in
-          Sort (up, list, (pos, new_kind, None))
   | Database (params, pos) ->
       let params = type_check env params in
         unify (type_of_expression params, `List(`Primitive `Char));

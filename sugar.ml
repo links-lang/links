@@ -291,7 +291,6 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
   | Projection (e, name) -> (let s = unique_name ()
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
-  | SortExp (d, e) -> Sort (d, desugar e, pos)
   | TableLit (name, kind, unique, order, db) -> 
       (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) (orders:[`Asc of string | `Desc of string] list) : Query.query =
          let table_name = (db_unique_name ()) in

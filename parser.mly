@@ -22,7 +22,6 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET
-%token SORT_UP SORT_DOWN
 %token FOR LARROW HANDLE WHERE 
 %token AMPER COMMA VBAR DOT COLON COLONCOLON
 %token TABLE FROM DATABASE WITH UNIQUE ORDER ASC DESC UPDATE DELETE INSERT BY VALUES INTO
@@ -80,8 +79,6 @@ primary_expression:
 | constant                                                     { $1 }
 | LBRACKET RBRACKET                                            { ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
-| SORT_UP LPAREN exp RPAREN                                    { SortExp (true, $3), pos() }
-| SORT_DOWN LPAREN exp RPAREN                                  { SortExp (false, $3), pos() }
 | xml                                                          { $1 }
 | parenthesized_thing                                          { $1 }
 

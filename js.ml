@@ -523,7 +523,6 @@ let rec generate : 'a expression' -> code =
                            )]))
 
   (* Unimplemented stuff *)
-  | Sort _
   | Database _
   | Table _
   | Escape _  as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)

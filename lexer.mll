@@ -55,9 +55,8 @@ let keywords = [
 "client" , CLIENT; "server"   ,  SERVER;   
 "if"     , IF;     "else"     ,  ELSE;     "beginswith", BEGINSWITH;     
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
-"where"  , WHERE;  "escape"   ,  ESCAPE;   "handle"    , HANDLE;
-"sort_up", SORT_UP;"sort_down",  SORT_DOWN;"true"      , TRUE;
-"false"  , FALSE;  "Bool"     ,  TBOOL;    "Int"       , TINT;
+"escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
+"false"  ,  FALSE; "Bool"     ,  TBOOL;    "Int"       , TINT;
 "Float"  , TFLOAT; "String"   ,  TSTRING;  "Table"     , TABLE;
 "from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;

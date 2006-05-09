@@ -48,7 +48,6 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 
                                'data)
-  | Sort of (bool * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
   | Table of ('data expression' * string * Query.query * 'data)
   | Escape of (string * 'data expression' * 'data)
@@ -116,7 +115,6 @@ let rec show_expression =
   | List_of v -> "List_of " ^ s2 (exp, null) v
   | Concat v -> "Concat " ^ s3 (exp, exp, null) v
   | For v -> "For " ^ s4 (exp, identity, exp, null) v
-  | Sort v -> "Sort " ^ s3 (string_of_bool, exp, null) v
   | Database v -> "Database " ^ s2 (exp, null) v
   | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
   | Escape v -> "Escape " ^ s3 (identity, exp, null) v
@@ -189,8 +187,6 @@ and show t : 'a expression' -> string = function
       "(" ^ show t left ^ t data ^ "++" ^ show t right ^ ")" 
   | For (expr, variable, value, data) ->
       "(for " ^ variable ^ " <- " ^ show t value ^ " in " ^ show t expr ^ ")" ^ t data
-  | Sort (up, list, data) ->
-      "sort_" ^ (if up then "up" else "down") ^ "(" ^ show t list ^ ")" ^ t data
   | Database (params, data) -> "(database " ^ show t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
@@ -256,8 +252,6 @@ let rec ppexpr t : 'a expression' -> string = function
   | Concat (left, right, data)  -> "(" ^ ppexpr t left ^ t data ^ "::" ^ ppexpr t right ^ ")" 
   | For (expr, variable, value, data) ->
       "(for " ^ variable ^ " <- " ^ ppexpr t value ^ " in " ^ ppexpr t expr ^ ")" ^ t data
-  | Sort (up, list, data) ->
-      "sort_" ^ (if up then "up" else "down") ^ "(" ^ ppexpr t list ^ ")" ^ t data
   | Database (params, data) -> "(database " ^ ppexpr t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ ppexpr t daba ^"["^string_of_query query^"])" ^ t data
@@ -320,7 +314,6 @@ let rec serialise_expression : ('data expression' serialiser)
         | List_of v       -> serialise2 'P' (exp, data) v
         | Concat v        -> serialise3 'Q' (exp, exp, data) v
         | For v    -> serialise4 'T' (exp, string, exp, data) v
-        | Sort v                    -> serialise3 'U' (serialise_bool, exp, data) v
         | Database v                -> serialise2 'V' (exp, data) v
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
         | Escape v                  -> serialise3 'e' (string, exp, data) v
@@ -358,7 +351,6 @@ and deserialise_expression : (expression deserialiser)
            | 'P' -> List_of (deserialise2 (exp, poskind) obj)
            | 'Q' -> Concat (deserialise3 (exp, exp, poskind) obj)
            | 'T' -> For (deserialise4 (exp, string, exp, poskind) obj)
-           | 'U' -> Sort (deserialise3 (deserialise_bool, exp, poskind) obj)
            | 'V' -> Database (deserialise2 (exp, poskind) obj)
            | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, poskind) obj)
            | 'p' -> Placeholder(deserialise2 (string, poskind) obj)
@@ -497,8 +489,6 @@ let visit_expressions'
                                              and e2, data2 = visitor visit_children (e2, data) in
         For ( e1, s, e2, d), combiner data1 data2
 
-    | Sort (b, e, d) -> let e, data = visitor visit_children (e, data) in
-        Sort (b, e, d), data
     | Database (e, d) -> let e, data = visitor visit_children (e, data) in
         Database (e, d), data
     | Table (e, s, q, d) -> let e, data = visitor visit_children (e, data) in
@@ -568,7 +558,6 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | List_of (a, data) -> List_of (redecorate f a, f data)
   | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
   | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
-  | Sort (a, b, data) -> Sort (a, redecorate f b, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
@@ -612,7 +601,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_selection_empty (e, _)
                | Define (_, e, _, _)
                | Abstr (_, e, _)
-               | Sort (_, e, _)
                | Database (e, _)
                | Variant_injection (_, e, _)
                | List_of (e, _)
@@ -673,7 +661,6 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Variant_injection (a, e, b)                -> passto [e] (fun [e] -> Variant_injection (a, e, b))
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
       | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
-      | Sort (a, e, b)                             -> passto [e] (fun [e] -> Sort (a, e, b))
       | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
       | Table (e, a, b, c)                         -> passto [e] (fun [e] -> Table (e, a, b, c))
       | Escape (a, e, b)                           -> passto [e] (fun [e] -> Escape (a, e, b))
@@ -742,8 +729,6 @@ let perhaps_process_children_bindings
         Define (var, e, b, c))
       | List_of (e, b)                             -> passto [bind [],e] (fun [e] ->
         List_of (e, b))
-      | Sort (a, e, b)                             -> passto [bind [],e] (fun [e] ->
-        Sort (a, e, b))
       | Database (e, a)                            -> passto [bind [],e] (fun [e] ->
         Database (e, a))
       | Table (e, a, b, c)                         -> passto [bind [],e] (fun [e] ->
@@ -807,7 +792,6 @@ let expression_data : ('a expression' -> 'a) = function
 	| List_of (_, data) -> data
 	| Concat (_, _, data) -> data
 	| For (_, _, _, data) -> data
-	| Sort (_, _, data) -> data
 	| Database (_, data) -> data
 	| Table (_, _, _, data) -> data
 	| Escape (_, _, data) -> data
