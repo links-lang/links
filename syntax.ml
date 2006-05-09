@@ -14,12 +14,8 @@ exception Parse_failure of position * string
 
 type location = [`Client | `Server | `Unknown]
 
-type directive = Namespace of (string * string)
-
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
-  | Directive of (directive * 'data)
-
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -97,7 +93,6 @@ let rec show_expression =
   let exp = show_expression in
     function
   | Define v -> "Define " ^ s4 (identity, show_expression, null, null) v
-  | Directive v -> "Directive " ^ s2 (null, null) v
   | Boolean v -> "Boolean " ^ s2 (string_of_bool, null) v
   | Integer v -> "Integer " ^ s2 (string_of_num, null) v
   | Char v -> "Char " ^ s2 (String.make 1, null) v
@@ -144,7 +139,6 @@ and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
 and show t : 'a expression' -> string = function 
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
-  | Directive (Namespace (id, url), data) -> "namespace " ^ id ^ " = " ^ url ^ "; " ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -211,7 +205,6 @@ and show t : 'a expression' -> string = function
 let rec ppexpr t : 'a expression' -> string = function 
   | Define (variable, value, location, data) -> variable ^ "=" ^ ppexpr t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
-  | Directive (Namespace (id, url), data) -> "namespace " ^ id ^ " = " ^ url ^ "; " ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -668,7 +661,6 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
   in
     function
         (* No children *)
-      | Directive _
       | Boolean _
       | Integer _
       | Char _
@@ -733,7 +725,6 @@ let perhaps_process_children_bindings
   let bind names = f (names @ vars) in
     function
         (* No children *)
-      | Directive _
       | Boolean _
       | Integer _
       | Char _

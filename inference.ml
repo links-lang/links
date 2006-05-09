@@ -544,7 +544,6 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
     debug ("Typechecking expression: " ^ (string_of_expression expression));
     match expression with
   | Define (variable, _, _, pos) -> nested_def pos variable
-  | Directive (_, _) -> failwith "Internal error: directive reached type inference phase"
   | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
   | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))

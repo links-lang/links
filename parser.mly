@@ -27,7 +27,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token AMPER COMMA VBAR DOT COLON
 %token TABLE FROM DATABASE WITH UNIQUE ORDER ASC DESC UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
-%token CLIENT SERVER NAMESPACE
+%token CLIENT SERVER 
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP BANG
@@ -58,14 +58,10 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
-| namespace_decl                                               { $1 }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
-namespace_decl:
-| NAMESPACE VARIABLE EQ STRING SEMICOLON                       { NamespaceDecl ($2, $4), pos() }
-
 perhaps_location:
 | SERVER                                                       { `Server }
 | CLIENT                                                       { `Client }

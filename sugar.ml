@@ -214,7 +214,6 @@ type phrasenode =
   | FunLit of (name option * ppattern list * phrase)
   | CollectionLit of (Kind.collection_type * phrase list)
   | SortExp of (bool * phrase)
-  | NamespaceDecl of (name * url)
   | Definition of (name * phrase * location)
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option)
   | Escape of (name * phrase)
@@ -292,7 +291,6 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Projection (e, name) -> (let s = unique_name ()
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
   | SortExp (d, e) -> Sort (d, desugar e, pos)
-  | NamespaceDecl (name, url) -> Directive (Namespace (name, url), pos)
   | TableLit (name, kind, unique, order, db) -> 
       (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) (orders:[`Asc of string | `Desc of string] list) : Query.query =
          let table_name = (db_unique_name ()) in

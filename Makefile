@@ -25,7 +25,7 @@ else
    OCAMLNET_DIRS = $(OCAML_LIBDIR)/netstring $(OCAML_LIBDIR)/cgi 
 endif
 
-AUXLIB_DIRS = $(OCAMLNET_DIRS) $(OCAML_LIBDIR)/curl \
+AUXLIB_DIRS = $(OCAMLNET_DIRS) \
 	$(OCAML_LIBDIR)/pcre $(OCAML_LIBDIR)/getopt \
 	$(OCAML_LIBDIR)/postgresql $(DB_AUXLIBS)
 
@@ -69,11 +69,10 @@ SOURCES = cgi.ml                \
           interpreter.mli interpreter.ml \
           optimiser.ml          \
           js.mli js.ml          \
-          import.mli import.ml  \
           webif.ml              \
           links.ml              \
 
-LIBS    = unix postgresql nums str curl pcre netstring cgi getopt $(DB_LIBS) 
+LIBS    = unix postgresql nums str pcre netstring cgi getopt $(DB_LIBS) 
 RESULT  = links
 CLIBS 	= cclib lssl cclib lcrypto $(DB_CLIBS)
 

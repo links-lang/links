@@ -52,7 +52,7 @@ let isupper = function 'A'..'Z' -> true | _ -> false
 let keywords = [
 "switch" , SWITCH; "update"   ,  UPDATE;   "delete"    , DELETE;
 "insert" , INSERT; "into"     ,  INTO;     "values"    , VALUES;
-"client" , CLIENT; "server"   ,  SERVER;   "namespace" , NAMESPACE;
+"client" , CLIENT; "server"   ,  SERVER;   
 "if"     , IF;     "else"     ,  ELSE;     "beginswith", BEGINSWITH;     
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
 "where"  , WHERE;  "escape"   ,  ESCAPE;   "handle"    , HANDLE;

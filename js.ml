@@ -526,7 +526,6 @@ let rec generate : 'a expression' -> code =
   | Sort _
   | Database _
   | Table _
-  | Directive _
   | Escape _  as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("unknown ast object " ^ string_of_expression x)
 
