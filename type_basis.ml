@@ -7,7 +7,7 @@ type type_var_set = Utility.IntSet.t
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem ]
 
-type ('typ, 'row, 'ctype) type_basis = [
+type ('typ, 'row) type_basis = [
   | `Not_typed
   | `Primitive of primitive
   | `TypeVar of int
@@ -15,7 +15,7 @@ type ('typ, 'row, 'ctype) type_basis = [
   | `Record of 'row
   | `Variant of 'row
   | `Recursive of (int * 'typ)
-  | `Collection of ('ctype * 'typ)
+  | `List of ('typ)
   | `DB ]
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
@@ -25,7 +25,7 @@ type 'row row_var_basis =
     [ `RowVar of int option 
     | `RecRowVar of int * 'row ]
 
-type type_variable = [`TypeVar of int | `RowVar of int | `CollectionTypeVar of int]
+type type_variable = [`TypeVar of int | `RowVar of int]
 type quantifier = type_variable
 
 type 'typ assumption_basis = ((quantifier list) * 'typ)
@@ -49,7 +49,6 @@ module type TYPEOPS =
 sig
   type typ
   type row_var
-  type collection_type
 
   type field_spec = typ field_spec_basis
   type field_spec_map = typ field_spec_map_basis
@@ -58,7 +57,6 @@ sig
   (* fresh type variable generation *)
   val fresh_type_variable : unit -> typ
   val fresh_row_variable : unit -> row_var
-  val fresh_collection_variable : unit -> collection_type
 
   (* empty row constructors *)
   val make_empty_closed_row : unit -> row
@@ -86,7 +84,6 @@ module type BASICTYPEOPS =
 sig
   type typ
   type row_var'
-  type collection_type'
  
   type field_spec = typ field_spec_basis
   type field_spec_map = typ field_spec_map_basis
@@ -94,7 +91,6 @@ sig
 
   val make_type_variable : int -> typ
   val make_row_variable : int -> row_var'
-  val make_collection_variable : int -> collection_type'
 
   val empty_field_env : typ field_spec_map_basis
   val closed_row_var : row_var'
@@ -106,12 +102,10 @@ module TypeOpsGen(BasicOps: BASICTYPEOPS) :
   (TYPEOPS
    with type typ = BasicOps.typ 
    and type row_var = BasicOps.row_var'
-   and type collection_type = BasicOps.collection_type'
 ) =
 struct
   type typ = BasicOps.typ
   type row_var = BasicOps.row_var'
-  type collection_type = BasicOps.collection_type'
 
   type field_spec = BasicOps.field_spec
   type field_spec_map = BasicOps.field_spec_map
@@ -121,7 +115,6 @@ struct
 
   let fresh_type_variable = BasicOps.make_type_variable -<- fresh_raw_variable
   let fresh_row_variable = BasicOps.make_row_variable -<- fresh_raw_variable
-  let fresh_collection_variable = BasicOps.make_collection_variable -<- fresh_raw_variable
 
   let empty_field_env = BasicOps.empty_field_env
   let closed_row_var = BasicOps.closed_row_var

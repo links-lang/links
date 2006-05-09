@@ -21,7 +21,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token SWITCH RECEIVE
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
-%token LSET LBAG RBRACKET LBRACKET
+%token RBRACKET LBRACKET
 %token SORT_UP SORT_DOWN
 %token FOR LARROW HANDLE WHERE 
 %token AMPER COMMA VBAR DOT COLON
@@ -78,12 +78,8 @@ constant:
 primary_expression:
 | VARIABLE                                                     { Var $1, pos() }
 | constant                                                     { $1 }
-| LSET RBRACKET                                                { CollectionLit (`Set, []), pos() } 
-| LSET exps RBRACKET                                           { CollectionLit (`Set, $2), pos() }
-| LBAG RBRACKET                                                { CollectionLit (`Bag, []), pos() } 
-| LBAG exps RBRACKET                                           { CollectionLit (`Bag, $2), pos() } 
-| LBRACKET RBRACKET                                            { CollectionLit (`List, []), pos() } 
-| LBRACKET exps RBRACKET                                       { CollectionLit (`List, $2), pos() } 
+| LBRACKET RBRACKET                                            { ListLit [], pos() } 
+| LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
 | SORT_UP LPAREN exp RPAREN                                    { SortExp (true, $3), pos() }
 | SORT_DOWN LPAREN exp RPAREN                                  { SortExp (false, $3), pos() }
 | xml                                                          { $1 }
@@ -336,14 +332,12 @@ kind:
 | TBOOL                                                        { `Primitive `Bool }
 | TINT                                                         { `Primitive `Int }
 | TFLOAT                                                       { `Primitive `Float }
-| TSTRING                                                      { `Collection (`List, `Primitive `Char) }
+| TSTRING                                                      { `List (`Primitive `Char) }
 | TVARIABLE                                                    { `TypeVar $1 }
 | kind RARROW kind                                             { `Function ($1, $3) }
 | LBRACE labeled_kinds RBRACE                                  { `Record $2 }
 /*| LANG labeled_kinds RANG                                      { `Variant $2 }*/
-| LSET kind RBRACKET                                           { `Collection (`Set, $2) }
-| LBAG kind RBRACKET                                           { `Collection (`Bag, $2) }
-| LBRACKET kind RBRACKET                                       { `Collection (`List, $2) }
+| LBRACKET kind RBRACKET                                       { `List ($2) }
 
 field:
 | VARIABLE COLON kind                                          { ($1, `Present $3) }

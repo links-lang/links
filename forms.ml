@@ -37,7 +37,7 @@ let lname_bound_vars : 'a expression' -> string list =
         (try [assoc "l:name" attrs] with Not_found -> concat (map lnames contents))
     | Xml_node ("form", _, _, _) -> (* new scope *) []
     | Xml_node (_, _, contents, _) -> concat (map lnames contents)
-    | Collection_union (l, r, _) -> lnames l @ lnames r
+    | Concat (l, r, _) -> lnames l @ lnames r
     | _ -> [] 
   in function
     | Xml_node ("form", _, contents, _)  -> map desyntax (concat (map lnames contents))
@@ -80,7 +80,7 @@ let hidden_input name value =
   Xml_node ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (Sugar._DUMMY_POS, `Collection (`List, `Primitive `XMLitem), None))
+            (Sugar._DUMMY_POS, `List (`Primitive `XMLitem), None))
 
 let attrname = fst
 let attrval = snd

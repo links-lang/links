@@ -21,29 +21,21 @@ let value_from_db_string (value:string) = function
 
 let kind_from_db_type = function
   | BoolField -> `Primitive `Bool
-  | TextField -> `Collection (`List, `Primitive `Char)
+  | TextField -> `List (`Primitive `Char)
   | IntField -> `Primitive `Int
   | FloatField -> `Primitive `Float
   | _ -> failwith "Unsupported kind"
 
 let execute_select  (kind:kind) (query:string) (db: database) : result =
-  let coll_type, fields = (match kind with
-			     | `Collection (coll_type, `Record (field_env, _)) ->
-				 (coll_type, StringMap.fold
-				    (fun label field_spec fields ->
-				       match field_spec with
-					 | `Present t -> (label, t) :: fields
-					 | `Absent -> raise (Runtime_failure "SQ072")) field_env [])
-								 
-(*
-                             | `Collection (coll_type, `Record fields) ->
-                                 (coll_type, map (function `Field_present props -> props | _ -> raise (Runtime_failure "SQ072")) fields)
-*)
-                                   (* Quick hack to avoid reliance on RTTI*)
-                             | x -> (`List, []))
+  let fields = (match kind with
+		  | `List (`Record (field_env, _)) ->
+		      (StringMap.fold
+			 (fun label field_spec fields ->
+			    match field_spec with
+			      | `Present t -> (label, t) :: fields
+			      | `Absent -> raise (Runtime_failure "SQ072")) field_env [])
+                  | _ -> failwith "internal error: unexpected type in select")
   in 
-    (*raise (Runtime_failure ("SQ074 : " ^ (string_of_kind x))) *)
-    
   let result = (db#exec query) in
     (match result#status with
        | QueryOk -> let row_fields =
@@ -61,10 +53,9 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
                             (* Quick kludge because I don't know what's wrong *)) in
          let null_query = exists is_null row_fields in
            if null_query then
-             `Collection (coll_type, map (fun row -> `Record []) result#get_all_lst)
+             `List (map (fun row -> `Record []) result#get_all_lst)
            else
-              `Collection (coll_type, 
-			  map (fun row ->
+              `List (map (fun row ->
                                  `Record (map2 (fun (name, db_type) value -> 
 			                          name, value_from_db_string value db_type)
                                             row_fields row))

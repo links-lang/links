@@ -5,8 +5,7 @@ open Type_basis
 type type_var_set = Type_basis.type_var_set
 type primitive = Type_basis.primitive
 
-type collection_type = [`Set | `Bag | `List | `CollectionTypeVar of int]
-type kind = (kind, row, collection_type) type_basis
+type kind = (kind, row) type_basis
 and field_spec = kind field_spec_basis
 and field_spec_map = kind field_spec_map_basis
 and row_var = row row_var_basis
@@ -34,8 +33,6 @@ val string_type : kind
 val xml : kind
 
 (* Type printers *)
-val coll_name : collection_type -> string 
-val coll_prefix : string Utility.IntMap.t -> collection_type -> string
 val string_of_primitive : primitive -> string
 
 exception Not_tuple
@@ -54,9 +51,6 @@ val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
 (* serialisation *) 
-val serialise_colltype : collection_type Pickle.serialiser
-val deserialise_colltype : collection_type Pickle.deserialiser
-
 val serialise_primitive : primitive Pickle.serialiser 
 val deserialise_primitive : primitive Pickle.deserialiser
 
@@ -84,17 +78,15 @@ val deserialise_environment : environment Pickle.deserialiser
 
 module BasicTypeOps :
   (BASICTYPEOPS with type typ = kind
-		and type row_var' = row_var
-		and type collection_type' = collection_type)
+		and type row_var' = row_var)
 
 module TypeOps :
   (TYPEOPS with type typ = kind
-	   and type row_var = row_var
-	   and type collection_type = collection_type)
+	   and type row_var = row_var)
 
 val unit_type : kind
 
 (* From library.ml; there's probably another name for these *)
 val fresh_type : unit -> type_variable * kind
 val fresh_row : unit -> type_variable * row
-val fresh_collection : unit -> type_variable * collection_type
+

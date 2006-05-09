@@ -17,13 +17,13 @@ let rec jsonize_result : Result.result -> string = function
   | `Database _
   | `Environment _
   | `Continuation _
-  | `Collection (`List, (`Primitive(`XML _)::_))
+  | `Collection (`Primitive(`XML _)::_)
   | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | `Primitive p -> jsonize_primitive p
   | `Record fields -> "{" ^ String.concat ", " (List.map (fun (k, v) -> k ^ " : " ^ jsonize_result v) fields) ^ "}"
-  | `Collection (_, []) -> "[]"
-  | `Collection (`List, `Primitive(`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
-  | `Collection (`List, elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
+  | `Collection [] -> "[]"
+  | `Collection (`Primitive(`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
+  | `Collection (elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
   | r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
 
 %}
@@ -50,8 +50,8 @@ members:
 | members COMMA id  COLON value      { ($3, $5) :: $1 }
 
 array:
-| LBRACKET RBRACKET                  { `Collection (`List, []) }
-| LBRACKET elements RBRACKET         { `Collection (`List, (List.rev $2)) }
+| LBRACKET RBRACKET                  { `Collection ([]) }
+| LBRACKET elements RBRACKET         { `Collection (List.rev $2) }
 
 elements:
 | value                              { [$1] }

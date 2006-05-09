@@ -9,8 +9,7 @@ type type_var_set = Type_basis.type_var_set
 type primitive = Type_basis.primitive
 
 (* Types for kinds *)
-type collection_type = [`Set | `Bag | `List | `CollectionTypeVar of int]
-type kind = (kind, row, collection_type) type_basis
+type kind = (kind, row) type_basis
 and field_spec = kind field_spec_basis
 and field_spec_map = kind field_spec_map_basis
 and row_var = row row_var_basis
@@ -48,21 +47,11 @@ let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string li
 let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
-let string_type = `Collection (`List, `Primitive `Char)
-let xml = `Collection (`List, `Primitive `XMLitem)
+let string_type = `List (`Primitive `Char)
+let xml = `List (`Primitive `XMLitem)
 
 (* Type printers *)
-let coll_name : collection_type -> string = function
-  | `Set          -> "Set"
-  | `Bag          -> "Bag"
-  | `List         -> "List"
-  | `CollectionTypeVar var  -> "{"^ string_of_int var ^"}"
-and coll_prefix var_names : collection_type -> string = function
-  | `Set          -> "Set"
-  | `Bag          -> "Bag"
-  | `List         -> ""
-  | `CollectionTypeVar var  -> "{"^ IntMap.find var var_names ^"}"
-and string_of_primitive : primitive -> string = function
+let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  | `XMLitem -> "XMLitem"
 
 exception Not_tuple
@@ -105,9 +94,9 @@ let rec string_of_kind' vars : kind -> string =
       | `Recursive (var, body) ->
 	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_kind' vars body
       | `DB             ->                   "Database"
-      | `Collection (`List, `Primitive `Char) -> "String"
-      | `Collection (`List, `Primitive `XMLitem) -> "XML"
-      | `Collection (coll_type, elems)           ->  coll_prefix vars coll_type ^"["^ string_of_kind' vars elems ^"]"
+      | `List (`Primitive `Char) -> "String"
+      | `List (`Primitive `XMLitem) -> "XML"
+      | `List (elems)           ->  "["^ string_of_kind' vars elems ^"]"
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_kind' vars t) present_fields in
@@ -180,9 +169,8 @@ let rec type_vars : kind -> int list = fun kind ->
     | `Function (from, into)   -> aux from @ aux into
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
-    | `Recursive (var, body)    -> List.filter ((<>) var) (aux body)
-    | `Collection (`CollectionTypeVar var, kind)    -> var :: aux kind
-    | `Collection (_, kind)    -> aux kind
+    | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
+    | `List (kind)       -> aux kind
     | `DB                      -> []
   in unduplicate (=) (aux kind)
 and row_type_vars (field_env, row_var) =
@@ -205,8 +193,7 @@ let rec free_bound_type_vars = function
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
   | `Recursive (var, body)    -> IntSet.add var (free_bound_type_vars body)
-  | `Collection (`CollectionTypeVar var, kind) -> IntSet.add var (free_bound_type_vars kind)
-  | `Collection (_, kind)    -> free_bound_type_vars kind
+  | `List (kind)    -> free_bound_type_vars kind
   | `DB                      -> IntSet.empty
 
 and free_bound_row_type_vars (field_env, row_var) =
@@ -237,7 +224,6 @@ let string_of_row row =
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
   | `RowVar var -> "'" ^ string_of_int var
-  | `CollectionTypeVar var -> "`" ^ string_of_int var
 let string_of_assumption = function
   | [], kind -> string_of_kind kind
   | assums, kind -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_kind kind
@@ -245,12 +231,6 @@ let string_of_environment env =
   "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
 
 (* serialisation *) 
-let serialise_colltype : (collection_type serialiser) = function
-  | `Set -> "s" | `Bag -> "b" | `List -> "l" | `CollectionTypeVar _ -> "c"
-and deserialise_colltype : (collection_type deserialiser)
-    = fun s -> (List.assoc (String.sub s 0 1) ["s", `Set; "b", `Bag; "l", `List; "c", `CollectionTypeVar (-1)],
-                String.sub s 1 (String.length s - 1))
-
 let (serialise_primitive : primitive serialiser), 
     (deserialise_primitive : primitive deserialiser)
   = enumeration_serialisers [`Bool, 'b';  `Int, 'i';  `Char, 'c';  `Float, 'f';  `XMLitem, 'x']
@@ -264,7 +244,7 @@ let rec serialise_kind : kind serialiser =
     | `Record v        -> serialise_row 'e' v
     | `Variant v       -> serialise_row 'f' v
     | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_kind) v
-    | `Collection v    -> serialise2 'h' (serialise_colltype, serialise_kind) v
+    | `List v    -> serialise1 'h' (serialise_kind) v
     | `DB              -> serialise0 'i' () ()
 and serialise_field_spec : field_spec serialiser =
   function
@@ -292,7 +272,7 @@ and deserialise_kind : kind deserialiser =
          | 'e'        -> `Record (fst (deserialise_row obj))
          | 'f'        -> `Variant (fst (deserialise_row obj))
 	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_kind) obj)
-         | 'h'        -> `Collection (deserialise2 (deserialise_colltype, deserialise_kind) obj)
+         | 'h'        -> `List (deserialise1 (deserialise_kind) obj)
          | 'i'        -> (deserialise0 () obj); `DB
          | _          -> failwith ("Unexpected character deserialising kind : " ^ String.make 1 t))
     in r, rest
@@ -329,14 +309,12 @@ let serialise_quantifier : quantifier serialiser
     = function
       | `TypeVar i -> serialise1 't' serialise_oint i
       | `RowVar i -> serialise1 'r' serialise_oint i
-      | `CollectionTypeVar i -> serialise1 'c' serialise_oint i
 
 let deserialise_quantifier : quantifier deserialiser
     = fun s -> let t, obj, rest = extract_object s in
       match t with 
       | 't' -> `TypeVar (deserialise1 deserialise_oint obj), rest
       | 'r' -> `RowVar (deserialise1 deserialise_oint obj), rest
-      | 'c' -> `CollectionTypeVar (deserialise1 deserialise_oint obj), rest
 
 let serialise_assumption : assumption serialiser 
     = serialise2 'a' (serialise_list (serialise_quantifier), serialise_kind)
@@ -368,12 +346,10 @@ let deserialise_environment : environment deserialiser =
 module BasicTypeOps :
   (Type_basis.BASICTYPEOPS
    with type typ = kind
-   and type row_var' = row_var
-   and type collection_type' = collection_type) =
+   and type row_var' = row_var) =
 struct
   type typ = kind
   type row_var' = row_var
-  type collection_type' = collection_type
 
   type field_spec = typ field_spec_basis
   type field_spec_map = typ field_spec_map_basis
@@ -381,7 +357,6 @@ struct
 
   let make_type_variable var = `TypeVar var
   let make_row_variable var = `RowVar (Some var)
-  let make_collection_variable var = `CollectionTypeVar var
 
   let empty_field_env = StringMap.empty
   let closed_row_var = `RowVar None
@@ -395,8 +370,7 @@ end
 module TypeOps :
   (Type_basis.TYPEOPS
    with type typ = kind
-   and type row_var = row_var
-   and type collection_type = collection_type) = TypeOpsGen(BasicTypeOps)
+   and type row_var = row_var) = TypeOpsGen(BasicTypeOps)
 
 let unit_type = `Record (TypeOps.make_empty_closed_row ())
 
@@ -409,9 +383,4 @@ let fresh_type () =
 let fresh_row () =
   let var = fresh_raw_variable () in
     `RowVar var, TypeOps.make_empty_open_row_with_var var
-
-(* fresh type_variable * collection_type  *)
-let fresh_collection () =
-  let var = fresh_raw_variable () in
-    `CollectionTypeVar var, `CollectionTypeVar var
 

@@ -38,16 +38,15 @@ type 'data expression' =
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Record_selection_empty of ('data expression' * 'data expression' * 'data)
-
   | Variant_injection of (string * 'data expression' * 'data)
   | Variant_selection of ('data expression' * 
 			    string * string * 'data expression' * 
 			    string * 'data expression' * 'data)
   | Variant_selection_empty of ('data expression' * 'data)
-  | Collection_empty of (collection_type * 'data)
-  | Collection_single of ('data expression' * collection_type * 'data)
-  | Collection_union of ('data expression' * 'data expression' * 'data)
-  | Collection_extension of ('data expression' * string * 'data expression' * 
+  | Nil of ('data)
+  | List_of of ('data expression' * 'data)
+  | Concat of ('data expression' * 'data expression' * 'data)
+  | For of ('data expression' * string * 'data expression' * 
                                'data)
   | Sort of (bool * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
@@ -113,10 +112,10 @@ let rec show_expression =
   | Variant_injection v -> "Variant_injection " ^ s3 (identity, exp, null) v
   | Variant_selection v -> "Variant_selection " ^ s7 (exp, identity, identity, exp, identity, exp, null) v
   | Variant_selection_empty v -> "Variant_selection_empty " ^ s2 (exp, null) v
-  | Collection_empty v -> "Collection_empty " ^ s2 (coll_name, null) v
-  | Collection_single v -> "Collection_single " ^ s3 (exp, coll_name, null) v
-  | Collection_union v -> "Collection_union " ^ s3 (exp, exp, null) v
-  | Collection_extension v -> "Collection_extension " ^ s4 (exp, identity, exp, null) v
+  | Nil v -> "Nil " ^ s1 (null) v
+  | List_of v -> "List_of " ^ s2 (exp, null) v
+  | Concat v -> "Concat " ^ s3 (exp, exp, null) v
+  | For v -> "For " ^ s4 (exp, identity, exp, null) v
   | Sort v -> "Sort " ^ s3 (string_of_bool, exp, null) v
   | Database v -> "Database " ^ s2 (exp, null) v
   | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
@@ -129,9 +128,9 @@ let string_of_location : location -> string = function
   | `Client -> "client" | `Server -> "server" | `Unknown -> "unknown"
 
 let rec unparse_sequence empty unit append = function 
-  | Collection_empty _ -> empty
-  | Collection_single (elem, _, _) -> unit elem
-  | Collection_union (l, r, _) -> (append 
+  | Nil _ -> empty
+  | List_of (elem, _) -> unit elem
+  | Concat (l, r, _) -> (append 
                                      (unparse_sequence empty unit append l) 
                                      (unparse_sequence empty unit append r))
   | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
@@ -184,12 +183,11 @@ and show t : 'a expression' -> string = function
       ^ variable ^ " in " ^ show t body ^ t data
   | Variant_selection_empty (value, data) ->
       show t value ^ " is wrong " ^ t data
-  | Collection_empty (`List, data)              -> "[]" ^ t data
-  | Collection_empty (ctype, data)              -> coll_name ctype ^ "[]" ^ t data
-  | Collection_single (elem, ctype, data)       -> coll_name ctype ^ "[" ^ show t elem ^ "]" ^ t data
-  | Collection_union (left, right, data) -> 
+  | Nil (data)              -> "[]" ^ t data
+  | List_of (elem, data)       -> "[" ^ show t elem ^ "]" ^ t data
+  | Concat (left, right, data) -> 
       "(" ^ show t left ^ t data ^ "++" ^ show t right ^ ")" 
-  | Collection_extension (expr, variable, value, data) ->
+  | For (expr, variable, value, data) ->
       "(for " ^ variable ^ " <- " ^ show t value ^ " in " ^ show t expr ^ ")" ^ t data
   | Sort (up, list, data) ->
       "sort_" ^ (if up then "up" else "down") ^ "(" ^ show t list ^ ")" ^ t data
@@ -252,11 +250,11 @@ let rec ppexpr t : 'a expression' -> string = function
       ^ variable ^ " in " ^ ppexpr t body ^ t data
   | Variant_selection_empty (value, data) ->
       show t value ^ " is wrong" ^ t data
-  | Collection_empty (`List, data)              -> "[]" ^ t data
-  | Collection_empty (ctype, data)              -> coll_name ctype ^ "[]" ^ t data
-  | Collection_single (elem, ctype, data)       -> coll_name ctype ^ "[" ^ ppexpr t elem ^ "]" ^ t data
-  | Collection_union (left, right, data)  -> "(" ^ ppexpr t left ^ t data ^ "::" ^ ppexpr t right ^ ")" 
-  | Collection_extension (expr, variable, value, data) ->
+  | Nil (data)              -> "[]" ^ t data
+  | Nil (data)              -> "[]" ^ t data
+  | List_of (elem, data)       -> "[" ^ ppexpr t elem ^ "]" ^ t data
+  | Concat (left, right, data)  -> "(" ^ ppexpr t left ^ t data ^ "::" ^ ppexpr t right ^ ")" 
+  | For (expr, variable, value, data) ->
       "(for " ^ variable ^ " <- " ^ ppexpr t value ^ " in " ^ ppexpr t expr ^ ")" ^ t data
   | Sort (up, list, data) ->
       "sort_" ^ (if up then "up" else "down") ^ "(" ^ ppexpr t list ^ ")" ^ t data
@@ -318,10 +316,10 @@ let rec serialise_expression : ('data expression' serialiser)
         | Variant_injection v       -> serialise3 'I' (string, exp, data) v
         | Variant_selection v       -> serialise7 'J' (exp, string, string, exp, string, exp, data) v
         | Variant_selection_empty v -> serialise1 'K' (data) v
-        | Collection_empty v        -> serialise2 'O' (serialise_colltype, data) v
-        | Collection_single v       -> serialise3 'P' (exp, serialise_colltype, data) v
-        | Collection_union v        -> serialise3 'Q' (exp, exp, data) v
-        | Collection_extension v    -> serialise4 'T' (exp, string, exp, data) v
+        | Nil v        -> serialise1 'O' (data) v
+        | List_of v       -> serialise2 'P' (exp, data) v
+        | Concat v        -> serialise3 'Q' (exp, exp, data) v
+        | For v    -> serialise4 'T' (exp, string, exp, data) v
         | Sort v                    -> serialise3 'U' (serialise_bool, exp, data) v
         | Database v                -> serialise2 'V' (exp, data) v
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
@@ -356,10 +354,10 @@ and deserialise_expression : (expression deserialiser)
            | 'I' -> Variant_injection (deserialise3 (string, exp, poskind) obj)
            | 'J' -> Variant_selection (deserialise7 (exp, string, string, exp, string, exp, poskind) obj)
            | 'K' -> Variant_selection_empty (deserialise2 (exp, poskind) obj)
-           | 'O' -> Collection_empty (deserialise2 (deserialise_colltype, poskind) obj)
-           | 'P' -> Collection_single (deserialise3 (exp, deserialise_colltype, poskind) obj)
-           | 'Q' -> Collection_union (deserialise3 (exp, exp, poskind) obj)
-           | 'T' -> Collection_extension (deserialise4 (exp, string, exp, poskind) obj)
+           | 'O' -> Nil (deserialise1 (poskind) obj)
+           | 'P' -> List_of (deserialise2 (exp, poskind) obj)
+           | 'Q' -> Concat (deserialise3 (exp, exp, poskind) obj)
+           | 'T' -> For (deserialise4 (exp, string, exp, poskind) obj)
            | 'U' -> Sort (deserialise3 (deserialise_bool, exp, poskind) obj)
            | 'V' -> Database (deserialise2 (exp, poskind) obj)
            | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, poskind) obj)
@@ -488,16 +486,16 @@ let visit_expressions'
                                                        and e3, data3 = visitor visit_children (e3, data) in
         Variant_selection ( e1, s1, s2, e2, s3, e3, d), combiner (combiner data1 data2) data3
     | Variant_selection_empty (d) -> Variant_selection_empty (d), unit data
-    | Collection_empty (c, d) -> Collection_empty (c, d), unit data
+    | Nil (d) -> Nil (d), unit data
 
-    | Collection_single (e, c, d) -> let e, data = visitor visit_children (e, data) in
-        Collection_single (e, c, d), data
-    | Collection_union (e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
+    | List_of (e, d) -> let e, data = visitor visit_children (e, data) in
+        List_of (e, d), data
+    | Concat (e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
                                       and e2, data2 = visitor visit_children (e2, data) in
-        Collection_union ( e1,  e2, d), combiner data1 data2
-    | Collection_extension (e1, s, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
+        Concat ( e1,  e2, d), combiner data1 data2
+    | For (e1, s, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
                                              and e2, data2 = visitor visit_children (e2, data) in
-        Collection_extension ( e1, s, e2, d), combiner data1 data2
+        For ( e1, s, e2, d), combiner data1 data2
 
     | Sort (b, e, d) -> let e, data = visitor visit_children (e, data) in
         Sort (b, e, d), data
@@ -566,10 +564,10 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Variant_injection (a, b, data) -> Variant_injection (a, redecorate f b, f data)
   | Variant_selection (a, b, c, d, e, g, data) -> Variant_selection (redecorate f a, b, c, redecorate f d, e, redecorate f g, f data)
   | Variant_selection_empty (value, data) -> Variant_selection_empty (redecorate f value, f data)
-  | Collection_empty (a, data) -> Collection_empty (a, f data)
-  | Collection_single (a, b, data) -> Collection_single (redecorate f a, b, f data)
-  | Collection_union (a, b, data) -> Collection_union (redecorate f a, redecorate f b, f data)
-  | Collection_extension (a, b, c, data) -> Collection_extension (redecorate f a, b, redecorate f c, f data)
+  | Nil (data) -> Nil (f data)
+  | List_of (a, data) -> List_of (redecorate f a, f data)
+  | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
+  | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
   | Sort (a, b, data) -> Sort (a, redecorate f b, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
@@ -608,7 +606,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | String _
                | Float _ 
                | Record_empty _
-               | Collection_empty _
+               | Nil _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
@@ -617,7 +615,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Sort (_, e, _)
                | Database (e, _)
                | Variant_injection (_, e, _)
-               | Collection_single (e, _, _)
+               | List_of (e, _)
                | Escape (_, e, _)
                | Table (e, _, _, _) -> [visitor visit_children e]
 
@@ -627,9 +625,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Let (_, e1, e2, _)
                | Record_extension (_, e1, e2, _)
                | Record_selection_empty (e1, e2, _)
-               | Collection_union (e1, e2, _)
+               | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
-               | Collection_extension (e1, _, e2, _) ->
+               | For (e1, _, e2, _) ->
                    [visitor visit_children e1; visitor visit_children e2]
                    
                | Condition (e1, e2, e3, _)
@@ -667,14 +665,14 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | String _
       | Float _
       | Variable _
-      | Collection_empty _
+      | Nil _
       | Record_empty _ -> None
           
       (* fixed children *)
       | Abstr (a, e, b)                            -> passto [e] (fun [e] -> Abstr (a, e, b))
       | Variant_injection (a, e, b)                -> passto [e] (fun [e] -> Variant_injection (a, e, b))
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
-      | Collection_single (e, a, b)                -> passto [e] (fun [e] -> Collection_single (e, a, b))
+      | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
       | Sort (a, e, b)                             -> passto [e] (fun [e] -> Sort (a, e, b))
       | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
       | Table (e, a, b, c)                         -> passto [e] (fun [e] -> Table (e, a, b, c))
@@ -687,8 +685,8 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Record_extension (a, e1, e2, b)            -> passto [e1; e2] (fun [e1; e2] -> Record_extension (a, e1, e2, b))
       | Record_selection (a, b, c, e1, e2, d)      -> passto [e1; e2] (fun [e1; e2] -> Record_selection (a, b, c, e1, e2, d))
       | Record_selection_empty (e1, e2, a)         -> passto [e1; e2] (fun [e1; e2] -> Record_selection_empty (e1, e2, a))
-      | Collection_union (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Collection_union (e1, e2, a))
-      | Collection_extension (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> Collection_extension (e1, a, e2, b))
+      | Concat (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Concat (e1, e2, a))
+      | For (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> For (e1, a, e2, b))
       | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
       | Condition (e1, e2, e3, a)                  -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Condition (e1, e2, e3, a))
       (* varying children *)
@@ -731,7 +729,7 @@ let perhaps_process_children_bindings
       | String _
       | Float _
       | Variable _
-      | Collection_empty _
+      | Nil _
       | Variant_selection_empty _
       | Record_empty _ -> None
           
@@ -742,8 +740,8 @@ let perhaps_process_children_bindings
         Variant_injection (a, e, b))
       | Define (var, e, b, c)                      -> passto [bind [],e] (fun [e] ->  (* binding not visible in rhs *)
         Define (var, e, b, c))
-      | Collection_single (e, a, b)                -> passto [bind [],e] (fun [e] ->
-        Collection_single (e, a, b))
+      | List_of (e, b)                             -> passto [bind [],e] (fun [e] ->
+        List_of (e, b))
       | Sort (a, e, b)                             -> passto [bind [],e] (fun [e] ->
         Sort (a, e, b))
       | Database (e, a)                            -> passto [bind [],e] (fun [e] ->
@@ -764,10 +762,10 @@ let perhaps_process_children_bindings
         Record_selection (a, var1, var2, e1, e2, d))
       | Record_selection_empty (e1, e2, a)         -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
         Record_selection_empty (e1, e2, a))
-      | Collection_union (e1, e2, a)               -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Collection_union (e1, e2, a))
-      | Collection_extension (e1, var, e2, b)      -> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
-        Collection_extension (e1, var, e2, b))
+      | Concat (e1, e2, a)               -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
+        Concat (e1, e2, a))
+      | For (e1, var, e2, b)      -> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
+        For (e1, var, e2, b))
       | Variant_selection (e1, a, var1, e2, var2, e3, d) -> passto [bind [],e1; bind [var1],e2; bind [var2],e3]
 	                                                           (fun [e1;e2;e3] ->
 	Variant_selection (e1, a, var1, e2, var2, e3, d))
@@ -805,10 +803,10 @@ let expression_data : ('a expression' -> 'a) = function
 	| Variant_injection (_, _, data) -> data
 	| Variant_selection (_, _, _, _, _, _, data) -> data
 	| Variant_selection_empty (_, data) -> data
-	| Collection_empty (_, data) -> data
-	| Collection_single (_, _, data) -> data
-	| Collection_union (_, _, data) -> data
-	| Collection_extension (_, _, _, data) -> data
+	| Nil (data) -> data
+	| List_of (_, data) -> data
+	| Concat (_, _, data) -> data
+	| For (_, _, _, data) -> data
 	| Sort (_, _, data) -> data
 	| Database (_, data) -> data
 	| Table (_, _, _, data) -> data

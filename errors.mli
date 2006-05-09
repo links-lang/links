@@ -7,7 +7,6 @@ val mistyped_application : Syntax.position ->
   'a
                
 val mistyped_union : Syntax.position ->
-  Inferencetypes.inference_collection_type ->
   Inferencetypes.inference_expression ->
   Inferencetypes.inference_type ->
   Inferencetypes.inference_expression ->

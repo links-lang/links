@@ -68,7 +68,7 @@ let parse_db_string : string -> (string * string) =
 and reconstruct_db_string : (string * string) -> string =
   fun (x,y) -> x ^ ":" ^ y
 
-type unop = MkColl of collection_type
+type unop = MkColl
             | MkVariant of string
             | MkDatabase
             | VrntSelect of (string * string * expression * string option * 
@@ -76,14 +76,8 @@ type unop = MkColl of collection_type
             | QueryOp of (query * kind)
             | SortOp of bool
 
-let string_of_coll_type = function
-  | `Set -> "set"
-  | `Bag -> "bag"
-  | `List -> "list"
-  | _ -> failwith("Internal error: an abstract collection type was stringified")
-
 let string_of_unop = function
-  | MkColl ctype -> "MkColl" ^ string_of_coll_type ctype
+  | MkColl -> "MkColl"
   | MkDatabase -> "MkDatabase"
   | MkVariant label -> "MkVariant " ^ label
   | SortOp up -> "SortOp" ^ if up then "Up" else "Down"
@@ -91,7 +85,7 @@ let string_of_unop = function
   | VrntSelect _ -> "VrntSelect(...)"
 
 type binop = EqEqOp | NotEqOp | LessEqOp | LessOp | BeginsWithOp
-	     | UnionOp of collection_type
+	     | UnionOp
 	     | RecExtOp of string
 
 
@@ -159,7 +153,6 @@ type contin_frame =
   | UnopApply of (environment * unop )
   | RecSelect of (environment * string * string * string * expression)
   | CollExtn of (environment * 
-		   collection_type * 
 		   string * expression * 
 		   result list * result list)
   | StartCollExtn of (environment *
@@ -190,7 +183,7 @@ and result = [
 		         * expression)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
-  | `Collection of (collection_type * (result) list)
+  | `List of (result list)
   | `Database of (database * string)
   | `Environment of (string (* url *) * environment)
   | `Continuation of continuation
@@ -225,7 +218,7 @@ and bool b = `Primitive(`Bool b)
 and int i = `Primitive(`Int i)
 and float f = `Primitive(`Float f)
 and char c = `Primitive(`Char c)
-and listval es = `Collection(`List, es)
+and listval es = `List es
 and xmlnodeval contents = `Primitive(`XML(Node contents))
 
 let make_tuple fields = 
@@ -241,7 +234,7 @@ let recfields = function
 exception Match of string
 
 let string_as_charlist s : result =
-  `Collection(`List, map (fun x -> (`Primitive (`Char x))) (explode s))
+  `List(map (fun x -> (`Primitive (`Char x))) (explode s))
 
 let pair_as_ocaml_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
@@ -275,8 +268,8 @@ and strip_cont_frame = function
   | RecSelect(env, var, label, var2, body) -> RecSelect(strip_env env, 
                                                         var, label, var2, 
                                                         to_placeholder body)
-  | CollExtn(env, ctype, var, body, results, source) ->
-      CollExtn(strip_env env, ctype, var, to_placeholder body, 
+  | CollExtn(env, var, body, results, source) ->
+      CollExtn(strip_env env, var, to_placeholder body, 
                map strip_result results, map strip_result source)
   | StartCollExtn(env, var, body) -> 
       StartCollExtn(strip_env env, var, to_placeholder body)
@@ -292,7 +285,7 @@ and strip_result = function
       `Function(name, strip_env locals, strip_env globals, to_placeholder body)
   | `Record(fields) -> `Record(map strip_binding fields)
   | `Variant(label, value) ->  `Variant(label, strip_result value)
-  | `Collection(ctype, elements)-> `Collection(ctype, map strip_result elements)
+  | `List(elements)-> `List(map strip_result elements)
   | `Database(db, params) ->
       `Database(db, params)
   | `Environment(namespace, env) -> `Environment(namespace, strip_env env)
@@ -337,7 +330,7 @@ let rec char_of_primchar = function
 
 and charlist_as_string chlist = 
   match chlist with
-    | `Collection (`List, elems) -> 
+    | `List elems -> 
         Utility.implode (map char_of_primchar elems)
     | _ -> raise (Match("Non-string " ^ string_of_result chlist
                         ^ " used as string."))
@@ -352,10 +345,10 @@ and string_of_result : result -> string = function
        with Not_tuple ->
          "(" ^ (String.concat "," (map (function (label, value) -> label ^ "=" ^ (string_of_result value)) fields)) ^ ")")
   | `Variant (label, value) -> label ^ " " ^ string_of_result value
-  | `Collection (coll_type, []) -> coll_prefix IntMap.empty coll_type ^ "[]"
-  | `Collection (`List, `Primitive(`Char _)::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
-  | `Collection (`List, (`Primitive(`XML _)::_ as elems))  -> String.concat "" (map string_of_xresult elems)
-  | `Collection (coll_type, elems) -> coll_prefix IntMap.empty coll_type ^ "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
+  | `List [] -> "[]"
+  | `List (`Primitive(`Char _)::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
+  | `List ((`Primitive(`XML _)::_ as elems))  -> String.concat "" (map string_of_xresult elems)
+  | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment env
   | `Continuation cont -> pp_continuation cont
@@ -426,7 +419,7 @@ and serialise_result : result serialiser =
                ("", var, locals, globals, expr))
       | `Record      v -> serialise1 'r' (list (serialise_binding)) v
       | `Variant     v -> serialise2 'v' (string, serialise_result) v
-      | `Collection  v -> serialise2 'c' (serialise_colltype, list serialise_result) v
+      | `List  v -> serialise1 'c' (list serialise_result) v
       | `Database    v -> serialise2 'd' (null_serialiser, string) v
       | `Environment v -> serialise2 'e' (null_serialiser, serialise_environment) v
       | `Continuation v -> serialise1 'C' (serialise_continuation) v
@@ -480,7 +473,7 @@ and deserialise_result resolve : result deserialiser =
                            in f))
          | 'r' -> `Record (deserialise1 (deserialise_list (deserialise_binding resolve)) obj)
          | 'v' -> `Variant (deserialise2 (string, result) obj)
-         | 'c' -> `Collection (deserialise2 (deserialise_colltype, deserialise_list (deserialise_result resolve)) obj)
+         | 'c' -> `List (deserialise1 (deserialise_list (deserialise_result resolve)) obj)
          | 'd' -> let _, dbstring = deserialise2 (null_deserialiser (), string) obj in
 	   let driver, params = parse_db_string dbstring in
              `Database (db_connect driver params)
@@ -519,7 +512,7 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
                          map_expr result_f expr_f contframe_f body))
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
-  | `Collection(ctype, elems) -> result_f(`Collection(ctype, map (map_result result_f expr_f contframe_f) elems))
+  | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Environment(ns, bindings) -> result_f(`Environment(ns, alistmap (map_result result_f expr_f contframe_f) bindings))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
   | other -> result_f(other)
@@ -542,8 +535,8 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = f
       contframe_f(UnopApply((map_env result_f expr_f contframe_f) env, op))
   | RecSelect(env, label, var, label_var, body) -> 
       contframe_f(RecSelect((map_env result_f expr_f contframe_f) env, label, var, label_var, (map_expr result_f expr_f contframe_f) body))
-  | CollExtn(env, ctype, var, body, results, inputs) ->
-      contframe_f(CollExtn((map_env result_f expr_f contframe_f) env, ctype, var, (map_expr result_f expr_f contframe_f) body, 
+  | CollExtn(env, var, body, results, inputs) ->
+      contframe_f(CollExtn((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body, 
                            map (map_result result_f expr_f contframe_f) results, map (map_result result_f expr_f contframe_f) inputs))
   | StartCollExtn(env, var, body) ->
       contframe_f(StartCollExtn((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
@@ -605,7 +598,7 @@ let label_of_expression expr =
     
 let result_to_xml = function
   | `Primitive (`XML r) -> r
-  | `Collection _ as r -> (charlist_as_string r) 
+  | `List _ as r -> (charlist_as_string r) 
   | `Continuation cont -> Utility.base64encode (serialise_continuation cont)
   | _ -> "NOT IMPLEMENTED"
 

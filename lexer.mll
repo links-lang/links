@@ -118,8 +118,6 @@ rule lex lexers = parse
   | "<-"                                { LARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           Stack.push (starttag lexers) lexers; LXML id }
-  | "set["                              { LSET }
-  | "bag["                              { LBAG }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
   | "||"                                { BARBAR }

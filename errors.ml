@@ -20,7 +20,7 @@ let mistyped_application pos (fn, fntype) (param, paramtype)
                                   ^", cannot be applied to `"^ pexpr ^"', of type " ^ string_of_type paramtype))
                
 
-let mistyped_union pos coll_type l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
+let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
     = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_type ltype 
                            ^") and "^ string_of_expression r ^" ("^ string_of_type rtype ^")"))
 

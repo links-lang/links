@@ -291,11 +291,11 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
     With CPS transform, result of generate is always : (a -> w) -> b
 *)
 let rec generate : 'a expression' -> code = 
-  let rec reduce_collection : 'a expression' -> code = 
+  let rec reduce_list : 'a expression' -> code = 
     function
-      | Collection_union (c, Collection_empty _, _) -> 
-          reduce_collection c
-      | Collection_union (l, r, _) ->
+      | Concat (c, Nil _, _) -> 
+          reduce_list c
+      | Concat (l, r, _) ->
           let l_cps = generate l in
           let r_cps = generate r in
             Fn(["__kappa"],
@@ -303,14 +303,14 @@ let rec generate : 'a expression' -> code =
                    Call(r_cps, [Fn(["__r"],
                         Call(Var "__kappa", 
                              [Call (Var "_concat", [Var "__l"; Var "__r"])]))]))])) 
-      | Collection_union (Collection_single (l,_,_), r, _) -> 
+      | Concat (List_of (l,_), r, _) -> 
           failwith "unimpl"; 
-	  (match reduce_collection r with
+	  (match reduce_list r with
 	     | Lst items -> Lst (generate_noncps l :: items)
 	     | c         -> Call (Var "_concat", [Lst [generate_noncps l]; c]))
-      | Collection_union (l, Collection_single (r,_,_), _) -> 
+      | Concat (l, List_of (r,_), _) -> 
           failwith "unimpl"; 
-	  (match reduce_collection l with
+	  (match reduce_list l with
 	     | Lst items -> Lst (items @ [generate_noncps r])
 	     | c         -> Call (Var "_concat", [c; Lst [generate_noncps r]]))
       | e ->          
@@ -357,16 +357,16 @@ let rec generate : 'a expression' -> code =
                      Call(Var "__kappa", 
                           [Binop(Var "__l", binop_name op, Var "__r")]))]))]))
       (* Should strings be handled differently at this level? *)
-  | Collection_empty _                 -> trivial_cps (Lst [])
-  | Collection_single (e, _, _)        -> 
+  | Nil _                 -> trivial_cps (Lst [])
+  | List_of (e, _)        -> 
       let content_cps = generate e in
         Fn(["__kappa"],
            (Call(content_cps, [Fn(["__x"], 
                                   (Call(Var "__kappa", [Lst [Var "__x"]])))])))
-  | (Collection_union _) as c          -> 
-      reduce_collection c
-(*  | Collection_union (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
-  | Collection_extension (e, v, b, _)  -> 
+  | (Concat _) as c          -> 
+      reduce_list c
+(*  | Concat (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
+  | For (e, v, b, _)  -> 
       let b_cps = generate b in
       let e_cps = generate e in
         Fn(["__kappa"],

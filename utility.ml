@@ -79,49 +79,16 @@ let less_to_cmp less l r =
   else if less l r then -1
   else 0
 
-(** Removes all duplicates from a list and order the list. This can be
-    used to transform the list into a set. **)
-let ordered_unique list =
-  let rec unique_neighbours list =
-    match list with
-      | head :: (vice_head :: _ as tail) -> (if head = vice_head then unique_neighbours tail
-                                             else head :: unique_neighbours tail)
-      | _                                -> list
-  in unique_neighbours (List.sort compare list)
-     
 (** Remove duplicates from a list *)
 let rec unduplicate equal = function
   | [] -> []
   | elem :: elems -> (let _, others = List.partition (equal elem) elems in
                         elem :: unduplicate equal others)
 
-(** Unions two ordered unique lists. If the provided lists are not
-    already ordered unique they will be transformed. **)
-let union left right =
-  let rec union' = function
-    | [], r -> r
-    | l, [] -> l
-    | lhead :: ltail, rhead :: rtail -> 
-	if lhead = rhead then      lhead :: union' (ltail, rtail)
-	else if lhead < rhead then lhead :: union' (ltail, right)
-	else                       rhead :: union' (left, rtail) in
-    union' (ordered_unique left, ordered_unique right)
-
-(** Unions a list of lists with each other. If the provided lists are
-    not already ordered unique they will be transformed. **)
-let union_lists l = ordered_unique (List.concat l)
-
-(** Intersects two ordered unique lists. If the provided lists are not
-    already ordered unique they will be transformed. **)
-let intersect l r =
-  let rec isect l r = 
-    match l, r with
-      | [], _ -> []
-      | _, [] -> []
-      | lh :: lt, rh :: rt -> (if lh = rh      then lh :: (isect lt rt)
-	                       else if lh < rh then isect lt r
-	                       else                 isect l rt)
-  in isect (ordered_unique l) (ordered_unique r)
+let rec ordered_consecutive = function
+  | [] -> true
+  | [_] -> true
+  | one :: (two :: _ as rest) -> one + 1 = two && ordered_consecutive rest
 
 let rec drop n = if n = 0 then identity else function
   | []     -> []
@@ -132,8 +99,6 @@ let rec take n list = match n, list with
   | _, [] -> []
   | _, h :: t -> h :: take (n - 1) t
   
-let equal_set l r = ordered_unique l = ordered_unique r
-
 let rec rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = fun value ->
     function
       | (k, v) :: _ when eq v value -> k
@@ -204,11 +169,6 @@ let find_char (s : string) (c : char) : int list =
 let mapstrcat glue f list = String.concat glue (List.map f list)
 
 let numberp s = try ignore (int_of_string s); true with _ -> false
-
-let rec ordered_consecutive = function
-  | [] -> true
-  | [_] -> true
-  | one :: (two :: _ as rest) -> one + 1 = two && ordered_consecutive rest
 
 let index pred list = 
   let rec idx pos  = function

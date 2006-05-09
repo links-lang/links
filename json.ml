@@ -11,12 +11,12 @@ let rec jsonize_result : Result.result -> string = function
   | `Database _
   | `Environment _
   | `Continuation _
-  | `Collection (`List, (`Primitive(`XML _)::_))
+  | `List (`Primitive(`XML _)::_)
   | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | `Primitive p -> jsonize_primitive p
   | `Record fields -> "{" ^ String.concat ", " (List.map (fun (k, v) -> "\"" ^ k ^ "\" : " ^ jsonize_result v) fields) ^ "}"
-  | `Collection (_, []) -> "[]"
-  | `Collection (`List, `Primitive(`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
-  | `Collection (`List, elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
+  | `List [] -> "[]"
+  | `List (`Primitive(`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
+  | `List (elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
   | r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
 

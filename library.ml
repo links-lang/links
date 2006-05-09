@@ -33,7 +33,7 @@ let fresh_pid =
 	!current_pid
       end
 
-(* let xml = `Collection (`List, `Primitive `XMLitem) *)
+(* let xml = `List (`Primitive `XMLitem) *)
 
 type primop = (Result.result -> Result.result)
 
@@ -103,7 +103,7 @@ and float_fun name func =
     ([], `Primitive `Float --> `Primitive `Float)))
 
 let format_attrs : result -> string = function
-  | `Collection (`List, attrs)  ->
+  | `List (attrs)  ->
       let format_attr pair = 
         let (k, v) = pair_as_ocaml_pair pair in 
         let k = charlist_as_string k
@@ -112,18 +112,18 @@ let format_attrs : result -> string = function
       in String.concat "" (map format_attr attrs)
   | _ -> failwith "Internal error: format attributes applied to non-list"
 
-(*let format_contents (`Collection (_, contents)) : (string) =
+(*let format_contents (`List (_, contents)) : (string) =
   String.concat "" (map charlist_as_string contents)
 *)
 
 let value_as_string = function
-  | `Collection (`List, `Primitive(`Char _)::elems) as c  -> "\'" ^ Postgresql.escape_string (charlist_as_string c) ^ "\'"
-  | `Collection (`List, [])  -> "NULL"
+  | `List (`Primitive(`Char _)::elems) as c  -> "\'" ^ Postgresql.escape_string (charlist_as_string c) ^ "\'"
+  | `List ([])  -> "NULL"
   | a -> string_of_result a
 
 let cond_from_field (k, v) =
   match (k, v) with
-      (_, `Collection(_, [])) -> k ^ " is null" (* Is [] really always null? *)
+      (_, `List([])) -> k ^ " is null" (* Is [] really always null? *)
     | _ -> "("^ k ^" = "^ value_as_string v ^")"
 
 let single_match = 
@@ -138,7 +138,7 @@ and row_values = function
   | `Record fields -> String.concat ", " (map (value_as_string -<- snd) fields)
   | _ -> failwith "Internal error: forming query from non-row"
 and delete_condition = function
-  | `Collection(`List, rows) -> "("^ (String.concat " OR " (map single_match rows)) ^")"
+  | `List(rows) -> "("^ (String.concat " OR " (map single_match rows)) ^")"
   | _ -> failwith "Internal error: forming query from non-row"
 and updates : Result.result -> string = function
   | `Record fields -> 
@@ -237,25 +237,24 @@ let env : (string * (result * Kind.assumption)) list = map
   ("hd", 
    (primfun "hd" 
       (function
-         | `Collection (_, elems) -> 
+         | `List (elems) -> 
              (match elems with 
                 | [] -> failwith "Head of empty list"
                 | x :: xs -> x)
          | _ -> failwith "Internal error: head of non-list"),
     let v', v = fresh_type () in 
       ([v'],
-       (`Collection (`List, v) --> v))
+       (`List (v) --> v))
    ));
 
   ("length", 
    (primfun "length" 
       (function
-         | `Collection (_, elems) -> `Primitive (`Int (num_of_int (length elems)))
+         | `List (elems) -> `Primitive (`Int (num_of_int (length elems)))
          | _ -> failwith "Internal error: length of non-collection"),
     let v', v = fresh_type () in
-    let c', c = fresh_collection () in
-      ([c'; v'],
-       (`Collection (c, v) --> `Primitive `Int))));
+      ([v'],
+       (`List (v) --> `Primitive `Int))));
   
   ("take",
    (primfun "take"
@@ -265,21 +264,21 @@ let env : (string * (result * Kind.assumption)) list = map
                primfun
 		 "take..."
 		 (function
-		    | `Collection (`List, elems) -> `Collection (`List, take (int_of_num n) elems)
+		    | `List (elems) -> `List (take (int_of_num n) elems)
 		    | _ -> failwith "Internal error: non-list passed to take"))
 	 | _ -> failwith "Internal error: non-integer passed to take"),
     let a', a = fresh_type () in
-      ([a'], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
+      ([a'], (`Primitive `Int --> (`List (a) -->  `List (a))))));
 
 
   ("childNodes",
    (primfun "childNodes"
       ((function
-         | `Collection(_, [elem]) ->
+         | `List [elem] ->
              (match elem with 
                   `Primitive(`XML(Node(tag, children))) -> 
                     let children = filter (function (Node x) -> true | _ -> false) children in
-                      (`Collection(`List, map (fun x -> `Primitive(`XML x)) children) : Result.result)
+                      (`List(map (fun x -> `Primitive(`XML x)) children) : Result.result)
                 | _ -> failwith ("non-XML given to childNodes")
              )
          | _ -> failwith ("non-XML given to childNodes")
@@ -298,39 +297,38 @@ let env : (string * (result * Kind.assumption)) list = map
                primfun
 		 "drop..."
 		 (function
-		    | `Collection (`List, elems) -> `Collection (`List, drop (int_of_num n) elems)
+		    | `List (elems) -> `List (drop (int_of_num n) elems)
 		    | _ -> failwith "Internal error: non-list passed to drop"))
 	 | _ -> failwith "Internal error: non-integer passed to drop"),
     let a', a = fresh_type () in
-      ([a'], (`Primitive `Int --> (`Collection (`List, a) -->  `Collection (`List, a))))));
+      ([a'], (`Primitive `Int --> (`List (a) -->  `List (a))))));
 
   ("tl", 
    (primfun "tl"
       (function
-         | `Collection (_, elems) -> 
+         | `List (elems) -> 
          (match elems with 
            | [] -> failwith "Tail of empty list"
-           | x :: xs -> `Collection (`List, xs))
+           | x :: xs -> `List (xs))
          | _ -> failwith "Internal error: tail of non-list"),
     let v', v = fresh_type () in 
       ([v'],
-       (`Collection (`List, v) --> `Collection (`List, v)))));
+       (`List (v) --> `List (v)))));
 
   ("childNodes",
    (primfun "childNodes"
       ((function
-         | `Collection(_, [elem]) ->
+         | `List [elem] ->
              (match elem with 
                   `Primitive(`XML(Node(tag, children))) -> 
                     let children = filter (function (Node x) -> true | _ -> false) children in
-                      (`Collection(`List, map (fun x -> `Primitive(`XML x)) children) : Result.result)
+                      (`List(map (fun x -> `Primitive(`XML x)) children) : Result.result)
                 | _ -> failwith ("non-XML given to childNodes")
              )
          | _ -> failwith ("non-XML given to childNodes")
        ) : Result.result -> Result.result
       ),
-   ([],
-       xml --> xml)
+   ([], xml --> xml)
    )
   );
 
@@ -349,7 +347,7 @@ let env : (string * (result * Kind.assumption)) list = map
                                and attr = charlist_as_string (List.assoc "2" elems)
                                and none = `Variant ("None", `Record []) in
                                  (match elem with 
-                                    | `Collection (_, `Primitive (`XML (Node (tag, children)))::_) -> 
+                                    | `List (`Primitive (`XML (Node (tag, children)))::_) -> 
                                         (try
                                            (match (List.find (function
                                                                 | Attr (k, v) when k = attr -> true
@@ -395,7 +393,7 @@ let env : (string * (result * Kind.assumption)) list = map
   ("enxml",
    (primfun "enxml"
       (function 
-         | `Collection _ as c -> `Collection (`List, [`Primitive (`XML (Text (charlist_as_string c)))])
+         | `List _ as c -> `List [`Primitive (`XML (Text (charlist_as_string c)))]
          | _ -> failwith ("internal error: non-string value passed to xml conversion routine")),
     ([], 
      Kind.string_type --> xml))); 
@@ -440,7 +438,7 @@ let env : (string * (result * Kind.assumption)) list = map
                     primfun ("insert into (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (row : result) ->
                          Database.execute_select
-                           (`Collection (`List, unit_type))
+                           (`List (unit_type))
                            (prerr_endline("*RUNNING SQL: " ^ "insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")");
                             ("insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")"))
 
@@ -461,13 +459,13 @@ let env : (string * (result * Kind.assumption)) list = map
                     continuationize_primfn (primfun ("delete from (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
                       (fun (rows : result) ->
                          Database.execute_select
-                           (`Collection (`List, unit_type))
+                           (`List (unit_type))
                            ("delete from " ^ table ^ " where " ^ delete_condition rows)
                            db))
                 | _ -> failwith "Internal error: delete row from non-database"))),
     let r', r = fresh_row () in
       ([r'],
-       (Kind.string_type --> (`DB --> (`Collection (`List, `Record r) --> unit_type))))));
+       (Kind.string_type --> (`DB --> (`List (`Record r) --> unit_type))))));
 
   ("updaterows", (* destructive *)
    (primfun "updaterows"
@@ -480,12 +478,12 @@ primfun ("update (" ^ table ^ ", ... ) by ...")
 continuationize_primfn (
                 primfun ("update (" ^ table ^ ", "^ string_of_result database ^ ") by ...")
                   (function
-                     |  (`Collection(`List, rows)) ->
+                     |  (`List(rows)) ->
                           (List.iter (fun row -> 
 (*                                         debug("update " ^ table ^ " set " ^ *)
 (*                                                 updates row  ^ " where " ^ single_match (map (fst -<- pair_as_ocaml_pair) row)); *)
                                         ignore(Database.execute_select
-                                                 (`Collection (`List, unit_type))
+                                                 (`List (unit_type))
                                                  ("update " ^ table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
                                                  db))
                              rows);
@@ -507,7 +505,7 @@ continuationize_primfn (
 *)
     in
       ([u'; v'],
-       (Kind.string_type --> (`DB --> (`Collection (`List, pair) --> unit_type))))));
+       (Kind.string_type --> (`DB --> (`List (pair) --> unit_type))))));
 
 (*  ("javascript",
    (`Primitive(`Bool false),

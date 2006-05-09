@@ -58,9 +58,9 @@ let uniquify_expression : RewriteSyntax.rewriter =
           Some(Record_selection(lab, lvar', var', value, 
                                 rename_var var var' (rename_var lvar lvar' body),
                                 data))
-    | Collection_extension (b, v, src, data) -> 
+    | For (b, v, src, data) -> 
         let name = gensym v in
-          Some (Collection_extension
+          Some (For
                   (rename_var v name b, name, src, data))
     | Variant_selection (value, clab, cvar, cbody, var, body, data) ->
         let cvar' = gensym cvar
@@ -192,23 +192,23 @@ let rec extract_tests (bindings:bindings) (expr:expression)
         let positive, negative, body, origin = extract_tests (`Unavailable variable :: bindings) body in
           (positive, negative, Record_selection (label, label_variable, variable, value, body, data), origin)
 
-    | Condition (condition, t, ((Collection_empty _) as e), data)  ->
+    | Condition (condition, t, ((Nil _) as e), data)  ->
         let positive, negative, t, origin = extract_tests bindings t in
           (match condition_to_sql condition bindings with
              | Some (sql_condition, new_origin) ->
                  (sql_condition :: positive, negative, t, new_origin @ origin)
              | None ->
                  (positive, negative, Condition(condition, t, e, data), origin))
-    | Condition (condition, ((Collection_empty _) as t), e, data) ->
+    | Condition (condition, ((Nil _) as t), e, data) ->
         let positive, negative, e, origin = extract_tests bindings e in
           (match condition_to_sql condition bindings with
              | Some (sql_condition, new_origin) ->
                  (positive, sql_condition :: negative, e, new_origin @ origin)
              | None ->
                  (positive, negative, Condition(condition, t, e, data), origin))
-    | Collection_extension (expr, variable, value, data) ->
+    | For (expr, variable, value, data) ->
         let positive, negative, expr, origin = extract_tests (`Calculated (variable, expr) :: bindings) expr in
-          (positive, negative, Collection_extension (expr, variable, value, data), origin)
+          (positive, negative, For (expr, variable, value, data), origin)
     | _ -> ([], [], expr, [])
 
 (** {3 SQL optimisers} All following values are optimiser functions
@@ -261,10 +261,10 @@ let sql_projections (env:Kind.environment) : RewriteSyntax.rewriter =
         | other -> default other
     in reduce_expression (visitor var) (merge_needed -<- snd) in
   let rewrite = function
-    | Collection_extension (body, variable, Table (db, s, query, tdata), data) ->
+    | For (body, variable, Table (db, s, query, tdata), data) ->
         (match needed_fields variable body with
            | Fields needs ->
-               Some (Collection_extension (body, variable,
+               Some (For (body, variable,
                                            Table (db, s, 
                                                   (if needs = [] then null_query else project needs) query,
                                                   tdata),
@@ -277,18 +277,18 @@ let sql_projections (env:Kind.environment) : RewriteSyntax.rewriter =
     modifies the SQL query associated to that table to add as many
     conditions from the extension's body to the query itself as
     possible. To be considered for optimisation, a condition must be
-    of the form '{i if cond then bag[] else ...}' or '{i if cond then
-    ... else bag[]}', where '{i cond}' is a camparison between a
+    of the form '{i if cond then [] else ...}' or '{i if cond then
+    ... else []}', where '{i cond}' is a comparison between a
     constant and a variable or between two variables (comming from the
     database). The optimisation will stop looking for conditions in
     the body expression if it encouters any other node than a
     condition, a {i let}, a record selection or a collection
     extension. *)
 let sql_selections : RewriteSyntax.rewriter = function 
-  | Collection_extension (expr, variable, Table (db, s, query, tdata), data) ->
+  | For (expr, variable, Table (db, s, query, tdata), data) ->
       let positive, negative, expr, origin = extract_tests [`Table_loop (variable, query)] expr in
       let table = Table (db, s, select (positive, negative) query, tdata) in
-        Some (select_by_origin origin (Collection_extension (expr, variable, table, data)))
+        Some (select_by_origin origin (For (expr, variable, table, data)))
   | _ -> None
 
 let rec substitute_projections new_src renamings expr bindings =
@@ -338,17 +338,17 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
     =
   let bindings, expr = sep_assgmts bindings expr in
     match expr with
-      | Condition (condition, t, ((Collection_empty _) as e), data)  ->
+      | Condition (condition, t, ((Nil _) as e), data)  ->
           (match check_join loop_var ref_db bindings t with
 	     | Some (positive, negative, query, projs, var, t) ->
                  Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
 	     | None -> None)
-      | Condition (condition, ((Collection_empty _) as t), e, data) ->
+      | Condition (condition, ((Nil _) as t), e, data) ->
           (match check_join loop_var ref_db bindings e with
 	     | Some (positive, negative, query, projs, var, e) ->
                  Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
 	     | None -> None)
-      | Collection_extension (expr, variable, Table (_, _, query, _), data) ->
+      | For (expr, variable, Table (_, _, query, _), data) ->
           (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
                (*  ([], [], _, _) -> None *)
@@ -366,7 +366,7 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 *)
 let rec sql_joins : RewriteSyntax.rewriter = 
   function
-    | Collection_extension (body, outer_var, (Table (db, s, query, tdata) as table), data) ->
+    | For (body, outer_var, (Table (db, s, query, tdata) as table), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var "dummy" bindings body with
            | Some (positives, negatives, inner_query, origins, inner_var, body) ->
@@ -378,7 +378,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                let body = substitute_projections outer_var renamings body
                  [`Table_loop(inner_var, inner_query)] 
                in
-               let expr = Collection_extension(body,
+               let expr = For(body,
                                                outer_var, 
                                                Table (db, s, query, tdata), 
                                                data) in
@@ -399,7 +399,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                debug("extract_tests returned " ^ String.concat " AND " (map Sql.string_of_expression pos) ^ " AND NOT " ^ String.concat " AND " (map Sql.string_of_expression neg));
                  if (pos <> [] || neg <> []) then
                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in
-                     Some (Collection_extension(body, outer_var, 
+                     Some (For(body, outer_var, 
                                                 Table (db, s, query, tdata), data))
                  else None
         ) (* match check_join .... with *)
@@ -517,7 +517,7 @@ let push_takedrop : RewriteSyntax.rewriter =
 
 
 let trivial_extensions : RewriteSyntax.rewriter = function
-  | Collection_extension (Collection_single (Variable (v1, _), _, _), v2, e, _)
+  | For (List_of (Variable (v1, _), _), v2, e, _)
       when v1 = v1 -> Some e
   | _ -> None
      
@@ -532,16 +532,16 @@ let fold_constant : RewriteSyntax.rewriter =
   (* TODO: Also arithmetic, etc. *)
   let constantp = function
     | Boolean _ | Integer _ | Char _ | String _ 
-    | Float _ | Record_empty _ | Collection_empty _ -> true
+    | Float _ | Record_empty _ | Nil _ -> true
     | _ -> false 
   in function 
 	(* Is this safe without unboxing? *)
 (*    | Comparison (l, op, r, data) when constantp l && constantp r -> Some (Boolean ((assoc op ops) l r, data)) *)
     | Condition (Boolean (true, _), t, _, _)  -> Some t
     | Condition (Boolean (false, _), _, e, _) -> Some e
-    | Collection_union (Collection_empty _, c, _) 
-    | Collection_union (c, Collection_empty _, _) -> Some c
-    | Collection_union (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
+    | Concat (Nil _, c, _) 
+    | Concat (c, Nil _, _) -> Some c
+    | Concat (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
     | _ -> None 
 
 let rewriters env = [
@@ -597,13 +597,13 @@ let test () =
 		       Syntax.Integer (Num.Int 3, ()), ())))
   ;
   assert (opt_map
-	    strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) bag[(x.b, y.d)] else bag[]}"))
+	    strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) [(x.b, y.d)] else []}"))
 	  =
       Some
 	(Let
 	   ("db", Database (String ("Rubbish", ()), ()),
-	    Collection_extension
-	      (Collection_single
+	    For
+	      (List_of
 		 (Record_extension
 		    ("1",
 		     Record_selection
@@ -616,7 +616,7 @@ let test () =
 			   Variable ("g29", ()), ()),
 			Record_empty (), ()),
 		     ()),
-		  `Bag, ()),
+		  ()),
 	       "x",
 	       Table
 		 (Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
@@ -625,12 +625,12 @@ let test () =
 	       ()),
 	    ())))
   ;
-  assert(opt_map strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env  "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db) in if (x.b == z.e && x.a == y.c)         bag[(x.b, y.d)] else bag[]}"))
+  assert(opt_map strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env  "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db) in if (x.b == z.e && x.a == y.c)         [(x.b, y.d)] else []}"))
          =
       Some
         (Syntax.Let
            ("db", Syntax.Database (Syntax.String ("Rubbish", ()), ()),
-            Syntax.Collection_extension
+            Syntax.For
               (Syntax.Condition
                  (Syntax.Condition
                     (Syntax.Comparison
@@ -652,7 +652,7 @@ let test () =
                            Syntax.Variable ("g103", ()), ()),
                         ()),
                      Syntax.Boolean (false, ()), ()),
-                  Syntax.Collection_single
+                  Syntax.List_of
                     (Syntax.Record_extension
                        ("1",
                         Syntax.Record_selection
@@ -665,8 +665,8 @@ let test () =
                               Syntax.Variable ("g107", ()), ()),
                            Syntax.Record_empty (), ()),
                         ()),
-                     `Bag, ()),
-                  Syntax.Collection_empty (`Bag, ()), ()),
+                     ()),
+                  Syntax.Nil (), ()),
                "x",
                Syntax.Table
                  (Syntax.Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",

@@ -212,7 +212,7 @@ type phrasenode =
   | CharLit of (char)
   | Var of (name)
   | FunLit of (name option * ppattern list * phrase)
-  | CollectionLit of (Kind.collection_type * phrase list)
+  | ListLit of (phrase list)
   | SortExp of (bool * phrase)
   | Definition of (name * phrase * location)
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option)
@@ -273,7 +273,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | BoolLit b   -> Boolean (b, pos)
   | CharLit c   -> Char (c, pos)
   | Var v       -> Variable (v, pos)
-  | InfixAppl (`Concat, e1, e2) -> Collection_union (desugar e1, desugar e2, pos)
+  | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
   | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
   | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
   | InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
@@ -317,8 +317,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
   | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
   | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
-  | CollectionLit  (ctype, []) -> Collection_empty (ctype, pos)
-  | CollectionLit  (ctype, (e::es)) -> Collection_union (Collection_single (desugar e, ctype, pos), desugar (CollectionLit (ctype ,es), pos'), pos)
+  | ListLit  [] -> Nil (pos)
+  | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
   | DBUpdate (table, db, rows) -> curried_apply (Variable("updaterows", pos)) pos [String (table, pos); desugar db; desugar rows]
   | DBDelete (table, db, rows) -> curried_apply (Variable("deleterows", pos)) pos [String (table, pos); desugar db; desugar rows]
   | DBInsert (table, db, rows) -> curried_apply (Variable("insertrow",  pos)) pos [String (table, pos); desugar db; desugar rows]
@@ -349,14 +349,13 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
       polylets es (desugar exp)
   | Iteration (pattern, from, body, None) ->
       (match patternize pattern with
-         | Bind var -> Collection_extension (desugar body, var, desugar from, pos)
+         | Bind var -> For (desugar body, var, desugar from, pos)
          | pattern -> (let var = unique_name () in
-	                 Collection_extension (polylet pattern pos (Variable (var, pos)) (desugar body), var, desugar from, pos)))
+	                 For (polylet pattern pos (Variable (var, pos)) (desugar body), var, desugar from, pos)))
   | Iteration (pattern, from, body, Some exp) -> desugar (Iteration (pattern, from, 
                                                                      (Conditional (exp,
                                                                                    body,
-                                                                                   (CollectionLit (
-										      Kind.TypeOps.fresh_collection_variable(),[]), pos')), pos'), None),
+                                                                                   (ListLit [], pos')), pos'), None),
                                                           pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
   | Switch (exp, patterns, None)         -> (closed_variant_selection
@@ -383,15 +382,15 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | TextNode s -> Apply (Variable ("enxml", pos), String (s, pos), pos)
   | Xml (tag, attrs, subnodes) -> 
       let concat a b = 
-        Collection_union (desugar a, b, pos) in
+        Concat (desugar a, b, pos) in
       let desugar_attr = function
         | [] -> String ("", pos)
         | [x] -> desugar x
-        | xs  -> (fold_right concat xs (Collection_empty (`List, pos))) in
+        | xs  -> (fold_right concat xs (Nil (pos))) in
         Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
-  | XmlForest []  -> Collection_empty  (`List, pos)
+  | XmlForest []  -> Nil  (pos)
   | XmlForest [x] -> desugar x
-  | XmlForest (x::xs) -> Collection_union (desugar x, desugar (XmlForest xs, pos'), pos)
+  | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
 and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
        should convert directly from phrases to patterns *)

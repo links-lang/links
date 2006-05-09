@@ -74,8 +74,7 @@ let lookup toplevel locals name =
   try
     lookup_qname toplevel locals (split_string name ':')
   with Not_found ->
-    failwith ("Internal error: variable `"  ^ name ^ "' not defined");
-    raise Not_found
+    failwith ("Internal error: variable `"  ^ name ^ "' not defined")
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -117,7 +116,7 @@ let rec equal l r =
                                      | all :: alls -> one_equal_all alls (ref_label, ref_result)) in
           for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
-    | `Collection (`List, l), `Collection (`List, r) -> length l = length r &&
+    | `List (l), `List (r) -> length l = length r &&
             fold_left2 (fun result x y -> result && equal x y) true l r
     | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
 
@@ -138,7 +137,7 @@ let rec less l r =
           | (l,r)::_ when less r l -> false
           | _::rest                -> compare_list rest in
           compare_list (combine lv rv)
-    | `Collection (`List, l), `Collection (`List, r) ->
+    | `List (l), `List (r) ->
         (try for_all2 less l r
          with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
     | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
@@ -153,9 +152,9 @@ let rec normalise_query (toplevel:environment) (env:environment) (qry:query) : q
                | `Primitive(`Bool value) -> Query.Boolean value
                | `Primitive(`Int value) -> Query.Integer value
                | `Primitive(`Float value) -> Query.Float value
-               | `Collection (`List, `Primitive(`Char _)::elems) as c  
+               | `List (`Primitive(`Char _)::elems) as c  
                  -> Query.Text (Postgresql.escape_string (charlist_as_string c))
-               | `Collection (`List, []) -> Query.Text ""
+               | `List ([]) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
            with Not_found -> failwith ("Internal error: undefined query variable '" ^ name ^ "'"))
             (* UGLY HACK BELOW *)
@@ -184,12 +183,6 @@ let binopFromOpString = function
     | "<"  -> LessOp
     | "beginswith" -> BeginsWithOp
     | opstr -> raise(Runtime_failure("Evaluating unknown operator "^opstr))
-
-let collect ctype = function elements ->
-  match ctype with
-    `Set -> `Collection (ctype, unduplicate equal elements)
-  | `Bag | `List -> `Collection (ctype, elements)
-  | _ -> raise (Runtime_failure "Abstract collection type used concretely")
 
 exception CollExtnWithWeirdSrc
 exception TopLevel of (Result.environment * Result.result)
@@ -294,15 +287,13 @@ and apply_cont globals : continuation -> result -> result =
                      | LessEqOp -> bool (less_or_equal lhsVal value)
                      | LessOp -> bool (less lhsVal value)
                      | BeginsWithOp -> failwith("Beginswith not implemented except when pushable into SQL")
-	             | UnionOp(ctype) -> 
+	             | UnionOp -> 
                          (match lhsVal, value with
-		              `Collection (`Set, l), `Collection (`Set, r)
-                                -> `Collection (`Set, (unduplicate equal (l @ r)))
-	                    | `Collection (`Bag, l), `Collection (`Bag, r)
-                                -> `Collection (`Bag, (l @ r))
-	                    | `Collection (`List, l), `Collection (`List, r)
-                                -> `Collection (`List, (l @ r))
-	                    | _ -> raise (Runtime_failure ("Union of non-collection types: " ^ string_of_result lhsVal ^ " and " ^ string_of_result value))
+	                    | `List (l), `List (r)
+                                -> `List (l @ r)
+	                    | _ -> raise (Runtime_failure ("Concatenation of non-list types: "
+							   ^ string_of_result lhsVal ^ " and "
+							   ^ string_of_result value))
 			 )
 	             | RecExtOp(label) -> 
 		         (match lhsVal with
@@ -314,7 +305,7 @@ and apply_cont globals : continuation -> result -> result =
 	          apply_cont globals cont result
             | UnopApply (locals, op) ->
                 (match op with
-                     MkColl(coll_type) -> apply_cont globals cont (`Collection (coll_type, [(value)]))
+                     MkColl -> apply_cont globals cont (`List [(value)])
 	           | MkVariant(label) -> 
 	               apply_cont globals cont (`Variant (label, value))
                    | VrntSelect(case_label, case_variable, case_body, variable, body) ->
@@ -339,14 +330,14 @@ and apply_cont globals : continuation -> result -> result =
                                    (* debug("    result:" ^ string_of_result result); *)
                                    result
                                      (* disable actual queries *)
-                                     (*                                   `Collection(`List, []) *)
+                                     (*                                   `List(`List, []) *)
                            | x -> raise (Runtime_failure ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
 	           | SortOp(up) ->
 	               apply_cont globals cont
 		         (match value with
-		            | `Collection(_, results) ->
+		            | `List (results) ->
 		                let cmp = (if up then less_to_cmp less
                                            else curry ((~-) -<- (uncurry (less_to_cmp less)))) in
 		                  listval(List.sort cmp results)
@@ -361,35 +352,30 @@ and apply_cont globals : continuation -> result -> result =
                     
             | StartCollExtn (locals, variable, expr) -> 
 	        (match value with
-                   | `Collection (source_coll_type, source_elems) ->
+                   | `List (source_elems) ->
 	               (match source_elems with
-		            [] -> apply_cont globals cont (`Collection(source_coll_type, []))
+		            [] -> apply_cont globals cont (`List [])
 	                  | (first_elem::other_elems) ->
 	                      (* bind 'var' to the first element, save the others for later *)
 		              interpret globals (bind locals variable first_elem) expr
-		                (CollExtn(locals, source_coll_type, 
-                                          variable, expr, [], other_elems) :: cont))
+		                (CollExtn(locals, variable, expr, [], other_elems) :: cont))
 	           | x -> raise (Runtime_failure ("TF197 : " ^ string_of_result x)))
 	          
-            | CollExtn (locals, ctype, var, expr, rslts, inputs) ->
+            | CollExtn (locals, var, expr, rslts, inputs) ->
                 (let new_results = match value with
                      (* Check that value's a collection, and extract its contents: *)
-                   | `Collection (expr_coll_type, expr_elems) -> expr_elems
+                   | `List (expr_elems) -> expr_elems
                    | r -> raise (Runtime_failure ("TF183 : " ^ string_of_result r))
 	         in
-                 let join = match ctype with (* FIXME: use this! *)
-		     `Set  -> fun (a,b) -> unduplicate equal (a@b)
-		     | `Bag | `List -> (fun (a,b) -> a@b)
-		     | _ -> failwith("Internal error: comprhnsn src is non-collection") in
 	           (* Extend rslts with the newest list of results. *)
                  let rslts = rslts @ new_results in
 	           match inputs with
 		       [] -> (* no more inputs, collect results & continue *)
-		         apply_cont globals cont (collect ctype rslts)
+		         apply_cont globals cont (`List rslts)
 		     | (next_input_expr::inputs) ->
 		         (* Evaluate next input, continuing with given results: *)
 		         interpret globals (bind locals var next_input_expr) expr
-		           (CollExtn(locals, ctype, var, expr, 
+		           (CollExtn(locals, var, expr, 
 				     rslts, inputs) :: cont)
 	        )
                   
@@ -397,9 +383,9 @@ and apply_cont globals : continuation -> result -> result =
                 (let new_children = 
                    match attrtag, value with 
                        (* FIXME: multiple attrs resulting from one expr? *)
-                     | Some attrtag, (`Collection (`List, _) as s) -> 
+                     | Some attrtag, (`List (_) as s) -> 
                          [Attr (attrtag, charlist_as_string s)]
-                     | None, (`Collection (`List, elems)) ->
+                     | None, (`List (elems)) ->
                          (match elems with
                             | [] -> []
                             | `Primitive (`XML x) :: etc ->
@@ -484,14 +470,14 @@ fun globals locals expr cont ->
       eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, Some variable, Some body)) :: cont)
   | Syntax.Variant_selection_empty (_) ->
       failwith("internal error: attempt to evaluate empty closed case expression")
-  | Syntax.Collection_empty (coll_type, _) ->
-      apply_cont globals cont (`Collection (coll_type, []))
-  | Syntax.Collection_single (elem, coll_type, _) ->
-      eval elem (UnopApply(locals, MkColl(coll_type)) :: cont)
-  | Syntax.Collection_union (l, r, _) ->
-      eval l (BinopRight(locals, UnionOp(`Set (*FIXME*)), r) :: cont)
+  | Syntax.Nil _ ->
+      apply_cont globals cont (`List [])
+  | Syntax.List_of (elem, _) ->
+      eval elem (UnopApply(locals, MkColl) :: cont)
+  | Syntax.Concat (l, r, _) ->
+      eval l (BinopRight(locals, UnionOp, r) :: cont)
 
-  | Syntax.Collection_extension (expr, var, value, _) as c ->
+  | Syntax.For (expr, var, value, _) as c ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Sort (up, list, _) ->
       eval list (UnopApply(locals, SortOp up) :: cont)

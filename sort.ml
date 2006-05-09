@@ -56,11 +56,11 @@ let rec sql_sort : optimiser = fun expr ->
             (match assoc name bindings with
                | `Row -> expr_fields ((label_variable, `Field label) :: (variable, `Row) :: bindings) body
                | _ -> failwith "OP920")
-        | Collection_single (elem, _, _) -> fields_from_list bindings elem
+        | List_of (elem, _, _) -> fields_from_list bindings elem
         | Sort (_, e', _)              
         | Record_selection_empty (_, e', _)
-        | Condition (_, Collection_empty _, e', _)
-        | Condition (_, e', Collection_empty _, _)
+        | Condition (_, Nil _, e', _)
+        | Condition (_, e', Nil _, _)
         | Let (variable, Variable _, e', _)
         | Record_selection (_, _, _, Variable _, e', _)  -> expr_fields bindings e'
         | Let _
@@ -69,27 +69,27 @@ let rec sql_sort : optimiser = fun expr ->
         | Table _
         | Variable _
         | Condition _ 
-        | Collection_union _ 
-        | Collection_empty _
+        | Concat _ 
+        | Nil _
         | Record_selection _
-        | Collection_extension _  -> `Not_found
+        | For _  -> `Not_found
         | _ -> failwith "OP865" in
   let rec listify = function
     | Condition (i, e, t, d)                            -> Condition (i, listify t, listify e, d)
     | Let (var, value, body, d)                         -> Let (var, value, listify body, d)
     | Record_selection (lab, lvar, var, value, body, d) -> Record_selection (lab, lvar, var, value, listify body, d)
     | Record_selection_empty (v, body, d)               -> Record_selection_empty (v, listify body, d)
-    | Collection_single (e, _, d)                       -> Collection_single (e, `List, d)
-    | Collection_empty v                                -> Collection_empty v
+    | List_of (e, _, d)                       -> List_of (e, `List, d)
+    | Nil v                                -> Nil v
     | _ -> failwith "OP865" in
   let rec push_sort up (expr:expression) : [`No_push | `Push of expression] = 
     (* Some s  == `Push s
        None    == No_push *)
     match expr with
       | Variable _
-      | Collection_empty _
-      | Collection_single _
-      | Collection_union _
+      | Nil _
+      | List_of _
+      | Concat _
       | Apply _  (* IMPROVABLE *) -> None
       | Condition (condition, t, e, data) ->
           (match push_sort up t, push_sort up e with
@@ -123,7 +123,7 @@ let rec sql_sort : optimiser = fun expr ->
           (match push_sort up case_body with
              | None -> None
              | Some case_body -> Some (Variant_selection_empty (value, case_label, case_variable, case_body, data)))
-      | Collection_extension (expr, variable, Table (db, s, query, _), data) ->
+      | For (expr, variable, Table (db, s, query, _), data) ->
           (match expr_fields [(variable, `Row)] expr with
              | `Not_found -> None
              | `Found_all ->
@@ -132,7 +132,7 @@ let rec sql_sort : optimiser = fun expr ->
 		     if up then (fun col -> `Asc  (col.Query.table_renamed, col.Query.renamed))
                      else       (fun col -> `Desc (col.Query.table_renamed, col.Query.renamed))
 		   in map f query.Query.result_cols 
-		 in Some (Collection_extension
+		 in Some (For
 			     (listify expr, variable, 
 			      Table (db, s,
 				     {query with 
@@ -146,10 +146,10 @@ let rec sql_sort : optimiser = fun expr ->
                                           if up then (`Asc (table, field)) else (`Desc (table, field))
                                     ) raw_order) in 
                  let query = {query with Query.sortings = (new_sortings @ query.Query.sortings)} in
-                   Some (Collection_extension (listify expr, variable, 
+                   Some (For (listify expr, variable, 
                                                 Table (db, s, query, (Sugar._DUMMY_POS, `Not_typed, None)),
                                                 data)))
-      | Collection_extension _ -> None (* IMPROVABLE? *)
+      | For _ -> None (* IMPROVABLE? *)
       | Sort (inner_up, list, _) when inner_up = up -> Some list  (* IMPROVABLE this sort really does not bring anyting *)
       | Sort _ -> None  (* IMPROVABLE this sort really does not bring anyting *)
       | Table (db, s, query, data) ->

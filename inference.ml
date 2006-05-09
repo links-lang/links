@@ -98,43 +98,7 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
           unify' rec_vars (lbody, rbody)
       | `Record l, `Record r -> unify_row' rec_vars (l, r)
       | `Variant l, `Variant r -> unify_row' rec_vars (l, r)
-
-      | `Collection (`List, `Primitive `XMLitem), `Collection (`List, `Primitive `XMLitem) -> ()
-
-      | `Collection (`Set, t),  `Collection (`Set, t')  -> unify' rec_vars (t, t')
-      | `Collection (`Bag, t),  `Collection (`Bag, t')  -> unify' rec_vars (t, t')
-      | `Collection (`List, t), `Collection (`List, t') -> unify' rec_vars (t, t')
-
-      | `Collection (`MetaCollectionVar lpoint, lelems), `Collection (`MetaCollectionVar rpoint, relems) ->
-	  unify' rec_vars (lelems, relems);
-	  let elem_type = lelems in
-	    (match (Unionfind.find lpoint, Unionfind.find rpoint) with
-	       | `CollectionTypeVar var, ctype -> Unionfind.union lpoint rpoint
-	       | ctype, `CollectionTypeVar var -> Unionfind.union rpoint lpoint
-	       | ctype, ctype' -> 
-		   if ctype = ctype' then
-		     ()
-		   else
-		     raise (Unify_failure
-			      ("Couldn't match "^
-				 string_of_type (`Collection (ctype, elem_type)) ^" against "^
-				 string_of_type (`Collection (ctype', elem_type)))))
-              
-      | `Collection (`MetaCollectionVar point, elems), `Collection (ctype, elems') 
-      | `Collection (ctype, elems), `Collection (`MetaCollectionVar point, elems') ->
-	  unify' rec_vars (elems, elems');
-	  let elem_type = elems in
-	    (match (Unionfind.find point, ctype) with
-	       | `CollectionTypeVar var, ctype -> 
-		   Unionfind.change point ctype
-	       | ctype', ctype ->
-		   if ctype = ctype' then
-		     ()
-		   else
-		     raise (Unify_failure
-			      ("Couldn't match "^
-				 string_of_type (`Collection (ctype, elem_type)) ^" against "^
-				 string_of_type (`Collection (ctype', elem_type)))))    
+      | `List t, `List t' -> unify' rec_vars (t, t')
       | `DB, `DB -> ()
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_type t1 ^" against "^ string_of_type t2)));
@@ -344,7 +308,6 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	  (fun (tenv, renv, cenv) -> function
 	     | `TypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv, cenv
 	     | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv, cenv
-	     | `CollectionTypeVar var -> tenv, renv, IntMap.add var (ITO.fresh_collection_variable ()) cenv
 	  ) (IntMap.empty, IntMap.empty, IntMap.empty) generics in
 	  
 	let rec inst : rec_maps -> inference_type -> inference_type = fun rec_env typ ->
@@ -396,9 +359,8 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 		    )
 
 		  (*`Recursive (var, inst (IntSet.add var rec_vars) t) *)
-	      | `Collection (collection_type, elem_type) ->
-		  `Collection (inst_collection_type collection_type, inst rec_env elem_type)
-		  (* `Collection (substitute_colltype subst coll_type, substitute subst elems) *)
+	      | `List (elem_type) ->
+		  `List (inst rec_env elem_type)
 	      | `DB -> `DB
 	and inst_row : rec_maps -> inference_row -> inference_row = fun rec_env row ->
 	  let rec_type_env, rec_row_env = rec_env in
@@ -445,17 +407,6 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 		  assert(false)
 	  in
 	    field_env', row_var'
-	
-	and inst_collection_type : inference_collection_type -> inference_collection_type = function
-	  | `Set | `Bag | `List as k -> k
-	  | `CollectionTypeVar var as k ->
-	      if IntMap.mem var cenv then
-		IntMap.find var cenv
-	      else
-		`MetaCollectionVar (Unionfind.fresh k)
-	  | `MetaCollectionVar point ->
-	      inst_collection_type (Unionfind.find point)
-
 	in
 	  inst (IntMap.empty, IntMap.empty) t)
   with Not_found ->
@@ -512,20 +463,8 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 	      []
 	    else
 	      get_quantifiers (IntSet.add var bound_vars) body
-	| `Collection (collection_type, elem_type) ->
-	    let collection_vars =
-	      (match collection_type with
-		 | `MetaCollectionVar point ->
-		     (match Unionfind.find point with
-			| `CollectionTypeVar var when IntSet.mem var bound_vars -> []
-			| `CollectionTypeVar var -> [`CollectionTypeVar var]
-			| `MetaCollectionVar _ -> assert false
-			| _ -> [])
-		 | `CollectionTypeVar _ -> assert false
-		 | _ -> []) in
-	    let elem_vars = get_quantifiers bound_vars elem_type
-	    in
-	      collection_vars @ elem_vars
+	| `List (elem_type) ->
+	    get_quantifiers bound_vars elem_type
 	| `DB -> []
 
 (** generalize: 
@@ -547,7 +486,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
   | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
   | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))
-  | String (value, pos) -> String (value, (pos, `Collection (`List, `Primitive `Char), None))
+  | String (value, pos) -> String (value, (pos, `List (`Primitive `Char), None))
   | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
   | Variable (name, pos) -> Variable (name, (pos, instantiate env name, None))
   | Apply (f, p, pos) ->
@@ -619,13 +558,13 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let attr_type = inference_string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
-      let unified_cs = map (fun node -> unify (type_of_expression node, `Collection (`List, `Primitive `XMLitem))) contents in
+      let unified_cs = map (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
       let unified_atts = map (fun (s, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
       let trimmed_node =
         Xml_node (tag, 
                   nonspecial_attrs,         (* v-- up here I mean *)
                   contents,
-                  (pos, `Collection (`List, `Primitive `XMLitem), None))
+                  (pos, `List (`Primitive `XMLitem), None))
       in
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
@@ -688,34 +627,30 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let new_row_type = `Variant (ITO.make_empty_closed_row()) in
         unify(new_row_type, type_of_expression value);
         Variant_selection_empty (value, (pos, ITO.fresh_type_variable (), None))
-  | Collection_empty (ctype, pos) ->
-      Collection_empty (ctype,
-			(pos, `Collection (collection_type_to_inference_collection_type ctype, ITO.fresh_type_variable ()), None))
-  | Collection_single (elem, ctype, pos) ->
+  | Nil (pos) ->
+      Nil (pos, `List (ITO.fresh_type_variable ()), None)
+  | List_of (elem, pos) ->
       let elem = type_check env elem in
-	Collection_single (elem, ctype,
-			   (pos, `Collection (collection_type_to_inference_collection_type ctype, type_of_expression elem), None))
-  | Collection_union (l, r, pos) ->
+	List_of (elem,
+		 (pos, `List (type_of_expression elem), None))
+  | Concat (l, r, pos) ->
       let tvar = ITO.fresh_type_variable () in
-      let collvar = ITO.fresh_collection_variable ()in
       let l = type_check env l in
-	unify (type_of_expression l, `Collection (collvar, tvar));
+	unify (type_of_expression l, `List (tvar));
 	let r = type_check env r in
 	  unify (type_of_expression r, type_of_expression l);
-	  let type' = `Collection (collvar, tvar) in
-	    Collection_union (l, r, (pos, type', None))
-  | Collection_extension (expr, var, value, pos) ->
+	  let type' = `List (tvar) in
+	    Concat (l, r, (pos, type', None))
+  | For (expr, var, value, pos) ->
       let value_tvar = ITO.fresh_type_variable () in
       let expr_tvar = ITO.fresh_type_variable () in
-      let collvar = ITO.fresh_collection_variable () in
-
       let value = type_check env value in
-	unify (type_of_expression value, `Collection (collvar, value_tvar));
+	unify (type_of_expression value, `List (value_tvar));
 	let expr_env = (var, ([], value_tvar)) :: env in
 	let expr = type_check expr_env expr in
-	  unify (type_of_expression expr, `Collection (collvar, expr_tvar));
+	  unify (type_of_expression expr, `List (expr_tvar));
 	  let type' = type_of_expression expr in
-	    Collection_extension (expr, var, value, (pos, type', None))
+	    For (expr, var, value, (pos, type', None))
   | Escape(var, body, pos) -> 
       let exprtype = ITO.fresh_type_variable () in
       let contrettype = ITO.fresh_type_variable () in
@@ -727,15 +662,15 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
         Escape(var, body, (pos, type_of_expression body, None))
   | Sort (up, list, pos) ->
       let list = type_check env list in
-	unify (type_of_expression list, `Collection (ITO.fresh_collection_variable (), ITO.fresh_type_variable ()));
+	unify (type_of_expression list, `List (ITO.fresh_type_variable ()));
 	let new_kind = (match type_of_expression list
-			with `Collection(_, e) -> `Collection (`List, e)
+			with `List (e) -> `List (e)
                           | _ -> failwith "Internal error typing sort")
 	in
           Sort (up, list, (pos, new_kind, None))
   | Database (params, pos) ->
       let params = type_check env params in
-        unify (type_of_expression params, `Collection(`List, `Primitive `Char));
+        unify (type_of_expression params, `List(`Primitive `Char));
         Database (params, (pos, `DB, None))
   | Table (db, s, query, pos) ->
       let row =
@@ -744,13 +679,10 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	      StringMap.add col.Query.name
 		(`Present (type_to_inference_type col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
-      let kind =  `Collection ((if query.Query.sortings <> [] then `List 
-                                else if query.Query.distinct_only then `Set 
-                                else `Bag),
-			       `Record row) in
+      let kind =  `List (`Record row) in
       let db = type_check env db in
 	unify (type_of_expression db, `DB);
-	unify (kind, `Collection (ITO.fresh_collection_variable (), `Record (ITO.make_empty_open_row ())));
+	unify (kind, `List (`Record (ITO.make_empty_open_row ())));
         Table (db, s, query, (pos, kind, None))
           
   with 
