@@ -24,7 +24,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token RBRACKET LBRACKET
 %token SORT_UP SORT_DOWN
 %token FOR LARROW HANDLE WHERE 
-%token AMPER COMMA VBAR DOT COLON
+%token AMPER COMMA VBAR DOT COLON COLONCOLON
 %token TABLE FROM DATABASE WITH UNIQUE ORDER ASC DESC UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
 %token CLIENT SERVER 
@@ -150,33 +150,32 @@ addition_expression:
 | addition_expression PLUSDOT   multiplicative_expression      { InfixAppl (`FloatPlus, $1, $3), pos() }
 | addition_expression MINUSDOT  multiplicative_expression      { InfixAppl (`FloatMinus, $1, $3), pos() }
 
-comparison_expression:
+cons_expression:
 | addition_expression                                          { $1 }
-| comparison_expression EQEQ      addition_expression          { InfixAppl (`Eq, $1, $3), pos() }
-| comparison_expression LESS      addition_expression          { InfixAppl (`Less, $1, $3), pos() }
-| comparison_expression LESSEQUAL addition_expression          { InfixAppl (`LessEq, $1, $3), pos() }
-| comparison_expression MORE      addition_expression          { InfixAppl (`Greater, $1, $3), pos() }
-| comparison_expression MOREEQUAL addition_expression          { InfixAppl (`GreaterEq, $1, $3), pos() }
-| comparison_expression DIFFERENT addition_expression          { InfixAppl (`NotEq, $1, $3), pos() }
-| comparison_expression BEGINSWITH addition_expression         { InfixAppl (`BeginsWith, $1, $3), pos() }
+| addition_expression COLONCOLON cons_expression               { InfixAppl (`Cons, $1, $3), pos() }
+| addition_expression PLUSPLUS cons_expression                 { InfixAppl (`Concat, $1, $3), pos() }
+
+comparison_expression:
+| cons_expression                                              { $1 }
+| comparison_expression EQEQ      cons_expression              { InfixAppl (`Eq, $1, $3), pos() }
+| comparison_expression LESS      cons_expression              { InfixAppl (`Less, $1, $3), pos() }
+| comparison_expression LESSEQUAL cons_expression              { InfixAppl (`LessEq, $1, $3), pos() }
+| comparison_expression MORE      cons_expression              { InfixAppl (`Greater, $1, $3), pos() }
+| comparison_expression MOREEQUAL cons_expression              { InfixAppl (`GreaterEq, $1, $3), pos() }
+| comparison_expression DIFFERENT cons_expression              { InfixAppl (`NotEq, $1, $3), pos() }
+| comparison_expression BEGINSWITH cons_expression             { InfixAppl (`BeginsWith, $1, $3), pos() }
 
 logical_expression:
 | comparison_expression                                        { $1 }
 | logical_expression BARBAR comparison_expression              { InfixAppl (`Or, $1, $3), pos() }
 | logical_expression AMPAMP comparison_expression              { InfixAppl (`And, $1, $3), pos() }
-/*| NOT addition_expression                                    { UnaryAppl (`Not, $2), pos() }*/
 
 send_expression:
 | logical_expression                                           { $1 }
 | logical_expression BANG logical_expression                   { Send ($1, $3), pos() }
 
-
-union_expression:
-| send_expression                                              { $1 }
-| union_expression PLUSPLUS logical_expression                 { InfixAppl (`Concat, $1, $3), pos() }
-
 db_expression:
-| union_expression                                             { $1 }
+| send_expression                                              { $1 }
 | UPDATE LPAREN STRING COMMA exp RPAREN BY exp                 { DBUpdate ($3, $5, $8), pos() }
 | DELETE FROM LPAREN STRING COMMA exp RPAREN VALUES exp        { DBDelete ($4, $6, $9), pos() }
 | INSERT INTO LPAREN STRING COMMA exp RPAREN VALUES exp        { DBInsert ($4, $6, $9), pos() }

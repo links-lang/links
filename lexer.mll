@@ -127,6 +127,7 @@ rule lex lexers = parse
   | '&'                                 { AMPER }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
+  | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
   | "'\\\\'"                            { CHAR '\\' }
   | "'\\''"                             { CHAR '\'' }

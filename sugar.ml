@@ -193,7 +193,7 @@ type unary_op = [
 type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `BeginsWith]
 type arith_binop = [`Times | `Div | `Exp | `Plus | `Minus | `FloatTimes | `FloatDiv | `FloatExp | `FloatPlus | `FloatMinus]
 type logical_binop = [`And | `Or]
-type binop = [comparison_binop | logical_binop | arith_binop | `Concat]
+type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Cons]
 
 type operator = [ unary_op | binop | `Project of name ]
 type location = Syntax.location
@@ -273,6 +273,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | BoolLit b   -> Boolean (b, pos)
   | CharLit c   -> Char (c, pos)
   | Var v       -> Variable (v, pos)
+  | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
   | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
   | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
   | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
