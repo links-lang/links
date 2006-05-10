@@ -521,11 +521,18 @@ let rec generate : 'a expression' -> code =
                                       Call(else_body_cps, [Var "__kappa"]))
                                 )
                            )]))
+  | Escape (v, e, _) -> 
+      Fn(["__kappa"], 
+	 Call (Fn ([v], Call(generate e, [Var "__kappa"])), 
+	       [
+		 Fn (["__ignore"],
+		     Var "__kappa")
+	       ])
+	)
 
   (* Unimplemented stuff *)
   | Database _
-  | Table _
-  | Escape _  as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+  | Table _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("unknown ast object " ^ string_of_expression x)
 
 (* Specialness: 
