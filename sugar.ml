@@ -203,6 +203,81 @@ type order = [`Asc of string | `Desc of string]
 
 type pposition = Lexing.position * Lexing.position (* start * end *)
 
+type kind = 
+  | TypeVar of string
+  | FunctionType of kind * kind
+  | MuType of string * kind
+  | UnitType
+  | TupleType of (kind list)
+  | RecordType of row
+  | VariantType of row
+  | ListType of kind
+  | PrimitiveType of Kind.primitive
+  | DBType
+and row = (string * [`Present of kind | `Absent]) list * string option
+
+type quantifier = [`TypeVar of string | `RowVar of string]
+
+let rec typevars : kind -> quantifier list = 
+  let rvars (fields, rv) =
+    let rowvars = match rv with
+      | None   -> []
+      | Some s -> [`RowVar s] in
+    (Utility.concat_map 
+       (function (_, `Present k) -> typevars k
+	  | _ -> [])
+       fields) @ rowvars
+  in function
+    | TypeVar s -> [`TypeVar s]
+    | FunctionType (s,t) -> Utility.unduplicate (=) (typevars s @ typevars t)
+    | MuType (v, k) -> snd (partition ((=)(`TypeVar v)) (typevars k))
+    | TupleType ks -> Utility.concat_map typevars ks
+    | RecordType r
+    | VariantType r -> rvars r
+    | ListType k -> typevars k
+    | UnitType
+    | PrimitiveType _
+    | DBType -> []
+
+type assumption = quantifier list * kind
+
+let generalize (k : kind) : assumption =
+  typevars k, k
+
+let desugar_assumption ((vars, k)  : assumption) : Kind.assumption = 
+  let vars, varmap = split (map2 (fun n -> function
+				    | `TypeVar x -> `TypeVar n, (x, n)
+				    | `RowVar x  -> `RowVar n, (x, n))
+			      (Utility.fromTo 0 (length vars))
+				    vars) in
+  let lookup = flip assoc varmap in
+  let rec desugar = function
+    | TypeVar s -> `TypeVar (lookup s)
+    | FunctionType (k1, k2) -> `Function (desugar k1, desugar k2)
+    | MuType (v, k) -> `Recursive (lookup v, desugar k)
+    | UnitType -> Kind.unit_type
+    | TupleType ks -> 
+	let labels = map (string_of_int -<- ((+)1)) (Utility.fromTo 0 (length ks)) 
+	and unit = Kind.TypeOps.make_empty_closed_row ()
+	and present (s, x) = (s, `Present x)
+	in `Record (fold_right2 (curry (Kind.TypeOps.set_field -<- present)) labels (map desugar ks) unit)
+    | RecordType row -> `Record (desugar_row row)
+    | VariantType row -> `Variant (desugar_row row)
+    | ListType k -> `List (desugar k)
+    | PrimitiveType k -> `Primitive k
+    | DBType -> `DB
+     and desugar_row (fields, rv) = 
+      let seed = match rv with
+	| None    -> Kind.TypeOps.make_empty_closed_row ()
+	| Some rv -> Kind.TypeOps.make_empty_open_row_with_var (lookup rv)
+      and fields = map (fun (k, v) -> match v with
+			  | `Absent -> (k, `Absent)
+			  | `Present v -> (k, `Present (desugar v))) fields 
+      in fold_right Kind.TypeOps.set_field fields seed
+  in (vars, desugar k)
+
+let desugar_kind k = snd (desugar_assumption ([], k))
+
 type phrasenode =
 (* ... *)
   | FloatLit of (float)
@@ -236,7 +311,7 @@ type phrasenode =
   | Receive of (((name * ppattern * phrase) list) * (name * phrase) option)
 (* Database operations *)
   | DatabaseLit of (string)
-  | TableLit of (string * Kind.kind * bool (* unique *) * order list * phrase)
+  | TableLit of (string * kind * bool (* unique *) * order list * phrase)
   | DBUpdate of (string * phrase * phrase)
   | DBDelete of (string * phrase * phrase)
   | DBInsert of (string * phrase * phrase)
@@ -312,7 +387,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                                           | `Desc field -> `Desc (table_name, field)) orders;
             max_rows = None;
             offset = Query.Integer (Num.Int 0)} in
-         Table (desugar db, name, db_query name pos kind unique order, pos))
+         Table (desugar db, name, db_query name pos (desugar_kind kind) unique order, pos))
   | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
   | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
   | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)

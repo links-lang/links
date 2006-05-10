@@ -1,22 +1,22 @@
 Construction
 Foo
-stdout : @Foo \(\) : \[Foo:\(\) | [0-9]*\]
+stdout : @Foo \(\) : \[|Foo:\(\) | [0-9]*\|]
 
 Nested Construction
 Foo (Bar)
-stdout : @Foo Bar \(\) : \[Foo:\[Bar:\(\) | [0-9]*\] | [0-9]*\]
+stdout : @Foo Bar \(\) : \[|Foo:\[|Bar:\(\) | [0-9]*|\] | [0-9]*\|]
 
 Nested Construction w/o parens
 Foo Bar
-stdout : @Foo Bar \(\) : \[Foo:\[Bar:\(\) | [0-9]*\] | [0-9]*\]
+stdout : @Foo Bar \(\) : \[|Foo:\[|Bar:\(\) | [0-9]*|\] | [0-9]*|\]
 
 Nested Construction w/o parens (nary)
 This Is A Valid Links Program
-stdout : @This Is A Valid Links Program \(\) : \[This:\[Is:\[A:\[Valid:\[Links:\[Program:\(\) | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\]
+stdout : @This Is A Valid Links Program \(\) : \[|This:\[|Is:\[|A:\[|Valid:\[|Links:\[|Program:\(\) | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\]
 
 Nested Construction + argument w/o parens (nary)
 This Is A Valid Links Program 42
-stdout : @This Is A Valid Links Program 42 : \[This:\[Is:\[A:\[Valid:\[Links:\[Program:Int | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\] | [0-9]*\]
+stdout : @This Is A Valid Links Program 42 : \[|This:\[|Is:\[|A:\[|Valid:\[|Links:\[|Program:Int | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\]
 
 Trivial closed case
 fun (x) { switch x { A b -> b } }
@@ -66,23 +66,23 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Recursive variant types [1]
 fun (x) { switch x { A a -> a y -> x } }
-stdout : @fun : \(mu [a-z]+ \. \[A:[a-z]+ | [a-z0-9]+\]\)-> mu [a-z]+ \. \[A:[a-z]+ | [a-z0-9]+\]
+stdout : @fun : \(mu [a-z]+ \. \[|A:[a-z]+ | [a-z0-9]+|\]\)-> mu [a-z]+ \. \[|A:[a-z]+ | [a-z0-9]+|\]
 
 Recursive variant types [2]
 fun increment(x) { switch x { Zero -> Succ (Zero) Succ n -> Succ (increment(n))}}
-stdout : @fun : \(mu [a-z]+ \. \[Succ:[a-z]+ | Zero:\(\)\]\) -> \[Zero:\(\) | mu [0-9]+ \. Succ:\[Zero:\(\) | [0-9]+\] | [0-9]+\]
+stdout : @fun : \(mu [a-z]+ \. \[|Succ:[a-z]+ | Zero:\(\)|\]\) -> \[|Zero:\(\) | mu [0-9]+ \. Succ:\[|Zero:\(\) | [0-9]+|\] | [0-9]+|\]
 
 Recursive variant types [3]
 fun rev(x, r) { switch x { Empty -> r Cons(a, b) -> rev(b, Cons(a, r)) }}
-stdout : @fun : \(mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | Empty:\(\)\], mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | [0-9]+\]\) -> mu [a-z]+ \. \[Cons:\([a-z]+, [a-z]+\) | [0-9]+\]
+stdout : @fun : \(mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | Empty:\(\)|\], mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
 
 Recursive variant types [4]
 fun increment(x) { switch x { Zero -> Succ (Zero) Succ n -> Succ (increment(n))}} fun (x) {switch (increment(x)) {Foo -> 0 Zero -> 1 Succ n -> 2}}
-stdout : @fun : \(mu a . \[Succ:a | Zero:\(\)\]\) -> Int
+stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\) -> Int
 
 Rows preserved across functions
 fun f(x) { switch x { Foo -> (Bar) s -> s } }
-stdout : @fun : \(\[Bar:\(\) | Foo:\(\) | [0-9]*\]\) -> \[Bar:\(\) | [0-9]*\]
+stdout : @fun : \(\[|Bar:\(\) | Foo:\(\) | [0-9]*|\]\) -> \[|Bar:\(\) | [0-9]*|\]
 
 Nullary variants with cases
 switch None { None -> None Some x -> Some x }

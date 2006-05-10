@@ -1,5 +1,7 @@
 %{
 
+open Utility
+open List
 open Sugar
 
 let ensure_match (start, finish) (opening : string) (closing : string) = function
@@ -21,7 +23,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token SWITCH RECEIVE
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
-%token RBRACKET LBRACKET
+%token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW HANDLE WHERE 
 %token AMPER COMMA VBAR DOT COLON COLONCOLON
 %token TABLE FROM DATABASE WITH UNIQUE ORDER ASC DESC UPDATE DELETE INSERT BY VALUES INTO
@@ -37,14 +39,13 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <string> VARIABLE CONSTRUCTOR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token <int> TVARIABLE
-%token TINT TFLOAT TBOOL TSTRING
+%token MU
 
-%right RARROW
 %start parse_links
 
 %type <Sugar.phrase list> parse_links
 %type <Sugar.phrase> xml_tree
+%type <Sugar.kind> kind
 
 %%
 
@@ -324,22 +325,65 @@ patt:
 | exp                                                          { Pattern $1 }
 
 kind:
+| mu_kind                                                      { $1 }
+| mu_kind RARROW kind                                          { FunctionType ($1, $3) }
+
+mu_kind:
+| MU VARIABLE DOT mu_kind                                      { MuType ($2, $4) }
+| primary_kind                                                 { $1 }
+
+primary_kind:
+| LPAREN RPAREN                                                { UnitType }
 | LPAREN kind RPAREN                                           { $2 }
-| TBOOL                                                        { `Primitive `Bool }
-| TINT                                                         { `Primitive `Int }
-| TFLOAT                                                       { `Primitive `Float }
-| TSTRING                                                      { `List (`Primitive `Char) }
-| TVARIABLE                                                    { `TypeVar $1 }
-| kind RARROW kind                                             { `Function ($1, $3) }
-| LBRACE labeled_kinds RBRACE                                  { `Record $2 }
-/*| LANG labeled_kinds RANG                                      { `Variant $2 }*/
-| LBRACKET kind RBRACKET                                       { `List ($2) }
+| LPAREN kind COMMA kinds RPAREN                               { TupleType ($2 :: $4) }
+| LPAREN row RPAREN                                            { RecordType $2 }
+| LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
+| LBRACKET kind RBRACKET                                       { ListType $2 }
+| VARIABLE                                                     { TypeVar $1 }
+| CONSTRUCTOR                                                  { match $1 with 
+                                                                   | "Bool"    -> PrimitiveType `Bool
+                                                                   | "Int"     -> PrimitiveType `Int
+                                                                   | "Char"    -> PrimitiveType `Char
+                                                                   | "Float"   -> PrimitiveType `Float
+                                                                   | "XMLitem" -> PrimitiveType `XMLitem
+                                                                   | "Database"-> DBType
+                                                                   | "String"  -> ListType (PrimitiveType `Char)
+                                                                   | "XML"     -> ListType (PrimitiveType `XMLitem)
+                                                                   | t -> failwith ("Unknown type constructor : " ^ t)
+                                                               }
+row:
+| fields                                                       { $1 }
+
+vrow:
+| vfields                                                      { $1 }
+
+kinds:
+| kind                                                         { [$1] }
+| kind COMMA kinds                                             { $1 :: $3 }
+
+/* this assumes that the type (a) is invalid.  Is that a reasonable assumption? 
+  (i.e. that records cannot be open rows?)  The only reason to make such an
+  assumption is that "(a)" is ambiguous (is it an empty open record or a 
+  parenthesized regular type variable?).
+*/
+fields:
+| field                                                        { [$1], None }
+| field COMMA VARIABLE                                         { [$1], Some $3 }
+| field COMMA fields                                           { $1 :: fst $3, snd $3 }
+
+vfields:
+| vfield                                                       { [$1], None }
+| VARIABLE                                                     { [], Some $1 }
+| vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
+
+vfield:
+| CONSTRUCTOR COLON kind                                       { $1, `Present $3 }
+| CONSTRUCTOR COLON MINUS                                      { $1, `Absent }
 
 field:
-| VARIABLE COLON kind                                          { ($1, `Present $3) }
-| VARIABLE COLON MINUS                                         { ($1, `Absent) }
+| fname COLON kind                                             { $1, `Present $3 }
+| fname COLON MINUS                                            { $1, `Absent }
 
-labeled_kinds:
-| field COMMA labeled_kinds                                    { Kind.TypeOps.set_field $1 $3 }
-| field                                                        { Kind.TypeOps.make_singleton_closed_row $1 }
-| TVARIABLE                                                    { Kind.TypeOps.make_empty_open_row_with_var $1 }
+fname:
+| CONSTRUCTOR                                                  { $1 }
+| VARIABLE                                                     { $1 }

@@ -1,4 +1,4 @@
 Fields in order spec for table must be part of table.
-fun () { Table "foo" with { a : String } order [ b : asc ] from database "" }
+fun () { Table "foo" with (a:String) order [ b : asc ] from database "" }
 stderr : @..*
 exit : 1

@@ -90,7 +90,7 @@ let rec string_of_kind' vars : kind -> string =
       | `Record row      -> (if is_tuple row then string_of_tuple row
 			     else
 			       "(" ^ string_of_row' "," vars row ^ ")")
-      | `Variant row    -> "[" ^ string_of_row' " | " vars row ^ "]"
+      | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
       | `Recursive (var, body) ->
 	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_kind' vars body
       | `DB             ->                   "Database"

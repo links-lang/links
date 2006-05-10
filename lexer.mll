@@ -56,8 +56,8 @@ let keywords = [
 "if"     , IF;     "else"     ,  ELSE;     "beginswith", BEGINSWITH;     
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
 "escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
-"false"  , FALSE;  "Bool"     ,  TBOOL;    "Int"       , TINT;
-"Float"  , TFLOAT; "String"   ,  TSTRING;  "Table"     , TABLE;
+"false"  , FALSE;
+"Table"  , TABLE;
 "from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
@@ -117,6 +117,8 @@ rule lex lexers = parse
   | "<-"                                { LARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           Stack.push (starttag lexers) lexers; LXML id }
+  | "[|"                                { LBRACKETBAR }
+  | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
   | "||"                                { BARBAR }
@@ -136,12 +138,10 @@ rule lex lexers = parse
   | def_integer as var                  { UINTEGER (Num.num_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
-  | '\'' (def_integer as var)           { TVARIABLE (int_of_string var) }
   | def_id as var                       { try List.assoc var keywords 
                                           with Not_found -> 
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
-  | def_qname as var                    { VARIABLE var }
   | def_blank                           { lex lexers lexbuf }
   | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 and starttag lexers = parse
