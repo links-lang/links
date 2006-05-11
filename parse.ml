@@ -162,3 +162,8 @@ let parse_channel (channel, name) =
 *)
 let parse_file filename = 
   parse_channel (open_in filename, filename)
+
+
+(* Parse a kind *)
+let parse_kind string = 
+  Sugar.desugar_assumption (Sugar.generalize (Parser.just_kind (Lexer.lexer ()) (from_string (string ^ ";"))))

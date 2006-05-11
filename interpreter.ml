@@ -74,7 +74,7 @@ let lookup toplevel locals name =
   try
     lookup_qname toplevel locals (split_string name ':')
   with Not_found ->
-    failwith ("Internal error: variable `"  ^ name ^ "' not defined")
+    `Primitive (`PFunction (name, []))
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -208,7 +208,7 @@ and scheduler globals state stepf =
   else
     stepf()
 
-and apply_cont globals : continuation -> result -> result = 
+and apply_cont (globals : environment) : continuation -> result -> result = 
   fun cont value ->
     let stepf() = 
       match cont with
@@ -250,17 +250,8 @@ and apply_cont globals : continuation -> result -> result =
                        let locals = bind (trim_env (fnlocals @ locals)) var value in
                          interpret globals locals body cont
 		           
-                   | `Primitive (`PFunction (name, impl, pargs)) ->
-		       (match impl with
-		          | Some func ->
-                              func (apply_cont globals, cont, value)
-		          | None -> 
-                              (* this primitive's implementation was
-                                 deserialized away; should be able to get it
-                                 from the global env. *)
-                              let func = (Library.get_prim name) in
-			        func (apply_cont globals, cont, value)
-		       )
+                   | `Primitive (`PFunction (name, pargs)) ->
+		       apply_pfun (apply_cont globals) cont name (pargs @ [value])
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
 		       apply_cont globals cont value

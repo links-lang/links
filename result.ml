@@ -172,7 +172,7 @@ and primitive = [
   | `Float of float
   | `Char of char
   | `XML of xmlitem
-  | `PFunction of (string * (((continuation -> result -> result) * continuation * result) -> result) option * result list)
+  | `PFunction of (string * result list)
 ]
 and result = [
   | `Primitive of primitive 
@@ -210,8 +210,6 @@ let xmlitem_of : result -> xmlitem = function
   | (`Primitive(`XML x)) -> x
   | _ -> raise(Match_failure("",0,0))
 
-let primfun name func = `Primitive (`PFunction (name, Some func, []))
-let primfunappl name func args = `Primitive (`PFunction (name, Some func, args))
 and bool b = `Primitive(`Bool b)
 and int i = `Primitive(`Int i)
 and float f = `Primitive(`Float f)
@@ -276,8 +274,8 @@ and strip_cont_frame = function
               alistmap to_placeholder attrexprs, map to_placeholder childexprs)
   | Ignore(env, body) -> Ignore(strip_env env, to_placeholder body)
 and strip_result = function
-  | `Primitive(`PFunction(name, impl, pargs)) ->
-      `Primitive(`PFunction(name, None, map strip_result pargs))
+  | `Primitive(`PFunction(name, pargs)) ->
+      `Primitive(`PFunction(name, map strip_result pargs))
   | `Primitive(prim) -> `Primitive(prim)
   | `Function(name, locals, globals, body) -> 
       `Function(name, strip_env locals, strip_env globals, to_placeholder body)
@@ -356,7 +354,7 @@ and string_of_primitive : primitive -> string = function
   | `Float value -> string_of_float value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
-  | `PFunction (name, _, _) -> name
+  | `PFunction (name, _) -> name
 
 and string_of_tuple (fields : (string * result) list) : string = 
     let fields = map (function
@@ -386,10 +384,10 @@ let rec serialise_primitive : primitive serialiser =
     | `Int v       -> serialise1 'i' (serialise_int) v
     | `Float v     -> serialise1 'f' (serialise_float) v
     | `Char v      -> serialise1 'c' (serialise_char) v
-    | `PFunction (name, func, pargs) -> 
+    | `PFunction (name, pargs) ->
 	serialise1 'p'
           (serialise_string)
-	  (name)
+	  (name) (* This seems wrong: what about the args? *)
     | `XML v       -> serialise1 'x' (serialise_item) v
 and serialise_result : result serialiser = 
   let list, string = serialise_list, serialise_string in
@@ -501,8 +499,8 @@ let deserialise_result_b64 lookup = fst -<- deserialise_result lookup -<- Utilit
 (* generic visitation functions for results *)
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
-  | `Primitive(`PFunction(str, impl, pargs)) ->
-      result_f(`Primitive(`PFunction(str, impl, map (map_result result_f expr_f contframe_f) pargs)))
+  | `Primitive(`PFunction(str, pargs)) ->
+      result_f(`Primitive(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs)))
   | `Primitive x -> result_f(`Primitive x)
   | `Function (str, globals, locals, body) ->
       result_f(`Function(str, map_env result_f expr_f contframe_f globals,
@@ -618,7 +616,7 @@ and box_xml x = `Primitive (`XML x)
 and unbox_xml  :  result -> xmlitem = function
   | `Primitive (`XML x) -> x | _ -> failwith "Type error unboxing xml"
 and box_string = string_as_charlist
-and unbox_string = charlist_as_string
+and unbox_string : result -> string = charlist_as_string
 
 (* Retain only bindings in env named by members of `names' *)
 let retain names env = filter (fun (x, _) -> mem x names) env

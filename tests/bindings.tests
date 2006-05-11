@@ -43,7 +43,7 @@ stdout : 7 : Int
 exit : 0
 
 handle HTML with VAR -> HANDLER construction
-handle <html>{enxml(string_of_cont(handler))}</html> with r -> r
+handle <html>{handler; <body/>}</html> with r -> r
 stdout : @<html>.*</html> : XML
 
 No value recursion

@@ -31,6 +31,7 @@ AUXLIB_DIRS = $(OCAMLNET_DIRS) \
 
 OCAMLOPT := ocamlopt.opt
 OCAMLC := ocamlc.opt
+OCAMLDEP := ocamldep
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc
@@ -61,11 +62,11 @@ SOURCES = cgi.ml                \
           forms.mli forms.ml    \
           errors.mli errors.ml  \
           database.mli database.ml \
-          library.ml            \
           lexer.mll             \
+          parse.mli parse.ml    \
+          library.ml            \
           jsonlex.mll           \
           inference.mli inference.ml \
-          parse.mli parse.ml    \
           interpreter.mli interpreter.ml \
           optimiser.ml          \
           js.mli js.ml          \

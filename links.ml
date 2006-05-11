@@ -11,7 +11,7 @@ let printing_types = ref true
 let ps1 = "links> "
 
 (* Builtin environments *)
-let stdenvs = Library.value_env, Library.type_env
+let stdenvs = [], Library.type_env
 
 (* Run unit tests *)
 let run_tests () = 
@@ -93,3 +93,5 @@ let options : opt list =
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
   if !interacting then interact stdenvs
+
+

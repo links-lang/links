@@ -42,10 +42,12 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token MU
 
 %start parse_links
+%start just_kind
 
 %type <Sugar.phrase list> parse_links
 %type <Sugar.phrase> xml_tree
 %type <Sugar.kind> kind
+%type <Sugar.kind> just_kind
 
 %%
 
@@ -323,6 +325,9 @@ provider:
 
 patt:
 | exp                                                          { Pattern $1 }
+
+just_kind:
+| kind SEMICOLON                                               { $1 }
 
 kind:
 | mu_kind                                                      { $1 }

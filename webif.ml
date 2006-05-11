@@ -86,8 +86,15 @@ let stubify_client_funcs env =
                         exit 0)),
              []))) in
   let server_env, client_env = List.partition is_server_fun env in
-  let client_env = List.map def_as_client_fun client_env in
-    (fst ((Interpreter.run_program Library.value_env) server_env)) @ client_env
+    List.iter (fun (Syntax.Define (name, _, _, _)) ->
+		      let f (_, cont, arg) =
+			let call = serialize_call_to_client (cont, name, arg) in
+			  (print_endline ("Content-type: text/plain\n\n" ^ 
+					    Utility.base64encode call);
+			   exit 0)
+		      in Library.value_env := (name,`PFun f):: !Library.value_env)
+      client_env;
+    (fst (Interpreter.run_program [] server_env))
 
 (* let handle_client_call unevaled_env f args =  *)
 (*   let env = stubify_client_funcs unevaled_env in *)

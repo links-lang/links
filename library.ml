@@ -44,64 +44,7 @@ let continuationize_fn :
   fun prim ->
     fun (applycont, cont, arg) ->
       applycont cont (prim arg)
-
-let continuationize_primfn = function
-  | `Primitive (`PFunction (n, Some s, a)) -> 
-      `Primitive (`PFunction (n, Some (continuationize_fn s), a))
-  | otherwise -> failwith "boom"
-
-
-(* FIXME: need a better way to get the parsed query string in here *)
-let query_environment : (string * string) list ref = ref []
-let set_query_environment env =
-  query_environment := env
-    ; debug("query environment set to " ^ (string_of_alist !query_environment))
-
-(* template for builtin binary operators *)
-let binary_op box unbox op name : primop = 
-  fun left -> 
-    let l = unbox left  in
-      primfunappl name
-	(* (name ^ "(" ^ string_of_result left ^ ")") *)
-	(continuationize_fn (fun right -> let r = unbox right in box (op l r)))
-	[left]
-       
-(* instantiations of binary_op for integers and floats *)
-let intop name op =
-  (name, ((primfun name (binary_op box_int unbox_int op name)), 
-          ([],  (`Primitive `Int --> (`Primitive `Int --> `Primitive `Int)))))
     
-and floatop name op  = 
-  (name, ((primfun name (binary_op box_float unbox_float op name)),
-          ([], (`Primitive `Float -->
-		  (`Primitive `Float --> `Primitive `Float)))))
-
-
-    
-(* template for builtin conversion functions *)
-let conversion_op box unbox op : primop = 
-  fun from -> 
-    try box (op (unbox from))
-    with _ -> failwith ("Failure converting " ^ string_of_result from)
-
-let conversion name op result from = (name, (primfun name op, ([], from --> result)))
-
-let char_test_op name func =
-  (name,
-   (primfun name
-      (box_bool -<- func -<- unbox_char),
-    ([], `Primitive `Char --> `Primitive `Bool)))
-and char_conversion name func = 
-  (name,
-   (primfun name
-      (box_char -<- func -<- unbox_char),
-    ([], `Primitive `Char --> `Primitive `Char)))
-and float_fun name func = 
-  (name,
-   (primfun name
-      (box_float -<- func -<- unbox_float),
-    ([], `Primitive `Float --> `Primitive `Float)))
-
 let format_attrs : result -> string = function
   | `List (attrs)  ->
       let format_attr pair = 
@@ -146,552 +89,347 @@ and updates : Result.result -> string = function
         (String.concat ", " (map field fields))
   | _ -> failwith "Internal error: forming query from non-row"
 
+type primitive =  [
+  Result.result
+| `PFun of result -> primitive ]
+
+let int_op impl : primitive * Kind.assumption = 
+  (`PFun (fun x -> `PFun (fun y -> (`Primitive (`Int (impl (unbox_int x) (unbox_int y))))))),
+  ([], `Primitive `Int --> (`Primitive `Int --> `Primitive `Int))
+
+let float_op impl : primitive * Kind.assumption = 
+  (`PFun (fun x -> `PFun (fun y -> (`Primitive (`Float (impl (unbox_float x) (unbox_float y))))))),
+  ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
+
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Kind.assumption =
+  let box = (box :> 'a -> primitive) in
+  (`PFun (fun x -> (box (conv (unbox x)))),
+   ([], from --> into))
+
+let char_test_op fn = 
+  (`PFun (fun c -> (`Primitive (`Bool (fn (unbox_char c))))),
+   ([], `Primitive `Char --> `Primitive `Bool))
+
+let char_conversion fn = 
+  (`PFun (fun c ->  (box_char (fn (unbox_char c)))),
+   ([], `Primitive `Char --> `Primitive `Char))
+
+let float_fn fn = 
+  (`PFun (fun c ->  (box_float (fn (unbox_float c)))),
+   ([], `Primitive `Float --> `Primitive `Float))
+
+let p1 fn : primitive = 
+  `PFun (fun a ->  (fn a))
+and p2 fn : primitive = 
+  `PFun (fun a -> `PFun (fun b ->  (fn a b)))
+and p3 fn : primitive = 
+  `PFun (fun a -> `PFun (fun b -> `PFun (fun c ->  (fn a b c))))
+
+let notimpl fn = 
+  p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
+
+let kind = Parse.parse_kind
+let _UNTYPED_ = kind "a"
+
+let env : (string * (primitive * Kind.assumption)) list = [
+  "+", int_op (+/);
+  "-", int_op (-/);
+  "*", int_op ( */);
+  "/", int_op (fun x y -> integer_num (x // y));
+  "^", int_op ( **/ );
+  "mod", int_op mod_num;
+
+  "+.", float_op (+.);
+  "-.", float_op (-.);
+  "*.", float_op ( *.);
+  "/.", float_op (/.);
+  "^^", float_op ( ** );
+
+  (** Conversions (any missing?) **)
+  "int_of_string",   conversion_op ~from:Kind.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
+  "float_of_int",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
+  "string_of_int",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Kind.string_type;
+  "string_of_float", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Kind.string_type;
+
+  (** concurrency **)
+  "send",
+  (p2 (fun pid msg -> 
+         let pid = int_of_num (unbox_int pid) in
+           (try 
+              Queue.push msg (Hashtbl.find messages pid)
+            with Not_found -> failwith ("Internal error while sending message: no mailbox for " ^ string_of_int pid));
+           (try 
+              Queue.push (Hashtbl.find blocked_processes pid) suspended_processes;
+              Hashtbl.remove blocked_processes pid
+            with Not_found -> ());
+           `Record []),
+   let r', r = fresh_row () in
+     [r'], `Primitive `Int --> (`Variant r --> unit_type));
 
 
-open Netencoding
-
-(* value and type environments *)
-(* value_env = [string * 'conn result]
-   type_env = [string * ((int list) * kind)]
-*)
-let env : (string * (result * Kind.assumption)) list = map
-  (fun (name, (fn, kind)) -> (name, (continuationize_primfn fn, kind))) [
-(* arithmetic operators *)
-  intop "+" (+/);
-  intop "-" (-/);
-  intop "*" ( */);
-  intop "/" (fun x y -> integer_num (x // y));
-  intop "^" ( **/ );
-  intop "mod" (mod_num);
-  floatop "+." (+.);
-  floatop "-." (-.);
-  floatop "*." ( *.);
-  floatop "/." (/.);
-  floatop "^^" ( ** );
-
-  conversion "string_of_float" (conversion_op box_string unbox_float string_of_float) 
-    Kind.string_type (`Primitive `Float);
-
-  conversion "float_of_int" (conversion_op box_float unbox_int float_of_num) 
-    (`Primitive `Float) (`Primitive `Int);
-
-  conversion "string_of_int" (conversion_op box_string unbox_int string_of_num) 
-    Kind.string_type (`Primitive `Int);
-
-  conversion "int_of_string" (conversion_op box_int unbox_string num_of_string) 
-    (`Primitive `Int)  Kind.string_type;
-
-  ("recv",
-   (primfun "recv"
-      (fun _ -> 
-         (* this function is not used, as its application is a special
-            case in the interpreter. But we need it here, for now,
-            because of its type.  Ultimately we should probably not
-            special-case it, but rather provide a way to implement
-            this primitive from here. *)
-         assert(false)),
-    let r', r = fresh_row () in
-      ([r'], unit_type --> `Variant r)));
-
-  ("send",
-   (primfun "send"
-      (function
-	 | `Primitive (`Int dest_pid)  -> 
-	     continuationize_primfn (
-	       primfun "send..."
-		 (fun msg -> 
-                    let dest_pid = int_of_num dest_pid in
-                      (try
-                         Queue.push msg (Hashtbl.find messages dest_pid);
-                       with Not_found -> failwith ("Internal error while sending message: no mailbox for " ^ string_of_int dest_pid));
-                      (try
-                         Queue.push (Hashtbl.find blocked_processes dest_pid) suspended_processes;
-                         Hashtbl.remove blocked_processes dest_pid
-                       with Not_found -> ());
-		      `Record []))
-	 | _ -> failwith "Internal error (argument to send)"),
-    let r', r = fresh_row () in
-      ([r'], `Primitive `Int --> (`Variant r --> unit_type))));
+  "self",
+  (p1 (fun _ -> `Primitive (`Int (num_of_int !current_pid))),
+   ([], unit_type --> `Primitive `Int));
   
-  ("spawn",
-   (primfun "spawn"
-      (fun f ->
-         continuationize_primfn (
-           primfun
-             "spawn..."
-             (fun p ->
-                (* Push the new process onto the queue. *)
-		let new_pid = fresh_pid () in
-		  Hashtbl.add messages new_pid (Queue.create ());
-                  Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
-                  `Primitive (`Int (num_of_int new_pid))))),
-    let a', a = fresh_type () in
-    let b', b = fresh_type () in
-      ([a'; b'], (a --> b) --> (a --> `Primitive `Int))));
+  "recv",
+  (* this function is not used, as its application is a special case
+     in the interpreter. But we need it here, for now, because of its
+     type.  Ultimately we should probably not special-case it, but
+     rather provide a way to implement this primitive from here.
+     (Ultimately, it should perhaps be a true primitive (an AST node),
+     because it uses a different evaluation mechanism from functions.
+     Also, the type allows any message to be received, which is wrong.
+     -- jdy) *)
+  (p1 (fun _ -> assert false),
+   let r', r = fresh_row () in
+     ([r'], unit_type --> `Variant r));
+  
+  "spawn",
+  (* This should also be a primitive, as described in the ICFP
+     paper. Also, the type is wrong.  *)
+  (p2 (fun f p ->
+         let new_pid = fresh_pid () in
+           Hashtbl.add messages new_pid (Queue.create ());
+           Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
+           `Primitive (`Int (num_of_int new_pid))),
+   let a', a = fresh_type () in
+   let b', b = fresh_type () in
+     ([a'; b'], (a --> b) --> (a --> `Primitive `Int)));
 
-  ("self",
-   (primfun "self"
-      (fun _ -> (`Primitive (`Int (num_of_int !current_pid)))),
-    ([], (unit_type --> `Primitive `Int))));
-
-  ("hd", 
-   (primfun "hd" 
-      (function
-         | `List (elems) -> 
-             (match elems with 
-                | [] -> failwith "Head of empty list"
-                | x :: xs -> x)
+  (** Lists and collections **)
+  "hd",
+  (p1 (function
+         | `List ((#result as x)::_) -> x
+         | `List [] -> failwith "Head of empty list"
          | _ -> failwith "Internal error: head of non-list"),
-    let v', v = fresh_type () in 
-      ([v'],
-       (`List (v) --> v))
-   ));
+   kind "[a] -> a");
 
-  ("length", 
-   (primfun "length" 
-      (function
+  "tl", 
+  (p1 (function
+         | `List (_::xs) -> `List xs
+         | `List [] -> failwith "Tail of empty list"
+         | _ -> failwith "Internal error: tail of non-list"),
+   kind "[a] -> [a]");
+       
+  "length", 
+  (p1 (function
          | `List (elems) -> `Primitive (`Int (num_of_int (length elems)))
          | _ -> failwith "Internal error: length of non-collection"),
-    let v', v = fresh_type () in
-      ([v'],
-       (`List (v) --> `Primitive `Int))));
+   kind "[a] -> Int");
+
+  "take",
+  (p2 (fun n l -> 
+         match l with 
+           | `List elems -> `List (take (int_of_num (unbox_int n)) elems)
+           | _ -> failwith "Internal error: non-list passed to take"),
+   kind "Int -> [a] -> [a]");
+
+  "drop",
+  (p2 (fun n l ->
+         match l with 
+           | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
+           | _ -> failwith "Internal error: non-list passed to drop"),
+   kind "Int -> [a] -> [a]");
+
+  (** XML **)
+  "childNodes",
+  (p1 (function
+         | `List [`Primitive(`XML(Node(_, children)))] ->
+             let children = filter (function (Node _) -> true | _ -> false) children in
+               `List (map (fun x -> `Primitive (`XML x)) children)
+         | _ -> failwith "non-XML given to childNodes"),
+   kind "XML -> XML");
+
+  "objectType",
+  (notimpl "objectType",
+   let u', u = fresh_type () in
+     ([u'], u --> Kind.string_type));
+
+  "attribute",
+  (p1 (let none = `Variant ("None", `Record []) in
+         function
+           | `Record elems -> 
+               (let elem = assoc "1" elems
+                and attr = charlist_as_string (assoc "2" elems) in
+                  match elem with
+                    | `List (`Primitive (`XML (Node (_, children)))::_) -> 
+                        let attr_match = (function
+                                            | Attr (k, _) when k = attr -> true
+                                            | _ -> false) in
+                          (try match find attr_match children with
+                             | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
+                             | _ -> failwith "Internal error in `attribute'"
+                           with Not_found -> none)
+                    | _ -> none)
+           | _ -> failwith "Internal error: bad arguments to attribute"),
+   kind "(XML,String) -> [|Some:String | None:()|]");
+
+  "elementById",
+  (notimpl "elementById",
+   kind "String -> [|Some:XML |None:()|]");
   
-  ("take",
-   (primfun "take"
-      (function 
-	 | `Primitive (`Int n) -> 
-             continuationize_primfn (
-               primfun
-		 "take..."
-		 (function
-		    | `List (elems) -> `List (take (int_of_num n) elems)
-		    | _ -> failwith "Internal error: non-list passed to take"))
-	 | _ -> failwith "Internal error: non-integer passed to take"),
-    let a', a = fresh_type () in
-      ([a'], (`Primitive `Int --> (`List (a) -->  `List (a))))));
-
-
-  ("childNodes",
-   (primfun "childNodes"
-      ((function
-         | `List [elem] ->
-             (match elem with 
-                  `Primitive(`XML(Node(tag, children))) -> 
-                    let children = filter (function (Node x) -> true | _ -> false) children in
-                      (`List(map (fun x -> `Primitive(`XML x)) children) : Result.result)
-                | _ -> failwith ("non-XML given to childNodes")
-             )
-         | _ -> failwith ("non-XML given to childNodes")
-       ) : Result.result -> Result.result
-      ),
-   ([],
-       xml --> xml)
-   )
-  );
-
-  ("drop",
-   (primfun "drop"
-      (function 
-	 | `Primitive (`Int n) -> 
-             continuationize_primfn (
-               primfun
-		 "drop..."
-		 (function
-		    | `List (elems) -> `List (drop (int_of_num n) elems)
-		    | _ -> failwith "Internal error: non-list passed to drop"))
-	 | _ -> failwith "Internal error: non-integer passed to drop"),
-    let a', a = fresh_type () in
-      ([a'], (`Primitive `Int --> (`List (a) -->  `List (a))))));
-
-  ("tl", 
-   (primfun "tl"
-      (function
-         | `List (elems) -> 
-         (match elems with 
-           | [] -> failwith "Tail of empty list"
-           | x :: xs -> `List (xs))
-         | _ -> failwith "Internal error: tail of non-list"),
-    let v', v = fresh_type () in 
-      ([v'],
-       (`List (v) --> `List (v)))));
-
-  ("childNodes",
-   (primfun "childNodes"
-      ((function
-         | `List [elem] ->
-             (match elem with 
-                  `Primitive(`XML(Node(tag, children))) -> 
-                    let children = filter (function (Node x) -> true | _ -> false) children in
-                      (`List(map (fun x -> `Primitive(`XML x)) children) : Result.result)
-                | _ -> failwith ("non-XML given to childNodes")
-             )
-         | _ -> failwith ("non-XML given to childNodes")
-       ) : Result.result -> Result.result
-      ),
-   ([], xml --> xml)
-   )
-  );
-
-  ("objectType",
-   (primfun "objectType"
-      (fun obj ->
-         failwith("objectType not implemented for server-side code.")),
-    let u', u = fresh_type () in
-    ([u'], u --> Kind.string_type)
-   ));
-
-  ("attribute",
-   (primfun "attribute"
-      (function
-         | `Record (elems) -> (let elem = List.assoc "1" elems
-                               and attr = charlist_as_string (List.assoc "2" elems)
-                               and none = `Variant ("None", `Record []) in
-                                 (match elem with 
-                                    | `List (`Primitive (`XML (Node (tag, children)))::_) -> 
-                                        (try
-                                           (match (List.find (function
-                                                                | Attr (k, v) when k = attr -> true
-                                                                | _ -> false) children) with
-                                              | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
-                                              | _ -> failwith "boom")
-                                         with Not_found -> none)
-                                    | _ -> none))
-         | _ -> failwith "Internal error: bad arguments to attribute"),
-    let pair = `Record (TypeOps.set_field ("1", `Present (`Primitive `XMLitem))
-	                  (TypeOps.set_field ("2", `Present Kind.string_type)
-	                     (TypeOps.make_empty_closed_row ()))) in
-      ([],
-       pair --> 
-         `Variant (TypeOps.set_field ("Some", `Present Kind.string_type)
-                     (TypeOps.set_field ("None", `Present (`Record (TypeOps.make_empty_closed_row ())))
-                        (TypeOps.make_empty_closed_row ()))))));
-
-  ("elementById",
-   (primfun "elementById"
-      (fun _ -> failwith "elementById not implemented in the server"),
-    let pair = `Record (TypeOps.set_field ("1", `Present xml)
-	                  (TypeOps.set_field ("2", `Present Kind.string_type)
-	                     (TypeOps.make_empty_closed_row ()))) in
-      ([],
-       Kind.string_type --> `Variant (TypeOps.set_field ("Some", `Present xml)
-                              (TypeOps.set_field ("None", `Present ((`Record (TypeOps.make_empty_closed_row ())):kind))
-                                 (TypeOps.make_empty_closed_row ()))))));
-
-  ("string_of_cont",
-   (primfun "string_of_cont"
-      (fun cont ->
-	 match cont with
-	     `Continuation cont -> 
-	       box_string(Utility.base64encode(serialise_continuation cont))
-	   | _ -> failwith "string_of_cont applied to non-continuation" ),(*TYPEME!*)
-    let v', v = fresh_type () and
-        u', u = fresh_type () 
-    in 
-      ([v'; u'],
-       (v --> u) --> Kind.string_type)));
-  
-  ("enxml",
-   (primfun "enxml"
-      (function 
+  "enxml",
+  (p1 (function 
          | `List _ as c -> `List [`Primitive (`XML (Text (charlist_as_string c)))]
-         | _ -> failwith ("internal error: non-string value passed to xml conversion routine")),
-    ([], 
-     Kind.string_type --> xml))); 
+         | _ -> failwith "internal error: non-string value passed to xml conversion routine"),
+   ([], Kind.string_type --> xml));
 
-  ("debug", (* destructive *)
-   (primfun "debug"
-      (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
-    ([], Kind.string_type --> unit_type)));
-   
-  ("debugObj", (* destructive *)
-   (primfun "debugObj"
-      (fun message -> failwith("no debugObj on server")),
-    let u', u = fresh_type () in 
-    ([u'], u --> unit_type)));
+  "dom",
+  (* Not available on the server *)
+  ((`Primitive (`Int (num_of_int (-1)))),
+   kind "Int");
 
-  ("dump", (* destructive *)
-   (primfun "dump"
-      (fun message -> failwith("no dump on server")),
-    let u', u = fresh_type () in 
-    ([u'], u --> unit_type)));
+  "debug", 
+  (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
+   kind "String -> ()");
 
-  ("textContent",
-   (primfun "textContent"
-      (fun _ -> failwith("textContent is not implemented on the server side")),
-    let u', u = fresh_type () in 
-      ([u'], u --> Kind.string_type)));
-   
-  ("print", (* destructive *)
-   (primfun "print"
-      (fun message -> print_endline (unbox_string message); flush stdout; `Record []),
-    ([], Kind.string_type --> unit_type)));
-   
-  ("insertrow", (* destructive *)
-   (primfun "insertrow"
-      (fun (table : result) -> 
-         let table = charlist_as_string table in
-           continuationize_primfn (
-             primfun ("insert into (" ^ table ^ ", ...) values ...")
-             (function
-                | `Database (db, _) as database -> 
-                    continuationize_primfn (
-                    primfun ("insert into (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
-                      (fun (row : result) ->
-                         Database.execute_select
-                           (`List (unit_type))
-                           (prerr_endline("*RUNNING SQL: " ^ "insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")");
-                            ("insert into " ^ table ^ "("^ row_columns row ^") values ("^ row_values row ^")"))
-
-                           db))
-                | _ -> failwith "Internal error: insert row into non-database"))),
-    (* FIXME: reboxing of `RowVar <-> Row_variable *)
-    let r', r = fresh_row () in
-      ([r'],
-       (Kind.string_type --> (`DB --> (`Record r --> unit_type))))));
-
-  ("deleterows", (* destructive *)
-   (primfun "deleterows"
-    (fun table ->
-       let table = charlist_as_string table in 
-         continuationize_primfn (primfun ("delete from (" ^ table ^ ", ...) values ...")
-             (function
-                | `Database (db, _) as database ->
-                    continuationize_primfn (primfun ("delete from (" ^ table ^ ", "^ string_of_result database ^ ") values ...")
-                      (fun (rows : result) ->
-                         Database.execute_select
-                           (`List (unit_type))
-                           ("delete from " ^ table ^ " where " ^ delete_condition rows)
-                           db))
-                | _ -> failwith "Internal error: delete row from non-database"))),
-    let r', r = fresh_row () in
-      ([r'],
-       (Kind.string_type --> (`DB --> (`List (`Record r) --> unit_type))))));
-
-  ("updaterows", (* destructive *)
-   (primfun "updaterows"
-    (fun table ->
-       let table = charlist_as_string table in 
-         continuationize_primfn (
-primfun ("update (" ^ table ^ ", ... ) by ...")
-         (function
-            | `Database (db, _) as database ->
-continuationize_primfn (
-                primfun ("update (" ^ table ^ ", "^ string_of_result database ^ ") by ...")
-                  (function
-                     |  (`List(rows)) ->
-                          (List.iter (fun row -> 
-(*                                         debug("update " ^ table ^ " set " ^ *)
-(*                                                 updates row  ^ " where " ^ single_match (map (fst -<- pair_as_ocaml_pair) row)); *)
-                                        ignore(Database.execute_select
-                                                 (`List (unit_type))
-                                                 ("update " ^ table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
-                                                 db))
-                             rows);
-                          `Record []
-                     | _ -> failwith "Internal error: non-list passed to UPDATE"))
-            | _ -> failwith "Internal error: update row in non-database"))),
-    let v', v = fresh_row () in
-    let u', u = fresh_row () in
-
-    let pair = `Record
-      (TypeOps.set_field ("1", `Present (`Record u))
-	 (TypeOps.set_field ("2", `Present (`Record v))
-	    (TypeOps.make_empty_closed_row ())))
-(*
-    let Row_variable v = fresh_row_variable () in
-    let Row_variable u = fresh_row_variable () in
-    let pair = `Record [Kind.Field_present ("1", `Record [Row_variable u]);
-                        Kind.Field_present ("2", `Record [Row_variable v])] 
-*)
-    in
-      ([u'; v'],
-       (Kind.string_type --> (`DB --> (`List (pair) --> unit_type))))));
-
-(*  ("javascript",
-   (`Primitive(`Bool false),
-    ([], `Primitive `Bool))); *)
-  ("javascript",
-(primfun "not" 
-      (function 
-         | `Primitive (`Bool x) -> `Primitive(`Bool (not x))
-         | _ -> failwith "Internal error: non-boolean passed to `not'"),
-    ([], `Primitive `Bool))); 
-
-  ("dom",
-   (primfun "dom"
-      (function _ -> failwith "dom not implemented on server"),
-    ([], `Primitive `Int)));
-
-  ("not", 
-   (primfun "not" 
-      (function 
-         | `Primitive (`Bool x) -> `Primitive(`Bool (not x))
-         | _ -> failwith "Internal error: non-boolean passed to `not'"),
-    ([],
-     (`Primitive `Bool --> `Primitive `Bool))));
+  "debugObj",
+  (notimpl "debugObj", kind "a -> ()");
   
-  ("negate", 
-   (primfun "negate" 
-      (function 
-         | `Primitive (`Int x) -> `Primitive(`Int (minus_num x))
-         | _ -> failwith "Internal error: non-integer passed to `negate"),
-    ([],
-     (`Primitive `Int --> `Primitive `Int))));  
-
-  ("negatef", 
-   (primfun "negatef" 
-      (function 
-         | `Primitive (`Float x) -> `Primitive(`Float (-. x))
-         | _ -> failwith "Internal error: non-float passed to `negatef"),
-    ([],
-     (`Primitive `Float --> `Primitive `Float))));
-
-  ("is_integer", 
-   (primfun "is_integer" 
-      (fun s -> `Primitive (`Bool (Str.string_match (Str.regexp "^[0-9]+$") (charlist_as_string s) 0))),
-    ([],
-     (Kind.string_type --> `Primitive `Bool))));
-
-(*   ("fullname", *)
-(*    (primfun "fullname" *)
-(*       (function uid -> *)
-(*          try *)
-(*            `Variant ("fullname",  *)
-(*                      box_string (Str.global_replace (Str.regexp ",*$") ""  *)
-(*                                    (Unix.getpwnam (unbox_string uid)).Unix.pw_gecos)) *)
-(*          with Not_found ->  *)
-(*            `Variant ("not_found", unit_type)), *)
-(*     let `Row_variable v = fresh_row_variable () in *)
-(*       ([`RowVar v], Kind.string_type -->  *)
-(*          `Variant ([`Row_variable v; *)
-(*                      `Field_present ("fullname", Kind.string_type); *)
-(*                      `Field_present ("not_found", unit_type)])))); *)
-
-  ("query_param",           (* Get query parameters from the web environment
-                                   (Right now only works in CGI environment) *)
-   (primfun "query_param"
-      (function name_charlist -> 
-	 let name = charlist_as_string name_charlist in
-	   debug("trying to grab " ^ name ^ " from " ^ 
-		   (string_of_alist !query_environment));
-	   try
-	     string_as_charlist(assoc name !query_environment)
-	   with
-	       (* TBD: need option types within Links *)
-	       Not_found -> string_as_charlist "" 
-      ),
-    ([],
-     (Kind.string_type --> Kind.string_type))));
-
-  ("get_cookie",
-   (primfun "get_cookie"
-      (function cookiename_charlist ->
-	 let cookiename = charlist_as_string cookiename_charlist 
-         and cookie_header = Sys.getenv "HTTP_COOKIE" in
-	   string_as_charlist(cookie_header)
-      ),
-    ([],
-     Kind.string_type --> Kind.string_type))
-  );
+  "dump",
+  (notimpl "dump", kind "a -> ()");
   
+  "textContent",
+  (notimpl "textContent", kind "a -> String");
+  "print",
+  (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
+   kind "String -> ()");
 
-  ("error",
-   (primfun "error"
-      (function msg -> failwith (unbox_string msg)),
-    let v', v = fresh_type () in
-      ([v'],
-       (Kind.string_type --> v))));
+  "javascript",
+  (`Primitive (`Bool false), kind "Bool");
 
-  ("sleep",
-   (primfun "sleep"
-      (function duration ->
-         Unix.sleep(int_of_num (unbox_int duration));
+  "not", 
+  (p1 (fun b -> box_bool (not (unbox_bool b))),
+   kind "Bool -> Bool");
+ 
+  "negate", 
+  (p1 (fun i -> box_int (minus_num (unbox_int i))), kind "Int -> Int");
+
+  "negatef", 
+  (p1 (fun f -> box_float (-. (unbox_float f))), kind "Float -> Float");
+
+  "is_integer", 
+  (p1 (fun s -> box_bool (Str.string_match (Str.regexp "^[0-9]+$") (unbox_string s) 0)),
+   kind "String -> Bool");
+
+  "error",
+  (p1 (fun msg -> failwith (unbox_string msg)),
+   kind "String -> a");
+
+  "sleep",
+  (* This doesn't seem right : it freezes all threads *)
+  (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
          `Record []),
-      ([],
-       (`Primitive `Int --> unit_type))));
+   kind "Int -> ()");
 
-  ("domutate",
-   (primfun "domutate"
-      (function mutations ->
-         failwith("domutate not implemented on server side.")),
-    let u', u = fresh_type () in
-    let v', v = fresh_type () in
-      ([u'; v'],
-       (u --> v))));
+  (** Database functions **)
+  "insertrow",
+  (p3 (fun table database row ->
+         match database with 
+           | `Database (db, _) -> 
+               (Database.execute_select 
+                 (`List unit_type)
+                 ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values row ^")")
+                 db :> primitive)
+           | _ -> failwith "Internal error: insert row into non-database"),
+   (* FIXME: reboxing of `RowVar <-> Row_variable *)
+   let r', r = fresh_row () in
+     [r'],
+   Kind.string_type --> (`DB --> (`Record r --> unit_type)));
+  
+  "deleterows", 
+  (p3 (fun table database rows -> 
+       match database with 
+         | `Database (db, _)  ->
+             (Database.execute_select
+                (`List unit_type)
+                ("delete from " ^ unbox_string table ^ " where " ^ delete_condition rows)
+                db :> primitive)
+         | _ -> failwith "Internal error: delete row from non-database"),
+   let r', r = fresh_row () in
+     [r'],
+   Kind.string_type --> (`DB --> (`List (`Record r) --> unit_type)));
 
 
-  (* some char functions *)
-  char_test_op "isAlpha" (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
-  char_test_op "isAlpha" (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
-  char_test_op "isLower" (function 'a'..'z' -> true | _ -> false);
-  char_test_op "isUpper" (function 'A'..'Z' -> true | _ -> false);
-  char_test_op "isDigit" (function '0'..'9' -> true | _ -> false);
-  char_test_op "isXDigit" (function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false);
-  char_test_op "isBlank" (function ' '|'\t' -> true | _ -> false);
+  "updaterows", 
+  (p3 (fun table database rows ->
+         match database, rows with 
+           |  `Database (db, _), `List rows ->
+                List.iter (fun row -> 
+                             ignore (Database.execute_select
+                                       (`List unit_type)
+                                       ("update " ^ unbox_string table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
+                                       db))
+                  rows;
+                `Record []
+       | _ -> failwith "Internal error: bad value passed to `updaterows'"),
+   let v', v = fresh_row () in
+   let u', u = fresh_row () in
+   let pair = `Record
+     (TypeOps.set_field ("1", `Present (`Record u))
+        (TypeOps.set_field ("2", `Present (`Record v))
+           (TypeOps.make_empty_closed_row ())))
+   in
+     [u'; v'],
+   Kind.string_type --> (`DB --> (`List pair --> unit_type)));
+
+  (** some char functions **)
+  "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
+  "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
+  "isLower",  char_test_op (function 'a'..'z' -> true | _ -> false);
+  "isUpper",  char_test_op (function 'A'..'Z' -> true | _ -> false);
+  "isDigit",  char_test_op (function '0'..'9' -> true | _ -> false);
+  "isXDigit", char_test_op (function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false);
+  "isBlank",  char_test_op (function ' '|'\t' -> true | _ -> false);
   (* isCntrl, isGraph, isPrint, isPunct, isSpace *)
+  
+  "toUpper", char_conversion Char.uppercase;
+  "toLower", char_conversion Char.lowercase;
 
-  char_conversion  "toUpper" Char.uppercase;
-  char_conversion  "toLower" Char.lowercase;
+  "ord",
+  (p1 (fun c -> box_int (num_of_int (Char.code (unbox_char c)))), 
+   kind "Char -> Int");
 
-  ("ord",
-   (primfun "ord"
-      (function 
-         | `Primitive (`Char c) -> `Primitive (`Int (num_of_int (Char.code c)))
-         | c -> failwith ("Error unboxing char : "  ^ string_of_result c)),
-    ([], `Primitive `Char --> `Primitive `Int)));
-
-  ("chr",
-   (primfun "chr"
-      (function 
-         | `Primitive (`Int n) -> `Primitive (`Char (Char.chr (int_of_num n)))
-         | c -> failwith ("Error unboxing char : "  ^ string_of_result c)),
-    ([], `Primitive `Int --> `Primitive `Char)));
-
+  "chr",
+  (p1 (fun n -> (box_char (Char.chr (int_of_num (unbox_int n))))), 
+   kind "Int -> Char");
 
   (* some trig functions *)
-  float_fun "floor" floor;
-  float_fun "ceiling" ceil;
-  float_fun "cos" cos;
-  float_fun "sin" sin;
-  float_fun "tan" tan;
-  float_fun "log" log;
-  float_fun "sqrt" sqrt;
+  "floor",   float_fn floor;
+  "ceiling", float_fn ceil;
+  "cos",     float_fn cos;
+  "sin",     float_fn sin;
+  "tan",     float_fn tan;
+  "log",     float_fn log;
+  "sqrt",    float_fn sqrt;
 ]
 
-(* Our primitive environment currently has the implementations
-   embedded within it. This is full of problems. For now, kosherize
-   splits such an environment into a meat meal and a dairy meal. The
-   meat meal has the implementations, tagged by name, and the dairy
-   meal has everything else (also tagged by name).  Eventually we
-   should split this into two things, rather than creating the
-   combined meal and pulling it apart.
+type continuationized_val = [
+  result
+| `PFun of (continuation -> result -> result) * continuation * result -> continuationized_val
+]
 
-   Proper dairy meal (goes in the interpreter's environment:
+(* Transform a primitive function so that it accepts a continuation
+   and an 'apply-continuation' primitive as well as an argument *)
+let rec continuationize : primitive -> continuationized_val = function
+    | `PFun f -> `PFun (fun ((applycont : continuation -> result -> result), (cont : continuation), (arg : result)) ->
+			  match f arg with 
+			    | #result as r -> (applycont cont r :> continuationized_val)
+			    | prim         -> continuationize prim)
+    | (#result as a) -> a
 
-   ["+"  =>  `Primitive("+", []);
-   "-" => `Primitive("-", [])]
+type primitive_environment = (string*continuationized_val) list
 
-   Proper meat meal:
+let value_env : primitive_environment ref = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
+and type_env : Kind.environment = List.map (fun (n, (_,t)) -> (n,t)) env
 
-   ["+" => (function foo -> bar);
-   "-" => (function baz -> bust)
-   ]
-
-*)
-let kosherize_primfunc = function
-    (name, `Primitive(`PFunction(name2, impl, pargs))) ->
-      (name, `Primitive(`PFunction(name2, None, pargs))),
-      (name, valOf impl)
-  | _ -> failwith "boom"
-
-let kosherize_primenv env = split (map kosherize_primfunc env)
-
-let envs environment : (Result.environment * Kind.environment) = 
-  split (map (fun (name, (value, kind)) -> (name, value), (name, kind)) environment)
-
-let primvalue_env, type_env = envs env
-let value_env, implementations = kosherize_primenv primvalue_env 
-
-let get_prim goal = 
-  snd (List.find (fun (name, impl) -> (name = goal)) implementations)
-    
+let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
+  let rec aux args' = function
+    | #result as r -> 
+	assert (args' = []);
+	apply_cont cont r
+    | `PFun f      -> 
+	match args' with 
+	  | []      -> apply_cont cont (`Primitive (`PFunction (name, args)))
+	  | r::rest -> aux rest (f r) in
+    aux args (fst (assoc name env))
