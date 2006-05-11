@@ -420,7 +420,7 @@ let rec continuationize : primitive -> continuationized_val = function
 
 type primitive_environment = (string*continuationized_val) list
 
-let value_env : primitive_environment ref = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
+let value_env = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
 and type_env : Kind.environment = List.map (fun (n, (_,t)) -> (n,t)) env
 
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
@@ -432,4 +432,15 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
 	match args' with 
 	  | []      -> apply_cont cont (`Primitive (`PFunction (name, args)))
 	  | r::rest -> aux rest (f r) in
-    aux args (fst (assoc name env))
+    try
+      aux args (fst (assoc name env))
+    with Not_found ->
+      let result_of_cval : continuationized_val -> result = function
+        | #result as r -> r
+        | _ -> failwith ("Error calling client function " ^ name ^ " (is it curried?)")
+      in match assoc name !value_env, args with
+        | `PFun f, [a]  -> result_of_cval (f (apply_cont, cont, a))
+        | `PFun f, l  -> failwith (Printf.sprintf "expected one arg, but found %d during server->client call of %s"
+                                     (length args) name)
+        | #result, _ -> failwith ("value found, expecting function during server->client call of "
+                                   ^ name)
