@@ -218,7 +218,7 @@ class mysql_result (result: result) db = object
   method status : db_status = 
     match status db with 
       | StatusOK | StatusEmpty -> QueryOk
-      | StatusError _          -> QueryError
+      | StatusError c          -> QueryError (string_of_error_code c)
   method nfields : int = 
     fields result
   method fname  n : string = 
@@ -239,6 +239,7 @@ class mysql_database spec = object
   val connection = connect spec
   method exec query : dbresult = 
     new mysql_result (exec connection query) connection
+  method escape_string = Mysql.escape
 end
 
 let parse_args (args : string) : db =

@@ -144,7 +144,7 @@ let rec less l r =
 
 let less_or_equal l r = equal l r || less l r
         
-let rec normalise_query (toplevel:environment) (env:environment) (qry:query) : query =
+let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_expression : Query.expression -> Query.expression = function
       | Query.Variable name ->
           (try
@@ -153,7 +153,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (qry:query) : q
                | `Primitive(`Int value) -> Query.Integer value
                | `Primitive(`Float value) -> Query.Float value
                | `List (`Primitive(`Char _)::elems) as c  
-                 -> Query.Text (Postgresql.escape_string (charlist_as_string c))
+                 -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
            with Not_found -> failwith ("Internal error: undefined query variable '" ^ name ^ "'"))
@@ -315,7 +315,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let result = 
                          match value with
                            | `Database (db, _) ->
-       	                       let query_string = string_of_query (normalise_query globals locals query) in
+       	                       let query_string = string_of_query (normalise_query globals locals db query) in
 		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
 		                 let result = execute_select kind query_string db in
                                    (* debug("    result:" ^ string_of_result result); *)

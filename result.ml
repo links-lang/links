@@ -38,6 +38,7 @@ class virtual dbresult = object
 end
 
 class virtual database = object
+  method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
 end
 

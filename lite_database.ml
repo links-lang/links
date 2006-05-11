@@ -42,7 +42,7 @@ class lite_result (vm: vm) = object
   method status : db_status = 
     match vm_rc vm with
       | RC_ok -> QueryOk
-      | _     -> QueryError
+      | e     -> QueryError (error_as_string e)
   method nfields : int = 
     match result_list with 
       | [] -> -1
@@ -68,6 +68,8 @@ class lite_database file = object(self)
   method exec query : dbresult =
     let vm, _, _ = compile connection query 0 true in
       new lite_result vm
+  (* See http://www.sqlite.org/lang_expr.html *)
+  method escape_string = Str.global_replace (Str.regexp_string "'") "''"
 end
 
 let driver_name = "sqlite"

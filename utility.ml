@@ -316,14 +316,19 @@ let read_hex c =
    confused by all the backslashes and quotes and refuses to translate
    the file.
 *)
-let decode_escapes s = 
+let escape_regexp = Str.regexp "\\\\\"\\|\\\\\\\\\\|\\\\[0-3][0-7][0-7]\\|\\\\[xX][0-9a-fA-F][0-9a-fA-F]" 
+let decode_escapes s =
   let unquoter s = 
-    match s with
-      | "\\\"" -> "\""
-      | "\\\\" -> "\\"
-      | other when other.[1] = 'x' || other.[1] = 'X' -> String.make 1 (read_hex (String.sub other 2 2)) 
-      | other -> String.make 1 (read_octal (String.sub other 1 3)) in
-    Pcre.substitute ~pat:"\\\\\"|\\\\\\\\|\\\\[0-3][0-7][0-7]|\\\\[xX][0-9a-fA-F][0-9a-fA-F]" ~subst:unquoter s
+    (* Yes, the Str interface is stateful.  A pretty poor show.  PCRE
+       is better, but we'd rather avoid the dependency and stick with
+       the standard library. *)
+    let s = Str.matched_string s in
+      match s with
+        | "\\\"" -> "\""
+        | "\\\\" -> "\\"
+        | other when other.[1] = 'x' || other.[1] = 'X' -> String.make 1 (read_hex (String.sub other 2 2)) 
+        | other -> String.make 1 (read_octal (String.sub other 1 3)) in
+    Str.global_substitute escape_regexp unquoter s
 
 (** xml_escape
     xml_unescape

@@ -59,33 +59,33 @@ let format_attrs : result -> string = function
   String.concat "" (map charlist_as_string contents)
 *)
 
-let value_as_string = function
-  | `List (`Primitive(`Char _)::elems) as c  -> "\'" ^ Postgresql.escape_string (charlist_as_string c) ^ "\'"
+let value_as_string db = function
+  | `List (`Primitive(`Char _)::elems) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
   | `List ([])  -> "NULL"
   | a -> string_of_result a
 
-let cond_from_field (k, v) =
+let cond_from_field db (k, v) =
   match (k, v) with
       (_, `List([])) -> k ^ " is null" (* Is [] really always null? *)
-    | _ -> "("^ k ^" = "^ value_as_string v ^")"
+    | _ -> "("^ k ^" = "^ value_as_string db v ^")"
 
-let single_match = 
+let single_match db = 
   function
-    | `Record fields -> "("^ (String.concat " AND " (map cond_from_field fields)) ^")"
+    | `Record fields -> "("^ (String.concat " AND " (map (cond_from_field db) fields)) ^")"
     | _ -> failwith "Internal error: forming query from non-row"
 
 let row_columns = function
   | `Record fields -> String.concat ", " (map fst fields)
   | _ -> failwith "Internal error: forming query from non-row"
-and row_values = function
-  | `Record fields -> String.concat ", " (map (value_as_string -<- snd) fields)
+and row_values db = function
+  | `Record fields -> String.concat ", " (map (value_as_string db -<- snd) fields)
   | _ -> failwith "Internal error: forming query from non-row"
-and delete_condition = function
-  | `List(rows) -> "("^ (String.concat " OR " (map single_match rows)) ^")"
+and delete_condition db = function
+  | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")"
   | _ -> failwith "Internal error: forming query from non-row"
-and updates : Result.result -> string = function
+and updates db : Result.result -> string = function
   | `Record fields -> 
-      let field (k, v) = (k ^" = "^ value_as_string v) in
+      let field (k, v) = (k ^" = "^ value_as_string db v) in
         (String.concat ", " (map field fields))
   | _ -> failwith "Internal error: forming query from non-row"
 
@@ -169,7 +169,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
 
   "self",
   (p1 (fun _ -> `Primitive (`Int (num_of_int !current_pid))),
-   ([], unit_type --> `Primitive `Int));
+   kind "() -> Int");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -329,7 +329,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
            | `Database (db, _) -> 
                (Database.execute_select 
                  (`List unit_type)
-                 ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values row ^")")
+                 ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
                  db :> primitive)
            | _ -> failwith "Internal error: insert row into non-database"),
    (* FIXME: reboxing of `RowVar <-> Row_variable *)
@@ -343,7 +343,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
          | `Database (db, _)  ->
              (Database.execute_select
                 (`List unit_type)
-                ("delete from " ^ unbox_string table ^ " where " ^ delete_condition rows)
+                ("delete from " ^ unbox_string table ^ " where " ^ delete_condition db rows)
                 db :> primitive)
          | _ -> failwith "Internal error: delete row from non-database"),
    let r', r = fresh_row () in
@@ -358,7 +358,9 @@ let env : (string * (primitive * Kind.assumption)) list = [
                 List.iter (fun row -> 
                              ignore (Database.execute_select
                                        (`List unit_type)
-                                       ("update " ^ unbox_string table ^ " set " ^ updates (links_snd row)  ^ " where " ^ single_match (links_fst row))
+                                       ("update " ^ unbox_string table
+                                        ^ " set " ^ updates db (links_snd row)
+                                        ^ " where " ^ single_match db (links_fst row))
                                        db))
                   rows;
                 `Record []

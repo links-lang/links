@@ -107,6 +107,7 @@ class pg_database host port dbname user password = object(self)
   method exec : string -> dbresult = fun query ->
     let raw_result = connection#exec query in
     new pg_dbresult raw_result
+  method escape_string s = Postgresql.escape_string s
 end
 let driver_name = "postgresql"
     

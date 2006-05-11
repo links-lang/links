@@ -17,17 +17,13 @@ ifdef BUILD_MYSQL
    DB_LIBS    += mysql
 endif
 
-ifdef OCAMLNET_FINDLIB
-#-- ocamlnet without findlib
-   OCAMLNET_DIRS = $(OCAML_LIBDIR)/ocamlnet
-else
-#-- ocamlnet with findlib
-   OCAMLNET_DIRS = $(OCAML_LIBDIR)/netstring $(OCAML_LIBDIR)/cgi 
+ifdef BUILD_POSTGRESQL
+   DB_CODE    += pg_database.ml
+   DB_AUXLIBS += $(OCAML_LIBDIR)/postgresql
+   DB_LIBS    += postgresql
 endif
 
-AUXLIB_DIRS = $(OCAMLNET_DIRS) \
-	$(OCAML_LIBDIR)/pcre $(OCAML_LIBDIR)/getopt \
-	$(OCAML_LIBDIR)/postgresql $(DB_AUXLIBS)
+AUXLIB_DIRS = $(DB_AUXLIBS)
 
 OCAMLOPT := ocamlopt.opt
 OCAMLC := ocamlc.opt
@@ -36,10 +32,12 @@ OCAMLDEP := ocamldep
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc
 
-OCAMLFLAGS=-w ae
+OCAMLFLAGS=-w Ae
 
-SOURCES = cgi.ml                \
-          unionfind.ml          \
+# Other people's code.
+OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
+
+SOURCES = $(OPC)                \
           utility.ml            \
           rewrite.ml            \
           pickle.mli pickle.ml  \
@@ -54,7 +52,6 @@ SOURCES = cgi.ml                \
           sugar.ml              \
           result.ml             \
           sql_transform.ml      \
-          pg_database.ml        \
           parser.mly            \
           $(DB_CODE)            \
           jsonparse.mly         \
@@ -73,7 +70,7 @@ SOURCES = cgi.ml                \
           webif.ml              \
           links.ml              \
 
-LIBS    = unix postgresql nums str pcre netstring cgi getopt $(DB_LIBS) 
+LIBS    = unix nums str $(DB_LIBS) 
 RESULT  = links
 CLIBS 	= cclib lssl cclib lcrypto $(DB_CLIBS)
 
