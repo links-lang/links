@@ -2,11 +2,11 @@
 
 fun showAttr(id, attr) client {
   switch elementById(id) {
-   Some s ->  switch attribute(s, attr) {
-                  Some s -> debug("show " ++ id ++ " : found an element whose " ++ attr ++ " attribute is " ++s)
-                  None   -> debug("show " ++ id ++ " : found an element, but no " ++ attr ++ " attribute")
-               }
-   None   ->  debug("show " ++ id ++ " : couldn't find an element")
+   case Some s ->  switch attribute(s, attr) {
+                     case Some s -> debug("show " ++ id ++ " : found an element whose " ++ attr ++ " attribute is " ++s);
+                     case None   -> debug("show " ++ id ++ " : found an element, but no " ++ attr ++ " attribute");
+                   };
+   case None   ->  debug("show " ++ id ++ " : couldn't find an element");
   }   
 }
 

@@ -20,7 +20,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT BEGINSWITH
 %token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
 %token PLUSPLUS HATHAT HAT
-%token SWITCH RECEIVE
+%token SWITCH RECEIVE CASE
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -229,22 +229,21 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { Conditional ($3, $5, $7), pos() }
 
 cases:
-| case                                                         { [$1] }
-| case cases                                                   { $1 :: $2 }
+| case default_case                                            { [$1], Some $2 }
+| case                                                         { [$1], None }
+| case cases                                                   { $1 :: fst $2, snd $2 }
 
 case:
-| CONSTRUCTOR patt  RARROW exp                                 { $1, $2, $4 }
-| CONSTRUCTOR       RARROW exp                                 { $1, Pattern (RecordLit ([], None), pos ()), $3 }
+| CASE CONSTRUCTOR patt  RARROW exp SEMICOLON                  { $2, $3, $5 }
+| CASE CONSTRUCTOR       RARROW exp SEMICOLON                  { $2, Pattern (RecordLit ([], None), pos ()), $4 }
 
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH exp LBRACE cases default_case RBRACE                  { Switch ($2, $4, Some $5), pos() }
-| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None),    pos() }
-| RECEIVE LBRACE cases default_case RBRACE                     { Receive ($3, Some $4), pos() }
-| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None),    pos() }
+| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, fst $4, snd $4), pos() }
+| RECEIVE LBRACE cases RBRACE                                  { Receive $3, pos() }
 
 default_case :
-| VARIABLE RARROW exp                                          { ($1, $3) }
+| CASE VARIABLE RARROW exp SEMICOLON                           { ($2, $4) }
 
 iteration_expression:
 | case_expression                                              { $1 }

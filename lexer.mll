@@ -56,8 +56,7 @@ let keywords = [
 "if"     , IF;     "else"     ,  ELSE;     "beginswith", BEGINSWITH;     
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
 "escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
-"false"  , FALSE;
-"table"  , TABLE;
+"false"  , FALSE;  "table"    ,  TABLE;    "case"      , CASE;
 "from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;

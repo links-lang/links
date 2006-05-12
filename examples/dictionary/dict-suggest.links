@@ -27,13 +27,17 @@ fun lowercase(str) server {
   map(fun (ch) { lc(ch) } , str)
 }
 
+table wordlist (
+  word : String, 
+  type : String, 
+  meaning : String
+) order [word:asc]
+database "postgresql:dictionary::5432:s0567141:";
+
 fun completions(p) server {
   if (p == "") []
   else {
-    var db = database "postgresql:dictionary::5432:s0567141:";
-    take(10)(for (w <- Table "wordlist" 
-                        with {word : String, type : String, meaning : String} 
-                       order [word : asc] from db)
+    take(10)(for (w <- wordlist)
              where (w.word beginswith p) [w])
   }
 }
