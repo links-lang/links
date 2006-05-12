@@ -94,7 +94,9 @@ let stubify_client_funcs env =
 			   exit 0)
 		      in Library.value_env := (name,`PFun f):: !Library.value_env)
       client_env;
-    (fst (Interpreter.run_program [] server_env))
+    match server_env with 
+        [] -> []
+      | server_env -> fst (Interpreter.run_program [] server_env)
 
 (* let handle_client_call unevaled_env f args =  *)
 (*   let env = stubify_client_funcs unevaled_env in *)
