@@ -80,6 +80,10 @@ Recursive variant types [4]
 fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));}} fun (x) {switch (increment(x)) { case Foo -> 0; case Zero -> 1; case Succ n -> 2; }}
 stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\) -> Int
 
+Recursive variant types [5]
+fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));} increment(increment(Zero))}
+stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\)
+
 Rows preserved across functions
 fun f(x) { switch x { case Foo -> Bar; case s -> s; } }
 stdout : @fun : \(\[|Bar:\(\) | Foo:\(\) | [0-9]*|\]\) -> \[|Bar:\(\) | [0-9]*|\]
