@@ -443,9 +443,9 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
 	match args' with 
 	  | []      -> apply_cont cont (`Primitive (`PFunction (name, args)))
 	  | r::rest -> aux rest (f r) in
-    try
+    if mem_assoc name env then
       aux args (fst (assoc name env))
-    with Not_found ->
+    else 
       let result_of_cval : continuationized_val -> result = function
         | #result as r -> r
         | _ -> failwith ("Error calling client function " ^ name ^ " (is it curried?)")
