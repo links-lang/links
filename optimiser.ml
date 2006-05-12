@@ -7,6 +7,7 @@ open Rewrite
 open Syntax
 open Sql_transform
 
+(* This appears to be ignored *)
 let optimising = ref true
 
 module RewriteSyntax = 
@@ -568,9 +569,29 @@ let optimise env expr =
 			    ^ "\nAfter optimization  : " ^ show_expression expr');
 		     expr')
 
-let optimise_program (env, exprs) = 
-  map (optimise env) exprs
+(* Not really an optimisation.  This /must/ be run, or the program
+   semantics will be completely wrong.
+*)
+let inline_tables expressions = 
+  let insert_tables map : RewriteSyntax.rewriter = function
+    | Variable (v, _) when mem_assoc v map -> Some (assoc v map)
+    | s -> None in
+  let tabledefs, sanstables = 
+    either_partition
+      (function
+         | Define (name, (Table _ as t), _, _) -> Left (name, t)
+         | e -> Right e)
+      expressions
+  in
+    map (valOf -<- (RewriteSyntax.either
+                      (RewriteSyntax.bottomup (insert_tables tabledefs))
+                      RewriteSyntax.always))
+      sanstables
 
+let optimise_program (env, exprs) = 
+  map (optimise env) (inline_tables exprs)
+
+(* Testing stuff from here on down *)
 
 let parse = Parse.parse_string
 let parse_and_type env = List.hd -<- snd -<- Inference.type_program env -<- parse

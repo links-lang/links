@@ -60,6 +60,8 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
+| TABLE VARIABLE kind unique perhaps_order
+        DATABASE STRING SEMICOLON                              { Definition ($2, (TableLit ($2, $3, $4, $5, (DatabaseLit $7, pos())), pos()), `Server), pos() }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
@@ -179,7 +181,6 @@ db_expression:
 | UPDATE LPAREN STRING COMMA exp RPAREN BY exp                 { DBUpdate ($3, $5, $8), pos() }
 | DELETE FROM LPAREN STRING COMMA exp RPAREN VALUES exp        { DBDelete ($4, $6, $9), pos() }
 | INSERT INTO LPAREN STRING COMMA exp RPAREN VALUES exp        { DBInsert ($4, $6, $9), pos() }
-| DATABASE STRING                                              { DatabaseLit $2, pos() }
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }
@@ -245,12 +246,8 @@ case_expression:
 default_case :
 | VARIABLE RARROW exp                                          { ($1, $3) }
 
-table_expression:
-| case_expression                                              { $1 }
-| TABLE STRING WITH kind unique perhaps_order FROM exp         { TableLit ($2, $4, $5, $6, $8), pos() }
-
 iteration_expression:
-| table_expression                                             { $1 }
+| case_expression                                              { $1 }
 | FOR provider exp                                             { Iteration (fst $2, snd $2, $3, None),    pos() }
 | FOR provider WHERE LPAREN exp RPAREN exp                     { Iteration (fst $2, snd $2, $7, Some $5), pos() }
 

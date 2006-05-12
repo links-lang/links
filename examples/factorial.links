@@ -35,11 +35,14 @@ fun response(s) client {
  )
 }
 
+table factorials ( 
+  i : Int,
+  f : Int
+) order [i : asc]
+  database "postgresql:factorials::5432:www-data:";
+
 fun factorialsUpto(n) server {
-  for (row <- Table "factorials" 
-              with { i : Int, f : Int }
-              order [i : asc]
-              from database "postgresql:factorials::5432:www-data:")
+  for (row <- factorials)
      where (row.i <= n)
      [(row.i,row.f)]
 }

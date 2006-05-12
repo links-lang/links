@@ -245,6 +245,17 @@ let either_assoc lbl1 lbl2 alist =
   with Not_found ->
     Right(List.assoc lbl2 alist)
 
+let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
+    : 'b list * 'c list =
+  let rec aux (lefts, rights) = function
+    | [] -> (List.rev lefts, List.rev rights)
+    | x::xs ->
+        match f x with 
+          | Left l  -> aux (l :: lefts, rights) xs
+          | Right r -> aux (lefts, r :: rights) xs
+  in aux ([], []) l
+    
+
 let option_assoc2 lbl1 lbl2 alist =
   option_or (safe_assoc lbl1 alist,
 	     safe_assoc lbl2 alist)

@@ -1,11 +1,13 @@
 #!/home/s0567141/links/links -w
 
-fun nextMsg(lastTime) server {
-  db = database "postgresql:chat:localhost:5432:s0567141:";
+table chatlog (
+  line : String, 
+  time : String
+) order [time:asc] 
+  database "postgresql:chat:localhost:5432:s0567141:";
 
-  result = for line <- Table "chatlog" with {line : String, time : String} 
-              order [ time : asc ] 
-               from db
+fun nextMsg(lastTime) server {
+  result = for (line <- chatlog)
   where (line.time >> lastTime)
   in
      [(line.line, line.time)];

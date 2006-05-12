@@ -10,15 +10,15 @@ fun assoc(d, a, l) {
   else assoc(d, a, tl(l));
 }
 
+table "dict" (
+   word : String, 
+   definition : String
+) order [word:asc] database "postgresql:gcide:localhost:5432:s0567141:";
+
 fun lookup_data(word) server {
-  db = database "postgresql:gcide:localhost:5432:s0567141:";
-  for defn <- Table "dict"
-               with { word : String, definition : String }
-              order [ word : asc ]
-               from db
-  in
-  if (defn.word == word)
-    [defn.definition] else [];
+  for (defn <- dict)
+  where (defn.word == word)
+    [defn.definition]
 }
 
 fun lookup(word) client {
@@ -75,12 +75,8 @@ fun prefixof(p, str) {
 }
 
 fun completions(p) server {
-  db = database "postgresql:gcide:localhost:5432:s0567141:";
   if (p == "") [] else {
-    results = for w <- Table "dict"
-                        with { word : String, definition : String }
-                       order [ word : asc ]
-                        from db
+    results = for (w <- dict)
               where (w.word beginswith p)
               in [w.word];
     results
