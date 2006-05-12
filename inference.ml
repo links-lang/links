@@ -554,8 +554,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
         (* extend the env with each l:name bound variable *)
       let attr_env = fold_right (fun s env -> (s, ([], inference_string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in
-        (* Check that the bound expressions have type XML *)
-        (* TBD: figure out what the right type for these is *)
+        (* Check that the bound expressions have type 
+           <strike>XML</strike> unit. *)
 (*      let _ =
 	List.iter (fun (_, expr) -> unify(type_of_expression expr, ITO.fresh_type_variable ()(*Kind.xml*))) special_attrs in*)
       let contents = map (type_check env) cs in
@@ -685,6 +685,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	unify (type_of_expression db, `DB);
 	unify (kind, `List (`Record (ITO.make_empty_open_row ())));
         Table (db, s, query, (pos, kind, None))
+  | Wrong pos ->
+      Wrong(pos, ITO.fresh_type_variable(), None)
           
   with 
       Unify_failure msg

@@ -187,6 +187,9 @@ let binopFromOpString = function
 exception CollExtnWithWeirdSrc
 exception TopLevel of (Result.environment * Result.result)
 
+(* could bundle these together with globals to get a global
+   'interpreter state' that we'd then thread through the whole
+   interpreter, making it re-entrant. *)
 let process_steps = ref 0
 let switch_granularity = 5
 
@@ -469,6 +472,8 @@ fun globals locals expr cont ->
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
+  | Syntax.Wrong (_) ->
+      failwith("Went wrong (pattern matching failed?)")
   | Syntax.Placeholder (l, _) -> 
       failwith("Internal error: Placeholder at runtime")
 

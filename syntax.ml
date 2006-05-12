@@ -34,7 +34,6 @@ type 'data expression' =
                    ('data expression' list) * 'data)
   | Record_empty of 'data
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
-
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Record_selection_empty of ('data expression' * 'data expression' * 'data)
@@ -51,6 +50,7 @@ type 'data expression' =
   | Database of ('data expression' * 'data)
   | Table of ('data expression' * string * Query.query * 'data)
   | Escape of (string * 'data expression' * 'data)
+  | Wrong of 'data
   | Placeholder of (string * 'data)
 
 
@@ -118,6 +118,7 @@ let rec show_expression =
   | Database v -> "Database " ^ s2 (exp, null) v
   | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
   | Escape v -> "Escape " ^ s3 (identity, exp, null) v
+  | Wrong v -> "Wrong " ^ s1 null v
 
 type expression = (position * kind * string option (* label *)) expression'
 type untyped_expression = position expression'
@@ -173,13 +174,13 @@ and show t : 'a expression' -> string = function
   | Record_selection_empty (value, body, data) ->
       "{() = " ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Variant_injection (label, value, data) ->
-      label ^ "(" ^ show t value ^ "" ^ t data
+      label ^ "(" ^ show t value ^ ")" ^ t data
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
       "case " ^ show t value ^ " of " ^ case_label ^ "=" 
       ^ case_variable ^ " in " ^ (show t case_body) ^ " | " 
       ^ variable ^ " in " ^ show t body ^ t data
   | Variant_selection_empty (value, data) ->
-      show t value ^ " is wrong " ^ t data
+      show t value ^ " is empty " ^ t data
   | Nil (data)              -> "[]" ^ t data
   | List_of (elem, data)       -> "[" ^ show t elem ^ "]" ^ t data
   | Concat (left, right, data) -> 
@@ -189,6 +190,7 @@ and show t : 'a expression' -> string = function
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
+  | Wrong data -> "wrong"
 
 (* this is meant to do the work for pretty-printing an expression,
    making it look like the user would expect it to look; e.g. it should
@@ -238,13 +240,13 @@ let rec ppexpr t : 'a expression' -> string = function
   | Record_selection_empty (value, body, data) ->
       "{() = " ^ ppexpr t value ^ "; " ^ ppexpr t body ^ "}" ^ t data
   | Variant_injection (label, value, data) ->
-      label ^ "(" ^ show t value ^ "" ^ t data
+      label ^ "(" ^ ppexpr t value ^ ")" ^ t data
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
       "case " ^ ppexpr t value ^ " of < " ^ case_label ^ "=" 
       ^ case_variable ^ "> in " ^ (ppexpr t case_body) ^ " | " 
       ^ variable ^ " in " ^ ppexpr t body ^ t data
   | Variant_selection_empty (value, data) ->
-      show t value ^ " is wrong" ^ t data
+      show t value ^ " is empty" ^ t data
   | Nil (data)              -> "[]" ^ t data
   | Nil (data)              -> "[]" ^ t data
   | List_of (elem, data)       -> "[" ^ ppexpr t elem ^ "]" ^ t data
@@ -494,6 +496,7 @@ let visit_expressions'
         Table (e, s, q, d), data
     | Escape (n, e, d) -> let e, data = visitor visit_children (e, data) in
         Escape (n, e, d), data
+    | Wrong (d) -> Wrong (d), unit data
     | Placeholder (str, d) -> Placeholder (str, d), unit data
   in visitor visit_children
        
@@ -560,6 +563,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
+  | Wrong (data) -> Wrong (f data)
 
 let erase : expression -> untyped_expression = 
   redecorate (fun (pos, _, _) -> pos)
@@ -653,6 +657,7 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Float _
       | Variable _
       | Nil _
+      | Wrong _
       | Record_empty _ -> None
           
       (* fixed children *)
@@ -794,6 +799,7 @@ let expression_data : ('a expression' -> 'a) = function
 	| Database (_, data) -> data
 	| Table (_, _, _, data) -> data
 	| Escape (_, _, data) -> data
+        | Wrong data -> data
 
 let fst3 (a, _, _) = a
 and snd3 (_, b, _) = b

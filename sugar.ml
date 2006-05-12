@@ -8,6 +8,7 @@ open Syntax
 exception ParseError of (string * (Lexing.position * Lexing.position))
 
 let _DUMMY_POS = Syntax.dummy_position
+let no_expr_data = (_DUMMY_POS, `Not_typed, None)
 
 let base_value = ref 0
 
@@ -28,6 +29,12 @@ let col_unique_name () =
   incr base_value;
   "col_" ^ string_of_int !base_value
 
+let list_head expr pos = 
+  Apply(Variable ("hd", pos), expr, pos)
+
+let list_tail expr pos = 
+  Apply(Variable ("tl", pos), expr, pos)
+
 type pattern = 
   | Constant of untyped_expression 
   | Bind of string 
@@ -35,6 +42,7 @@ type pattern =
   | Record_extension of (string * pattern * pattern) 
   | Empty_record 
   | Variant of (string * pattern) 
+  | Cons of (pattern * pattern)
 
 (* let rec string_of_pattern = function *)
 (*   | Constant expr -> string_of_expression expr *)
@@ -61,20 +69,37 @@ type pattern =
 (*       one_more value selects *)
 
 
-
-
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
 let rec patternize' = function 
+  | Syntax.Nil _
   | Syntax.Variable ("_", _) ->  Bind (unique_name ())
   | Syntax.Variable (name, _) -> Bind (name)
   | Syntax.Record_empty _ -> Empty_record
-  | Syntax.Record_extension (name, value, record, _) -> Record_extension (name, patternize' value, patternize' record)
+  | Syntax.Record_extension (name, value, record, _) 
+    -> Record_extension (name, patternize' value, patternize' record)
   (* See note above `amper' *)
   | Syntax.Apply(Syntax.Variable("&", _),
                  Apply(Syntax.Variable (var, _), expr, _), _) -> 
       Bind_using(var, patternize' expr)
+  | Syntax.Concat (List_of (e1, _), e2, _) as cons_patt ->
+      patternize_cons_pattern cons_patt
   | other -> raise (Parse_failure (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
+and patternize_cons_pattern = function
+  | Concat (List_of (e1, _), e2, _) ->
+      Cons(patternize' e1, patternize' e2)
+
+let is_null expr pos = 
+  Comparison(expr, "==", Nil pos, pos)
+
+let is_not_null expr pos = 
+  Comparison(expr, "<>", Nil pos, pos)
+
+let and_expr l r pos = 
+  Condition(l, Condition(r, Boolean(true, pos), 
+                         Boolean(false, pos), pos), 
+            Boolean(false, pos), pos)
+      
 
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
   fun pat pos value body ->
@@ -83,6 +108,10 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
       | Variant _      -> failwith "Variant selection cannot be used in function parameter or let patterns"
       | Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
       | Bind name -> Let (name, value, body, pos)
+      | Cons (head, tail) -> 
+          (polylet head pos (list_head value pos)
+             (polylet tail pos (list_tail value pos)
+                body))
       | Record_extension (label, patt, rem_patt) ->
 	  let temp_var_field = unique_name () in
 	  let temp_var_ext = unique_name () in
@@ -98,55 +127,41 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
                               pos)
       | Empty_record -> Record_selection_empty (value, body, pos)
 
-let variant_selection : (untyped_expression -> (string * pattern * untyped_expression) list -> position -> string -> untyped_expression -> untyped_expression) =
-  fun value selects pos var body ->
-    let rec one_more = (fun value -> function
-			  | (case_label, Bind case_var, case_body) :: [] ->
-			      Variant_selection (value, case_label, case_var, case_body, var, body, pos)
-			  | (case_label, case_patt, case_body) :: [] ->
-			      let case_var = (unique_name ()) in
-			      let case_var_expr = (Variable (case_var, pos)) in
-				Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, var, body, pos)
-			  | (case_label, Bind case_var, case_body) :: selects ->
-			      let new_var = (unique_name ()) in
-			      let new_var_expr = (Variable (new_var, pos)) in
-				Variant_selection (value, case_label, case_var, case_body, new_var, (one_more new_var_expr selects), pos)
-			  | (case_label, case_patt, case_body) :: selects ->
-			      let case_var = (unique_name ()) in
-			      let new_var = (unique_name ()) in
-			      let case_var_expr = (Variable (case_var, pos)) in
-			      let new_var_expr = (Variable (new_var, pos)) in
-				Variant_selection (value, case_label, case_var,
-                                                   polylet case_patt pos case_var_expr case_body,
-                                                   new_var, one_more new_var_expr selects,
-                                                   pos)
-			  | [] -> raise (Failure "Programming error (SU037)")
-		       ) in
-      one_more value selects
-
-let closed_variant_selection (value : untyped_expression) (selects : (string * pattern * untyped_expression) list) (pos : position) : untyped_expression =
-  let rec one_more value = function
-    | (case_label, Bind case_var, case_body) :: [] ->
-        Variant_selection (value, case_label, case_var, case_body,
-                           "x", Variant_selection_empty(Variable("x", pos), pos), pos)
-    | (case_label, case_patt, case_body) :: [] ->
-	let case_var = (unique_name ()) in
-	let case_var_expr = (Variable (case_var, pos)) in
-	  debug(string_of_expression(Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, "x", Variant_selection_empty(Variable("x", pos), pos), pos)));
-	  Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, "x", Variant_selection_empty(Variable("x", pos), pos), pos)
-    | (case_label, Bind case_var, case_body) :: selects ->
-	let new_var = (unique_name ()) in
-	let new_var_expr = (Variable (new_var, pos)) in
-	  Variant_selection (value, case_label, case_var, case_body, new_var, (one_more new_var_expr selects), pos)
-    | (case_label, case_patt, case_body) :: selects ->
-	let case_var = (unique_name ()) in
-	let new_var = (unique_name ()) in
-	let case_var_expr = (Variable (case_var, pos)) in
-	let new_var_expr = (Variable (new_var, pos)) in
-	  Variant_selection (value, case_label, case_var, polylet case_patt pos case_var_expr case_body, new_var, (one_more new_var_expr selects), pos)
-    | [] -> raise (Failure "Programming error (SU037)") in
-  let r = one_more value selects in
-    r
+let variant_selection
+    (source : untyped_expression) 
+    (cases : (string * pattern * untyped_expression) list) 
+    (pos : position) 
+    (default : (string * untyped_expression) option) : untyped_expression =
+    let rec one_more source = function
+      | [] -> source
+      | (case_label, case_patt, case_body) :: [] ->
+	  let case_var = (unique_name ()) in
+	  let case_var_expr = (Variable (case_var, pos)) in
+          let var, body = match default with
+              None -> let x = unique_name() in
+                x, Variant_selection_empty(Variable(x, pos), pos)
+            | Some(var, body) -> var, body
+          in
+	    Variant_selection (source, case_label, case_var, 
+                               polylet case_patt pos case_var_expr case_body, 
+                               var, body, pos)
+      | (case_label, Bind case_var, case_body) :: selects ->
+	  let new_var = (unique_name ()) in
+	  let new_var_expr = (Variable (new_var, pos)) in
+	    Variant_selection (source, case_label, case_var, case_body, new_var, 
+                               (one_more new_var_expr selects), pos)
+      | (case_label, case_patt, case_body) :: selects ->
+	  let case_var = (unique_name ()) in
+	  let new_var = (unique_name ()) in
+	  let case_var_expr = (Variable (case_var, pos)) in
+	  let new_var_expr = (Variable (new_var, pos)) in
+	    Variant_selection (source, case_label, case_var,
+                               polylet case_patt pos case_var_expr case_body,
+                               new_var, one_more new_var_expr selects,
+                               pos)
+      | [] -> raise (Failure "Programming error (SU037)")
+    in
+      one_more source cases
 
 
 (** With respect to scope of variables bound at the same level the
@@ -309,10 +324,13 @@ type phrasenode =
   | TupleLit of (phrase list)
   | RecordLit of ((name * phrase) list * phrase option)
   | Projection of (phrase * name)
+
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
-  | Switch of (phrase * ((name * ppattern * phrase) list) * (name * phrase) option)
-  | Receive of (((name * ppattern * phrase) list) * (name * phrase) option)
+(*  TBD: remove `None' from Switch constructor *)
+  | Switch of (phrase * (switchcase list) * (name * phrase) option)
+  | Receive of ((switchcase list) * (name * phrase) option)
+
 (* Database operations *)
   | DatabaseLit of (string)
   | TableLit of (string * kind * bool (* unique *) * order list * phrase)
@@ -325,6 +343,7 @@ type phrasenode =
   | TextNode of (string)
 and phrase = (phrasenode * pposition)
 and ppattern = Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
+and switchcase = ppattern * phrase
 
 let _DUMMY_PHRASE = TupleLit [], (Lexing.dummy_pos, Lexing.dummy_pos)
 let _DUMMY_PATTERN = Pattern _DUMMY_PHRASE
@@ -437,22 +456,32 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                                                                                    (ListLit [], pos')), pos'), None),
                                                           pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
-  | Switch (exp, patterns, None)         -> (closed_variant_selection
-					       (desugar exp) 
-					       (List.map
-						  (fun (name, pat, p) -> (name, patternize pat, desugar p))
-						  patterns) 
-					       pos)
-  | Switch (exp, patterns, Some (name, e2)) -> (variant_selection 
-						  (desugar exp)
-						  (List.map
-						     (fun (name, pat, p) -> (name, patternize pat, desugar p))
-						     patterns) 
-						  pos
-						  name
-						  (desugar e2))
-  | Receive (patterns, final) -> desugar (Switch ((FnAppl ((Var "recv", pos'), [TupleLit [], pos']), pos'),
-                                                  patterns, final), pos')
+      (* TBD: Remove the _ at the end of the Switch node *)
+  | Switch (exp, (((Pattern(InfixAppl (`Cons, _, _), _), _)::_) as patterns), dflt)
+  | Switch (exp, (((Pattern(ListLit [], _), _)::_) as patterns), dflt)
+    -> open_list_match (desugar exp) patterns dflt lookup_pos pos
+  | Switch (exp, patterns, _) ->
+      let patterns, default_case = match (unsnoc patterns) with
+          patterns, (Pattern(Var x, pos), body) -> patterns, Some(x, desugar body)
+        | _ -> patterns, None
+      in
+      (variant_selection 
+         (desugar exp)
+         (List.map
+            (fun (Pattern patt, body) ->
+               let name, content = match patt with
+                   ConstructorLit(name, None), pos ->
+                     name, (RecordLit ([], None), pos)
+                 | ConstructorLit(name, Some content), pos ->
+                     name, content
+               in
+                 (name, patternize (Pattern content), desugar body))
+            patterns) 
+	 pos
+         default_case)
+  | Receive (patterns, final) -> 
+      desugar (Switch ((FnAppl ((Var "recv", pos'), [TupleLit [], pos']), pos'),
+                       patterns, final), pos')
 
       (* (\* TBD: We should die if the XML text literal has bare ampersands or *)
       (*    is otherwise ill-formed. It should also be made to properly handle *)
@@ -474,6 +503,24 @@ and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
        should convert directly from phrases to patterns *)
   | Pattern p -> patternize' (desugar lookup_pos p)
+and list_patt_to_bool value pos = function
+    Var name, _ -> Boolean(true, pos)
+  | InfixAppl(`Cons, head, tail), _ ->
+      and_expr (is_not_null value pos)
+        (and_expr (list_patt_to_bool value pos head)
+           (list_patt_to_bool value pos tail) pos) pos
+  | ListLit [], _ -> is_null value pos
+and open_list_match value cases default lookup_pos pos =
+  let inner_case =
+    match default with
+        None -> Wrong pos
+      | Some(x, body) -> Let(x, value, desugar lookup_pos body, pos)
+  in
+    fold_right (fun (Pattern patt, body) otherwise ->
+                  Condition(list_patt_to_bool value pos patt,
+                            polylet (patternize' (desugar lookup_pos patt)) pos value (desugar lookup_pos body),
+                            otherwise, pos)
+               ) cases inner_case
 
 
 (* (\* project_subset *)
@@ -494,8 +541,6 @@ and patternize lookup_pos : ppattern -> pattern = function
 (* *\) *)
 
 
-let no_expr_data = (_DUMMY_POS, `Not_typed, None)
-
 (* d: internal shorthand for nowhere_pos *)
 let d = no_expr_data
 
@@ -509,3 +554,4 @@ let project_subset (fields : (string * string) list) (source : Syntax.expression
   let record_extension = fold_right recext_builder variables (Record_empty d) in
     (* project out the source record into the free variables *)
     fold_right select variables record_extension
+

@@ -70,6 +70,8 @@ let rec unsnoc =
 
 let last l = snd (unsnoc l)
 
+let butlast l = fst (unsnoc l)
+
 let fold_right1 f xs = let butlast, last = unsnoc xs in
   List.fold_right f butlast last
 

@@ -293,7 +293,7 @@ let strip_cont cont = map strip_cont_frame cont
 
 let serialise_continuation c = Marshal.to_string (strip_cont c) []
 
-
+let serialise_continuation_b64 = Utility.base64encode -<- serialise_continuation
 
 let deserialise_continuation resolve str = 
   Marshal.from_string str 0

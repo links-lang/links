@@ -230,18 +230,17 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { Conditional ($3, $5, $7), pos() }
 
 cases:
-| case default_case                                            { [$1], Some $2 }
-| case                                                         { [$1], None }
-| case cases                                                   { $1 :: fst $2, snd $2 }
+| case                                                         { [$1] }
+| case cases                                                   { $1 :: $2 }
 
 case:
-| CASE CONSTRUCTOR patt  RARROW exp SEMICOLON                  { $2, $3, $5 }
-| CASE CONSTRUCTOR       RARROW exp SEMICOLON                  { $2, Pattern (RecordLit ([], None), pos ()), $4 }
+| CASE patt  RARROW exp SEMICOLON                              { $2, $4 }
 
+// TBD: remove `None' from Switch constructor
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, fst $4, snd $4), pos() }
-| RECEIVE LBRACE cases RBRACE                                  { Receive $3, pos() }
+| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None),    pos() }
+| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None),    pos() }
 
 default_case :
 | CASE VARIABLE RARROW exp SEMICOLON                           { ($2, $4) }
