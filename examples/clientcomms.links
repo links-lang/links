@@ -15,7 +15,7 @@ fun f(pid) client {
 
 fun myspawn(pid, n) {
   if (n == 0) pid
-  else myspawn(spawn(f)(pid), n-1)
+  else myspawn(spawn { f(pid) }, n-1)
 }
 
 fun main() client {

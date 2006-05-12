@@ -290,6 +290,7 @@ type phrasenode =
   | CharLit of (char)
   | Var of (name)
   | FunLit of (name option * ppattern list * phrase)
+  | Spawn of phrase
   | ListLit of (phrase list)
   | Definition of (name * phrase * location)
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option)
@@ -361,6 +362,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
   | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
   | Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
+  | Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), [FunLit (None, [Pattern (RecordLit ([], None), pos')], e), pos']),pos'), []), pos')
   | Section (#arith_binop as a) -> Variable (unarith a, pos)
   | Section (`Project name) -> (let var = unique_name () in
 				  desugar (FunLit (None, [Pattern (Var var, pos')], 

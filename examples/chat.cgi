@@ -65,7 +65,7 @@ fun page(a, b) client {
 }
 
 {
- spawn(startPoll)();
+ spawn { startPoll() }
  page(1, 4)
 }
 

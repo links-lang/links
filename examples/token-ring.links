@@ -3,10 +3,10 @@ fun pass_it_on(pid) {
 }
 
 fun create_processes(n, prevpid) {
-  if (n == 0) { spawn(fun() { pass_it_on(prevpid) })() }
+  if (n == 0) spawn { pass_it_on(prevpid) }
   else {
    if (mod(n)(1000) == 0) print(".") else ();
-   var thispid = spawn(fun () { pass_it_on(prevpid) })();
+   var thispid = spawn { pass_it_on(prevpid) };
    create_processes(n - 1, thispid)
   }
 }

@@ -20,7 +20,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT BEGINSWITH
 %token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
 %token PLUSPLUS HATHAT HAT
-%token SWITCH RECEIVE CASE
+%token SWITCH RECEIVE CASE SPAWN
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -118,6 +118,7 @@ binop:
 postfix_expression:
 | primary_expression                                           { $1 }
 | block                                                        { $1 }
+| SPAWN block                                                  { Spawn $2, pos() }
 | postfix_expression LPAREN RPAREN                             { FnAppl ($1, []), pos() }
 | postfix_expression LPAREN exps RPAREN                        { FnAppl ($1, $3), pos() }
 /*| postfix_expression LPAREN labeled_exps RPAREN              { FnAppl ($1, $3), pos() }*/
