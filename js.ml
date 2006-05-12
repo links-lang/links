@@ -140,10 +140,10 @@ let chrlit s = Lit (string_quote (string_of_char s))
 
 let boiler_1 = "<html>
        <head>
-          <script type='text/javascript' src=\"json.js\"></script>
-          <script type='text/javascript' src=\"YAHOO.js\"></script>
-          <script type='text/javascript' src=\"event.js\"></script>
-          <script type='text/javascript' src=\"jslib.js\"></script>
+          <script type='text/javascript' src=\"lib/json.js\"></script>
+          <script type='text/javascript' src=\"lib/yahoo/YAHOO.js\"></script>
+          <script type='text/javascript' src=\"lib/yahoo/event.js\"></script>
+          <script type='text/javascript' src=\"lib/jslib.js\"></script>
           <script type='text/javascript'><!-- \n"
 and boiler_2 =    "\n--> </script>
       </head>

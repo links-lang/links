@@ -1,3 +1,9 @@
+table factorials ( 
+  i : Int,
+  f : Int
+) order [i : asc]
+  database "postgresql:factorials::5432:www-data:";
+
 fun request(s) client {
  dom!Document(
   <html>
@@ -34,12 +40,6 @@ fun response(s) client {
   </html>
  )
 }
-
-table factorials ( 
-  i : Int,
-  f : Int
-) order [i : asc]
-  database "postgresql:factorials::5432:www-data:";
 
 fun factorialsUpto(n) server {
   for (row <- factorials)
