@@ -41,7 +41,8 @@ let
 	    []
 	  else
 	    free_type_vars' (IntSet.add var rec_vars) body
-      | `List (kind)    -> free_type_vars' rec_vars kind
+      | `List (kind)             -> free_type_vars' rec_vars kind
+      | `Mailbox (kind)          -> free_type_vars' rec_vars kind
       | `DB                      -> []
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> inference_row -> int list = 
@@ -261,6 +262,7 @@ let rec type_to_inference_type = fun ((type_var_map, row_var_map) as var_maps) -
 	    Unionfind.change point t';
 	    `MetaTypeVar point
   | `List (t) -> `List (type_to_inference_type var_maps t)
+  | `Mailbox (t) -> `Mailbox (type_to_inference_type var_maps t)
   | `DB -> `DB
 and field_spec_to_inference_field_spec = fun ((type_var_map, row_var_map) as var_maps) -> function
   | `Present t -> `Present (type_to_inference_type var_maps t)
@@ -311,6 +313,7 @@ let rec inference_type_to_type : type_var_set -> inference_type -> Kind.kind = f
 	else
 	  `Recursive (var, inference_type_to_type (IntSet.add var rec_vars) t)
     | `List (t) -> `List (inference_type_to_type rec_vars t)
+    | `Mailbox (t) -> `Mailbox (inference_type_to_type rec_vars t)
     | `DB -> `DB
     | `MetaTypeVar point -> inference_type_to_type rec_vars (Unionfind.find point)
 and inference_field_spec_to_field_spec = fun rec_vars ->

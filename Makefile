@@ -59,9 +59,9 @@ SOURCES = $(OPC)                \
           database.mli database.ml \
           lexer.mll             \
           parse.mli parse.ml    \
+          inference.mli inference.ml \
           library.ml            \
           jsonlex.mll           \
-          inference.mli inference.ml \
           interpreter.mli interpreter.ml \
           optimiser.ml          \
           js.mli js.ml          \

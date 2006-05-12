@@ -90,3 +90,4 @@ val unit_type : kind
 val fresh_type : unit -> type_variable * kind
 val fresh_row : unit -> type_variable * row
 
+val perhaps_process_children : (kind -> kind option) ->  kind -> kind option

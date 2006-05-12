@@ -16,6 +16,7 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Recursive of (int * 'typ)
   | `List of ('typ)
+  | `Mailbox of ('typ)
   | `DB ]
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]

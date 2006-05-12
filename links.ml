@@ -27,7 +27,7 @@ let print_result rtype result =
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
-let rec evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
+let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
   interacting := false;
   handle_errors
     (fun input ->

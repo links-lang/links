@@ -212,6 +212,7 @@ type kind =
   | RecordType of row
   | VariantType of row
   | ListType of kind
+  | MailboxType of kind
   | PrimitiveType of Kind.primitive
   | DBType
 and row = (string * [`Present of kind | `Absent]) list * string option
@@ -235,6 +236,7 @@ let rec typevars : kind -> quantifier list =
     | RecordType r
     | VariantType r -> rvars r
     | ListType k -> typevars k
+    | MailboxType k -> typevars k
     | UnitType
     | PrimitiveType _
     | DBType -> []
@@ -264,6 +266,7 @@ let desugar_assumption ((vars, k)  : assumption) : Kind.assumption =
     | RecordType row -> `Record (desugar_row row)
     | VariantType row -> `Variant (desugar_row row)
     | ListType k -> `List (desugar k)
+    | MailboxType k -> `Mailbox (desugar k)
     | PrimitiveType k -> `Primitive k
     | DBType -> `DB
      and desugar_row (fields, rv) = 

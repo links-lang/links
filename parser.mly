@@ -350,7 +350,11 @@ primary_kind:
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
                                                                    | "XML"     -> ListType (PrimitiveType `XMLitem)
-                                                                   | t -> failwith ("Unknown type constructor : " ^ t)
+                                                                   | t -> failwith ("Unknown nullary type constructor : " ^ t)
+                                                               }
+| CONSTRUCTOR primary_kind                                     { match $1 with 
+                                                                   | "Mailbox"    -> MailboxType $2
+                                                                   | t -> failwith ("Unknown unary type constructor : " ^ t)
                                                                }
 row:
 | fields                                                       { $1 }

@@ -142,16 +142,15 @@ and show t : 'a expression' -> string = function
   | String (s, data) -> "\"" ^ s ^ "\"" ^ t data
   | Float (value, data)   -> string_of_float value ^ t data
   | Variable (name, data) -> name ^ t data
-  | Apply (Variable("enxml", _), String (s, _), data)    -> s ^ t data
   | Apply (f, p, data)    -> show t f ^ "(" ^ show t p ^ ")" ^ t data
   | Condition (cond, if_true, if_false, data) ->
-      "if " ^ show t cond ^ " then " ^ show t if_true ^ " else " ^ show t if_false ^ t data
+      "if (" ^ show t cond ^ ") " ^ show t if_true ^ " else " ^ show t if_false ^ t data
   | Comparison (left_value, oper, right_value, data) ->
-      "" ^ show t left_value ^ " " ^ oper ^ " " ^ show t right_value ^ t data
+      show t left_value ^ " " ^ oper ^ " " ^ show t right_value ^ t data
   | Abstr (variable, body, data) ->
-      "fun (" ^ variable ^ ") {" ^ show t body ^ "}" ^ t data
+      "fun (" ^ variable ^ ") { " ^ show t body ^ " }" ^ t data
   | Let (variable, value, body, data) ->
-      "{" ^ variable ^ "=" ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
+      "{ var " ^ variable ^ "=" ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Rec (variables, body, data) ->
       "{" ^ (String.concat " ; " (map (function (label, expr) -> " " ^ label ^ "=" ^ show t expr) variables))
       ^ "; " ^ show t body ^ "}" ^ t data
@@ -186,8 +185,8 @@ and show t : 'a expression' -> string = function
   | Concat (left, right, data) -> 
       "(" ^ show t left ^ t data ^ "++" ^ show t right ^ ")" 
   | For (expr, variable, value, data) ->
-      "(for " ^ variable ^ " <- " ^ show t value ^ " in " ^ show t expr ^ ")" ^ t data
-  | Database (params, data) -> "(database " ^ show t params ^ ")" ^ t data
+      "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
+  | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
 

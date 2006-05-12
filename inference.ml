@@ -99,6 +99,7 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
       | `Record l, `Record r -> unify_row' rec_vars (l, r)
       | `Variant l, `Variant r -> unify_row' rec_vars (l, r)
       | `List t, `List t' -> unify' rec_vars (t, t')
+      | `Mailbox t, `Mailbox t' -> unify' rec_vars (t, t')
       | `DB, `DB -> ()
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_type t1 ^" against "^ string_of_type t2)));
@@ -361,6 +362,8 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 		  (*`Recursive (var, inst (IntSet.add var rec_vars) t) *)
 	      | `List (elem_type) ->
 		  `List (inst rec_env elem_type)
+	      | `Mailbox (elem_type) ->
+		  `Mailbox (inst rec_env elem_type)
 	      | `DB -> `DB
 	and inst_row : rec_maps -> inference_row -> inference_row = fun rec_env row ->
 	  let rec_type_env, rec_row_env = rec_env in
@@ -464,6 +467,8 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 	    else
 	      get_quantifiers (IntSet.add var bound_vars) body
 	| `List (elem_type) ->
+	    get_quantifiers bound_vars elem_type
+	| `Mailbox (elem_type) ->
 	    get_quantifiers bound_vars elem_type
 	| `DB -> []
 
@@ -655,9 +660,12 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
   | Escape(var, body, pos) -> 
       let exprtype = ITO.fresh_type_variable () in
       let contrettype = ITO.fresh_type_variable () in
-      let conttype =  `Function (exprtype, contrettype) in
+        (* It'd be better if this mailbox didn't intrude here.
+           Perhaps there's some rewrite rule for `escape' that we
+           could use instead. *)
+      let mailboxtype = ITO.fresh_type_variable () in 
+      let conttype =  `Function (mailboxtype, `Function (exprtype, contrettype)) in
       let body = type_check ((var, ([], conttype)):: env) body in
-
       let exprtype = exprtype in
 	unify (exprtype, type_of_expression body);
         Escape(var, body, (pos, type_of_expression body, None))
@@ -682,7 +690,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       Unify_failure msg
     | UndefinedVariable msg ->
         raise (Type_error(untyped_pos expression, msg))
-(* end "type_check" *)
+          (* end "type_check" *)
 
 (** type_check_mutually
     Companion to "type_check"; does mutual type-inference
@@ -802,6 +810,90 @@ let type_program : Kind.environment -> untyped_expression list -> (Kind.environm
       | _ ->  false
     in
       fold_left type_group (env, []) (regroup (groupBy bothdefs exprs))
-  
 
-      
+(** message typing trick.
+    This might be better off somewhere else (but where?).
+**)
+module RewriteSyntaxU = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = Syntax.untyped_expression
+          type rewriter = t -> t option
+          let process_children = Syntax.perhaps_process_children
+        end))
+
+module RewriteSyntax = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = Syntax.expression
+          type rewriter = t -> t option
+          let process_children = Syntax.perhaps_process_children
+        end))
+
+let add_parameter : RewriteSyntaxU.rewriter = function
+  | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
+  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
+  | _                  -> None
+and remove_parameter : RewriteSyntax.rewriter = function
+  | Abstr ("_MAILBOX_", (Abstr _ as e), d)              -> Some e
+  | Apply (Apply (f,Variable ("_MAILBOX_", _),_), a, d) -> Some (Apply (f,a,d))
+  | _                                                   -> None
+
+let add_parameter s = fromOption s (RewriteSyntaxU.bottomup add_parameter s)
+and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s)
+
+module RewriteKind = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = Kind.kind
+          type rewriter = t -> t option
+          let process_children = Kind.perhaps_process_children
+        end))
+    
+type tvar = [`TypeVar of int]
+
+(* rewrite an unquantified kind type *)
+let retype_primfun (var : Kind.kind) : RewriteKind.rewriter = function
+  | `Function (j, k) as f -> Some (`Function (var, f))
+  | _                     -> None
+
+(* rewrite a quantified kind type *)
+let retype_primfun (var : tvar) (quants, kind as k : Kind.assumption) =
+  match RewriteKind.bottomup (retype_primfun (var :> Kind.kind)) kind with
+    | None -> k
+    | Some kind -> ((var :> Kind.quantifier) :: quants, kind)
+
+(* find a suitable tvar name *)
+let new_typevar quants =
+  let tint = function
+    | `TypeVar i
+    | `RowVar  i -> i 
+  and candidates = Utility.fromTo 0 (1 + List.length quants)
+  in 
+    (* Create a type variable not already in the list *)
+    `TypeVar (List.hd (snd (List.partition
+                              (flip mem (List.map tint quants)) 
+                              candidates)))
+
+(* Find a suitable type variable and rewrite a quantified kind type *)
+let retype_primfun (quants, kind as k) =
+  retype_primfun (new_typevar quants) k
+
+(* Finally, a rewriter for type environments.  Ignore spawn, recv and
+   self (which should perhaps be syntax tree nodes). *)
+let retype_primitives = 
+  let specials = ["spawn"; "recv"; "self"] in
+    List.map (function
+                | name, kind when mem name specials -> (name, kind)
+                | name, kind -> name, retype_primfun kind)
+
+let type_program env exprs = 
+  let env, exprs = type_program env (List.map add_parameter exprs) in
+    env, List.map remove_parameter exprs
+
+and type_expression env e =
+  let env, e = type_expression env (add_parameter e) in
+    env, remove_parameter e

@@ -97,6 +97,7 @@ let rec string_of_kind' vars : kind -> string =
       | `List (`Primitive `Char) -> "String"
       | `List (`Primitive `XMLitem) -> "XML"
       | `List (elems)           ->  "["^ string_of_kind' vars elems ^"]"
+      | `Mailbox (msg)           ->  "Mailbox ("^ string_of_kind' vars msg ^")"
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_kind' vars t) present_fields in
@@ -170,7 +171,8 @@ let rec type_vars : kind -> int list = fun kind ->
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
-    | `List (kind)       -> aux kind
+    | `List (kind)             -> aux kind
+    | `Mailbox (kind)          -> aux kind
     | `DB                      -> []
   in unduplicate (=) (aux kind)
 and row_type_vars (field_env, row_var) =
@@ -185,15 +187,16 @@ and row_type_vars (field_env, row_var) =
   in
     field_type_vars @ row_var
 
-let rec free_bound_type_vars = function
+let rec free_bound_type_vars : kind -> IntSet.t = function
   | `Not_typed               -> IntSet.empty
   | `Primitive _             -> IntSet.empty
   | `TypeVar var             -> IntSet.singleton var
   | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
-  | `Recursive (var, body)    -> IntSet.add var (free_bound_type_vars body)
-  | `List (kind)    -> free_bound_type_vars kind
+  | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
+  | `List (kind)             -> free_bound_type_vars kind
+  | `Mailbox (kind)          -> free_bound_type_vars kind
   | `DB                      -> IntSet.empty
 
 and free_bound_row_type_vars (field_env, row_var) =
@@ -210,7 +213,7 @@ and free_bound_row_type_vars (field_env, row_var) =
     IntSet.union field_type_vars row_var
 
 (* string conversions *)
-let string_of_kind kind = 
+let string_of_kind (kind : kind) = 
   string_of_kind' (make_names (free_bound_type_vars kind)) kind
 
 let string_of_kind_raw kind = 
@@ -244,7 +247,8 @@ let rec serialise_kind : kind serialiser =
     | `Record v        -> serialise_row 'e' v
     | `Variant v       -> serialise_row 'f' v
     | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_kind) v
-    | `List v    -> serialise1 'h' (serialise_kind) v
+    | `List v          -> serialise1 'h' (serialise_kind) v
+    | `Mailbox v       -> serialise1 'm' (serialise_kind) v
     | `DB              -> serialise0 'i' () ()
 and serialise_field_spec : field_spec serialiser =
   function
@@ -273,6 +277,7 @@ and deserialise_kind : kind deserialiser =
          | 'f'        -> `Variant (fst (deserialise_row obj))
 	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_kind) obj)
          | 'h'        -> `List (deserialise1 (deserialise_kind) obj)
+         | 'm'        -> `Mailbox (deserialise1 (deserialise_kind) obj)
          | 'i'        -> (deserialise0 () obj); `DB
          | _          -> failwith ("Unexpected character deserialising kind : " ^ String.make 1 t))
     in r, rest
@@ -384,3 +389,47 @@ let fresh_row () =
   let var = fresh_raw_variable () in
     `RowVar var, TypeOps.make_empty_open_row_with_var var
 
+
+(* rewriting for types *)
+let perhaps_process_children (f : kind -> kind option) :  kind -> kind option =
+  let rewrite_row row (fields, r) = 
+    match (StringMap.fold
+             (fun name field (changed, row) ->
+                match field with
+                  | `Present k -> (match f k with
+                                     | Some k -> true,    TypeOps.set_field (name, `Present k) row
+                                     | None   -> changed, TypeOps.set_field (name, `Present k) row)
+                  | `Absent    -> changed, TypeOps.set_field (name, `Absent) row)
+             fields
+             (false, (BasicTypeOps.empty_field_env, r))) with
+      | true, row -> Some row
+      | false, _  -> None in
+    function
+        (* no children *)
+      | `Not_typed
+      | `Primitive _
+      | `DB
+      | `TypeVar  _ as p -> None
+          (* one child *)
+      | `Recursive (v, k) -> (match f k with 
+                                | Some k -> Some (`Recursive (v, k))
+                                | None   -> None)
+      | `List k ->          (match f k with 
+                               | Some k -> Some (`List k)
+                               | None   -> None)
+      | `Mailbox k ->       (match f k with 
+                               | Some k -> Some (`Mailbox k)
+                               | None   -> None)
+          (* two children *)
+      | `Function (j, k) -> (match f j, f k with
+                               | None,   None   -> None
+                               | Some j, None   -> Some (`Function (j, k))
+                               | None,   Some k -> Some (`Function (j, k))
+                               | Some j, Some k -> Some (`Function (j, k)))
+          (* n children *)
+      | `Record row  -> (match rewrite_row f row with 
+                           | Some row -> Some (`Record row)
+                           | None ->     None)
+      | `Variant row -> (match rewrite_row f row with 
+                           | Some row -> Some (`Variant row)
+                           | None ->     None)

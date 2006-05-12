@@ -163,13 +163,11 @@ let env : (string * (primitive * Kind.assumption)) list = [
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   let r', r = fresh_row () in
-     [r'], `Primitive `Int --> (`Variant r --> unit_type));
-
+   kind "Mailbox a -> a -> ()");
 
   "self",
   (p1 (fun _ -> `Primitive (`Int (num_of_int !current_pid))),
-   kind "() -> Int");
+   kind "Mailbox a -> () -> Mailbox a");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -178,23 +176,26 @@ let env : (string * (primitive * Kind.assumption)) list = [
      rather provide a way to implement this primitive from here.
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
-     Also, the type allows any message to be received, which is wrong.
      -- jdy) *)
-  (p1 (fun _ -> assert false),
-   let r', r = fresh_row () in
-     ([r'], unit_type --> `Variant r));
+    (p1 (fun _ -> assert false), kind "Mailbox a -> () -> a"); (* Yes, this is the right type. *)
   
   "spawn",
-  (* This should also be a primitive, as described in the ICFP
-     paper. Also, the type is wrong.  *)
+  (* This should also be a primitive, as described in the ICFP paper. *)
   (p2 (fun f p ->
          let new_pid = fresh_pid () in
            Hashtbl.add messages new_pid (Queue.create ());
            Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
            `Primitive (`Int (num_of_int new_pid))),
-   let a', a = fresh_type () in
-   let b', b = fresh_type () in
-     ([a'; b'], (a --> b) --> (a --> `Primitive `Int)));
+   (*
+     a: spawn's mailbox type (ignored, since spawn doesn't recv)
+     b: the mailbox type of the spawned process
+     c: the parameter expected by the process function
+     d: the return type of the spawned process function (ignored)
+   *)
+   kind "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
+
+  "_MAILBOX_",
+  (`Primitive (`Int (num_of_int 0)), kind "Mailbox a");
 
   (** Lists and collections **)
   "hd",
@@ -431,7 +432,7 @@ let rec continuationize : primitive -> continuationized_val = function
 type primitive_environment = (string*continuationized_val) list
 
 let value_env = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
-and type_env : Kind.environment = List.map (fun (n, (_,t)) -> (n,t)) env
+and type_env : Kind.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
 
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function
