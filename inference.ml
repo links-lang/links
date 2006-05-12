@@ -839,7 +839,7 @@ let add_parameter : RewriteSyntaxU.rewriter = function
   | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
   | _                  -> None
 and remove_parameter : RewriteSyntax.rewriter = function
-  | Abstr ("_MAILBOX_", (Abstr _ as e), d)              -> Some e
+  | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))
   | Apply (Apply (f,Variable ("_MAILBOX_", _),_), a, d) -> Some (Apply (f,a,d))
   | _                                                   -> None
 
