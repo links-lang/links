@@ -278,7 +278,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
   "dom",
   (* Not available on the server *)
   ((`Primitive (`Int (num_of_int (-1)))),
-   kind "Int");
+   kind "Mailbox a");
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
