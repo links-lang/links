@@ -1,25 +1,23 @@
-OCAMLMAKEFILE = ./OCamlMakefile
+include ./Makefile.config
 
-ifndef OCAML_LIBDIR
-   OCAML_LIBDIR = $(OCAMLLIB)/site-lib
-endif
+OCAMLMAKEFILE = ./OCamlMakefile
 
 ifdef BUILD_SQLITE
    DB_CODE    += lite_database.ml
-   DB_AUXLIBS += $(OCAML_LIBDIR)/sqlite
+   DB_AUXLIBS += $(SQLLITE_LIBDIR)
    DB_CLIBS   += cclib lsqlite_stubs
    DB_LIBS    += sqlite
 endif
 
 ifdef BUILD_MYSQL
    DB_CODE    += mysql_database.ml
-   DB_AUXLIBS += $(OCAML_LIBDIR)/mysql
+   DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
 
 ifdef BUILD_POSTGRESQL
    DB_CODE    += pg_database.ml
-   DB_AUXLIBS += $(OCAML_LIBDIR)/postgresql
+   DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
 endif
 
