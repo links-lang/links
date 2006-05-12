@@ -316,6 +316,14 @@ let env : (string * (primitive * Kind.assumption)) list = [
   (p1 (fun msg -> failwith (unbox_string msg)),
    kind "String -> a");
 
+
+  (* HACK *)
+  "callForeign",
+   (notimpl "callForeign",
+    let a', a = fresh_type() in
+    let b', b = fresh_type() in
+      ([a'; b'], a --> b));
+
   "sleep",
   (* This doesn't seem right : it freezes all threads *)
   (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));

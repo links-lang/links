@@ -6,15 +6,16 @@ fun compute(count, total) server {
 }
 
 fun showProgress(count, total) client {
+ debug("progress");
  var percent = 100.0 *. float_of_int(count) /. float_of_int(total);
  dom ! ReplaceElement(
   id="bar",
-  replacement=<div id="bar"
-       style="width:{string_of_float(percent)}%; background-color: black">|</div>
+  replacement=<div id="bar"><emph>{enxml(string_of_float(percent))}%</emph></div>
  )
 }
 
 fun showAnswer(answer) client {
+ debug("bla");
  dom ! ReplaceElement(
   id="bar",
   replacement=<div id="bar">{enxml(answer)}</div>

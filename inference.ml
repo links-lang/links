@@ -545,6 +545,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let bindings = lname_bound_vars xml in
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
+      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in
         (* extend the env with each l:name bound variable *)
       let attr_env = fold_right (fun s env -> (s, ([], inference_string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in

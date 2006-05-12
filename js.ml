@@ -99,7 +99,7 @@ let rec show : code -> string =
     | c -> "(" ^ show c ^ ")" in
   let show_def = function
       | name, (Fn _ as f) -> show_func name f
-      | name, Bind (v, (Fn _ as f), Var v') when v = v'  -> show_func (*name*) v f ^ "\nvar " ^ name ^ " = " ^ v ^ ";"
+      | name, Bind (v, (Fn _ as f), Var v') when v = v'  -> show_func (*name*) v f ^ "\nvar " ^ name ^ " = " ^ v
       | name, value -> "var " ^ name ^ " = " ^ show value in
     function
       | Var s -> s
@@ -138,10 +138,11 @@ let chrlit s = Lit (string_quote (string_of_char s))
      (e.g. int_of_string, xml)
  *)
 
-
 let boiler_1 = "<html>
        <head>
           <script type='text/javascript' src=\"json.js\"></script>
+          <script type='text/javascript' src=\"YAHOO.js\"></script>
+          <script type='text/javascript' src=\"event.js\"></script>
           <script type='text/javascript' src=\"jslib.js\"></script>
           <script type='text/javascript'><!-- \n"
 and boiler_2 =    "\n--> </script>
@@ -264,6 +265,30 @@ let trivial_cps expr =
 
 (* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("_idy")
+
+
+(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
+let rec rename' renamer = function
+  | Var x -> Var (renamer x)
+  | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
+  | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
+  | Call(func, args) -> Call(rename' renamer func,
+                             map (rename' renamer) args)
+  | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
+                                 rename' renamer rhs)
+  | Cond(test, yes, no) ->  Cond(rename' renamer test,
+                                 rename' renamer yes,
+                                 rename' renamer no)
+  | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
+  | Lst(terms) -> Lst(map (rename' renamer) terms)
+  | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
+                                   rename' renamer body)
+  | Seq(first, second) -> Seq(rename' renamer first,
+                              rename' renamer second)
+  | simple_expr -> simple_expr
+and rename renamer body = rename' renamer body
+
+
 
 (* let yield_and_call(func, args, kappa) = *)
 (*   Call(Var("_yield"), [jsthunk(Call(Call(func, [kappa]), args))]) *)
@@ -579,13 +604,17 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   let vars = Forms.lname_bound_vars xml in
     (* handlerInvoker generates onFoo="..." attributes--the first 
        thing invoked when that event occurs. *)
+(*
   let handlerInvoker (evName, _) = 
     (evName, strlit ("_eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
-  let elem_id = 
-    try 
-      match (assoc "id" attrs) with
-	  String(idStr, _) -> strlit idStr
-    with Not_found -> Lit "0" in
+*)
+  (* [BUG] the id tag isn't necessarily static! *)
+(*   let elem_id =  *)
+(*     try  *)
+(*       match (assoc "id" attrs) with *)
+(* 	  String(idStr, _) -> strlit idStr *)
+(*     with Not_found -> Lit "0" in *)
+
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left
                             (fun expr var -> Bind (var, Call (Var "_val", [strlit var]), expr))
@@ -594,10 +623,9 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   let handlers = map make_code_for_handler handlers in
   let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
   let children_cps = map (fun e -> (gensym "", generate e)) children in
-    make_xml_cps attrs_cps (["id", 
+    make_xml_cps attrs_cps (["key", 
                              Call(Var "_registerFormEventHandlers",
-                                  [elem_id;
-                                   Lst (map (fun (evName, code) -> 
+                                  [Lst (map (fun (evName, code) -> 
                                                Dict(["evName", strlit evName;
                                                      "handler", 
                                                         Fn (["event"], code)]))
@@ -689,27 +717,6 @@ and uniquify_args = function
            subst body)
 
 
-(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
-let rec rename' renamer = function
-  | Var x -> Var (renamer x)
-  | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
-  | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
-  | Call(func, args) -> Call(rename' renamer func,
-                             map (rename' renamer) args)
-  | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
-                                 rename' renamer rhs)
-  | Cond(test, yes, no) ->  Cond(rename' renamer test,
-                                 rename' renamer yes,
-                                 rename' renamer no)
-  | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
-  | Lst(terms) -> Lst(map (rename' renamer) terms)
-  | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
-                                   rename' renamer body)
-  | Seq(first, second) -> Seq(rename' renamer first,
-                              rename' renamer second)
-  | simple_expr -> simple_expr
-and rename renamer body = rename' renamer body
-
 let rec simplify = function
   | Call(Fn([formal_arg], body), [actual_arg]) 
       when Str.string_match (Str.regexp "^__") formal_arg 0
@@ -748,10 +755,12 @@ let gen =
   ->- eliminate_admin_redexes
   ->- show
 
+let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
+
  (* TODO: imports *)
-let generate_program environment expression = 
+let generate_program environment expression =
   (boiler_1
- ^ String.concat "\n" (map gen environment)
+ ^ String.concat "\n" (map gen (but_last environment))
  ^ boiler_2
  ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
  ^ boiler_3)

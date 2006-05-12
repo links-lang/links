@@ -1,5 +1,15 @@
 // Links js runtime.
 
+// [HACK]
+//   import third party APIs into here
+//   - jslib is typed as an empty open row
+//   - foreign calls are untyped
+var jslib = function () {
+  return {
+    event: YAHOO.util.Event
+  };
+}();
+
 var DEBUGGING = true;
 var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
 
@@ -122,6 +132,8 @@ function isarray(obj) {
 function _continuationize(f) {
     return function (kappa) {
         return function () {
+	    _alert("Applying continuationized function: "+f);
+	    _alert("to args: "+arguments);
             return kappa(f.apply(f, arguments));
         };
     };
@@ -371,20 +383,25 @@ function isElementWithTag(node, tag) {
   return (isElement(node) && (node.tagName.toLowerCase() == 'body'));
 }
 
-// bind all the handlers registered to this node id to this DOM node
+// bind all the handlers registered to this key to this DOM node
 function _activateHandlers(node) {
   if(!isElement(node))
     return;
 
-  var id = node.getAttribute('id');
-  if(id != null) {
-    var hs = _eventHandlers[id];
+  var key = node.getAttribute('key');
+  if(key != null) {
+    var hs = _eventHandlers[key];
     for(var eventName in hs) {
-      node[eventName] =
-	function (id, name){return function (e) {
- 	  _eventHandlers[id][name](e);
+      _alert("registering event: "+eventName+"; for node: "+key);
+      jslib.event.addListener(node, eventName.replace(/^on/, ""), 
+	function (key, name){return function (e) {
+          _alert("event firing: "+name);
+ 	  _eventHandlers[key][name](e);
+	  // make sure this event isn't handled by anyone else
+          jslib.event.stopEvent(e);
 	  return false;
-      	}}(id, eventName);
+      	}}(key, eventName)
+	);
     }
   }
 }
@@ -454,33 +471,25 @@ function _start(tree) {
 
 }
 
-// //  _registerFormEventHandlers(id, [action1, action2, ...])
-// //    Register an event handler.
-// //    We need to register it, and invoke it through the registry, 
-// //    because attributes like onClick are merely strings, whereas we 
-// //    want to associate proper closures.
-// //    `id' should be either 0 or the real ID of the element to which 
-// //    you're attaching the handler. If it is 0, a new ID will be
-// //    generated and returned.
+// generate a fresh key for each node
+var _node_key = 0;
+function _get_fresh_node_key() {
+  return _node_key++;
+}
 
-var _id = 0;
-
-function _registerFormEventHandlers(id, actions) {
-   var id = id != 0 ? id : _id++;
+var _eventHandlers = {};
+function _registerFormEventHandlers(actions) {
+   var key = _get_fresh_node_key();
    for (var i = 0; i < actions.length; i++) {
      var action = actions[i];
         // FIXME: clone this ??
 
-//      if (!_eventHandlers[action.evName])
-//        _eventHandlers[action.evName] = [];
-//      _eventHandlers[action.evName][id] = action.handler;
-     if (!_eventHandlers[id])
-       _eventHandlers[id] = [];
-     _eventHandlers[id][action.evName] = action.handler;
+     if (!_eventHandlers[key])
+       _eventHandlers[key] = [];
+     _eventHandlers[key][action.evName] = action.handler;
    }
-   return id;
+   return key;
 }
-var _eventHandlers = {};
 
 function enxml(kappa) { return function (body) {
   return kappa([document.createTextNode(body)]);
@@ -693,14 +702,17 @@ var _current_pid = 0;
 function spawn(kCurry) {
   return function (f) {
     kCurry(function (kappa) {
-      return function (arg) {
+       return function (arg) {
+
         var childPid = ++_maxPid;
         _mailboxes[childPid] = [];
         setTimeout(function () { 
+                     _debug("launched " + childPid);
                      _current_pid = childPid;
                      f(_applyChanges)(arg) 
                    }, 200);
         kappa(childPid);
+
       };
     });
   }
@@ -753,7 +765,7 @@ function _dictlength(x) {
 function _block_proc(pid, its_cont) {
   // FIXME: const?? is this OK?
   var current_pid = _current_pid;
-  _blocked_procs[pid] = function () { _current_pid = current_pid;  its_cont() };
+  _blocked_procs[pid] = function () { _current_pid = current_pid; _debug("scheduled " + current_pid); its_cont() };
   // discard stack
 }
 
@@ -763,7 +775,8 @@ function recv(kappa) {
       msg = _mailboxes[_current_pid].pop()
       kappa(msg);
     } else {
-      _block_proc(_current_pid, function () { recv(kappa)() });
+      var current_pid = _current_pid;
+      _block_proc(_current_pid, function () { _current_pid = current_pid; recv(kappa)() });
     }
   }
 }
@@ -780,7 +793,7 @@ function _yield(my_cont) {
   ++_yieldCount;
   if ((_yieldCount % _yieldGranularity) == 0) {
     var current_pid = _current_pid;
-    setTimeout((function() { _current_pid = current_pid; my_cont()}),
+    setTimeout((function() { _current_pid = current_pid; _debug("scheduled (after yield) " + current_pid); my_cont()}),
                sched_pause);
   }
   else {
@@ -790,9 +803,36 @@ function _yield(my_cont) {
 
 // _call: using this makes compiled js code easier to read.
 function _call(f, args, kappa) {
-  _yield(function() { it = f(kappa); it.apply(it, args) });
+  _yield(function() { try {it = f(kappa); it.apply(it, args) }
+	catch(e) {_alert("failed to apply function: "+it);
+		  _alert("to args: "+args); throw(e);}} );
 }
 
+// FFI
+//
+// want to find g such that:
+//   CPS(g f a) = \k.CPS(a) (\x.k (f x))
+// now:
+//   CPS(g f a) =_def \k.CPS(a) (\x.g (\h.h k x) f)
+// so we just need that:
+//   g (\h.h k x) f = k (f x)
+//
+// setting g =_def \k.\f.k(\k.\x.k (f x)) solves the
+// equation
+//
+// let callForeign = g
+//
+// callForeign allows us to call JS functions from within Links
+// using the syntax: callForeign(f)(args)
+function callForeign(kappa) {
+  return function (f) {
+    return kappa (function (kappa) {
+      return (function (x) {
+        kappa (f (x));
+      });
+    });
+  };
+}
 
 function print(kappa) {
   return function(str) {

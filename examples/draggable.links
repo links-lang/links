@@ -1,22 +1,24 @@
-fun waiting() client {
+fun waiting(id) client {
   receive {
-     MouseDown  target -> dragging(target)
-     MouseUp           -> waiting()
-     MouseOut   target -> waiting()
+     case MouseDown  target -> dragging(id, target);
+     case MouseUp           -> waiting(id);
+     case MouseOut   target -> waiting(id);
   }
 }
 
-fun dragging(elem) client {
+fun dragging(id, elem) client {
   receive {
-     MouseUp           -> waiting()
-     MouseDown  target -> dragging(target)
-     MouseOut relatedTarget -> {
-         if (relatedTarget.tagName == "LI") {
+     case MouseUp           -> waiting(id);
+     case MouseDown  target -> dragging(id, target);
+     case MouseOut relatedTarget -> {
+         if (relatedTarget.nodeName == "LI" && relatedTarget.parentNode.id == id) {
+	    debug(relatedTarget.parentNode.id);
+	    debug(id);
             dom ! SwapNodes(first=relatedTarget,second=elem);
-            dragging(elem)
+            dragging(id, elem)
          }
-         else waiting()
-    }
+         else waiting(id)
+    };
   }
 }
 
@@ -24,13 +26,14 @@ fun format(item) {
     <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{enxml(item)}</li><span/>
 }
 
-fun draggableList(items)
+fun draggableList(id, items)
 {
-  listMgr = spawn(waiting)();
-   <ul id="list" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
-      l:onmouseup   = "{send(listMgr)(MouseUp)}"
-      l:onmousedown = "{send(listMgr)(MouseDown (event.target))}"
-      l:onmouseout  = "{send(listMgr)(MouseOut (event.relatedTarget))}"
+  var x = id;
+  listMgr = spawn(waiting)(id);
+   <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+      l:onmouseup   = "{listMgr ! (MouseUp)}"
+      l:onmousedown = "{listMgr ! (MouseDown (callForeign(jslib.event.getTarget)(event, true)))}"
+      l:onmouseout  = "{listMgr ! (MouseOut (callForeign(jslib.event.getRelatedTarget)(event)))}"
    >
     {for (item <- items)
          format(item)}
@@ -38,11 +41,14 @@ fun draggableList(items)
 
 }
 
+<html>
 <body>
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
-{draggableList(["Pooh", "Paddington", "Rupert", "Edward"])}
+{draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
-{draggableList(["Guinness", "Stella Artois", "McEwan"])}
+{draggableList("beers",["Guinness", "Stella Artois", "McEwan"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
-{draggableList(["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
+{draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
 </body>
+</html>
+
