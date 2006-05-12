@@ -70,7 +70,7 @@ SOURCES = $(OPC)                \
 
 LIBS    = unix nums str $(DB_LIBS) 
 RESULT  = links
-CLIBS 	= cclib lssl cclib lcrypto $(DB_CLIBS)
+CLIBS 	= $(DB_CLIBS)
 
 #PROFILING = 1
 
