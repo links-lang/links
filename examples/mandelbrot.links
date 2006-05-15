@@ -1,0 +1,75 @@
+#!/home/jeremy/code/links/svn/clean/links
+# adapted from http://www.timestretch.com/FractalBenchmark.html
+
+bailout = 16.;
+max_iterations = 100;
+
+# process associated with a canvas.  Receive Point messages and render
+# them on the screen using 2x2 div elements.
+fun draw(id) client {
+  receive {
+    case Point(x,y) -> {
+     dom ! AppendChild (
+               id=id,
+               replacement=<div style="position: absolute;
+                                       background-color: red; 
+                                       width: 2px;
+                                       height: 2px;
+                                       left: {string_of_int(2*x)}px;
+                                       top: {string_of_int(2*y)}px"> </div>)
+    };
+  };
+  draw(id);
+}
+
+# Create a canvas and return its id to the calling process.
+# The canvas can receive messages of the form Point (x,y)
+fun canvas (x, y, id) {
+  dom ! AppendChild (id="body",
+                     replacement=<div id="{id}"
+                                      style="width: {string_of_int(2*x)}px;
+                                             height: {string_of_int(2*y)}px"> </div>);
+  spawn{ draw(id) }
+}
+
+fun mandelbrot(x, y) {
+  cr = y -. 0.5;
+  ci = x;
+  zi = 0.0;
+  zr = 0.0;
+  i = 0;
+  fun loop(zr, zi, i) {
+      i = i + 1;
+      temp = zr *. zi;
+      zr2 = zr *. zr;
+      zi2 = zi *. zi;
+      zr = zr2 -. zi2 +. cr;
+      zi = temp +. temp +. ci;
+      if (zi2 +. zr2 > bailout)  i
+      else if (i > max_iterations) 0
+      else loop(zr, zi, i)
+  }
+  loop(zr, zi, i)
+}
+
+fun range(f, to) {
+  if (f >= to) []
+  else f :: range(f+1, to)
+}
+
+fun iterate() client {
+   var c = canvas (80,80, "pad");
+   for (y <- range(-39, 39)) {
+      for (x <- range(-39,39)) {
+            (if (mandelbrot(float_of_int(x)/.40.0, float_of_int(y)/.40.0) == 0) (c ! Point (x+39,y+39))
+            else ()); []
+            };
+      []
+   }
+}
+
+<html><body>
+  <div id="body"/>
+  <a l:onclick="{iterate()}">draw</a>
+</body></html>
+
