@@ -483,6 +483,34 @@ let generalize : inference_environment -> inference_type -> inference_assumption
       debug ("Generalized: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t)
 
+let rec is_value : 'a expression' -> bool = function
+  | Boolean _
+  | Integer _
+  | Char _
+  | String _
+  | Float _
+  | Variable _
+  | Xml_node _ (* ? *)
+  | Record_empty _
+  | Nil _
+  | Abstr _ -> true
+  | Variant_injection (_, e, _)
+  | Variant_selection_empty (e, _)
+  | Database (e, _)
+  | Table (e, _, _, _)
+  | List_of (e, _) -> is_value e
+  | Comparison (a,_,b,_)
+  | Concat (a, b, _)
+  | For (a, _, b, _)
+  | Record_extension (_, a, b, _)
+  | Record_selection_empty (a, b, _)
+  | Record_selection (_, _, _, a, b, _)
+  | Let (_, a, b,_)  -> is_value a && is_value b
+  | Variant_selection (a, _, _, b, _, c, _)
+  | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
+  | Rec (bs, e, _) -> List.for_all (is_value -<- snd) bs && is_value e
+  | _ -> false
+
 let rec type_check (env : inference_environment) : (untyped_expression -> inference_expression) = fun expression ->
   try
     debug ("Typechecking expression: " ^ (string_of_expression expression));
@@ -537,8 +565,9 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
   | Let (variable, _, _, pos) when qnamep variable -> invalid_name pos variable "qualified names (containing ':') cannot be bound"
   | Let (variable, value, body, pos) ->
       let value = type_check env value in
-      let body_env = (variable, (generalize env (type_of_expression value))) :: env in
-      let body = type_check body_env body in
+      let vtype = (if is_value value then (generalize env (type_of_expression value))
+                   else ([], type_of_expression value)) in
+      let body = type_check ((variable, vtype) :: env) body in
 	Let (variable, value, body, (pos, type_of_expression body, None))
   | Rec (variables, body, pos) ->
       let best_env, vars = type_check_mutually env variables in
@@ -786,8 +815,9 @@ let type_expression : Kind.environment -> untyped_expression -> (Kind.environmen
 	| Define (variable, value, loc, pos) ->
 	    (*let var_type = ITO.fresh_type_variable () in*)
 	    let value = type_check env value in
-	    let value_type = type_of_expression value in
-              (((variable, (generalize env (type_of_expression value))) :: env),
+	    let value_type = if is_value value then (generalize env (type_of_expression value))
+            else [], type_of_expression value in
+              (((variable, value_type) :: env),
     	       Define (variable, value, loc, (pos, type_of_expression value, None)))
 	| expr -> let value = type_check env expr in env, value
     in

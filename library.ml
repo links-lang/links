@@ -195,7 +195,12 @@ let env : (string * (primitive * Kind.assumption)) list = [
    kind "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
 
   "_MAILBOX_",
-  (`Primitive (`Int (num_of_int 0)), kind "Mailbox a");
+  (`Primitive (`Int (num_of_int 0)), 
+   let _, u = fresh_type () in
+     (* Deliberately non-quantified type.  Mailboxes are
+        non-polymorphic, so this is a so-called "weak type
+        variable". *)
+     ([], `Mailbox u));
 
   (** Lists and collections **)
   "hd",
