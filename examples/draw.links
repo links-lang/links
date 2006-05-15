@@ -1,0 +1,50 @@
+#!/home/jeremy/code/links/svn/clean/links
+
+# div-based drawing.
+
+# Create a canvas and return its id to the calling process.
+# The canvas can receive messages of the form Point (x,y)
+fun canvas (x, y, id) {
+  dom ! AppendChild (id="body",
+                     replacement=<div id="{id}"
+                                      style="width: {string_of_int(x)}px;
+                                             height: {string_of_int(y)}px"> </div>);
+  spawn{ draw(id) }
+}
+
+# process associated with a canvas.  Receive Point messages and render
+# them on the screen using 2x2 div elements.
+fun draw(id) client {
+  receive {
+    case Point(x,y) -> {
+     dom ! AppendChild (
+               id=id,
+               replacement=<div style="position: absolute;
+                                       background-color: red; 
+                                       width: 1px;
+                                       height: 1px;
+                                       left: {string_of_int(x)}px;
+                                       top: {string_of_int(y)}px"> </div>)
+    };
+  };
+  draw(id);
+}
+
+# [a..b]
+fun range(f, to) {
+  if (f >= to) []
+  else f :: range(f+1, to)
+}
+
+fun scribble() {
+  var c = canvas (100,100, "pad");
+  for (i <- range(0,50))
+    for (j <- range(0,50))
+      [c ! Point(i*2,j*2)];
+  ()
+}
+
+<html><body>
+  <div id="body"/>
+  <a l:onclick="{scribble()}">draw</a>
+</body></html>
