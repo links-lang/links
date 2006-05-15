@@ -474,8 +474,11 @@ fun globals locals expr cont ->
         interpret globals locals body cont
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
+  | Syntax.HasType(expr, typ, _) ->
+      interpret globals locals expr cont
   | Syntax.Placeholder (l, _) -> 
       failwith("Internal error: Placeholder at runtime")
+
 
           (* Note: no way to suspend threading *)
 and interpret_safe globals locals expr cont =

@@ -269,11 +269,13 @@ let desugar_assumption ((vars, k)  : assumption) : Kind.assumption =
 				    vars) in
   let lookup = flip assoc varmap in
   let rec desugar = function
-    | TypeVar s -> `TypeVar (lookup s)
+    | TypeVar s -> (try `TypeVar (lookup s)
+  with Not_found -> failwith"Not found while desugaring assumption")
     | FunctionType (k1, k2) -> `Function (desugar k1, desugar k2)
     | MuType (v, k) -> `Recursive (lookup v, desugar k)
     | UnitType -> Kind.unit_type
     | TupleType ks -> 
+	(* Why not?: Utility.fromTo 1 ((length ks) + 1) *)
 	let labels = map (string_of_int -<- ((+)1)) (Utility.fromTo 0 (length ks)) 
 	and unit = Kind.TypeOps.make_empty_closed_row ()
 	and present (s, x) = (s, `Present x)
@@ -325,6 +327,8 @@ type phrasenode =
   | RecordLit of ((name * phrase) list * phrase option)
   | Projection of (phrase * name)
 
+  | TypeAnnotation of (phrase * kind)
+
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
 (*  TBD: remove `None' from Switch constructor *)
@@ -364,6 +368,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   let desugar = desugar lookup_pos
   and patternize = patternize lookup_pos in
     match s with
+  | TypeAnnotation(e, k) -> HasType(desugar e, 
+				    snd (desugar_assumption (generalize k)), pos)
   | FloatLit f  -> Float (f, pos)
   | IntLit i    -> Integer (i, pos)
   | StringLit s -> String (s, pos)

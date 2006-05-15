@@ -51,6 +51,7 @@ type 'data expression' =
   | Table of ('data expression' * string * Query.query * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
+  | HasType of ('data expression' * kind * 'data)
   | Placeholder of (string * 'data)
 
 
@@ -119,6 +120,7 @@ let rec show_expression =
   | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
   | Escape v -> "Escape " ^ s3 (identity, exp, null) v
   | Wrong v -> "Wrong " ^ s1 null v
+  | HasType v -> "HasType " ^ s3 (exp, null, null) v
 
 type expression = (position * kind * string option (* label *)) expression'
 type untyped_expression = position expression'
@@ -135,6 +137,7 @@ let rec unparse_sequence empty unit append = function
   | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
 and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
 and show t : 'a expression' -> string = function 
+  | HasType(expr, kynd, data) -> show t expr
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
@@ -563,6 +566,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
+  | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
   | Wrong (data) -> Wrong (f data)
 
 let erase : expression -> untyped_expression = 
@@ -661,6 +665,7 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Record_empty _ -> None
           
       (* fixed children *)
+      | HasType (e, k, b)                          -> passto [e] (fun [e] -> HasType (e, k, b))
       | Abstr (a, e, b)                            -> passto [e] (fun [e] -> Abstr (a, e, b))
       | Variant_injection (a, e, b)                -> passto [e] (fun [e] -> Variant_injection (a, e, b))
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
@@ -772,6 +777,7 @@ open Kind
 
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
+	| HasType (_, _, data) -> data
 	| Boolean (_, data) -> data
 	| Integer (_, data) -> data
 	| Float (_, data) -> data

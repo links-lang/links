@@ -290,6 +290,7 @@ perhaps_semi:
 |                                                              {}
 
 exp:
+| exp COLON kind                                               { TypeAnnotation($1, $3), pos() }
 | amper_expression                                             { ($1 : Sugar.phrase) }
 
 unique:

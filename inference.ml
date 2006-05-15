@@ -598,9 +598,9 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let trimmed_node =
         Xml_node (tag, 
                   nonspecial_attrs,         (* v-- up here I mean *)
-                  contents,
+                  contents,                 (* | *)
                   (pos, `List (`Primitive `XMLitem), None))
-      in
+      in                                    (* | *)
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
 
@@ -716,6 +716,10 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
         Table (db, s, query, (pos, kind, None))
   | Wrong pos ->
       Wrong(pos, ITO.fresh_type_variable(), None)
+  | HasType(expr, typ, pos) ->
+      let expr = type_check env expr in
+	unify(type_of_expression expr, type_to_inference_type typ);
+	HasType(expr, typ, (pos, type_of_expression expr, None))
           
   with 
       Unify_failure msg
