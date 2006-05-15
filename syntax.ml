@@ -499,6 +499,8 @@ let visit_expressions'
         Table (e, s, q, d), data
     | Escape (n, e, d) -> let e, data = visitor visit_children (e, data) in
         Escape (n, e, d), data
+    | HasType (e, k, d) -> let e, data = visitor visit_children (e, data) in
+	HasType (e, k, d), data
     | Wrong (d) -> Wrong (d), unit data
     | Placeholder (str, d) -> Placeholder (str, d), unit data
   in visitor visit_children
