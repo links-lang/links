@@ -37,11 +37,12 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
 
 SOURCES = $(OPC)                \
           utility.ml            \
+          settings.mli settings.ml \
           rewrite.ml            \
           pickle.mli pickle.ml  \
           performance.ml        \
           graph.ml              \
-          type_basis.ml type_basis.mli \
+          type_basis.mli type_basis.ml \
           kind.mli kind.ml      \
           query.ml              \
           inferencetypes.mli inferencetypes.ml \

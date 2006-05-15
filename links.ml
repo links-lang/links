@@ -2,7 +2,7 @@ open Getopt
 open Utility
 
 (* Whether to run the interactive loop *)
-let interacting = ref true
+let interacting = Settings.add_bool true "interacting"
 
 (* Whether to print types *)
 let printing_types = ref true
@@ -15,7 +15,7 @@ let stdenvs = [], Library.type_env
 
 (* Run unit tests *)
 let run_tests () = 
-  interacting := false;
+  Settings.set_value(interacting, false);
 (*   Optimiser.test () ; *)
 (*   Js.test () *)
   Js.run_tests ()
@@ -28,7 +28,7 @@ let print_result rtype result =
 
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
-  interacting := false;
+  Settings.set_value(interacting, false);
   handle_errors
     (fun input ->
        let exprs =          Performance.measure "parse" parse input in 
@@ -49,7 +49,7 @@ let rec interact envs =
 
 let web_program filename = 
   prerr_endline "WARNING: -w flag is unnecessary and deprecated";
-  interacting := false;
+  Settings.set_value(interacting, false);
   Webif.serve_requests filename 
 
 (** testenv
@@ -62,14 +62,14 @@ let testenv env_var =
 
 let run_file filename = 
   if testenv "REQUEST_METHOD" then
-    (interacting := false;
+    (Settings.set_value(interacting, false);
      Webif.serve_requests filename)
   else
     (evaluate Parse.parse_file stdenvs filename;
     ())
 
 let serialize_expr str = 
-  interacting := false;
+  Settings.set_value(interacting, false);
   let [expr] = Parse.parse_string str in
   let _, expr = Inference.type_expression Library.type_env expr in
   let expr_str, env_str = Forms.serialize_exprenv expr [] in
@@ -92,6 +92,6 @@ let options : opt list =
 (* main *)
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
-  if !interacting then interact stdenvs
+  if Settings.get_value(interacting) then interact stdenvs
 
 
