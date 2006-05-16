@@ -36,8 +36,6 @@ let fresh_pid =
 
 (* let xml = `List (`Primitive `XMLitem) *)
 
-type primop = (Result.result -> Result.result)
-
 let value_as_string db = function
   | `List (`Primitive(`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
   | `List ([])  -> "NULL"

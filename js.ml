@@ -779,7 +779,7 @@ let generate_program environment expression =
 (* p is the gen'd javascript (type `code') *)
 
 let links2js = (Parse.parse_string
-                ->- Inference.type_program (alistmap snd Library.env) ->- snd
+                ->- Inference.type_program Library.type_env ->- snd
                   ->- map ((Utility.perhaps_apply Optimiser.uniquify_expression)
                            ->- generate 
                              ->- simplify_completely))
