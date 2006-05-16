@@ -86,6 +86,7 @@ primary_expression:
 | LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
 | xml                                                          { $1 }
 | parenthesized_thing                                          { $1 }
+| FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -101,7 +102,6 @@ parenthesized_thing:
 | LPAREN labeled_exps VBAR exp RPAREN                          { RecordLit ($2, Some $4), pos() }
 | LPAREN labeled_exps RPAREN                                   { RecordLit ($2, None),               pos() }
 | LPAREN exps RPAREN                                           { TupleLit ($2), pos() }
-
 
 binop:
 | STAR                                                         { `Times }
@@ -136,8 +136,8 @@ unary_expression:
 
 exponentiation_expression:
 | unary_expression                                             { $1 }
-| exponentiation_expression HAT    postfix_expression          { InfixAppl (`Exp,      $1, $3), pos() }
-| exponentiation_expression HATHAT postfix_expression          { InfixAppl (`FloatExp, $1, $3), pos() }
+| exponentiation_expression HAT    unary_expression            { InfixAppl (`Exp,      $1, $3), pos() }
+| exponentiation_expression HATHAT unary_expression            { InfixAppl (`FloatExp, $1, $3), pos() }
 
 multiplicative_expression:
 | exponentiation_expression                                    { $1 }
@@ -173,9 +173,13 @@ logical_expression:
 | logical_expression BARBAR comparison_expression              { InfixAppl (`Or, $1, $3), pos() }
 | logical_expression AMPAMP comparison_expression              { InfixAppl (`And, $1, $3), pos() }
 
-send_expression:
+typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression BANG logical_expression                   { Send ($1, $3), pos() }
+| logical_expression COLON kind                                { TypeAnnotation ($1, $3), pos() }
+
+send_expression:
+| typed_expression                                             { $1 }
+| typed_expression BANG logical_expression                     { Send ($1, $3), pos() }
 
 db_expression:
 | send_expression                                              { $1 }
@@ -257,7 +261,6 @@ escape_expression:
 lambda_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
-| FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
 
 arg_list:
 | parenthesized_pattern                                        { [$1] }
@@ -290,7 +293,6 @@ perhaps_semi:
 |                                                              {}
 
 exp:
-| exp COLON kind                                               { TypeAnnotation($1, $3), pos() }
 | amper_expression                                             { ($1 : Sugar.phrase) }
 
 unique:
@@ -321,7 +323,7 @@ provider:
 | LPAREN patt LARROW exp RPAREN                                { $2, $4 }
 
 patt:
-| exp                                                          { Pattern $1 }
+| cons_expression                                              { Pattern $1 }
 
 just_kind:
 | kind SEMICOLON                                               { $1 }

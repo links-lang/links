@@ -60,7 +60,7 @@ let keywords = [
 "from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
-"var"    , VAR;    "spawn"    ,  SPAWN;
+"var"    , VAR;    "spawn"    ,  SPAWN;    "mu"        , MU;
 ] 
 
 exception LexicalError of (string * Lexing.position)
