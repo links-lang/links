@@ -38,6 +38,7 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
 SOURCES = $(OPC)                \
           utility.ml            \
           settings.mli settings.ml \
+          debug.mli debug.ml    \
           rewrite.ml            \
           pickle.mli pickle.ml  \
           performance.ml        \

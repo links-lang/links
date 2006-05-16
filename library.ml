@@ -5,6 +5,7 @@ open List
 open Kind
 open Result
 open Utility
+open Debug
 
 (* Data structures/utilities for proc mgmt *)
 

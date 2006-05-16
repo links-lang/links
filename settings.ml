@@ -32,4 +32,4 @@ let lookup_string = lookup string_settings
 let get_value ({contents=v}, _) = v
 let get_name (_, name) = name
 
-let set_value ((r, _), v) = r := v
+let set_value (r, _) v = r := v

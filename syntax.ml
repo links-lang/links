@@ -2,6 +2,7 @@ open Num
 open List
 
 open Utility
+open Debug
 open Pickle
 open Kind
 open Sql

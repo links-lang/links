@@ -1,6 +1,7 @@
 open List
 
 open Utility
+open Debug
 open Syntax
 open Inferencetypes
 open Forms

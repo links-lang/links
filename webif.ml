@@ -24,7 +24,7 @@ let is_client_program p =
 
 (* Hacky cache.  Should be neater, and moved somewhere else *)
 let read_file_cache filename : (Syntax.expression list) = 
-  Performance.measuring := false; (* temp *)
+  Settings.set_value Performance.measuring false; (* temp *)
   let cachename = filename ^ ".cache" in
     try
       if ((Unix.stat cachename).Unix.st_mtime > (Unix.stat filename).Unix.st_mtime) then
@@ -238,7 +238,7 @@ let perform_request program globals main req =
 (*          exit 0) *)
 
 let serve_requests filename = 
-  Performance.measuring := true;
+  Settings.set_value Performance.measuring true;
   Pervasives.flush(Pervasives.stderr);
   let program = read_file_cache filename in
   let client_prog = is_client_program program in 

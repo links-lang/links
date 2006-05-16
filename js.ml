@@ -8,6 +8,7 @@ open List
 
 open Pickle
 open Forms
+open Debug
 open Utility
 open Kind
 open Syntax
@@ -841,7 +842,7 @@ let rhino_output linkscode =
     try
       let channel = open_out tempfile in 
       let s = gen linkscode in
-        Utility.debug ("generated code for " ^ linkscode ^ ":\n" ^ s ^ "\n");
+        debug ("generated code for " ^ linkscode ^ ":\n" ^ s ^ "\n");
         output_string channel s ;
         flush channel;
         let output = process_output ("rhino < " ^ tempfile ^ " 2>&1 | sed '1d;s/^ *js>//'") in

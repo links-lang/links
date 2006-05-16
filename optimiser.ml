@@ -3,12 +3,13 @@
 open List
 
 open Utility
+open Debug
 open Rewrite
 open Syntax
 open Sql_transform
 
 (* This appears to be ignored *)
-let optimising = ref true
+let optimising = Settings.add_bool true "optimising"
 
 module RewriteSyntax = 
   Rewrite

@@ -1,11 +1,12 @@
 open Getopt
 open Utility
+open Debug
 
 (* Whether to run the interactive loop *)
 let interacting = Settings.add_bool true "interacting"
 
 (* Whether to print types *)
-let printing_types = ref true
+let printing_types = Settings.add_bool true "printing_types"
 
 (* Prompt in interactive mode *)
 let ps1 = "links> "
@@ -15,7 +16,7 @@ let stdenvs = [], Library.type_env
 
 (* Run unit tests *)
 let run_tests () = 
-  Settings.set_value(interacting, false);
+  Settings.set_value interacting false;
 (*   Optimiser.test () ; *)
 (*   Js.test () *)
   Js.run_tests ()
@@ -23,12 +24,12 @@ let run_tests () =
 (* Print a result, including its type if `printing_types' is true. *)
 let print_result rtype result = 
   print_string (Result.string_of_result result);
-  print_endline (if !printing_types then " : "^ Kind.string_of_kind rtype
+  print_endline (if Settings.get_value(printing_types) then " : "^ Kind.string_of_kind rtype
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
-  Settings.set_value(interacting, false);
+  Settings.set_value interacting false;
   handle_errors
     (fun input ->
        let exprs =          Performance.measure "parse" parse input in 
@@ -49,7 +50,7 @@ let rec interact envs =
 
 let web_program filename = 
   prerr_endline "WARNING: -w flag is unnecessary and deprecated";
-  Settings.set_value(interacting, false);
+  Settings.set_value interacting false;
   Webif.serve_requests filename 
 
 (** testenv
@@ -62,31 +63,34 @@ let testenv env_var =
 
 let run_file filename = 
   if testenv "REQUEST_METHOD" then
-    (Settings.set_value(interacting, false);
+    (Settings.set_value interacting false;
      Webif.serve_requests filename)
   else
     (evaluate Parse.parse_file stdenvs filename;
     ())
 
 let serialize_expr str = 
-  Settings.set_value(interacting, false);
+  Settings.set_value interacting false;
   let [expr] = Parse.parse_string str in
   let _, expr = Inference.type_expression Library.type_env expr in
   let expr_str, env_str = Forms.serialize_exprenv expr [] in
     print_endline expr_str;
     print_endline env_str;
     ()
+
+let set setting value = Some (fun () -> Settings.set_value setting value)
     
 let options : opt list = 
     [
-      ('d',     "debug",               set Utility.debugging     true,  None);
-      ('O',     "optimize",            set Optimiser.optimising  true,  None);
-      (noshort, "measure-performance", set Performance.measuring true,  None);
-      ('n',     "no-types",            set printing_types        false, None);
-      ('e',     "evaluate",            None,                            Some (ignore -<- evaluate Parse.parse_string stdenvs));
-      ('s',     "serialize-expr",           None,                            Some (serialize_expr));
-      ('t',     "run-tests",           Some run_tests,                  None);
-      ('w',     "web",                 None,                            Some web_program);
+      ('d',     "debug",               set Debug.debuggingEnabled true,  None);
+      ('O',     "optimize",            set Optimiser.optimising true,    None);
+      (noshort, "measure-performance", set Performance.measuring true,   None);
+      ('n',     "no-types",            set printing_types false,         None);
+      ('e',     "evaluate",            None,
+       Some (ignore -<- evaluate Parse.parse_string stdenvs));
+      ('s',     "serialize-expr",      None,                             Some (serialize_expr));
+      ('t',     "run-tests",           Some run_tests,                   None);
+      ('w',     "web",                 None,                             Some web_program);
     ]
 
 (* main *)

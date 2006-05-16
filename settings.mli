@@ -24,4 +24,4 @@ val get_value : 'a setting -> 'a
 val get_name : 'a setting -> string
 
 (* set the value of a setting *)
-val set_value : 'a setting * 'a -> unit
+val set_value : 'a setting -> 'a -> unit

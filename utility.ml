@@ -180,11 +180,6 @@ let index pred list =
   in idx 0 list
 
 let dict_map f = List.map (fun (k,v) -> k, f v) 
-
-(*** Debugging ***)
-let debugging = ref false
-let debug msg = 
-  (if !debugging then prerr_endline msg)
   
 (** http://caml.inria.fr/archives/200001/msg00054.html **)
 (*

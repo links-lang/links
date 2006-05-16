@@ -64,10 +64,10 @@ type stat = {
 
 *)
 
-let measuring = ref false
+let measuring = Settings.add_bool false "measure_performance"
 
 let notify_gc () = 
-  Utility.debug ("Completing GC cycle")
+  Debug.debug ("Completing GC cycle")
 
 let measure_diff obtain diff f a = 
   let start = obtain () in
@@ -89,7 +89,7 @@ let write_memory =
   Printf.fprintf stderr "%.20s : %d words allocated\n"
 
 let measure name (f : 'a -> 'b) (a : 'a) : 'b = 
-  if !measuring then 
+  if Settings.get_value(measuring) then 
     let (result, time_taken), memory_allocated = measure_memory (time f) a in
       write_time name time_taken;
       write_memory name (int_of_float memory_allocated);

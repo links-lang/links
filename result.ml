@@ -7,6 +7,7 @@ open Kind
 open Query
 open Syntax
 open Utility
+open Debug
 
 exception Runtime_failure of string
 exception Runtime_exception of string
