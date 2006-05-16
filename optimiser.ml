@@ -140,7 +140,7 @@ let renaming : RewriteSyntax.rewriter =
         *)
   | Let (y, Variable (x,  _), body,  _) when bound_in x body || bound_in y body
       -> None (* Could do better: does the binding shadow? *)
-  | Let (y, Variable (x, d1), body, _)
+  | Let (y, Variable (x, _), body, _)
       -> Some (fromOption body (rename_var y x body))
   | _ -> None
 
@@ -350,7 +350,7 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 	     | Some (positive, negative, query, projs, var, e) ->
                  Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
 	     | None -> None)
-      | For (expr, variable, Table (_, _, query, _), data) ->
+      | For (expr, variable, Table (_, _, query, _), _) ->
           (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
                (*  ([], [], _, _) -> None *)
@@ -368,7 +368,7 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 *)
 let rec sql_joins : RewriteSyntax.rewriter = 
   function
-    | For (body, outer_var, (Table (db, s, query, tdata) as table), data) ->
+    | For (body, outer_var, (Table (db, s, query, tdata)), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var "dummy" bindings body with
            | Some (positives, negatives, inner_query, origins, inner_var, body) ->
@@ -469,7 +469,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
 *)
 let simplify_takedrop : RewriteSyntax.rewriter = function
   | Apply (Apply (Variable ("take", _), (Variable _|Integer _), _), 
-           Apply (Apply (Variable ("drop", d3), ((Variable _| Integer _) as e2), d2), e3, d5), d6) -> None
+           Apply (Apply (Variable ("drop", _), ((Variable _| Integer _)), _), _, _), _) -> None
   | Apply (Apply (Variable ("take", d1), e1, d2), 
            Apply (Apply (Variable ("drop", d3), e2, d4), e3, d5), d6) ->
       let x = gensym "" 
@@ -503,24 +503,24 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Integer  (n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
     function
-      | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as e1), d2), 
-               Apply (Apply (Variable ("drop", d3), (Variable _|Integer _ as e2), d4), 
-                      Table (e, s, q, d5), d6), d7) ->
+      | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as e1), _), 
+               Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as e2), _), 
+                      Table (e, s, q, d5), _), _) ->
           Some (Table (e, s, {q with
                                 Query.max_rows = Some (queryize e1);
                                 Query.offset   = queryize e2}, d5))
-      | Apply (Apply (Variable ("take", d1), (Variable _|Integer _ as n), d3),
-               Table (e, s, q, d4), d5) -> 
+      | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
+               Table (e, s, q, d4), _) -> 
 	  Some (Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4))
-      | Apply (Apply (Variable ("drop", d1), (Variable _|Integer _ as n), d3) as f1,
-               Table (e, s, q, d4), d5) -> 
+      | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
+               Table (e, s, q, d4), _) -> 
 	  Some (Table (e, s, {q with Query.offset = queryize n}, d4))
       | _ -> None
 
 
 let trivial_extensions : RewriteSyntax.rewriter = function
   | For (List_of (Variable (v1, _), _), v2, e, _)
-      when v1 = v1 -> Some e
+      when v1 = v2 -> Some e
   | _ -> None
      
 let ops = ["==", (=);
@@ -576,7 +576,7 @@ let optimise env expr =
 let inline_tables expressions = 
   let insert_tables map : RewriteSyntax.rewriter = function
     | Variable (v, _) when mem_assoc v map -> Some (assoc v map)
-    | s -> None in
+    | _ -> None in
   let tabledefs, sanstables = 
     either_partition
       (function

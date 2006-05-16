@@ -30,7 +30,7 @@ OCAMLDEP := ocamldep
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc
 
-OCAMLFLAGS=-w Ae
+OCAMLFLAGS=-w Aef
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli

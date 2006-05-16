@@ -142,7 +142,7 @@ rule lex lexers = parse
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex lexers lexbuf }
-  | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 and starttag lexers = parse
   | def_qname as var                    { VARIABLE var }
   | '='                                 { EQ }
@@ -155,7 +155,7 @@ and starttag lexers = parse
   | '\n'                                { bump_lines lexbuf 1; starttag lexers lexbuf }
   | def_blank                           { starttag lexers lexbuf }
   | eof                                 { END }
-  | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 and xmllex lexers = parse
   | "\\{"                               { CDATA "{" }
   | '\\'                                { CDATA "\\" }
@@ -167,14 +167,14 @@ and xmllex lexers = parse
   | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
                                           Stack.push (starttag lexers) lexers; LXML var }
   | eof                                 { END }
-  | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 and attrlex lexers = parse
   | '"'                                 { (* fall back *)
                                           Stack.pop lexers; RQUOTE }
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex lexers) lexers; LBRACE }
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
-  | _ as c                              { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
 {
 
 let lexer () = 
