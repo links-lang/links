@@ -98,8 +98,8 @@ let serialize_exprenv expr env =
 
 
 let rec is_trivial_apply_aux = function
-    Variable(f, _) -> true
-  | Apply(e, Variable(x, _), _) -> is_trivial_apply_aux e
+    Variable(_, _) -> true
+  | Apply(e, Variable(_, _), _) -> is_trivial_apply_aux e
   | _ -> false
 
 let is_trivial_apply = function
@@ -112,7 +112,7 @@ let rec is_variable = function
   | _ -> false
 
 let rec is_simple_apply_aux = function
-    Variable(f, _) -> true
+    Variable(_, _) -> true
   | Apply(e, a, _) -> is_simple_apply_aux e && (is_variable a(*  || is_tuple a *))
   | _ -> false
 
@@ -148,12 +148,12 @@ let rec clean_serialize_apply = function
   | Apply(e, arg, _) -> 
       clean_serialize_apply e @ [serialise_expression arg]
 
-let is_constant expr = false
+let is_constant _ = false
 
 (** val_of_const_expr
     Given an expression with a constant value, reduce it to that value.
 *)
-let val_of_const_expr expr = `Primitive(`Bool false)
+let val_of_const_expr _ = `Primitive(`Bool false)
 
 let rec value_of_simple_expr lookup = function
   | expr when is_constant(expr) -> Some(val_of_const_expr(expr))

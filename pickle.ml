@@ -31,7 +31,7 @@ let primitive_serialisers (header : char) (convin : 'a -> string) (convout : str
   ((add_header header) -<- convin,
    fun s -> match extract_object s with
      | (h, s, rest) when h = header -> (convout s, rest)
-     | (h, s, rest) -> failwith ("Error deserialising primitive: expected header "^  (String.make 1 header) ^"; got "^ (String.make 1 h)))
+     | (h, _, _) -> failwith ("Error deserialising primitive: expected header "^  (String.make 1 header) ^"; got "^ (String.make 1 h)))
     
 let serialise_string, (deserialise_string : string deserialiser)  = primitive_serialisers 'h' identity identity
 let serialise_bool, deserialise_bool = primitive_serialisers 'b' string_of_bool bool_of_string
@@ -40,7 +40,9 @@ let serialise_oint, deserialise_oint = primitive_serialisers 's' string_of_int i
 let serialise_char, deserialise_char = (fun s -> String.make 1 s), (fun s -> (s.[0], Str.string_after s 1))
 let serialise_float, deserialise_float = primitive_serialisers 'f' string_of_float float_of_string
 
-let null_serialiser s = ""
+let invalid_header s c = failwith (Printf.sprintf "Error deserialising %s (unexpected header '%c')" s c)
+
+let null_serialiser _ = ""
 and null_deserialiser obj s = (obj, s)
 
 let serialise_option (serialise : 'a serialiser) : 'a option serialiser = function
@@ -52,6 +54,7 @@ and deserialise_option (deserialise : 'a deserialiser) : 'a option deserialiser 
       | 'n', rest -> None, rest
       | 's', rest -> (let obj, rest = deserialise rest in 
                         Some obj, rest)
+      | (c,_) -> invalid_header "option" c
 
 (* Why, /yes/, I /would/ like generic tuple facilities. Why do you ask? *)
 let serialise0 typ () () : string

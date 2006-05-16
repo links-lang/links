@@ -131,14 +131,12 @@ struct
   let make_singleton_open_row_with_var (label, field_spec) var =
     StringMap.add label field_spec empty_field_env, BasicOps.make_row_variable var
 
-  let is_absent_from_row label =
-    function
-      | (field_env, row_var) as row ->
-	  if StringMap.mem label field_env then
-	    StringMap.find label field_env = `Absent
-	  else
-	    is_closed_row row
+  let is_absent_from_row label (field_env, _ as row) =
+    if StringMap.mem label field_env then
+      StringMap.find label field_env = `Absent
+    else
+      is_closed_row row
 
-  let set_field (label, f) ((field_env, row_var) as row) =
+  let set_field (label, f) (field_env, row_var) =
     StringMap.add label f field_env, row_var
 end

@@ -8,7 +8,7 @@ exception Type_error of (Syntax.position * string)
 exception SyntaxError of string
 
 let mistyped_application pos (fn, fntype) (param, paramtype)
-    = let ((fpos, _, fexpr),_,_), ((ppos, _, pexpr),_,_) = expression_data fn, expression_data param in
+    = let ((_, _, fexpr),_,_), ((_, _, pexpr),_,_) = expression_data fn, expression_data param in
       match fntype with 
         | `Function _ -> 
             raise (Type_error (pos, "`" ^ pexpr
@@ -37,12 +37,12 @@ let nested_def pos var
                               ^ var ^"' is not at top level."))
   
   
-let letrec_nonfunction pos (form, formtype)
+let letrec_nonfunction pos (form, _)
     = raise (Parse_failure (pos, "Invalid form:\n  The values bound by letrec (and defrec) must be function forms,"
                               ^"\n  but `" ^ string_of_expression form 
                               ^"' is not a function form"))
 
-let string_of_pos ((pos : Lexing.position), line, expr) = 
+let string_of_pos ((pos : Lexing.position), _, expr) = 
   Printf.sprintf "%s:%d:\nexpression: %s" pos.pos_fname pos.pos_lnum expr
 
 
@@ -53,10 +53,10 @@ let invalid_name pos name message =
 let format_exception = function
   | SyntaxError s -> s
   | Getopt.Error s -> s
-  | Type_error ((pos,line,expr), s) -> Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
+  | Type_error ((pos,_,expr), s) -> Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
   | Result.Runtime_failure s -> "*** Runtime failure: " ^ s
   | Result.Runtime_exception s -> "*** Runtime exception: " ^ s
-  | Parse_failure ((pos,line,expr), s) -> Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
+  | Parse_failure ((pos,_,expr), s) -> Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" pos.pos_fname pos.pos_lnum s expr
   | Failure msg -> "*** Fatal error : " ^ msg
   | exn -> "*** Error: " ^ Printexc.to_string exn
 

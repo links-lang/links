@@ -65,8 +65,10 @@ let groupBy eq =
   in group
 
 let rec unsnoc = 
-  function [x] -> [], x
+  function
+    |  [x] -> [], x
     | (x::xs) -> let ys, y = unsnoc xs in x :: ys, y
+    | []   -> raise (Invalid_argument "unsnoc")
 
 let last l = snd (unsnoc l)
 
@@ -121,7 +123,7 @@ and rremove_assq i l = rremove_assoc_eq (==) i l
 
 let concat_map f l = 
   let rec aux = function
-    | f, [] -> []
+    | _, [] -> []
     | f, x :: xs -> f x @ aux (f, xs)
   in aux (f,l)
 
@@ -300,7 +302,7 @@ let opt_sum e =
 let read_octal c =
   let octal_char = function
     | '0' -> 0 | '1' -> 1 | '2' -> 2 | '3' -> 3
-    | '4' -> 4 | '5' -> 5 | '6' -> 6 | '7' -> 7
+    | '4' -> 4 | '5' -> 5 | '6' -> 6 | '7' -> 7 | _ -> invalid_arg "read_octal"
   in Char.chr ((octal_char c.[0]) * 64 + (octal_char c.[1]) * 8 + (octal_char c.[2]))
 
 let read_hex c =
@@ -312,7 +314,7 @@ let read_hex c =
     | 'c' | 'C' -> 12
     | 'd' | 'D' -> 13
     | 'e' | 'E' -> 14
-    | 'f' | 'F' -> 15
+    | 'f' | 'F' -> 15 | _ -> invalid_arg "read_hex"
   in Char.chr ((hex_char c.[0]) * 16 + (hex_char c.[1]))
 
 (* Handle escape sequences in string literals.

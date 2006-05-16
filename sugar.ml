@@ -82,7 +82,7 @@ let rec patternize' = function
   | Syntax.Apply(Syntax.Variable("&", _),
                  Apply(Syntax.Variable (var, _), expr, _), _) -> 
       Bind_using(var, patternize' expr)
-  | Syntax.Concat (List_of (e1, _), e2, _) as cons_patt ->
+  | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
       patternize_cons_pattern cons_patt
   | other -> raise (Parse_failure (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
@@ -159,7 +159,6 @@ let variant_selection
                                polylet case_patt pos case_var_expr case_body,
                                new_var, one_more new_var_expr selects,
                                pos)
-      | [] -> raise (Failure "Programming error (SU037)")
     in
       one_more source cases
 
@@ -182,7 +181,7 @@ let rec polylets (bindings : (pattern * untyped_expression * position) list) exp
           Rec ((s, value)  :: bindings, e, p) 
       | Bind s, Abstr _, _ ->  
           Rec ([s, value], expr, pos) 
-      | otherwise ->  
+      | _ ->  
           polylet patt pos value expr in 
     fold_right folder bindings expression 
 
@@ -471,7 +470,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
     -> open_list_match (desugar exp) patterns dflt lookup_pos pos
   | Switch (exp, patterns, _) ->
       let patterns, default_case = match (unsnoc patterns) with
-          patterns, (Pattern(Var x, pos), body) -> patterns, Some(x, desugar body)
+          patterns, (Pattern(Var x, _), body) -> patterns, Some(x, desugar body)
         | _ -> patterns, None
       in
       (variant_selection 
@@ -481,7 +480,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                let name, content = match patt with
                    ConstructorLit(name, None), pos ->
                      name, (RecordLit ([], None), pos)
-                 | ConstructorLit(name, Some content), pos ->
+                 | ConstructorLit(name, Some content), _ ->
                      name, content
                in
                  (name, patternize (Pattern content), desugar body))
@@ -513,7 +512,7 @@ and patternize lookup_pos : ppattern -> pattern = function
        should convert directly from phrases to patterns *)
   | Pattern p -> patternize' (desugar lookup_pos p)
 and list_patt_to_bool value pos = function
-    Var name, _ -> Boolean(true, pos)
+    Var _, _ -> Boolean(true, pos)
   | InfixAppl(`Cons, head, tail), _ ->
       and_expr (is_not_null value pos)
         (and_expr (list_patt_to_bool value pos head)
@@ -557,8 +556,8 @@ let project_subset (fields : (string * string) list) (source : Syntax.expression
   let dummy = unique_name () in
     (* generate a fresh variable for each (old, noo) pair in the input *)
   let variables = map (fun (old, noo) -> (unique_name (), old, noo)) fields in
-  let recext_builder (var, old, noo) record = Syntax.Record_extension(noo, Syntax.Variable(var, d), record, d) in
-  let select (label_var, old, noo) body = Syntax.Record_selection(old, label_var, dummy, source, body, d) in
+  let recext_builder (var, _, noo) record = Syntax.Record_extension(noo, Syntax.Variable(var, d), record, d) in
+  let select (label_var, old, _) body = Syntax.Record_selection(old, label_var, dummy, source, body, d) in
     (* build a record using the free variables we named above *)
   let record_extension = fold_right recext_builder variables (Record_empty d) in
     (* project out the source record into the free variables *)

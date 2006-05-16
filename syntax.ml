@@ -122,6 +122,7 @@ let rec show_expression =
   | Escape v -> "Escape " ^ s3 (identity, exp, null) v
   | Wrong v -> "Wrong " ^ s1 null v
   | HasType v -> "HasType " ^ s3 (exp, null, null) v
+  | Placeholder v -> "Placeholder " ^ s2 (identity, null) v
 
 type expression = (position * kind * string option (* label *)) expression'
 type untyped_expression = position expression'
@@ -138,7 +139,7 @@ let rec unparse_sequence empty unit append = function
   | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
 and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
 and show t : 'a expression' -> string = function 
-  | HasType(expr, kynd, data) -> show t expr
+  | HasType(expr, kind, data) -> show t expr ^ " : " ^ string_of_kind kind ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
@@ -194,85 +195,14 @@ and show t : 'a expression' -> string = function
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
-  | Wrong data -> "wrong"
-
-(* this is meant to do the work for pretty-printing an expression,
-   making it look like the user would expect it to look; e.g. it should
-   fold nested record extensions back into a single record.
-   very incomplete at this point.
-*)
-let rec ppexpr t : 'a expression' -> string = function 
-  | Define (variable, value, location, data) -> variable ^ "=" ^ ppexpr t value
-      ^ "[" ^ string_of_location location ^ "]; " ^ t data
-  | Boolean (value, data) -> string_of_bool value ^ t data
-  | Integer (value, data) -> string_of_num value ^ t data
-  | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
-  | String (s, data) -> "\"" ^ s ^ "\"" ^ t data
-  | Float (value, data)   -> string_of_float value ^ t data
-  | Variable (name, data) -> name ^ t data
-
-  | Apply (Variable("enxml", _), String (s, _), data)    -> s ^ t data
-
-  | Apply (f, p, data)    -> ppexpr t f ^ "(" ^ ppexpr t p ^ ")" ^ t data
-  | Condition (cond, if_true, if_false, data) ->
-      "if " ^ ppexpr t cond ^ " then " ^ ppexpr t if_true ^ " else " ^ ppexpr t if_false ^ "" ^ t data
-  | Comparison (left_value, oper, right_value, data) ->
-      "" ^ ppexpr t left_value ^ " " ^ oper ^ " " ^ ppexpr t right_value ^ "" ^ t data
-  | Abstr (variable, body, data) ->
-      "fun (" ^ variable ^ ") {" ^ ppexpr t body ^ "}" ^ t data
-  | Let (variable, value, body, data) ->
-      "{" ^ variable ^ "=" ^ ppexpr t value ^ "; " ^ ppexpr t body ^ "}" ^ t data
-  | Rec (variables, body, data) ->
-      "{" ^ (String.concat " ; " (map (function (label, expr) -> " " ^ label ^ "=" ^ ppexpr t expr) variables))
-      ^ "; " ^ ppexpr t body ^ "}" ^ t data
-  | Escape(var, body, data) -> "escape {" ^ var ^ " in " ^ ppexpr t body ^"}"^ t data
-  | Xml_node (tag, attrs, elems, data) ->  
-      let attrs = 
-        let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ ppexpr t v ^ "\"") attrs) in
-          match attrs with 
-            | "" -> ""
-            | _ -> " " ^ attrs in
-        (match elems with 
-           | []    -> "<" ^ tag ^ attrs ^ "/>" ^ t data
-           | elems -> "<" ^ tag ^ attrs ^ ">" ^ String.concat "" (map (ppexpr t) elems) ^ "</" ^ tag ^ ">" ^ t data)
-  | Record_empty (data) ->  "()" ^ t data
-  | Record_extension (_,_,_,data) as record ->
-      pp_record t data "(" record
-  | Record_selection (label, label_variable, variable, value, body, data) ->
-      "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
-      ^ ppexpr t value ^ "; " ^ ppexpr t body ^ "}" ^ t data
-  | Record_selection_empty (value, body, data) ->
-      "{() = " ^ ppexpr t value ^ "; " ^ ppexpr t body ^ "}" ^ t data
-  | Variant_injection (label, value, data) ->
-      label ^ "(" ^ ppexpr t value ^ ")" ^ t data
-  | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
-      "case " ^ ppexpr t value ^ " of < " ^ case_label ^ "=" 
-      ^ case_variable ^ "> in " ^ (ppexpr t case_body) ^ " | " 
-      ^ variable ^ " in " ^ ppexpr t body ^ t data
-  | Variant_selection_empty (value, data) ->
-      show t value ^ " is empty" ^ t data
-  | Nil (data)              -> "[]" ^ t data
-  | Nil (data)              -> "[]" ^ t data
-  | List_of (elem, data)       -> "[" ^ ppexpr t elem ^ "]" ^ t data
-  | Concat (left, right, data)  -> "(" ^ ppexpr t left ^ t data ^ "::" ^ ppexpr t right ^ ")" 
-  | For (expr, variable, value, data) ->
-      "(for " ^ variable ^ " <- " ^ ppexpr t value ^ " in " ^ ppexpr t expr ^ ")" ^ t data
-  | Database (params, data) -> "(database " ^ ppexpr t params ^ ")" ^ t data
-  | Table (daba, s, query, data) ->
-      "("^ s ^" from "^ ppexpr t daba ^"["^string_of_query query^"])" ^ t data
-and pp_record t orig_data accum = function 
-  | Record_empty _ -> (accum ^ ")" ^ t orig_data)
-  | Record_extension (label, value, record, data) ->
-      pp_record t orig_data (accum ^ label ^ "=" ^ ppexpr t value ^ ", ") record
-  | expr -> (accum ^ ")" ^ t orig_data) ^ ppexpr t expr
-
-let prettyprint expr = ppexpr (fun _ -> " ") expr
+  | Wrong data -> "wrong" ^ t data
+  | Placeholder (s, data) -> "PLACEHOLDER : " ^ s ^ t data
 
 let string_of_kinded_expression (s : expression) : string = 
   show (function (_, kind, _) -> 
 	  " : (" ^ (string_of_kind kind) ^ ")") s
 
-let with_label = (fun (pos, kind, lbl) ->
+let with_label = (fun (_, _, lbl) ->
      " [" ^ fromOption "BOGUS" lbl ^ "] ")
 
 let string_of_expression s = show (fun _ -> " ") s
@@ -323,6 +253,8 @@ let rec serialise_expression : ('data expression' serialiser)
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
         | Escape v                  -> serialise3 'e' (string, exp, data) v
         | Placeholder v             -> serialise2 'p' (string, data) v
+        | HasType v                 -> serialise3 '0' (exp, Kind.serialise_kind, data) v
+        | Placeholder v             -> serialise2 '1' (string, data) v
       )
 and deserialise_expression : (expression deserialiser)
     = let poskind = null_deserialiser (dummy_position, `Not_typed, None)
@@ -571,6 +503,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
   | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
   | Wrong (data) -> Wrong (f data)
+  | Placeholder (s, data) -> Placeholder (s, f data) 
 
 let erase : expression -> untyped_expression = 
   redecorate (fun (pos, _, _) -> pos)
@@ -699,85 +632,6 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
                   Xml_node (a, combine anames (take alength children), 
                             drop alength children, b)))
             
-(* Apply a function to each subnode.  Return Some c if any changes
-   were made, otherwise None. *)
-let perhaps_process_children_bindings 
-    (f : string list -> expression -> expression option) 
-    (vars :string list) :  expression -> expression option =
-  let transform = 
-    let rec aux passed es = function
-      | [] -> passed, es
-      | (f,x)::rest ->
-          (match f x with 
-             | Some x -> aux true (x::es) rest
-             | None   -> aux passed (x::es) rest) in
-      aux false [] in
-  let passto exprs next = 
-    (* if applying f to any of the expressions has an effect, pass all
-       the transformed or original to `next' and return Some of the
-       result.  Otherwise, return None *)
-    match transform exprs with
-      | false, _ -> None
-      | true,  es -> Some (next es) in
-  let bind names = f (names @ vars) in
-    function
-        (* No children *)
-      | Boolean _
-      | Integer _
-      | Char _
-      | String _
-      | Float _
-      | Variable _
-      | Nil _
-      | Variant_selection_empty _
-      | Record_empty _ -> None
-          
-      (* fixed children *)
-      | Abstr (var, e, b)                          -> passto [bind [var],e] (fun [e] -> (* var visible in body *)
-        Abstr (var, e, b))
-      | Variant_injection (a, e, b)                -> passto [bind [],e] (fun [e] -> 
-        Variant_injection (a, e, b))
-      | Define (var, e, b, c)                      -> passto [bind [],e] (fun [e] ->  (* binding not visible in rhs *)
-        Define (var, e, b, c))
-      | List_of (e, b)                             -> passto [bind [],e] (fun [e] ->
-        List_of (e, b))
-      | Database (e, a)                            -> passto [bind [],e] (fun [e] ->
-        Database (e, a))
-      | Table (e, a, b, c)                         -> passto [bind [],e] (fun [e] ->
-        Table (e, a, b, c))
-      | Escape (var, e, b)                         -> passto [bind [var],e] (fun [e] -> (* binding visible in body *)
-        Escape (var, e, b))
-      | Apply (e1, e2, a)                          -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Apply (e1, e2, a))
-      | Comparison (e1, a, e2, b)                  -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Comparison (e1, a, e2, b))
-      | Let (var, e1, e2, b)                       -> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
-        Let (var, e1, e2, b))
-      | Record_extension (a, e1, e2, b)            -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Record_extension (a, e1,  e2, b))
-      | Record_selection (a, var1, var2, e1, e2, d)-> passto [bind [],e1; bind [var1;var2],e2] (fun [e1;e2] ->
-        Record_selection (a, var1, var2, e1, e2, d))
-      | Record_selection_empty (e1, e2, a)         -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Record_selection_empty (e1, e2, a))
-      | Concat (e1, e2, a)               -> passto [bind [],e1; bind [],e2] (fun [e1;e2] ->
-        Concat (e1, e2, a))
-      | For (e1, var, e2, b)      -> passto [bind [],e1; bind [var],e2] (fun [e1;e2] ->
-        For (e1, var, e2, b))
-      | Variant_selection (e1, a, var1, e2, var2, e3, d) -> passto [bind [],e1; bind [var1],e2; bind [var2],e3]
-	                                                           (fun [e1;e2;e3] ->
-	Variant_selection (e1, a, var1, e2, var2, e3, d))
-      | Condition (e1, e2, e3, a)                  -> passto [bind [],e1; bind [],e2; bind [],e2] (fun [e1;e2;e3] ->
-        Condition (e1, e2, e3, a))
-  
-(* is this right... doesn't look like it *)        
-(*
-open Num
-open List
-
-open Utility
-open Kind
-*)
-
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
 	| HasType (_, _, data) -> data

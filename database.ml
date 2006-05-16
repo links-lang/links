@@ -18,6 +18,7 @@ let value_from_db_string (value:string) = function
   | IntField  -> Result.int (num_of_string value)
   | FloatField -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
+  | _ -> invalid_arg "value_from_db_string"
 
 let kind_from_db_type = function
   | BoolField -> `Primitive `Bool
@@ -53,7 +54,7 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
                             (* Quick kludge because I don't know what's wrong *)) in
          let null_query = exists is_null row_fields in
            if null_query then
-             `List (map (fun row -> `Record []) result#get_all_lst)
+             `List (map (fun _ -> `Record []) result#get_all_lst)
            else
               `List (map (fun row ->
                                  `Record (map2 (fun (name, db_type) value -> 

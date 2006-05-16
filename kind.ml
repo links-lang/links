@@ -287,7 +287,8 @@ and deserialise_field_spec : field_spec deserialiser =
     let r =
       (match t with
 	 | 'a' -> `Absent
-	 | 'b' -> `Present (fst (deserialise_kind obj)))
+	 | 'b' -> `Present (fst (deserialise_kind obj))
+         | c   -> invalid_header "field_spec" c)
     in
       r, rest
 and deserialise_row_var : row_var deserialiser =
@@ -296,7 +297,8 @@ and deserialise_row_var : row_var deserialiser =
     let r =
       (match t with
 	 | 'a' -> `RowVar (deserialise1 (deserialise_option (deserialise_oint)) obj)
-	 | 'b' -> `RecRowVar (deserialise2 (deserialise_oint, deserialise_row) obj))
+	 | 'b' -> `RecRowVar (deserialise2 (deserialise_oint, deserialise_row) obj)
+         | c   -> invalid_header "row_var" c)
     in
       r, rest
 and deserialise_row : row deserialiser =
@@ -320,6 +322,7 @@ let deserialise_quantifier : quantifier deserialiser
       match t with 
       | 't' -> `TypeVar (deserialise1 deserialise_oint obj), rest
       | 'r' -> `RowVar (deserialise1 deserialise_oint obj), rest
+      | c   -> invalid_header "quantifier" c
 
 let serialise_assumption : assumption serialiser 
     = serialise2 'a' (serialise_list (serialise_quantifier), serialise_kind)
@@ -392,7 +395,7 @@ let fresh_row () =
 
 (* rewriting for types *)
 let perhaps_process_children (f : kind -> kind option) :  kind -> kind option =
-  let rewrite_row row (fields, r) = 
+  let rewrite_row (fields, r) = 
     match (StringMap.fold
              (fun name field (changed, row) ->
                 match field with
@@ -409,7 +412,7 @@ let perhaps_process_children (f : kind -> kind option) :  kind -> kind option =
       | `Not_typed
       | `Primitive _
       | `DB
-      | `TypeVar  _ as p -> None
+      | `TypeVar  _ -> None
           (* one child *)
       | `Recursive (v, k) -> (match f k with 
                                 | Some k -> Some (`Recursive (v, k))
@@ -427,9 +430,9 @@ let perhaps_process_children (f : kind -> kind option) :  kind -> kind option =
                                | None,   Some k -> Some (`Function (j, k))
                                | Some j, Some k -> Some (`Function (j, k)))
           (* n children *)
-      | `Record row  -> (match rewrite_row f row with 
+      | `Record row  -> (match rewrite_row row with 
                            | Some row -> Some (`Record row)
                            | None ->     None)
-      | `Variant row -> (match rewrite_row f row with 
+      | `Variant row -> (match rewrite_row row with 
                            | Some row -> Some (`Variant row)
                            | None ->     None)

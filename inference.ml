@@ -49,7 +49,7 @@ let rec unify' : (int Unionfind.point) IntMap.t -> (inference_type * inference_t
       | `Primitive x, `Primitive y when x = y -> ()
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  (match (Unionfind.find lpoint, Unionfind.find rpoint) with
-	     | `TypeVar lvar, `TypeVar rvar ->
+	     | `TypeVar lvar, `TypeVar _ ->
 		   Unionfind.union lpoint rpoint
 	     | `TypeVar var, t ->
 		 (if var_is_free_in_type var t then
@@ -317,7 +317,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	    match typ with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
 	      | `Primitive _  -> typ
-	      | `TypeVar var -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
+	      | `TypeVar _ -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
 	      | `MetaTypeVar point ->
 		  let t = Unionfind.find point in
 		    (match t with
@@ -385,7 +385,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	    match row_var with
 	      | `MetaRowVar point ->
 		  (match Unionfind.find point with
-		     | (field_env, `RowVar (Some var)) ->
+		     | (_, `RowVar (Some var)) ->
 			 (* assert(StringMap.is_empty env); *)
 			 if IntMap.mem var renv then
 			   IntMap.find var renv
@@ -407,7 +407,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 		  `RowVar None
 	      | `RowVar (Some _) ->
 		  assert(false)
-	      | `RecRowVar (var, rec_row) ->
+	      | `RecRowVar (_, _) ->
 		  assert(false)
 	  in
 	    field_env', row_var'
@@ -449,9 +449,9 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
     in
       function
 	| `Not_typed -> raise (Failure "Programming error (TY313)")
-	| `Primitive _ as kind -> []
-	| `TypeVar var as kind when IntSet.mem var bound_vars -> []
-	| `TypeVar var as kind -> [`TypeVar var]
+	| `Primitive _ -> []
+	| `TypeVar var when IntSet.mem var bound_vars -> []
+	| `TypeVar var -> [`TypeVar var]
 	| `MetaTypeVar point ->
 	    get_quantifiers bound_vars (Unionfind.find point)
 	      
@@ -533,7 +533,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	with Unify_failure _ -> mistyped_application pos (f, f_type) (p, type_of_expression p)
       in
 	Apply (f, p, (pos, return_type, None))
-  | Condition (if_, then_, else_, pos) as c ->
+  | Condition (if_, then_, else_, pos) ->
       let if_ = type_check env if_ in
       let _ = (try unify (type_of_expression if_, `Primitive `Bool)
                with Unify_failure _ -> mistype (pos_of_expression if_) (if_, type_of_expression if_) (`Primitive `Bool)) in
@@ -594,8 +594,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let attr_type = inference_string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
-      let unified_cs = map (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
-      let unified_atts = map (fun (s, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
+      let _ = List.iter (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
+      let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
       let trimmed_node =
         Xml_node (tag, 
                   nonspecial_attrs,         (* v-- up here I mean *)
@@ -721,7 +721,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let expr = type_check env expr in
 	unify(type_of_expression expr, type_to_inference_type typ);
 	HasType(expr, typ, (pos, type_of_expression expr, None))
-          
+  | Placeholder _ ->
+      assert(false)
   with 
       Unify_failure msg
     | UndefinedVariable msg ->
@@ -737,7 +738,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 *)
 and
     type_check_mutually env (defns : (string * untyped_expression) list) =
-      let var_env = (map (fun (name, expr) ->
+      let var_env = (map (fun (name, _) ->
 	                      (name, ([], ITO.fresh_type_variable ())))
 		       defns) in
       let inner_env = (var_env @ env) in
@@ -805,8 +806,8 @@ let mutually_type_defs
 let regroup exprs = 
   let regroup_defs defs = 
     let alist = map (fun (Define (name, f, _, _) as e) -> name, (e, f)) defs in
-    let cliques = find_cliques (map (fun (name, (e, f)) -> (name, f)) alist) in
-      map (map (fun (k,v) -> fst (assoc k alist))) cliques 
+    let cliques = find_cliques (map (fun (name, (_, f)) -> (name, f)) alist) in
+      map (map (fun (k,_) -> fst (assoc k alist))) cliques 
   in
     concat (map (function
                    | Define _ :: _ as defs -> regroup_defs defs
@@ -837,7 +838,7 @@ let type_program : Kind.environment -> untyped_expression list -> (Kind.environm
       | xs  -> (* A group of potentially mutually-recursive definitions *)
           let defparts = map (fun (Define x) -> x) xs in
           let env, defs = mutually_type_defs env (map (fun (name, expr, _, _) -> name, expr) defparts) in
-          let defs = (map2 (fun (name, _, location, data) (_, expr) -> 
+          let defs = (map2 (fun (name, _, location, _) (_, expr) -> 
                               Define (name, expr, location, expression_data expr)) 
 			defparts defs) in
             env, typed_exprs @ defs
@@ -894,8 +895,8 @@ type tvar = [`TypeVar of int]
 
 (* rewrite an unquantified kind type *)
 let retype_primfun (var : Kind.kind) : RewriteKind.rewriter = function
-  | `Function (j, k) as f -> Some (`Function (var, f))
-  | _                     -> None
+  | `Function _ as f -> Some (`Function (var, f))
+  | _                -> None
 
 (* rewrite a quantified kind type *)
 let retype_primfun (var : tvar) (quants, kind as k : Kind.assumption) =
@@ -916,7 +917,7 @@ let new_typevar quants =
                               candidates)))
 
 (* Find a suitable type variable and rewrite a quantified kind type *)
-let retype_primfun (quants, kind as k) =
+let retype_primfun (quants, _ as k) =
   retype_primfun (new_typevar quants) k
 
 (* Finally, a rewriter for type environments.  Ignore spawn, recv and

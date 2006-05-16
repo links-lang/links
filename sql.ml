@@ -50,7 +50,7 @@ and string_of_condition cond = match string_of_expression cond with
 let rec conjunction = function
   | [] -> Boolean true
   | (Boolean true :: ts) -> conjunction ts
-  | (Boolean false :: ts) -> Boolean false
+  | (Boolean false :: _) -> Boolean false
   | (t :: ts) -> match conjunction ts with
 	Boolean true -> t
       | Boolean false -> Boolean false
@@ -58,7 +58,7 @@ let rec conjunction = function
 
 let rec disjunction = function
   | [] -> Boolean false
-  | (Boolean true :: ts) -> Boolean true
+  | (Boolean true :: _) -> Boolean true
   | (Boolean false :: ts) -> disjunction ts
   | (t :: ts) -> match disjunction ts with
 	Boolean true -> Boolean true

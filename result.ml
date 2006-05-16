@@ -131,12 +131,14 @@ let rec deserialise_item : xmlitem deserialiser =
     (match t with 
        | 'a' -> Text (deserialise1 (deserialise_string ) obj)
        | 'b' -> Attr (deserialise2 (deserialise_string, deserialise_string ) obj)
-       | 'c' -> Node (deserialise2 (deserialise_string, deserialise_xml) obj))
+       | 'c' -> Node (deserialise2 (deserialise_string, deserialise_xml) obj)
+       | _   -> invalid_header "xmlitem" t)
   in e, rest
 and deserialise_xml : xml deserialiser = 
   fun s -> let t, obj, rest = extract_object s in
     match t with
       | 'a' -> deserialise1 (deserialise_list (deserialise_item)) obj, rest
+      | _   -> invalid_header "xml" t
 
 type contin_frame = 
   | Definition of (environment * string)
@@ -296,7 +298,7 @@ let serialise_continuation c = Marshal.to_string (strip_cont c) []
 
 let serialise_continuation_b64 = Utility.base64encode -<- serialise_continuation
 
-let deserialise_continuation resolve str = 
+let deserialise_continuation _ str = 
   Marshal.from_string str 0
 
 
@@ -543,7 +545,7 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = f
                           alistmap (map_expr result_f expr_f contframe_f) attr_exprs, map (map_expr result_f expr_f contframe_f) elem_exprs))
   | Ignore(env, next) -> 
       contframe_f(Ignore((map_env result_f expr_f contframe_f) env, (map_expr result_f expr_f contframe_f) next))
-and map_expr result_f expr_f contframe_f expr =
+and map_expr _ expr_f _ expr =
   expr_f(simple_visit (fun visit_children expr -> visit_children expr) expr)
 and map_env result_f expr_f contframe_f env =
   alistmap (map_result result_f expr_f contframe_f) env
@@ -572,7 +574,7 @@ let resolve_label program label : 'a expression' =
                     raise Not_found)
 
 let resolve_placeholder program = function
-    Placeholder(s,d) -> resolve_label program s
+    Placeholder(s,_) -> resolve_label program s
   | x -> x
       
 let resolve_placeholders_result program rslt = 

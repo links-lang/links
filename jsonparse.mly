@@ -24,7 +24,6 @@ let rec jsonize_result : Result.result -> string = function
   | `List [] -> "[]"
   | `List (`Primitive(`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
   | `List (elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
-  | r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
 
 %}
 

@@ -106,7 +106,7 @@ let field_env_union : (inference_field_spec_map * inference_field_spec_map) -> i
 
 let contains_present_fields field_env =
   StringMap.fold
-    (fun label field_spec present ->
+    (fun _ field_spec present ->
        match field_spec with
 	 | `Present _ -> true
 	 | `Absent -> present
@@ -114,19 +114,19 @@ let contains_present_fields field_env =
 
 let is_flattened_row : inference_row -> bool =
   let rec is_flattened = fun rec_vars -> function
-    | (field_env, `MetaRowVar point) ->
+    | (_, `MetaRowVar point) ->
 	(match Unionfind.find point with 
-	   | (field_env', `RowVar None) -> false
+	   | (_, `RowVar None) -> false
 	   | (field_env', `RowVar (Some _)) ->
 	       assert(not (contains_present_fields field_env')); true
 	   | (field_env', `RecRowVar (var, rec_row)) ->
 	       assert(not (contains_present_fields field_env'));
 	       if IntSet.mem var rec_vars then true
 	       else is_flattened (IntSet.add var rec_vars) rec_row
-	   | (field_env', `MetaRowVar _) -> false)
-    | (field_env, `RowVar (Some _ )) -> assert(false)
-    | (field_env, `RowVar None) -> true
-    | (field_env, `RecRowVar (var, rec_row)) ->
+	   | (_ , `MetaRowVar _) -> false)
+    | (_, `RowVar (Some _ )) -> assert(false)
+    | (_, `RowVar None) -> true
+    | (_, `RecRowVar (_, _)) ->
 	assert(false)
   in
     is_flattened IntSet.empty
@@ -166,7 +166,7 @@ let flatten_row : inference_row -> inference_row =
 		   | (_, `MetaRowVar _) ->
 		       let field_env', row_var' = flatten_row' rec_env row' in
 			 field_env_union (field_env, field_env'), row_var')
-	  | (field_env, `RowVar None) -> row
+	  | (_, `RowVar None) -> row
 	  | _ -> assert(false)
       in
 	assert (is_flattened_row row');
@@ -212,7 +212,7 @@ let unwrap_row : inference_row -> inference_row =
 		   | (_, `MetaRowVar _) ->
 		       let field_env', row_var' = unwrap_row' rec_env row' in
 			 field_env_union (field_env, field_env'), row_var')
-	  | (field_env, `RowVar None) -> row
+	  | (_, `RowVar None) -> row
 	  | _ -> assert(false)
       in
 	assert (is_flattened_row row');
@@ -237,7 +237,7 @@ let empty_var_maps : unit ->
 (*** Conversions ***)
 
 (* implementation *)
-let rec type_to_inference_type = fun ((type_var_map, row_var_map) as var_maps) -> function
+let rec type_to_inference_type = fun ((type_var_map, _) as var_maps) -> function
   | `Not_typed -> `Not_typed
   | `Primitive p -> `Primitive p
   | `TypeVar var ->
@@ -264,10 +264,10 @@ let rec type_to_inference_type = fun ((type_var_map, row_var_map) as var_maps) -
   | `List (t) -> `List (type_to_inference_type var_maps t)
   | `Mailbox (t) -> `Mailbox (type_to_inference_type var_maps t)
   | `DB -> `DB
-and field_spec_to_inference_field_spec = fun ((type_var_map, row_var_map) as var_maps) -> function
+and field_spec_to_inference_field_spec var_maps = function
   | `Present t -> `Present (type_to_inference_type var_maps t)
   | `Absent -> `Absent
-and row_to_inference_row = fun ((type_var_map, row_var_map) as var_maps) -> function
+and row_to_inference_row = fun ((_, row_var_map) as var_maps) -> function
   | fields, `RowVar None ->
       (StringMap.map (field_spec_to_inference_field_spec var_maps) fields, `RowVar None)
   | fields, `RowVar (Some var) ->
@@ -330,7 +330,7 @@ and inference_row_to_row = fun rec_vars row ->
 	     | (env, `RowVar var) ->
 		 assert(not (contains_present_fields env));
 		 `RowVar var
-	     | (env, `RecRowVar (var, rec_row)) ->
+	     | (_, `RecRowVar (var, rec_row)) ->
 		 if IntSet.mem var rec_vars then
 		   `RowVar (Some var)
 		 else
@@ -340,7 +340,7 @@ and inference_row_to_row = fun rec_vars row ->
 	  `RowVar None
       | `RowVar (Some _) ->
 	  assert(false)
-      | `RecRowVar (var, rec_row) ->
+      | `RecRowVar (_, _) ->
 	  assert(false)
   in
     field_env', row_var'
