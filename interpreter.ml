@@ -1,16 +1,11 @@
 open Str
 open Num
 open List
-open Lexing
 
 open Utility
-open Kind
 open Result
-open Sql
 open Query
 open Syntax
-open Database
-open Library
 
 (* Environment handling *)
 
@@ -74,7 +69,7 @@ let lookup toplevel locals name =
   try
     lookup_qname toplevel locals (split_string name ':')
   with Not_found ->
-    `Primitive (`PFunction (name, []))
+    Library.primitive_stub name
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -155,7 +150,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
                | `List (`Primitive(`Char _)::elems) as c  
                  -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
-               | r -> failwith("Internal error: variable in query " ^ string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
+               | r -> failwith("Internal error: variable in query " ^ Sql.string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
            with Not_found -> failwith ("Internal error: undefined query variable '" ^ name ^ "'"))
             (* UGLY HACK BELOW *)
       | Query.Binary_op ("concat", left, right) ->
@@ -205,7 +200,7 @@ and scheduler globals state stepf =
   if (!process_steps mod switch_granularity == 0) then 
     begin
       process_steps := 0;
-      Queue.push (state, !current_pid) Library.suspended_processes;
+      Queue.push (state, !Library.current_pid) Library.suspended_processes;
       switch_context globals
     end
   else
@@ -254,7 +249,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                          interpret globals locals body cont
 		           
                    | `Primitive (`PFunction (name, pargs)) ->
-		       apply_pfun (apply_cont globals) cont name (pargs @ [value])
+		       Library.apply_pfun (apply_cont globals) cont name (pargs @ [value])
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
 		       apply_cont globals cont value
@@ -318,9 +313,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let result = 
                          match value with
                            | `Database (db, _) ->
-       	                       let query_string = string_of_query (normalise_query globals locals db query) in
+       	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
 		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 let result = execute_select kind query_string db in
+		                 let result = Database.execute_select kind query_string db in
                                    (* debug("    result:" ^ string_of_result result); *)
                                    result
                                      (* disable actual queries *)

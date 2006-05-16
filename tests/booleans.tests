@@ -5,3 +5,7 @@ stdout : false : Bool
 Boolean not(false)
 not(false)
 stdout : true : Bool
+
+Predefined "javascript" value
+javascript
+stdout : false : Bool

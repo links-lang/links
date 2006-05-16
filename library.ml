@@ -38,30 +38,8 @@ let fresh_pid =
 
 type primop = (Result.result -> Result.result)
 
-let continuationize_fn : 
-    (Result.result -> Result.result)
-->  ((Result.continuation -> Result.result -> Result.result) * Result.continuation * Result.result)
-->  Result.result = 
-  fun prim ->
-    fun (applycont, cont, arg) ->
-      applycont cont (prim arg)
-    
-let format_attrs : result -> string = function
-  | `List (attrs)  ->
-      let format_attr pair = 
-        let (k, v) = pair_as_ocaml_pair pair in 
-        let k = charlist_as_string k
-        and v = charlist_as_string v
-        in " " ^ k ^ "=\"" ^ v ^ "\""
-      in String.concat "" (map format_attr attrs)
-  | _ -> failwith "Internal error: format attributes applied to non-list"
-
-(*let format_contents (`List (_, contents)) : (string) =
-  String.concat "" (map charlist_as_string contents)
-*)
-
 let value_as_string db = function
-  | `List (`Primitive(`Char _)::elems) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
+  | `List (`Primitive(`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
   | `List ([])  -> "NULL"
   | a -> string_of_result a
 
@@ -457,7 +435,13 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
         | _ -> failwith ("Error calling client function " ^ name ^ " (is it curried?)")
       in match assoc name !value_env, args with
         | `PFun f, [a]  -> result_of_cval (f (apply_cont, cont, a))
-        | `PFun f, l  -> failwith (Printf.sprintf "expected one arg, but found %d during server->client call of %s"
+        | `PFun _, _  -> failwith (Printf.sprintf "expected one arg, but found %d during server->client call of %s"
                                      (length args) name)
         | #result, _ -> failwith ("value found, expecting function during server->client call of "
                                    ^ name)
+let primitive_stub (name : string) : result =
+  match assoc name env with 
+    | `PFun _, _      -> `Primitive (`PFunction (name, []))
+    | #result as r, _ -> r
+
+
