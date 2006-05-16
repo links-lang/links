@@ -21,3 +21,105 @@ stdout : true : Bool
 Cons
 1 :: 2 :: 3 :: 4 :: []
 stdout : [1, 2, 3, 4] : [Int]
+
+Let-patterns [1]
+{x :: xs = [1,2,3] ; x}
+stdout : 1 : Int
+
+Let-patterns [2]
+{(x :: y :: xs, z) = ([1,2,3],4) ; (x,y)}
+stdout : (1, 2) : (Int, Int)
+
+Let-patterns [3]
+{((v,w) :: (x,y) :: z) = [(1,2),(3,4)] ; (w,x)}
+stdout : (2, 3) : (Int, Int)
+
+Let-patterns [4]
+{(x,y) :: [] = [(1,2),(3,4),(4,5)] ; (x,y)}
+stderr : @..*
+exit : 1
+
+Let-patterns [5]
+{[(x,y)] = [(1,2),(3,4),(4,5)] ; (x,y)}
+stderr : @..*
+exit : 1
+
+Let-patterns [6]
+{[] = [1,2,3] ; ()}
+stderr : @..*
+exit : 1
+
+Let-patterns [7]
+{[x] = [] ; ()}
+stderr : @..*
+exit : 1
+
+Let-patterns [8]
+{x::y = [] ; ()}
+stderr : @..*
+exit : 1
+
+Case-patterns [1]
+switch [] { case [] -> 1; }
+stdout : 1 : Int
+
+Case-patterns [2]
+switch [] { case x::xs -> 1; }
+stderr : @..*
+exit : 1
+
+Case-patterns [3]
+switch [] { case x -> 1; case [] -> 2; }
+stdout : 1 : Int
+
+Case-patterns [4]
+switch [] { case [] -> 2; case x -> 1; }
+stdout : 2 : Int
+
+Case-patterns [5]
+switch [] { case x -> 2; case x::xs -> 1; }
+stdout : 2 : Int
+
+Case-patterns [6]
+switch [] { case x::xs -> 1; case x -> 2; }
+stdout : 2 : Int
+
+Case-patterns [7]
+switch [1] { case x -> 2; case x::xs -> 1; }
+stdout : 2 : Int
+
+Case-patterns [8]
+switch [1] { case x::xs -> 1;  case x -> 2; }
+stdout : 1 : Int
+
+Case-patterns [9]
+switch [1,3] { case x::y::z -> 3; case x::y -> 2; case x -> 1; }
+stdout : 3 : Int
+
+Case-patterns [10]
+switch [1] { case x::y::z -> 3; case x::y -> 2; case x -> 1; }
+stdout : 2 : Int
+
+Case-patterns [11]
+switch [1,3] { case x::y::[] -> 3; case x::y -> 2; case x -> 1; }
+stdout : 3 : Int
+
+Case-patterns [12]
+switch [1] { case x::[] -> 2; case x -> 1; }
+stdout : 2 : Int
+
+Case-patterns [13]
+switch [1] { case [x] -> 2; case x -> 1; }
+stdout : 2 : Int
+
+With parentheses:
+switch [1] { case (x::xs) -> 1;  case x -> 2; }
+stdout : 1 : Int
+
+Length function
+fun length (l) { switch l { case [] -> 0; case x::xs -> 1 + length(xs); } }; length ([1,2,3])
+stdout : 3 : Int
+
+Map function
+fun map (f,l) { switch l { case [] -> []; case x::xs -> f(x) :: map(f,xs); } }; map((+)(1), [1,2,3])
+stdout : [2,3,4] : [Int]
