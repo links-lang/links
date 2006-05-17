@@ -15,8 +15,6 @@ BUGS
   which typically won't be writable (webservers writing to the CGI dir
   is often seen as a security hole).
 
-* Trailing final semicolon is not allowed
-
 * JavaScript generation assumes that jslib.js and json.js are
   alongside the generated program; in /cgi-bin/ they won't be
   executable, and hence not accessible. We need to be able control how
@@ -69,10 +67,6 @@ BUGS
   request and force you to pass it around in the language. (?)
 
 * Type errors don't always give the (right) line number.
-
-* There's no check that order fields are present in the table.
-  The following ought to be rejected:
-     Table "foo" with { a : String } order [ b : asc ] from db
 
 TODO
 
@@ -142,15 +136,6 @@ TODO
 
 * No way to access CGI query variables at the Links toplevel.
 
-* postgres dependency lingers, in the form of the get_database
-  parameter passed to the deserialization functions. An idea to remove
-  it: give every type a "reanimator" function, dual to Java's
-  finalizers; the reanimator function T_r for a type T is run when an
-  object of that type is deserialized and put into a
-  program-to-be-run.
-
-* Erlang backend: compile Links to Erlang.
-
 * Default to Content-type: text/xml+html (Ezra)
   Are Links programs by default XHTML Transitional or Strict?
 
@@ -195,7 +180,6 @@ TODO
          maybe type classes, maybe something else.)
 
 * Ability to import values from another file (module system? #include?)
-  (jdy: we have this.  namespace n = "file://other-file.links")
 
 * Tests for the web-interface logic
 
@@ -210,5 +194,3 @@ TODO
 
 * Find a way to import tables' types from the DDL, or export DDL from 
   table-type declarations
-
-* Handle non-inline Table values.
