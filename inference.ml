@@ -982,35 +982,6 @@ let type_program : Kind.environment -> untyped_expression list -> (Kind.environm
 (** message typing trick.
     This might be better off somewhere else (but where?).
 **)
-module RewriteSyntaxU = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = Syntax.untyped_expression
-          type rewriter = t -> t option
-          let process_children = Syntax.perhaps_process_children
-        end))
-
-module RewriteSyntax = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = Syntax.expression
-          type rewriter = t -> t option
-          let process_children = Syntax.perhaps_process_children
-        end))
-
-let add_parameter : RewriteSyntaxU.rewriter = function
-  | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
-  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
-  | _                  -> None
-and remove_parameter : RewriteSyntax.rewriter = function
-  | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))
-  | Apply (Apply (f,Variable ("_MAILBOX_", _),_), a, d) -> Some (Apply (f,a,d))
-  | _                                                   -> None
-
-let add_parameter s = fromOption s (RewriteSyntaxU.bottomup add_parameter s)
-and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s)
 
 module RewriteKind = 
   Rewrite.Rewrite
@@ -1020,7 +991,13 @@ module RewriteKind =
           type rewriter = t -> t option
           let process_children = Kind.perhaps_process_children
         end))
-    
+
+let remove_mailbox : RewriteKind.rewriter = function
+  | `Function (a, (`Function _ as f)) -> Some f
+  | _                                 -> None
+
+let remove_mailbox k = fromOption k (RewriteKind.topdown remove_mailbox k)
+
 type tvar = [`TypeVar of int]
 
 (* This rewriting may not be correct.  If we have a function that
@@ -1073,10 +1050,45 @@ let retype_primitives =
                 | name, kind when mem name specials -> (name, kind)
                 | name, kind -> name, retype_primfun kind)
 
+module RewriteSyntaxU = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = Syntax.untyped_expression
+          type rewriter = t -> t option
+          let process_children = Syntax.perhaps_process_children
+        end))
+
+module RewriteSyntax = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = Syntax.expression
+          type rewriter = t -> t option
+          let process_children = Syntax.perhaps_process_children
+        end))
+
+let add_parameter : RewriteSyntaxU.rewriter = function
+  | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
+  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
+  | _                  -> None
+and remove_parameter : RewriteSyntax.rewriter = function
+  | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))
+  | Apply (Apply (f,Variable ("_MAILBOX_", _),_), a, d) -> Some (Apply (f,a,d))
+  | _                                                   -> None
+
+let add_parameter s = fromOption s (RewriteSyntaxU.bottomup add_parameter s)
+and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s)
+
+let rewrite_annotations : RewriteSyntaxU.rewriter = function
+  | HasType (e, k, d) -> Some (HasType (e, snd (retype_primfun ([], k)), d))
+  | _                 -> None
+let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
+
 let type_program env exprs = 
-  let env, exprs = type_program env (List.map add_parameter exprs) in
+  let env, exprs = type_program env (List.map (rewrite_annotations -<- add_parameter) exprs) in
     env, List.map remove_parameter exprs
 
 and type_expression env e =
-  let env, e = type_expression env (add_parameter e) in
+  let env, e = type_expression env (rewrite_annotations (add_parameter e)) in
     env, remove_parameter e

@@ -1,12 +1,17 @@
 Function typing bug (see jdy's blog, 2005-10-24)
 (fun (x,y) { [x] ++ [y] }) ([1],"a")
-stderr : @.*
+stderr : @..*
 exit : 1
 
 Type annotations on functions
-fun (x) { x } : a -> String -> String
-stdout : fun : (a) -> (String) -> String
+fun (x) { x } : String -> String
+stdout : fun : (String) -> String
+
+Incorrect type annotations rejected
+fun (x) { x + 1 } : Float -> String
+stderr : @..*
+exit : 1
 
 Loose type annotations on functions
-fun (x) { x } : a -> b -> b
-stdout : fun : (a) -> (b) -> b
+fun (x) { x } : b -> b
+stdout : fun : (a) -> a

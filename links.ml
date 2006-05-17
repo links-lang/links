@@ -24,7 +24,7 @@ let run_tests () =
 (* Print a result, including its type if `printing_types' is true. *)
 let print_result rtype result = 
   print_string (Result.string_of_result result);
-  print_endline (if Settings.get_value(printing_types) then " : "^ Kind.string_of_kind rtype
+  print_endline (if Settings.get_value(printing_types) then " : "^ Kind.string_of_kind (Inference.remove_mailbox rtype)
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
