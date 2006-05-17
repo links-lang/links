@@ -20,7 +20,9 @@ let stdenvs = [], Library.type_env
 (* shell directives *)
 let directives = [
                    "set", (fun (name::value::_) ->
-			     Settings.parse_and_set (name, value))
+			     Settings.parse_and_set (name, value));
+                   "options", (fun _ -> 
+                                 List.iter prerr_endline (Settings.list_options ()));
                  ]
 let execute_directive name args = 
   try List.assoc name directives args 

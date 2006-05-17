@@ -15,6 +15,10 @@ type universal = [
 | `Int of int setting
 | `String  of string setting
 ]
+let string_of_universal : universal -> string  = function
+  | `Bool (v,_) -> string_of_bool !v
+  | `Int (v,_) -> string_of_int !v
+  | `String (v, _) -> !v
 
 let settings = ref (SettingsMap.empty)
 
@@ -76,3 +80,5 @@ let lookup_string name =
     | `String setting -> setting
     | _ -> assert(false)
 
+let list_options () = 
+  SettingsMap.fold (fun k v p -> Printf.sprintf "%-25s (%s)" k (string_of_universal v) ::p) !settings []
