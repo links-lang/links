@@ -97,6 +97,20 @@ struct
 	    is_closed_row' rec_vars (Unionfind.find point)
     in
       is_closed_row' IntSet.empty
+
+  let get_row_var = fun (_, row_var) ->
+    let rec get_row_var' = fun rec_vars -> function
+      | `RowVar None -> None
+      | `RowVar (Some var) -> Some var
+      | `RecRowVar (var, (_, row_var')) ->
+	  if IntSet.mem var rec_vars then
+	    None
+	  else
+	    get_row_var' (IntSet.add var rec_vars) row_var'
+      | `MetaRowVar point ->
+	  get_row_var' rec_vars (snd (Unionfind.find point))
+    in
+      get_row_var' IntSet.empty row_var
 end
 
 let field_env_union : (inference_field_spec_map * inference_field_spec_map) -> inference_field_spec_map =
@@ -183,42 +197,40 @@ let flatten_row : inference_row -> inference_row =
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
-let unwrap_row : inference_row -> inference_row =
-  let rec unwrap_row' : (inference_row Unionfind.point) IntMap.t -> inference_row -> inference_row =
-    fun rec_env row ->
-      let row' =
-	match row with
-	  | (field_env, `MetaRowVar point) ->
-	      let row' = Unionfind.find point in
-		(match row' with
-		   | (field_env', `RowVar None) ->
-		       field_env_union (field_env, field_env'), `RowVar None
-		   | (field_env', `RowVar (Some var)) ->
-		       assert(not (contains_present_fields field_env'));
-		       if IntMap.mem var rec_env then
-			 (field_env, `MetaRowVar (IntMap.find var rec_env))
-		       else
-		         row
-		   | (field_env', `RecRowVar (var, rec_row)) ->
-		       assert(not (contains_present_fields field_env'));
-		       if IntMap.mem var rec_env then
-			 field_env, `MetaRowVar (IntMap.find var rec_env)
-		       else
-			 (let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
-			  let rec_row' = unwrap_row' (IntMap.add var point' rec_env) rec_row in
-			    Unionfind.change point' (field_env', `RecRowVar (var, rec_row'));
-			    let field_env'', row_var' = rec_row' in
-			      (field_env_union ((field_env_union (field_env, field_env')), field_env''), row_var'))
-		   | (_, `MetaRowVar _) ->
-		       let field_env', row_var' = unwrap_row' rec_env row' in
-			 field_env_union (field_env, field_env'), row_var')
-	  | (_, `RowVar None) -> row
-	  | _ -> assert(false)
-      in
-	assert (is_flattened_row row');
-	row'
+let unwrap_row : inference_row -> (inference_row * (int * inference_row) option) =
+  let rec unwrap_row' : (inference_row Unionfind.point) IntMap.t -> inference_row -> (inference_row * (int * inference_row) option) =
+    fun rec_env -> function
+      | (field_env, `MetaRowVar point) as row ->
+	  (match Unionfind.find point with
+	     | (field_env', `RowVar None) ->
+		 (field_env_union (field_env, field_env'), `RowVar None), None
+	     | (field_env', `RowVar (Some var)) ->
+		 assert(not (contains_present_fields field_env'));
+		 if IntMap.mem var rec_env then
+		   (field_env, `MetaRowVar (IntMap.find var rec_env)), None
+		 else
+		   row, None
+	     | (field_env', `RecRowVar ((var, body) as rec_row)) ->
+		 assert(not (contains_present_fields field_env'));
+		 if IntMap.mem var rec_env then
+		   (field_env, `MetaRowVar (IntMap.find var rec_env)), Some rec_row
+		 else
+		   (let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
+		    let unwrapped_body, _ = unwrap_row' (IntMap.add var point' rec_env) body in
+		      Unionfind.change point' (field_env', `RecRowVar (var, unwrapped_body));
+		      let field_env'', row_var' = unwrapped_body in
+			(field_env_union ((field_env_union (field_env, field_env')), field_env''), row_var')), Some rec_row
+	     | (_, `MetaRowVar _) as row' ->
+		 let (field_env', row_var'), rec_row = unwrap_row' rec_env row' in
+		   (field_env_union (field_env, field_env'), row_var'), rec_row)
+      | (_, `RowVar None) as row -> row, None
+      | _ -> assert(false)
   in
-    unwrap_row' IntMap.empty
+    fun row ->
+      let unwrapped_row, rec_row = unwrap_row' IntMap.empty row
+      in
+	assert (is_flattened_row unwrapped_row);
+	unwrapped_row, rec_row	
 
 module InferenceTypeOps :
   (Type_basis.TYPEOPS

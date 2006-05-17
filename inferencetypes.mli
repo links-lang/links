@@ -57,8 +57,11 @@ val flatten_row : inference_row -> inference_row
 
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
+
+Also returns the outermost RecRowVar that was unwrapped if it exists,
+or None otherwise.
  *)
-val unwrap_row : inference_row -> inference_row
+val unwrap_row : inference_row -> (inference_row * (int * inference_row) option)
 
 module InferenceTypeOps :
   (Type_basis.TYPEOPS

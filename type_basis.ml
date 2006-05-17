@@ -73,6 +73,9 @@ sig
   val is_closed_row : row -> bool
   val is_absent_from_row : string -> row -> bool
 
+  (* row_var retrieval *)
+  val get_row_var : row -> int option
+
   (* row update *)
   val set_field : (string * field_spec) -> row -> row
 
@@ -97,6 +100,7 @@ sig
   val closed_row_var : row_var'
 
   val is_closed_row : row -> bool
+  val get_row_var : row -> int option
 end
 
 module TypeOpsGen(BasicOps: BASICTYPEOPS) :
@@ -111,6 +115,8 @@ struct
   type field_spec = BasicOps.field_spec
   type field_spec_map = BasicOps.field_spec_map
   type row = BasicOps.row
+
+  let get_row_var = BasicOps.get_row_var
 
   let is_closed_row = BasicOps.is_closed_row
 

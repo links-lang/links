@@ -82,7 +82,7 @@ let set setting value = Some (fun () -> Settings.set_value setting value)
     
 let options : opt list = 
     [
-      ('d',     "debug",               set Debug.debuggingEnabled true,  None);
+      ('d',     "debug",               set Debug.debugging_enabled true, None);
       ('O',     "optimize",            set Optimiser.optimising true,    None);
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);

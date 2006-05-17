@@ -81,7 +81,7 @@ fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (inc
 stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\) -> Int
 
 Recursive variant types [5]
-fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));} increment(increment(Zero))}
+fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));}} increment(increment(Zero))
 stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\)
 
 Rows preserved across functions

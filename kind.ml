@@ -373,6 +373,18 @@ struct
     | (_, `RowVar (Some _)) -> false
     | (_, `RowVar None) -> true
     | (_, `RecRowVar _) -> true
+
+  let get_row_var (_, row_var) =
+    let rec get_row_var' rec_vars = function
+      | `RowVar None -> None
+      | `RowVar (Some var) -> Some var
+      | `RecRowVar (var, (_, row_var')) ->
+	  if IntSet.mem var rec_vars then
+	    None
+	  else
+	    get_row_var' (IntSet.add var rec_vars) row_var'
+    in
+      get_row_var' IntSet.empty row_var
 end
 
 module TypeOps :

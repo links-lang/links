@@ -7,6 +7,7 @@ struct
   let compare : string -> string -> int = String.compare
 end
 module StringMap = Map.Make(OrderedString)
+module StringSet = Set.Make(OrderedString)
 
 let assoc_list_of_string_map env =
   StringMap.fold (fun x y l -> (x, y) :: l) env []
