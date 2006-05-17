@@ -71,7 +71,7 @@ arg:
 | UINTEGER                                                     { Num.string_of_num $1 }
 | UFLOAT                                                       { string_of_float $1 }
 | TRUE                                                         { "true" }
-| FALSE                                                        { "float" }
+| FALSE                                                        { "false" }
 
 parse_links:
 | toplevel_seq END                                             { $1 }
