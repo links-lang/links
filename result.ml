@@ -140,6 +140,15 @@ and deserialise_xml : xml deserialiser =
       | 'a' -> deserialise1 (deserialise_list (deserialise_item)) obj, rest
       | _   -> invalid_header "xml" t
 
+type basetype = [
+  | `Bool of bool
+  | `Int of num
+  | `Float of float
+  | `Char of char
+  | `XML of xmlitem
+  | `Database of (database * string)
+]
+
 type contin_frame = 
   | Definition of (environment * string)
   | FuncArg of (expression * environment) (* FIXME: This is twiddled *)
@@ -169,24 +178,15 @@ type contin_frame =
   | Ignore of (environment * expression )
 
   | Recv of (environment)
-
-and primitive = [
-  | `Bool of bool
-  | `Int of num
-  | `Float of float
-  | `Char of char
-  | `XML of xmlitem
-  | `PFunction of (string * result list)
-]
 and result = [
-  | `Primitive of primitive 
+  basetype
+  | `PFunction of (string * result list)
   | `Function of (string * environment (*locals*)
                          * environment (*globals*) 
 		         * expression)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `List of (result list)
-  | `Database of (database * string)
   | `Environment of (string (* url *) * environment)
   | `Continuation of continuation
 ]
@@ -195,31 +195,31 @@ and binding = (string * result)
 and environment = (binding list)
 
 let expr_of_prim_val : result -> expression option = function
-    `Primitive(`Bool b) -> Some(Boolean(b, Sugar.no_expr_data))
-  | `Primitive(`Int i) -> Some(Integer(i, Sugar.no_expr_data))
-  | `Primitive(`Char ch) -> Some(Char(ch, Sugar.no_expr_data))
-  | `Primitive(`Float f) -> Some(Float(f, Sugar.no_expr_data))
+    `Bool b -> Some(Boolean(b, Sugar.no_expr_data))
+  | `Int i -> Some(Integer(i, Sugar.no_expr_data))
+  | `Char ch -> Some(Char(ch, Sugar.no_expr_data))
+  | `Float f -> Some(Float(f, Sugar.no_expr_data))
   | _ -> None
 
 let prim_val_of_expr : expression -> result option = function
-    Boolean(b, _) -> Some(`Primitive(`Bool b))
-  | Integer(i, _) -> Some(`Primitive(`Int i))
-  | Char(ch, _) -> Some(`Primitive(`Char ch))
-  | Float(f, _) -> Some(`Primitive(`Float f))
+    Boolean(b, _) -> Some( `Bool b)
+  | Integer(i, _) -> Some(`Int i)
+  | Char(ch, _) -> Some(`Char ch)
+  | Float(f, _) -> Some(`Float f)
   | _ -> None
 
 let (toplevel: continuation) = [] 
 
 let xmlitem_of : result -> xmlitem = function
-  | (`Primitive(`XML x)) -> x
-  | _ -> raise(Match_failure("",0,0))
+  | `XML x -> x
+  | _ -> raise (Match_failure ("", 0,0))
 
-and bool b = `Primitive(`Bool b)
-and int i = `Primitive(`Int i)
-and float f = `Primitive(`Float f)
-and char c = `Primitive(`Char c)
+and bool b =`Bool b
+and int i = `Int i
+and float f = `Float f
+and char c = `Char c
 and listval es = `List es
-and xmlnodeval contents = `Primitive(`XML(Node contents))
+and xmlnodeval contents = `XML (Node contents)
 
 let make_tuple fields = 
   `Record(List.map2 (fun exp n -> string_of_int n, exp) fields 
@@ -234,7 +234,7 @@ let recfields = function
 exception Match of string
 
 let string_as_charlist s : result =
-  `List(map (fun x -> (`Primitive (`Char x))) (explode s))
+  `List (map (fun x -> (`Char x)) (explode s))
 
 let pair_as_ocaml_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
@@ -278,9 +278,9 @@ and strip_cont_frame = function
               alistmap to_placeholder attrexprs, map to_placeholder childexprs)
   | Ignore(env, body) -> Ignore(strip_env env, to_placeholder body)
 and strip_result = function
-  | `Primitive(`PFunction(name, pargs)) ->
-      `Primitive(`PFunction(name, map strip_result pargs))
-  | `Primitive(prim) -> `Primitive(prim)
+  | `PFunction (name, pargs) ->
+      `PFunction (name, map strip_result pargs)
+  | #basetype as prim -> prim
   | `Function(name, locals, globals, body) -> 
       `Function(name, strip_env locals, strip_env globals, to_placeholder body)
   | `Record(fields) -> `Record(map strip_binding fields)
@@ -325,7 +325,7 @@ exception Not_tuple
 open Netencoding
 
 let rec char_of_primchar = function 
-    (`Primitive (`Char c)) -> c
+    `Char c -> c
   | o -> raise (Match (string_of_result o))
 
 and charlist_as_string chlist = 
@@ -337,28 +337,28 @@ and charlist_as_string chlist =
 
     
 and string_of_result : result -> string = function
-  | `Primitive p -> string_of_primitive p
+  | #basetype as p -> string_of_primitive p
+  | `PFunction (name, _) -> name
   | `Function (_, _, _, Placeholder (str, _)) -> "fun (" ^ str ^ ")"
   | `Function _ -> "fun"
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
-         "(" ^ (String.concat "," (map (function (label, value) -> label ^ "=" ^ (string_of_result value)) fields)) ^ ")")
+         "(" ^ String.concat "," (map (fun (label, value) -> label ^ "=" ^ string_of_result value) fields) ^ ")")
   | `Variant (label, value) -> label ^ " " ^ string_of_result value
   | `List [] -> "[]"
-  | `List (`Primitive(`Char _)::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
-  | `List ((`Primitive(`XML _)::_ as elems))  -> String.concat "" (map string_of_xresult elems)
+  | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
+  | `List ((`XML _)::_ as elems) -> String.concat "" (map string_of_xresult elems)
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
-  | `Database (_, params) -> "(database " ^ params ^")"
   | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment env
   | `Continuation cont -> pp_continuation cont
-and string_of_primitive : primitive -> string = function
+and string_of_primitive : basetype -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
   | `Float value -> string_of_float value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
-  | `PFunction (name, _) -> name
+  | `Database (_, params) -> "(database " ^ params ^")"
 
 and string_of_tuple (fields : (string * result) list) : string = 
     let fields = map (function
@@ -379,24 +379,25 @@ and string_of_environment : binding list -> string = fun env ->
                             String.concat ", " (map (string_of_binding) env)
 
 and string_of_xresult = function 
-  | `Primitive (`Char c) -> String.make 1 c
+  | `Char c -> String.make 1 c
   | otherwise -> string_of_result otherwise
 
-let rec serialise_primitive : primitive serialiser = 
+let rec serialise_primitive : basetype serialiser = 
   function
     | `Bool v      -> serialise1 'b' (serialise_bool) v
     | `Int v       -> serialise1 'i' (serialise_int) v
     | `Float v     -> serialise1 'f' (serialise_float) v
     | `Char v      -> serialise1 'c' (serialise_char) v
-    | `PFunction (name, pargs) ->
-	serialise1 'p'
-          (serialise_string)
-	  (name) (* This seems wrong: what about the args? *)
+    | `Database  v -> serialise2 'd' (null_serialiser, serialise_string) v
     | `XML v       -> serialise1 'x' (serialise_item) v
 and serialise_result : result serialiser = 
   let list, string = serialise_list, serialise_string in
     function
-      | `Primitive v -> serialise1 'p' (serialise_primitive) v
+      | #basetype as b -> serialise_primitive b
+      | `PFunction (name, pargs) ->
+	  serialise1 'p'
+            (serialise_string)
+	    (name) (* This seems wrong: what about the args? *)
           (* Remove self from bindings list to prevent infinite regress *)
       | `Function (var, locals, globals, expr) as f ->  
           (* I think this only works for top-level functions,
@@ -419,8 +420,7 @@ and serialise_result : result serialiser =
                ("", var, locals, globals, expr))
       | `Record      v -> serialise1 'r' (list (serialise_binding)) v
       | `Variant     v -> serialise2 'v' (string, serialise_result) v
-      | `List  v -> serialise1 'c' (list serialise_result) v
-      | `Database    v -> serialise2 'd' (null_serialiser, string) v
+      | `List  v -> serialise1 'l' (list serialise_result) v
       | `Environment v -> serialise2 'e' (null_serialiser, serialise_environment) v
       | `Continuation v -> serialise1 'C' (serialise_continuation) v
 and serialise_binding b
@@ -435,31 +435,13 @@ and minimize_env env =
     | first :: rest, output -> aux (rest, (first :: output))
   in aux (env, [])
 
-let rec deserialise_primitive (resolve : string -> result)  :  primitive deserialiser =
-  (fun s -> let t, obj, rest = extract_object s in
-  let r = 
-    (match t with
-       | 'b' -> `Bool (deserialise1 deserialise_bool obj)
-       | 'i' -> `Int (deserialise1 deserialise_int obj)
-       | 'f' -> `Float   (deserialise1 deserialise_float obj)
-       | 'c' -> `Char    (deserialise1 deserialise_char obj)
-       | 'p' -> (let name = 
-                   deserialise1 (deserialise_string) obj 
-                 in
-                   match resolve name with
-                     | `Primitive x -> x     (* FIXME: Include pargs*)
-                     | _ -> failwith "Error resolving primitive name")
-       | 'x' -> `XML     (deserialise1 deserialise_item obj)
-       | _ -> failwith "Error deserialising primitive")
-  in r, rest)
-and deserialise_result resolve : result deserialiser =
+let rec deserialise_result resolve : result deserialiser =
   fun s -> 
     let t, obj, rest = extract_object s 
     and result = deserialise_result resolve
     and string = deserialise_string in
     let r = 
       (match t with  
-         | 'p' -> `Primitive (deserialise1 (deserialise_primitive resolve) obj)
              (* Add the function back into its own environment *)
          | 'f' -> let name, var, locals, globals, body =
              (deserialise5 (string, string, 
@@ -473,13 +455,20 @@ and deserialise_result resolve : result deserialiser =
                            in f))
          | 'r' -> `Record (deserialise1 (deserialise_list (deserialise_binding resolve)) obj)
          | 'v' -> `Variant (deserialise2 (string, result) obj)
-         | 'c' -> `List (deserialise1 (deserialise_list (deserialise_result resolve)) obj)
+         | 'l' -> `List (deserialise1 (deserialise_list (deserialise_result resolve)) obj)
          | 'd' -> let _, dbstring = deserialise2 (null_deserialiser (), string) obj in
 	   let driver, params = parse_db_string dbstring in
              `Database (db_connect driver params)
 	 | 'e' -> `Environment (deserialise2 (null_deserialiser "", deserialise_environment resolve) obj)
 	 | 'C' -> `Continuation (deserialise1 (deserialise_continuation resolve) obj)
-         | _ -> failwith ("Error deserialising result : unknown prefix " ^ (String.make 1 t)))
+         | 'b' -> `Bool (deserialise1 deserialise_bool obj)
+         | 'i' -> `Int (deserialise1 deserialise_int obj)
+         | 'f' -> `Float   (deserialise1 deserialise_float obj)
+         | 'c' -> `Char    (deserialise1 deserialise_char obj)
+         | 'p' -> (* FIXME: Include pargs*)
+             resolve (deserialise1 (deserialise_string) obj)
+         | 'x' -> `XML     (deserialise1 deserialise_item obj)
+         | _ -> failwith "Error deserialising result")
     in r, rest
 
 and deserialise_binding resolve :  binding deserialiser = 
@@ -503,9 +492,10 @@ let deserialise_result_b64 lookup = fst -<- deserialise_result lookup -<- Utilit
 (* generic visitation functions for results *)
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
-  | `Primitive(`PFunction(str, pargs)) ->
-      result_f(`Primitive(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs)))
-  | `Primitive x -> result_f(`Primitive x)
+  | #basetype as x -> result_f x
+  | `PFunction (str, pargs) ->
+      result_f(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs))
+
   | `Function (str, globals, locals, body) ->
       result_f(`Function(str, map_env result_f expr_f contframe_f globals,
                          map_env result_f expr_f contframe_f locals,
@@ -597,28 +587,28 @@ let label_of_expression expr =
     vestigial? *)
     
 let result_to_xml = function
-  | `Primitive (`XML r) -> r
+  | `XML r -> r
   | `List _ as r -> (charlist_as_string r) 
   | `Continuation cont -> Utility.base64encode (serialise_continuation cont)
   | _ -> "NOT IMPLEMENTED"
 
 
 (* boxing and unboxing of primitive types *)
-let box_bool b = `Primitive (`Bool b)
+let box_bool b = `Bool b
 and unbox_bool : result -> bool   = function
-  | `Primitive (`Bool b)  -> b | _ -> failwith "Type error unboxing bool"
-and box_int i = `Primitive (`Int i)      
+  | `Bool b  -> b | _ -> failwith "Type error unboxing bool"
+and box_int i = `Int i      
 and unbox_int  : result -> num    = function
-  | `Primitive (`Int i)   -> i | _ -> failwith "Type error unboxing int"
-and box_float f = `Primitive (`Float f)  
+  | `Int i   -> i | _ -> failwith "Type error unboxing int"
+and box_float f = `Float f  
 and unbox_float : result -> float = function
-  | `Primitive (`Float f) -> f | _ -> failwith "Type error unboxing float"
-and box_char c = `Primitive (`Char c)    
+  | `Float f -> f | _ -> failwith "Type error unboxing float"
+and box_char c = `Char c    
 and unbox_char :  result -> char = function
-  | `Primitive (`Char f) -> f | _ -> failwith "Type error unboxing char"
-and box_xml x = `Primitive (`XML x)      
+  | `Char f -> f | _ -> failwith "Type error unboxing char"
+and box_xml x = `XML x      
 and unbox_xml  :  result -> xmlitem = function
-  | `Primitive (`XML x) -> x | _ -> failwith "Type error unboxing xml"
+  | `XML x -> x | _ -> failwith "Type error unboxing xml"
 and box_string = string_as_charlist
 and unbox_string : result -> string = charlist_as_string
 

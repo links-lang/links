@@ -98,10 +98,10 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
 
 let rec equal l r =
   match l, r with
-    | `Primitive (`Bool l  ), `Primitive (`Bool r  ) -> l = r
-    | `Primitive (`Int l   ), `Primitive (`Int r   ) -> eq_num l r
-    | `Primitive (`Float l ), `Primitive (`Float r ) -> l = r
-    | `Primitive (`Char l  ), `Primitive (`Char r  ) -> l = r
+    | `Bool l  , `Bool r   -> l = r
+    | `Int l   , `Int r    -> eq_num l r
+    | `Float l , `Float r  -> l = r
+    | `Char l  , `Char r   -> l = r
     | `Function _, `Function _ -> serialise_result l = serialise_result r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
@@ -117,10 +117,10 @@ let rec equal l r =
 
 let rec less l r =
   match l, r with
-    | `Primitive(`Bool l), `Primitive(`Bool r)   -> l < r
-    | `Primitive(`Int l), `Primitive(`Int r)     -> lt_num l r
-    | `Primitive(`Float l), `Primitive(`Float r) -> l < r
-    | `Primitive(`Char l), `Primitive(`Char r) -> l < r
+    | `Bool l, `Bool r   -> l < r
+    | `Int l, `Int r     -> lt_num l r
+    | `Float l, `Float r -> l < r
+    | `Char l, `Char r -> l < r
     | `Function _ , `Function _                  -> serialise_result l < serialise_result r
         (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
@@ -144,10 +144,10 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
       | Query.Variable name ->
           (try
              match lookup toplevel env name with
-               | `Primitive(`Bool value) -> Query.Boolean value
-               | `Primitive(`Int value) -> Query.Integer value
-               | `Primitive(`Float value) -> Query.Float value
-               | `List (`Primitive(`Char _)::elems) as c  
+               | `Bool value -> Query.Boolean value
+               | `Int value -> Query.Integer value
+               | `Float value -> Query.Float value
+               | `List (`Char _::elems) as c  
                  -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ Sql.string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
@@ -248,7 +248,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let locals = bind (trim_env (fnlocals @ locals)) var value in
                          interpret globals locals body cont
 		           
-                   | `Primitive (`PFunction (name, pargs)) ->
+                   | `PFunction (name, pargs) ->
 		       Library.apply_pfun (apply_cont globals) cont name (pargs @ [value])
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
@@ -259,9 +259,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	        interpret globals (bind locals variable value) body cont
             | (BranchCont(locals, true_branch, false_branch)) ->
 	        (match value with
-                   | `Primitive (`Bool true)  -> 
+                   | `Bool true  -> 
 	               interpret globals locals true_branch cont
-                   | `Primitive (`Bool false) -> 
+                   | `Bool false -> 
 	               interpret globals locals false_branch cont
                    | _ -> raise (Runtime_failure("Attempt to test a non-boolean value: "
 					         ^ string_of_result value)))
@@ -369,9 +369,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | None, (`List (elems)) ->
                          (match elems with
                             | [] -> []
-                            | `Primitive (`XML x) :: etc ->
+                            | `XML x :: etc ->
                                 map xmlitem_of elems
-                            | `Primitive (`Char x) :: etc ->
+                            | `Char x :: etc ->
                                 [ Result.Text(charlist_as_string value) ]
                             | _ -> failwith("Internal error: unexpected contents in XML construction"))
                      | _ -> failwith("Internal error: unexpected contents in XML construction")

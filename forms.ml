@@ -70,7 +70,7 @@ let add_attrs new_attrs = function
                       string_of_expression o)
 
 let is_pfunc = function
-  | (_, `Primitive(`PFunction _)) -> true
+  | (_, `PFunction _) -> true
   | _ -> false
 
 let string s = 
@@ -153,31 +153,30 @@ let is_constant _ = false
 (** val_of_const_expr
     Given an expression with a constant value, reduce it to that value.
 *)
-let val_of_const_expr _ = `Primitive(`Bool false)
+let val_of_const_expr _ = `Bool false
 
 let rec value_of_simple_expr lookup = function
-  | expr when is_constant(expr) -> Some(val_of_const_expr(expr))
-  | Variable(x, _) -> Some(lookup x)
+  | expr when is_constant(expr) -> Some (val_of_const_expr expr)
+  | Variable(x, _) -> Some (lookup x)
   | Boolean _ | Integer _ | Char _ | Float _ as expr -> prim_val_of_expr expr
   | expr -> Some(delay_expr expr)
 
 exception UnplainResult
 
 let plain_serialise_result = function  
-    `Primitive(`Bool b) -> if b then "t" else "f"
-  | `Primitive(`Int i) -> string_of_num i
-  | `Primitive(`Char ch) -> String.make 1 ch
-  | `Primitive(`Float f) -> string_of_float f
+    (`Bool b) -> if b then "t" else "f"
+  | (`Int i) -> string_of_num i
+  | (`Char ch) -> String.make 1 ch
+  | (`Float f) -> string_of_float f
   | `Function _ as f -> serialise_result f
   | _ -> raise UnplainResult
 
 let plain_deserialise_result str = 
   match str with
-      "t" -> `Primitive(`Bool true)
-    | "f" -> `Primitive(`Bool false)
-    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+$") str 0) ->
-        `Primitive(`Int (int_of_string str))
-    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+.[0-9]*(E(+|-)?[0-9*])?$") str 0) -> `Primitive(`Float (float_of_string str))
+      "t" -> `Bool true
+    | "f" -> `Bool false
+    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+$") str 0) -> `Int (int_of_string str)
+    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+.[0-9]*(E(+|-)?[0-9*])?$") str 0) -> `Float (float_of_string str)
 
 
 (* Serialise the continuation and environment, and adjust the form accordingly *)

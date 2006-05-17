@@ -76,8 +76,7 @@ let stubify_client_funcs env =
   let def_as_client_fun = function 
     | Syntax.Define (name, _, _, _) -> 
       (name,
-       `Primitive
-	 (`PFunction
+       (`PFunction
 	    (name, 
              Some (fun (_, cont, arg) -> 
                      let call = serialize_call_to_client (cont, name, arg) in

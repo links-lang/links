@@ -37,7 +37,7 @@ let fresh_pid =
 (* let xml = `List (`Primitive `XMLitem) *)
 
 let value_as_string db = function
-  | `List (`Primitive(`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
+  | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
   | `List ([])  -> "NULL"
   | a -> string_of_result a
 
@@ -71,11 +71,11 @@ type primitive =  [
 | `PFun of result -> primitive ]
 
 let int_op impl : primitive * Kind.assumption = 
-  (`PFun (fun x -> `PFun (fun y -> (`Primitive (`Int (impl (unbox_int x) (unbox_int y))))))),
+  (`PFun (fun x -> `PFun (fun y -> `Int (impl (unbox_int x) (unbox_int y))))),
   ([], `Primitive `Int --> (`Primitive `Int --> `Primitive `Int))
 
 let float_op impl : primitive * Kind.assumption = 
-  (`PFun (fun x -> `PFun (fun y -> (`Primitive (`Float (impl (unbox_float x) (unbox_float y))))))),
+  (`PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y)))))),
   ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Kind.assumption =
@@ -84,7 +84,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Kind
    ([], from --> into))
 
 let char_test_op fn = 
-  (`PFun (fun c -> (`Primitive (`Bool (fn (unbox_char c))))),
+  (`PFun (fun c -> (`Bool (fn (unbox_char c)))),
    ([], `Primitive `Char --> `Primitive `Bool))
 
 let char_conversion fn = 
@@ -143,7 +143,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
    kind "Mailbox a -> a -> ()");
 
   "self",
-  (p1 (fun _ -> `Primitive (`Int (num_of_int !current_pid))),
+  (p1 (fun _ -> `Int (num_of_int !current_pid)),
    kind "Mailbox a -> () -> Mailbox a");
   
   "recv",
@@ -162,7 +162,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
          let new_pid = fresh_pid () in
            Hashtbl.add messages new_pid (Queue.create ());
            Queue.push ((FuncApply(f, []) :: [], p), new_pid) suspended_processes;
-           `Primitive (`Int (num_of_int new_pid))),
+           (`Int (num_of_int new_pid))),
    (*
      a: spawn's mailbox type (ignored, since spawn doesn't recv)
      b: the mailbox type of the spawned process
@@ -172,7 +172,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
    kind "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
 
   "_MAILBOX_",
-  (`Primitive (`Int (num_of_int 0)), 
+  (`Int (num_of_int 0), 
    let _, u = fresh_type () in
      (* Deliberately non-quantified type.  Mailboxes are
         non-polymorphic, so this is a so-called "weak type
@@ -196,7 +196,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
        
   "length", 
   (p1 (function
-         | `List (elems) -> `Primitive (`Int (num_of_int (length elems)))
+         | `List (elems) -> `Int (num_of_int (length elems))
          | _ -> failwith "Internal error: length of non-collection"),
    kind "[a] -> Int");
 
@@ -217,9 +217,9 @@ let env : (string * (primitive * Kind.assumption)) list = [
   (** XML **)
   "childNodes",
   (p1 (function
-         | `List [`Primitive(`XML(Node(_, children)))] ->
+         | `List [`XML (Node (_, children))] ->
              let children = filter (function (Node _) -> true | _ -> false) children in
-               `List (map (fun x -> `Primitive (`XML x)) children)
+               `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
    kind "XML -> XML");
 
@@ -235,7 +235,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
                (let elem = assoc "1" elems
                 and attr = charlist_as_string (assoc "2" elems) in
                   match elem with
-                    | `List (`Primitive (`XML (Node (_, children)))::_) -> 
+                    | `List ((`XML (Node (_, children)))::_) -> 
                         let attr_match = (function
                                             | Attr (k, _) when k = attr -> true
                                             | _ -> false) in
@@ -253,14 +253,13 @@ let env : (string * (primitive * Kind.assumption)) list = [
   
   "enxml",
   (p1 (function 
-         | `List _ as c -> `List [`Primitive (`XML (Text (charlist_as_string c)))]
+         | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
          | _ -> failwith "internal error: non-string value passed to xml conversion routine"),
    ([], Kind.string_type --> xml));
 
   "dom",
   (* Not available on the server *)
-  ((`Primitive (`Int (num_of_int (-1)))),
-   kind "Mailbox a");
+  (`Int (num_of_int (-1)), kind "Mailbox a");
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
@@ -279,26 +278,25 @@ let env : (string * (primitive * Kind.assumption)) list = [
    kind "String -> ()");
 
   "javascript",
-  (`Primitive (`Bool false), kind "Bool");
+  (`Bool false, kind "Bool");
 
   "not", 
-  (p1 (fun b -> box_bool (not (unbox_bool b))),
+  (p1 (unbox_bool ->- not ->- box_bool),
    kind "Bool -> Bool");
  
   "negate", 
-  (p1 (fun i -> box_int (minus_num (unbox_int i))), kind "Int -> Int");
+  (p1 (unbox_int ->- minus_num ->- box_int), kind "Int -> Int");
 
   "negatef", 
   (p1 (fun f -> box_float (-. (unbox_float f))), kind "Float -> Float");
 
   "is_integer", 
-  (p1 (fun s -> box_bool (Str.string_match (Str.regexp "^[0-9]+$") (unbox_string s) 0)),
+  (p1 (unbox_string ->- (flip (Str.string_match (Str.regexp "^[0-9]+$")) 0) ->- box_bool),
    kind "String -> Bool");
-
+  
   "error",
-  (p1 (fun msg -> failwith (unbox_string msg)),
-   kind "String -> a");
-
+  (p1 (unbox_string ->- failwith), kind "String -> a");
+  
 
   (* HACK *)
   "callForeign",
@@ -406,9 +404,9 @@ type continuationized_val = [
    and an 'apply-continuation' primitive as well as an argument *)
 let rec continuationize : primitive -> continuationized_val = function
     | `PFun f -> `PFun (fun ((applycont : continuation -> result -> result), (cont : continuation), (arg : result)) ->
-			  match f arg with 
-			    | #result as r -> (applycont cont r :> continuationized_val)
-			    | prim         -> continuationize prim)
+                          match f arg with 
+                            | #result as r -> (applycont cont r :> continuationized_val)
+                            | prim         -> continuationize prim)
     | (#result as a) -> a
 
 type primitive_environment = (string*continuationized_val) list
@@ -419,12 +417,12 @@ and type_env : Kind.environment = Inference.retype_primitives (List.map (fun (n,
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function
     | #result as r -> 
-	assert (args' = []);
-	apply_cont cont r
+        assert (args' = []);
+        apply_cont cont r
     | `PFun f      -> 
-	match args' with 
-	  | []      -> apply_cont cont (`Primitive (`PFunction (name, args)))
-	  | r::rest -> aux rest (f r) in
+        match args' with 
+          | []      -> apply_cont cont (`PFunction (name, args))
+          | r::rest -> aux rest (f r) in
     if mem_assoc name env then
       aux args (fst (assoc name env))
     else 
@@ -439,7 +437,7 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
                                    ^ name)
 let primitive_stub (name : string) : result =
   match assoc name env with 
-    | `PFun _, _      -> `Primitive (`PFunction (name, []))
+    | `PFun _, _      -> `PFunction (name, [])
     | #result as r, _ -> r
 
 
