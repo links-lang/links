@@ -893,6 +893,21 @@ module RewriteKind =
     
 type tvar = [`TypeVar of int]
 
+(* This rewriting may not be correct.  If we have a function that
+   takes another function as argument, e.g.
+
+     (a -> b) -> c -> d
+
+   then the passed-in-function may not use the same mailbox as the
+   receiving function (consider the function passed to spawn for a
+   concrete example).  This rewriter gives the same type to both
+   mailboxes.  Can we do any better?  Are there some criteria for
+   determining whether the mailboxes should be the same (I think not).
+
+   Regardless, in our current library we have no higher-order
+   functions (except spawn and curried functions), so it probably
+   doesn't matter.
+*)
 (* rewrite an unquantified kind type *)
 let retype_primfun (var : Kind.kind) : RewriteKind.rewriter = function
   | `Function _ as f -> Some (`Function (var, f))
