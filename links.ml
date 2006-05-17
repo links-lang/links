@@ -8,6 +8,9 @@ let interacting = Settings.add_bool true "interacting"
 (* Whether to print types *)
 let printing_types = Settings.add_bool true "printing_types"
 
+(* whether to display the message parameter in types *)
+let show_message_parameter = Settings.add_bool false "show_message_parameter"
+
 (* Prompt in interactive mode *)
 let ps1 = "links> "
 
@@ -17,11 +20,7 @@ let stdenvs = [], Library.type_env
 (* shell directives *)
 let directives = [
                    "set", (fun (name::value::_) ->
-                             match Settings.get_setting_type name with
-                               | `Absent -> Printf.fprintf stderr "no such setting : %s\n"  name; flush stderr
-                               | `Int  -> Settings.set_value (Settings.lookup_int name) (int_of_string value)
-                               | `Bool -> Settings.set_value (Settings.lookup_bool name) (bool_of_string value)
-                               | `String -> Settings.set_value (Settings.lookup_string name) value)
+			     Settings.parse_and_set (name, value))
                  ]
 let execute_directive name args = 
   try List.assoc name directives args 
@@ -37,7 +36,13 @@ let run_tests () =
 (* Print a result, including its type if `printing_types' is true. *)
 let print_result rtype result = 
   print_string (Result.string_of_result result);
-  print_endline (if Settings.get_value(printing_types) then " : "^ Kind.string_of_kind (Inference.remove_mailbox rtype)
+  print_endline (if Settings.get_value(printing_types) then
+		   begin
+		     if Settings.get_value(show_message_parameter) then
+		       " : "^ Kind.string_of_kind rtype
+		     else
+		       " : "^ Kind.string_of_kind (Inference.remove_mailbox rtype)
+		   end
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
