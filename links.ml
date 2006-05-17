@@ -18,14 +18,33 @@ let ps1 = "links> "
 let stdenvs = [], Library.type_env
 
 (* shell directives *)
-let directives = [
-                   "set", (fun (name::value::_) ->
-			     Settings.parse_and_set (name, value));
-                   "options", (fun _ -> 
-                                 List.iter prerr_endline (Settings.list_options ()));
-                 ]
+let rec directives = 
+  [
+    "directives", 
+    ((fun _ -> 
+        List.iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) directives),
+     "list available directives");
+     
+    "options",
+    ((fun _ -> 
+        List.iter (Printf.fprintf stderr " %s\n") (Settings.list_options ())),
+     "list available settings");
+    
+    "set",
+    ((function (name::value::_) -> Settings.parse_and_set (name, value)
+        | _ -> prerr_endline "syntax : @set name value"),
+     "change the value of a setting");
+    
+    "builtins",
+    ((fun _ ->
+        List.iter (fun (n, k) ->
+                     Printf.fprintf stderr " %-16s : %s\n" 
+                       n (Kind.string_of_kind (snd k)))
+          Library.type_env),
+     "list builtin functions and values");
+    ]
 let execute_directive name args = 
-  try List.assoc name directives args 
+  try fst (List.assoc name directives) args; flush stderr
   with Not_found -> Printf.fprintf stderr "unknown directive : %s\n" name; flush stderr
 
 (* Run unit tests *)
