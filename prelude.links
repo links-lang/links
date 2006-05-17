@@ -1,21 +1,29 @@
 fun all(p, l) { 
-   if (l == []) true
-   else p(hd(l)) && all(p, tl(l))
+   switch l {
+     case []    -> true;
+     case x::xs -> p(x) && all(p, xs);
+   }
 }
 
 fun and(l) { 
-   if (l == []) true
-   else hd(l) && and(tl(l))
+   switch l {
+     case [] -> true;
+     case x::xs -> x && and(xs);
+   }
 }
 
-fun and(l) { 
-   if (l == []) false
-   else hd(l) || and(tl(l))
+fun or(l) { 
+   switch l {
+     case [] -> false;
+     case x::xs -> x || or(xs);
+   }
 }
 
 fun any(p, l) {
-   if (l == []) false
-   else p(hd(l)) || any(p,tl(l))
+   switch l {
+     case [] -> false;
+     case x::xs -> p(x) || any(p, xs);
+   }
 }
 
 fun odd(i)  { mod(i)(2) == 1 }
@@ -24,8 +32,10 @@ fun even(i) { mod(i)(2) == 0 }
 fun null(l) { l == [] }
 
 fun fold_left(p, u, l) {
-  if (l == []) u
-  else fold_left(p, p(u, hd(l)), tl(l))
+  switch l {
+    case [] -> u;
+    case x::xs -> fold_left(p, p(u, x), xs);
+  }
 }
 
 fun fold_left1(p, l) {
@@ -33,8 +43,10 @@ fun fold_left1(p, l) {
 }
 
 fun fold_right(f, u, l) {
-  if (l == []) u
-  else f(hd(l), fold_right(f, u, tl(l)))
+  switch l {
+    case [] -> u;
+    case x::xs -> f(x, fold_right(f,u,xs));
+  }
 }
 
 fun fold_right1(f, l) {
@@ -42,21 +54,22 @@ fun fold_right1(f, l) {
 }
 
 fun zip(l) {
-  if (l == []) ([],[])
-  else {
-    (a,b) = hd(l);
-    (c,d) = zip(tl(l));
-    ([a] ++ c, [b] ++ d)
+  switch l {
+    case [] -> ([], []);
+    case (a,b)::xs -> { 
+     (c,d) = zip(xs);
+     (a :: c, b :: d)
+    };
   }
 }
 
 fun replicate(n, l) {
   if (n == 0) []
-  else [l] ++ replicate(n-1, l)
+  else l :: replicate(n-1, l)
 }
 
 fun filter(p, l) {
-  for x <- l in if (p(x)) [x] else []
+  for (x <- l) where (p(x)) [x]
 }
 
 fun drop(n, l) {
@@ -83,7 +96,7 @@ fun compose(f, g) {
 fun id(x) { x }
 
 fun concatMap(f,l) {
-  for x <- l in f(x)
+  for (x <- l) f(x)
 }
 
 fun first(p)   { p.1 }
@@ -106,17 +119,19 @@ fun product(ns) {
 }
 
 fun map(f, l) {
-  if (l == []) []
-  else [f(hd(l))] ++ map(f, tl(l))
+  switch l {
+    case []     -> [];
+    case hd::tl -> f(hd) :: map(f,tl);
+  }
 }
 
 fun max(l, r) {
-  if (l >> r) l
+  if (l > r) l
   else r
 }
 
 fun min(l, r) {
-  if (l << r) l
+  if (l < r) l
   else r
 }
 
@@ -130,8 +145,10 @@ fun minimum(ls) {
 
 fun reverse(l) {
   fun aux(l,o) {
-    if (l == []) o
-    else aux(tl(l), [hd(l)] ++ o)
+    switch l {
+      case [] -> o;
+      case x::xs -> aux(xs, x::o);
+    }
   }
   aux(l, [])
 }
