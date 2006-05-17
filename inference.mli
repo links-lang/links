@@ -6,3 +6,4 @@ val type_expression : Kind.environment -> Syntax.untyped_expression      -> Kind
 
 val retype_primitives : Kind.environment -> Kind.environment
 
+val remove_mailbox : Kind.kind  -> Kind.kind
