@@ -36,20 +36,42 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <float> UFLOAT 
 %token <string> STRING CDATA
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU
 
 %start parse_links
 %start just_kind
+%start sentence
 
 %type <Sugar.phrase list> parse_links
 %type <Sugar.phrase> xml_tree
 %type <Sugar.kind> kind
 %type <Sugar.kind> just_kind
+%type <Sugar.sentence> sentence
 
 %%
+
+sentence:
+| parse_links                                                  { Left $1 }
+| directive                                                    { Right $1 }
+
+directive:
+| KEYWORD args SEMICOLON END                                   { ($1, $2) }
+
+args: 
+|                                                              { [] }
+| arg args                                                     { $1 :: $2 }
+
+arg:
+| STRING                                                       { $1 }
+| VARIABLE                                                     { $1 }
+| CONSTRUCTOR                                                  { $1 }
+| UINTEGER                                                     { Num.string_of_num $1 }
+| UFLOAT                                                       { string_of_float $1 }
+| TRUE                                                         { "true" }
+| FALSE                                                        { "float" }
 
 parse_links:
 | toplevel_seq END                                             { $1 }

@@ -3,6 +3,13 @@
 *)
 module SettingsMap = Utility.StringMap
 
+type chocolate = [
+| `Bool
+| `String
+| `Int
+| `Absent
+]
+
 type 'a setting = 'a ref * string
 
 let bool_settings = ref (SettingsMap.empty)
@@ -33,3 +40,10 @@ let get_value ({contents=v}, _) = v
 let get_name (_, name) = name
 
 let set_value (r, _) v = r := v
+
+let get_setting_type name = 
+  let mem s = SettingsMap.mem name s in
+    if mem !bool_settings then `Bool
+    else if mem !int_settings then `Int
+    else if mem !string_settings then `String
+    else `Absent

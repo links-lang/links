@@ -1,3 +1,4 @@
+open Utility
 open Lexing
 
 (* NB : For now, positions are resolved eagerly.  It might be better
@@ -77,14 +78,13 @@ let lookup code =
 (* Read and parse Links source code from the source named `name' via
    the function `infun'.
 *)
-let read (infun : string -> int -> int) (name : string) : Syntax.untyped_expression list =
+let read parse desugarer (infun : string -> int -> int) (name : string)  =
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
  		with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      List.map
-	(Sugar.desugar (lookup code))
-	(Parser.parse_links (Lexer.lexer ()) lexbuf)
+      desugarer code (parse (Lexer.lexer ()) lexbuf)
+(*        List.map (desugar (lookup code)) (parse (Lexer.lexer ()) lexbuf)*)
     with 
       | Parsing.Parse_error -> 
 	  let line, position = find_line code lexbuf.lex_curr_p in
@@ -149,13 +149,13 @@ let reader_of_string string =
    Return a list of ASTs representing definitions and expressions.
 *)
 let parse_string string = 
-  read (reader_of_string string) "<string>"
+  read Parser.parse_links 	(fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_string string) "<string>"
     
 (* Read and parse Links code from an input channel.
    Return a list of ASTs representing definitions and expressions.
 *)
 let parse_channel (channel, name) =
-  read (reader_of_channel channel) name
+  read Parser.parse_links (fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_channel channel) name
 
 (* Open, read and parse a file containing Links code.
    Return a list of ASTs representing definitions and expressions.
@@ -167,3 +167,10 @@ let parse_file filename =
 (* Parse a kind *)
 let parse_kind string = 
   Sugar.desugar_assumption (Sugar.generalize (Parser.just_kind (Lexer.lexer ()) (from_string (string ^ ";"))))
+
+(* Parse a sentence *)
+let parse_sentence (channel, name) =
+  read Parser.sentence (fun code -> function
+                          | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
+                          | Right directive -> Right directive)
+    (reader_of_channel channel) name

@@ -7,10 +7,19 @@
  *)
 type 'a setting
 
+type chocolate = [
+| `Bool
+| `String
+| `Int
+| `Absent
+]
+
 (* add a new setting *)
 val add_bool : bool -> string -> bool setting
 val add_int : int -> string -> int setting
 val add_string : string -> string -> string setting 
+
+val get_setting_type : string -> chocolate
 
 (* lookup a setting *)
 val lookup_bool : string -> bool setting

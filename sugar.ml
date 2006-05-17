@@ -563,3 +563,8 @@ let project_subset (fields : (string * string) list) (source : Syntax.expression
     (* project out the source record into the free variables *)
     fold_right select variables record_extension
 
+
+type directive = string * string list
+type sentence = (phrase list, directive) either
+type sentence' = (untyped_expression list, directive) either
+

@@ -14,6 +14,19 @@ let ps1 = "links> "
 (* Builtin environments *)
 let stdenvs = [], Library.type_env
 
+(* shell directives *)
+let directives = [
+                   "set", (fun (name::value::_) ->
+                             match Settings.get_setting_type name with
+                               | `Absent -> Printf.fprintf stderr "no such setting : %s\n"  name; flush stderr
+                               | `Int  -> Settings.set_value (Settings.lookup_int name) (int_of_string value)
+                               | `Bool -> Settings.set_value (Settings.lookup_bool name) (bool_of_string value)
+                               | `String -> Settings.set_value (Settings.lookup_string name) value)
+                 ]
+let execute_directive name args = 
+  try List.assoc name directives args 
+  with Not_found -> Printf.fprintf stderr "unknown directive : %s\n" name; flush stderr
+
 (* Run unit tests *)
 let run_tests () = 
   Settings.set_value interacting false;
@@ -44,9 +57,28 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
 
 (* Interactive loop *)
 let rec interact envs = 
-  let error_handler = Errors.display_errors stderr (fun _ -> envs, `Record []) in
+let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
+  Settings.set_value interacting false;
+  handle_errors
+    (fun input ->
+       match Performance.measure "parse" parse input with 
+         | Left exprs -> 
+             let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
+             let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+             let exprs = List.map Syntax.labelize exprs in
+             let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
+               print_result (Syntax.node_kind (last exprs)) result;
+               (valenv, typeenv)
+         | Right (directive : Sugar.directive) -> 
+             begin
+               (Utility.uncurry execute_directive) directive;
+               (valenv, typeenv)
+             end)
+    input
+in
+let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
-    interact (fst (evaluate ~handle_errors:error_handler Parse.parse_channel envs (stdin, "<stdin>")))
+    interact (evaluate ~handle_errors:error_handler Parse.parse_sentence envs (stdin, "<stdin>"))
 
 let web_program filename = 
   prerr_endline "WARNING: -w flag is unnecessary and deprecated";
@@ -97,5 +129,3 @@ let options : opt list =
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
   if Settings.get_value(interacting) then interact stdenvs
-
-

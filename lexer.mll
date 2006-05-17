@@ -76,6 +76,7 @@ let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
 let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
 
+let directive_prefix = ['' '@' '$' '%']
 
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
@@ -89,6 +90,7 @@ rule lex lexers = parse
   | '#' ([^ '\n'] *)                    { lex lexers lexbuf }
   | eof | ";;"                          { END }
   | ';'                                 { SEMICOLON }
+  | directive_prefix (def_id as id)     { KEYWORD id}
   | '\n'                                { bump_lines lexbuf 1; lex lexers lexbuf }
   | '='                                 { EQ }
   | "->"                                { RARROW }
