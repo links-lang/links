@@ -187,7 +187,6 @@ and result = [
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `List of (result list)
-  | `Environment of (string (* url *) * environment)
   | `Continuation of continuation
 ]
 and continuation = contin_frame list
@@ -288,7 +287,6 @@ and strip_result = function
   | `List(elements)-> `List(map strip_result elements)
   | `Database(db, params) ->
       `Database(db, params)
-  | `Environment(namespace, env) -> `Environment(namespace, strip_env env)
   | `Continuation(cont) -> `Continuation(strip_continuation cont)
 
 let strip_cont cont = map strip_cont_frame cont
@@ -350,7 +348,6 @@ and string_of_result : result -> string = function
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `List ((`XML _)::_ as elems) -> String.concat "" (map string_of_xresult elems)
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
-  | `Environment (url, env) -> "Environment[" ^ url ^ "]: " ^ string_of_environment env
   | `Continuation cont -> pp_continuation cont
 and string_of_primitive : basetype -> string = function
   | `Bool value -> string_of_bool value
@@ -421,7 +418,6 @@ and serialise_result : result serialiser =
       | `Record      v -> serialise1 'r' (list (serialise_binding)) v
       | `Variant     v -> serialise2 'v' (string, serialise_result) v
       | `List  v -> serialise1 'l' (list serialise_result) v
-      | `Environment v -> serialise2 'e' (null_serialiser, serialise_environment) v
       | `Continuation v -> serialise1 'C' (serialise_continuation) v
 and serialise_binding b
     = serialise2 'B' (serialise_string, serialise_result) b
@@ -459,7 +455,6 @@ let rec deserialise_result resolve : result deserialiser =
          | 'd' -> let _, dbstring = deserialise2 (null_deserialiser (), string) obj in
 	   let driver, params = parse_db_string dbstring in
              `Database (db_connect driver params)
-	 | 'e' -> `Environment (deserialise2 (null_deserialiser "", deserialise_environment resolve) obj)
 	 | 'C' -> `Continuation (deserialise1 (deserialise_continuation resolve) obj)
          | 'b' -> `Bool (deserialise1 deserialise_bool obj)
          | 'i' -> `Int (deserialise1 deserialise_int obj)
@@ -503,7 +498,6 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
-  | `Environment(ns, bindings) -> result_f(`Environment(ns, alistmap (map_result result_f expr_f contframe_f) bindings))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
   | other -> result_f(other)
 and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function

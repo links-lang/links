@@ -14,7 +14,6 @@ let jsonize_primitive : Result.basetype -> string = function
 
 let rec jsonize_result : Result.result -> string = function
   | `Variant _
-  | `Environment _
   | `Continuation _
   | `List ((`XML _)::_)
   | `PFunction _ 

@@ -58,7 +58,7 @@ sentence:
 | directive                                                    { Right $1 }
 
 directive:
-| KEYWORD args SEMICOLON END                                   { ($1, $2) }
+| KEYWORD args SEMICOLON                                       { ($1, $2) }
 
 args: 
 |                                                              { [] }
@@ -260,7 +260,7 @@ cases:
 | case cases                                                   { $1 :: $2 }
 
 case:
-| CASE patt  RARROW exp SEMICOLON                              { $2, $4 }
+| CASE patt RARROW exp SEMICOLON                               { $2, $4 }
 
 // TBD: remove `None' from Switch constructor
 case_expression:
@@ -280,7 +280,7 @@ escape_expression:
 | iteration_expression                                         { $1 }
 | ESCAPE VARIABLE IN postfix_expression                        { Escape ($2, $4), pos() }
 
-lambda_expression:
+handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
 
@@ -301,10 +301,6 @@ bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
 
-amper_expression:
-| lambda_expression                                            { $1 }
-/*| LPAREN exp AMPER VARIABLE RPAREN                           { amper (fst $4) $2 $1 }*/
-
 block:
 | LBRACE bindings exp perhaps_semi RBRACE                      { Block ($2, $3), pos() }
 | LBRACE exp perhaps_semi RBRACE                               { $2 }
@@ -315,7 +311,7 @@ perhaps_semi:
 |                                                              {}
 
 exp:
-| amper_expression                                             { ($1 : Sugar.phrase) }
+| handlewith_expression                                        { $1 }
 
 unique:
 | UNIQUE                                                       { true }

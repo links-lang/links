@@ -53,23 +53,12 @@ let bind_rec globals locals defs =
 let remove_toplevel_bindings toplevel env = 
   filter (fun pair -> mem pair toplevel) env
 
-let rec lookup_qname toplevel locals =
-  let lookup_simple_name name = 
-    try assoc name locals
-    with Not_found -> assoc name toplevel
-  in
-    function
-        | [name] -> lookup_simple_name name
-        | namespace :: names -> 
-	    (match lookup_simple_name namespace with
-               | `Environment (url, env) -> lookup_qname env locals names 
-               | _ -> failwith (namespace ^ " is not a namespace"))
-              
 let lookup toplevel locals name = 
-  try
-    lookup_qname toplevel locals (split_string name ':')
-  with Not_found ->
-    Library.primitive_stub name
+  match safe_assoc name locals with
+    | Some v -> v
+    | None -> match safe_assoc name toplevel with
+        | Some v -> v
+        | None -> Library.primitive_stub name
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -487,7 +476,6 @@ let run_program (globals : environment) exprs : (environment * result)=
     interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs));
     failwith "boom"
   ) with
-    | Not_found -> failwith("Internal error: Something was 'not found' while interpreting")
     | TopLevel s -> s
 
 let apply_cont_safe x y z = 
