@@ -349,10 +349,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | r -> raise (Runtime_failure ("TF183 : " ^ string_of_result r))
 	         in
 	           (* Extend rslts with the newest list of results. *)
-                 let rslts = rslts @ new_results in
+                   let rslts = (List.rev new_results) :: rslts in
 	           match inputs with
 		       [] -> (* no more inputs, collect results & continue *)
-		         apply_cont globals cont (`List rslts)
+		         apply_cont globals cont (`List (List.rev (List.concat rslts)))
 		     | (next_input_expr::inputs) ->
 		         (* Evaluate next input, continuing with given results: *)
 		         interpret globals (bind locals var next_input_expr) expr
@@ -494,5 +494,3 @@ let apply_cont_safe x y z =
   try apply_cont x y z
   with
     | TopLevel s -> snd s
-
-

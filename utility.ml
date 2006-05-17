@@ -74,9 +74,6 @@ let last l = snd (unsnoc l)
 
 let butlast l = fst (unsnoc l)
 
-let fold_right1 f xs = let butlast, last = unsnoc xs in
-  List.fold_right f butlast last
-
 (** Comparison function from a less-than function *)
 let less_to_cmp less l r = 
   if less r l then 1

@@ -156,7 +156,7 @@ type contin_frame =
   | RecSelect of (environment * string * string * string * expression)
   | CollExtn of (environment * 
 		   string * expression * 
-		   result list * result list)
+		   result list list * result list)
   | StartCollExtn of (environment *
 			string * expression)
   | XMLCont of (environment 
@@ -270,7 +270,7 @@ and strip_cont_frame = function
                                                         to_placeholder body)
   | CollExtn(env, var, body, results, source) ->
       CollExtn(strip_env env, var, to_placeholder body, 
-               map strip_result results, map strip_result source)
+               map (map strip_result) results, map strip_result source)
   | StartCollExtn(env, var, body) -> 
       StartCollExtn(strip_env env, var, to_placeholder body)
   | XMLCont(env, tagname, attrname, children, attrexprs, childexprs) ->
@@ -537,7 +537,7 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = f
       contframe_f(RecSelect((map_env result_f expr_f contframe_f) env, label, var, label_var, (map_expr result_f expr_f contframe_f) body))
   | CollExtn(env, var, body, results, inputs) ->
       contframe_f(CollExtn((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body, 
-                           map (map_result result_f expr_f contframe_f) results, map (map_result result_f expr_f contframe_f) inputs))
+                           map (map (map_result result_f expr_f contframe_f)) results, map (map_result result_f expr_f contframe_f) inputs))
   | StartCollExtn(env, var, body) ->
       contframe_f(StartCollExtn((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
   | XMLCont(env, tag, attr_name, children, attr_exprs, elem_exprs) ->
