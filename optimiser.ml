@@ -389,7 +389,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
     | For (body, outer_var, (Table (db, s, query, tdata)), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var "dummy" bindings body with
-           | Some (positives, negatives, inner_query, origins, inner_var, body) ->
+           | Some(positives, negatives, inner_query, origins, inner_var, body) ->
                let renamings, query = join (positives, negatives) (query, inner_query) in
                  
                (* Replace anything of the form inner_var.field with 
@@ -567,11 +567,11 @@ let fold_constant : RewriteSyntax.rewriter =
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
+  RewriteSyntax.topdown (sql_sort);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
   RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.bottomup (sql_projections env);
-  RewriteSyntax.topdown (sql_sort);
 (*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown trivial_extensions;

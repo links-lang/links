@@ -332,6 +332,7 @@ let append_uniquely left right : (column list * (column * string) list) =
     @raise Failure A general programming error has occured. Passing 
         conditions that where not selectable with 
     {! Sql_transform.selectable} might cause such exceptions. *)
+(* FIXME: This ought to uniquely rename the tables (as well as the columns) *)
 let rec join ((positives, negatives):(expression list * expression list))
     ((left, right) : query * query)
     : ((column * string) list * query) =

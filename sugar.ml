@@ -400,6 +400,11 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
   | TableLit (name, kind, unique, db) -> 
       (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) : Query.query =
+         (* FIXME: this is not the appropriate place to gensym the
+            table name. The table will move around later. The right place
+            to do it is when joining two queries: at that point,
+            alpha-convert to ensure that the involved tables have
+            different names. *)
          let table_name = (db_unique_name ()) in
          let selects = match kind with
            | `Record (field_env, `RowVar row_var) ->
@@ -437,9 +442,9 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
   | HandleWith (e1, name, e2) -> 
       Syntax.Escape("return", 
-        Let (name, Syntax.Escape("handler",  
-                     Apply (Variable ("return", pos), 
-                            desugar e1, pos), pos), desugar e2, pos), pos)
+                    Let (name, Syntax.Escape("handler",  
+                                             Apply (Variable ("return", pos), 
+                                                    desugar e1, pos), pos), desugar e2, pos), pos)
   | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
   | FnAppl (fn, [p]) -> Apply (desugar fn, desugar p, pos)
   | FnAppl (fn, ps)  -> Apply (desugar fn, desugar (TupleLit ps, pos'), pos)
