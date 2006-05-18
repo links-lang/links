@@ -728,7 +728,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
       let trimmed_node =
         Xml_node (tag, 
-                  nonspecial_attrs,         (* v-- up here I mean *)
+                  nonspecial_attrs,         (* +--> up here I mean *)
                   contents,                 (* | *)
                   (pos, `List (`Primitive `XMLitem), None))
       in                                    (* | *)
@@ -845,6 +845,13 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	unify (type_of_expression db, `DB);
 	unify (kind, `List (`Record (ITO.make_empty_open_row ())));
         Table (db, s, query, (pos, kind, None))
+  | SortBy(expr, byExpr, pos) ->
+      (* FIXME: the byExpr is typed freely as yet. It could have any
+         orderable type, of which there are at least several. How to
+         resolve this? Would kill for type classes. *)
+      let byExpr = type_check env byExpr in
+      let expr = type_check env expr in
+        SortBy(expr, byExpr, (pos, type_of_expression expr, None))
   | Wrong pos ->
       Wrong(pos, ITO.fresh_type_variable(), None)
   | HasType(expr, typ, pos) ->

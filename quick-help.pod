@@ -387,6 +387,7 @@ Replaces the entire active document with C<newDocument>.
 
 =back
 
+=head1 Standard Library
 
 =cut
 

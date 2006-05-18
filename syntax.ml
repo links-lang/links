@@ -46,10 +46,12 @@ type 'data expression' =
   | Nil of ('data)
   | List_of of ('data expression' * 'data)
   | Concat of ('data expression' * 'data expression' * 'data)
-  | For of ('data expression' * string * 'data expression' * 
-                               'data)
+  | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | Table of ('data expression' * string * Query.query * 'data)
+  | Table of ((* the database: *) 'data expression' *
+      (* the real name of some table associated with thsi query; not used: *) string * 
+      (* the query to run against database: *) Query.query * 'data)
+  | SortBy of ('data expression' * 'data expression' * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * kind * 'data)
@@ -81,7 +83,22 @@ let s6 (s1, s2, s3, s4, s5, s6) (e1, e2, e3, e4, e5, e6) =
 let s7 (s1, s2, s3, s4, s5, s6, s7) (e1, e2, e3, e4, e5, e6, e7) =
   "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^  "," ^ s7 e7 ^ ")"
 
-let null = fun _ -> "_"
+let t1 () v =
+  "()"
+let t2 (s1) (e1, e2) =
+  s1 e1 
+let t3 (s1, s2) (e1, e2, e3) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ ")"
+let t4 (s1, s2, s3) (e1, e2, e3, e4) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ ")"
+let t5 (s1, s2, s3, s4) (e1, e2, e3, e4, e5) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ ")"
+let t6 (s1, s2, s3, s4, s5) (e1, e2, e3, e4, e5, e6) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ ")"
+let t7 (s1, s2, s3, s4, s5, s6) (e1, e2, e3, e4, e5, e6, e7) =
+  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^ ")"
+
+let null = fun _ -> ""
 
 let slist s l = 
   "[" ^ String.concat "," (map s l) ^ "]"
@@ -97,37 +114,38 @@ let gensym =
 let rec show_expression = 
   let exp = show_expression in
     function
-  | Define v -> "Define " ^ s4 (identity, show_expression, null, null) v
-  | Boolean v -> "Boolean " ^ s2 (string_of_bool, null) v
-  | Integer v -> "Integer " ^ s2 (string_of_num, null) v
-  | Char v -> "Char " ^ s2 (String.make 1, null) v
-  | String v -> "String " ^ s2 (identity, null) v
-  | Float v -> "Float " ^ s2 (string_of_float, null) v
-  | Variable v -> "Variable " ^ s2 (identity, null) v
-  | Apply v -> "Apply " ^ s3 (exp, exp, null) v
-  | Condition v -> "Condition " ^ s4 (exp, exp, exp, null) v
-  | Comparison v -> "Comparison " ^ s4 (exp, identity, exp, null) v
-  | Abstr v -> "Abstr " ^ s3 (identity, exp, null) v
-  | Let v -> "Let " ^ s4 (identity, exp, exp, null) v
-  | Rec v -> "Rec " ^ s3 (slist (s2 (identity, exp)), exp, null) v
-  | Xml_node v -> "Xml_node " ^ s4 (identity, slist (s2 (identity, exp)), slist exp, null) v
-  | Record_empty v -> "Record_empty " ^ s1 (null) v
-  | Record_extension v -> "Record_extension " ^ s4 (identity, exp, exp, null) v
-  | Record_selection v -> "Record_selection " ^ s6 (identity, identity, identity, exp, exp, null) v
-  | Record_selection_empty v -> "Record_selection_empty " ^ s3 (exp, exp, null) v
-  | Variant_injection v -> "Variant_injection " ^ s3 (identity, exp, null) v
-  | Variant_selection v -> "Variant_selection " ^ s7 (exp, identity, identity, exp, identity, exp, null) v
-  | Variant_selection_empty v -> "Variant_selection_empty " ^ s2 (exp, null) v
-  | Nil v -> "Nil " ^ s1 (null) v
-  | List_of v -> "List_of " ^ s2 (exp, null) v
-  | Concat v -> "Concat " ^ s3 (exp, exp, null) v
-  | For v -> "For " ^ s4 (exp, identity, exp, null) v
-  | Database v -> "Database " ^ s2 (exp, null) v
-  | Table v -> "Table " ^ s4 (exp, identity, string_of_query, null) v
-  | Escape v -> "Escape " ^ s3 (identity, exp, null) v
-  | Wrong v -> "Wrong " ^ s1 null v
-  | HasType v -> "HasType " ^ s3 (exp, null, null) v
-  | Placeholder v -> "Placeholder " ^ s2 (identity, null) v
+  | Define v -> "Define " ^ t4 (identity, show_expression, null) v
+  | Boolean v -> "Boolean " ^ t2 (string_of_bool) v
+  | Integer v -> "Integer " ^ t2 (string_of_num) v
+  | Char v -> "Char " ^ t2 (String.make 1) v
+  | String v -> "String " ^ t2 (identity) v
+  | Float v -> "Float " ^ t2 (string_of_float) v
+  | Variable v -> "Variable " ^ t2 (identity) v
+  | Apply v -> "Apply " ^ t3 (exp, exp) v
+  | Condition v -> "Condition " ^ t4 (exp, exp, exp) v
+  | Comparison v -> "Comparison " ^ t4 (exp, identity, exp) v
+  | Abstr v -> "Abstr " ^ t3 (identity, exp) v
+  | Let v -> "Let " ^ t4 (identity, exp, exp) v
+  | Rec v -> "Rec " ^ t3 (slist (s2 (identity, exp)), exp) v
+  | Xml_node v -> "Xml_node " ^ t4 (identity, slist (s2 (identity, exp)), slist exp) v
+  | Record_empty v -> "Record_empty " ^ t1 () v
+  | Record_extension v -> "Record_extension " ^ t4 (identity, exp, exp) v
+  | Record_selection v -> "Record_selection " ^ t6 (identity, identity, identity, exp, exp) v
+  | Record_selection_empty v -> "Record_selection_empty " ^ t3 (exp, exp) v
+  | Variant_injection v -> "Variant_injection " ^ t3 (identity, exp) v
+  | Variant_selection v -> "Variant_selection " ^ t7 (exp, identity, identity, exp, identity, exp) v
+  | Variant_selection_empty v -> "Variant_selection_empty " ^ t2 (exp) v
+  | Nil v -> "Nil " ^ t1 () v
+  | List_of v -> "List_of " ^ t2 (exp) v
+  | Concat v -> "Concat " ^ t3 (exp, exp) v
+  | For v -> "For " ^ t4 (exp, identity, exp) v
+  | Database v -> "Database " ^ t2 (exp) v
+  | Table v -> "Table " ^ t4 (exp, identity, string_of_query) v
+  | SortBy v -> "SortBy " ^ t3 (exp, exp) v
+  | Escape v -> "Escape " ^ t3 (identity, exp) v
+  | Wrong v -> "Wrong " ^ t1 () v
+  | HasType v -> "HasType " ^ t3 (exp, string_of_kind) v 
+  | Placeholder v -> "Placeholder " ^ t2 (identity) v
   | Alien v -> "Alien " ^ s4 (identity, identity, string_of_assumption, null) v
 
 type expression = (position * kind * string option (* label *)) expression'
@@ -201,6 +219,8 @@ and show t : 'a expression' -> string = function
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | Table (daba, s, query, data) ->
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
+  | SortBy (expr, byExpr, data) ->
+      "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")"
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ s ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (string_of_assumption k) ^ t data
@@ -508,6 +528,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
+  | SortBy (a, b, data) -> SortBy (redecorate f a, redecorate f b, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
   | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
   | Wrong (data) -> Wrong (f data)
@@ -631,6 +652,7 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Record_selection_empty (e1, e2, a)         -> passto [e1; e2] (fun [e1; e2] -> Record_selection_empty (e1, e2, a))
       | Concat (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Concat (e1, e2, a))
       | For (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> For (e1, a, e2, b))
+      | SortBy (e1, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> SortBy (e1, e2, b))
       | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
       | Condition (e1, e2, e3, a)                  -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Condition (e1, e2, e3, a))
       (* varying children *)
@@ -673,6 +695,7 @@ let expression_data : ('a expression' -> 'a) = function
 	| For (_, _, _, data) -> data
 	| Database (_, data) -> data
 	| Table (_, _, _, data) -> data
+	| SortBy (_, _, data) -> data
 	| Escape (_, _, data) -> data
         | Wrong data -> data
         | Alien (_,_,_,data) -> data

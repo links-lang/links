@@ -457,10 +457,12 @@ fun globals locals expr cont ->
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
+  | Syntax.SortBy (list, byExpr, _) ->
+      eval list cont
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, typ, _) ->
-      interpret globals locals expr cont
+      eval expr cont
   | Syntax.Placeholder (l, _) -> 
       failwith("Internal error: Placeholder at runtime")
 

@@ -200,7 +200,7 @@ let xml_transform env lookup eval : expression -> expression =
                  (match eval lhandler [] with
                       `Continuation c ->
                         [hidden_input "continuation%"
-                           (Utility.base64encode (Result.serialise_continuation c))]
+                           (Result.serialise_continuation_b64 c)]
                     | _ -> failwith "Internal error: l:handler was not a continuation")
            in
              Xml_node ("form",
@@ -210,11 +210,13 @@ let xml_transform env lookup eval : expression -> expression =
                          ("action", string "#") attrs, 
                        new_fields @ contents, data)
          with Not_found -> form)
+
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with
            | String (name, _) -> Xml_node(tag, substitute (((=)"l:name") -<- attrname) ("name", string name) attrs, contents, data)
            | _ -> failwith "Internal error transforming xml"
          with Not_found -> input)
+
     | Xml_node ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in
         let ser_expr, ser_env = serialize_exprenv href_expr env in

@@ -5,6 +5,10 @@ open List
 open Pickle
 open Query
 
+let sorting_to_sql = function
+  | `Asc (table, col)  -> table ^ "." ^ col ^ " ASC" 
+  | `Desc (table, col) -> table ^ "." ^ col ^ " DESC"
+  
 let rec string_of_expression : expression -> string = function
   | Field (table, field)     -> table ^"."^ field
 (*   | NamedField field         -> field *)
@@ -29,10 +33,7 @@ and string_of_query (qry:query) : string =
        string_of_condition where
      ^ (match order with
 	  | [] -> "" 
-	  | orders -> " ORDER BY "^(String.concat ", " (map (function
-                                                               | `Asc (db, col)  -> db ^"."^ col ^" ASC" 
-                                                               | `Desc (db, col) -> db ^"."^ col ^" DESC") 
-							  orders)))
+	  | orders -> " ORDER BY " ^ Utility.mapstrcat ", " sorting_to_sql orders)
      ^ (match qry.max_rows with
           | None   -> ""
           | Some m -> " limit " ^ string_of_expression m)

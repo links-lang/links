@@ -17,9 +17,9 @@ let unique_name () =
   "g" ^ string_of_int !base_value ^ "" 
 
 let db_unique_name () = 
-incr base_value; 
-"Table_" ^ string_of_int !base_value 
-
+  incr base_value; 
+  "Table_" ^ string_of_int !base_value 
+    
 (* col_unique_name
    Make up a globally-unique name for a db column usage.
    Note: this is sensitive to capitalization. PostgreSQL, at least, is
@@ -161,7 +161,6 @@ let variant_selection
                                pos)
     in
       one_more source cases
-
 
 (** With respect to scope of variables bound at the same level the
     rules are these:
@@ -312,7 +311,7 @@ type phrasenode =
   | Spawn of phrase
   | ListLit of (phrase list)
   | Definition of (name * phrase * location)
-  | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option)
+  | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
   | Escape of (name * phrase)
   | HandleWith of (phrase * name * phrase)
   | Section of ([arith_binop|`Project of name])
@@ -329,6 +328,7 @@ type phrasenode =
   | TupleLit of (phrase list)
   | RecordLit of ((name * phrase) list * phrase option)
   | Projection of (phrase * name)
+  | SortBy_Conc of (ppattern * phrase * phrase)
 
   | TypeAnnotation of (phrase * kind)
 
@@ -340,7 +340,7 @@ type phrasenode =
 
 (* Database operations *)
   | DatabaseLit of (string)
-  | TableLit of (string * kind * bool (* unique *) * order list * phrase)
+  | TableLit of (string * kind * bool (* unique *) * phrase)
   | DBUpdate of (string * phrase * phrase)
   | DBDelete of (string * phrase * phrase)
   | DBInsert of (string * phrase * phrase)
@@ -398,8 +398,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
   | Projection (e, name) -> (let s = unique_name ()
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
-  | TableLit (name, kind, unique, order, db) -> 
-      (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) (orders:[`Asc of string | `Desc of string] list) : Query.query =
+  | TableLit (name, kind, unique, db) -> 
+      (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) : Query.query =
          let table_name = (db_unique_name ()) in
          let selects = match kind with
            | `Record (field_env, `RowVar row_var) ->
@@ -408,7 +408,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 	           List.map (fun
 		               (field_name, field_kind) ->
 			         {table_renamed = table_name;
-			          name=field_name; renamed=field_name; col_type = field_kind})
+			          name=field_name; renamed=field_name; 
+                                  col_type = field_kind})
                      present_fields
 	         else raise (Parse_failure (pos, "Table kinds are records with only field present elements"))
            | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Kind.string_of_kind kind)) in
@@ -416,11 +417,10 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
             result_cols = selects;
             tables = [(name, table_name)];
             condition = Query.Boolean true;
-            sortings = List.map (function | `Asc field -> `Asc (table_name, field)
-                                          | `Desc field -> `Desc (table_name, field)) orders;
+            sortings = [];
             max_rows = None;
             offset = Query.Integer (Num.Int 0)} in
-         Table (desugar db, name, db_query name pos (desugar_kind kind) unique order, pos))
+         Table (desugar db, "IGNORED", db_query name pos (desugar_kind kind) unique, pos))
   | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
   | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
   | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
@@ -436,10 +436,10 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | TupleLit [field] -> desugar field
   | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
   | HandleWith (e1, name, e2) -> 
-      Syntax.Escape ("return", 
-                     Let (name, Syntax.Escape ("handler",  
-                                               Apply (Variable ("return", pos), 
-                                                      desugar e1, pos), pos), desugar e2, pos), pos)
+      Syntax.Escape("return", 
+        Let (name, Syntax.Escape("handler",  
+                     Apply (Variable ("return", pos), 
+                            desugar e1, pos), pos), desugar e2, pos), pos)
   | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
   | FnAppl (fn, [p]) -> Apply (desugar fn, desugar p, pos)
   | FnAppl (fn, ps)  -> Apply (desugar fn, desugar (TupleLit ps, pos'), pos)
@@ -449,23 +449,40 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],
                                                Variable (name, pos),
                                                pos)
-  | Block (es, exp) -> let es = List.map (function (* pattern * untyped_expression * position *)
-                                            | Binding (p, e), pos -> (patternize p, desugar e, lookup_pos pos)
-                                            | FunLit (Some n, patts, body), pos -> (Bind n, desugar (FunLit (None, patts, body), pos), lookup_pos pos)
-                                            | expr, pos -> Bind "__", desugar (expr, pos), lookup_pos pos) es in
+  | Block (es, exp) -> let es = 
+      List.map (function (* pattern * untyped_expression * position *)
+                  | Binding (p, e), pos -> 
+                      (patternize p, desugar e, lookup_pos pos)
+                  | FunLit (Some n, patts, body), pos -> 
+                      (Bind n, desugar (FunLit (None, patts, body), pos), 
+                       lookup_pos pos)
+                  | expr, pos -> 
+                      Bind "__", desugar (expr, pos), lookup_pos pos) es in
       polylets es (desugar exp)
   | Foreign (language, name, kind) -> 
       Alien (language, name, desugar_assumption (generalize kind), pos)
-  | Iteration (pattern, from, body, None) ->
+  | SortBy_Conc(patt, expr, sort_expr) ->
+      (match patternize patt with
+        | Bind var -> 
+            SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
+        | pattern -> failwith("orderby clause on non-simple pattern-matching for is not yet implemented."))
+  | Iteration (pattern, from, body, None, None) ->
       (match patternize pattern with
          | Bind var -> For (desugar body, var, desugar from, pos)
          | pattern -> (let var = unique_name () in
-	                 For (polylet pattern pos (Variable (var, pos)) (desugar body), var, desugar from, pos)))
-  | Iteration (pattern, from, body, Some exp) -> desugar (Iteration (pattern, from, 
-                                                                     (Conditional (exp,
-                                                                                   body,
-                                                                                   (ListLit [], pos')), pos'), None),
-                                                          pos')
+	                 For (polylet pattern pos (Variable (var, pos)) (desugar body),
+                              var, desugar from, pos)))
+  | Iteration (pattern, from, body, filter_cond, Some sort_expr) -> 
+      desugar (Iteration (pattern, (SortBy_Conc(pattern, from, sort_expr), pos'),
+                          body, filter_cond, None),
+               pos')
+  | Iteration (pattern, from, body, Some exp, sort_expr) -> 
+      desugar (Iteration (pattern, from, 
+                          (Conditional (exp,
+                                        body,
+                                        (ListLit [], pos')), pos'), 
+                          None, sort_expr),
+               pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
       (* TBD: Remove the _ at the end of the Switch node *)
   | Switch (exp, (((Pattern(InfixAppl (`Cons, _, _), _), _)::_) as patterns), dflt)

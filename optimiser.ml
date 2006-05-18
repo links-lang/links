@@ -62,8 +62,7 @@ let uniquify_expression : RewriteSyntax.rewriter =
                                 data))
     | For (b, v, src, data) -> 
         let name = gensym v in
-          Some (For
-                  (rename_var v name b, name, src, data))
+          Some (For(rename_var v name b, name, src, data))
     | Variant_selection (value, clab, cvar, cbody, var, body, data) ->
         let cvar' = gensym cvar
         and var'  = gensym var in
@@ -227,6 +226,8 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     used in the selection's body. *)
 type fieldset = All
               | Fields of (string list)
+(* FIXME: Make sure we don't throw away fields that are used in 
+   a SortBy clause. *)
 let sql_projections (env:Kind.environment) : RewriteSyntax.rewriter =
   let merge_needed : fieldset list -> fieldset =
     let merge2 = function
@@ -317,7 +318,24 @@ let rec substitute_projections new_src renamings expr bindings =
     fold_right (fun ren expr ->
                   simple_visit (subst_projection ren) expr
                ) renamings expr
-	
+
+let read_proj = function
+    Record_selection(field, field_var, etc_var, record, 
+                     Variable(result_var, data1), data2) ->
+      Some(record, field)
+  | _ -> None
+
+let rec sql_sort = function
+  | SortBy(Table(db, dummy, query, data1), 
+           Abstr(loopVar, sortByExpr, data2), data3) ->
+      (match read_proj sortByExpr with
+           Some (Variable(sortByRecVar, data3), sortByFld)
+             when sortByRecVar = loopVar
+               -> Some(Table(db, dummy, Query.add_sorting query 
+                               (`Asc(Query.owning_table sortByFld query, sortByFld)), data1))
+         | _ -> None)
+  | _ -> None
+      
 (** check_join
     Inspects an expression for possible collection extension
     operators that can be joined with some outer comprhsn, the
@@ -381,9 +399,9 @@ let rec sql_joins : RewriteSyntax.rewriter =
                  [`Table_loop(inner_var, inner_query)] 
                in
                let expr = For(body,
-                                               outer_var, 
-                                               Table (db, s, query, tdata), 
-                                               data) in
+                              outer_var, 
+                              Table (db, s, query, tdata), 
+                              data) in
 (*                (\* finally, wrap the whole expression in the  *)
 (*                   projections returned from check_join; *)
 (*                   TBD: Does this need to go somewhere? Inside the loop? *\) *)
@@ -402,7 +420,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                  if (pos <> [] || neg <> []) then
                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in
                      Some (For(body, outer_var, 
-                                                Table (db, s, query, tdata), data))
+                               Table (db, s, query, tdata), data))
                  else None
         ) (* match check_join .... with *)
     | _ -> None
@@ -553,8 +571,8 @@ let rewriters env = [
   RewriteSyntax.bottomup sql_selections;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.bottomup (sql_projections env);
-(*  optimiser2rewriter sql_sort;
-  inference_rw env; *)
+  RewriteSyntax.topdown (sql_sort);
+(*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown trivial_extensions;
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
@@ -566,12 +584,14 @@ let run_optimisers : Kind.environment -> RewriteSyntax.rewriter
 let optimise env expr =
   match run_optimisers env expr with
       None -> debug ("Optimization had no effect"); expr
-    | Some expr' -> (debug ("Before optimization : " ^ show_expression expr
-			    ^ "\nAfter optimization  : " ^ show_expression expr');
+    | Some expr' -> (debug("Before optimization : " ^ show_expression expr ^ 
+			     "\nAfter optimization  : " ^ show_expression expr');
 		     expr')
 
 (* Not really an optimisation.  This /must/ be run, or the program
    semantics will be completely wrong.
+   FIXME: Should we separate *necessary* transformations from optimizations? 
+     SQL generation might count as a necessary transformation, too.
 *)
 let inline_tables expressions = 
   let insert_tables map : RewriteSyntax.rewriter = function

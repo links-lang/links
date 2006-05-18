@@ -1,4 +1,4 @@
-Fields in order spec for table must be part of table.
-table foo (a:String) order [b:asc] database "";()
-stderr : @..*
-exit : 1
+Orderby clause (not a semantic test, just syntax)
+for (x <- [1, 2, 3]) orderby (x) [x]
+stdout : [1, 2, 3] : [Int]
+exit : 0

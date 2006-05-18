@@ -16,7 +16,7 @@ for $expr (keys %tests) {
     $env_str = <OUTPUT>;
     chomp($env_str);
     close OUTPUT;
-    $ENV{QUERY_STRING} = "expression%=$expr_str&environment%=$env_str";
+    $ENV{QUERY_STRING} = "?expression%=$expr_str&environment%=$env_str";
     open OUTPUT, "./links examples/null.links|";
     while (<OUTPUT> =~ /./) { }
     $orig_sep = $/;

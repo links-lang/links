@@ -6,6 +6,10 @@ To install Links, you'll need:
   * OCaml packages: findlib, equeue, curl, postgresql, pcre, ocamlnet.
   * A webserver that can run CGI programs.
 
+SYSTEM REQUIREMENTS
+
+... TBD: System Requirements ...
+
 INSTALLING OCAML
 
 Visit http://caml.inria.fr/ and look for a "Download" link. Download

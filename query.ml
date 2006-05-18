@@ -30,7 +30,6 @@ and query = {distinct_only : bool;
              offset : expression; (* The row in the table to start from *)
             }
 
-
 and table_instance = string * string (* (real_name, as_name) *)
 
 and sorting = [`Asc of (string * string) | `Desc of (string * string)]
@@ -39,10 +38,26 @@ and column = {table_renamed : string;
               renamed : string;
               col_type : Kind.kind}
 
+(* Simple accessors *)
+
 let get_renaming col = col.renamed
 
 let table_real_name = fst
 let table_as_name = snd
+
+let add_sorting query col = 
+  {query with
+     sortings = col :: query.sortings}
+
+let owning_table of_col qry =
+  let col_rec = (List.find (fun c -> c.name = of_col) qry.result_cols) in
+    col_rec.table_renamed
+
+let table_as_name_to_real_name renamed qry = 
+  table_real_name (List.find (fun t -> table_as_name t = renamed) qry.tables)
+
+let table_real_name_to_as_name real_name qry = 
+  table_as_name (List.find (fun t -> table_real_name t = real_name) qry.tables)
 
 let rec freevars query =
   qexpr_freevars query.condition

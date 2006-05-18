@@ -103,10 +103,20 @@ end
 
 class pg_database host port dbname user password = object(self)
   inherit database
-  val connection = new connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
+
+  val connection =
+    try
+      new connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
+    with
+        Postgresql.Error msg ->
+          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
   method exec : string -> dbresult = fun query ->
-    let raw_result = connection#exec query in
-    new pg_dbresult raw_result
+    try
+      let raw_result = connection#exec query in
+        new pg_dbresult raw_result
+    with
+        Postgresql.Error msg ->
+          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
   method escape_string s = Postgresql.escape_string s
 end
 let driver_name = "postgresql"

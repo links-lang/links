@@ -285,8 +285,7 @@ and strip_result = function
   | `Record(fields) -> `Record(map strip_binding fields)
   | `Variant(label, value) ->  `Variant(label, strip_result value)
   | `List(elements)-> `List(map strip_result elements)
-  | `Database(db, params) ->
-      `Database(db, params)
+  | `Database(db, params) -> `Database(db, params)
   | `Continuation(cont) -> `Continuation(strip_continuation cont)
 
 let strip_cont cont = map strip_cont_frame cont

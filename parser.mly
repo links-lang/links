@@ -26,7 +26,8 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW HANDLE WHERE 
 %token AMPER COMMA VBAR DOT COLON COLONCOLON
-%token TABLE FROM DATABASE WITH UNIQUE ORDER ASC DESC UPDATE DELETE INSERT BY VALUES INTO
+%token TABLE FROM DATABASE WITH UNIQUE ORDERBY ASC DESC 
+%token UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
 %token CLIENT SERVER 
 %token SEMICOLON
@@ -82,8 +83,7 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
-| TABLE VARIABLE kind unique perhaps_order
-        DATABASE STRING SEMICOLON                              { Definition ($2, (TableLit ($2, $3, $4, $5, (DatabaseLit $7, pos())), pos()), `Server), pos() }
+| TABLE VARIABLE kind unique DATABASE STRING SEMICOLON         { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | ALIEN VARIABLE VARIABLE COLON kind SEMICOLON                 { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
@@ -274,8 +274,15 @@ default_case :
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR provider exp                                             { Iteration (fst $2, snd $2, $3, None),    pos() }
-| FOR provider WHERE LPAREN exp RPAREN exp                     { Iteration (fst $2, snd $2, $7, Some $5), pos() }
+| FOR provider perhaps_where perhaps_orderby exp               { Iteration (fst $2, snd $2, $5, $3, $4),    pos() }
+
+perhaps_where:
+|                                                              { None }
+| WHERE LPAREN exp RPAREN                                      { Some $3 }
+
+perhaps_orderby:
+|                                                              { None }
+| ORDERBY LPAREN exp RPAREN                                    { Some $3 }
 
 escape_expression:
 | iteration_expression                                         { $1 }
@@ -317,11 +324,6 @@ exp:
 unique:
 | UNIQUE                                                       { true }
 |                                                              { false }
-
-perhaps_order:
-| ORDER LBRACKET orders RBRACKET                               { $3 }
-| ORDER LBRACKET RBRACKET                                      { [] }
-|                                                              { [] }
 
 orders:
 | VARIABLE COLON ASC COMMA orders                              { (`Asc $1) :: $5 }
