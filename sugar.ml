@@ -261,41 +261,42 @@ let generalize (k : kind) : assumption =
 
 let desugar_assumption ((vars, k)  : assumption) : Kind.assumption = 
   let max = length vars in
-  let vars, varmap = split (map2 (fun n -> function
-				    | `TypeVar x -> `TypeVar n, (x, n)
-				    | `RowVar x  -> `RowVar n, (x, n))
-			      (Utility.fromTo 0 max)
+  let vars, varmap = split (map (fun m ->
+                                   let n = Type_basis.fresh_raw_variable () in
+                                     match m with 
+				       | `TypeVar x -> `TypeVar n, (x, n)
+				       | `RowVar x  -> `RowVar n, (x, n))
 				    vars) in
-  let rec desugar (counter, varmap) = 
+  let rec desugar varmap = 
     let lookup = flip assoc varmap in
       function
 	| TypeVar s -> (try `TypeVar (lookup s)
 			with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
-	| FunctionType (k1, k2) -> `Function (desugar (counter, varmap) k1, desugar (counter, varmap) k2)
-	| MuType (v, k) -> `Recursive (counter, desugar (counter + 1, ((v,counter):: varmap)) k)
+	| FunctionType (k1, k2) -> `Function (desugar varmap k1, desugar varmap k2)
+	| MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
+                             `Recursive (n, desugar ((v,n):: varmap) k)
 	| UnitType -> Kind.unit_type
 	| TupleType ks -> 
-	    (* Why not?: Utility.fromTo 1 ((length ks) + 1) *)
-	    let labels = map (string_of_int -<- ((+)1)) (Utility.fromTo 0 (length ks)) 
+	    let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
 	    and unit = Kind.TypeOps.make_empty_closed_row ()
 	    and present (s, x) = (s, `Present x)
-	    in `Record (fold_right2 (curry (Kind.TypeOps.set_field -<- present)) labels (map (desugar (counter, varmap)) ks) unit)
-	| RecordType row -> `Record (desugar_row (counter, varmap) row)
-	| VariantType row -> `Variant (desugar_row (counter, varmap) row)
-	| ListType k -> `List (desugar (counter, varmap) k)
-	| MailboxType k -> `Mailbox (desugar (counter, varmap) k)
+	    in `Record (fold_right2 (curry (Kind.TypeOps.set_field -<- present)) labels (map (desugar varmap) ks) unit)
+	| RecordType row -> `Record (desugar_row varmap row)
+	| VariantType row -> `Variant (desugar_row varmap row)
+	| ListType k -> `List (desugar varmap k)
+	| MailboxType k -> `Mailbox (desugar varmap k)
 	| PrimitiveType k -> `Primitive k
 	| DBType -> `DB
-  and desugar_row (counter, varmap) (fields, rv) = 
+  and desugar_row varmap (fields, rv) = 
     let lookup = flip assoc varmap in
     let seed = match rv with
       | None    -> Kind.TypeOps.make_empty_closed_row ()
       | Some rv -> Kind.TypeOps.make_empty_open_row_with_var (lookup rv)
     and fields = map (fun (k, v) -> match v with
 			| `Absent -> (k, `Absent)
-			| `Present v -> (k, `Present (desugar (counter, varmap) v))) fields 
+			| `Present v -> (k, `Present (desugar varmap v))) fields 
     in fold_right Kind.TypeOps.set_field fields seed
-  in (vars, desugar (max, varmap) k)
+  in (vars, desugar varmap k)
        
 let desugar_kind k = snd (desugar_assumption ([], k))
 

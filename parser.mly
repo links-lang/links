@@ -269,9 +269,6 @@ case_expression:
 | SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None),    pos() }
 | RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None),    pos() }
 
-default_case :
-| CASE VARIABLE RARROW exp SEMICOLON                           { ($2, $4) }
-
 iteration_expression:
 | case_expression                                              { $1 }
 | FOR provider perhaps_where perhaps_orderby exp               { Iteration (fst $2, snd $2, $5, $3, $4),    pos() }
@@ -324,13 +321,6 @@ exp:
 unique:
 | UNIQUE                                                       { true }
 |                                                              { false }
-
-orders:
-| VARIABLE COLON ASC COMMA orders                              { (`Asc $1) :: $5 }
-| VARIABLE COLON DESC COMMA orders                             { (`Desc $1) :: $5 }
-| VARIABLE COLON ASC                                           { [`Asc $1] }
-| VARIABLE COLON DESC                                          { [`Desc $1] }
-
 
 labeled_exps:
 | record_label EQ exp                                          { [$1, $3] }

@@ -28,7 +28,7 @@ OCAMLC := ocamlc.opt
 OCAMLDEP := ocamldep
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
-OCAMLYACC := ocamlyacc
+OCAMLYACC := ocamlyacc -v
 
 OCAMLFLAGS=-w Aef
 
