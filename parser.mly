@@ -39,7 +39,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <string> VARIABLE CONSTRUCTOR KEYWORD
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU
+%token MU ALIEN
 
 %start parse_links
 %start just_kind
@@ -85,6 +85,7 @@ toplevel:
 | TABLE VARIABLE kind unique perhaps_order
         DATABASE STRING SEMICOLON                              { Definition ($2, (TableLit ($2, $3, $4, $5, (DatabaseLit $7, pos())), pos()), `Server), pos() }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
+| ALIEN VARIABLE VARIABLE COLON kind SEMICOLON                 { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       

@@ -555,6 +555,7 @@ let rec generate : 'a expression' -> code =
 		     Var "__kappa")
 	       ])
 	)
+  | Alien _ -> Nothing
 
   (* Unimplemented stuff *)
   | Database _

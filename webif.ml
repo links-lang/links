@@ -70,22 +70,14 @@ let stubify_client_funcs env =
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, `Client, _) -> false
+    | Syntax.Alien ("javascript", _, _, _) -> false
     | e  -> failwith ("Unexpected non-definition in environment : " 
 		      ^ Syntax.string_of_expression e)
   in 
-  let def_as_client_fun = function 
-    | Syntax.Define (name, _, _, _) -> 
-      (name,
-       (`PFunction
-	    (name, 
-             Some (fun (_, cont, arg) -> 
-                     let call = serialize_call_to_client (cont, name, arg) in
-                       (print_endline ("Content-type: text/plain\n\n" ^ 
-                                         Utility.base64encode call);
-                        exit 0)),
-             []))) in
   let server_env, client_env = List.partition is_server_fun env in
-    List.iter (fun (Syntax.Define (name, _, _, _)) ->
+    List.iter (function
+                 | Syntax.Define (name, _, _, _)
+                 | Syntax.Alien (_, name, _, _) -> 
 		      let f (_, cont, arg) =
 			let call = serialize_call_to_client (cont, name, arg) in
 			  (print_endline ("Content-type: text/plain\n\n" ^ 

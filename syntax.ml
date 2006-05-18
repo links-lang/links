@@ -53,10 +53,15 @@ type 'data expression' =
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * kind * 'data)
+  | Alien of (string * string * assumption * 'data)
   | Placeholder of (string * 'data)
 
 
-let is_define = function Define _ -> true | _ -> false
+let is_define = 
+  function
+    | Define _
+    | Alien _ -> true
+    | _ -> false
 
 
 let s0 () () =
@@ -123,6 +128,7 @@ let rec show_expression =
   | Wrong v -> "Wrong " ^ s1 null v
   | HasType v -> "HasType " ^ s3 (exp, null, null) v
   | Placeholder v -> "Placeholder " ^ s2 (identity, null) v
+  | Alien v -> "Alien " ^ s4 (identity, identity, string_of_assumption, null) v
 
 type expression = (position * kind * string option (* label *)) expression'
 type untyped_expression = position expression'
@@ -197,6 +203,7 @@ and show t : 'a expression' -> string = function
       "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ s ^ t data
+  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (string_of_assumption k) ^ t data
 
 let string_of_kinded_expression (s : expression) : string = 
   show (function (_, kind, _) -> 
@@ -254,7 +261,7 @@ let rec serialise_expression : ('data expression' serialiser)
         | Escape v                  -> serialise3 'e' (string, exp, data) v
         | Placeholder v             -> serialise2 'p' (string, data) v
         | HasType v                 -> serialise3 '0' (exp, Kind.serialise_kind, data) v
-        | Placeholder v             -> serialise2 '1' (string, data) v
+        | Alien v                   -> serialise4 '1' (string, string, serialise_assumption, data) v
       )
 and deserialise_expression : (expression deserialiser)
     = let poskind = null_deserialiser (dummy_position, `Not_typed, None)
@@ -436,6 +443,7 @@ let visit_expressions'
 	HasType (e, k, d), data
     | Wrong (d) -> Wrong (d), unit data
     | Placeholder (str, d) -> Placeholder (str, d), unit data
+    | Alien _ as v -> v, unit data
   in visitor visit_children
        
 (* A simplified version which doesn't pass data around *)
@@ -504,6 +512,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
   | Wrong (data) -> Wrong (f data)
   | Placeholder (s, data) -> Placeholder (s, f data) 
+  | Alien (s1, s2, k, data) -> Alien (s1, s2, k, f data)
 
 let erase : expression -> untyped_expression = 
   redecorate (fun (pos, _, _) -> pos)
@@ -539,6 +548,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Float _ 
                | Record_empty _
                | Nil _
+               | Alien _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
@@ -598,11 +608,13 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Variable _
       | Nil _
       | Wrong _
+      | Alien _
       | Record_empty _ -> None
           
       (* fixed children *)
       | HasType (e, k, b)                          -> passto [e] (fun [e] -> HasType (e, k, b))
       | Abstr (a, e, b)                            -> passto [e] (fun [e] -> Abstr (a, e, b))
+
       | Variant_injection (a, e, b)                -> passto [e] (fun [e] -> Variant_injection (a, e, b))
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
       | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
@@ -663,6 +675,8 @@ let expression_data : ('a expression' -> 'a) = function
 	| Table (_, _, _, data) -> data
 	| Escape (_, _, data) -> data
         | Wrong data -> data
+        | Alien (_,_,_,data) -> data
+        | Placeholder (_,data) -> data
 
 let fst3 (a, _, _) = a
 and snd3 (_, b, _) = b

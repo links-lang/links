@@ -15,6 +15,19 @@ type universal = [
 | `Int of int setting
 | `String  of string setting
 ]
+
+let parse_bool = function
+  | "true"
+  | "yes"
+  | "oui"
+  | "ja"
+  | "on"  -> true
+  | "false"
+  | "no"
+  | "non"
+  | "nein"
+  | "off" -> false
+
 let string_of_universal : universal -> string  = function
   | `Bool (v,_) -> string_of_bool !v
   | `Int (v,_) -> string_of_int !v
@@ -28,7 +41,7 @@ let parse_and_set (name, value) =
       | `Bool setting ->
 	  begin
 	    try
-	      set_value setting (bool_of_string value)
+	      set_value setting (parse_bool value)
 	    with (Invalid_argument _) ->
 	      output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
 	  end

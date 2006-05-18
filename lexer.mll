@@ -61,8 +61,8 @@ let keywords = [
 "unique" , UNIQUE; "order"    ,  ORDER;    "asc"       , ASC;
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
 "var"    , VAR;    "spawn"    ,  SPAWN;    "mu"        , MU;
+"alien"  , ALIEN;
 ] 
-
 exception LexicalError of (string * Lexing.position)
 
 }

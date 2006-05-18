@@ -851,7 +851,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let expr = type_check env expr in
 	unify(type_of_expression expr, type_to_inference_type typ);
 	HasType(expr, typ, (pos, type_of_expression expr, None))
-  | Placeholder _ ->
+  | Placeholder _ 
+  | Alien _ ->
       assert(false)
   with 
       Unify_failure msg
@@ -949,12 +950,15 @@ let type_expression : Kind.environment -> untyped_expression -> (Kind.environmen
     let env', exp' =
       match untyped_expression with
 	| Define (variable, value, loc, pos) ->
-	    (*let var_type = ITO.fresh_type_variable () in*)
 	    let value = type_check env value in
 	    let value_type = if is_value value then (generalize env (type_of_expression value))
             else [], type_of_expression value in
               (((variable, value_type) :: env),
     	       Define (variable, value, loc, (pos, type_of_expression value, None)))
+        | Alien (language, name, assumption, pos)  ->
+            let (qs, k) = assumption_to_inference_assumption assumption in
+              ((name, (qs, k)) :: env),
+            Alien (language, name, assumption, (pos, k, None))
 	| expr -> let value = type_check env expr in env, value
     in
       inference_environment_to_environment env', inference_expression_to_expression exp'
@@ -1081,8 +1085,9 @@ let add_parameter s = fromOption s (RewriteSyntaxU.bottomup add_parameter s)
 and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s)
 
 let rewrite_annotations : RewriteSyntaxU.rewriter = function
-  | HasType (e, k, d) -> Some (HasType (e, snd (retype_primfun ([], k)), d))
-  | _                 -> None
+  | HasType (e, k, d)    -> Some (HasType (e, snd (retype_primfun ([], k)), d))
+  | Alien (s1, s2, k, d) -> Some (Alien (s1, s2, retype_primfun k, d))
+  | _                    -> None
 let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
 
 let type_program env exprs = 

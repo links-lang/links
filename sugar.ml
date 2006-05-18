@@ -319,6 +319,7 @@ type phrasenode =
   | Conditional of (phrase * phrase * phrase)
   | Binding of (ppattern * phrase)
   | Block of (phrase list * phrase)
+  | Foreign of (name * name * kind)
 (* Applications *)
   | InfixAppl of (binop * phrase * phrase)
   | UnaryAppl of (unary_op * phrase)
@@ -453,6 +454,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                                             | FunLit (Some n, patts, body), pos -> (Bind n, desugar (FunLit (None, patts, body), pos), lookup_pos pos)
                                             | expr, pos -> Bind "__", desugar (expr, pos), lookup_pos pos) es in
       polylets es (desugar exp)
+  | Foreign (language, name, kind) -> 
+      Alien (language, name, desugar_assumption (generalize kind), pos)
   | Iteration (pattern, from, body, None) ->
       (match patternize pattern with
          | Bind var -> For (desugar body, var, desugar from, pos)
