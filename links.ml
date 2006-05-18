@@ -25,10 +25,10 @@ let rec directives =
         List.iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) directives),
      "list available directives");
      
-    "options",
+    "settings",
     ((fun _ -> 
-        List.iter (Printf.fprintf stderr " %s\n") (Settings.list_options ())),
-     "list available settings");
+        List.iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
+     "print available settings");
     
     "set",
     ((function (name::value::_) -> Settings.parse_and_set (name, value)
@@ -124,7 +124,7 @@ let run_file filename =
     (Settings.set_value interacting false;
      Webif.serve_requests filename)
   else
-    (evaluate Parse.parse_file stdenvs filename;
+    (ignore(evaluate Parse.parse_file stdenvs filename);
     ())
 
 let serialize_expr str = 

@@ -93,5 +93,5 @@ let lookup_string name =
     | `String setting -> setting
     | _ -> assert(false)
 
-let list_options () = 
+let print_settings () = 
   SettingsMap.fold (fun k v p -> Printf.sprintf "%-25s (%s)" k (string_of_universal v) ::p) !settings []

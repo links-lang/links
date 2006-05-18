@@ -32,5 +32,5 @@ val get_name : 'a setting -> string
 (* set the value of a setting *)
 val set_value : 'a setting -> 'a -> unit
 
-(* list all registered options *)
-val list_options : unit -> string list
+(* print all registered settings *)
+val print_settings : unit -> string list
