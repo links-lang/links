@@ -8,8 +8,8 @@ let interacting = Settings.add_bool true "interacting"
 (* Whether to print types *)
 let printing_types = Settings.add_bool true "printing_types"
 
-(* whether to display the message parameter in types *)
-let show_message_parameter = Settings.add_bool false "show_message_parameter"
+(* whether to display the mailbox parameter in types *)
+let show_mailbox_parameter = Settings.add_bool false "show_message_parameter"
 
 (* Prompt in interactive mode *)
 let ps1 = "links> "
@@ -59,7 +59,9 @@ let print_result rtype result =
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
 		   begin
-		     if Settings.get_value(show_message_parameter) then
+		     if Settings.get_value(Inference.enable_mailbox_typing) &&
+		       Settings.get_value(show_mailbox_parameter)
+		     then
 		       " : "^ Types.string_of_kind rtype
 		     else
 		       " : "^ Types.string_of_kind (Inference.remove_mailbox rtype)

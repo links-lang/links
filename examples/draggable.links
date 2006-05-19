@@ -1,3 +1,9 @@
+alien javascript jslib:
+	(event:
+	  (getTarget : (a, Bool) -> c, 
+	   getRelatedTarget : a -> b)
+	);
+
 fun waiting(id) client {
   receive {
      case MouseDown  target -> dragging(id, target);

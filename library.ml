@@ -300,10 +300,7 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   (* HACK *)
   "callForeign",
-   (notimpl "callForeign",
-    let a', a = fresh_type() in
-    let b', b = fresh_type() in
-      ([a'; b'], a --> b));
+   (notimpl "callForeign", kind "(a -> b) -> a -> b");
 
   "sleep",
   (* This doesn't seem right : it freezes all threads *)

@@ -17,6 +17,9 @@ let show_generalization = Settings.add_bool false "show_generalization"
 let show_typechecking = Settings.add_bool false "show_typechecking"
 let show_recursion = Settings.add_bool false "show_recursion"
 
+(* mailbox typing *)
+let enable_mailbox_typing = Settings.add_bool true "enable_mailbox_typing"
+
 exception Unify_failure of string
 exception UndefinedVariable of string
 
@@ -710,7 +713,8 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let bindings = lname_bound_vars xml in
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
-      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in
+(* should now use alien javascript jslib : ... to import library functions *)
+(*      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in *)
         (* extend the env with each l:name bound variable *)
       let attr_env = fold_right (fun s env -> (s, ([], inference_string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in
@@ -1098,9 +1102,19 @@ let rewrite_annotations : RewriteSyntaxU.rewriter = function
 let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
 
 let type_program env exprs = 
-  let env, exprs = type_program env (List.map (rewrite_annotations -<- add_parameter) exprs) in
-    env, List.map remove_parameter exprs
+  let embed, project =
+    if Settings.get_value(enable_mailbox_typing) then
+      rewrite_annotations -<- add_parameter, remove_parameter
+    else
+      rewrite_annotations, identity in
+  let env, exprs = type_program env (List.map embed exprs) in
+    env, List.map project exprs
 
 and type_expression env e =
-  let env, e = type_expression env (rewrite_annotations (add_parameter e)) in
-    env, remove_parameter e
+  let embed, project =
+    if Settings.get_value(enable_mailbox_typing) then
+      add_parameter, remove_parameter
+    else
+      identity, identity in
+  let env, e = type_expression env (rewrite_annotations (embed e)) in
+    env, project e
