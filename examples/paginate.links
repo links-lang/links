@@ -5,14 +5,14 @@ results_per_page = 10;
 table wordlist (
    word: String,
    meaning: String
-) order [word: asc]
-  database "postgresql:dictionary::5432:s0567141:";
+) database "postgresql:dictionary::5432:s0567141:";
 
 fun query(n,c) {
   take(results_per_page) (
        drop(results_per_page * (n-1)) (
-            for (r <- wordlis)
+            for (r <- wordlist)
              where (r.word beginswith c)
+             orderby (r.word)
                 [r]))
 }
 
