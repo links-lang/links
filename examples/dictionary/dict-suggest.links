@@ -31,14 +31,16 @@ table wordlist (
   word : String, 
   type : String, 
   meaning : String
-) order [word:asc]
+)
 database "postgresql:dictionary::5432:s0567141:";
 
 fun completions(p) server {
   if (p == "") []
   else {
     take(10)(for (w <- wordlist)
-             where (w.word beginswith p) [w])
+             where (w.word beginswith p)
+             orderby (w.word)
+              [w])
   }
 }
 
