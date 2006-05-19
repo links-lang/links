@@ -83,11 +83,13 @@ let stubify_client_funcs env =
 			  (print_endline ("Content-type: text/plain\n\n" ^ 
 					    Utility.base64encode call);
 			   exit 0)
-		      in Library.value_env := (name,`PFun f):: !Library.value_env)
+		      in 
+                        Library.value_env := (name,`PFun f):: !Library.value_env)
       client_env;
     match server_env with 
         [] -> []
-      | server_env -> fst (Interpreter.run_program [] server_env)
+      | server_env ->
+          fst (Interpreter.run_program [] server_env)
 
 (* let handle_client_call unevaled_env f args =  *)
 (*   let env = stubify_client_funcs unevaled_env in *)
@@ -232,7 +234,6 @@ let serve_requests filename =
   Settings.set_value Performance.measuring true;
   Pervasives.flush(Pervasives.stderr);
   let program = read_file_cache filename in
-  let client_prog = is_client_program program in 
   let global_env, [main] = List.partition is_define program in
   let global_env = stubify_client_funcs global_env in
   let cgi_args = Cgi.parse_args () in

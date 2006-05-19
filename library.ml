@@ -436,8 +436,8 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
         | #result, _ -> failwith ("value found, expecting function during server->client call of "
                                    ^ name)
 let primitive_stub (name : string) : result =
-  match assoc name env with 
-    | `PFun _, _      -> `PFunction (name, [])
-    | #result as r, _ -> r
+  match assoc name !value_env with 
+    | `PFun _      -> `PFunction (name, [])
+    | #result as r -> r
 
 

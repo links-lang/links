@@ -473,6 +473,7 @@ and interpret_safe globals locals expr cont =
     interpret globals locals expr cont
   with
     | TopLevel s -> snd s
+    | Not_found -> failwith "Internal error: Not_found while interpreting."
 
 let run_program (globals : environment) exprs : (environment * result)= 
   try (
@@ -480,8 +481,10 @@ let run_program (globals : environment) exprs : (environment * result)=
     failwith "boom"
   ) with
     | TopLevel s -> s
+    | Not_found -> failwith "Internal error: Not_found while interpreting."
 
 let apply_cont_safe x y z = 
   try apply_cont x y z
   with
     | TopLevel s -> snd s
+    | Not_found -> failwith "Internal error: Not_found while interpreting."

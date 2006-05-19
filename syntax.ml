@@ -450,7 +450,7 @@ let visit_expressions'
                                       and e2, data2 = visitor visit_children (e2, data) in
         Concat ( e1,  e2, d), combiner data1 data2
     | For (e1, s, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
-                                             and e2, data2 = visitor visit_children (e2, data) in
+                            and e2, data2 = visitor visit_children (e2, data) in
         For ( e1, s, e2, d), combiner data1 data2
 
     | Database (e, d) -> let e, data = visitor visit_children (e, data) in
@@ -461,6 +461,9 @@ let visit_expressions'
         Escape (n, e, d), data
     | HasType (e, k, d) -> let e, data = visitor visit_children (e, data) in
 	HasType (e, k, d), data
+    | SortBy (e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
+                            and e2, data2 = visitor visit_children (e2, data) in
+        SortBy (e1, e2, d), combiner data1 data2
     | Wrong (d) -> Wrong (d), unit data
     | Placeholder (str, d) -> Placeholder (str, d), unit data
     | Alien _ as v -> v, unit data
@@ -590,6 +593,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _) ->
+                   [visitor visit_children e1; visitor visit_children e2]
+               | SortBy (e1, e2, _) ->
                    [visitor visit_children e1; visitor visit_children e2]
                    
                | Condition (e1, e2, e3, _)
