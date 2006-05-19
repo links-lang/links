@@ -74,7 +74,7 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (Sugar._DUMMY_POS, Kind.string_type, None))
+  String (s, (Sugar._DUMMY_POS, Types.string_type, None))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");

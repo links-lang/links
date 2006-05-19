@@ -4,7 +4,6 @@ open List
 open Utility
 open Result
 open Sql
-open Kind
 open Syntax
 
 class virtual db_args from_str = object
@@ -27,7 +26,7 @@ let kind_from_db_type = function
   | FloatField -> `Primitive `Float
   | _ -> failwith "Unsupported kind"
 
-let execute_select  (kind:kind) (query:string) (db: database) : result =
+let execute_select  (kind:Types.kind) (query:string) (db: database) : result =
   let fields = (match kind with
 		  | `List (`Record (field_env, _)) ->
 		      (StringMap.fold
@@ -56,9 +55,9 @@ let execute_select  (kind:kind) (query:string) (db: database) : result =
            if null_query then
              `List (map (fun _ -> `Record []) result#get_all_lst)
            else
-              `List (map (fun row ->
-                                 `Record (map2 (fun (name, db_type) value -> 
-			                          name, value_from_db_string value db_type)
-                                            row_fields row))
-                            result#get_all_lst)
+             `List (map (fun row ->
+                           `Record (map2 (fun (name, db_type) value -> 
+			                    name, value_from_db_string value db_type)
+                                      row_fields row))
+                      result#get_all_lst)
        | QueryError msg -> raise (Runtime_exception ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

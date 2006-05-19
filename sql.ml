@@ -122,12 +122,12 @@ and deserialise_query : (query deserialiser) =
                | _ -> failwith "Error deserialising query")
     in {distinct_only=d;result_cols=r;tables=t;condition=c;sortings=s;max_rows=m;offset=o}, rest
 and serialise_column : column serialiser
-    = fun b -> serialise4 'B' (serialise_string, serialise_string, serialise_string, Kind.serialise_kind) (b.table_renamed, b.name, b.renamed, b.col_type)
+    = fun b -> serialise4 'B' (serialise_string, serialise_string, serialise_string, Types.serialise_kind) (b.table_renamed, b.name, b.renamed, b.col_type)
 and deserialise_column : column deserialiser
     = fun s ->
       let t, obj, rest = extract_object s in
         let (t,n,r,k), rest = match t with
-          | 'B' -> deserialise4 (deserialise_string, deserialise_string, deserialise_string, Kind.deserialise_kind) obj, rest
+          | 'B' -> deserialise4 (deserialise_string, deserialise_string, deserialise_string, Types.deserialise_kind) obj, rest
           | x -> failwith ("Error deserialising column header (expected 'B'; got '"^ String.make 1 x ^ "')")
       in
         {table_renamed=t; name=n; renamed=r; col_type=k}, rest

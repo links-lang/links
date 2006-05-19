@@ -10,7 +10,7 @@ open Pickle
 open Forms
 open Debug
 open Utility
-open Kind
+(*open Type *)
 open Syntax
 
 (* Intermediate language *)

@@ -717,10 +717,10 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
         (* Check that the bound expressions have type 
            <strike>XML</strike> unit. *)
 (*      let _ =
-	List.iter (fun (_, expr) -> unify(type_of_expression expr, ITO.fresh_type_variable ()(*Kind.xml*))) special_attrs in*)
+	List.iter (fun (_, expr) -> unify(type_of_expression expr, ITO.fresh_type_variable ()(*Types.xml*))) special_attrs in*)
       let contents = map (type_check env) cs in
       let nonspecial_attrs = map (fun (k,v) -> k, type_check env v) nonspecial_attrs in
-(*      let attr_type = if islhref xml then Kind.xml else Kind.string_type in *)
+(*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
       let attr_type = inference_string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
@@ -934,7 +934,7 @@ let find_cliques (bindings : (string * untyped_expression) list)
       map (map (fun name -> name, assoc name bindings)) orders 
 
 let mutually_type_defs
-    : Kind.environment -> (string * untyped_expression) list -> (Kind.environment * (string * expression) list) =
+    : Types.environment -> (string * untyped_expression) list -> (Types.environment * (string * expression) list) =
   fun env defs ->
     let env = environment_to_inference_environment env in
     let new_type_env, new_defs = type_check_mutually env defs in
@@ -951,7 +951,7 @@ let regroup exprs =
                    | Define _ :: _ as defs -> regroup_defs defs
                    | e                     -> [e]) exprs)
 
-let type_expression : Kind.environment -> untyped_expression -> (Kind.environment * expression) =
+let type_expression : Types.environment -> untyped_expression -> (Types.environment * expression) =
   fun env untyped_expression ->
     let env = environment_to_inference_environment env in
     let env', exp' =
@@ -970,9 +970,9 @@ let type_expression : Kind.environment -> untyped_expression -> (Kind.environmen
     in
       inference_environment_to_environment env', inference_expression_to_expression exp'
 
-let type_program : Kind.environment -> untyped_expression list -> (Kind.environment * expression list) =
+let type_program : Types.environment -> untyped_expression list -> (Types.environment * expression list) =
   fun env exprs ->
-    let type_group (env, typed_exprs) : untyped_expression list -> (Kind.environment * expression list) = function
+    let type_group (env, typed_exprs) : untyped_expression list -> (Types.environment * expression list) = function
       | [x] -> (* A single node *)
 	  let env, expression = type_expression env x in 
             env, typed_exprs @ [expression]
@@ -994,20 +994,20 @@ let type_program : Kind.environment -> untyped_expression list -> (Kind.environm
     This might be better off somewhere else (but where?).
 **)
 
-module RewriteKind = 
+module RewriteTypes = 
   Rewrite.Rewrite
     (Rewrite.SimpleRewrite
        (struct
-          type t = Kind.kind
+          type t = Types.kind
           type rewriter = t -> t option
-          let process_children = Kind.perhaps_process_children
+          let process_children = Types.perhaps_process_children
         end))
 
-let remove_mailbox : RewriteKind.rewriter = function
+let remove_mailbox : RewriteTypes.rewriter = function
   | `Function (a, (`Function _ as f)) -> Some f
   | _                                 -> None
 
-let remove_mailbox k = fromOption k (RewriteKind.topdown remove_mailbox k)
+let remove_mailbox k = fromOption k (RewriteTypes.topdown remove_mailbox k)
 
 type tvar = [`TypeVar of int]
 
@@ -1027,15 +1027,15 @@ type tvar = [`TypeVar of int]
    doesn't matter.
 *)
 (* rewrite an unquantified kind type *)
-let retype_primfun (var : Kind.kind) : RewriteKind.rewriter = function
+let retype_primfun (var : Types.kind) : RewriteTypes.rewriter = function
   | `Function _ as f -> Some (`Function (var, f))
   | _                -> None
 
 (* rewrite a quantified kind type *)
-let retype_primfun (var : tvar) (quants, kind as k : Kind.assumption) =
-  match RewriteKind.bottomup (retype_primfun (var :> Kind.kind)) kind with
+let retype_primfun (var : tvar) (quants, kind as k : Types.assumption) =
+  match RewriteTypes.bottomup (retype_primfun (var :> Types.kind)) kind with
     | None -> k
-    | Some kind -> ((var :> Kind.quantifier) :: quants, kind)
+    | Some kind -> ((var :> Types.quantifier) :: quants, kind)
 
 (* find a suitable tvar name *)
 let new_typevar quants =

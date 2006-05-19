@@ -2,8 +2,8 @@ open Sys
 open Num
 open List
 
-open Kind
 open Result
+open Types
 open Utility
 open Debug
 
@@ -70,15 +70,15 @@ type primitive =  [
   Result.result
 | `PFun of result -> primitive ]
 
-let int_op impl : primitive * Kind.assumption = 
+let int_op impl : primitive * Types.assumption = 
   (`PFun (fun x -> `PFun (fun y -> `Int (impl (unbox_int x) (unbox_int y))))),
   ([], `Primitive `Int --> (`Primitive `Int --> `Primitive `Int))
 
-let float_op impl : primitive * Kind.assumption = 
+let float_op impl : primitive * Types.assumption = 
   (`PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y)))))),
   ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Kind.assumption =
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Types.assumption =
   let box = (box :> 'a -> primitive) in
   (`PFun (fun x -> (box (conv (unbox x)))),
    ([], from --> into))
@@ -108,7 +108,7 @@ let notimpl fn =
 let kind = Parse.parse_kind
 let _UNTYPED_ = kind "a"
 
-let env : (string * (primitive * Kind.assumption)) list = [
+let env : (string * (primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
   "*", int_op ( */);
@@ -123,10 +123,10 @@ let env : (string * (primitive * Kind.assumption)) list = [
   "^^", float_op ( ** );
 
   (** Conversions (any missing?) **)
-  "int_of_string",   conversion_op ~from:Kind.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
+  "int_of_string",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
   "float_of_int",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
-  "string_of_int",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Kind.string_type;
-  "string_of_float", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Kind.string_type;
+  "string_of_int",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
+  "string_of_float", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
 
   (** concurrency **)
   "send",
@@ -226,7 +226,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
   "objectType",
   (notimpl "objectType",
    let u', u = fresh_type () in
-     ([u'], u --> Kind.string_type));
+     ([u'], u --> Types.string_type));
 
   "attribute",
   (p1 (let none = `Variant ("None", `Record []) in
@@ -255,7 +255,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
   (p1 (function 
          | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
          | _ -> failwith "internal error: non-string value passed to xml conversion routine"),
-   ([], Kind.string_type --> xml));
+   ([], Types.string_type --> xml));
 
   "dom",
   (* Not available on the server *)
@@ -324,7 +324,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
    (* FIXME: reboxing of `RowVar <-> Row_variable *)
    let r', r = fresh_row () in
      [r'],
-   Kind.string_type --> (`DB --> (`Record r --> unit_type)));
+   Types.string_type --> (`DB --> (`Record r --> unit_type)));
   
   "deleterows", 
   (p3 (fun table database rows -> 
@@ -337,7 +337,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
          | _ -> failwith "Internal error: delete row from non-database"),
    let r', r = fresh_row () in
      [r'],
-   Kind.string_type --> (`DB --> (`List (`Record r) --> unit_type)));
+   Types.string_type --> (`DB --> (`List (`Record r) --> unit_type)));
 
 
   "updaterows", 
@@ -362,7 +362,7 @@ let env : (string * (primitive * Kind.assumption)) list = [
            (TypeOps.make_empty_closed_row ())))
    in
      [u'; v'],
-   Kind.string_type --> (`DB --> (`List pair --> unit_type)));
+   Types.string_type --> (`DB --> (`List pair --> unit_type)));
 
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
@@ -412,7 +412,7 @@ let rec continuationize : primitive -> continuationized_val = function
 type primitive_environment = (string*continuationized_val) list
 
 let value_env = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
-and type_env : Kind.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+and type_env : Types.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
 
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function

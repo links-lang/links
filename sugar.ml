@@ -226,7 +226,7 @@ type kind =
   | VariantType of row
   | ListType of kind
   | MailboxType of kind
-  | PrimitiveType of Kind.primitive
+  | PrimitiveType of Types.primitive
   | DBType
 and row = (string * [`Present of kind | `Absent]) list * string option
 
@@ -259,7 +259,7 @@ type assumption = quantifier list * kind
 let generalize (k : kind) : assumption =
   typevars k, k
 
-let desugar_assumption ((vars, k)  : assumption) : Kind.assumption = 
+let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
   let max = length vars in
   let vars, varmap = split (map (fun m ->
                                    let n = Type_basis.fresh_raw_variable () in
@@ -275,12 +275,12 @@ let desugar_assumption ((vars, k)  : assumption) : Kind.assumption =
 	| FunctionType (k1, k2) -> `Function (desugar varmap k1, desugar varmap k2)
 	| MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
                              `Recursive (n, desugar ((v,n):: varmap) k)
-	| UnitType -> Kind.unit_type
+	| UnitType -> Types.unit_type
 	| TupleType ks -> 
 	    let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
-	    and unit = Kind.TypeOps.make_empty_closed_row ()
+	    and unit = Types.TypeOps.make_empty_closed_row ()
 	    and present (s, x) = (s, `Present x)
-	    in `Record (fold_right2 (curry (Kind.TypeOps.set_field -<- present)) labels (map (desugar varmap) ks) unit)
+	    in `Record (fold_right2 (curry (Types.TypeOps.set_field -<- present)) labels (map (desugar varmap) ks) unit)
 	| RecordType row -> `Record (desugar_row varmap row)
 	| VariantType row -> `Variant (desugar_row varmap row)
 	| ListType k -> `List (desugar varmap k)
@@ -290,12 +290,12 @@ let desugar_assumption ((vars, k)  : assumption) : Kind.assumption =
   and desugar_row varmap (fields, rv) = 
     let lookup = flip assoc varmap in
     let seed = match rv with
-      | None    -> Kind.TypeOps.make_empty_closed_row ()
-      | Some rv -> Kind.TypeOps.make_empty_open_row_with_var (lookup rv)
+      | None    -> Types.TypeOps.make_empty_closed_row ()
+      | Some rv -> Types.TypeOps.make_empty_open_row_with_var (lookup rv)
     and fields = map (fun (k, v) -> match v with
 			| `Absent -> (k, `Absent)
 			| `Present v -> (k, `Present (desugar varmap v))) fields 
-    in fold_right Kind.TypeOps.set_field fields seed
+    in fold_right Types.TypeOps.set_field fields seed
   in (vars, desugar varmap k)
        
 let desugar_kind k = snd (desugar_assumption ([], k))
@@ -400,7 +400,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Projection (e, name) -> (let s = unique_name ()
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
   | TableLit (name, kind, unique, db) -> 
-      (let db_query (name:string) (pos:position) (kind:Kind.kind) (unique:bool) : Query.query =
+      (let db_query (name:string) (pos:position) (kind:Types.kind) (unique:bool) : Query.query =
          (* FIXME: this is not the appropriate place to gensym the
             table name. The table will move around later. The right place
             to do it is when joining two queries: at that point,
@@ -409,7 +409,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
          let table_name = (db_unique_name ()) in
          let selects = match kind with
            | `Record (field_env, `RowVar row_var) ->
-	       let present_fields, absent_fields = Kind.split_fields field_env in
+	       let present_fields, absent_fields = Types.split_fields field_env in
 	         if row_var = None && absent_fields = [] then
 	           List.map (fun
 		               (field_name, field_kind) ->
@@ -418,7 +418,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                                   col_type = field_kind})
                      present_fields
 	         else raise (Parse_failure (pos, "Table kinds are records with only field present elements"))
-           | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Kind.string_of_kind kind)) in
+           | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Types.string_of_kind kind)) in
            {distinct_only = unique;
             result_cols = selects;
             tables = [(name, table_name)];

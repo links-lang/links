@@ -4,7 +4,7 @@ open List
 open Utility
 open Debug
 open Pickle
-open Kind
+open Types
 open Sql
 
 type position = Lexing.position * (* source line : *) string * (* expression source: *) string
@@ -280,7 +280,7 @@ let rec serialise_expression : ('data expression' serialiser)
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
         | Escape v                  -> serialise3 'e' (string, exp, data) v
         | Placeholder v             -> serialise2 'p' (string, data) v
-        | HasType v                 -> serialise3 '0' (exp, Kind.serialise_kind, data) v
+        | HasType v                 -> serialise3 '0' (exp, serialise_kind, data) v
         | Alien v                   -> serialise4 '1' (string, string, serialise_assumption, data) v
       )
 and deserialise_expression : (expression deserialiser)

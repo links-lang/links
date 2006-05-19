@@ -3,7 +3,6 @@ open Num
 open List
 
 open Pickle
-open Kind
 open Query
 open Syntax
 open Utility
@@ -75,7 +74,7 @@ type unop = MkColl
             | MkDatabase
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (query * kind)
+            | QueryOp of (query * Types.kind)
 
 let string_of_unop = function
   | MkColl -> "MkColl"

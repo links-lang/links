@@ -6,7 +6,6 @@ open Num
 open List
 
 open Utility
-open Kind
 open Sql
 open Query
 

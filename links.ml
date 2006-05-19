@@ -39,7 +39,7 @@ let rec directives =
     ((fun _ ->
         List.iter (fun (n, k) ->
                      Printf.fprintf stderr " %-16s : %s\n" 
-                       n (Kind.string_of_kind (snd k)))
+                       n (Types.string_of_kind (snd k)))
           Library.type_env),
      "list builtin functions and values");
     ]
@@ -60,9 +60,9 @@ let print_result rtype result =
   print_endline (if Settings.get_value(printing_types) then
 		   begin
 		     if Settings.get_value(show_message_parameter) then
-		       " : "^ Kind.string_of_kind rtype
+		       " : "^ Types.string_of_kind rtype
 		     else
-		       " : "^ Kind.string_of_kind (Inference.remove_mailbox rtype)
+		       " : "^ Types.string_of_kind (Inference.remove_mailbox rtype)
 		   end
                  else "")
 

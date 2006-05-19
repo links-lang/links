@@ -1,4 +1,3 @@
-(*open Kind *)
 open Inferencetypes
 open Syntax
 open Sugar

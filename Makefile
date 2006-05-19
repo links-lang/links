@@ -35,40 +35,40 @@ OCAMLFLAGS=-w Aef
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
 
-SOURCES = $(OPC)                \
-          utility.ml            \
-          settings.mli settings.ml \
-          debug.mli debug.ml    \
-          rewrite.ml            \
-          pickle.mli pickle.ml  \
-          performance.ml        \
-          graph.ml              \
-          type_basis.mli type_basis.ml \
-          kind.mli kind.ml      \
-          query.ml              \
-          inferencetypes.mli inferencetypes.ml \
-          sql.ml                \
-          syntax.ml             \
-          sugar.ml              \
-          result.ml             \
-          sql_transform.ml      \
-          parser.mly            \
-          $(DB_CODE)            \
-          jsonparse.mly         \
-          json.ml               \
-          forms.mli forms.ml    \
-          errors.mli errors.ml  \
-          database.mli database.ml \
-          lexer.mll             \
-          parse.mli parse.ml    \
-          inference.mli inference.ml \
-          library.mli library.ml \
-          jsonlex.mll           \
-          interpreter.mli interpreter.ml \
-          optimiser.ml          \
-          js.mli js.ml          \
-          webif.ml              \
-          links.ml              \
+SOURCES = $(OPC)                		\
+          utility.ml            		\
+          settings.mli settings.ml 		\
+          debug.mli debug.ml    		\
+          rewrite.ml            		\
+          pickle.mli pickle.ml  		\
+          performance.ml        		\
+          graph.ml              		\
+          type_basis.mli type_basis.ml 		\
+          types.mli types.ml      		\
+          query.ml              		\
+          inferencetypes.mli inferencetypes.ml 	\
+          sql.ml                		\
+          syntax.ml             		\
+          sugar.ml              		\
+          result.ml             		\
+          sql_transform.ml      		\
+          parser.mly            		\
+          $(DB_CODE)            		\
+          jsonparse.mly         		\
+          json.ml               		\
+          forms.mli forms.ml    		\
+          errors.mli errors.ml  		\
+          database.mli database.ml 		\
+          lexer.mll             		\
+          parse.mli parse.ml    		\
+          inference.mli inference.ml 		\
+          library.mli library.ml 		\
+          jsonlex.mll           		\
+          interpreter.mli interpreter.ml 	\
+          optimiser.ml          		\
+          js.mli js.ml          		\
+          webif.ml              		\
+          links.ml              		\
 
 LIBS    = unix nums str $(DB_LIBS) 
 RESULT  = links

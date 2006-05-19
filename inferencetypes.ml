@@ -47,7 +47,7 @@ let
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> inference_row -> int list = 
     fun rec_vars (field_env, row_var) ->
-      let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Kind.get_present_fields field_env)) in
+      let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Types.get_present_fields field_env)) in
       let row_vars =
         match row_var with
 	  | `RowVar (Some var) -> [var]
@@ -311,7 +311,7 @@ let field_spec_to_inference_field_spec = field_spec_to_inference_field_spec (emp
 let row_to_inference_row = row_to_inference_row (empty_var_maps ())
 
 (* implementation *)
-let rec inference_type_to_type : type_var_set -> inference_type -> Kind.kind = fun rec_vars ->
+let rec inference_type_to_type : type_var_set -> inference_type -> Types.kind = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
@@ -365,21 +365,21 @@ let inference_row_to_row = inference_row_to_row IntSet.empty
 
 
 (* assumptions *)
-let assumption_to_inference_assumption : Kind.assumption -> inference_assumption = function
+let assumption_to_inference_assumption : Types.assumption -> inference_assumption = function
   | (quantifiers, t) -> (quantifiers, type_to_inference_type t)
-let inference_assumption_to_assumption : inference_assumption -> Kind.assumption = function
+let inference_assumption_to_assumption : inference_assumption -> Types.assumption = function
   | (quantifiers, t) -> (quantifiers, inference_type_to_type t)
 
 (* environments *)
-let environment_to_inference_environment : Kind.environment -> inference_environment =
+let environment_to_inference_environment : Types.environment -> inference_environment =
   List.map (fun (name, assumption) -> (name, assumption_to_inference_assumption assumption))
-let inference_environment_to_environment : inference_environment -> Kind.environment =
+let inference_environment_to_environment : inference_environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, inference_assumption_to_assumption assumption))
 
 (* output as a string *)
-let string_of_type = Kind.string_of_kind -<- inference_type_to_type
-let string_of_type_raw = Kind.string_of_kind_raw -<- inference_type_to_type
-let string_of_row : inference_row -> string = Kind.string_of_row -<- inference_row_to_row
+let string_of_type = Types.string_of_kind -<- inference_type_to_type
+let string_of_type_raw = Types.string_of_kind_raw -<- inference_type_to_type
+let string_of_row : inference_row -> string = Types.string_of_row -<- inference_row_to_row
 
-let string_of_assumption = Kind.string_of_assumption -<- inference_assumption_to_assumption
-let string_of_environment = Kind.string_of_environment -<- inference_environment_to_environment
+let string_of_assumption = Types.string_of_assumption -<- inference_assumption_to_assumption
+let string_of_environment = Types.string_of_environment -<- inference_environment_to_environment

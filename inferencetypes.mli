@@ -68,20 +68,20 @@ module InferenceTypeOps :
    with type typ = inference_type
    and type row_var = inference_row_var)
 
-val type_to_inference_type : Kind.kind -> inference_type
-val field_spec_to_inference_field_spec : Kind.field_spec -> inference_field_spec
-val row_to_inference_row : Kind.row -> inference_row
+val type_to_inference_type : Types.kind -> inference_type
+val field_spec_to_inference_field_spec : Types.field_spec -> inference_field_spec
+val row_to_inference_row : Types.row -> inference_row
 
-val inference_type_to_type : inference_type -> Kind.kind
-val inference_field_spec_to_field_spec : inference_field_spec -> Kind.field_spec
-val inference_row_to_row : inference_row -> Kind.row
+val inference_type_to_type : inference_type -> Types.kind
+val inference_field_spec_to_field_spec : inference_field_spec -> Types.field_spec
+val inference_row_to_row : inference_row -> Types.row
 
-val assumption_to_inference_assumption : Kind.assumption -> inference_assumption
-val inference_assumption_to_assumption : inference_assumption -> Kind.assumption
+val assumption_to_inference_assumption : Types.assumption -> inference_assumption
+val inference_assumption_to_assumption : inference_assumption -> Types.assumption
 
 
-val environment_to_inference_environment : Kind.environment -> inference_environment
-val inference_environment_to_environment : inference_environment -> Kind.environment
+val environment_to_inference_environment : Types.environment -> inference_environment
+val inference_environment_to_environment : inference_environment -> Types.environment
 
 val string_of_type : inference_type -> string
 val string_of_type_raw : inference_type -> string
