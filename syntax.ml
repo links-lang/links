@@ -54,7 +54,7 @@ type 'data expression' =
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
-  | HasType of ('data expression' * kind * 'data)
+  | HasType of ('data expression' * datatype * 'data)
   | Alien of (string * string * assumption * 'data)
   | Placeholder of (string * 'data)
 
@@ -144,11 +144,11 @@ let rec show_expression =
   | SortBy v -> "SortBy " ^ t3 (exp, exp) v
   | Escape v -> "Escape " ^ t3 (identity, exp) v
   | Wrong v -> "Wrong " ^ t1 () v
-  | HasType v -> "HasType " ^ t3 (exp, string_of_kind) v 
+  | HasType v -> "HasType " ^ t3 (exp, string_of_datatype) v 
   | Placeholder v -> "Placeholder " ^ t2 (identity) v
   | Alien v -> "Alien " ^ s4 (identity, identity, string_of_assumption, null) v
 
-type expression = (position * kind * string option (* label *)) expression'
+type expression = (position * datatype * string option (* label *)) expression'
 type untyped_expression = position expression'
 
 let string_of_location : location -> string = function
@@ -163,7 +163,7 @@ let rec unparse_sequence empty unit append = function
   | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
 and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
 and show t : 'a expression' -> string = function 
-  | HasType(expr, kind, data) -> show t expr ^ " : " ^ string_of_kind kind ^ t data
+  | HasType(expr, datatype, data) -> show t expr ^ " : " ^ string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
@@ -225,9 +225,9 @@ and show t : 'a expression' -> string = function
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ s ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (string_of_assumption k) ^ t data
 
-let string_of_kinded_expression (s : expression) : string = 
-  show (function (_, kind, _) -> 
-	  " : (" ^ (string_of_kind kind) ^ ")") s
+let string_of_typed_expression (s : expression) : string = 
+  show (function (_, datatype, _) -> 
+	  " : (" ^ (string_of_datatype datatype) ^ ")") s
 
 let with_label = (fun (_, _, lbl) ->
      " [" ^ fromOption "BOGUS" lbl ^ "] ")
@@ -280,44 +280,44 @@ let rec serialise_expression : ('data expression' serialiser)
         | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
         | Escape v                  -> serialise3 'e' (string, exp, data) v
         | Placeholder v             -> serialise2 'p' (string, data) v
-        | HasType v                 -> serialise3 '0' (exp, serialise_kind, data) v
+        | HasType v                 -> serialise3 '0' (exp, serialise_datatype, data) v
         | Alien v                   -> serialise4 '1' (string, string, serialise_assumption, data) v
       )
 and deserialise_expression : (expression deserialiser)
-    = let poskind = null_deserialiser (dummy_position, `Not_typed, None)
+    = let posdatatype = null_deserialiser (dummy_position, `Not_typed, None)
       and string = deserialise_string
       and exp = deserialise_expression in
       fun s -> let t, obj, rest = extract_object s in
         let e = 
         (match t with 
-           | 'd' -> Define (deserialise4 (string, exp, deserialise_location, poskind) obj)
-           | 'b' -> Boolean (deserialise2 (deserialise_bool, poskind) obj)
-           | 'i' -> Integer (deserialise2 (deserialise_int, poskind) obj)
-           | 'c' -> Char (deserialise2 (deserialise_char, poskind) obj)
-           | 's' -> String (deserialise2 (deserialise_string, poskind) obj)
-           | 'f' -> Float (deserialise2 (deserialise_float, poskind) obj)
-           | 'v' -> Variable (deserialise2 (string, poskind) obj)
-           | 'A' -> Apply (deserialise3 (exp, exp, poskind) obj)
-           | 'C' -> Condition (deserialise4 (exp, exp, exp, poskind) obj)
-           | 'S' -> Comparison (deserialise4 (exp, string, exp, poskind) obj)
-           | 'F' -> Abstr (deserialise3 (string, exp, poskind) obj)
-           | 'L' -> Let (deserialise4 (string, exp, exp, poskind) obj)
-           | 'N' -> Rec (deserialise3 (deserialise_list deserialise_recbinding, exp, poskind) obj)
-           | 'g' -> Xml_node (deserialise4 (string, deserialise_list deserialise_recbinding, deserialise_list deserialise_expression, poskind) obj)
-           | 'R' -> Record_empty (deserialise1 (poskind) obj)
-           | 'E' -> Record_extension (deserialise4 (string, exp, exp, poskind) obj)
-           | 'G' -> Record_selection (deserialise6 (string, string, string, exp, exp, poskind) obj)
-           | 'H' -> Record_selection_empty (deserialise3 (exp, exp, poskind) obj)
-           | 'I' -> Variant_injection (deserialise3 (string, exp, poskind) obj)
-           | 'J' -> Variant_selection (deserialise7 (exp, string, string, exp, string, exp, poskind) obj)
-           | 'K' -> Variant_selection_empty (deserialise2 (exp, poskind) obj)
-           | 'O' -> Nil (deserialise1 (poskind) obj)
-           | 'P' -> List_of (deserialise2 (exp, poskind) obj)
-           | 'Q' -> Concat (deserialise3 (exp, exp, poskind) obj)
-           | 'T' -> For (deserialise4 (exp, string, exp, poskind) obj)
-           | 'V' -> Database (deserialise2 (exp, poskind) obj)
-           | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, poskind) obj)
-           | 'p' -> Placeholder(deserialise2 (string, poskind) obj)
+           | 'd' -> Define (deserialise4 (string, exp, deserialise_location, posdatatype) obj)
+           | 'b' -> Boolean (deserialise2 (deserialise_bool, posdatatype) obj)
+           | 'i' -> Integer (deserialise2 (deserialise_int, posdatatype) obj)
+           | 'c' -> Char (deserialise2 (deserialise_char, posdatatype) obj)
+           | 's' -> String (deserialise2 (deserialise_string, posdatatype) obj)
+           | 'f' -> Float (deserialise2 (deserialise_float, posdatatype) obj)
+           | 'v' -> Variable (deserialise2 (string, posdatatype) obj)
+           | 'A' -> Apply (deserialise3 (exp, exp, posdatatype) obj)
+           | 'C' -> Condition (deserialise4 (exp, exp, exp, posdatatype) obj)
+           | 'S' -> Comparison (deserialise4 (exp, string, exp, posdatatype) obj)
+           | 'F' -> Abstr (deserialise3 (string, exp, posdatatype) obj)
+           | 'L' -> Let (deserialise4 (string, exp, exp, posdatatype) obj)
+           | 'N' -> Rec (deserialise3 (deserialise_list deserialise_recbinding, exp, posdatatype) obj)
+           | 'g' -> Xml_node (deserialise4 (string, deserialise_list deserialise_recbinding, deserialise_list deserialise_expression, posdatatype) obj)
+           | 'R' -> Record_empty (deserialise1 (posdatatype) obj)
+           | 'E' -> Record_extension (deserialise4 (string, exp, exp, posdatatype) obj)
+           | 'G' -> Record_selection (deserialise6 (string, string, string, exp, exp, posdatatype) obj)
+           | 'H' -> Record_selection_empty (deserialise3 (exp, exp, posdatatype) obj)
+           | 'I' -> Variant_injection (deserialise3 (string, exp, posdatatype) obj)
+           | 'J' -> Variant_selection (deserialise7 (exp, string, string, exp, string, exp, posdatatype) obj)
+           | 'K' -> Variant_selection_empty (deserialise2 (exp, posdatatype) obj)
+           | 'O' -> Nil (deserialise1 (posdatatype) obj)
+           | 'P' -> List_of (deserialise2 (exp, posdatatype) obj)
+           | 'Q' -> Concat (deserialise3 (exp, exp, posdatatype) obj)
+           | 'T' -> For (deserialise4 (exp, string, exp, posdatatype) obj)
+           | 'V' -> Database (deserialise2 (exp, posdatatype) obj)
+           | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, posdatatype) obj)
+           | 'p' -> Placeholder(deserialise2 (string, posdatatype) obj)
            | x -> failwith ("Unexpected expression type header during deserialisation : "^ (String.make 1  x)))
       in e, rest
 and serialise_recbinding : (string * expression) serialiser
@@ -710,7 +710,7 @@ let fst3 (a, _, _) = a
 and snd3 (_, b, _) = b
 and thd3 (_, _, c) = c
 
-let node_kind : (expression -> kind) = snd3 -<- expression_data
+let node_datatype : (expression -> datatype) = snd3 -<- expression_data
 and node_pos  : (expression -> position) = fst3 -<- expression_data 
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 

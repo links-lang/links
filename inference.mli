@@ -8,4 +8,4 @@ val type_expression : Types.environment -> Syntax.untyped_expression      -> Typ
 
 val retype_primitives : Types.environment -> Types.environment
 
-val remove_mailbox : Types.kind  -> Types.kind
+val remove_mailbox : Types.datatype  -> Types.datatype

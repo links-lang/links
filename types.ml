@@ -8,12 +8,12 @@ open Type_basis
 type type_var_set = Type_basis.type_var_set
 type primitive = Type_basis.primitive
 
-(* Types for kinds *)
-type kind = (kind, row) type_basis
-and field_spec = kind field_spec_basis
-and field_spec_map = kind field_spec_map_basis
+(* Types for datatypes *)
+type datatype = (datatype, row) type_basis
+and field_spec = datatype field_spec_basis
+and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
-and row = (kind, row_var) row_basis
+and row = (datatype, row_var) row_basis
 			  
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
@@ -21,8 +21,8 @@ type quantifier = Type_basis.quantifier
 type 'typ assumption_basis = ((quantifier list) * 'typ)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
 
-type assumption = kind assumption_basis
-type environment = kind environment_basis
+type assumption = datatype assumption_basis
+type environment = datatype environment_basis
 
 let (-->) x y = `Function (x,y)
 
@@ -56,7 +56,7 @@ let string_of_primitive : primitive -> string = function
 
 exception Not_tuple
 
-let rec string_of_kind' vars : kind -> string =
+let rec string_of_datatype' vars : datatype -> string =
   let is_tuple (field_env, _) =
     let present_fields, absent_fields = split_fields field_env in
       match absent_fields with
@@ -79,28 +79,28 @@ let rec string_of_kind' vars : kind -> string =
 	  let row_var_string = match row_var with
 	    |	Some var -> [string_of_int var]
 	    | None -> [] in
-	  let strings = (List.map (fun (_, t) -> string_of_kind' vars t) present_fields) @ row_var_string in
+	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) @ row_var_string in
 	    "(" ^ String.concat ", " strings ^ ")" in
     function
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
       | `TypeVar var      -> IntMap.find var vars
-      | `Function (`Record _ as f,t) -> string_of_kind' vars f ^ " -> " ^ string_of_kind' vars t
-      | `Function (f,t)  -> "(" ^ string_of_kind' vars f ^ ") -> " ^ string_of_kind' vars t
+      | `Function (`Record _ as f,t) -> string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
+      | `Function (f,t)  -> "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t
       | `Record row      -> (if is_tuple row then string_of_tuple row
 			     else
 			       "(" ^ string_of_row' "," vars row ^ ")")
       | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
       | `Recursive (var, body) ->
-	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_kind' vars body
+	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
       | `DB             ->                   "Database"
       | `List (`Primitive `Char) -> "String"
       | `List (`Primitive `XMLitem) -> "XML"
-      | `List (elems)           ->  "["^ string_of_kind' vars elems ^"]"
-      | `Mailbox (msg)           ->  "Mailbox ("^ string_of_kind' vars msg ^")"
+      | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
+      | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
-  let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_kind' vars t) present_fields in
+  let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
   let row_var_string = match row_var with
       |	`RowVar (Some var) -> [string_of_int var]
@@ -111,12 +111,12 @@ and string_of_row' sep vars (field_env, row_var) =
 (*
   String.concat sep (map (function
 			    | `Row_variable var -> string_of_int var
-			    | `Field_present (label, kind) -> label ^":"^ string_of_kind' vars kind
+			    | `Field_present (label, datatype) -> label ^":"^ string_of_datatype' vars datatype
 			    | `Field_absent label -> label ^ " -")
 		       fields)
 *)
 
-(*let string_of_kind = string_of_kind' []
+(*let string_of_datatype = string_of_datatype' []
 and string_of_row = string_of_row' []*)
 
 (* Making readable names for printing type variables.  (This can't be
@@ -162,7 +162,7 @@ let make_names vars =
 (* [TODO]
       change the return type to be IntSet.t
 *)
-let rec type_vars : kind -> int list = fun kind ->
+let rec type_vars : datatype -> int list = fun datatype ->
   let rec aux = function
     | `Not_typed               -> []
     | `Primitive _             -> []
@@ -171,10 +171,10 @@ let rec type_vars : kind -> int list = fun kind ->
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
-    | `List (kind)             -> aux kind
-    | `Mailbox (kind)          -> aux kind
+    | `List (datatype)             -> aux datatype
+    | `Mailbox (datatype)          -> aux datatype
     | `DB                      -> []
-  in unduplicate (=) (aux kind)
+  in unduplicate (=) (aux datatype)
 and row_type_vars (field_env, row_var) =
   let field_type_vars =
     List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in
@@ -187,7 +187,7 @@ and row_type_vars (field_env, row_var) =
   in
     field_type_vars @ row_var
 
-let rec free_bound_type_vars : kind -> IntSet.t = function
+let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Not_typed               -> IntSet.empty
   | `Primitive _             -> IntSet.empty
   | `TypeVar var             -> IntSet.singleton var
@@ -195,8 +195,8 @@ let rec free_bound_type_vars : kind -> IntSet.t = function
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
-  | `List (kind)             -> free_bound_type_vars kind
-  | `Mailbox (kind)          -> free_bound_type_vars kind
+  | `List (datatype)             -> free_bound_type_vars datatype
+  | `Mailbox (datatype)          -> free_bound_type_vars datatype
   | `DB                      -> IntSet.empty
 
 and free_bound_row_type_vars (field_env, row_var) =
@@ -213,13 +213,13 @@ and free_bound_row_type_vars (field_env, row_var) =
     IntSet.union field_type_vars row_var
 
 (* string conversions *)
-let string_of_kind (kind : kind) = 
-  string_of_kind' (make_names (free_bound_type_vars kind)) kind
+let string_of_datatype (datatype : datatype) = 
+  string_of_datatype' (make_names (free_bound_type_vars datatype)) datatype
 
-let string_of_kind_raw kind = 
-  string_of_kind' (IntSet.fold
+let string_of_datatype_raw datatype = 
+  string_of_datatype' (IntSet.fold
 		     (fun var name_map -> IntMap.add var (string_of_int var) name_map)
-		     (free_bound_type_vars kind) IntMap.empty) kind
+		     (free_bound_type_vars datatype) IntMap.empty) datatype
 
 let string_of_row row = 
   string_of_row' "," (make_names (free_bound_row_type_vars row)) row
@@ -228,8 +228,8 @@ let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
   | `RowVar var -> "'" ^ string_of_int var
 let string_of_assumption = function
-  | [], kind -> string_of_kind kind
-  | assums, kind -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_kind kind
+  | [], datatype -> string_of_datatype datatype
+  | assums, datatype -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_datatype datatype
 let string_of_environment env =
   "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
 
@@ -238,22 +238,22 @@ let (serialise_primitive : primitive serialiser),
     (deserialise_primitive : primitive deserialiser)
   = enumeration_serialisers [`Bool, 'b';  `Int, 'i';  `Char, 'c';  `Float, 'f';  `XMLitem, 'x']
 
-let rec serialise_kind : kind serialiser = 
+let rec serialise_datatype : datatype serialiser = 
   function
     | `Not_typed       -> serialise0 'a' () ()
     | `Primitive v     -> serialise1 'b' (serialise_primitive) v
     | `TypeVar v       -> serialise1 'c' (serialise_oint) v
-    | `Function v      -> serialise2 'd' (serialise_kind, serialise_kind) v
+    | `Function v      -> serialise2 'd' (serialise_datatype, serialise_datatype) v
     | `Record v        -> serialise_row 'e' v
     | `Variant v       -> serialise_row 'f' v
-    | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_kind) v
-    | `List v          -> serialise1 'h' (serialise_kind) v
-    | `Mailbox v       -> serialise1 'm' (serialise_kind) v
+    | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_datatype) v
+    | `List v          -> serialise1 'h' (serialise_datatype) v
+    | `Mailbox v       -> serialise1 'm' (serialise_datatype) v
     | `DB              -> serialise0 'i' () ()
 and serialise_field_spec : field_spec serialiser =
   function
     | `Absent -> serialise0 'a' () ()
-    | `Present v -> serialise1 'b' (serialise_kind) v
+    | `Present v -> serialise1 'b' (serialise_datatype) v
 and serialise_row_var : row_var serialiser = 
   function
     | `RowVar v        -> serialise1 'a' (serialise_option (serialise_oint)) v
@@ -264,7 +264,7 @@ and serialise_row : char -> row serialiser = fun t -> serialise2 t
    serialise_row_var)
   
 
-and deserialise_kind : kind deserialiser =
+and deserialise_datatype : datatype deserialiser =
   fun s ->
     let t, obj, rest = extract_object s in
     let r = 
@@ -272,14 +272,14 @@ and deserialise_kind : kind deserialiser =
          | 'a'        -> (deserialise0 () obj); `Not_typed
          | 'b'        -> `Primitive (deserialise1 (deserialise_primitive) obj)
          | 'c'        -> `TypeVar (deserialise1 (deserialise_oint) obj)
-         | 'd'        -> `Function (deserialise2 (deserialise_kind, deserialise_kind) obj)
+         | 'd'        -> `Function (deserialise2 (deserialise_datatype, deserialise_datatype) obj)
          | 'e'        -> `Record (fst (deserialise_row obj))
          | 'f'        -> `Variant (fst (deserialise_row obj))
-	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_kind) obj)
-         | 'h'        -> `List (deserialise1 (deserialise_kind) obj)
-         | 'm'        -> `Mailbox (deserialise1 (deserialise_kind) obj)
+	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_datatype) obj)
+         | 'h'        -> `List (deserialise1 (deserialise_datatype) obj)
+         | 'm'        -> `Mailbox (deserialise1 (deserialise_datatype) obj)
          | 'i'        -> (deserialise0 () obj); `DB
-         | _          -> failwith ("Unexpected character deserialising kind : " ^ String.make 1 t))
+         | _          -> failwith ("Unexpected character deserialising datatype : " ^ String.make 1 t))
     in r, rest
 and deserialise_field_spec : field_spec deserialiser =
   fun s ->
@@ -287,7 +287,7 @@ and deserialise_field_spec : field_spec deserialiser =
     let r =
       (match t with
 	 | 'a' -> `Absent
-	 | 'b' -> `Present (fst (deserialise_kind obj))
+	 | 'b' -> `Present (fst (deserialise_datatype obj))
          | c   -> invalid_header "field_spec" c)
     in
       r, rest
@@ -325,13 +325,13 @@ let deserialise_quantifier : quantifier deserialiser
       | c   -> invalid_header "quantifier" c
 
 let serialise_assumption : assumption serialiser 
-    = serialise2 'a' (serialise_list (serialise_quantifier), serialise_kind)
+    = serialise2 'a' (serialise_list (serialise_quantifier), serialise_datatype)
 
 let deserialise_assumption : assumption deserialiser
     = fun s ->
       let t, obj, rest = extract_object s in
       match t with
-          | 'a'  -> deserialise2 (deserialise_list (deserialise_quantifier), deserialise_kind) obj, rest
+          | 'a'  -> deserialise2 (deserialise_list (deserialise_quantifier), deserialise_datatype) obj, rest
           | _          -> failwith ("Unexpected character deserialising assumption : " ^ String.make 1 t)
 
 let serialise_environment : environment serialiser =
@@ -353,10 +353,10 @@ let deserialise_environment : environment deserialiser =
 
 module BasicTypeOps :
   (Type_basis.BASICTYPEOPS
-   with type typ = kind
+   with type typ = datatype
    and type row_var' = row_var) =
 struct
-  type typ = kind
+  type typ = datatype
   type row_var' = row_var
 
   type field_spec = typ field_spec_basis
@@ -389,7 +389,7 @@ end
 
 module TypeOps :
   (Type_basis.TYPEOPS
-   with type typ = kind
+   with type typ = datatype
    and type row_var = row_var) = TypeOpsGen(BasicTypeOps)
 
 let unit_type = `Record (TypeOps.make_empty_closed_row ())
@@ -406,7 +406,7 @@ let fresh_row () =
 
 
 (* rewriting for types *)
-let perhaps_process_children (f : kind -> kind option) :  kind -> kind option =
+let perhaps_process_children (f : datatype -> datatype option) :  datatype -> datatype option =
   let rewrite_row (fields, r) = 
     match (StringMap.fold
              (fun name field (changed, row) ->

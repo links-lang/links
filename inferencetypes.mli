@@ -68,11 +68,11 @@ module InferenceTypeOps :
    with type typ = datatype
    and type row_var = row_var)
 
-val inference_type_of_type : Types.kind -> datatype
+val inference_type_of_type : Types.datatype -> datatype
 val inference_field_spec_of_field_spec : Types.field_spec -> field_spec
 val inference_row_of_row : Types.row -> row
 
-val type_of_inference_type : datatype -> Types.kind
+val type_of_inference_type : datatype -> Types.datatype
 val field_spec_of_inference_field_spec : field_spec -> Types.field_spec
 val row_of_inference_row : row -> Types.row
 
@@ -83,8 +83,8 @@ val assumption_of_inference_assumption : assumption -> Types.assumption
 val inference_environment_of_environment : Types.environment -> environment
 val environment_of_inference_environment : environment -> Types.environment
 
-val string_of_type : datatype -> string
-val string_of_type_raw : datatype -> string
+val string_of_datatype : datatype -> string
+val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 
 val string_of_assumption : assumption -> string

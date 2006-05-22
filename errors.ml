@@ -11,22 +11,22 @@ let mistyped_application pos (fn, fntype) (param, paramtype)
       match fntype with 
         | `Function _ -> 
             raise (Type_error (pos, "`" ^ pexpr
-                                 ^"' has type " ^ string_of_type paramtype
+                                 ^"' has type " ^ string_of_datatype paramtype
                                  ^" and cannot be passed as an argument to `"^ fexpr
-                                 ^"', which has type "^ string_of_type fntype))
+                                 ^"', which has type "^ string_of_datatype fntype))
         | _ -> raise (Type_error (pos,
-                                  "`"^ fexpr ^"', which has type "^ string_of_type fntype
-                                  ^", cannot be applied to `"^ pexpr ^"', of type " ^ string_of_type paramtype))
+                                  "`"^ fexpr ^"', which has type "^ string_of_datatype fntype
+                                  ^", cannot be applied to `"^ pexpr ^"', of type " ^ string_of_datatype paramtype))
                
 
 let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
-    = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_type ltype 
-                           ^") and "^ string_of_expression r ^" ("^ string_of_type rtype ^")"))
+    = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_datatype ltype 
+                           ^") and "^ string_of_expression r ^" ("^ string_of_datatype rtype ^")"))
 
 let mistype pos (condition, condtype) expected_type
     = raise (Type_error (pos, "`"^ string_of_expression condition
-                           ^"' has type "^ string_of_type condtype
-                           ^", but is used in a context where a "^ string_of_type expected_type
+                           ^"' has type "^ string_of_datatype condtype
+                           ^", but is used in a context where a "^ string_of_datatype expected_type
                            ^" is expected"))
                
 

@@ -39,7 +39,7 @@ let rec directives =
     ((fun _ ->
         List.iter (fun (n, k) ->
                      Printf.fprintf stderr " %-16s : %s\n" 
-                       n (Types.string_of_kind (snd k)))
+                       n (Types.string_of_datatype (snd k)))
           Library.type_env),
      "list builtin functions and values");
     ]
@@ -62,9 +62,9 @@ let print_result rtype result =
 		     if Settings.get_value(Inference.enable_mailbox_typing) &&
 		       Settings.get_value(show_mailbox_parameter)
 		     then
-		       " : "^ Types.string_of_kind rtype
+		       " : "^ Types.string_of_datatype rtype
 		     else
-		       " : "^ Types.string_of_kind (Inference.remove_mailbox rtype)
+		       " : "^ Types.string_of_datatype (Inference.remove_mailbox rtype)
 		   end
                  else "")
 
@@ -78,7 +78,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
        let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
        let exprs = List.map Syntax.labelize exprs in
        let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
-         print_result (Syntax.node_kind (last exprs)) result;
+         print_result (Syntax.node_datatype (last exprs)) result;
          (valenv, typeenv), result
     ) input
 
@@ -95,7 +95,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
              let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
              let exprs = List.map Syntax.labelize exprs in
              let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
-               print_result (Syntax.node_kind (last exprs)) result;
+               print_result (Syntax.node_datatype (last exprs)) result;
                (valenv, typeenv)
          | Right (directive : Sugar.directive) -> 
              begin

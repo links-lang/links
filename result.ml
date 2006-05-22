@@ -74,7 +74,7 @@ type unop = MkColl
             | MkDatabase
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (query * Types.kind)
+            | QueryOp of (query * Types.datatype)
 
 let string_of_unop = function
   | MkColl -> "MkColl"
@@ -245,9 +245,9 @@ let escape =
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
 let to_placeholder expr = 
-  let (pos, kind, label) = expression_data expr in
+  let (pos, datatype, label) = expression_data expr in
     match label with
-        Some str -> Placeholder(str, (pos, kind, label))
+        Some str -> Placeholder(str, (pos, datatype, label))
       | None -> failwith("Not labeled: " ^ string_of_expression expr)
 
 let rec strip_binding(name, value) = (name, strip_result value)

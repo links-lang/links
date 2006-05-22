@@ -243,7 +243,7 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
                  | Variable (name, _) -> snd (assoc name env)
                  | Abstr _ ->
                      (match snd (Inference.type_expression env (erase apply)) with
-                        | Abstr (_, _, (_, kind, _)) -> kind
+                        | Abstr (_, _, (_, datatype, _)) -> datatype
                         | _ -> failwith "OP442")
                  | _ -> failwith "OP437"
              ) with

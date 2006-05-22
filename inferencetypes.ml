@@ -41,8 +41,8 @@ let
 	    []
 	  else
 	    free_type_vars' (IntSet.add var rec_vars) body
-      | `List (kind)             -> free_type_vars' rec_vars kind
-      | `Mailbox (kind)          -> free_type_vars' rec_vars kind
+      | `List (datatype)             -> free_type_vars' rec_vars datatype
+      | `Mailbox (datatype)          -> free_type_vars' rec_vars datatype
       | `DB                      -> []
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> row -> int list = 
@@ -311,7 +311,7 @@ let inference_field_spec_of_field_spec = inference_field_spec_of_field_spec (emp
 let inference_row_of_row = inference_row_of_row (empty_var_maps ())
 
 (* implementation *)
-let rec type_of_inference_type : type_var_set -> datatype -> Types.kind = fun rec_vars ->
+let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
@@ -377,8 +377,8 @@ let environment_of_inference_environment : environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, assumption_of_inference_assumption assumption))
 
 (* output as a string *)
-let string_of_type = Types.string_of_kind -<- type_of_inference_type
-let string_of_type_raw = Types.string_of_kind_raw -<- type_of_inference_type
+let string_of_datatype = Types.string_of_datatype -<- type_of_inference_type
+let string_of_datatype_raw = Types.string_of_datatype_raw -<- type_of_inference_type
 let string_of_row : row -> string = Types.string_of_row -<- row_of_inference_row
 
 let string_of_assumption = Types.string_of_assumption -<- assumption_of_inference_assumption

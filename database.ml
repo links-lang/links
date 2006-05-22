@@ -11,23 +11,23 @@ class virtual db_args from_str = object
   method virtual from_string : string -> unit
 end
 
-let value_from_db_string (value:string) = function
+let value_of_db_string (value:string) = function
   | BoolField -> Result.bool (value = "true")
   | TextField -> Result.string_as_charlist value
   | IntField  -> Result.int (num_of_string value)
   | FloatField -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
-  | _ -> invalid_arg "value_from_db_string"
+  | _ -> invalid_arg "value_of_db_string"
 
-let kind_from_db_type = function
+let datatype_of_db_type = function
   | BoolField -> `Primitive `Bool
   | TextField -> `List (`Primitive `Char)
   | IntField -> `Primitive `Int
   | FloatField -> `Primitive `Float
-  | _ -> failwith "Unsupported kind"
+  | _ -> failwith "Unsupported datatype"
 
-let execute_select  (kind:Types.kind) (query:string) (db: database) : result =
-  let fields = (match kind with
+let execute_select  (datatype:Types.datatype) (query:string) (db: database) : result =
+  let fields = (match datatype with
 		  | `List (`Record (field_env, _)) ->
 		      (StringMap.fold
 			 (fun label field_spec fields ->
@@ -47,7 +47,7 @@ let execute_select  (kind:Types.kind) (query:string) (db: database) : result =
          let is_null = (fun (name, db_type) ->
                           if name = "null" then true
                           else if mem_assoc name fields then
-                            (if assoc name fields = kind_from_db_type db_type then false 
+                            (if assoc name fields = datatype_of_db_type db_type then false 
 			     else raise (Runtime_exception ("Database did not provide results compatible with specified type (query was '" ^ query ^ "')")))
                           else false (*raise (Runtime_failure ("SQ094 " ^ name)) *)
                             (* Quick kludge because I don't know what's wrong *)) in
@@ -57,7 +57,7 @@ let execute_select  (kind:Types.kind) (query:string) (db: database) : result =
            else
              `List (map (fun row ->
                            `Record (map2 (fun (name, db_type) value -> 
-			                    name, value_from_db_string value db_type)
+			                    name, value_of_db_string value db_type)
                                       row_fields row))
                       result#get_all_lst)
        | QueryError msg -> raise (Runtime_exception ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

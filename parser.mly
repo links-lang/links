@@ -43,13 +43,13 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token MU ALIEN
 
 %start parse_links
-%start just_kind
+%start just_datatype
 %start sentence
 
 %type <Sugar.phrase list> parse_links
 %type <Sugar.phrase> xml_tree
-%type <Sugar.kind> kind
-%type <Sugar.kind> just_kind
+%type <Sugar.datatype> datatype
+%type <Sugar.datatype> just_datatype
 %type <Sugar.sentence> sentence
 
 %%
@@ -83,9 +83,9 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
-| TABLE VARIABLE kind unique DATABASE STRING SEMICOLON         { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
+| TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON         { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
-| ALIEN VARIABLE VARIABLE COLON kind SEMICOLON                 { Foreign ($2, $3, $5), pos() }
+| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON                 { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
@@ -198,7 +198,7 @@ logical_expression:
 
 typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression COLON kind                                { TypeAnnotation ($1, $3), pos() }
+| logical_expression COLON datatype                                { TypeAnnotation ($1, $3), pos() }
 
 send_expression:
 | typed_expression                                             { $1 }
@@ -336,24 +336,24 @@ provider:
 patt:
 | cons_expression                                              { Pattern $1 }
 
-just_kind:
-| kind SEMICOLON                                               { $1 }
+just_datatype:
+| datatype SEMICOLON                                               { $1 }
 
-kind:
-| mu_kind                                                      { $1 }
-| mu_kind RARROW kind                                          { FunctionType ($1, $3) }
+datatype:
+| mu_datatype                                                      { $1 }
+| mu_datatype RARROW datatype                                          { FunctionType ($1, $3) }
 
-mu_kind:
-| MU VARIABLE DOT mu_kind                                      { MuType ($2, $4) }
-| primary_kind                                                 { $1 }
+mu_datatype:
+| MU VARIABLE DOT mu_datatype                                      { MuType ($2, $4) }
+| primary_datatype                                                 { $1 }
 
-primary_kind:
+primary_datatype:
 | LPAREN RPAREN                                                { UnitType }
-| LPAREN kind RPAREN                                           { $2 }
-| LPAREN kind COMMA kinds RPAREN                               { TupleType ($2 :: $4) }
+| LPAREN datatype RPAREN                                           { $2 }
+| LPAREN datatype COMMA datatypes RPAREN                               { TupleType ($2 :: $4) }
 | LPAREN row RPAREN                                            { RecordType $2 }
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
-| LBRACKET kind RBRACKET                                       { ListType $2 }
+| LBRACKET datatype RBRACKET                                       { ListType $2 }
 | VARIABLE                                                     { TypeVar $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
@@ -366,7 +366,7 @@ primary_kind:
                                                                    | "XML"     -> ListType (PrimitiveType `XMLitem)
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
-| CONSTRUCTOR primary_kind                                     { match $1 with 
+| CONSTRUCTOR primary_datatype                                     { match $1 with 
                                                                    | "Mailbox"    -> MailboxType $2
                                                                    | t -> failwith ("Unknown unary type constructor : " ^ t)
                                                                }
@@ -376,9 +376,9 @@ row:
 vrow:
 | vfields                                                      { $1 }
 
-kinds:
-| kind                                                         { [$1] }
-| kind COMMA kinds                                             { $1 :: $3 }
+datatypes:
+| datatype                                                         { [$1] }
+| datatype COMMA datatypes                                             { $1 :: $3 }
 
 /* this assumes that the type (a) is invalid.  Is that a reasonable assumption? 
   (i.e. that records cannot be open rows?)  The only reason to make such an
@@ -396,11 +396,11 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR COLON kind                                       { $1, `Present $3 }
+| CONSTRUCTOR COLON datatype                                       { $1, `Present $3 }
 | CONSTRUCTOR COLON MINUS                                      { $1, `Absent }
 
 field:
-| fname COLON kind                                             { $1, `Present $3 }
+| fname COLON datatype                                             { $1, `Present $3 }
 | fname COLON MINUS                                            { $1, `Absent }
 
 fname:

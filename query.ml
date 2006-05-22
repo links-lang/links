@@ -36,7 +36,7 @@ and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;
               name : string;
               renamed : string;
-              col_type : Types.kind}
+              col_type : Types.datatype}
 
 (* Simple accessors *)
 

@@ -105,8 +105,8 @@ and p3 fn : primitive =
 let notimpl fn = 
   p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
 
-let kind = Parse.parse_kind
-let _UNTYPED_ = kind "a"
+let datatype = Parse.parse_datatype
+let _UNTYPED_ = datatype "a"
 
 let env : (string * (primitive * Types.assumption)) list = [
   "+", int_op (+/);
@@ -140,11 +140,11 @@ let env : (string * (primitive * Types.assumption)) list = [
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   kind "Mailbox a -> a -> ()");
+   datatype "Mailbox a -> a -> ()");
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   kind "Mailbox a -> () -> Mailbox a");
+   datatype "Mailbox a -> () -> Mailbox a");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -154,7 +154,7 @@ let env : (string * (primitive * Types.assumption)) list = [
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
-    (p1 (fun _ -> assert false), kind "Mailbox a -> () -> a"); (* Yes, this is the right type. *)
+    (p1 (fun _ -> assert false), datatype "Mailbox a -> () -> a"); (* Yes, this is the right type. *)
   
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -169,7 +169,7 @@ let env : (string * (primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   kind "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
+   datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 
@@ -185,34 +185,34 @@ let env : (string * (primitive * Types.assumption)) list = [
          | `List ((#result as x)::_) -> x
          | `List [] -> failwith "Head of empty list"
          | _ -> failwith "Internal error: head of non-list"),
-   kind "[a] -> a");
+   datatype "[a] -> a");
 
   "tl", 
   (p1 (function
          | `List (_::xs) -> `List xs
          | `List [] -> failwith "Tail of empty list"
          | _ -> failwith "Internal error: tail of non-list"),
-   kind "[a] -> [a]");
+   datatype "[a] -> [a]");
        
   "length", 
   (p1 (function
          | `List (elems) -> `Int (num_of_int (length elems))
          | _ -> failwith "Internal error: length of non-collection"),
-   kind "[a] -> Int");
+   datatype "[a] -> Int");
 
   "take",
   (p2 (fun n l -> 
          match l with 
            | `List elems -> `List (take (int_of_num (unbox_int n)) elems)
            | _ -> failwith "Internal error: non-list passed to take"),
-   kind "Int -> [a] -> [a]");
+   datatype "Int -> [a] -> [a]");
 
   "drop",
   (p2 (fun n l ->
          match l with 
            | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
            | _ -> failwith "Internal error: non-list passed to drop"),
-   kind "Int -> [a] -> [a]");
+   datatype "Int -> [a] -> [a]");
 
   (** XML **)
   "childNodes",
@@ -221,7 +221,7 @@ let env : (string * (primitive * Types.assumption)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   kind "XML -> XML");
+   datatype "XML -> XML");
 
   "objectType",
   (notimpl "objectType",
@@ -245,11 +245,11 @@ let env : (string * (primitive * Types.assumption)) list = [
                            with Not_found -> none)
                     | _ -> none)
            | _ -> failwith "Internal error: bad arguments to attribute"),
-   kind "(XML,String) -> [|Some:String | None:()|]");
+   datatype "(XML,String) -> [|Some:String | None:()|]");
 
   "elementById",
   (notimpl "elementById",
-   kind "String -> [|Some:XML |None:()|]");
+   datatype "String -> [|Some:XML |None:()|]");
   
   "enxml",
   (p1 (function 
@@ -259,54 +259,54 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   "dom",
   (* Not available on the server *)
-  (`Int (num_of_int (-1)), kind "Mailbox a");
+  (`Int (num_of_int (-1)), datatype "Mailbox a");
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
-   kind "String -> ()");
+   datatype "String -> ()");
 
   "debugObj",
-  (notimpl "debugObj", kind "a -> ()");
+  (notimpl "debugObj", datatype "a -> ()");
   
   "dump",
-  (notimpl "dump", kind "a -> ()");
+  (notimpl "dump", datatype "a -> ()");
   
   "textContent",
-  (notimpl "textContent", kind "a -> String");
+  (notimpl "textContent", datatype "a -> String");
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
-   kind "String -> ()");
+   datatype "String -> ()");
 
   "javascript",
-  (`Bool false, kind "Bool");
+  (`Bool false, datatype "Bool");
 
   "not", 
   (p1 (unbox_bool ->- not ->- box_bool),
-   kind "Bool -> Bool");
+   datatype "Bool -> Bool");
  
   "negate", 
-  (p1 (unbox_int ->- minus_num ->- box_int), kind "Int -> Int");
+  (p1 (unbox_int ->- minus_num ->- box_int), datatype "Int -> Int");
 
   "negatef", 
-  (p1 (fun f -> box_float (-. (unbox_float f))), kind "Float -> Float");
+  (p1 (fun f -> box_float (-. (unbox_float f))), datatype "Float -> Float");
 
   "is_integer", 
   (p1 (unbox_string ->- (flip (Str.string_match (Str.regexp "^[0-9]+$")) 0) ->- box_bool),
-   kind "String -> Bool");
+   datatype "String -> Bool");
   
   "error",
-  (p1 (unbox_string ->- failwith), kind "String -> a");
+  (p1 (unbox_string ->- failwith), datatype "String -> a");
   
 
   (* HACK *)
   "callForeign",
-   (notimpl "callForeign", kind "(a -> b) -> a -> b");
+   (notimpl "callForeign", datatype "(a -> b) -> a -> b");
 
   "sleep",
   (* This doesn't seem right : it freezes all threads *)
   (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
          `Record []),
-   kind "Int -> ()");
+   datatype "Int -> ()");
 
   (** Database functions **)
   "insertrow",
@@ -376,11 +376,11 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   "ord",
   (p1 (fun c -> box_int (num_of_int (Char.code (unbox_char c)))), 
-   kind "Char -> Int");
+   datatype "Char -> Int");
 
   "chr",
   (p1 (fun n -> (box_char (Char.chr (int_of_num (unbox_int n))))), 
-   kind "Int -> Char");
+   datatype "Int -> Char");
 
   (* some trig functions *)
   "floor",   float_fn floor;

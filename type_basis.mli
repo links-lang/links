@@ -2,7 +2,7 @@
 
 type type_var_set = Utility.IntSet.t
 
-(* Types for kinds *)
+(* Types for datatypes *)
 type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `Abstract of string ]
 
 type ('typ, 'row) type_basis = [

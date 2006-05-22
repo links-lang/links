@@ -43,7 +43,7 @@ let rec extract_row : datatype -> row = function
   | `MetaTypeVar point ->
       extract_row (Unionfind.find point)
   | t -> failwith
-      ("Internal error: attempt to extract a row from a kind that is not a record or variant: " ^ (string_of_type t))
+      ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
 let var_is_free_in_type var typ = mem var (free_type_vars typ)
 
@@ -124,7 +124,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	 unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows) (lbody, rbody)) in
     
     fun (t1, t2) ->
-      (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_type t1^" with "^string_of_type t2);
+      (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
       | `Primitive x, `Primitive y when x = y -> ()
@@ -169,7 +169,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	     | `TypeVar var ->
 		 if var_is_free_in_type var t then
    		   (let _ = debug_if_set (show_recursion)
-		      (fun () -> "rec intro3 ("^string_of_int var^","^string_of_type t^")") in
+		      (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")") in
 		     Unionfind.change point (`Recursive (var, t)))
 		 else
 		   (debug_if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
@@ -192,8 +192,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       | `Mailbox t, `Mailbox t' -> unify' rec_env (t, t')
       | `DB, `DB -> ()
       | _, _ ->
-          raise (Unify_failure ("Couldn't match "^ string_of_type t1 ^" against "^ string_of_type t2)));
-       debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_type t1)
+          raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
+       debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
       )
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
@@ -416,7 +416,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 
 let unify (t1, t2) =
   (unify' (IntMap.empty, IntMap.empty) (t1, t2);
-   debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_type t1))
+   debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1))
 
 (*
   instantiation environment:
@@ -744,8 +744,8 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
   | Record_extension (label, value, record, pos) ->
       let value = type_check env value in
       let record = type_check env record in
-      let unif_kind = `Record (ITO.make_singleton_open_row (label, `Absent)) in
-	unify (type_of_expression record, unif_kind);
+      let unif_datatype = `Record (ITO.make_singleton_open_row (label, `Absent)) in
+	unify (type_of_expression record, unif_datatype);
 
 	let record_row = extract_row (type_of_expression record) in
 	let value_type = type_of_expression value in
@@ -844,11 +844,11 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
 	      StringMap.add col.Query.name
 		(`Present (inference_type_of_type col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
-      let kind =  `List (`Record row) in
+      let datatype =  `List (`Record row) in
       let db = type_check env db in
 	unify (type_of_expression db, `DB);
-	unify (kind, `List (`Record (ITO.make_empty_open_row ())));
-        Table (db, s, query, (pos, kind, None))
+	unify (datatype, `List (`Record (ITO.make_empty_open_row ())));
+        Table (db, s, query, (pos, datatype, None))
   | SortBy(expr, byExpr, pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any
          orderable type, of which there are at least several. How to
@@ -892,7 +892,7 @@ and
             | `Function _ ->(
 		  unify (snd (assoc name var_env), expr_type);
 		  (name, expr) :: result)
-            | kind -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, kind) in
+            | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
       let defns = fold_left type_check [] defns in
       let defns = rev defns in
@@ -1002,7 +1002,7 @@ module RewriteTypes =
   Rewrite.Rewrite
     (Rewrite.SimpleRewrite
        (struct
-          type t = Types.kind
+          type t = Types.datatype
           type rewriter = t -> t option
           let process_children = Types.perhaps_process_children
         end))
@@ -1030,16 +1030,16 @@ type tvar = [`TypeVar of int]
    functions (except spawn and curried functions), so it probably
    doesn't matter.
 *)
-(* rewrite an unquantified kind type *)
-let retype_primfun (var : Types.kind) : RewriteTypes.rewriter = function
+(* rewrite an unquantified datatype type *)
+let retype_primfun (var : Types.datatype) : RewriteTypes.rewriter = function
   | `Function _ as f -> Some (`Function (var, f))
   | _                -> None
 
-(* rewrite a quantified kind type *)
-let retype_primfun (var : tvar) (quants, kind as k : Types.assumption) =
-  match RewriteTypes.bottomup (retype_primfun (var :> Types.kind)) kind with
+(* rewrite a quantified datatype type *)
+let retype_primfun (var : tvar) (quants, datatype as k : Types.assumption) =
+  match RewriteTypes.bottomup (retype_primfun (var :> Types.datatype)) datatype with
     | None -> k
-    | Some kind -> ((var :> Types.quantifier) :: quants, kind)
+    | Some datatype -> ((var :> Types.quantifier) :: quants, datatype)
 
 (* find a suitable tvar name *)
 let new_typevar quants =
@@ -1053,7 +1053,7 @@ let new_typevar quants =
                               (flip mem (List.map tint quants)) 
                               candidates)))
 
-(* Find a suitable type variable and rewrite a quantified kind type *)
+(* Find a suitable type variable and rewrite a quantified datatype type *)
 let retype_primfun (quants, _ as k) =
   retype_primfun (new_typevar quants) k
 
@@ -1062,8 +1062,8 @@ let retype_primfun (quants, _ as k) =
 let retype_primitives = 
   let specials = ["spawn"; "recv"; "self"] in
     List.map (function
-                | name, kind when mem name specials -> (name, kind)
-                | name, kind -> name, retype_primfun kind)
+                | name, datatype when mem name specials -> (name, datatype)
+                | name, datatype -> name, retype_primfun datatype)
 
 module RewriteSyntaxU = 
   Rewrite.Rewrite

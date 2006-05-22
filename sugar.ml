@@ -216,23 +216,23 @@ type order = [`Asc of string | `Desc of string]
 
 type pposition = Lexing.position * Lexing.position (* start * end *)
 
-type kind = 
+type datatype = 
   | TypeVar of string
-  | FunctionType of kind * kind
-  | MuType of string * kind
+  | FunctionType of datatype * datatype
+  | MuType of string * datatype
   | UnitType
-  | TupleType of (kind list)
+  | TupleType of (datatype list)
   | RecordType of row
   | VariantType of row
-  | ListType of kind
-  | MailboxType of kind
+  | ListType of datatype
+  | MailboxType of datatype
   | PrimitiveType of Types.primitive
   | DBType
-and row = (string * [`Present of kind | `Absent]) list * string option
+and row = (string * [`Present of datatype | `Absent]) list * string option
 
 type quantifier = [`TypeVar of string | `RowVar of string]
 
-let rec typevars : kind -> quantifier list = 
+let rec typevars : datatype -> quantifier list = 
   let rvars (fields, rv) =
     let rowvars = match rv with
       | None   -> []
@@ -254,9 +254,9 @@ let rec typevars : kind -> quantifier list =
     | PrimitiveType _
     | DBType -> []
 
-type assumption = quantifier list * kind
+type assumption = quantifier list * datatype
 
-let generalize (k : kind) : assumption =
+let generalize (k : datatype) : assumption =
   typevars k, k
 
 let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
@@ -298,7 +298,7 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
     in fold_right Types.TypeOps.set_field fields seed
   in (vars, desugar varmap k)
        
-let desugar_kind k = snd (desugar_assumption ([], k))
+let desugar_datatype k = snd (desugar_assumption ([], k))
 
 type phrasenode =
 (* ... *)
@@ -319,7 +319,7 @@ type phrasenode =
   | Conditional of (phrase * phrase * phrase)
   | Binding of (ppattern * phrase)
   | Block of (phrase list * phrase)
-  | Foreign of (name * name * kind)
+  | Foreign of (name * name * datatype)
 (* Applications *)
   | InfixAppl of (binop * phrase * phrase)
   | UnaryAppl of (unary_op * phrase)
@@ -331,7 +331,7 @@ type phrasenode =
   | Projection of (phrase * name)
   | SortBy_Conc of (ppattern * phrase * phrase)
 
-  | TypeAnnotation of (phrase * kind)
+  | TypeAnnotation of (phrase * datatype)
 
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
@@ -341,7 +341,7 @@ type phrasenode =
 
 (* Database operations *)
   | DatabaseLit of (string)
-  | TableLit of (string * kind * bool (* unique *) * phrase)
+  | TableLit of (string * datatype * bool (* unique *) * phrase)
   | DBUpdate of (string * phrase * phrase)
   | DBDelete of (string * phrase * phrase)
   | DBInsert of (string * phrase * phrase)
@@ -399,26 +399,26 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
   | Projection (e, name) -> (let s = unique_name ()
                              in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
-  | TableLit (name, kind, unique, db) -> 
-      (let db_query (name:string) (pos:position) (kind:Types.kind) (unique:bool) : Query.query =
+  | TableLit (name, datatype, unique, db) -> 
+      (let db_query (name:string) (pos:position) (datatype:Types.datatype) (unique:bool) : Query.query =
          (* FIXME: this is not the appropriate place to gensym the
             table name. The table will move around later. The right place
             to do it is when joining two queries: at that point,
             alpha-convert to ensure that the involved tables have
             different names. *)
          let table_name = (db_unique_name ()) in
-         let selects = match kind with
+         let selects = match datatype with
            | `Record (field_env, `RowVar row_var) ->
 	       let present_fields, absent_fields = Types.split_fields field_env in
 	         if row_var = None && absent_fields = [] then
 	           List.map (fun
-		               (field_name, field_kind) ->
+		               (field_name, field_datatype) ->
 			         {table_renamed = table_name;
 			          name=field_name; renamed=field_name; 
-                                  col_type = field_kind})
+                                  col_type = field_datatype})
                      present_fields
-	         else raise (Parse_failure (pos, "Table kinds are records with only field present elements"))
-           | _ -> raise (Parse_failure (pos, "Table kinds must be records " ^ Types.string_of_kind kind)) in
+	         else raise (Parse_failure (pos, "Table datatypes are records with only field present elements"))
+           | _ -> raise (Parse_failure (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
            {distinct_only = unique;
             result_cols = selects;
             tables = [(name, table_name)];
@@ -426,7 +426,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
             sortings = [];
             max_rows = None;
             offset = Query.Integer (Num.Int 0)} in
-         Table (desugar db, "IGNORED", db_query name pos (desugar_kind kind) unique, pos))
+         Table (desugar db, "IGNORED", db_query name pos (desugar_datatype datatype) unique, pos))
   | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
   | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
   | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
@@ -465,8 +465,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                   | expr, pos -> 
                       Bind "__", desugar (expr, pos), lookup_pos pos) es in
       polylets es (desugar exp)
-  | Foreign (language, name, kind) -> 
-      Alien (language, name, desugar_assumption (generalize kind), pos)
+  | Foreign (language, name, datatype) -> 
+      Alien (language, name, desugar_assumption (generalize datatype), pos)
   | SortBy_Conc(patt, expr, sort_expr) ->
       (match patternize patt with
         | Bind var -> 

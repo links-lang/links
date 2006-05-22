@@ -3,4 +3,4 @@ class virtual db_args : string -> object
   method virtual from_string : string -> unit
 end
 
-val execute_select : (Types.kind -> string -> Result.database -> Result.result)
+val execute_select : (Types.datatype -> string -> Result.database -> Result.result)

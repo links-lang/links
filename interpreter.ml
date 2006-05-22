@@ -298,13 +298,13 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	               apply_cont globals cont (let args = charlist_as_string value in
                                                 let driver, params = parse_db_string args in
                                                   `Database (db_connect driver params))
-                   | QueryOp(query, kind) ->
+                   | QueryOp(query, datatype) ->
                        let result = 
                          match value with
                            | `Database (db, _) ->
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
 		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 let result = Database.execute_select kind query_string db in
+		                 let result = Database.execute_select datatype query_string db in
                                    (* debug("    result:" ^ string_of_result result); *)
                                    result
                                      (* disable actual queries *)
@@ -431,7 +431,7 @@ fun globals locals expr cont ->
   | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
   | Syntax.Record_extension (label, value, record, _) ->
       eval record (BinopRight(locals, RecExtOp label, value) :: cont)
-  | Syntax.Record_selection (label, label_variable, variable, value, body, (pos, kind, lbl)) ->
+  | Syntax.Record_selection (label, label_variable, variable, value, body, (pos, datatype, lbl)) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Record_selection_empty (value, body, _) ->
       eval value (Ignore(locals, body) :: cont)
@@ -452,8 +452,8 @@ fun globals locals expr cont ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-  | Syntax.Table (database, s, query, (_, kind, _)) ->
-      eval database (UnopApply(locals, QueryOp(query, kind)) :: cont)
+  | Syntax.Table (database, s, query, (_, datatype, _)) ->
+      eval database (UnopApply(locals, QueryOp(query, datatype)) :: cont)
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
