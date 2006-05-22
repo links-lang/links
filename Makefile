@@ -83,12 +83,18 @@ CLIBS 	= $(DB_CLIBS)
 INCDIRS = $(AUXLIB_DIRS)
 LIBDIRS = $(AUXLIB_DIRS)
 
+PRE_TARGETS = $(DERIVING_DIR)/built
+
+clean : deriving-clean
+
 include $(OCAMLMAKEFILE)
 
-deriving:  $(DERIVING_DIR)/built
-
+.PHONY : deriving
 $(DERIVING_DIR)/built:
 	cd $(DERIVING_DIR) && make
+
+deriving-clean:
+	cd $(DERIVING_DIR) && make clean
 
 test-raw:
 	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
