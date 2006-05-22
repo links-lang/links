@@ -85,11 +85,9 @@ LIBDIRS = $(AUXLIB_DIRS)
 
 PRE_TARGETS = $(DERIVING_DIR)/built
 
-clean : deriving-clean
-
 include $(OCAMLMAKEFILE)
 
-.PHONY : deriving
+.PHONY : $(DERIVING_DIR)/built
 $(DERIVING_DIR)/built:
 	cd $(DERIVING_DIR) && make
 
@@ -113,3 +111,5 @@ docs: quick-help.html
 
 quick-help.html: quick-help.pod
 	pod2html quick-help.pod > quick-help.html
+
+clean : deriving-clean
