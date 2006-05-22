@@ -5,7 +5,7 @@ open Utility
 type type_var_set = Utility.IntSet.t
 
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem ]
+type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `Abstract of string ]
 
 type ('typ, 'row) type_basis = [
   | `Not_typed

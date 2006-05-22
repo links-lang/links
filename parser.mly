@@ -364,7 +364,7 @@ primary_kind:
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
                                                                    | "XML"     -> ListType (PrimitiveType `XMLitem)
-                                                                   | t -> failwith ("Unknown nullary type constructor : " ^ t)
+                                                                   | t         -> PrimitiveType (`Abstract t)
                                                                }
 | CONSTRUCTOR primary_kind                                     { match $1 with 
                                                                    | "Mailbox"    -> MailboxType $2
