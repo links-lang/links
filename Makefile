@@ -85,9 +85,10 @@ LIBDIRS = $(AUXLIB_DIRS)
 
 include $(OCAMLMAKEFILE)
 
-deriving: $(DERIVING_DIR)/syntax   $(DERIVING_DIR)/lib
-	cd $(DERIVING_DIR)/syntax && make
-	cd $(DERIVING_DIR)/lib && make bcl
+deriving:  $(DERIVING_DIR)/built
+
+$(DERIVING_DIR)/built:
+	cd $(DERIVING_DIR) && make
 
 test-raw:
 	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
