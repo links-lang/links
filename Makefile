@@ -23,9 +23,13 @@ endif
 
 AUXLIB_DIRS = $(DB_AUXLIBS)
 
-OCAMLOPT := ocamlopt.opt
-OCAMLC := ocamlc.opt
-OCAMLDEP := ocamldep
+DERIVING_DIR=deriving
+CLASSES=deriving.cmo show_class.cmo enum_class.cmo bounded_class.cmo pickle_class.cmo
+PP='camlp4o -I $(DERIVING_DIR)/syntax $(CLASSES)'
+
+OCAMLOPT := ocamlopt.opt -pp $(PP)
+OCAMLC := ocamlc.opt -pp $(PP)
+OCAMLDEP := ocamldep -pp $(PP)
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
@@ -80,6 +84,10 @@ INCDIRS = $(AUXLIB_DIRS)
 LIBDIRS = $(AUXLIB_DIRS)
 
 include $(OCAMLMAKEFILE)
+
+deriving: $(DERIVING_DIR)/syntax   $(DERIVING_DIR)/lib
+	cd $(DERIVING_DIR)/syntax && make
+	cd $(DERIVING_DIR)/lib && make bcl
 
 test-raw:
 	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
