@@ -26,18 +26,18 @@ exception UndefinedVariable of string
 module ITO = InferenceTypeOps
 
 (* extract data from inference_expressions *)
-let type_of_expression : inference_expression -> inference_type =
+let type_of_expression : inference_expression -> datatype =
   fun exp -> let _, t, _ = expression_data exp in t
 let pos_of_expression : inference_expression -> position =
   fun exp -> let pos, _, _ = expression_data exp in pos
 
 (* conversions between expressions and inference expressions *)
-let expression_to_inference_expression : expression -> inference_expression =
-  redecorate (fun (pos, t, label) -> (pos, type_to_inference_type t, label))
-let inference_expression_to_expression : inference_expression -> expression =
-  redecorate (fun (pos, t, label) -> (pos, inference_type_to_type t, label))
+let inference_expression_of_expression : Syntax.expression -> inference_expression =
+  redecorate (fun (pos, t, label) -> (pos, inference_type_of_type t, label))
+let expression_of_inference_expression : inference_expression -> Syntax.expression =
+  redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 
-let rec extract_row : inference_type -> inference_row = function
+let rec extract_row : datatype -> row = function
   | `Record row -> row
   | `Variant row -> row
   | `MetaTypeVar point ->
@@ -50,7 +50,7 @@ let var_is_free_in_type var typ = mem var (free_type_vars typ)
 
 (* a special kind of structural equality on types that doesn't look
 inside points *)
-let rec eq_types : (inference_type * inference_type) -> bool =
+let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
     (match (t1, t2) with
        | `Not_typed, `Not_typed -> true
@@ -63,7 +63,7 @@ let rec eq_types : (inference_type * inference_type) -> bool =
        | `Mailbox t, `Mailbox t' -> eq_types (t, t')
        | `DB, `DB -> true
        | _, _ -> false)
-and eq_rows : (inference_row * inference_row) -> bool =
+and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
 and eq_field_envs (lfield_env, rfield_env) =
@@ -84,12 +84,12 @@ and eq_row_vars = function
   unification environment:
     for stopping cycles during unification
 *)
-type unify_type_env = (inference_type list) IntMap.t
-type unify_row_env = (inference_row list) IntMap.t
+type unify_type_env = (datatype list) IntMap.t
+type unify_row_env = (row list) IntMap.t
 type unify_env = unify_type_env * unify_row_env
 
 
-let rec unify' : unify_env -> (inference_type * inference_type) -> unit = fun rec_env ->
+let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
   let rec_types, rec_rows = rec_env in
 
   let unify_rec ((var, body), t) =
@@ -196,7 +196,7 @@ let rec unify' : unify_env -> (inference_type * inference_type) -> unit = fun re
        debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_type t1)
       )
 
-and unify_rows' : unify_env -> ((inference_row * inference_row) -> unit) = 
+and unify_rows' : unify_env -> ((row * row) -> unit) = 
   fun rec_env (lrow, rrow) ->
       debug_if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
@@ -231,8 +231,8 @@ and unify_rows' : unify_env -> ((inference_row * inference_row) -> unit) =
       *)
       let extend_field_env
 	  (rec_env : unify_env)
-	  (traversal_env : inference_field_spec_map)
-	  (extending_env : inference_field_spec_map) =
+	  (traversal_env : field_spec_map)
+	  (extending_env : field_spec_map) =
 	    StringMap.fold
 	      (fun label field_spec extension ->
 		 if StringMap.mem label extending_env then
@@ -258,7 +258,7 @@ and unify_rows' : unify_env -> ((inference_row * inference_row) -> unit) =
       let unify_compatible_field_environments rec_env (field_env1, field_env2) =
 	ignore (extend_field_env rec_env field_env1 field_env2) in
 
-      let extend_row_var : inference_row_var * inference_row -> unit =
+      let extend_row_var : row_var * row -> unit =
 	fun (row_var, extension_row) ->
 	  match row_var with
 	    | `MetaRowVar point ->
@@ -279,7 +279,7 @@ and unify_rows' : unify_env -> ((inference_row * inference_row) -> unit) =
 
 	 precondition: big_field_env contains small_field_env
       *)
-      let matching_labels : inference_field_spec_map * inference_field_spec_map -> StringSet.t = 
+      let matching_labels : field_spec_map * field_spec_map -> StringSet.t = 
 	fun (big_field_env, small_field_env) ->
 	  StringMap.fold (fun label _ labels ->
 			    if StringMap.mem label small_field_env then
@@ -287,7 +287,7 @@ and unify_rows' : unify_env -> ((inference_row * inference_row) -> unit) =
 			    else
 			      labels) big_field_env StringSet.empty in
 
-      let row_without_labels : StringSet.t -> inference_row -> inference_row =
+      let row_without_labels : StringSet.t -> row -> row =
 	fun labels (field_env, row_var) ->
 	  let restricted_field_env =
 	    StringSet.fold (fun label field_env ->
@@ -422,14 +422,14 @@ let unify (t1, t2) =
   instantiation environment:
     for stopping cycles during instantiation
 *)
-type inst_type_env = (inference_type Unionfind.point) IntMap.t
-type inst_row_env = (inference_row Unionfind.point) IntMap.t
+type inst_type_env = (datatype Unionfind.point) IntMap.t
+type inst_row_env = (row Unionfind.point) IntMap.t
 type inst_env = inst_type_env * inst_row_env
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
  *)
-let instantiate : inference_environment -> string -> inference_type = fun env var ->
+let instantiate : environment -> string -> datatype = fun env var ->
   try
     let generics, t = Type_basis.lookup var env in
       if generics = [] then
@@ -445,7 +445,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	     | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
 	  ) (IntMap.empty, IntMap.empty) generics in
 	  
-	let rec inst : inst_env -> inference_type -> inference_type = fun rec_env typ ->
+	let rec inst : inst_env -> datatype -> datatype = fun rec_env typ ->
 	  let rec_type_env, rec_row_env = rec_env in
 	    match typ with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
@@ -499,7 +499,7 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
 	      | `Mailbox (elem_type) ->
 		  `Mailbox (inst rec_env elem_type)
 	      | `DB -> `DB
-	and inst_row : inst_env -> inference_row -> inference_row = fun rec_env row ->
+	and inst_row : inst_env -> row -> row = fun rec_env row ->
 	  let rec_type_env, rec_row_env = rec_env in
 	  let field_env, row_var = flatten_row row in
 	    
@@ -549,11 +549,11 @@ let instantiate : inference_environment -> string -> inference_type = fun env va
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
-let rec get_quantifiers : type_var_set -> inference_type -> quantifier list = 
+let rec get_quantifiers : type_var_set -> datatype -> quantifier list = 
   fun bound_vars -> 
  
-    let rec row_generics : type_var_set -> inference_row -> quantifier list = fun bound_vars (field_env, row_var) ->
-      let free_field_spec_vars : inference_field_spec -> quantifier list =
+    let rec row_generics : type_var_set -> row -> quantifier list = fun bound_vars (field_env, row_var) ->
+      let free_field_spec_vars : field_spec -> quantifier list =
 	function
 	  | `Present t -> get_quantifiers bound_vars t
 	  | `Absent -> [] in
@@ -609,7 +609,7 @@ let rec get_quantifiers : type_var_set -> inference_type -> quantifier list =
 (** generalize: 
     Universally quantify any free type variables in the expression.
 *)
-let generalize : inference_environment -> inference_type -> inference_assumption = 
+let generalize : environment -> datatype -> assumption = 
   fun env t ->
     let vars_in_env = concat_map (free_type_vars -<- snd) (Type_basis.environment_values env) in
     let bound_vars = intset_of_list vars_in_env in
@@ -645,7 +645,7 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- snd) bs && is_value e
   | _ -> false
 
-let rec type_check (env : inference_environment) : (untyped_expression -> inference_expression) = fun expression ->
+let rec type_check (env : environment) : (untyped_expression -> inference_expression) = fun expression ->
   try
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match expression with
@@ -716,7 +716,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 (* should now use alien javascript jslib : ... to import library functions *)
 (*      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in *)
         (* extend the env with each l:name bound variable *)
-      let attr_env = fold_right (fun s env -> (s, ([], inference_string_type)) :: env) bindings attr_env in
+      let attr_env = fold_right (fun s env -> (s, ([], string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check attr_env expr)) special_attrs in
         (* Check that the bound expressions have type 
            <strike>XML</strike> unit. *)
@@ -725,7 +725,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       let contents = map (type_check env) cs in
       let nonspecial_attrs = map (fun (k,v) -> k, type_check env v) nonspecial_attrs in
 (*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
-      let attr_type = inference_string_type in
+      let attr_type = string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
       let _ = List.iter (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
@@ -842,7 +842,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
 	(List.fold_right
 	   (fun col env ->
 	      StringMap.add col.Query.name
-		(`Present (type_to_inference_type col.Query.col_type)) env)
+		(`Present (inference_type_of_type col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let kind =  `List (`Record row) in
       let db = type_check env db in
@@ -860,7 +860,7 @@ let rec type_check (env : inference_environment) : (untyped_expression -> infere
       Wrong(pos, ITO.fresh_type_variable(), None)
   | HasType(expr, typ, pos) ->
       let expr = type_check env expr in
-	unify(type_of_expression expr, type_to_inference_type typ);
+	unify(type_of_expression expr, inference_type_of_type typ);
 	HasType(expr, typ, (pos, type_of_expression expr, None))
   | Placeholder _ 
   | Alien _ ->
@@ -940,10 +940,10 @@ let find_cliques (bindings : (string * untyped_expression) list)
 let mutually_type_defs
     : Types.environment -> (string * untyped_expression) list -> (Types.environment * (string * expression) list) =
   fun env defs ->
-    let env = environment_to_inference_environment env in
+    let env = inference_environment_of_environment env in
     let new_type_env, new_defs = type_check_mutually env defs in
-      inference_environment_to_environment new_type_env,
-    List.map (fun (name, exp) -> name, inference_expression_to_expression exp) new_defs
+      environment_of_inference_environment new_type_env,
+    List.map (fun (name, exp) -> name, expression_of_inference_expression exp) new_defs
 
 let regroup exprs = 
   let regroup_defs defs = 
@@ -957,7 +957,7 @@ let regroup exprs =
 
 let type_expression : Types.environment -> untyped_expression -> (Types.environment * expression) =
   fun env untyped_expression ->
-    let env = environment_to_inference_environment env in
+    let env = inference_environment_of_environment env in
     let env', exp' =
       match untyped_expression with
 	| Define (variable, value, loc, pos) ->
@@ -967,12 +967,12 @@ let type_expression : Types.environment -> untyped_expression -> (Types.environm
               (((variable, value_type) :: env),
     	       Define (variable, value, loc, (pos, type_of_expression value, None)))
         | Alien (language, name, assumption, pos)  ->
-            let (qs, k) = assumption_to_inference_assumption assumption in
+            let (qs, k) = inference_assumption_of_assumption assumption in
               ((name, (qs, k)) :: env),
             Alien (language, name, assumption, (pos, k, None))
 	| expr -> let value = type_check env expr in env, value
     in
-      inference_environment_to_environment env', inference_expression_to_expression exp'
+      environment_of_inference_environment env', expression_of_inference_expression exp'
 
 let type_program : Types.environment -> untyped_expression list -> (Types.environment * expression list) =
   fun env exprs ->
