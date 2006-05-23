@@ -2,7 +2,8 @@
 open Num
 open List
 
-open Pickle
+open Types
+open Pickler
 open Query
 open Syntax
 open Utility
@@ -16,8 +17,17 @@ object
   method show : string
 end
 
+open Show
+module Show_otherfield = ShowDefaults(
+  struct
+    type a = otherfield
+    let showBuf obj buffer = Buffer.add_string buffer (obj # show)
+  end)
+
+
 type db_field_type = BoolField | TextField | IntField | FloatField
 		     | SpecialField of otherfield
+    deriving (Show)
 
 let string_of_db_field_type = function
   | BoolField -> "bool"
@@ -27,6 +37,7 @@ let string_of_db_field_type = function
   | SpecialField ft -> ft # show
 
 type db_status = QueryOk | QueryError of string
+    deriving (Show)
 
 class virtual dbresult = object
   method virtual status : db_status
@@ -41,6 +52,14 @@ class virtual database = object
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
 end
+
+module Show_database = Show_unprintable (struct type a = database end)
+
+(* Here we could do something better, like pickling enough information
+   about the database to be able to restore the connection on
+   deserialisation *)
+open Pickle
+module Pickle_database = Pickle_unpicklable (struct type a = database end)
 
 type db_construtor = string -> (database * string)
 
@@ -74,7 +93,8 @@ type unop = MkColl
             | MkDatabase
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (query * Types.datatype)
+            | QueryOp of (query * datatype)
+                deriving (Show, Pickle)
 
 let string_of_unop = function
   | MkColl -> "MkColl"
@@ -86,12 +106,13 @@ let string_of_unop = function
 type binop = EqEqOp | NotEqOp | LessEqOp | LessOp | BeginsWithOp
 	     | UnionOp
 	     | RecExtOp of string
-
+                 deriving (Show, Pickle)
 
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
+    deriving (Show, Pickle)
 
 let is_attr = function
   | Attr _ -> true
@@ -147,6 +168,7 @@ type basetype = [
   | `XML of xmlitem
   | `Database of (database * string)
 ]
+    deriving (Show, Pickle)
 
 type contin_frame = 
   | Definition of (environment * string)
@@ -178,7 +200,6 @@ type contin_frame =
 
   | Recv of (environment)
 and result = [
-  basetype
   | `PFunction of (string * result list)
   | `Function of (string * environment (*locals*)
                          * environment (*globals*) 
@@ -187,10 +208,13 @@ and result = [
   | `Variant of (string * result)
   | `List of (result list)
   | `Continuation of continuation
+  |  basetype
+
 ]
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
+    deriving (Show, Pickle)
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Boolean(b, Sugar.no_expr_data))

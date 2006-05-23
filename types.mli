@@ -48,28 +48,28 @@ val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
 (* serialisation *) 
-val serialise_primitive : primitive Pickle.serialiser 
-val deserialise_primitive : primitive Pickle.deserialiser
+val serialise_primitive : primitive Pickler.serialiser 
+val deserialise_primitive : primitive Pickler.deserialiser
 
-val serialise_datatype : datatype Pickle.serialiser 
-val serialise_field_spec : field_spec Pickle.serialiser
-val serialise_row_var : row_var Pickle.serialiser
-val serialise_row : char -> row Pickle.serialiser
+val serialise_datatype : datatype Pickler.serialiser 
+val serialise_field_spec : field_spec Pickler.serialiser
+val serialise_row_var : row_var Pickler.serialiser
+val serialise_row : char -> row Pickler.serialiser
   
 
-val deserialise_datatype : datatype Pickle.deserialiser
-val deserialise_field_spec : field_spec Pickle.deserialiser
-val deserialise_row_var : row_var Pickle.deserialiser
-val deserialise_row : row Pickle.deserialiser
+val deserialise_datatype : datatype Pickler.deserialiser
+val deserialise_field_spec : field_spec Pickler.deserialiser
+val deserialise_row_var : row_var Pickler.deserialiser
+val deserialise_row : row Pickler.deserialiser
 
-val serialise_quantifier : quantifier Pickle.serialiser
-val deserialise_quantifier : quantifier Pickle.deserialiser
+val serialise_quantifier : quantifier Pickler.serialiser
+val deserialise_quantifier : quantifier Pickler.deserialiser
 
-val serialise_assumption : assumption Pickle.serialiser 
-val deserialise_assumption : assumption Pickle.deserialiser
+val serialise_assumption : assumption Pickler.serialiser 
+val deserialise_assumption : assumption Pickler.deserialiser
 
-val serialise_environment : environment Pickle.serialiser
-val deserialise_environment : environment Pickle.deserialiser
+val serialise_environment : environment Pickler.serialiser
+val deserialise_environment : environment Pickler.deserialiser
 
 
 
@@ -88,3 +88,13 @@ val fresh_type : unit -> type_variable * datatype
 val fresh_row : unit -> type_variable * row
 
 val perhaps_process_children : (datatype -> datatype option) ->  datatype -> datatype option
+
+
+(* Eventually all this stuff should be generated *)
+module Show_datatype : Show.Show with type a = datatype
+module Show_assumption : Show.Show with type a = assumption
+module Show_environment : Show.Show with type a = environment
+
+module Pickle_datatype : Pickle.Pickle with type a = datatype
+module Pickle_assumption : Pickle.Pickle with type a = assumption
+module Pickle_environment : Pickle.Pickle with type a = environment

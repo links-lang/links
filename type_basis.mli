@@ -98,3 +98,21 @@ module TypeOpsGen(BasicOps: BASICTYPEOPS) :
    with type typ = BasicOps.typ 
    and type row_var = BasicOps.row_var'
 )
+
+(* Eventually all this should be generated *)
+module Show_type_basis (A : Show.Show) (B : Show.Show) : Show.Show with type a = (A.a,B.a) type_basis
+module Show_field_spec_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_basis
+module Show_field_spec_map_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_map_basis
+module Show_row_var_basis (A : Show.Show) : Show.Show with type a = (A.a) row_var_basis
+module Show_row_basis (A : Show.Show) (B : Show.Show) : Show.Show with type a = (A.a,B.a) row_basis
+module Show_assumption_basis (A : Show.Show) : Show.Show with type a = (A.a) assumption_basis
+module Show_environment_basis (A : Show.Show) : Show.Show with type a = (A.a) environment_basis
+
+
+module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a) type_basis
+module Pickle_field_spec_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_basis
+module Pickle_field_spec_map_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_map_basis
+module Pickle_row_var_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) row_var_basis
+module Pickle_row_basis (A : Pickle.Pickle) (B : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a) row_basis
+module Pickle_assumption_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) assumption_basis
+module Pickle_environment_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) environment_basis

@@ -1,9 +1,12 @@
+open Num
+open Types
+
 (** A SQL expression to be used as the condition for a query. *)
 type expression =
   | Field of (string (* table name (as) *) * string (* field name (real) *))
   | Variable of string
   | Null
-  | Integer of Num.num
+  | Integer of num
   | Float of float
   | Boolean of bool
   | Text of string
@@ -36,7 +39,8 @@ and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;
               name : string;
               renamed : string;
-              col_type : Types.datatype}
+              col_type : datatype}
+    deriving (Show, Pickle)
 
 (* Simple accessors *)
 

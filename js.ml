@@ -227,12 +227,12 @@ let untuple_def =
        | Record_selection_empty (Variable (avar, _), body, _) 
 	   when avar = argvar 
 	     -> [], body
-       | e -> failwith ("Error unpacking arglist: " ^ show_expression e)) in
+       | e -> failwith ("Error unpacking arglist: " ^ Show_expression.show e)) in
     function
       | Abstr (var, (Record_selection _ as body), _) -> arglist var body
       | Abstr (var, (Record_selection_empty _ as body), _) -> [], body
       | Abstr (var, body, _) -> [var], body
-      | e -> failwith ("Error unpacking arglist " ^ show_expression e)
+      | e -> failwith ("Error unpacking arglist " ^ Show_expression.show e)
 
 (* Convert an application of a function to a tuple into an application
    of a function to several arguments *)

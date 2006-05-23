@@ -1,6 +1,6 @@
 (* Representations of types *)
 
-open Pickle
+open Pickler
 open Utility
 
 open Type_basis
@@ -14,12 +14,15 @@ and field_spec = datatype field_spec_basis
 and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
 and row = (datatype, row_var) row_basis
-
+    deriving (Show, Pickle)
+			  
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
 type assumption = datatype assumption_basis
+    deriving (Show, Pickle)
 type environment = datatype environment_basis
+    deriving (Show, Pickle)
 
 let (-->) x y = `Function (x,y)
 

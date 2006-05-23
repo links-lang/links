@@ -21,9 +21,10 @@ ifdef BUILD_POSTGRESQL
    DB_LIBS    += postgresql
 endif
 
-AUXLIB_DIRS = $(DB_AUXLIBS)
-
 DERIVING_DIR=deriving
+
+AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
+
 CLASSES=deriving.cmo show_class.cmo enum_class.cmo bounded_class.cmo pickle_class.cmo
 PP='camlp4o -I $(DERIVING_DIR)/syntax $(CLASSES)'
 
@@ -44,7 +45,7 @@ SOURCES = $(OPC)                		\
           settings.mli settings.ml 		\
           debug.mli debug.ml    		\
           rewrite.ml            		\
-          pickle.mli pickle.ml  		\
+          pickler.mli pickler.ml  		\
           performance.ml        		\
           graph.ml              		\
           type_basis.mli type_basis.ml 		\
@@ -74,7 +75,7 @@ SOURCES = $(OPC)                		\
           webif.ml              		\
           links.ml              		\
 
-LIBS    = unix nums str $(DB_LIBS) 
+LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 

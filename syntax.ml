@@ -3,17 +3,33 @@ open List
 
 open Utility
 open Debug
-open Pickle
+open Pickler
 open Types
 open Sql
 
-type position = Lexing.position * (* source line : *) string * (* expression source: *) string
+open Show
+open Pickle
+
+type lexpos = Lexing.position
+module LexposType = struct type a = lexpos end
+module Show_lexpos = Show_unprintable (LexposType)
+module Pickle_lexpos = Pickle_unpicklable (LexposType)
+
+type position = lexpos * (* source line : *) string * (* expression source: *) string
+    deriving (Show, Pickle)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
 exception Parse_failure of position * string
 
 type location = [`Client | `Server | `Unknown]
+    deriving (Show, Pickle)
+
+(* This shouldn't be necessary: the "deriving" should cope with
+   instances defined in other modules *)
+type query = Query.query
+module Show_query = Query.Show_query
+module Pickle_query = Query.Pickle_query
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
@@ -50,58 +66,20 @@ type 'data expression' =
   | Database of ('data expression' * 'data)
   | Table of ((* the database: *) 'data expression' *
       (* the real name of some table associated with thsi query; not used: *) string * 
-      (* the query to run against database: *) Query.query * 'data)
+      (* the query to run against database: *) query * 'data)
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * datatype * 'data)
   | Alien of (string * string * assumption * 'data)
   | Placeholder of (string * 'data)
-
+      deriving (Show, Pickle)
 
 let is_define = 
   function
     | Define _
     | Alien _ -> true
     | _ -> false
-
-
-let s0 () () =
-  "()"
-let s1 (s1) (e1) =
-  "(" ^ s1 e1 ^ ")"
-let s2 (s1, s2) (e1, e2) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2  ^ ")"
-let s3 (s1, s2, s3) (e1, e2, e3) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ ")"
-let s4 (s1, s2, s3, s4) (e1, e2, e3, e4) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ ")"
-let s5 (s1, s2, s3, s4, s5) (e1, e2, e3, e4, e5) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ ")"
-let s6 (s1, s2, s3, s4, s5, s6) (e1, e2, e3, e4, e5, e6) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^ ")"
-let s7 (s1, s2, s3, s4, s5, s6, s7) (e1, e2, e3, e4, e5, e6, e7) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^  "," ^ s7 e7 ^ ")"
-
-let t1 () v =
-  "()"
-let t2 (s1) (e1, e2) =
-  s1 e1 
-let t3 (s1, s2) (e1, e2, e3) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ ")"
-let t4 (s1, s2, s3) (e1, e2, e3, e4) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ ")"
-let t5 (s1, s2, s3, s4) (e1, e2, e3, e4, e5) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ ")"
-let t6 (s1, s2, s3, s4, s5) (e1, e2, e3, e4, e5, e6) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ ")"
-let t7 (s1, s2, s3, s4, s5, s6) (e1, e2, e3, e4, e5, e6, e7) =
-  "(" ^ s1 e1 ^ "," ^ s2 e2 ^ "," ^ s3 e3 ^ "," ^ s4 e4 ^ "," ^ s5 e5 ^ "," ^ s6 e6 ^ ")"
-
-let null = fun _ -> ""
-
-let slist s l = 
-  "[" ^ String.concat "," (map s l) ^ "]"
 
 let gensym =
   let counter = ref 0 in
@@ -111,45 +89,10 @@ let gensym =
         str ^ "_g" ^ string_of_int !counter
       end
 
-let rec show_expression = 
-  let exp = show_expression in
-    function
-  | Define v -> "Define " ^ t4 (identity, show_expression, null) v
-  | Boolean v -> "Boolean " ^ t2 (string_of_bool) v
-  | Integer v -> "Integer " ^ t2 (string_of_num) v
-  | Char v -> "Char " ^ t2 (String.make 1) v
-  | String v -> "String " ^ t2 (identity) v
-  | Float v -> "Float " ^ t2 (string_of_float) v
-  | Variable v -> "Variable " ^ t2 (identity) v
-  | Apply v -> "Apply " ^ t3 (exp, exp) v
-  | Condition v -> "Condition " ^ t4 (exp, exp, exp) v
-  | Comparison v -> "Comparison " ^ t4 (exp, identity, exp) v
-  | Abstr v -> "Abstr " ^ t3 (identity, exp) v
-  | Let v -> "Let " ^ t4 (identity, exp, exp) v
-  | Rec v -> "Rec " ^ t3 (slist (s2 (identity, exp)), exp) v
-  | Xml_node v -> "Xml_node " ^ t4 (identity, slist (s2 (identity, exp)), slist exp) v
-  | Record_empty v -> "Record_empty " ^ t1 () v
-  | Record_extension v -> "Record_extension " ^ t4 (identity, exp, exp) v
-  | Record_selection v -> "Record_selection " ^ t6 (identity, identity, identity, exp, exp) v
-  | Record_selection_empty v -> "Record_selection_empty " ^ t3 (exp, exp) v
-  | Variant_injection v -> "Variant_injection " ^ t3 (identity, exp) v
-  | Variant_selection v -> "Variant_selection " ^ t7 (exp, identity, identity, exp, identity, exp) v
-  | Variant_selection_empty v -> "Variant_selection_empty " ^ t2 (exp) v
-  | Nil v -> "Nil " ^ t1 () v
-  | List_of v -> "List_of " ^ t2 (exp) v
-  | Concat v -> "Concat " ^ t3 (exp, exp) v
-  | For v -> "For " ^ t4 (exp, identity, exp) v
-  | Database v -> "Database " ^ t2 (exp) v
-  | Table v -> "Table " ^ t4 (exp, identity, string_of_query) v
-  | SortBy v -> "SortBy " ^ t3 (exp, exp) v
-  | Escape v -> "Escape " ^ t3 (identity, exp) v
-  | Wrong v -> "Wrong " ^ t1 () v
-  | HasType v -> "HasType " ^ t3 (exp, string_of_datatype) v 
-  | Placeholder v -> "Placeholder " ^ t2 (identity) v
-  | Alien v -> "Alien " ^ s4 (identity, identity, string_of_assumption, null) v
-
 type expression = (position * datatype * string option (* label *)) expression'
+    deriving (Show, Pickle)
 type untyped_expression = position expression'
+    deriving (Show, Pickle)
 
 let string_of_location : location -> string = function
   | `Client -> "client" | `Server -> "server" | `Unknown -> "unknown"

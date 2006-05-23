@@ -2,7 +2,7 @@
 
 open Num
 open List
-open Pickle
+open Pickler
 open Query
 
 let sorting_to_sql = function

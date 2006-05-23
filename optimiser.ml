@@ -584,8 +584,8 @@ let run_optimisers : Types.environment -> RewriteSyntax.rewriter
 let optimise env expr =
   match run_optimisers env expr with
       None -> debug ("Optimization had no effect"); expr
-    | Some expr' -> (debug("Before optimization : " ^ show_expression expr ^ 
-			     "\nAfter optimization  : " ^ show_expression expr');
+    | Some expr' -> (debug("Before optimization : " ^ Show_expression.show expr ^ 
+			     "\nAfter optimization  : " ^ Show_expression.show expr');
 		     expr')
 
 (* Not really an optimisation.  This /must/ be run, or the program

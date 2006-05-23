@@ -173,7 +173,7 @@ value gen_unpickle_polycase ({loc=loc; tname=self} as ti) = fun [
 | (MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp), n) -> 
     (<:patt< $int:string_of_int n$ >>, None,
             <:expr<  let module S = $gen_printer ti ctyp$ in
-              S.unpickle stream >>)
+                       (S.unpickle stream :> a) >>)
 | (MLast.RfInh _, _) ->
     failwith ("Cannot generate pickle instance for " ^ ti.tname)
 ];
@@ -208,7 +208,7 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
                                                                      type a = $atype$;
                                                                      $gen_funs_record ti (gen_this_module loc atype) fields$;
                                                                    end) : Pickle with type a = $atype$) >>
-| <:ctyp< [< $list:row$ ] >>  -> <:module_expr< (Pickle_defaults (struct
+| <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (Pickle_defaults (struct
                                                                   type a = $atype$;
                                                                   $gen_funs_poly ti (gen_this_module loc atype) row$;
                                                                    end) : Pickle with type a = $atype$) >>
