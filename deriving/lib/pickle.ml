@@ -480,12 +480,31 @@ module Pickle_num : Pickle with type a = Num.num = Pickle_defaults (
 module Pickle_unpicklable (P : sig type a end) : Pickle with type a = P.a = Pickle_defaults ( 
   struct 
     type a = P.a
-    let pickle buffer _ = failwith "boom"
+    let pickle _ _ = failwith "boom"
     let unpickle _ = failwith "boom"
   end
 )
 
-
+(* Uses Marshal to pickle the values that the parse-the-declarations
+   technique can't reach. *)
+module Pickle_via_marshal (P : sig type a end) : Pickle with type a = P.a = Pickle_defaults (
+(* Rather inefficient. *)
+  struct
+    include P
+    let pickle buffer obj = Buffer.add_string buffer (Marshal.to_string obj [Marshal.Closures])
+    let unpickle stream = 
+      let readn n = 
+        let s = String.create n in
+          for i = 0 to n - 1 do
+            String.set s i (Stream.next stream)
+          done;
+          s
+      in
+      let header = readn Marshal.header_size in
+      let datasize = Marshal.data_size header 0 in
+      let datapart = readn datasize in
+        Marshal.from_string (header ^ datapart) 0
+  end)
 
 type 'a fruit = 
   | Apple
