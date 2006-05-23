@@ -32,7 +32,7 @@ table wordlist (
   type : String, 
   meaning : String
 )
-database "postgresql:dictionary::5432:s0567141:";
+database "postgresql:dictionary::5432:www-data:";
 
 fun completions(p) server {
   if (p == "") []
