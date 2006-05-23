@@ -1,5 +1,3 @@
-#!/home/jeremy/links-svn/links/trunk/links -w
-
 # Spawn a ring of n processes.
 # Pass an integer around the ring, incrementing it each time it passes
 # through a process.  Print out the result when it gets back to main.
@@ -24,7 +22,7 @@ fun main() client {
   receive {
     case Message n -> {  
           print("received : main");
-          <html>Hi, mom: {enxml(string_of_int(n))}</html> }
+          <html>Hi, mom: {enxml(string_of_int(n))}</html> };
   };
 }
 

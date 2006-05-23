@@ -1,0 +1,33 @@
+#!/home/jeremy/links-svn/deriving/links
+
+
+fun remove(item, items) {
+  switch items {
+     case []    -> [];
+     case x::xs -> if (item == x) xs
+                   else x::remove(item, xs);
+  }
+}
+
+
+fun todo(items) {
+<html>
+ <body>
+  <form l:onsubmit="{todo(item::items)}" method="POST">
+    <input l:name="item"/>
+  </form>
+  <table>
+   {for (item <- items)
+     <tr><td>{enxml(item)}</td>
+         <td><form l:onsubmit="{todo(remove(item,items))}" method="POST">
+              <button type="submit">Done</button>
+             </form>
+         </td>
+     </tr>}
+   </table>
+  </body>
+</html>
+  
+}
+
+todo(["foo"])
