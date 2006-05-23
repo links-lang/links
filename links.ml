@@ -129,6 +129,9 @@ let run_file filename =
     (ignore(evaluate Parse.parse_file stdenvs filename);
     ())
 
+(* [BUG]
+     this is broken (the -s option doesn't work)
+*)
 let serialize_expr str = 
   Settings.set_value interacting false;
   let [expr] = Parse.parse_string str in

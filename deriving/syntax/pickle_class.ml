@@ -208,7 +208,7 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
                                                                      type a = $atype$;
                                                                      $gen_funs_record ti (gen_this_module loc atype) fields$;
                                                                    end) : Pickle with type a = $atype$) >>
-| <:ctyp< [| $list:row$ |] >>  -> <:module_expr< (Pickle_defaults (struct
+| <:ctyp< [< $list:row$ ] >>  -> <:module_expr< (Pickle_defaults (struct
                                                                   type a = $atype$;
                                                                   $gen_funs_poly ti (gen_this_module loc atype) row$;
                                                                    end) : Pickle with type a = $atype$) >>

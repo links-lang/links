@@ -14,12 +14,9 @@ and field_spec = datatype field_spec_basis
 and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
 and row = (datatype, row_var) row_basis
-			  
+
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
-
-type 'typ assumption_basis = ((quantifier list) * 'typ)
-type 'typ environment_basis = ((string * 'typ assumption_basis) list)
 
 type assumption = datatype assumption_basis
 type environment = datatype environment_basis

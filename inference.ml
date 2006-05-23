@@ -1101,7 +1101,57 @@ let rewrite_annotations : RewriteSyntaxU.rewriter = function
   | _                    -> None
 let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
 
-let type_program env exprs = 
+
+(* [HACK]
+   This is a rather ugly way of checking for duplicate top-level definitions.
+   It probably shouldn't appear in the type inference module.
+
+   (Duplicate top-level definitions are simply not allowed.)
+
+   In future we should probably allow duplicate top-level definitions, but
+   only if we implement the correct semantics!
+*)
+let check_for_duplicate_defs : Types.environment -> untyped_expression list -> unit = fun type_env expressions ->
+  let env = ref (List.fold_right (fun (name, _) env ->
+				    StringSet.add name env) type_env StringSet.empty) in
+  let duplicates = ref StringMap.empty in
+    
+  let check : RewriteSyntaxU.rewriter = function
+    | Define (name, _, _, position) ->
+	(if StringSet.mem name !env then
+	   begin
+	     let ps =
+	       if StringMap.mem name !duplicates
+	       then (StringMap.find name !duplicates)
+	       else []
+	     in
+	       duplicates := StringMap.add name (position::ps) !duplicates
+	   end
+	 else
+	   begin
+	     env := StringSet.add name !env
+	   end);
+	None
+    | _ -> None in
+    
+  let report_errors () =
+    let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
+      Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum in
+    let message =
+      "Duplicate top-level bindings\n" ^
+      (StringMap.fold (fun name positions message ->
+                         message^" "^name^":\n  "^
+			   (String.concat "\n  " (List.map show_pos (List.rev positions)))) !duplicates "")
+    in
+      if not (StringMap.is_empty !duplicates) then
+	raise (SyntaxError(message))
+      else
+	()
+  in
+    List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; report_errors()
+	      
+let type_program env exprs =
+  let _ = check_for_duplicate_defs env exprs in
   let embed, project =
     if Settings.get_value(enable_mailbox_typing) then
       rewrite_annotations -<- add_parameter, remove_parameter
@@ -1111,6 +1161,7 @@ let type_program env exprs =
     env, List.map project exprs
 
 and type_expression env e =
+  let _ = check_for_duplicate_defs env [e] in
   let embed, project =
     if Settings.get_value(enable_mailbox_typing) then
       add_parameter, remove_parameter

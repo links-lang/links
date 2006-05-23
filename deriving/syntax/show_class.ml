@@ -148,7 +148,7 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
                                      <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
                                      (List.map gen params))
 | <:ctyp< '$a$ >>              -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
-| <:ctyp< [| $list:row$ |] >>  -> <:module_expr< (ShowDefaults (struct
+| <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
                                                                   $gen_showBuf_polyv ti (gen_this_module loc atype) row$;
                                                                 end) : Show with type a = $atype$) >>
