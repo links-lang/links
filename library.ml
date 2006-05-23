@@ -302,8 +302,13 @@ let env : (string * (primitive * Types.assumption)) list = [
   "callForeign",
    (notimpl "callForeign", datatype "(a -> b) -> a -> b");
 
+  "domOp",
+  (p1 (fun message -> failwith("`do' is only available on the client side.");
+         `Record []),
+   datatype "a -> ()");
+
   "sleep",
-  (* This doesn't seem right : it freezes all threads *)
+  (* FIXME: This isn't right : it freezes all threads *)
   (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
          `Record []),
    datatype "Int -> ()");
