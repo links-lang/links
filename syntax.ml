@@ -573,6 +573,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_empty _
                | Nil _
                | Alien _
+               | Placeholder _ 
+               | Wrong _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
@@ -582,6 +584,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_injection (_, e, _)
                | List_of (e, _)
                | Escape (_, e, _)
+               | HasType (e, _, _)
                | Table (e, _, _, _) -> [visitor visit_children e]
 
 
@@ -602,6 +605,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
 
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
+
   in
     visitor visit_children
 

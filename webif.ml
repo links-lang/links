@@ -179,8 +179,15 @@ let is_contin_invocation params =
   List.mem_assoc "continuation%" params
 
 let is_expr_request params = 
-  List.mem_assoc "expression%" params && List.mem_assoc "environment%" params
-
+  try 
+    begin
+      ignore(lookup_either "expression%" "expression%25" params);
+      ignore(lookup_either "environment%" "environment%25" params);
+      true
+    end
+  with Not_found -> false
+      
+        
 let client_return_req env cgi_args = 
   let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
   let parse_json_b64 = parse_json -<- Utility.base64decode in

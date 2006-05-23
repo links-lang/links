@@ -181,20 +181,6 @@ let index pred list =
 
 let dict_map f = List.map (fun (k,v) -> k, f v) 
   
-(** http://caml.inria.fr/archives/200001/msg00054.html **)
-(*
-  [QUESTION]
-   This function isn't used. Can we delete it?
-*)
-(*
-let reopen_out outchan filename =
-  flush outchan;
-  let fd1 = Unix.descr_of_out_channel outchan in
-  let fd2 = Unix.openfile filename [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o666 in
-    Unix.dup2 fd2 fd1;
-    Unix.close fd2
-*)
-
 let lines (channel : in_channel) : string list = 
   let rec next_line lines =
     try
