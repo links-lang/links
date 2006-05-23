@@ -358,9 +358,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | None, (`List (elems)) ->
                          (match elems with
                             | [] -> []
-                            | `XML x :: etc ->
+                            | `XML _ :: _ ->
                                 map xmlitem_of elems
-                            | `Char x :: etc ->
+                            | `Char _ :: _ ->
                                 [ Result.Text(charlist_as_string value) ]
                             | _ -> failwith("Internal error: unexpected contents in XML construction"))
                      | _ -> failwith("Internal error: unexpected contents in XML construction")
