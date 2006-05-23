@@ -303,9 +303,42 @@ let env : (string * (primitive * Types.assumption)) list = [
    (notimpl "callForeign", datatype "(a -> b) -> a -> b");
 
   "domOp",
-  (p1 (fun message -> failwith("`do' is only available on the client side.");
+  (p1 (fun message -> failwith("`domOp' is only available on the client.");
          `Record []),
    datatype "a -> ()");
+
+  "domGetRepresentation",
+  (p1 (fun message -> failwith("`domGetRepresentation' is only available on the client.");
+         `Record []),
+   datatype "DOMRef -> Xml");
+
+  "domGetRefByID",
+  (p1 (fun message -> failwith("`domGetRefByID' is only available on the client.");
+         `Record []),
+   datatype "String -> DOMRef");
+
+
+  "getTagName",
+    (p1 (fun message -> failwith("`getTagName is only available on the client.");
+         `Record []),
+     datatype "Xml -> String");
+  "getAttributes",
+    (p1 (fun message -> failwith("`getAttributes is only available on the client.");
+         `Record []),
+     datatype "Xml -> a");
+  "getChildNodes",
+    (p1 (fun message -> failwith("`getChildNodes is only available on the client.");
+         `Record []),
+     datatype "Xml -> [Xml]");
+  "getTextContent",
+    (p1 (fun message -> failwith("`getTextContent is only available on the client.");
+         `Record []),
+     datatype "Xml -> String");
+
+  "getAttribute",
+    (p1 (fun message -> failwith("`getAttribute is only available on the client.");
+         `Record []),
+     datatype "(Xml, String) -> String");
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)

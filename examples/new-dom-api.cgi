@@ -40,11 +40,22 @@ fun moveAppend() client {
 
 fun representation() client {
   deckRef = domOp([GetRefByID(id = "deck")]);
-  deckXml = domOp([GetRepresentation(nodeRef=deckRef)]);
+  deckXml = domOp([GetRepresentation((nodeRef=deckRef))]);
   doc = domOp([GetDocRef()]);
   domOp([AppendChildXml(parentNode = doc,
-                        newChild = deckXml)]);
-  ()
+                        newChild = deckXml)])
+}
+
+fun deckTagName() {
+  deck = domGetRefByID("deck");
+  deckXml = domGetRepresentation(deck);
+  debug(getTagName(deckXml));
+}
+
+fun deckStyle() {
+  deck = domGetRefByID("deck");
+  deckXml = domGetRepresentation(deck);
+  debug(getAttribute(deckXml, "style"));
 }
 
 <html>
@@ -55,6 +66,8 @@ fun representation() client {
   <a l:onclick="{move()}">Move punchline before setup</a>
   <a l:onclick="{moveAppend()}">Move punchline to end</a>
   <a l:onclick="{representation()}">Copy deck using XML rep'n</a>
+  <a l:onclick="{deckTagName()}">What is the tag name on `deck'?</a>
+  <a l:onclick="{deckStyle()}">What is the style of `deck'?</a>
   <div id="deck" style="border: 1px solid black">
     <h1 id="setup">A Buddhist walks up to a hot dog stand.</h1>
     <p id="punchline">He says, "Can you make me one with everything?"</p>

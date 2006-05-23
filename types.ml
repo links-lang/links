@@ -52,7 +52,8 @@ let xml = `List (`Primitive `XMLitem)
 
 (* Type printers *)
 let string_of_primitive : primitive -> string = function
-  | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  | `XMLitem -> "XMLitem" | `Abstract s -> s
+  | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
+  | `XMLitem -> "XMLitem" | `Abstract s -> s
 
 exception Not_tuple
 

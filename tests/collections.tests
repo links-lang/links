@@ -117,9 +117,9 @@ switch [1] { case (x::xs) -> 1;  case x -> 2; }
 stdout : 1 : Int
 
 Length function
-fun length (l) { switch l { case [] -> 0; case x::xs -> 1 + length(xs); } }; length ([1,2,3])
+fun len (l) { switch l { case [] -> 0; case x::xs -> 1 + len(xs); } }; len ([1,2,3])
 stdout : 3 : Int
 
 Map function
 fun map (f,l) { switch l { case [] -> []; case x::xs -> f(x) :: map(f,xs); } }; map((+)(1), [1,2,3])
-stdout : [2,3,4] : [Int]
+stdout : [2, 3, 4] : [Int]
