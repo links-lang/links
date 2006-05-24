@@ -307,38 +307,69 @@ let env : (string * (primitive * Types.assumption)) list = [
          `Record []),
    datatype "a -> ()");
 
-  "domGetRepresentation",
-  (p1 (fun message -> failwith("`domGetRepresentation' is only available on the client.");
+  "domInsertBeforeXml",
+  (p2 (fun _ _ -> failwith("`domInsertBeforeXml' is only available on the client.");
          `Record []),
-   datatype "DOMRef -> Xml");
+  datatype "(XML, DOMNodeRef) -> ()");
+
+  "domAppendChildXml",
+  (p2 (fun _ _ -> failwith("`domAppendChildXml' is only available on the client.");
+         `Record []),
+  datatype "(XML, DOMNodeRef) -> ()");
+
+  "domRemoveNodeRef",
+  (p1 (fun _ -> failwith("`domAppendChildXml' is only available on the client.");
+         `Record []),
+   datatype "DOMNodeRef -> ()");
+
+  "domInsertBeforeRef",
+  (p2 (fun _ _ -> failwith("`domInsertBeforeRef' is only available on the client.");
+         `Record []),
+  datatype "(DOMNodeRef, DOMNodeRef) -> ()");
+
+  "domAppendChildRef",
+  (p2 (fun _ _ -> failwith("`domAppendChildRef' is only available on the client.");
+         `Record []),
+  datatype "(DOMNodeRef, DOMNodeRef) -> ()");
+
+  "domGetDocRef",
+  (p1 (fun message -> failwith("`domGetDocRef' is only available on the client.");
+         `Record []),
+   datatype "() -> DOMNodeRef");
 
   "domGetRefByID",
   (p1 (fun message -> failwith("`domGetRefByID' is only available on the client.");
          `Record []),
-   datatype "String -> DOMRef");
+   datatype "String -> DOMNodeRef");
 
+  "domGetRepresentation",
+  (p1 (fun message -> failwith("`domGetRepresentation' is only available on the client.");
+         `Record []),
+   datatype "DOMNodeRef -> XML");
 
   "getTagName",
     (p1 (fun message -> failwith("`getTagName is only available on the client.");
          `Record []),
-     datatype "Xml -> String");
+     datatype "XML -> String");
+
   "getAttributes",
     (p1 (fun message -> failwith("`getAttributes is only available on the client.");
          `Record []),
-     datatype "Xml -> a");
+     datatype "XML -> a");
+
   "getChildNodes",
     (p1 (fun message -> failwith("`getChildNodes is only available on the client.");
          `Record []),
-     datatype "Xml -> [Xml]");
+     datatype "XML -> [XML]");
   "getTextContent",
     (p1 (fun message -> failwith("`getTextContent is only available on the client.");
          `Record []),
-     datatype "Xml -> String");
+     datatype "XML -> String");
 
   "getAttribute",
     (p1 (fun message -> failwith("`getAttribute is only available on the client.");
          `Record []),
-     datatype "(Xml, String) -> String");
+     datatype "(XML, String) -> String");
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)

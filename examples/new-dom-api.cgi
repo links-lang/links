@@ -1,49 +1,46 @@
 #!/home/s0567141/links/links -d
 
 fun append() client {
- deck = domOp([GetRefByID(id = "deck")]);
+ deck = domGetRefByID("deck");
  newJoke = <ul><li> Q: Why don't Buddhists vacuum in the corners?</li>
                <li> A: Because they have no attachments. </li> </ul>;
- domOp([AppendChildXml(parentNode = deck, 
-                       newChild = newJoke)]);
+ domAppendChildXml(newJoke, deck);
 }
 
 fun appendToDoc() client {
- doc = domOp([GetDocRef()]);
- domOp([AppendChildXml(parentNode = doc,
-                       newChild = <ul id="chores"><li>laundry</li>
-                                                  <li>fix bike</li></ul>
- )]);
+ doc = domGetDocRef();
+ choreList = <ul id="chores"><li>laundry</li>
+                             <li>fix bike</li></ul>;
+ domAppendChildXml(choreList, doc);
 }
 
 fun remove() client {
-  chores = domOp([GetRefByID(id = "chores")]);
-  domOp([RemoveNodeRef(nodeRef = chores)]);
+  chores = domGetRefByID("chores");
+  domRemoveNodeRef(chores);
 }
 
 fun removeDoc() client {
-  doc = domOp([GetDocRef()]);
-  domOp([RemoveNodeRef(nodeRef = doc)]);
+  doc = domGetDocRef();
+  domRemoveNodeRef(doc);
 }
 
 fun move() client {
-  setup = domOp([GetRefByID(id = "setup")]);
-  punchline = domOp([GetRefByID(id = "punchline")]);
-  domOp([InsertBeforeRef(moveRef = punchline, beforeRef = setup)]);
+  setup = domGetRefByID("setup");
+  punchline = domGetRefByID("punchline");
+  domInsertBeforeRef(punchline, setup);
 }
 
 fun moveAppend() client {
-  deck = domOp([GetRefByID(id = "deck")]);
-  punchline = domOp([GetRefByID(id = "punchline")]);
-  domOp([AppendChildRef(moveRef = punchline, parentRef = deck)]);
+  deck = domGetRefByID("deck");
+  punchline = domGetRefByID("punchline");
+  domAppendChildRef(punchline, deck);
 }
 
 fun representation() client {
-  deckRef = domOp([GetRefByID(id = "deck")]);
-  deckXml = domOp([GetRepresentation((nodeRef=deckRef))]);
-  doc = domOp([GetDocRef()]);
-  domOp([AppendChildXml(parentNode = doc,
-                        newChild = deckXml)])
+  deckRef = domGetRefByID("deck");
+  deckXml = domGetRepresentation(deckRef);
+  doc = domGetDocRef();
+  domAppendChildXml(deckXml,doc)
 }
 
 fun deckTagName() {
