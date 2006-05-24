@@ -710,7 +710,12 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
   | Xml_node (tag, atts, cs, pos) as xml -> 
       let separate = partition (is_special -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
-      let bindings = lname_bound_vars xml in
+      let bindings = 
+(*         try *)
+          lname_bound_vars xml 
+(*         with InvalidLNameExpr ->  *)
+(*           raise UndefinedVariable "Invalid l:name parameter " ^ string_of_expression  *)
+      in
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
 (* should now use alien javascript jslib : ... to import library functions *)
@@ -1135,20 +1140,16 @@ let check_for_duplicate_defs : Types.environment -> untyped_expression list -> u
     | _ -> None in
     
   let report_errors () =
-    let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
-      Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum in
-    let message =
-      "Duplicate top-level bindings\n" ^
-      (StringMap.fold (fun name positions message ->
-                         message^" "^name^":\n  "^
-			   (String.concat "\n  " (List.map show_pos (List.rev positions)))) !duplicates "")
-    in
-      if not (StringMap.is_empty !duplicates) then
-	raise (SyntaxError(message))
-      else
-	()
+    if not (StringMap.is_empty !duplicates) then
+      raise(Errors.MultiplyDefinedToplevelNames !duplicates)
+    else
+      ()
   in
-    List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; report_errors()
+    begin
+      (* what in tarnation? *)
+      List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; 
+      report_errors()
+    end
 	      
 let type_program env exprs =
   let _ = check_for_duplicate_defs env exprs in

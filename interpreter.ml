@@ -66,7 +66,7 @@ let bind_rec globals locals defs =
                             (match value with
                                | Syntax.Abstr (var, body, _) ->
                                    bind env variable (`Function (var, [], [] (*globals*), body))
-                               | _ -> raise (Runtime_failure "TF146"))) in
+                               | _ -> raise (Runtime_error "TF146"))) in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
     (* fill in the local variables *)
   let fill_placeholder = (fun (label, result) ->
@@ -78,7 +78,7 @@ let bind_rec globals locals defs =
     trim_env (map fill_placeholder new_env)
 
 let rec crack_row : (string -> ((string * result) list) -> (result * (string * result) list)) = fun ref_label -> function
-        | [] -> raise (Runtime_failure("Internal error: no field '" ^ ref_label ^ "' in record"))
+        | [] -> raise (Runtime_error("Internal error: no field '" ^ ref_label ^ "' in record"))
         | (label, result) :: fields when label = ref_label ->
             (result, fields)
         | field :: fields ->
@@ -166,9 +166,8 @@ let binopFromOpString = function
     | "<=" -> LessEqOp
     | "<"  -> LessOp
     | "beginswith" -> BeginsWithOp
-    | opstr -> raise(Runtime_failure("Evaluating unknown operator "^opstr))
+    | opstr -> raise(Runtime_error("Evaluating unknown operator "^opstr))
 
-exception CollExtnWithWeirdSrc
 exception TopLevel of (Result.environment * Result.result)
 
 (* could bundle these together with globals to get a global
@@ -242,7 +241,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
 		       apply_cont globals cont value
-                   | _ -> raise (Runtime_failure ("Applied non-function value: "^
+                   | _ -> raise (Runtime_error ("Applied non-function value: "^
                                                     string_of_result func)))
             | (LetCont(locals, variable, body)) ->
 	        interpret globals (bind locals variable value) body cont
@@ -252,7 +251,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	               interpret globals locals true_branch cont
                    | `Bool false -> 
 	               interpret globals locals false_branch cont
-                   | _ -> raise (Runtime_failure("Attempt to test a non-boolean value: "
+                   | _ -> raise (Runtime_error("Attempt to test a non-boolean value: "
 					         ^ string_of_result value)))
             | (BinopRight(locals, op, rhsExpr)) ->
 	        interpret globals locals rhsExpr
@@ -269,7 +268,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                          (match lhsVal, value with
 	                    | `List (l), `List (r)
                                 -> `List (l @ r)
-	                    | _ -> raise (Runtime_failure ("Concatenation of non-list types: "
+	                    | _ -> raise (Runtime_error ("Concatenation of non-list types: "
 							   ^ string_of_result lhsVal ^ " and "
 							   ^ string_of_result value))
 			 )
@@ -277,7 +276,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		         (match lhsVal with
 		            | `Record fields -> 
 		                `Record ((label, value) :: fields)
-		            | _ -> raise (Runtime_failure "TF077"))
+		            | _ -> raise (Runtime_error "TF077"))
 	          )
 	        in
 	          apply_cont globals cont result
@@ -293,7 +292,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                           | `Variant (_) as value ->
 		              (interpret globals (bind locals (valOf variable) value)
 		                 (valOf body) cont)
-                          | _ -> raise (Runtime_failure "TF181"))
+                          | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
 	               apply_cont globals cont (let args = charlist_as_string value in
                                                 let driver, params = parse_db_string args in
@@ -309,7 +308,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                                    result
                                      (* disable actual queries *)
                                      (*                                   `List(`List, []) *)
-                           | x -> raise (Runtime_failure ("TF309 : " ^ string_of_result x))
+                           | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
 	        )
@@ -329,13 +328,13 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	                      (* bind 'var' to the first element, save the others for later *)
 		              interpret globals (bind locals variable first_elem) expr
 		                (CollExtn(locals, variable, expr, [], other_elems) :: cont))
-	           | x -> raise (Runtime_failure ("TF197 : " ^ string_of_result x)))
+	           | x -> raise (Runtime_error ("TF197 : " ^ string_of_result x)))
 	          
             | CollExtn (locals, var, expr, rslts, inputs) ->
                 (let new_results = match value with
                      (* Check that value's a collection, and extract its contents: *)
                    | `List (expr_elems) -> expr_elems
-                   | r -> raise (Runtime_failure ("TF183 : " ^ string_of_result r))
+                   | r -> raise (Runtime_error ("TF183 : " ^ string_of_result r))
 	         in
 	           (* Extend rslts with the newest list of results. *)
                    let rslts = (List.rev new_results) :: rslts in

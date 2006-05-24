@@ -109,9 +109,6 @@ let get_remote_call_args env cgi_args =
     RemoteCall(List.assoc fname env, args)
 
 open Errors
-open Syntax (* needed for Parse_failure exception *)
-(* really error handling should happen at a different level than
-   the web interface *)
 	
 let decode_continuation (cont : string) : Result.continuation =
   let fixup_cont = 
@@ -197,23 +194,19 @@ let client_return_req env cgi_args =
 let perform_request program globals main req =
   match req with
     | ContInvoke (cont, params) -> 
-        prerr_endline "Continuation";
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        prerr_endline "expr/env pair";
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
-        prerr_endline "client call return";
         print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
-        prerr_endline "server rpc call";
         let cont = [Result.FuncApply (func, [])] in
           print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode
@@ -221,12 +214,10 @@ let perform_request program globals main req =
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         if is_client_program program then
-          (prerr_endline "generating js";
-           print_http_response [("Content-type", "text/html")]
+          (print_http_response [("Content-type", "text/html")]
              (Js.generate_program program main)
           )
         else (
-          prerr_endline "running main";
           print_http_response [("Content-type", "text/html")]
             (Result.string_of_result (snd (Interpreter.run_program globals [main])))
         )
@@ -237,30 +228,43 @@ let perform_request program globals main req =
 (*            (Utility.base64encode (Result.string_of_result result)); *)
 (*          exit 0) *)
 
+let error_page_stylesheet = 
+  "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee}</style>"
+
+let error_page body = 
+  "<html>\n  <head>\n    <title>Links error</title>" ^ error_page_stylesheet ^ 
+    "\n  </head>\n  <body>" ^ 
+    body ^ 
+    "\n  </body></html>"
+
 let serve_requests filename = 
-  Settings.set_value Performance.measuring true;
-  Pervasives.flush(Pervasives.stderr);
-  let program = read_file_cache filename in
-  let global_env, [main] = List.partition is_define program in
-  let global_env = stubify_client_funcs global_env in
-  let cgi_args = Cgi.parse_args () in
-  let request = 
-    if is_remote_call cgi_args then 
-      get_remote_call_args global_env cgi_args
-    else if is_client_call_return cgi_args then
-      client_return_req global_env cgi_args
-    else if (is_contin_invocation cgi_args) then
-      contin_invoke_req global_env cgi_args 
-    else if (is_expr_request cgi_args) then
-      expr_eval_req program (flip List.assoc global_env) cgi_args           
+  try 
+    Settings.set_value Performance.measuring true;
+    Pervasives.flush(Pervasives.stderr);
+    let program = read_file_cache filename in
+    let global_env, main = List.partition Syntax.is_define program in
+    if (List.length main < 1) then raise NoMainExpr
+    else if (List.length main > 1) then raise ManyMainExprs
     else
-      CallMain
-  in
-    perform_request program global_env main request
-(*       let headers, result = perform_request program global_env main request *)
-(*       in *)
-(*         print_http_response headers *)
-(*           (Result.string_of_result result) *)
+    let [main] = main in
+    let global_env = stubify_client_funcs global_env in
+    let cgi_args = Cgi.parse_args () in
+    let request = 
+      if is_remote_call cgi_args then 
+        get_remote_call_args global_env cgi_args
+      else if is_client_call_return cgi_args then
+        client_return_req global_env cgi_args
+      else if (is_contin_invocation cgi_args) then
+        contin_invoke_req global_env cgi_args 
+      else if (is_expr_request cgi_args) then
+        expr_eval_req program (flip List.assoc global_env) cgi_args           
+      else
+        CallMain
+    in
+      perform_request program global_env main request
+  with
+      exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
+        (error_page (format_exception_html exc))
           
 let serve_requests filename =
   Errors.display_errors_fatal stderr

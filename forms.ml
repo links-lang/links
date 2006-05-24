@@ -25,23 +25,34 @@ open Utility
 open Syntax
 open Result
 
+(* exception InvalidLNameExpr of 'a expression' *)
+
 (* Walk the XML tree, looking for <input l:name> bindings that are
    inside the top <form> element, with no intervening <form>s.
 *)
 let lname_bound_vars : 'a expression' -> string list = 
-  let desyntax = function
-    | String (name, _) -> name
-    | other -> raise (Parse_failure (Sugar._DUMMY_POS, string_of_expression other ^ " cannot be bound with l:name")) in
   let rec lnames = function
     | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
-        (try [assoc "l:name" attrs] with Not_found -> concat (map lnames contents))
+        (try 
+          let lname_attr = assoc "l:name" attrs in 
+            (try
+               [stringlit_value(lname_attr)]
+             with
+                 (* TBD: we need a way to extract position information 
+                    from a typed or untyped expression in an ad-hoc 
+                    polymorphic way. *)
+               | Match_failure _ ->failwith("l:name attribute was not a string: "
+                                           ^ string_of_expression lname_attr))
+        with Not_found -> concat (map lnames contents))
     | Xml_node ("form", _, _, _) -> (* new scope *) []
     | Xml_node (_, _, contents, _) -> concat (map lnames contents)
     | Concat (l, r, _) -> lnames l @ lnames r
     | _ -> [] 
   in function
-    | Xml_node ("form", _, contents, _)  -> map desyntax (concat (map lnames contents))
+    | Xml_node ("form", _, contents, _)  ->
+        concat (map lnames contents)
     | Xml_node (_, _, _, _)  -> []
+        
 
 let is_special x = String.length x > 2 && String.sub x 0 2 = "l:"
 

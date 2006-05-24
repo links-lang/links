@@ -53,6 +53,16 @@ Rejection of incorrectly typed l:attributes
 stderr : @.*
 exit : 1
 
+Reject nonsense l:name attributes
+<form><input l:name="{1+1}" /></form>
+stderr : @.*
+exit : 1
+
+Accept okay l:name attributes
+<form><input l:name="{foo}" /></form>
+stderr : @.*
+exit : 1
+
 Looping in XML quasis
 things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
 stdout : <ul><br/><br/></ul> : XML

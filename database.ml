@@ -33,7 +33,7 @@ let execute_select  (datatype:Types.datatype) (query:string) (db: database) : re
 			 (fun label field_spec fields ->
 			    match field_spec with
 			      | `Present t -> (label, t) :: fields
-			      | `Absent -> raise (Runtime_failure "SQ072")) field_env [])
+			      | `Absent -> raise (Runtime_error "SQ072")) field_env [])
                   | _ -> failwith "internal error: unexpected type in select")
   in 
   let result = (db#exec query) in
@@ -48,8 +48,8 @@ let execute_select  (datatype:Types.datatype) (query:string) (db: database) : re
                           if name = "null" then true
                           else if mem_assoc name fields then
                             (if assoc name fields = datatype_of_db_type db_type then false 
-			     else raise (Runtime_exception ("Database did not provide results compatible with specified type (query was '" ^ query ^ "')")))
-                          else false (*raise (Runtime_failure ("SQ094 " ^ name)) *)
+			     else raise (Runtime_error ("Database did not provide results compatible with specified type (query was '" ^ query ^ "')")))
+                          else false (*raise (Runtime_error ("SQ094 " ^ name)) *)
                             (* Quick kludge because I don't know what's wrong *)) in
          let null_query = exists is_null row_fields in
            if null_query then
@@ -60,4 +60,4 @@ let execute_select  (datatype:Types.datatype) (query:string) (db: database) : re
 			                    name, value_of_db_string value db_type)
                                       row_fields row))
                       result#get_all_lst)
-       | QueryError msg -> raise (Runtime_exception ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+       | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

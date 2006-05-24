@@ -35,15 +35,22 @@ let extract_substring
     (finish : position) : string =
   Buffer.sub code.text start.pos_cnum (finish.pos_cnum - start.pos_cnum)
 
-(* Return a line of source code *)
+(* Return some lines of the source code *)
+let extract_line_range
+    (code : source_code)
+    (startline : int)
+    (finishline : int) : string =
+  try 
+    let start  = Hashtbl.find code.lines startline
+    and finish = Hashtbl.find code.lines finishline in
+      trim_initial_newline (Buffer.sub code.text (start) (finish - start))
+  with Not_found -> "<unknown>"
+
+(* Return one line of the source code *)
 let extract_line
     (code : source_code)
     (line : int) : string =
-  try 
-    let start  = Hashtbl.find code.lines (line-1)
-    and finish = Hashtbl.find code.lines line in
-      trim_initial_newline (Buffer.sub code.text (start) (finish - start))
-  with Not_found -> "<unknown>"
+  extract_line_range code (line-1) line
       
 (* Given a function `infun' as required by Lexing.from_function,
    return another such function that stores the text read in `code'.
@@ -87,35 +94,38 @@ let read parse desugarer (infun : string -> int -> int) (name : string)  =
 (*        List.map (desugar (lookup code)) (parse (Lexer.lexer ()) lexbuf)*)
     with 
       | Parsing.Parse_error -> 
-	  let line, position = find_line code lexbuf.lex_curr_p in
+	  let line, column = find_line code lexbuf.lex_curr_p in
 	    raise
-	      (Errors.SyntaxError
-		 ("*** Parse error: " ^ name ^ ":"
-		  ^ string_of_int lexbuf.lex_curr_p.pos_lnum
-		  ^"\n   " ^ line ^ "\n"
-		  ^ String.make (position + 3) ' ' ^ "^"))
-      | Sugar.ParseError (msg, (start, finish)) ->
+	      (Errors.RichSyntaxError
+		 {Errors.filename = name;
+		  Errors.linespec = string_of_int lexbuf.lex_curr_p.pos_lnum;
+		  Errors.message = "";
+		  Errors.linetext = line;
+		  Errors.marker = String.make column ' ' ^ "^" })
+      | Sugar.ConcreteSyntaxError (msg, (start, finish)) ->
 	  let linespec = 
 	    if start.pos_lnum = finish.pos_lnum 
 	    then string_of_int start.pos_lnum
 	    else (string_of_int start.pos_lnum  ^ "..."
 		  ^ string_of_int finish.pos_lnum) in
-	  let line, position = find_line code finish in
+          let line = extract_line_range code (start.pos_lnum-1) finish.pos_lnum in
+	  let _, column = find_line code finish in
 	    raise 
-	      (Errors.SyntaxError
-		 ("*** Parse error: " ^ name ^ ":"
-		  ^ linespec ^ "\n"
-		  ^ msg ^ "\n   " ^ line ^ "\n"
-		  ^ String.make (position + 3) ' ' ^ "^"))
+	      (Errors.RichSyntaxError
+		 {Errors.filename = name;
+		  Errors.linespec = linespec;
+		  Errors.message = msg;
+                  Errors.linetext = line;
+		  Errors.marker = String.make column ' ' ^ "^"})
       | Lexer.LexicalError (lexeme, position) ->
-	  let line = extract_line code position.pos_lnum in
+	  let line, column = find_line code position in
 	    raise
-	      (Errors.SyntaxError
-		 ("*** Lexical error: " ^ name ^ ":"
-		  ^ string_of_int position.pos_lnum
-		  ^ "\nIn line:\n   " ^ line ^ "\n"
-		  ^ "Unexpected character : " ^ lexeme))
-
+	      (Errors.RichSyntaxError
+                 {Errors.filename = name;
+		  Errors.linespec = string_of_int position.pos_lnum;
+		  Errors.message = "Unexpected character : " ^ lexeme;
+                  Errors.linetext = line;
+		  Errors.marker = String.make column ' ' ^ "^"})
 
 (* Given an input channel, return a function suitable for input to
    Lexing.from_function that reads characters from the channel.

@@ -108,10 +108,10 @@ let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler Parse.parse_sentence envs (stdin, "<stdin>"))
 
-let web_program filename = 
+let web_program filename =
   prerr_endline "WARNING: -w flag is unnecessary and deprecated";
   Settings.set_value interacting false;
-  Webif.serve_requests filename 
+  Webif.serve_requests filename
 
 (** testenv
     Test whether an environment variable is set.

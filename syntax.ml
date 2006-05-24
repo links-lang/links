@@ -20,7 +20,7 @@ type position = lexpos * (* source line : *) string * (* expression source: *) s
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
-exception Parse_failure of position * string
+exception ASTSyntaxError of position * string
 
 type location = [`Client | `Server | `Unknown]
     deriving (Show, Pickle)
@@ -661,3 +661,5 @@ let node_datatype : (expression -> datatype) = snd3 -<- expression_data
 and node_pos  : (expression -> position) = fst3 -<- expression_data 
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 
+let stringlit_value = function
+  | String (name, _) -> name

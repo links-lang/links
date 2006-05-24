@@ -6,7 +6,7 @@ open Sugar
 
 let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> raise (ParseError ("Closing tag " ^ closing ^ " does not match start tag " ^ opening,
+  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
 			    (start, finish)))
 
 let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()

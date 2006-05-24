@@ -5,7 +5,7 @@ open Query
 open Utility
 open Syntax
 
-exception ParseError of (string * (Lexing.position * Lexing.position))
+exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
 
 let _DUMMY_POS = Syntax.dummy_position
 let no_expr_data = (_DUMMY_POS, `Not_typed, None)
@@ -84,7 +84,7 @@ let rec patternize' = function
       Bind_using(var, patternize' expr)
   | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
       patternize_cons_pattern cons_patt
-  | other -> raise (Parse_failure (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
+  | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
   | Concat (List_of (e1, _), e2, _) ->
       Cons(patternize' e1, patternize' e2)
@@ -191,7 +191,7 @@ let func (pos : position) (body : untyped_expression) : pattern -> untyped_expre
 
 let rec polyfunc (patterns : pattern list) (pos : position) (expr : untyped_expression) : untyped_expression =
   match patterns with 
-    | [] -> raise (Parse_failure (pos, "At least one parameter must be defined for a function")) 
+    | [] -> raise (ASTSyntaxError (pos, "At least one parameter must be defined for a function")) 
     | [patt] -> func pos expr patt 
     | patt :: patts -> func pos (polyfunc patts pos expr) patt
 
@@ -417,8 +417,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 			          name=field_name; renamed=field_name; 
                                   col_type = field_datatype})
                      present_fields
-	         else raise (Parse_failure (pos, "Table datatypes are records with only field present elements"))
-           | _ -> raise (Parse_failure (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
+	         else raise (ASTSyntaxError (pos, "Table datatypes are records with only field present elements"))
+           | _ -> raise (ASTSyntaxError (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
            {distinct_only = unique;
             result_cols = selects;
             tables = [(name, table_name)];
@@ -490,8 +490,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                           None, sort_expr),
                pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
-      (* TBD: Remove the _ at the end of the Switch node *)
-  | Switch (exp, (((Pattern(InfixAppl (`Cons, _, _), _), _)::_) as patterns), dflt)
+  | Switch (exp, (((Pattern(InfixAppl (`Cons, _, _), _), _)::_) as patterns), dflt)       (* TBD: Remove the _ at the end of the Switch node *)
   | Switch (exp, (((Pattern(ListLit [], _), _)::_) as patterns), dflt)
     -> open_list_match (desugar exp) patterns dflt lookup_pos pos
   | Switch (exp, patterns, _) ->
@@ -508,6 +507,11 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                      name, (RecordLit ([], None), pos)
                  | ConstructorLit(name, Some content), _ ->
                      name, content
+                 | patt -> 
+                     (ignore (patternize' (desugar patt));
+                     failwith("Internal error: Unknown expression used as pattern; patternize did not detect the error."))
+(*                      raise(RichSyntaxError{ *)
+(*                              Syntax.string_of_expression(desugar(patt, pos)) ^ " cannot appear in a pattern.", pos)) *)
                in
                  (name, patternize (Pattern content), desugar body))
             patterns) 
