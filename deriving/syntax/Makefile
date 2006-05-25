@@ -12,6 +12,7 @@ DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
 OBJS=deriving.cmo $(DERIVER_OBJS)
 
 byte: $(OBJS)
+opt: $(OBJS)
 all: byte opt
 
 clean:

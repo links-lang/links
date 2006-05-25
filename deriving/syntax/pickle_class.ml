@@ -82,6 +82,7 @@ value gen_unpickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
 ;
 
 
+value unpickle_failure loc = (<:patt< c >>, None, <:expr< failwith ("Unexpected tag : " ^ string_of_int c) >>);
 
 (* Generate the pickle and unpickle functions. *)
 value gen_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item< 
@@ -90,7 +91,7 @@ value gen_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item<
              fun [ $list:List.map2 (gen_pickle_case ti) ctors (range 0 (List.length ctors - 1))$ ]
    and unpickle stream =
          let module This = $thismod$ in
-           match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1))$ ]
+           match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1)) @ [unpickle_failure loc]$ ]
 >>;
 
 (* Generate a `this' module given the type *)
@@ -186,7 +187,7 @@ value gen_funs_poly ({loc=loc} as ti) thismod row =
      and unpickle stream =
          let module This = $thismod$ in
            match Pickle_int.unpickle stream with
-             [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1))$ ] 
+             [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure loc]$ ] 
 >>;
 
 
