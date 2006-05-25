@@ -39,6 +39,9 @@ let rec directives =
                        n (Types.string_of_datatype (snd k)))
           Library.type_env),
      "list builtin functions and values");
+
+    "quit",
+    ((fun _ -> exit 0), "exit the interpreter");
     ]
 let execute_directive name args = 
   try fst (List.assoc name directives) args; flush stderr

@@ -57,6 +57,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 sentence:
 | parse_links                                                  { Left $1 }
 | directive                                                    { Right $1 }
+| SEMICOLON END                                                { Right ("quit", []) (* rather hackish *) }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
