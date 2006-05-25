@@ -173,12 +173,12 @@ let variant_selection
     * All other RHS can refer to previously established bindings (i.e.
     bindings occuring textually previously.
 *)
-let rec polylets (bindings : (pattern * untyped_expression * position) list) expression =  
-  let folder (patt, value, pos) expr = 
-    match patt, value, expr with 
-      | Bind s, Abstr _, Rec (bindings, e, p) ->  
+let rec polylets (bindings : (pattern * untyped_expression * position * bool) list) expression =  
+  let folder (patt, value, pos, recp) expr = 
+    match patt, value, expr, recp with 
+      | Bind s, Abstr _, Rec (bindings, e, p), _ ->  
           Rec ((s, value)  :: bindings, e, p) 
-      | Bind s, Abstr _, _ ->  
+      | Bind s, Abstr _, _, true ->  
           Rec ([s, value], expr, pos) 
       | _ ->  
           polylet patt pos value expr in 
@@ -456,14 +456,14 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                                                Variable (name, pos),
                                                pos)
   | Block (es, exp) -> let es = 
-      List.map (function (* pattern * untyped_expression * position *)
+      List.map (function (* pattern * untyped_expression * position * recursivep *)
                   | Binding (p, e), pos -> 
-                      (patternize p, desugar e, lookup_pos pos)
+                      (patternize p, desugar e, lookup_pos pos, false)
                   | FunLit (Some n, patts, body), pos -> 
                       (Bind n, desugar (FunLit (None, patts, body), pos), 
-                       lookup_pos pos)
+                       lookup_pos pos, true)
                   | expr, pos -> 
-                      Bind "__", desugar (expr, pos), lookup_pos pos) es in
+                      Bind "__", desugar (expr, pos), lookup_pos pos, false) es in
       polylets es (desugar exp)
   | Foreign (language, name, datatype) -> 
       Alien (language, name, desugar_assumption (generalize datatype), pos)
