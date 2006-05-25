@@ -237,9 +237,6 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			  unify' rec_env (t, t');
 			  extension
 	              | `Absent, `Absent ->
-			  (* Is this right? Yes. Throwing away the `Absent tag? No.*)
-			  (* The `Absent tag is present in both field environments, so
-			     doesn't need to be added to either environment. *)
 			  extension
 		      | `Present _, `Absent
 		      | `Absent, `Present _ ->
@@ -377,24 +374,25 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	    extend_row_var (open_row_var', (open_extension, `RowVar None)) in
 
       let unify_both_open ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) =
-	if (ITO.get_row_var lrow = ITO.get_row_var rrow) then
-	  unify_both_closed ((lfield_env, `RowVar None), (rfield_env, `RowVar None))
-	else
-	  let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
-	  let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
-	    
-	  let rec_env =
-	    (register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
-	       register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env in
-
-	  let fresh_row_var = ITO.fresh_row_variable() in	      
-            (* each row can contain fields missing from the other; 
-               thus we call extend_field_env once in each direction *)
-	  let rextension =
-	    extend_field_env rec_env lfield_env' rfield_env' in
-	    extend_row_var (rrow_var', (rextension, fresh_row_var));
-	    let lextension = extend_field_env rec_env rfield_env' lfield_env' in
-	      extend_row_var (lrow_var', (lextension, fresh_row_var)) in
+	let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
+	let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
+	  if (ITO.get_row_var lrow = ITO.get_row_var rrow) then
+	    unify_both_closed ((lfield_env', `RowVar None), (rfield_env', `RowVar None))
+	  else
+	    begin
+	      let rec_env =
+		(register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
+		   register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env in
+		
+	      let fresh_row_var = ITO.fresh_row_variable() in	      
+		(* each row can contain fields missing from the other; 
+		   thus we call extend_field_env once in each direction *)
+	      let rextension =
+		extend_field_env rec_env lfield_env' rfield_env' in
+		extend_row_var (rrow_var', (rextension, fresh_row_var));
+		let lextension = extend_field_env rec_env rfield_env' lfield_env' in
+		  extend_row_var (lrow_var', (lextension, fresh_row_var))
+	    end in
       
       let _ =
 	if ITO.is_closed_row lrow then
