@@ -119,8 +119,7 @@ module Show_1 (S1 : Show) : Show with type a = S1.a =
   ShowDefaults (struct
                   type a = S1.a
                   let showBuf s1 b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ')';
+                    S1.showBuf s1 b;
                 end)
 
 
