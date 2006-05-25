@@ -717,7 +717,7 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
 (*           raise UndefinedVariable "Invalid l:name parameter " ^ string_of_expression  *)
       in
         (* "event" is always in scope for the event handlers *)
-      let attr_env = ("event", ([], `Record(ITO.make_empty_open_row()))) :: env in
+      let attr_env = ("event", ([], `Primitive(`Abstract "Event"))) :: env in
 (* should now use alien javascript jslib : ... to import library functions *)
 (*      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in *)
         (* extend the env with each l:name bound variable *)

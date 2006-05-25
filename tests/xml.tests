@@ -59,7 +59,7 @@ stderr : @.*
 exit : 1
 
 Accept okay l:name attributes
-<form><input l:name="{foo}" /></form>
+<form><input l:name="foo" /></form>
 stderr : @.*
 exit : 1
 

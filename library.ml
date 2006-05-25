@@ -102,8 +102,10 @@ and p2 fn : primitive =
 and p3 fn : primitive = 
   `PFun (fun a -> `PFun (fun b -> `PFun (fun c ->  (fn a b c))))
 
-let notimpl fn = 
+let client_only_1 fn = 
   p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
+let client_only_2 fn = 
+  p2 (fun _ _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
 
 let datatype = Parse.parse_datatype
 let _UNTYPED_ = datatype "a"
@@ -224,7 +226,7 @@ let env : (string * (primitive * Types.assumption)) list = [
    datatype "XML -> XML");
 
   "objectType",
-  (notimpl "objectType",
+  (client_only_1 "objectType",
    let u', u = fresh_type () in
      ([u'], u --> Types.string_type));
 
@@ -248,7 +250,7 @@ let env : (string * (primitive * Types.assumption)) list = [
    datatype "(XML,String) -> [|Some:String | None:()|]");
 
   "elementById",
-  (notimpl "elementById",
+  (client_only_1 "elementById",
    datatype "String -> [|Some:XML |None:()|]");
   
   "enxml",
@@ -266,13 +268,13 @@ let env : (string * (primitive * Types.assumption)) list = [
    datatype "String -> ()");
 
   "debugObj",
-  (notimpl "debugObj", datatype "a -> ()");
+  (client_only_1 "debugObj", datatype "a -> ()");
   
   "dump",
-  (notimpl "dump", datatype "a -> ()");
+  (client_only_1 "dump", datatype "a -> ()");
   
   "textContent",
-  (notimpl "textContent", datatype "a -> String");
+  (client_only_1 "textContent", datatype "a -> String");
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
    datatype "String -> ()");
@@ -300,7 +302,7 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   (* HACK *)
   "callForeign",
-   (notimpl "callForeign", datatype "(a -> b) -> a -> b");
+   (client_only_1 "callForeign", datatype "(a -> b) -> a -> b");
 
   "domOp",
   (p1 (fun message -> failwith("`domOp' is only available on the client.");
@@ -347,29 +349,78 @@ let env : (string * (primitive * Types.assumption)) list = [
          `Record []),
    datatype "DOMNodeRef -> XML");
 
-  "getTagName",
-    (p1 (fun message -> failwith("`getTagName is only available on the client.");
-         `Record []),
+(* Section: Accessors for XML *)
+  "getTagNameXml",
+    (client_only_1 "getTagNameXml",
      datatype "XML -> String");
 
   "getAttributes",
-    (p1 (fun message -> failwith("`getAttributes is only available on the client.");
-         `Record []),
+    (client_only_1 "getAttributes",
      datatype "XML -> a");
 
-  "getChildNodes",
-    (p1 (fun message -> failwith("`getChildNodes is only available on the client.");
-         `Record []),
-     datatype "XML -> [XML]");
   "getTextContent",
-    (p1 (fun message -> failwith("`getTextContent is only available on the client.");
-         `Record []),
+    (client_only_1 "getTextContent",
      datatype "XML -> String");
 
   "getAttribute",
-    (p1 (fun message -> failwith("`getAttribute is only available on the client.");
-         `Record []),
-     datatype "(XML, String) -> String");
+  ((client_only_1 "getAttribute"),
+   datatype "(XML, String) -> String");
+
+(* Section: Navigation for XML *)
+  "getChildNodes",
+  ((client_only_1 "getChildNodes"),
+   datatype "XML -> [XML]");
+
+(* Section: Accessors for DOMNodeRefs *)
+  "domGetTagNameRef",
+    (client_only_1 "domGetTagNameRef",
+     datatype "DOMNodeRef -> String");
+
+  "domGetAttributeRef",
+  ((client_only_1 "domGetAttributeRef"),
+   datatype "(DOMNodeRef, String) -> String");
+
+(* Section:  Navigation for DOMNodeRefs *)
+  "domGetParentNodeRef",
+  ((client_only_1 "domGetParentNodeRef"),
+   datatype "DOMNodeRef -> DOMNodeRef");
+
+(* Section: DOM Event API *)
+  "evtGetTarget",
+  ((client_only_2 "evtGetTarget"),
+   datatype "Event -> DOMNodeRef");
+
+  "evtGetTargetResolveTextNode",
+  ((client_only_2 "evtGetTargetResolveTextNode"),
+   datatype "Event -> DOMNodeRef");
+
+(* getPageX : Event -> Int *)
+  "evtGetPageX",
+  ((client_only_1 "evtGetPageX"),
+   datatype "Event -> Int");
+
+(* getPageY : Event -> Int *)
+  "evtGetPageY",
+  ((client_only_1 "evtGetPageY"),
+   datatype "Event -> Int");
+
+(* getRelatedTarget : Event -> DOMNodeRef *)
+  "evtGetRelatedTarget",
+  ((client_only_1 "evtGetRelatedTarget"),
+   datatype "Event -> DOMNodeRef");
+
+(* getTime : Event -> Int *)
+  "evtGetTime",
+  ((client_only_1 "evtGetTime"),
+   datatype "Event -> Int");
+
+(* # stopEvent : ??? *)
+(* # stopPropagation : ??? *)
+(* # preventDefault : ??? *)
+(* getCharCode : Event -> Char *)
+  "evtGetCharCode",
+  ((client_only_1 "evtGetCharCode"),
+   datatype "Event -> Char");
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
