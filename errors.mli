@@ -6,7 +6,6 @@ exception NoMainExpr
 exception ManyMainExprs
 exception MultiplyDefinedToplevelNames of (Utility.StringMap.t (Syntax.position list))
 exception Type_error of (Syntax.position * string)
-exception SyntaxError of string
 exception RichSyntaxError of synerrspec
 
 val mistyped_application : Syntax.position ->
