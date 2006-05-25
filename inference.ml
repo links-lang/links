@@ -17,9 +17,6 @@ let show_generalization = Settings.add_bool false "show_generalization"
 let show_typechecking = Settings.add_bool false "show_typechecking"
 let show_recursion = Settings.add_bool false "show_recursion"
 
-(* mailbox typing *)
-let enable_mailbox_typing = Settings.add_bool true "enable_mailbox_typing"
-
 exception Unify_failure of string
 exception UndefinedVariable of string
 
@@ -30,12 +27,6 @@ let type_of_expression : inference_expression -> datatype =
   fun exp -> let _, t, _ = expression_data exp in t
 let pos_of_expression : inference_expression -> position =
   fun exp -> let pos, _, _ = expression_data exp in pos
-
-(* conversions between expressions and inference expressions *)
-let inference_expression_of_expression : Syntax.expression -> inference_expression =
-  redecorate (fun (pos, t, label) -> (pos, inference_type_of_type t, label))
-let expression_of_inference_expression : inference_expression -> Syntax.expression =
-  redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 
 let rec extract_row : datatype -> row = function
   | `Record row -> row
@@ -183,6 +174,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		    Unionfind.change point t;
 		 *)
 	     | t' -> unify' rec_env (t, t'))
+      | `Function (lmbvar, `Function(lvar, lbody)), `Function (rmbvar, `Function (rvar, rbody))
+	  when Types.using_mailbox_typing () ->
+	  (unify' rec_env (lmbvar, rmbvar);
+           unify' rec_env (lvar, rvar);
+           unify' rec_env (lbody, rbody))
       | `Function (lvar, lbody), `Function (rvar, rbody) ->
           unify' rec_env (lvar, rvar);
           unify' rec_env (lbody, rbody)
@@ -645,7 +641,8 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- snd) bs && is_value e
   | _ -> false
 
-let rec type_check (env : environment) : (untyped_expression -> inference_expression) = fun expression ->
+let rec type_check : environment -> untyped_expression -> inference_expression =
+  fun env expression ->
   try
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match expression with
@@ -656,14 +653,33 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
   | String (value, pos) -> String (value, (pos, `List (`Primitive `Char), None))
   | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
   | Variable (name, pos) -> Variable (name, (pos, instantiate env name, None))
-  | Apply (f, p, pos) ->
+  | Apply (Apply (f, mb, inner_pos), p, pos) when Types.using_mailbox_typing () ->
+      let f = type_check env f in
+      let mb = type_check env mb in
+      let p = type_check env p in
+	
+      let f_type = type_of_expression f in
+      let mb_type = type_of_expression mb in
+      let p_type = type_of_expression p in
+
+      let return_type = ITO.fresh_type_variable () in
+	
+      let _ =
+	try
+	  unify (`Function (mb_type, `Function (p_type, return_type)), f_type)
+	with
+	    Unify_failure _ -> mistyped_application pos (f, f_type) (p, p_type) (Some (mb, mb_type))
+      in
+	Apply (Apply (f, mb, (inner_pos, `Function (p_type, return_type), None)), p, (pos, return_type, None))
+  | Apply (f, p, pos) ->	  
       let f = type_check env f in
       let p = type_check env p in
       let f_type = type_of_expression f in
       let return_type = ITO.fresh_type_variable () in
+
       let _ =
 	try unify (`Function(type_of_expression p, return_type), f_type)
-	with Unify_failure _ -> mistyped_application pos (f, f_type) (p, type_of_expression p)
+	with Unify_failure _ -> mistyped_application pos (f, f_type) (p, type_of_expression p) None
       in
 	Apply (f, p, (pos, return_type, None))
   | Condition (if_, then_, else_, pos) ->
@@ -690,12 +706,33 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
       let r = type_check env r in
 	unify (type_of_expression l, type_of_expression r);
         Comparison (l, oper, r, (pos, `Primitive `Bool, None))
+  | Abstr (mailbox_variable, Abstr(variable, body, inner_pos), pos) when Types.using_mailbox_typing () ->
+      begin
+	  (*
+	    if the type inferred for a function term has
+	    an uninstantiated mailbox parameter then
+	    we can be sure that the body of the function
+	    cannot receive messages (unless further function application
+	    is performed arguments)
+	  *)
+	let mailbox_type = ITO.fresh_type_variable () in
+	let variable_type = ITO.fresh_type_variable () in
+	let body_env = (mailbox_variable, ([], mailbox_type)) :: (variable, ([], variable_type)) :: env in
+	let body = type_check body_env body in
+	let inner_type = `Function (variable_type, type_of_expression body) in
+	let outer_type = `Function (mailbox_type, inner_type) in
+	  Abstr (mailbox_variable,
+		 Abstr (variable, body, (inner_pos, inner_type, None)),
+		 (pos, outer_type, None))
+      end
   | Abstr (variable, body, pos) ->
-      let variable_type = ITO.fresh_type_variable () in
-      let body_env = (variable, ([], variable_type)) :: env in
-      let body = type_check body_env body in
-      let type' = `Function (variable_type, type_of_expression body) in
-	Abstr (variable, body, (pos, type', None))
+      begin
+	let variable_type = ITO.fresh_type_variable () in
+	let body_env = (variable, ([], variable_type)) :: env in
+	let body = type_check body_env body in
+	let type' = `Function (variable_type, type_of_expression body) in
+	  Abstr (variable, body, (pos, type', None))
+      end
   | Let (variable, _, _, pos) when qnamep variable -> invalid_name pos variable "qualified names (containing ':') cannot be bound"
   | Let (variable, value, body, pos) ->
       let value = type_check env value in
@@ -832,8 +869,12 @@ let rec type_check (env : environment) : (untyped_expression -> inference_expres
         (* It'd be better if this mailbox didn't intrude here.
            Perhaps there's some rewrite rule for `escape' that we
            could use instead. *)
-      let mailboxtype = ITO.fresh_type_variable () in 
-      let conttype =  `Function (mailboxtype, `Function (exprtype, contrettype)) in
+      let conttype =
+	if Types.using_mailbox_typing () then
+	  let mailboxtype = ITO.fresh_type_variable () in
+	    `Function (mailboxtype, `Function (exprtype, contrettype))
+	else
+	  `Function (exprtype, contrettype) in
       let body = type_check ((var, ([], conttype)):: env) body in
       let exprtype = exprtype in
 	unify (exprtype, type_of_expression body);
@@ -1031,44 +1072,88 @@ type tvar = [`TypeVar of int]
    mailboxes.  Can we do any better?  Are there some criteria for
    determining whether the mailboxes should be the same (I think not).
 
+   [SL: They should never be the same except for our
+   hacks for send, spawn and self, which should be primitives in
+   the language (as opposed to built-in functions).]
+
    Regardless, in our current library we have no higher-order
    functions (except spawn and curried functions), so it probably
    doesn't matter.
+
+   [SL: it now works correctly for higher-order functions]
 *)
+
+
 (* rewrite an unquantified datatype type *)
-let retype_primfun (var : Types.datatype) : RewriteTypes.rewriter = function
-  | `Function _ as f -> Some (`Function (var, f))
-  | _                -> None
+(* let retype_primfun (var : Types.datatype) : RewriteTypes.rewriter = function *)
+(*   | `Function _ as f -> Some (`Function (`Mailbox var, f)) *)
+(*   | _                -> None *)
 
 (* rewrite a quantified datatype type *)
-let retype_primfun (var : tvar) (quants, datatype as k : Types.assumption) =
-  match RewriteTypes.bottomup (retype_primfun (var :> Types.datatype)) datatype with
-    | None -> k
-    | Some datatype -> ((var :> Types.quantifier) :: quants, datatype)
+(* let retype_primfun (var : tvar) (quants, datatype as k : Types.assumption) = *)
+(*   match RewriteTypes.bottomup (retype_primfun (var :> Types.datatype)) datatype with *)
+(*     | None -> k *)
+(*     | Some datatype -> ((var :> Types.quantifier) :: quants, datatype) *)
 
 (* find a suitable tvar name *)
-let new_typevar quants =
-  let tint = function
-    | `TypeVar i
-    | `RowVar  i -> i 
-  and candidates = Utility.fromTo 0 (1 + List.length quants)
-  in 
-    (* Create a type variable not already in the list *)
-    `TypeVar (List.hd (snd (List.partition
-                              (flip mem (List.map tint quants)) 
-                              candidates)))
+(* let new_typevar quants = *)
+(*   let tint = function *)
+(*     | `TypeVar i *)
+(*     | `RowVar  i -> i  *)
+(*   and candidates = Utility.fromTo 0 (1 + List.length quants) *)
+(*   in  *)
+(*     (\* Create a type variable not already in the list *\) *)
+(*     `TypeVar (List.hd (snd (List.partition *)
+(*                               (flip mem (List.map tint quants))  *)
+(*                               candidates))) *)
 
 (* Find a suitable type variable and rewrite a quantified datatype type *)
-let retype_primfun (quants, _ as k) =
-  retype_primfun (new_typevar quants) k
+(* let retype_primfun (quants, _ as k) = *)
+(*   retype_primfun (new_typevar quants) k *)
 
-(* Finally, a rewriter for type environments.  Ignore spawn, recv and
-   self (which should perhaps be syntax tree nodes). *)
-let retype_primitives = 
+
+(* Correct (hopefully), albeit imperative code for introducing mailboxes *)
+let mailboxify_assumption (quantifiers, datatype) =
+  let mailboxify mailboxes : RewriteTypes.rewriter = function
+    | `Function _ as f ->
+	let var = Type_basis.fresh_raw_variable () in
+	  mailboxes := (`TypeVar var) :: !mailboxes;
+	  Some (`Function (`TypeVar var, f))
+    | _ -> None in
+  let mailboxes = ref [] in
+    match RewriteTypes.bottomup (mailboxify mailboxes) datatype with
+      | None -> quantifiers, datatype
+      | Some datatype' -> (!mailboxes @ quantifiers), datatype'
+
+let unmailboxify_type : RewriteTypes.rewriter = function
+  | `Function (_, (`Function _ as f)) -> Some f
+  | _ -> None
+
+let unmailboxify_assumption (quantifiers, datatype) = 
+  match RewriteTypes.topdown unmailboxify_type datatype with
+    | None -> quantifiers, datatype
+    | Some datatype' -> quantifiers, datatype'
+
+
+(* 
+  add mailbox typing to a type environment.
+  Ignore spawn, recv and
+  self (which should perhaps be syntax tree nodes).
+*)
+let mailboxify_type_env = 
   let specials = ["spawn"; "recv"; "self"] in
     List.map (function
-                | name, datatype when mem name specials -> (name, datatype)
-                | name, datatype -> name, retype_primfun datatype)
+                | name, assumption when mem name specials -> (name, assumption)
+                | name, assumption -> name, mailboxify_assumption assumption)
+
+
+(* remove mailbox typing from a type environment *)
+let unmailboxify_type_env =
+    List.map (function
+                | name, assumption -> name, unmailboxify_assumption assumption)
+
+let retype_primitives = mailboxify_type_env
+let unretype_primitives = unmailboxify_type_env  
 
 module RewriteSyntaxU = 
   Rewrite.Rewrite
@@ -1088,6 +1173,7 @@ module RewriteSyntax =
           let process_children = Syntax.perhaps_process_children
         end))
 
+(* add / remove mailbox parameter to / from expressions *)
 let add_parameter : RewriteSyntaxU.rewriter = function
   | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
   | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
@@ -1100,9 +1186,10 @@ and remove_parameter : RewriteSyntax.rewriter = function
 let add_parameter s = fromOption s (RewriteSyntaxU.bottomup add_parameter s)
 and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s)
 
+(* rewrite type annotations appearing in expressions *)
 let rewrite_annotations : RewriteSyntaxU.rewriter = function
-  | HasType (e, k, d)    -> Some (HasType (e, snd (retype_primfun ([], k)), d))
-  | Alien (s1, s2, k, d) -> Some (Alien (s1, s2, retype_primfun k, d))
+  | HasType (e, k, d)    -> Some (HasType (e, snd (mailboxify_assumption ([], k)), d))
+  | Alien (s1, s2, k, d) -> Some (Alien (s1, s2, mailboxify_assumption k, d))
   | _                    -> None
 let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
 
@@ -1150,23 +1237,68 @@ let check_for_duplicate_defs : Types.environment -> untyped_expression list -> u
       List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; 
       report_errors()
     end
-	      
-let type_program env exprs =
-  let _ = check_for_duplicate_defs env exprs in
-  let embed, project =
-    if Settings.get_value(enable_mailbox_typing) then
-      rewrite_annotations -<- add_parameter, remove_parameter
-    else
-      rewrite_annotations, identity in
-  let env, exprs = type_program env (List.map embed exprs) in
-    env, List.map project exprs
 
-and type_expression env e =
-  let _ = check_for_duplicate_defs env [e] in
-  let embed, project =
-    if Settings.get_value(enable_mailbox_typing) then
-      add_parameter, remove_parameter
-    else
-      identity, identity in
-  let env, e = type_expression env (rewrite_annotations (embed e)) in
-    env, project e
+
+(* [HACK] *)
+(* types for special builtin functions *)
+let datatype = Parse.parse_datatype
+let self_type_mailbox = datatype "Mailbox a -> () -> Mailbox a"
+let self_type_pure = datatype "() -> Mailbox a"
+let recv_type_mailbox = datatype "Mailbox a -> () -> a"
+let recv_type_pure = datatype "() -> a"
+let spawn_type_mailbox = datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b"
+let spawn_type_pure = datatype "(a -> b) -> a -> Mailbox c" 
+
+(* [HACK]
+   remove mailbox typing for special functions
+*)
+let remove_special_mailboxes =
+  List.map (fun (name, t) ->
+	      match name with
+		| "self" -> (name, self_type_pure)
+		| "recv" -> (name, recv_type_pure)
+		| "spawn" -> (name, spawn_type_pure)
+		| _ -> (name, t)) 
+
+(* [HACKS] *)
+(* two pass typing: yuck! *)
+let type_program env expressions = 
+  let _ = check_for_duplicate_defs env expressions in
+    (* without mailbox parameters *)
+  let env', expressions' =
+    debug_if_set (show_typechecking) (fun () -> "Typechecking without mailbox parameters");
+    Types.with_mailbox_typing false
+      (fun () ->
+	 type_program ((remove_special_mailboxes -<- unmailboxify_type_env) env) expressions) in
+  let env', expressions' =
+    (* with mailbox parameters *)
+    debug_if_set (show_typechecking) (fun () -> "Typechecking with mailbox parameters");
+    let env, expressions =
+      Types.with_mailbox_typing true
+	(fun () ->
+	   type_program env (List.map (rewrite_annotations -<- add_parameter) expressions))
+    in
+      env, List.map remove_parameter expressions
+  in
+    env', expressions'
+
+let type_expression env expression =
+  let _ = check_for_duplicate_defs env [expression] in
+    (* without mailbox parameters *)	
+
+  let env', expressions' =
+    debug_if_set (show_typechecking) (fun () -> "type checking without mailbox parameters");
+    Types.with_mailbox_typing false
+      (fun () ->
+	 type_expression (unmailboxify_type_env env) expression) in
+  let env', expressions' =
+    (* with mailbox parameters *)
+    debug_if_set (show_typechecking) (fun () -> "type checking with mailbox parameters");
+    let env, expression = 
+      Types.with_mailbox_typing true
+	(fun () ->
+	   type_expression env ((rewrite_annotations -<- add_parameter)(expression)))
+    in
+      env, remove_parameter expression
+  in
+    env', expressions'

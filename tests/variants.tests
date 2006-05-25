@@ -41,7 +41,7 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Variant matching - Closed case in function [2]
 fun (f) { switch f { case A a -> not(a); case B b -> true; } }
-stdout : @fun : .*A:Bool.*B:a.* -> Bool
+stdout : @fun : .*A:Bool.*B:[a-z]+.* -> Bool
 
 Variant matching - Closed case in function [3]
 fun (f) { switch f { case B a -> not(a); case A b -> b; } }
@@ -78,7 +78,7 @@ stdout : @fun : \(mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | Empty:\(\)|\], mu [a
 
 Recursive variant types [4]
 fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));}} fun (x) {switch (increment(x)) { case Foo -> 0; case Zero -> 1; case Succ n -> 2; }}
-stdout : @fun : \(mu a . \[|Succ:a | Zero:\(\)|\]\) -> Int
+stdout : @fun : \(mu ([a-z]+) . \[|Succ:\\1 | Zero:\(\)|\]\) -> Int
 
 Recursive variant types [5]
 fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));}} increment(increment(Zero))

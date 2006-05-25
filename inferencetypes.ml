@@ -19,6 +19,7 @@ let string_type = `List (`Primitive `Char)
 
 type inference_expression = (Syntax.position * datatype * string option (* label *)) Syntax.expression'
 
+
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)
@@ -375,6 +376,12 @@ let inference_environment_of_environment : Types.environment -> environment =
   List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption assumption))
 let environment_of_inference_environment : environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, assumption_of_inference_assumption assumption))
+
+(* conversions between expressions and inference expressions *)
+let inference_expression_of_expression : Syntax.expression -> inference_expression =
+  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type t, label))
+let expression_of_inference_expression : inference_expression -> Syntax.expression =
+  Syntax.redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 
 (* output as a string *)
 let string_of_datatype = Types.string_of_datatype -<- type_of_inference_type

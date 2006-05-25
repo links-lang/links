@@ -146,7 +146,7 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "Mailbox a -> () -> Mailbox a");
+   Inference.self_type_mailbox);
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -156,8 +156,9 @@ let env : (string * (primitive * Types.assumption)) list = [
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
-    (p1 (fun _ -> assert false), datatype "Mailbox a -> () -> a"); (* Yes, this is the right type. *)
-  
+    (p1 (fun _ -> assert false),
+     Inference.recv_type_mailbox);
+ 
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (p2 (fun f p ->
@@ -171,7 +172,7 @@ let env : (string * (primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
+   Inference.spawn_type_mailbox);
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 
@@ -530,6 +531,10 @@ type primitive_environment = (string*continuationized_val) list
 
 let value_env = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
 and type_env : Types.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+
+(* [DISGUSTING HACK] *)
+(* no mailbox type threaded through *)
+let pure_type_env = Inference.unretype_primitives type_env
 
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function

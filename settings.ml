@@ -4,6 +4,12 @@
 module SettingsMap = Utility.StringMap
 
 type 'a setting = 'a ref * string
+(*
+[SUGGESTION]
+  add an optional function to each setting
+  that is called whenever the setting is updated 
+*)
+(* ('a * 'a -> unit) option*)
 
 let get_value ({contents=v}, _) = v
 let get_name (_, name) = name

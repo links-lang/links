@@ -51,9 +51,9 @@ SOURCES = $(OPC)                		\
           type_basis.mli type_basis.ml 		\
           types.mli types.ml      		\
           query.ml              		\
-          inferencetypes.mli inferencetypes.ml 	\
           sql.ml                		\
           syntax.ml             		\
+          inferencetypes.mli inferencetypes.ml 	\
           sugar.ml              		\
           result.ml             		\
           sql_transform.ml      		\

@@ -13,19 +13,28 @@ exception Type_error of (Syntax.position * string)
 exception MultiplyDefinedToplevelNames of (Utility.StringMap.t (Syntax.position list))
 exception RichSyntaxError of synerrspec
 
-exception WrongArgumentTypeError of (Syntax.position * string * Inferencetypes.datatype * 
-                                     string * Inferencetypes.datatype)
+exception WrongArgumentTypeError of (Syntax.position *
+				       string * Inferencetypes.datatype * 
+                                       string * Inferencetypes.datatype *
+				       (string * Inferencetypes.datatype) option)
 
 exception NonfuncAppliedTypeError of (Syntax.position * string * Inferencetypes.datatype * 
-                                      string * Inferencetypes.datatype)
+					string * Inferencetypes.datatype *
+					(string * Inferencetypes.datatype) option)
 
-let mistyped_application pos (fn, fntype) (param, paramtype) =
+let mistyped_application pos (fn, fntype) (param, paramtype) mb =
   let ((_, _, fexpr),_,_) = expression_data fn in
   let ((_, _, pexpr),_,_) = expression_data param in
+  let mb = match mb with
+    | None -> None
+    | Some (exp, mbtype) ->
+	let ((_, _, mbexpr),_,_) = expression_data exp in
+	  Some (mbexpr, mbtype)
+  in  
     match fntype with 
       | `Function _ -> 
-          raise (WrongArgumentTypeError(pos, pexpr, paramtype, fexpr, fntype))
-      | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype))
+          raise (WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb))
+      | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb))
           
           
 let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
@@ -60,6 +69,19 @@ let invalid_name pos name message =
 let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
 
+let get_mailbox_msg add_code_tags =
+  let wrap =
+    if add_code_tags then
+      (fun s -> "<code>"^s^"</code>")
+    else
+      (fun s -> s)
+  in
+    function
+      | None -> ""
+      | Some (mbexpr, mbtype) ->
+	  " (mailbox parameter `"^(wrap mbexpr)^"' of type "^
+	    string_of_datatype mbtype ^ ") "
+  
 let rec format_exception = function
   | RichSyntaxError s ->
       ("*** Parse error: " ^ s.filename ^ ":"
@@ -70,16 +92,16 @@ let rec format_exception = function
   | Type_error ((pos,_,expr), s) -> 
       Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" 
         pos.pos_fname pos.pos_lnum s expr
-  | WrongArgumentTypeError(pos, pexpr, paramtype, fexpr, fntype) ->
-      let msg = "`" ^ pexpr
-        ^"' has type " ^ string_of_datatype paramtype
-        ^" and cannot be passed as an argument to `"^ fexpr
-        ^"', which has type "^ string_of_datatype fntype
+  | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
+      let msg = "`" ^ pexpr ^
+        "' has type " ^ string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
+        " and cannot be passed as an argument to `"^ fexpr ^
+        "', which has type "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
-  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype) ->
-      let msg = "`"^ fexpr ^"', which has type "^ string_of_datatype fntype
-        ^ ", cannot be applied to `"^ pexpr ^"', of type " ^ 
-        string_of_datatype paramtype
+  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
+      let msg = "`"^ fexpr ^"', which has type "^ string_of_datatype fntype ^
+        ", cannot be applied to `"^ pexpr ^"', of type " ^ 
+        string_of_datatype paramtype ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
   | Result.Runtime_error s -> "*** Runtime error: " ^ s
   | ASTSyntaxError ((pos,_,expr), s) -> 
@@ -109,17 +131,17 @@ let rec format_exception_html = function
   | Type_error ((pos,_,expr), s) -> 
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s. In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s expr
-  | WrongArgumentTypeError(pos, pexpr, paramtype, fexpr, fntype) ->
-      let msg = "<code>" ^ pexpr
-        ^"</code> has type " ^ string_of_datatype paramtype
-        ^" and cannot be passed as an argument to <code>"^ fexpr
-        ^"</code>, which has type <code>"^ string_of_datatype fntype ^ "</code>"
+  | WrongArgumentTypeError(pos, pexpr, paramtype, fexpr, fntype, mb) ->
+      let msg = "<code>" ^ pexpr ^ (get_mailbox_msg true mb) ^
+        "</code> has type " ^ string_of_datatype paramtype ^
+        " and cannot be passed as an argument to <code>"^ fexpr ^
+        "</code>, which has type <code>"^ string_of_datatype fntype ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
-  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype) ->
-      let msg = "<code>"^ fexpr ^"</code>, which has type <code>"^ string_of_datatype fntype
-        ^ "</code>, cannot be applied to <code>"^ pexpr ^"</code>, of type <code>" ^ 
-        string_of_datatype paramtype ^ "</code>"
+  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
+      let msg = "<code>"^ fexpr ^"</code>, which has type <code>"^ string_of_datatype fntype ^
+        "</code>, cannot be applied to <code>"^ pexpr ^"</code>, of type <code>" ^ 
+        string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
    

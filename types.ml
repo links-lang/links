@@ -1,5 +1,6 @@
 (* Representations of types *)
 
+open Debug
 open Pickler
 open Utility
 
@@ -25,6 +26,31 @@ type environment = datatype environment_basis
     deriving (Show, Pickle)
 
 let (-->) x y = `Function (x,y)
+
+(* whether to display the mailbox parameter in types *)
+let show_mailbox_parameter = Settings.add_bool false "show_mailbox_parameter"
+
+(* mailbox typing *)
+let enable_mailbox_typing = Settings.add_bool true "enable_mailbox_typing"
+
+(*
+  [HACK]
+  used to temporarily disable mailbox typing for two-pass type-checking
+*)
+let use_mailbox_typing = ref true
+let using_mailbox_typing () = !use_mailbox_typing
+
+let with_mailbox_typing b f =
+  let oldb = using_mailbox_typing ()
+  in
+    try
+      use_mailbox_typing := b;
+      let result = f() in
+	use_mailbox_typing := oldb;
+	result
+    with e ->
+      use_mailbox_typing := oldb;
+      raise e
 
 (* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
    so we need to reverse the result generated.
@@ -57,7 +83,17 @@ let string_of_primitive : primitive -> string = function
 
 exception Not_tuple
 
-let rec string_of_datatype' vars : datatype -> string =
+let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars datatype ->
+  let sd = string_of_datatype' vars in
+
+  let string_of_mailbox_arrow mailbox_type =
+    begin
+      if Settings.get_value(show_mailbox_parameter) then
+	"-{" ^ sd mailbox_type ^ "}->"
+      else
+	"->"
+    end in
+
   let is_tuple (field_env, _) =
     let present_fields, absent_fields = split_fields field_env in
       match absent_fields with
@@ -81,24 +117,58 @@ let rec string_of_datatype' vars : datatype -> string =
 	    |	Some var -> [string_of_int var]
 	    | None -> [] in
 	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) @ row_var_string in
-	    "(" ^ String.concat ", " strings ^ ")" in
-    function
+	    "(" ^ String.concat ", " strings ^ ")"
+  in
+    match datatype with
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
       | `TypeVar var      -> IntMap.find var vars
-      | `Function (`Record _ as f,t) -> string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
-      | `Function (f,t)  -> "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t
-      | `Record row      -> (if is_tuple row then string_of_tuple row
-			     else
-			       "(" ^ string_of_row' "," vars row ^ ")")
-      | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
-      | `Recursive (var, body) ->
-	  "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
-      | `DB             ->                   "Database"
-      | `List (`Primitive `Char) -> "String"
-      | `List (`Primitive `XMLitem) -> "XML"
-      | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
-      | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
+      | `Function (mailbox_type, t) when using_mailbox_typing () ->
+	  let arrow =
+	    match mailbox_type with
+	      | `Mailbox t ->
+		  string_of_mailbox_arrow (t)
+	      | _ ->
+		  "->"
+	  in
+	    begin
+	      match t with
+		| `Function (`Record _ as f, t) ->
+		    string_of_datatype' vars f ^ " " ^arrow ^
+		      " " ^ string_of_datatype' vars t
+		| `Function (f, t) ->
+		    "(" ^ string_of_datatype' vars f ^ ") "^ arrow ^
+		      " " ^ string_of_datatype' vars t
+		| _ -> (*assert(false)*)
+		    begin
+		      let f = mailbox_type in
+			debug ("non-mailbox function in mailbox type: pretending it didn't happen!");
+			match mailbox_type with
+			  | `Record _ ->
+			      string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
+			  | _ ->
+			      "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t	
+		   end
+	   end
+     | `Function (f, t) ->
+	 begin
+	   match f with
+	     | `Record _ ->
+		 string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
+	     | _ ->
+		 "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t	
+	 end
+     | `Record row      -> (if is_tuple row then string_of_tuple row
+			    else
+			      "(" ^ string_of_row' "," vars row ^ ")")
+     | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
+     | `Recursive (var, body) ->
+	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
+     | `DB             ->                   "Database"
+     | `List (`Primitive `Char) -> "String"
+     | `List (`Primitive `XMLitem) -> "XML"
+     | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
+     | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
@@ -196,8 +266,8 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
-  | `List (datatype)             -> free_bound_type_vars datatype
-  | `Mailbox (datatype)          -> free_bound_type_vars datatype
+  | `List (datatype)         -> free_bound_type_vars datatype
+  | `Mailbox (datatype)      -> free_bound_type_vars datatype
   | `DB                      -> IntSet.empty
 
 and free_bound_row_type_vars (field_env, row_var) =

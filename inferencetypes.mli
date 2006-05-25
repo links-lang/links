@@ -83,6 +83,9 @@ val assumption_of_inference_assumption : assumption -> Types.assumption
 val inference_environment_of_environment : Types.environment -> environment
 val environment_of_inference_environment : environment -> Types.environment
 
+val inference_expression_of_expression : Syntax.expression -> inference_expression
+val expression_of_inference_expression : inference_expression -> Syntax.expression
+
 val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string

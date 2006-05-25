@@ -20,6 +20,11 @@ type environment = datatype environment_basis
 
 val (-->) : datatype -> datatype -> datatype
 
+val show_mailbox_parameter : bool Settings.setting
+val enable_mailbox_typing : bool Settings.setting
+val using_mailbox_typing : unit -> bool
+
+val with_mailbox_typing : bool -> (unit -> 'a) -> 'a
 
 val split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list
 	

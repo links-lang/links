@@ -8,9 +8,6 @@ let interacting = Settings.add_bool true "interacting"
 (* Whether to print types *)
 let printing_types = Settings.add_bool true "printing_types"
 
-(* whether to display the mailbox parameter in types *)
-let show_mailbox_parameter = Settings.add_bool false "show_message_parameter"
-
 (* Prompt in interactive mode *)
 let ps1 = "links> "
 
@@ -58,14 +55,14 @@ let run_tests () =
 let print_result rtype result = 
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
-		   begin
-		     if Settings.get_value(Inference.enable_mailbox_typing) &&
-		       Settings.get_value(show_mailbox_parameter)
-		     then
-		       " : "^ Types.string_of_datatype rtype
-		     else
-		       " : "^ Types.string_of_datatype (Inference.remove_mailbox rtype)
-		   end
+		   if Settings.get_value(Types.show_mailbox_parameter) then
+		     Types.with_mailbox_typing true
+		       (fun () -> 
+			  " : "^ Types.string_of_datatype rtype)
+		   else
+		     Types.with_mailbox_typing false
+		       (fun () ->
+			  " : "^ Types.string_of_datatype (Inference.remove_mailbox rtype))
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)

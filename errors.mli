@@ -11,6 +11,7 @@ exception RichSyntaxError of synerrspec
 val mistyped_application : Syntax.position ->
   (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
   (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
+  (Inferencetypes.inference_expression * Inferencetypes.datatype) option ->
   'a
                
 val mistyped_union : Syntax.position ->
