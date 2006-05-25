@@ -94,4 +94,4 @@ stdout : @None \(\) : \[|None:\(\) | Some:a | [0-9]*|\]
 
 Nested variant unification
 [C A, C B]
-stdout : @\[C A (), C B ()\] : .*
+stdout : @\[C A \(\), C B \(\)\] : .*

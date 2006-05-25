@@ -1,7 +1,7 @@
 Lexical scoping at top-level
 x = 3; fun y(a) { x + a }; x = 4; y(10)
-stdout : 13 : Int
-stderr : @.*
+stderr : @..*
+exit : 1
 
 Nested scopes
 { x = 3; ({ x = 4; x }, x)}

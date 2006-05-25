@@ -308,7 +308,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	  | None -> 
 	      rec_env in
 
-      let unify_both_closed ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
+      let unify_both_closed_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
 	let get_present_labels (field_env, row_var) =
 	  let rec get_present' rec_vars (field_env, row_var) =
 	    let top_level_labels = 
@@ -344,6 +344,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 				  ^"\nand\n "^ string_of_row rrow
 				  ^"\n could not be unified because they have different fields")) in
 
+      let unify_both_closed = unify_both_closed_with_rec_env rec_env in
+
       let unify_one_closed ((closed_field_env, _ as closed_row), (open_field_env, _ as open_row)) =
 	let (closed_field_env', _) as closed_row', closed_rec_row = unwrap_row closed_row in
 	let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in 
@@ -376,14 +378,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let unify_both_open ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) =
 	let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
 	let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
-	  if (ITO.get_row_var lrow = ITO.get_row_var rrow) then
-	    unify_both_closed ((lfield_env', `RowVar None), (rfield_env', `RowVar None))
+
+	let rec_env =
+	  (register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
+	     register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env
+	in
+	  if (ITO.get_row_var lrow = ITO.get_row_var rrow) then     
+	    unify_both_closed_with_rec_env rec_env ((lfield_env', `RowVar None), (rfield_env', `RowVar None))
 	  else
-	    begin
-	      let rec_env =
-		(register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
-		   register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env in
-		
+	    begin		
 	      let fresh_row_var = ITO.fresh_row_variable() in	      
 		(* each row can contain fields missing from the other; 
 		   thus we call extend_field_env once in each direction *)
