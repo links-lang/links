@@ -843,7 +843,7 @@ let rhino_output linkscode =
     try
       let channel = open_out tempfile in 
       let s = gen linkscode in
-        debug ("generated code for " ^ linkscode ^ ":\n" ^ s ^ "\n");
+        debugf "generated code for %s:\n%s\n" linkscode s;
         output_string channel s ;
         flush channel;
         let output = process_output ("rhino < " ^ tempfile ^ " 2>&1 | sed '1d;s/^ *js>//'") in
