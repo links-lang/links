@@ -73,7 +73,8 @@ var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
 <html>
  <body>
-  <select l:onchange="{iterate(event.target.value)}" style="display: block">
+  <select l:onchange="{iterate(evtGetTargetValue(event))}"
+	style="display: block">
     {for (colour <- colours)
        <option>{enxml(colour)}</option>}
   </select>

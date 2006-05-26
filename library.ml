@@ -388,11 +388,16 @@ let env : (string * (primitive * Types.assumption)) list = [
 
 (* Section: DOM Event API *)
   "evtGetTarget",
-  ((client_only_2 "evtGetTarget"),
+  ((client_only_1 "evtGetTarget"),
    datatype "Event -> DOMNodeRef");
 
+  "evtGetTargetValue",
+  ((client_only_1 "evtGetTargetValue"),
+   datatype "Event -> String");
+
+
   "evtGetTargetResolveTextNode",
-  ((client_only_2 "evtGetTargetResolveTextNode"),
+  ((client_only_1 "evtGetTargetResolveTextNode"),
    datatype "Event -> DOMNodeRef");
 
 (* getPageX : Event -> Int *)

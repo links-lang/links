@@ -5,20 +5,22 @@ fun compute(count, total) server {
  } else "done"
 }
 
+fun replace(id, xml) {
+ var node = domGetRefByID(id);
+ domInsertBeforeXml(xml, node);
+ domRemoveNodeRef(node);
+}
+
 fun showProgress(count, total) client {
  var percent = 100.0 *. float_of_int(count) /. float_of_int(total);
- dom ! ReplaceElement(
-  id="bar",
-  replacement=<div id="bar"
-       style="width:{string_of_float(percent)}%; background-color: black">|</div>
+ replace("bar",
+	<div id="bar"
+             style="width:{string_of_float(percent)}%; background-color: black">|</div>
  )
 }
 
 fun showAnswer(answer) client {
- dom ! ReplaceElement(
-  id="bar",
-  replacement=<div id="bar">{enxml(answer)}</div>
- )
+ replace("bar", <div id="bar">{enxml(answer)}</div>)
 }
 
 

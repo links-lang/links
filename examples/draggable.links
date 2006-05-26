@@ -1,9 +1,3 @@
-alien javascript jslib:
-	(event:
-	  (getTarget : (a, Bool) -> c, 
-	   getRelatedTarget : a -> b)
-	);
-
 fun waiting(id) client {
   receive {
      case MouseDown  target -> dragging(id, target);
@@ -17,9 +11,8 @@ fun dragging(id, elem) client {
      case MouseUp           -> waiting(id);
      case MouseDown  target -> dragging(id, target);
      case MouseOut relatedTarget -> {
-         if (relatedTarget.nodeName == "LI" && relatedTarget.parentNode.id == id) {
-	    debug(relatedTarget.parentNode.id);
-	    debug(id);
+         if (domGetTagNameRef(relatedTarget) == "LI"
+		&& domGetAttributeRef(domGetParentNodeRef(relatedTarget), "id") == id) {
             dom ! SwapNodes(first=relatedTarget,second=elem);
             dragging(id, elem)
          }
@@ -38,8 +31,8 @@ fun draggableList(id, items)
   var listMgr = spawn { waiting(id) };
    <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{listMgr ! (MouseUp)}"
-      l:onmousedown = "{listMgr ! (MouseDown (evtGetTarget(event))}"
-      l:onmouseout  = "{listMgr ! (MouseOut (evtGetRelatedTarget(event))}"
+      l:onmousedown = "{listMgr ! (MouseDown (evtGetTarget(event)))}"
+      l:onmouseout  = "{listMgr ! (MouseOut (evtGetRelatedTarget(event)))}"
    >
     {for (item <- items)
          format(item)}
