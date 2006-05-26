@@ -8,14 +8,14 @@ open Forms
 open Errors
 
 (* debug flags *)
-let show_unification = Settings.add_bool false "show_unification"
-let show_row_unification = Settings.add_bool false "show_row_unification"
+let show_unification = Settings.add_bool true "show_unification"
+let show_row_unification = Settings.add_bool true "show_row_unification"
 
 let show_instantiation = Settings.add_bool false "show_instantiation"
 let show_generalization = Settings.add_bool false "show_generalization"
 
 let show_typechecking = Settings.add_bool false "show_typechecking"
-let show_recursion = Settings.add_bool false "show_recursion"
+let show_recursion = Settings.add_bool true "show_recursion"
 
 exception Unify_failure of string
 exception UndefinedVariable of string
@@ -290,8 +290,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 
       (*
 	register a recursive row in the rec_env environment
+	
+	return:
+	  None if the recursive row already appears in the environment
+          Some rec_env, otherwise, where rec_env is the updated environment
       *)
-      let register_rec_row (wrapped_field_env, unwrapped_field_env, rec_row, unwrapped_row') ((rec_types, rec_rows) as rec_env) =
+      let register_rec_row (wrapped_field_env, unwrapped_field_env, rec_row, unwrapped_row') : unify_env -> unify_env option =
+	fun ((rec_types, rec_rows) as rec_env) ->
 	match rec_row with
 	  | Some (var, body) ->
 	      let restricted_row = row_without_labels (matching_labels (unwrapped_field_env, wrapped_field_env)) unwrapped_row' in
@@ -302,11 +307,20 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		  [(StringMap.empty, `RecRowVar (var, body))]
 	      in
 		if List.exists (fun r -> eq_rows (r, restricted_row)) rs then
-		  rec_env
+		  None
 		else
-		  (rec_types, IntMap.add var (restricted_row::rs) rec_rows)
+		  Some (rec_types, IntMap.add var (restricted_row::rs) rec_rows)
 	  | None -> 
-	      rec_env in
+	      Some (rec_env) in
+
+      (*
+	register two recursive rows and return None if one of them is already in the environment
+      *)
+      let register_rec_rows p1 p2 : unify_env -> unify_env option = fun rec_env ->
+	let rec_env' = register_rec_row p1 rec_env in
+	  match rec_env' with
+	    | None -> None
+	    | Some rec_env -> register_rec_row p2 rec_env in
 
       let unify_both_closed_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
 	let get_present_labels (field_env, row_var) =
@@ -334,11 +348,16 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	  fail_on_absent_fields rfield_env;
 *)
 	  if fields_are_compatible (lrow', rrow') then
-	    let rec_env =
-	      (register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
-		 register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env
+	    let rec_env' =
+	      (register_rec_rows
+		 (lfield_env, lfield_env', lrec_row, rrow')
+		 (rfield_env, rfield_env', rrec_row, lrow')
+		 rec_env)
 	    in
-	      unify_compatible_field_environments rec_env (lfield_env', rfield_env')
+	      match rec_env' with
+		| None -> ()
+		| Some rec_env ->
+		    unify_compatible_field_environments rec_env (lfield_env', rfield_env')
 	  else
 	    raise (Unify_failure ("Closed rows\n "^ string_of_row lrow
 				  ^"\nand\n "^ string_of_row rrow
@@ -368,34 +387,44 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	(* check that the closed row contains no absent fields *)
 (*          fail_on_absent_fields closed_field_env; *)
 		 
-	  let rec_env =
-	      (register_rec_row (closed_field_env, closed_field_env', closed_rec_row, open_row') ->-
-		 register_rec_row (open_field_env, open_field_env', open_rec_row, closed_row')) rec_env in
-
-	  let open_extension = extend_field_env rec_env closed_field_env' open_field_env' in
-	    extend_row_var (open_row_var', (open_extension, `RowVar None)) in
+	  let rec_env' =
+	    (register_rec_rows
+	       (closed_field_env, closed_field_env', closed_rec_row, open_row')
+	       (open_field_env, open_field_env', open_rec_row, closed_row')
+	       rec_env)
+	  in
+	    match rec_env' with
+	      | None -> ()
+	      | Some rec_env ->
+		  let open_extension = extend_field_env rec_env closed_field_env' open_field_env' in
+		    extend_row_var (open_row_var', (open_extension, `RowVar None)) in
 
       let unify_both_open ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) =
 	let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
 	let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
 
-	let rec_env =
-	  (register_rec_row (lfield_env, lfield_env', lrec_row, rrow') ->-
-	     register_rec_row (rfield_env, rfield_env', rrec_row, lrow')) rec_env
+	let rec_env' =
+	  (register_rec_rows
+	     (lfield_env, lfield_env', lrec_row, rrow')
+	     (rfield_env, rfield_env', rrec_row, lrow')
+	     rec_env)
 	in
-	  if (ITO.get_row_var lrow = ITO.get_row_var rrow) then     
-	    unify_both_closed_with_rec_env rec_env ((lfield_env', `RowVar None), (rfield_env', `RowVar None))
-	  else
-	    begin		
-	      let fresh_row_var = ITO.fresh_row_variable() in	      
-		(* each row can contain fields missing from the other; 
-		   thus we call extend_field_env once in each direction *)
-	      let rextension =
-		extend_field_env rec_env lfield_env' rfield_env' in
-		extend_row_var (rrow_var', (rextension, fresh_row_var));
-		let lextension = extend_field_env rec_env rfield_env' lfield_env' in
-		  extend_row_var (lrow_var', (lextension, fresh_row_var))
-	    end in
+	  match rec_env' with
+	    | None -> ()
+	    | Some rec_env ->
+		if (ITO.get_row_var lrow = ITO.get_row_var rrow) then     
+		  unify_both_closed_with_rec_env rec_env ((lfield_env', `RowVar None), (rfield_env', `RowVar None))
+		else
+		  begin		
+		    let fresh_row_var = ITO.fresh_row_variable() in	      
+		      (* each row can contain fields missing from the other; 
+			 thus we call extend_field_env once in each direction *)
+		    let rextension =
+		      extend_field_env rec_env lfield_env' rfield_env' in
+		      extend_row_var (rrow_var', (rextension, fresh_row_var));
+		      let lextension = extend_field_env rec_env rfield_env' lfield_env' in
+			extend_row_var (lrow_var', (lextension, fresh_row_var))
+		  end in
       
       let _ =
 	if ITO.is_closed_row lrow then
