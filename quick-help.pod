@@ -37,7 +37,72 @@ TBD: talk about records.
 
 =head2 Variants
 
-TBD: talk about variants.
+A "Variant type" is one that uses a set of tags to differentiate
+values as to what they mean. For example, a mode of transport may be
+either Automobile or Camel. If it is Automobile, we want to know what
+fuel it takes; if it is Camel, we want to know how many humps it
+has. In Links, values like these can be expressed as follows:
+
+  Automobile Diesel
+  Automobile Unleaded
+  Camel 2
+
+The I<type> that includes such values is written as follows:
+
+  [|Automobile [|Diesel | Unleaded | Biodiesel|] | Camel Int |]
+
+The boxy brackets C<[| |]> delimit a variant type, and variant labels
+are separated by a pipe C<|>. After each variant label is the type of
+its contents--a Camel has a number of humps so its content type is
+C<Int>, whereas the Automobile content type is another variant type,
+C<[|Diesel | Unleaded|]>.
+
+In Links, I<a variant tag always begins with a capital letter>. Any
+string beginning with a capital letter, used in a value context,
+denotes a variant label.
+
+To use a variant, use pattern matching. Pattern matching is
+accomplished using the C<switch> form, which has a target expression
+and a case for each variant label. The following expression determines
+the effective number of humps of a transport (autos have no humps):
+
+  switch target {
+    case Automobile fuelType -> 0;
+    case Camel humpCount -> humpCount;
+  }
+
+The expression C<expr> is evaluated to produce a value of variant
+type; then the label is examined and one of the cases is chosen. The
+lowercase word following the variant label in a case is bound to the
+content of the target value (provided that case actually matches the
+target). This allows us to use the variable C<humpCount> within the
+body of the C<Camel> case. The body of a case (everything between the
+C<-E<gt>> and the C<;>) produces the result of the whole switch
+expression, and all case bodies of a switch must have the same type.
+
+Type-checking will also ensure that all possible cases are matched by
+the C<switch> expression. To handle arbitrary variant values, you can
+add an open case to the end of the switch:
+
+  switch target {
+    case Automobile fuelType -> 0;
+    case Camel humpCount -> humpCount;
+    case other -> 0;
+  }
+
+Since C<other> begins with a lowercase letter, it is a variable, which
+matches any value. Unlike the variables in the previous cases, which
+are wrapped inside variant labels, C<other> is used here as the
+complete pattern to match for its case, so it will match
+anything. Patterns are tried in the order they are given, so the
+C<other> case will not by selected unless the previous cases do not
+match.
+
+Here we assume that nothing other than a camel has humps.
+
+=head2 Pattern matching on lists
+
+TBD: talk about pattern matching on lists.
 
 =head2 XML Quasiquotes
 
@@ -167,8 +232,8 @@ assignments will mask preceding ones:
     x = 2;
     z = x + y;    # z is now bound to 4
 
-The scope of an assignment is strictly within its immediate
-block. Thus in this expression:
+The scope of an assignment is strictly within its immediate block. As
+a result, the following code may not do what you expect:
 
     x = 0;
     if (a == b)
@@ -182,12 +247,10 @@ assignments only create new bindings for x within the corresponding
 clauses of the conditional. This may come as a surprise to programmers
 from some languages.
 
-=head2 Collections: Bags, Sets, and Lists
+=head2 Lists
 
-TBD: remove bags and sets.
-
-A list is a finite sequence of values. A list can be created by
-wrapping a series of expressions in brackets:
+A list is a finite sequence of values. A list can be created directly 
+by wrapping a series of expressions in brackets:
 
     [1, 4, 9, 16]
     
@@ -203,7 +266,7 @@ characters:
 
     [1, 2] ++ [3, 4, 5] == [1, 2, 3, 4, 5]
 
-TBD: Talk about bags, lists.
+And they're comparable, with C<==>, as you can see!
 
 =head2 Functions
 
@@ -241,16 +304,15 @@ The principal loop construct in Links is the list comprehension:
     for (x <- source)
        body
 
-The body should be an expression that evaluates to a bag, set, or
-list.
+The body should be an expression that evaluates to a list.
 
-A comprehension produces a list which is the concatenation of all the
-collections produced by evaluating the body, once for each element of
-source, and binding that element to the name C<x>. For example:
+The value of a comprehension is the concatenation of all the lists
+produced by evaluating the body, once for each element of I<source>, and
+binding that element to the variable C<x>. For example:
 
     source_list = [1, 2, 3];
-    for (n <- source_list)
-        [ n*n ]
+    for (x <- source_list)
+        [ x*x ]
 
 constructs a list of the squares of the values in C<source_list>. Note
 that more than one value can be included in the body list:
@@ -264,22 +326,62 @@ that more than one value can be included in the body list:
 
 This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
 
-And of course, any expression is valid as the body, as long as its
-type is a collection type.
-
 Other forms of looping can be implemented using tail recursion.
-
-=head2 Spawning Processes
-
-... TBD: describe spawn ...
-
-=head2 Message Passing
-
-... TBD: describe message passing ...
 
 =head1 Features
 
-=head2 Handling Browser Events
+=head2 Concurrency
+
+A Links program begins as a single thread of control but can fork into
+many threads by executing the C<spawn> primitive:
+
+  newThreadID = spawn(func, arg)
+
+This starts a new thread which begins by applying C<func> to the
+single argument C<arg>. If the function ever returns, its return value
+is discarded. C<spawn> returns an identifier of the new thread to the
+calling thread. This identifier can be used to address messages to the
+new thread, with the C<send> primitive:
+
+  send(threadID, msg)
+
+This appends the value C<msg> to the mailbox for the thread identified
+by C<threadID>. The return value is just C<msg>. The mailbox is FIFO,
+so if you know that some message is sent before some other message,
+you know they will be received in that order.
+
+Each process's mailbox is given a static type according to the
+messages it expects to receive. Typically, a process will use variants
+to tag the various messages it can receive; for example, a process
+that can expects to be informed of passing comets and celebrity
+sightings might expect to receive either a value
+C<CelebritySighting(celebName, atVenue)> or a value
+C<PassingComet(cometID, zenith, azimuth)>. This process's mailbox
+would be given the type 
+C<[|CelebritySighting(String, String) | PassingComet(Int, Float, Float)|]>
+
+A process can receive messages using the C<recv> function, which
+returns the next message in the current process's mailbox.
+
+  nextMsg = recv()
+
+More commonly, however, you will want to dispatch on the received
+message's variant tag immediately. The C<receive> construct makes this
+easy to do.
+
+  receive {
+    case CelebritySighting(celebName, atVenue) -> e1;
+    case PassingComet(cometID, zenith, azimuth) -> e2;
+  }
+
+This removes the next message from the mailbox and does a C<switch> on
+it. (See L<Variants>).
+
+=head2 Located code and remote procedure calls
+
+TBD: Describe client/server annotations and RPC calls
+
+=head2 Handling User Actions
 
 A Links program usually runs on a client (browser) and a server. The
 client code can be notified when certain user events take place, such
@@ -359,35 +461,58 @@ document.
 Elements that are not installed are not visible, nor do events occur
 on them, so their event handlers cannot fire.
 
-=head2 The C<dom> Process
+=head2 Interacting with the page: DOM operations
 
-The C<dom> process handles a suite of messages, as follows (TBD: iron
-this out):
+Links enforces a distinction between XML trees, which are immutable,
+and DOM nodes, which are mutable objects. DOM nodes are owned by a DOM
+manager module, and all interaction with DOM nodes is through calls to
+that module, using objects call C<DOMNodeRef>s. You can create DOM
+nodes by passing an XML tree: the XML constitutes a model for the DOM
+node, which is a rough copy of the XML. Likewise, from a DOMNodeRef,
+you can extract an XML image of the DOM node and its DOM subtree. The
+browser may have special semantics associated with DOM nodes, and may
+add or remove attributes and children without warning; XML values,
+however, are completely within the control of the Links program.
+
+The operations on DOMNodeRefs are as follows:
 
 =over 4
 
-=item * C<ReplaceElement({id = nodeId, replacement = elem})>
+=item domInsertBeforeXml
 
-Replaces the element with ID C<nodeId> in the active document with the
-element elem.
+=item domAppendChildXml
 
-=item * C<AppendChild({id = parentId, replacement = elem})>
+=item domRemoveNodeRef
 
-Appends C<elem> to the list of children of the element with ID
-C<parentId> in the active document.
+=item domInsertBeforeRef
 
-=item * C<SwapNode({first = elem1, second = elem2})>
+=item domAppendChildRef
 
-Moves C<elem1> to the location in the active document occupied by
-C<elem2> and vice versa.
+=item domGetDocRef
 
-=item * Document(newDocument)
+=item domGetRefByID
 
-Replaces the entire active document with C<newDocument>.
+=item domGetRepresentation
+
+=back 
+
+You can also access attributes of DOM nodes, and navigate the DOM
+tree, in a reado-only fashion using the following operations:
+
+=over 4 
+
+=item domGetTagNameRef
+
+=item domGetAttributeRef
+
+=item domGetParentNodeRef
 
 =back
 
+
 =head1 Standard Library
+
+TBD: other standard operations.
 
 =cut
 
