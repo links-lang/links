@@ -41,6 +41,8 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN
+%token QUESTION TILDE
+%token <char*char> RANGE
 
 %start parse_links
 %start just_datatype
@@ -51,6 +53,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %type <Sugar.datatype> datatype
 %type <Sugar.datatype> just_datatype
 %type <Sugar.sentence> sentence
+%type <Regex.regex list> regex_pattern_sequence
 
 %%
 
@@ -184,6 +187,7 @@ cons_expression:
 
 comparison_expression:
 | cons_expression                                              { $1 }
+| comparison_expression TILDE     regex                        { InfixAppl (`RegexMatch, $1, $3), pos() }
 | comparison_expression EQEQ      cons_expression              { InfixAppl (`Eq, $1, $3), pos() }
 | comparison_expression LESS      cons_expression              { InfixAppl (`Less, $1, $3), pos() }
 | comparison_expression LESSEQUAL cons_expression              { InfixAppl (`LessEq, $1, $3), pos() }
@@ -397,13 +401,32 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR COLON datatype                                       { $1, `Present $3 }
-| CONSTRUCTOR COLON MINUS                                      { $1, `Absent }
+| CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
+| CONSTRUCTOR COLON MINUS                                      { $1, `Absent     }
+| CONSTRUCTOR                                                  { $1, `Present UnitType }
 
 field:
-| fname COLON datatype                                             { $1, `Present $3 }
+| fname COLON datatype                                         { $1, `Present $3 }
 | fname COLON MINUS                                            { $1, `Absent }
 
 fname:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
+
+regex:
+| SLASH regex_pattern_sequence SLASH                           { Regex (Regex.Seq $2), pos() }
+| SLASH SLASH                                                  { Regex (Regex.Simply ""), pos() }
+
+regex_pattern:
+| RANGE                                                        { Regex.Range $1 }
+| STRING                                                       { Regex.Simply $1 }
+| DOT                                                          { Regex.Any }
+| LPAREN regex_pattern_sequence RPAREN                         { Regex.Seq $2 }
+| regex_pattern STAR                                           { Regex.Repeat (Regex.Star, $1) }
+| regex_pattern PLUS                                           { Regex.Repeat (Regex.Plus, $1) }
+| regex_pattern QUESTION                                       { Regex.Repeat (Regex.Question, $1) }
+
+regex_pattern_sequence:
+| regex_pattern                                                { [$1] }
+| regex_pattern regex_pattern_sequence                         { $1 :: $2 }
+

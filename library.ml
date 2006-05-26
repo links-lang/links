@@ -511,6 +511,18 @@ let env : (string * (primitive * Types.assumption)) list = [
   "tan",     float_fn tan;
   "log",     float_fn log;
   "sqrt",    float_fn sqrt;
+
+  (* regular expression matching *)
+  ("~",
+   (p2 (fun s r -> 
+          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+          and string = unbox_string s in
+            box_bool (Str.string_match regex string 0)),
+    let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
+      qs, (`List (`Primitive `Char) --> (regex --> `Primitive `Bool))));
+
+
+
 ]
 
 type continuationized_val = [

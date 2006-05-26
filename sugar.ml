@@ -68,7 +68,6 @@ type pattern =
 (* 		       ) in *)
 (*       one_more value selects *)
 
-
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
 let rec patternize' = function 
@@ -203,7 +202,7 @@ type unary_op = [
 | `FloatMinus
 | `Not
 ]
-type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `BeginsWith]
+type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `BeginsWith | `RegexMatch ]
 type arith_binop = [`Times | `Div | `Exp | `Plus | `Minus | `FloatTimes | `FloatDiv | `FloatExp | `FloatPlus | `FloatMinus]
 type logical_binop = [`And | `Or]
 type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Cons]
@@ -322,6 +321,7 @@ type phrasenode =
   | Foreign of (name * name * datatype)
 (* Applications *)
   | InfixAppl of (binop * phrase * phrase)
+  | Regex of (Regex.regex)
   | UnaryAppl of (unary_op * phrase)
   | FnAppl of (phrase * phrase list)
   | Send of (phrase * phrase)
@@ -363,9 +363,10 @@ let rec curried_apply (head : untyped_expression) (pos : position) : untyped_exp
 
 let uncompare : comparison_binop -> string = 
   (* FIXME: this is buggy: should eliminate greater, greatereq *)
-  flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `BeginsWith, "beginswith"]
+  flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `BeginsWith, "beginswith"; `RegexMatch, "~"]
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
+
 (* Convert a syntax tree as returned by the parser into core syntax *)
 let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
   let pos = lookup_pos pos' in 
@@ -384,6 +385,10 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
   | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
   | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
+  | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
+      Apply (Apply (Variable ("~", pos), desugar e1, pos), 
+             desugar (desugar_regex pos' r, pos'), pos)
+  | InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
   | InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
   | InfixAppl (#arith_binop as a, e1, e2)  -> Apply (Apply (Variable (unarith a, pos), desugar e1, pos), desugar e2, pos) 
   | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
@@ -559,6 +564,18 @@ and open_list_match value cases default lookup_pos pos =
                             polylet (patternize' (desugar lookup_pos patt)) pos value (desugar lookup_pos body),
                             otherwise, pos)
                ) cases inner_case
+and desugar_repeat pos : Regex.repeat -> phrasenode = function
+  | Regex.Star      -> ConstructorLit ("Star", None)
+  | Regex.Plus      -> ConstructorLit ("Plus", None)
+  | Regex.Question  -> ConstructorLit ("Question", None)
+and desugar_regex pos : Regex.regex -> phrasenode = function
+  | Regex.Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
+  | Regex.Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
+  | Regex.Any             -> ConstructorLit ("Any", None)
+  | Regex.Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> desugar_regex pos s, pos) rs), pos))
+  | Regex.Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
+                                                                       desugar_regex pos r, pos], pos))
+
 
 
 (* (\* project_subset *)

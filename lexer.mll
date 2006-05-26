@@ -127,6 +127,7 @@ rule lex lexers = parse
   | "!"                                 { BANG }
   | '|'                                 { VBAR }
   | '&'                                 { AMPER }
+  | '~'                                 { Stack.push (regex' lexers) lexers; TILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | "::"                                { COLONCOLON }
@@ -177,6 +178,23 @@ and attrlex lexers = parse
                                           Stack.push (lex lexers) lexers; LBRACE }
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_start_p lexbuf)) }
+and regex' lexers = parse
+  | '/'                                 { Stack.push (regex lexers) lexers; SLASH }
+  | '#' ([^ '\n'] *)                    { regex' lexers lexbuf }
+  | '\n'                                { bump_lines lexbuf 1; regex' lexers lexbuf }
+  | def_blank                           { regex' lexers lexbuf }
+and regex lexers = parse
+  | '/'                                 { Stack.pop lexers; Stack.pop lexers; SLASH }
+  | '.'                                 { DOT }
+  | '[' (_ as f) '-' (_ as t) ']'       { RANGE (f,t) }
+  | '?'                                 { QUESTION }
+  | '*'                                 { STAR }
+  | '+'                                 { PLUS }
+  | '('                                 { LPAREN }
+  | ')'                                 { RPAREN }
+  | '\\' (_ as c)                       
+  | (_ as c)                            { STRING (String.make 1 c) }
+
 {
 
 let lexer () = 

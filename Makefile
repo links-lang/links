@@ -32,6 +32,8 @@ OCAMLOPT := ocamlopt.opt -pp $(PP)
 OCAMLC := ocamlc.opt -pp $(PP)
 OCAMLDEP := ocamldep -pp $(PP)
 
+VPATH=regex
+
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
@@ -53,6 +55,7 @@ SOURCES = $(OPC)                		\
           query.ml              		\
           sql.ml                		\
           syntax.ml             		\
+          regex.ml                              \
           inferencetypes.mli inferencetypes.ml 	\
           sugar.ml              		\
           result.ml             		\
@@ -67,6 +70,7 @@ SOURCES = $(OPC)                		\
           lexer.mll             		\
           parse.mli parse.ml    		\
           inference.mli inference.ml 		\
+          linksregex.ml                         \
           library.mli library.ml 		\
           jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
