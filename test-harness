@@ -2,10 +2,11 @@
 
 links = './links'
 
-import sys, re
+import sys, re, time
 from subprocess import Popen, PIPE
 
 successes = failures = 0
+TIMEOUT = 4 # seconds before a test is timed out.
 
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
@@ -61,18 +62,26 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', env = None):
     proc = Popen((links, '-e', code), stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
-    passed &= check_expected(name, 'return code', str(proc.wait()), exit, errors)
-    passed &= check_expected(name, 'stdout', file.read(proc.stdout), stdout, errors)
-    passed &= check_expected(name, 'stderr', file.read(proc.stderr), stderr, errors)
-    if passed:
-        OK(name)
-    else:
-        global failures
-        failures += 1
-        print '!FAILURE: %s' % name
-        for i, j in errors:
-            print i
-            print j
+    for i in xrange(0, TIMEOUT*100):
+        rc = proc.poll()
+        if rc <> None:
+            passed &= check_expected(name, 'return code', str(rc), exit, errors)
+            passed &= check_expected(name, 'stdout', file.read(proc.stdout), stdout, errors)
+            passed &= check_expected(name, 'stderr', file.read(proc.stderr), stderr, errors)
+            if passed:
+                OK(name)
+            else:
+                global failures
+                failures += 1
+                print '!FAILURE: %s' % name
+                for i, j in errors:
+                    print i
+                    print j
+            return
+        else:
+            time.sleep(0.01)
+    failures += 1
+    print '!FAILURE: %s [TIMED OUT]' % name        
 
 def main():
     try:
