@@ -321,7 +321,7 @@ type phrasenode =
   | Foreign of (name * name * datatype)
 (* Applications *)
   | InfixAppl of (binop * phrase * phrase)
-  | Regex of (Regex.regex)
+  | Regex of (regex)
   | UnaryAppl of (unary_op * phrase)
   | FnAppl of (phrase * phrase list)
   | Send of (phrase * phrase)
@@ -352,6 +352,12 @@ type phrasenode =
 and phrase = (phrasenode * pposition)
 and ppattern = Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
 and switchcase = ppattern * phrase
+and regex = | Range of (char * char)
+            | Simply of string
+            | Any
+            | Seq of regex list
+            | Repeat of (Regex.repeat * regex)
+            | Splice of phrase
 
 let _DUMMY_PHRASE = TupleLit [], (Lexing.dummy_pos, Lexing.dummy_pos)
 let _DUMMY_PATTERN = Pattern _DUMMY_PHRASE
@@ -387,7 +393,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
   | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
       Apply (Apply (Variable ("~", pos), desugar e1, pos), 
-             desugar (desugar_regex pos' r, pos'), pos)
+             desugar (desugar_regex desugar pos' r, pos'), pos)
   | InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
   | InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
   | InfixAppl (#arith_binop as a, e1, e2)  -> Apply (Apply (Variable (unarith a, pos), desugar e1, pos), desugar e2, pos) 
@@ -568,14 +574,16 @@ and desugar_repeat pos : Regex.repeat -> phrasenode = function
   | Regex.Star      -> ConstructorLit ("Star", None)
   | Regex.Plus      -> ConstructorLit ("Plus", None)
   | Regex.Question  -> ConstructorLit ("Question", None)
-and desugar_regex pos : Regex.regex -> phrasenode = function
-  | Regex.Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
-  | Regex.Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
-  | Regex.Any             -> ConstructorLit ("Any", None)
-  | Regex.Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> desugar_regex pos s, pos) rs), pos))
-  | Regex.Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
-                                                                       desugar_regex pos r, pos], pos))
-
+and desugar_regex desugar pos : regex -> phrasenode = function
+  | Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
+  | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
+  | Any             -> ConstructorLit ("Any", None)
+  | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> desugar_regex desugar pos s, pos) 
+                                                               rs), pos))
+  | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
+                                                                 desugar_regex desugar pos r, pos], pos))
+  | Splice e        -> ConstructorLit ("Simply", Some e)
+          
 
 
 (* (\* project_subset *)

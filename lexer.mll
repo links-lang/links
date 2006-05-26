@@ -192,6 +192,8 @@ and regex lexers = parse
   | '+'                                 { PLUS }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
+  | '{'                                 { (* scan the expression, then back here *)
+                                          Stack.push (lex lexers) lexers; LBRACE }
   | '\\' (_ as c)                       
   | (_ as c)                            { STRING (String.make 1 c) }
 

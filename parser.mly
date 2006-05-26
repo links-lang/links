@@ -53,7 +53,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %type <Sugar.datatype> datatype
 %type <Sugar.datatype> just_datatype
 %type <Sugar.sentence> sentence
-%type <Regex.regex list> regex_pattern_sequence
+%type <Sugar.regex list> regex_pattern_sequence
 
 %%
 
@@ -414,17 +414,18 @@ fname:
 | VARIABLE                                                     { $1 }
 
 regex:
-| SLASH regex_pattern_sequence SLASH                           { Regex (Regex.Seq $2), pos() }
-| SLASH SLASH                                                  { Regex (Regex.Simply ""), pos() }
+| SLASH regex_pattern_sequence SLASH                           { Regex (Seq $2), pos() }
+| SLASH SLASH                                                  { Regex (Simply ""), pos() }
 
 regex_pattern:
-| RANGE                                                        { Regex.Range $1 }
-| STRING                                                       { Regex.Simply $1 }
-| DOT                                                          { Regex.Any }
-| LPAREN regex_pattern_sequence RPAREN                         { Regex.Seq $2 }
-| regex_pattern STAR                                           { Regex.Repeat (Regex.Star, $1) }
-| regex_pattern PLUS                                           { Regex.Repeat (Regex.Plus, $1) }
-| regex_pattern QUESTION                                       { Regex.Repeat (Regex.Question, $1) }
+| RANGE                                                        { Range $1 }
+| STRING                                                       { Simply $1 }
+| DOT                                                          { Any }
+| LPAREN regex_pattern_sequence RPAREN                         { Seq $2 }
+| regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
+| regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }
+| regex_pattern QUESTION                                       { Repeat (Regex.Question, $1) }
+| block                                                        { Splice $1 }
 
 regex_pattern_sequence:
 | regex_pattern                                                { [$1] }
