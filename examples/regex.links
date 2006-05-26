@@ -1,0 +1,15 @@
+fun f(number) client {
+  domAppendChildXml(
+     <p>{enxml(number ++ (if (number ~ /[0-9]+/) " is a number" 
+                          else " is a non-number"))}</p>,
+     domGetRefByID("div"));
+}
+
+<html>
+   <body>
+     <form l:onsubmit="{f(number)}">
+      <input l:name="number"/>
+     </form>
+     <div id="div"/>
+   </body>
+</html>

@@ -142,6 +142,7 @@ let chrlit s = Lit (string_quote (string_of_char s))
 let boiler_1 = "<html>
        <head>
           <script type='text/javascript' src=\"lib/json.js\"></script>
+          <script type='text/javascript' src=\"lib/regex.js\"></script>
           <script type='text/javascript' src=\"lib/yahoo/YAHOO.js\"></script>
           <script type='text/javascript' src=\"lib/yahoo/event.js\"></script>
           <script type='text/javascript' src=\"lib/jslib.js\"></script>
@@ -366,6 +367,7 @@ let rec generate : 'a expression' -> code =
            Call(e', [Fn([x], 
                         Bind(v, Var x,
                              Call(b', [Var "__kappa"])))]))
+  | Variable ("~", _)                  -> trivial_cps (Var "tilde")
   | Variable (v, _)                    -> trivial_cps (Var v)
   | Comparison (l, "==", r, _)         -> 
       let l_cps = generate l in
