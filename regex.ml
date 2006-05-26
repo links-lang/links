@@ -11,7 +11,10 @@ type regex = | Range of (char * char)
                  deriving (Show)
 
 let compile_ocaml : regex -> Str.regexp = 
-  let group = Printf.sprintf "\\(:?%s\\)" 
+
+  (* Using points-free style here (i.e. omitting the s) triggers a bug in 
+     versions of OCaml before about 3.09.0, so don't do that. *)
+  let group s = Printf.sprintf "\\(:?%s\\)" s
     (* non-capturing grouping *)
   in
   let compile_repeat = function
