@@ -1,0 +1,71 @@
+#!/usr/bin/env python2.4
+
+import tarfile, sys, getopt, commands, re
+
+version = ''
+
+usage = '''Usage:
+
+   make_release --version VERSION --manifest-file MANIFEST [--compress (gz|bz2)]
+'''
+
+# TODO: save svn revision number and version number somewhere?
+
+def release_name(version):
+   return 'links-%s' % version
+
+def tarball_name(version, compression):
+   return '%s.tar.%s' % (release_name(version), compression)
+
+def files(manifest):
+   for file in map(str.strip, open(manifest)):
+      if file:
+         yield re.split(' |#', file)[0]
+
+def make_version_file(number):
+   """Write a file, VERSION, containing the internal
+   and external release numbers"""
+   internal_version = commands.getoutput('svn info | fgrep Revision | sed "s/.*: //"')
+   fd = open('VERSION', 'w')
+   print >> fd, 'VERSION : %s' % number
+   print >> fd, '\n\n--\n(Internal version: %s)' % internal_version
+   fd.close()
+
+def arcname(file, version):
+   return 'links-%s/%s' % (version, file)
+
+def make_release(version, manifest_file, compression):
+   make_version_file(version)
+   outfile = tarball_name(version, compression)
+   tar = tarfile.open(outfile, 'w:%s' % compression)
+   for file in files(manifest_file):
+      tar.add(file, arcname=arcname(file, version), recursive=False)
+   tar.close()
+   print 'Output: %s' % outfile
+   
+def main():
+   version = None
+   manifest_file = None
+   compression = 'gz'
+   opts, args = getopt.getopt(sys.argv[1:], '',
+                              ['version=','manifest-file=','compress='])
+   for opt, arg in opts:
+      if opt == '--version':
+         version = arg
+      elif opt == '--manifest-file':
+         manifest_file = arg
+      elif opt == '--compress':
+         if arg in ('bz2', 'gz'):
+            compression = arg
+         else:
+            raise SystemExit, usage
+   if not (version and manifest_file):
+      raise SystemExit, usage
+   try:
+      make_release(version, manifest_file, compression)
+   except Exception, e:
+      raise SystemExit, e
+      
+if __name__ == '__main__':
+   main()
+
