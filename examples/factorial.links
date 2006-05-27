@@ -1,11 +1,10 @@
 table factorials ( 
   i : Int,
   f : Int
-) order [i : asc]
-  database "postgresql:factorials::5432:www-data:";
+)
+database "postgresql:factorials::5432:www-data:";
 
-fun request(s) client {
- dom!Document(
+fun page(s) client {
   <html>
    <body>
     <h1>Please type a number</h1>
@@ -20,12 +19,15 @@ fun request(s) client {
      </form>
     </body>
   </html>
- )
+}
+
+fun request(s) client {
+  domReplaceDocumentXml(page(s))
 }
 
 fun response(s) client {
- var n = int_of_string(s); 
- dom!Document(
+ var n = int_of_string(s);
+ domReplaceDocumentXml(
   <html>
    <body>
     <h1>Factorials up to {enxml(string_of_int(n))}</h1>
@@ -44,7 +46,8 @@ fun response(s) client {
 fun factorialsUpto(n) server {
   for (row <- factorials)
      where (row.i <= n)
+     orderby (row.i)
      [(row.i,row.f)]
 }
 
-request("")    
+page("")

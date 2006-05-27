@@ -7,8 +7,10 @@ fun f(number) client {
 
 <html>
    <body>
+     <h1>Enter a string</h1>
      <form l:onsubmit="{f(number)}">
       <input l:name="number"/>
+      <input type="submit" value="Submit"/>
      </form>
      <div id="div"/>
    </body>
