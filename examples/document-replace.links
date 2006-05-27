@@ -1,5 +1,3 @@
-#!/home/jeremy/links-svn/links/trunk/links -w
-
 fun change() client {
   dom ! Document(
    <html>

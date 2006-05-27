@@ -1,5 +1,3 @@
-#!/home/jeremy/code/links/svn/clean/links
-
 # div-based drawing.
 
 # Create a canvas and return its id to the calling process.

@@ -1,5 +1,3 @@
-#!/home/s0567141/links/links -d
-
 fun lookup(item, list, default) server {
   if (list == []) default
   else {

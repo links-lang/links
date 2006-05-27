@@ -1,5 +1,7 @@
+var num=200000;
+
 fun pass_it_on(pid) {
-  pid ! recv()
+  pid ! recv()+1;
 }
 
 fun create_processes(n, prevpid) {
@@ -11,9 +13,15 @@ fun create_processes(n, prevpid) {
   }
 }
 
+fun run()
 {
-  last_pid = create_processes(200000, self());
-  last_pid ! Message;
-  recv();
-  "the end!"
+  var input = 42;
+  print("Spawning " ++ string_of_int(num) ++ " server processes.
+Input is: "++string_of_int(input));
+  last_pid = create_processes(num, self());
+  last_pid ! input;
+  print("Done. Output is: "++string_of_int(recv())++" isn't this ");
+  run
 }
+
+run()

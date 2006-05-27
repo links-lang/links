@@ -1,5 +1,3 @@
-#!/home/jeremy/code/links/svn/clean/links
-
 # adapted from http://www.timestretch.com/FractalBenchmark.html
 
 var bailout = 16.;
