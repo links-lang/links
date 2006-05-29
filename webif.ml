@@ -10,10 +10,11 @@ type web_request = ContInvoke of continuation * query_params
                    | RemoteCall of result * result
                    | CallMain
 
-let print_http_response headers body = 
+let print_http_response headers = 
   List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
   print_endline "";
-  print_string body
+  flush stdout;
+  print_string
 
 
 (* Does at least one of the functions have to run on the client? *)
