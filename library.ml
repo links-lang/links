@@ -310,6 +310,10 @@ let env : (string * (primitive * Types.assumption)) list = [
          `Record []),
    datatype "a -> ()");
 
+  "domReplaceDocumentXml",
+  (client_only_1 "domReplaceDocumentXml",
+   datatype "XML -> ()");
+
   "domInsertBeforeXml",
   (p2 (fun _ _ -> failwith("`domInsertBeforeXml' is only available on the client.");
          `Record []),

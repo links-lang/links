@@ -145,13 +145,15 @@ let boiler_1 = "<html>
           <script type='text/javascript' src=\"lib/regex.js\"></script>
           <script type='text/javascript' src=\"lib/yahoo/YAHOO.js\"></script>
           <script type='text/javascript' src=\"lib/yahoo/event.js\"></script>
+          <script type='text/javascript'>var DEBUGGING="
+and boiler_2 = ";</script>
           <script type='text/javascript' src=\"lib/jslib.js\"></script>
           <script type='text/javascript'><!-- \n"
-and boiler_2 =    "\n--> </script>
+and boiler_3 =    "\n--> </script>
       </head>
       <!-- $Id$ -->
       <body><script type='text/javascript'>" 
-and  boiler_3 = "</script></body>
+and  boiler_4 = "</script></body>
    </html>"
 
 (* Operators are represented as functions in the interpreter, but
@@ -764,10 +766,12 @@ let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
  (* TODO: imports *)
 let generate_program environment expression =
   (boiler_1
- ^ String.concat "\n" (map gen (but_last environment))
+ ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2
+ ^ String.concat "\n" (map gen (but_last environment))
+ ^ boiler_3
  ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
- ^ boiler_3)
+ ^ boiler_4)
 
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
