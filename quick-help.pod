@@ -25,11 +25,7 @@ types. An n-tuple is constructed by enclosing n expressions in
 parenthesis and separating them with commas:
 
    (a, "OK")
-   (7)
    (true, "a string", 42)
-
-A 1-tuple is distinct from the value it contains (FIXME: is this
-true?) but this rarely occurs in practice.
 
 TBD: talk about records.
 
@@ -414,8 +410,9 @@ prefix. Widely-supported l-event attributes include:
 
 =back
 
-(TBD: need to rationalize this list a bit. In keeping with the C<Event> interface, 
-we need a browser-agnostic set of event handlers.)
+(TBD: need to rationalize this list a bit. In keeping with the
+C<Event> interface, we need a browser-independent set of event
+handlers.)
 
 When an element containing one of these attributes is installed in the
 current DOM document (see L<Modifying the DOM>), the associated code
@@ -463,6 +460,7 @@ mouse-out event (TBD: define this) identifies an element which the mouse moved
 I<out of> and one which it movedd I<into>.
 
 =item C<evtGetPageX>
+
 =item C<evtGetPageY>
 
 Some events refer to a particular point on the page. These methods return 
@@ -471,6 +469,7 @@ page (I<right> and I<down> are the positive directions).
 
 (TBD: need methods for the position relative to the target, and rel. to the 
 screen. Also: how about C<evtGetPageXY> returning an (x, y) pair?)
+
 =item evtGetTime
 
 =back
