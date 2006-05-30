@@ -21,7 +21,7 @@ fun f() { receive { case Bar -> (); case x -> (); }} fun g() { receive { case Fo
 stdout : @fun : .*
 
 Receive types must unify (incorrect, open rows)
-fun f() { receive { case Bar x -> x+1; case x -> 0; }} fun g() { receive { case Bar s -> s+.1.; case x -> 0.0; }} fun () { f(); g() }
+fun f() { receive { case Bar (x) -> x+1; case x -> 0; }} fun g() { receive { case Bar (s) -> s+.1.; case x -> 0.0; }} fun () { f(); g() }
 stderr : @.*Type error.*
 exit : 1
 

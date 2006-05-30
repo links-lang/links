@@ -69,7 +69,7 @@ fun rev(x, r) { switch x { case Empty -> r; case Cons(a, b) -> rev(b, Cons(a, r)
 stdout : @fun : \(mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | Empty:\(\)|\], mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
 
 Recursive variant types [4]
-fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ n -> Succ (increment(n));}} fun (x) {switch (increment(x)) { case Foo -> 0; case Zero -> 1; case Succ n -> 2; }}
+fun increment(x) { switch x { case Zero -> Succ (Zero); case Succ (n) -> Succ (increment(n));}} fun (x) {switch (increment(x)) { case Foo -> 0; case Zero -> 1; case Succ (n) -> 2; }}
 stdout : @fun : \(mu ([a-z]+) . \[|Succ:\\1 | Zero:\(\)|\]\) -> Int
 
 Recursive variant types [5]
