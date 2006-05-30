@@ -251,8 +251,8 @@ let strip_lcolon evName =
 
 (* Generate a stub that calls the corresponding server function *)
 let generate_stub = function
-  | Define (n, Rec ([_, (Abstr (arg,_,_))], Variable _, _), `Server, _) ->
-      let arglist = [arg] in
+  | Define (n, Rec ([_, (Abstr _ as f)], Variable _, _), `Server, _) ->
+      let arglist, _ = untuple_def f in
         Defs [n, Fn(["__kappa"], Fn (arglist, 
                  Call(Call (Var "_remoteCall", [Var "__kappa"]),
                       [strlit n; Dict (
@@ -413,12 +413,13 @@ let rec generate : 'a expression' -> code =
         make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
-  | Abstr (arglist, body, _) ->
-      Fn(["__kappa"], 
-         Call(Var "__kappa", 
-	      [Fn(["__kappa"],
-		  Fn ([arglist], Call(generate body, [Var "__kappa"])))]))
-        
+  | Abstr _ as a -> 
+      let arglist, body = untuple_def a
+      in Fn(["__kappa"], 
+            Call(Var "__kappa", 
+		 [Fn(["__kappa"],
+		     Fn (arglist, Call(generate body, [Var "__kappa"])))]))
+
   | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
       let l_cps = generate l in
       let r_cps = generate r in
@@ -439,7 +440,7 @@ let rec generate : 'a expression' -> code =
       let kappa = Var("__kappa") in
       let f_cps = generate f in
       let f_name = gensym "__f" in
-      let arglist = [p] in
+      let arglist = untuple_call p in
       let cps_args = map generate arglist in
       let arg_names = map (fun e -> gensym "__f") arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
