@@ -11,7 +11,7 @@ fun append(xml) {
 
 fun f(pid) client {
   receive {
-    case Message n -> {
+    case Message(n) -> {
         append(enxml(". "));
         pid ! Message(n+1)
     };
@@ -28,7 +28,7 @@ fun run(input) client {
   pid = myspawn(self(), num); ();
   pid ! Message (int_of_string(input));
   receive {
-    case Message n -> {
+    case Message(n) -> {
         append(enxml(" Done. Output is: "++string_of_int(n)));
 	append(<br />)
     };

@@ -21,23 +21,23 @@ fun completions(p) server {
 }
 
 fun replace(id, xml) client {
- var node = domGetRefByID(id);
- domInsertBeforeXml(xml, node);
- domRemoveNodeRef(node);
+ var node = domGetRefById(id);
+ domInsertBefore(xml, node);
+ domRemoveRef(node);
 }
-
+#    <div align="left" CLASS="box" id="defs" style="width:500px;background-color:#ccccff">{
+#    }</div>,
 fun showdefs(suggestions) client {
- replace("defs",
-    <div align="left" CLASS="box" id="defs" style="width:500px;background-color:#ccccff">{
+ domReplaceChildren(
       for (suggestion <- suggestions)
         <span>
           <strong>{enxml(suggestion.word)}</strong>
                <i>{enxml(suggestion.type)}</i>:
                   {enxml(suggestion.meaning)}
                <br/>
-        </span>
-    }</div>
- )
+        </span>,
+    domGetRefById("defs")
+    )
 }
 
 <html>

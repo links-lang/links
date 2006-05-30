@@ -5,7 +5,7 @@ table factorials (
 database "postgresql:factorials::5432:www-data:";
 
 fun request(s) client {
- domReplaceDocumentXml(
+ domReplaceDocument(
   <html>
    <body>
     <h1>Please type a number</h1>
@@ -25,7 +25,7 @@ fun request(s) client {
 
 fun response(s) client {
  var n = int_of_string(s);
- domReplaceDocumentXml(
+ domReplaceDocument(
   <html>
    <body>
     <h1>Factorials up to {enxml(string_of_int(n))}</h1>

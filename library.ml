@@ -320,6 +320,11 @@ let env : (string * (primitive * Types.assumption)) list = [
   (client_only_2 "domReplaceNode",
    datatype "(XML, DomRef) -> ()"); 
 
+  "domReplaceDocument",
+  (client_only_1 "domReplaceDocument",
+   datatype "XML -> ()"); 
+
+
   "domInsertBeforeRef",
   (p2 (fun _ _ -> failwith("`domInsertBeforeRef' is only available on the client.");
          `Record []),
