@@ -4,7 +4,8 @@ table factorials (
 )
 database "postgresql:factorials::5432:www-data:";
 
-fun page(s) client {
+fun request(s) client {
+ domReplaceDocumentXml(
   <html>
    <body>
     <h1>Please type a number</h1>
@@ -19,10 +20,7 @@ fun page(s) client {
      </form>
     </body>
   </html>
-}
-
-fun request(s) client {
-  domReplaceDocumentXml(page(s))
+ )
 }
 
 fun response(s) client {
@@ -44,10 +42,10 @@ fun response(s) client {
 }
 
 fun factorialsUpto(n) server {
-  for (row <- factorials)
-     where (row.i <= n)
-     orderby (row.i)
-     [(row.i,row.f)]
+ for (row <- factorials)
+  where (row.i <= n)
+  orderby (row.i)
+  [(row.i,row.f)]
 }
 
-page("")
+request("")

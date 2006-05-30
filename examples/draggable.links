@@ -1,20 +1,30 @@
 fun waiting(id) client {
-  receive {
-     case MouseDown  target -> dragging(id, target);
-     case MouseUp           -> waiting(id);
-     case MouseOut   target -> waiting(id);
-  }
+ receive {
+  case MouseDown(target) -> dragging(id, target);
+  case MouseUp           -> waiting(id);
+  case MouseOut(relatedTarget) -> waiting(id);
+ }
+}
+
+fun swapNodeRefs(x, y) {
+ domSwapNodeRefs(x, y)
 }
 
 fun dragging(id, elem) client {
   receive {
-     case MouseUp           -> waiting(id);
-     case MouseDown  target -> dragging(id, target);
-     case MouseOut relatedTarget -> {
+     case MouseUp                 -> waiting(id);
+     case MouseDown(target)       -> dragging(id, target);
+     case MouseOut(relatedTarget) -> {
+#         if (not(isNull(relatedTarget)) &&
+#           domGetAttributeRef(domGetParentNodeRef(relatedTarget), "id") == id) {
+#           swapNodeRefs(relatedTarget, elem);
+#           dragging(id, elem)          
+#         }
+#         else waiting(id)
          if (domGetTagNameRef(relatedTarget) == "LI"
 		&& domGetAttributeRef(domGetParentNodeRef(relatedTarget), "id") == id) {
-            dom ! SwapNodes(first=relatedTarget,second=elem);
-            dragging(id, elem)
+           swapNodeRefs(relatedTarget, elem);
+           dragging(id, elem)
          }
          else waiting(id)
     };
