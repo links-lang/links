@@ -3,11 +3,11 @@
 # Create a canvas and return its id to the calling process.
 # The canvas can receive messages of the form Point (x,y)
 fun canvas (x, y, id) {
-  domAppendChildXml(
+  domAppendChild(
          <div id="{id}"
               style="width: {string_of_int(x)}px;
                      height: {string_of_int(y)}px"> </div>,
-         domGetRefByID("body"));
+         domGetRefById("body"));
   spawn{ draw(id) }
 }
 
@@ -16,14 +16,14 @@ fun canvas (x, y, id) {
 fun draw(id) client {
   receive {
     case Point(x,y) -> {
-     domAppendChildXml(
+     domAppendChild(
                <div style="position: absolute;
                            background-color: red; 
                            width: 1px;
                            height: 1px;
                            left: {string_of_int(x)}px;
                            top: {string_of_int(y)}px"> </div>,
-               domGetRefByID(id))
+               domGetRefById(id))
     };
   };
   draw(id);

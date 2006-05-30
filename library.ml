@@ -250,19 +250,16 @@ let env : (string * (primitive * Types.assumption)) list = [
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
 
-  "elementById",
-  (client_only_1 "elementById",
-   datatype "String -> [|Some:XML |None:()|]");
-  
   "enxml",
   (p1 (function 
          | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
          | _ -> failwith "internal error: non-string value passed to xml conversion routine"),
    ([], Types.string_type --> xml));
 
-  "dom",
+  (* [DEACTIVATED] *)
+  (* "dom", *)
   (* Not available on the server *)
-  (`Int (num_of_int (-1)), datatype "Mailbox a");
+(*  (`Int (num_of_int (-1)), datatype "Mailbox a");*)
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
@@ -301,58 +298,75 @@ let env : (string * (primitive * Types.assumption)) list = [
   "callForeign",
    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b");
 
-  "domOp",
-  (p1 (fun message -> failwith("`domOp' is only available on the client.");
-         `Record []),
-   datatype "a -> ()");
+  (* DOM API *)
 
-  "domReplaceDocumentXml",
-  (client_only_1 "domReplaceDocumentXml",
-   datatype "XML -> ()");
+(* [DEACTIVATED] *)
+(*   "domOp", *)
+(*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
+(*          `Record []), *)
+(*    datatype "a -> ()"); *)
 
-  "domInsertBeforeXml",
-  (p2 (fun _ _ -> failwith("`domInsertBeforeXml' is only available on the client.");
+  "domInsertBefore",
+  (p2 (fun _ _ -> failwith("`domInsertBefore' is only available on the client.");
          `Record []),
-  datatype "(XML, DOMNodeRef) -> ()");
+  datatype "(XML, DomRef) -> ()");
 
-  "domAppendChildXml",
-  (p2 (fun _ _ -> failwith("`domAppendChildXml' is only available on the client.");
+  "domAppendChild",
+  (p2 (fun _ _ -> failwith("`domAppendChild' is only available on the client.");
          `Record []),
-  datatype "(XML, DOMNodeRef) -> ()");
+  datatype "(XML, DomRef) -> ()");
 
-  "domRemoveNodeRef",
-  (p1 (fun _ -> failwith("`domAppendChildXml' is only available on the client.");
-         `Record []),
-   datatype "DOMNodeRef -> ()");
+  "domReplaceNode",
+  (client_only_2 "domReplaceNode",
+   datatype "(XML, DomRef) -> ()"); 
 
   "domInsertBeforeRef",
   (p2 (fun _ _ -> failwith("`domInsertBeforeRef' is only available on the client.");
          `Record []),
-  datatype "(DOMNodeRef, DOMNodeRef) -> ()");
+  datatype "(DomRef, DomRef) -> ()");
 
   "domAppendChildRef",
   (p2 (fun _ _ -> failwith("`domAppendChildRef' is only available on the client.");
          `Record []),
-  datatype "(DOMNodeRef, DOMNodeRef) -> ()");
+  datatype "(DomRef, DomRef) -> ()");
 
-  "domGetDocRef",
-  (p1 (fun message -> failwith("`domGetDocRef' is only available on the client.");
+  "domRemoveRef",
+  (p1 (fun _ -> failwith("`domAppendChild' is only available on the client.");
          `Record []),
-   datatype "() -> DOMNodeRef");
+   datatype "DomRef -> ()");
 
-  "domGetRefByID",
-  (p1 (fun message -> failwith("`domGetRefByID' is only available on the client.");
-         `Record []),
-   datatype "String -> DOMNodeRef");
 
-  "domGetRepresentation",
-  (p1 (fun message -> failwith("`domGetRepresentation' is only available on the client.");
+  "domReplaceChildren",
+  (client_only_2 "domReplaceChildren",
+   datatype "(XML, DomRef) -> ()");
+
+  "domSwapNodeRefs",
+  (client_only_2 "domSwapNodeRefs",
+  datatype "(DomRef, DomRef) -> ()");
+
+
+  "domGetDocumentRef",
+  (p1 (fun message -> failwith("`domGetDocumentRef' is only available on the client.");
          `Record []),
-   datatype "DOMNodeRef -> XML");
+   datatype "() -> DomRef");
+
+  "domGetRefById",
+  (p1 (fun message -> failwith("`domGetRefById' is only available on the client.");
+         `Record []),
+   datatype "String -> DomRef");
+
+  "domGetXml",
+  (p1 (fun message -> failwith("`domGetXml' is only available on the client.");
+         `Record []),
+   datatype "DomRef -> XML");
+
+  "domIsNullRef",
+   (client_only_1 "domIsNullRef",
+    datatype "DomRef -> Bool");
 
 (* Section: Accessors for XML *)
-  "getTagNameXml",
-    (client_only_1 "getTagNameXml",
+  "getTagName",
+    (client_only_1 "getTagName",
      datatype "XML -> String");
 
   "getAttributes",
@@ -372,60 +386,67 @@ let env : (string * (primitive * Types.assumption)) list = [
   ((client_only_1 "getChildNodes"),
    datatype "XML -> [XML]");
 
-(* Section: Accessors for DOMNodeRefs *)
-  "domGetTagNameRef",
-    (client_only_1 "domGetTagNameRef",
-     datatype "DOMNodeRef -> String");
+(* Section: Accessors for DomRefs *)
+  "domGetTagNameFromRef",
+    (client_only_1 "domGetTagNameFromRef",
+     datatype "DomRef -> String");
 
-  "domGetAttributeRef",
-  ((client_only_1 "domGetAttributeRef"),
-   datatype "(DOMNodeRef, String) -> String");
+  "domGetAttributeFromRef",
+  ((client_only_1 "domGetAttributeFromRef"),
+   datatype "(DomRef, String) -> String");
 
-(* Section:  Navigation for DOMNodeRefs *)
-  "domGetParentNodeRef",
-  ((client_only_1 "domGetParentNodeRef"),
-   datatype "DOMNodeRef -> DOMNodeRef");
+(* Section:  Navigation for DomRefs *)
+  "domGetParentFromRef",
+  ((client_only_1 "domGetParentFromRef"),
+   datatype "DomRef -> DomRef");
+
+  "domGetFirstChildFromRef",
+  ((client_only_1 "domGetFirstChildFromRef"),
+   datatype "DomRef -> DomRef");
+
+  "domGetNextSiblingFromRef",
+  ((client_only_1 "domGetNextSiblingFromRef"),
+   datatype "DomRef -> DomRef");
 
 (* Section: DOM Event API *)
-  "evtGetTarget",
-  ((client_only_1 "evtGetTarget"),
-   datatype "Event -> DOMNodeRef");
+  "eventGetTarget",
+  ((client_only_1 "eventGetTarget"),
+   datatype "Event -> DomRef");
 
-  "evtGetTargetValue",
-  ((client_only_1 "evtGetTargetValue"),
+  "eventGetTargetValue",
+  ((client_only_1 "eventGetTargetValue"),
    datatype "Event -> String");
 
-
-  "evtGetTargetResolveTextNode",
-  ((client_only_1 "evtGetTargetResolveTextNode"),
-   datatype "Event -> DOMNodeRef");
+  "eventGetTargetResolveTextNode",
+  ((client_only_1 "eventGetTargetResolveTextNode"),
+   datatype "Event -> DomRef");
 
 (* getPageX : Event -> Int *)
-  "evtGetPageX",
-  ((client_only_1 "evtGetPageX"),
+  "eventGetPageX",
+  ((client_only_1 "eventGetPageX"),
    datatype "Event -> Int");
 
 (* getPageY : Event -> Int *)
-  "evtGetPageY",
-  ((client_only_1 "evtGetPageY"),
+  "eventGetPageY",
+  ((client_only_1 "eventGetPageY"),
    datatype "Event -> Int");
 
-(* getRelatedTarget : Event -> DOMNodeRef *)
-  "evtGetRelatedTarget",
-  ((client_only_1 "evtGetRelatedTarget"),
-   datatype "Event -> DOMNodeRef");
+(* getRelatedTarget : Event -> DomRef *)
+  "eventGetRelatedTarget",
+  ((client_only_1 "eventGetRelatedTarget"),
+   datatype "Event -> DomRef");
 
 (* getTime : Event -> Int *)
-  "evtGetTime",
-  ((client_only_1 "evtGetTime"),
+  "eventGetTime",
+  ((client_only_1 "eventGetTime"),
    datatype "Event -> Int");
 
 (* # stopEvent : ??? *)
 (* # stopPropagation : ??? *)
 (* # preventDefault : ??? *)
 (* getCharCode : Event -> Char *)
-  "evtGetCharCode",
-  ((client_only_1 "evtGetCharCode"),
+  "eventGetCharCode",
+  ((client_only_1 "eventGetCharCode"),
    datatype "Event -> Char");
 
   "sleep",

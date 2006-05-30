@@ -6,9 +6,9 @@ fun compute(count, total) server {
 }
 
 fun replace(id, xml) {
- var node = domGetRefByID(id);
- domInsertBeforeXml(xml, node);
- domRemoveNodeRef(node);
+ var node = domGetRefById(id);
+ domInsertBefore(xml, node);
+ domRemoveRef(node);
 }
 
 fun showProgress(count, total) client {

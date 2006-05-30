@@ -15,16 +15,10 @@ fun dragging(id, elem) client {
      case MouseUp                 -> waiting(id);
      case MouseDown(target)       -> dragging(id, target);
      case MouseOut(relatedTarget) -> {
-#         if (not(isNull(relatedTarget)) &&
-#           domGetAttributeRef(domGetParentNodeRef(relatedTarget), "id") == id) {
-#           swapNodeRefs(relatedTarget, elem);
-#           dragging(id, elem)          
-#         }
-#         else waiting(id)
-         if (domGetTagNameRef(relatedTarget) == "LI"
-		&& domGetAttributeRef(domGetParentNodeRef(relatedTarget), "id") == id) {
+         if (not(domIsNullRef(relatedTarget)) &&
+           domGetAttributeFromRef(domGetParentFromRef(relatedTarget), "id") == id) {
            swapNodeRefs(relatedTarget, elem);
-           dragging(id, elem)
+           dragging(id, elem)          
          }
          else waiting(id)
     };
@@ -41,8 +35,8 @@ fun draggableList(id, items)
   var listMgr = spawn { waiting(id) };
    <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{listMgr ! (MouseUp)}"
-      l:onmousedown = "{listMgr ! (MouseDown (evtGetTarget(event)))}"
-      l:onmouseout  = "{listMgr ! (MouseOut (evtGetRelatedTarget(event)))}"
+      l:onmousedown = "{listMgr ! (MouseDown (eventGetTarget(event)))}"
+      l:onmouseout  = "{listMgr ! (MouseOut (eventGetRelatedTarget(event)))}"
    >
     {for (item <- items)
          format(item)}

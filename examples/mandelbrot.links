@@ -8,14 +8,14 @@ var max_iterations = 200;
 fun draw(colour, id) client {
   receive {
     case Point(x,y) -> {
-     domAppendChildXml(
+     domAppendChild(
                  <div style="position: absolute;
                              background-color: {colour}; 
                              width: 2px;
                              height: 2px;
                              left: {string_of_int(2*x)}px;
                              top: {string_of_int(2*y)}px"> </div>,
-                 domGetRefByID(id));
+                 domGetRefById(id));
     };
   };
   draw(colour, id);
@@ -24,12 +24,12 @@ fun draw(colour, id) client {
 # Create a canvas and return its process id to the calling process.
 # The canvas can receive messages of the form Point (x,y)
 fun canvas (x, y, colour, id) {
-  domAppendChildXml(
+  domAppendChild(
               <div id="{id}"
                    style="position: relative;
                           float: left; width: {string_of_int(2*x)}px;
                           height: {string_of_int(2*y)}px"> </div>,
-              domGetRefByID("body"));
+              domGetRefById("body"));
   spawn{ draw(colour, id) }
 }
 
@@ -60,12 +60,10 @@ fun mandelbrot(x, y) {
 
 fun makefreshname(colour, n) client {
   var name = colour++string_of_int(n);
-  # HACK: we should really use domGetRefById
-  # but that doesn't yet return an option type
-  switch(elementById(name)) {
-    case Some x -> makefreshname(colour, n+1);
-    case None -> name;
-  }
+  if(domIsNullRef(domGetRefById(name)))
+    name
+  else
+    makefreshname(colour, n+1)
 }
 
 fun getfreshid(colour) {
@@ -87,7 +85,7 @@ var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
 <html>
  <body>
-  <select l:onchange="{iterate(evtGetTargetValue(event))}"
+  <select l:onchange="{iterate(eventGetTargetValue(event))}"
 	style="display: block">
     {for (colour <- colours)
        <option>{enxml(colour)}</option>}

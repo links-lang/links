@@ -1,55 +1,55 @@
 fun append() client {
- deck = domGetRefByID("deck");
+ deck = domGetRefById("deck");
  newJoke = <ul><li> Q: Why don't Buddhists vacuum in the corners?</li>
                <li> A: Because they have no attachments. </li> </ul>;
- domAppendChildXml(newJoke, deck);
+ domAppendChild(newJoke, deck);
 }
 
 fun appendToDoc() client {
- doc = domGetDocRef();
+ doc = domGetDocumentRef();
  choreList = <ul id="chores"><li>laundry</li>
                              <li>fix bike</li></ul>;
- domAppendChildXml(choreList, doc);
+ domAppendChild(choreList, doc);
 }
 
 fun remove() client {
-  chores = domGetRefByID("chores");
-  domRemoveNodeRef(chores);
+  chores = domGetRefById("chores");
+  domRemoveRef(chores);
 }
 
 fun removeDoc() client {
-  doc = domGetDocRef();
-  domRemoveNodeRef(doc);
+  doc = domGetDocumentRef();
+  domRemoveRef(doc);
 }
 
 fun move() client {
-  setup = domGetRefByID("setup");
-  punchline = domGetRefByID("punchline");
+  setup = domGetRefById("setup");
+  punchline = domGetRefById("punchline");
   domInsertBeforeRef(punchline, setup);
 }
 
 fun moveAppend() client {
-  deck = domGetRefByID("deck");
-  punchline = domGetRefByID("punchline");
+  deck = domGetRefById("deck");
+  punchline = domGetRefById("punchline");
   domAppendChildRef(punchline, deck);
 }
 
 fun representation() client {
-  deckRef = domGetRefByID("deck");
-  deckXml = domGetRepresentation(deckRef);
-  doc = domGetDocRef();
-  domAppendChildXml(deckXml,doc)
+  deckRef = domGetRefById("deck");
+  deckXml = domGetXml(deckRef);
+  doc = domGetDocumentRef();
+  domAppendChild(deckXml,doc)
 }
 
 fun deckTagName() {
-  deck = domGetRefByID("deck");
-  deckXml = domGetRepresentation(deck);
-  debug(getTagNameXml(deckXml));
+  deck = domGetRefById("deck");
+  deckXml = domGetXml(deck);
+  debug(getTagName(deckXml));
 }
 
 fun deckStyle() {
-  deck = domGetRefByID("deck");
-  deckXml = domGetRepresentation(deck);
+  deck = domGetRefById("deck");
+  deckXml = domGetXml(deck);
   debug(getAttribute(deckXml, "style"));
 }
 
