@@ -10,11 +10,33 @@ type web_request = ContInvoke of continuation * query_params
                    | RemoteCall of result * result
                    | CallMain
 
-let print_http_response headers = 
+(*
+let print_http_response headers body =
   List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
   print_endline "";
+  print_string body
+*)
+
+(* This is curried in order to ensure that the headers are output
+   immediately. This is necessary for server-side programs that
+   use the print function (otherwise the output appears before the
+   headers).
+
+   Unfortunately it also breaks programs that use server -> client
+   calls, which is why we have the extra parameter immediate_endline.
+   Currently this is only set to true for a server-side call main function.
+    
+   We need to think more about the correct behaviour in other situations.
+ *)
+let print_http_response immediate_endline headers = 
+  List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
   flush stdout;
-  print_string
+  if immediate_endline then
+    (print_endline ""; print_string)
+  else
+    fun body ->
+      print_endline "";
+      print_string body
 
 
 (* Does at least one of the functions have to run on the client? *)
@@ -194,33 +216,38 @@ let client_return_req env cgi_args =
 
 let perform_request program globals main req =
   match req with
-    | ContInvoke (cont, params) -> 
-        print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result 
-             (Interpreter.apply_cont_safe globals cont (`Record params)))
+    | ContInvoke (cont, params) ->
+	let f = print_http_response false [("Content-type", "text/html")]
+	in
+          f (Result.string_of_result 
+               (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        print_http_response [("Content-type", "text/html")]
-          (Result.string_of_result 
+        let f = print_http_response false [("Content-type", "text/html")]
+	in
+          f (Result.string_of_result 
              (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
-        print_http_response [("Content-type", "text/plain")]
-          (Utility.base64encode 
+	let f = print_http_response false [("Content-type", "text/plain")]
+	in
+          f (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
         let cont = [Result.FuncApply (func, [])] in
-          print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode
+        let f = print_http_response false [("Content-type", "text/plain")] in
+	  f (Utility.base64encode
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         if is_client_program program then
-          (print_http_response [("Content-type", "text/html")]
-             (Js.generate_program program main)
+          (let f = print_http_response false [("Content-type", "text/html")]
+	   in
+             f (Js.generate_program program main)
           )
         else (
-          print_http_response [("Content-type", "text/html")]
-            (Result.string_of_result (snd (Interpreter.run_program globals [main])))
+          let f = print_http_response true [("Content-type", "text/html")]
+	  in
+            f (Result.string_of_result (snd (Interpreter.run_program globals [main])))
         )
           
 (*       let result = continue_from_client_call global_env cgi_args in *)
@@ -264,7 +291,7 @@ let serve_requests filename =
     in
       perform_request program global_env main request
   with
-      exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
+      exc -> print_http_response false [("Content-type", "text/html; charset=utf-8")]
         (error_page (format_exception_html exc))
           
 let serve_requests filename =
