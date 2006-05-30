@@ -118,7 +118,7 @@ primary_expression:
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
 | CONSTRUCTOR primary_expression                               { ConstructorLit($1, Some $2), pos() }
-| CONSTRUCTOR constructor_expression                           { ConstructorLit($1, Some $2), pos() }
+| CONSTRUCTOR LPAREN constructor_expression RPAREN             { ConstructorLit($1, Some $3), pos() }
 
 
 parenthesized_thing:

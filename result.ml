@@ -364,7 +364,8 @@ and string_of_result : result -> string = function
       (try string_of_tuple fields
        with Not_tuple ->
          "(" ^ String.concat "," (map (fun (label, value) -> label ^ "=" ^ string_of_result value) fields) ^ ")")
-  | `Variant (label, value) -> label ^ " " ^ string_of_result value
+  | `Variant (label, `Record []) -> label ^ "()"
+  | `Variant (label, value) -> label ^ "(" ^ string_of_result value ^ ")"
   | `List [] -> "[]"
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `List ((`XML _)::_ as elems) -> String.concat "" (map string_of_xresult elems)
