@@ -11,7 +11,7 @@ fun page(s) client {
      <form l:onsubmit="{response(t)}" l:onkeyup="{request(t)}">
       <input type="text" value="{s}" l:name="t"/>
       {
-      if (is_integer(s))
+      if (s ~ /[0-9]+/)
        <input type="submit"/>
       else
        <input type="submit" disabled="disabled"/>

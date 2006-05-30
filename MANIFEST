@@ -98,11 +98,7 @@ lib/js/json.js
 lib/js/jslib.js
 
 tests
-tests/selenium-tests
-tests/selenium-tests/selenium-tests.html
-tests/selenium-tests/selenium-suite.html
 tests/collections.tests
-tests/optimization.tests
 tests/conditionals.tests
 tests/web-tests.pl
 tests/variants.tests
@@ -129,6 +125,5 @@ examples/todo.links
 examples/factorial.links
 examples/progress.links
 examples/draggable.links
-examples/token-ring.links
 examples/mandelbrot.links
 examples/paginate.links

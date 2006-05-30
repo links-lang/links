@@ -293,10 +293,6 @@ let env : (string * (primitive * Types.assumption)) list = [
   "negatef", 
   (p1 (fun f -> box_float (-. (unbox_float f))), datatype "Float -> Float");
 
-  "is_integer", 
-  (p1 (unbox_string ->- (flip (Str.string_match (Str.regexp "^[0-9]+$")) 0) ->- box_bool),
-   datatype "String -> Bool");
-  
   "error",
   (p1 (unbox_string ->- failwith), datatype "String -> a");
   

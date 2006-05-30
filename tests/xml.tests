@@ -59,9 +59,8 @@ stderr : @.*
 exit : 1
 
 Accept okay l:name attributes
-<form><input l:name="foo" /></form>
-stderr : @.*
-exit : 1
+<form><input l:name="foo"/></form>
+stdout : <form><input name="foo"/></form> : XML
 
 Looping in XML quasis
 things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
