@@ -29,7 +29,7 @@ parenthesis and separating them with commas:
 
 TBD: talk about records.
 
-=head2 variants
+=head2 Polymorphic variants
 
 A "Variant type" is one that uses a set of tags to differentiate
 values as to what they mean. For example, a mode of transport may be
@@ -116,6 +116,10 @@ Within an XML quasi, a variety of special features can be used to
 handle browser events. See L<Handling User Actions>, below, for more
 information on these features.
 
+=head2 Forms
+
+...
+
 =head2 Comparisons and Boolean Expressions
 
 Comparisons are binary operations that yield a true/false value. 
@@ -186,7 +190,7 @@ and both branches are required.
 
 Variables are single-assignment in Links. The form
 
-    x = expr;
+    var x = expr;
     etc
 
 evaluates C<expr> and binds the name C<x> to the resulting value,
@@ -194,11 +198,11 @@ within the expression C<etc>.
 
 Variable assignments have block scope. The following example
 
-    x = 1;
+    var x = 1;
     if (condition) {
-      x = 2
+      var x = 2
     } else {
-      x = 3
+      var x = 3
     };
     print int_to_string(x);
 
@@ -207,10 +211,10 @@ bind within those clauses. If you want the value printed to depend on
 the condition, you should assign to C<x> from the result of the whole
 C<if> expression:
 
-    x = if (condition) {
-      x = 2
+    var x = if (condition) {
+      2
     } else {
-      x = 3
+      3
     };
     print int_to_string(x);
 
@@ -221,19 +225,19 @@ turn, binding each value to the corresponding name in what
 follows. Variables are assigned only once per scope, and succeeding
 assignments will mask preceding ones:
 
-    x = 1;
-    y = 2;
-    x = 2;
-    z = x + y;    # z is now bound to 4
+    var x = 1;
+    var y = 2;
+    var x = 2;
+    var z = x + y;    # z is now bound to 4
 
 The scope of an assignment is strictly within its immediate block. As
 a result, the following code may not do what you expect:
 
-    x = 0;
+    var x = 0;
     if (a == b)
-        x = 1;
+        var x = 1;
     else
-        x = 2;
+        var x = 2;
     alert(x);
 
 The value printed by C<alert> will be 0. That's because the other two
@@ -286,7 +290,7 @@ arguments in parentheses:
 This works whether C<foo> is a function defined with a name, as C<fun
 foo(...) {...}>, or a variable bound to a functional value, as
 
-    inc = fun (x) {x + 1};
+    var inc = fun (x) {x + 1};
     inc(7)
 
 This block returns C<8>.
@@ -304,14 +308,14 @@ The value of a comprehension is the concatenation of all the lists
 produced by evaluating the body, once for each element of I<source>, and
 binding that element to the variable C<x>. For example:
 
-    source_list = [1, 2, 3];
+    var source_list = [1, 2, 3];
     for (x <- source_list)
         [ x*x ]
 
 constructs a list of the squares of the values in C<source_list>. Note
 that more than one value can be included in the body list:
 
-    source_list = [2, 3, 7, 8, 9, 55];
+    var source_list = [2, 3, 7, 8, 9, 55];
     for (n <- source_list)
         if (odd(n))
            [n, n+1]
@@ -322,6 +326,25 @@ This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
 
 Other forms of looping can be implemented using tail recursion.
 
+TBD: where and orderby
+
+=head2 Tables
+
+In order to access a database table it must be declared at the
+top-level. For instance:
+
+  table wordlist (
+    word : String,
+    type : String,
+    meaning : String
+  ) database "postgresql:dictionary::5432:www-data:";
+
+declares a table wordlist with fields: word, type and meaning all of
+type String. The database descriptor contains a number of fields
+separated by colons:
+
+ driver:name:host:port:user:password
+
 =head1 Features
 
 =head2 Concurrency
@@ -329,7 +352,7 @@ Other forms of looping can be implemented using tail recursion.
 A Links program begins as a single thread of control but can fork into
 many threads by executing the C<spawn> primitive:
 
-  newThreadID = spawn(func, arg)
+  var newThreadID = spawn(func, arg)
 
 This starts a new thread which begins by applying C<func> to the
 single argument C<arg>. If the function ever returns, its return value
@@ -357,7 +380,7 @@ C<[|CelebritySighting(String, String) | PassingComet(Int, Float, Float)|]>
 A process can receive messages using the C<recv> function, which
 returns the next message in the current process's mailbox.
 
-  nextMsg = recv()
+  var nextMsg = recv()
 
 More commonly, however, you will want to dispatch on the received
 message's variant tag immediately. The C<receive> construct makes this
@@ -369,7 +392,7 @@ easy to do.
   }
 
 This removes the next message from the mailbox and does a C<switch> on
-it. (See L<variants>).
+it. (See L<Polymorphic variants>).
 
 =head2 Located code and remote procedure calls
 
@@ -628,9 +651,56 @@ getAttributes)
 (TBD: We are missing : domGetChildrenRef, getChildren, domGetFirstChildRef, 
 domGetNextSiblingRef, domGetPrevSiblingRef)
 
+=head2 Database access
+
 =head1 Standard Library
 
 TBD: other standard operations.
+
+
+=head1 Running links
+
+Links can be run either as a CGI script through a web server such as Apache, or from the command line.
+
+When run as a CGI script Links must be passed a filename as an argument.
+
+ links filename
+
+
+From the command line Links can be invoked in a number of different ways:
+
+  links            load the interactive environment
+  links -e exp     evaluate exp
+  links filename   run filename
+
+The following options are supported in all modes:
+
+ -d       debug mode
+ -O       enable optimisation
+ -n       don't print types
+
+=head2 The interactive interpreter
+
+The interactive interpreter allows server-side code to be entered
+dynamically. In order to evaluate an expression it must be terminated
+with a double semi-colon followed by a new line:
+
+  ./links
+  links> 1+2;;
+  3 : Int
+  links>
+
+The interpreter outputs the resulting value and its type.
+
+=head3 Directives
+
+The interpreter supports a number of directives.
+
+ @directives           : list available directives
+ @settings             : print available settings
+ @set                  : change the value of a setting
+ @builtins             : list builtin functions and values
+ @quit                 : exit the interpreter  
 
 =cut
 
