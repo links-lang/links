@@ -3,6 +3,9 @@ Makefile.sample.config
 OCamlMakefile
 
 INSTALL
+README
+ACKNOWLEDGEMENTS
+COPYING
 MANIFEST
 VERSION # created by the release script
 KNOWN-ISSUES
