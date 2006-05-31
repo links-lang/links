@@ -146,10 +146,12 @@ let options : opt list =
       ('n',     "no-types",            set printing_types false,         None);
       ('e',     "evaluate",            None,
        Some (ignore -<- evaluate Parse.parse_string stdenvs));
+(* [DEACTIVATED] *)
+(*
       ('s',     "serialize-expr",      None,                             Some (serialize_expr));
       ('t',     "run-tests",           Some run_tests,                   None);
       ('w',     "web",                 None,                             Some web_program);
-    ]
+*)    ]
 
 (* main *)
 
