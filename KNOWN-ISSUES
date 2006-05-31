@@ -1,0 +1,59 @@
+KNOWN ISSUES
+
+ * Browsers other than Firefox are currently unsupported.
+
+ * Pattern matching is not deep.
+
+ * The following web features have not yet been implemented.
+   - URLs
+   - Cookies
+   - Arbitrary HTTP headers, response codes
+   - Accessibility standards
+
+ * Linked stylesheets don't work (use embedded styles instead).
+
+ * Form-handling needs to be completely redesigned.
+ 
+ * There is no way to get the value of a radio button element.
+
+ * It is not possible to pass XML values across the client / server boundary.
+
+ * A top-level variable cannot be redefined in the interactive shell:
+
+    links> x = 1;;
+    1 : Int
+    links> x = 2;;
+    Duplicate top-level bindings
+    x:
+      <stdin>:1
+    links>
+  
+ * Queries against two different databases may be erroneously joined.
+
+ * Type errors sometimes print the wrong expression, e.g.:
+
+     links> 1 + "a"
+     <string>:1: Type error: `1 + "a"', which has type (Int) -> Int, 
+     cannot be applied to `"a"', of type String
+
+ * XML support is incomplete, e.g.:
+   - Ill-formed XML can sometimes be accepted; e.g. bare ampersands are
+     accepted.
+   - CDATA literals are not accepted.
+   - XML namespaces are not handled.
+   - Non-ASCII characters are not handled.
+
+ * Test coverage is limited.
+
+ * A loop variable that is used bare (without a projection) within a
+   comprehension is not optimized into SQL. Example:
+
+      for x <- (...) in
+        for y <- (...) in
+          [(x, y)]
+
+ * table declarations don't work in the interactive environment
+
+ * database names are not first class - they must be string
+   literals.
+ 

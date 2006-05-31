@@ -6,6 +6,7 @@ INSTALL
 README
 MANIFEST
 VERSION # created by the release script
+KNOWN-ISSUES
 
 quick-help.pod
 
