@@ -295,8 +295,9 @@ let env : (string * (primitive * Types.assumption)) list = [
   
 
   (* HACK *)
-  "callForeign",
-   (client_only_1 "callForeign", datatype "(a -> b) -> a -> b");
+(*   [DEACTIVATED] *)
+(*   "callForeign", *)
+(*    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b"); *)
 
   (* DOM API *)
 
