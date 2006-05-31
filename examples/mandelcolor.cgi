@@ -6,13 +6,11 @@ realUnit = precision;
 
 fun zmagsq(c) {
   r = c.1; i = c.2;
-#  debug("zmagsq(" ++ string_of_int(r) ++ ", " ++ string_of_int(i) ++ ")");
   (r*r + i*i) / precision
 }
 
 fun zsquare(c) {
   r = c.1; i = c.2;
-#  debug("zsquare(" ++ string_of_int(r) ++ ", " ++ string_of_int(i) ++ ")");
   ((r * r - i * i)/precision, (2 * r * i)/precision)
 }
 
@@ -40,8 +38,6 @@ fun mandelbrot(r, i, limit) {
   c = (0, 0);
   z = (r, i);
   result = mandelloop(c, z, 0);
-#  debug("point at " ++ string_of_int(r) ++ ", " ++ string_of_int(i) ++ " is " ++
-#        string_of_int(result));
   result
 }
 
@@ -94,12 +90,12 @@ fun redshade(i, max) {
 }
 
 fun pixeldiv(x, y, size, color) {
-  <div id="{"p" ++ string_of_int(x) ++ "x" ++ string_of_int(y)}"
-       style="width: {string_of_int(size)}px; 
-              height: {string_of_int(size)}px;
+  <div id="{"p" ++ intToString(x) ++ "x" ++ intToString(y)}"
+       style="width: {intToString(size)}px; 
+              height: {intToString(size)}px;
               position: absolute;
-              left: {string_of_int(x)}px;
-              top: {string_of_int(y)}px;
+              left: {intToString(x)}px;
+              top: {intToString(y)}px;
               background-color: {redshade(color, the_limit)}"> </div>
 }
 
@@ -155,14 +151,8 @@ fun mandelMadness(x, y, r, i, pixSize,
                     minx, miny, maxx, maxy, 
                     mini, minr, maxi, maxr)
     } else {
-#      debug("computing " ++ string_of_int(r) ++ ", " ++ string_of_int(i));
-#      debug("replacing " ++ string_of_int(x) ++ ", " ++ string_of_int(y));
-#      debug("bounds " ++ string_of_int(maxx) ++ ", " ++ string_of_int(maxy));
-#      replaceMe = domGetRefByID("p" ++ string_of_int(x) ++ "x" ++ string_of_int(y));
-#      domInsertBeforeXml(mandelBlock(pixSize, x, y,
-#                                     regionSize, r, i), replaceMe);
-      docElt = domGetDocRef();
-      domAppendChildXml(mandelBlock(pixSize, x, y,
+      docElt = domGetDocumentRef();
+      domAppendChild(mandelBlock(pixSize, x, y,
                                      regionSize, r, i), docElt);
       mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,
                     minx, miny, maxx, maxy,
@@ -184,7 +174,7 @@ fun needless(n) {
 }
 
 fun main() client {
-  dom ! Document(<body>
+  domReplaceDocument(<body>
     <div id="p0x0" />
   </body>);
   needless(1000);   # gives the DOM process time to draw the initial div
