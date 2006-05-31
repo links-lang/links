@@ -35,10 +35,6 @@ BUGS
 * Partial applications of primitive functions are not serialized
   correctly. (Can we have a test case?)
 
-* "insert into ..." seems to fail if some value is the empty string
-  (eekc: I'm not observing this (on MacOS) as of 10 Feb 06; maybe it 
-  was shaken out?)
-
 * Syntax for type of a record is subtly different from syntax for a
   record value.
   (jdy: how is this a bug?)
@@ -66,12 +62,7 @@ BUGS
   ugly. Instead we should create a real value that represents the
   request and force you to pass it around in the language. (?)
 
-* Type errors don't always give the (right) line number.
-
 TODO
-
-* `dom' is not a great name for the process that manages the active 
-  document.
 
 * Why do we bother to write name="..." as l:name="..." ? Couldn't we
   just create variables for all named input fields?
