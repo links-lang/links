@@ -95,7 +95,7 @@ let rec format_exception = function
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "`" ^ pexpr ^
         "' has type " ^ string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
-        " and cannot be passed as an argument to `"^ fexpr ^
+        " and cannot be passed to function `"^ fexpr ^
         "', which has type "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
@@ -134,7 +134,7 @@ let rec format_exception_html = function
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "<code>" ^ Utility.xml_escape(pexpr) ^ (get_mailbox_msg true mb) ^
         "</code> has type <code>" ^ (Utility.xml_escape(string_of_datatype paramtype)) ^
-        "</code> and cannot be passed as an argument to <code>"^ Utility.xml_escape(fexpr) ^
+        "</code> and cannot be passed to function <code>"^ Utility.xml_escape(fexpr) ^
         "</code>, which has type <code>"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
