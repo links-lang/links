@@ -187,37 +187,6 @@ and string_of_row' sep vars (field_env, row_var) =
       | `RecRowVar (var, row) -> 
 	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"] in
     String.concat sep (present_strings @ absent_strings @ row_var_string)
-(*
-  String.concat sep (map (function
-			    | `Row_variable var -> string_of_int var
-			    | `Field_present (label, datatype) -> label ^":"^ string_of_datatype' vars datatype
-			    | `Field_absent label -> label ^ " -")
-		       fields)
-*)
-
-(*let string_of_datatype = string_of_datatype' []
-and string_of_row = string_of_row' []*)
-
-(* Making readable names for printing type variables.  (This can't be
-   done at generation time because we don't have the whole type then.) *)
-(*
-let letters =
-  ["a"; "b"; "c"; "d"; "e"; "f"; "g"; "h"; "i"; "j"; "k"; "l"; "m"; 
-   "n"; "o"; "p"; "q"; (*"r";*) "s"; "t"; "u"; "v"; "w"; "x"; "y"; "z"]
-
-let rec next_name = function
-  | suffix, [] -> next_name (suffix + 1, letters)
-  | 0, name :: names -> name, names, 0
-  | suffix, name :: names -> (name ^ string_of_int suffix), names, suffix
-
-let make_names items =
-  let rec aux (suffix, names) = function
-    | item :: items ->
-	let name, names, suffix = next_name (suffix, names) in
-          (item, name) :: aux (suffix, names) items
-    | [] -> []
-  in aux (0, letters) items       
-*)
 
 let make_names vars =
   let first_letter = int_of_char 'a' in

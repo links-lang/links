@@ -10,6 +10,7 @@ open Sql_transform
 
 (* This appears to be ignored *)
 let optimising = Settings.add_bool true "optimising"
+let show_optimisation = Settings.add_bool false "show_optimisation"
 
 module RewriteSyntax = 
   Rewrite
@@ -602,9 +603,10 @@ let run_optimisers : Types.environment -> RewriteSyntax.rewriter
 
 let optimise env expr =
   match run_optimisers env expr with
-      None -> debug ("Optimization had no effect"); expr
-    | Some expr' -> (debug("Before optimization : " ^ Show_expression.show expr ^ 
-			     "\nAfter optimization  : " ^ Show_expression.show expr');
+      None -> debug_if_set show_optimisation (fun () -> "Optimization had no effect"); expr
+    | Some expr' -> (debug_if_set show_optimisation
+                       (fun () -> "Before optimization : " ^ Show_expression.show expr ^ 
+			  "\nAfter optimization  : " ^ Show_expression.show expr');
 		     expr')
 
 (* Not really an optimisation.  This /must/ be run, or the program
@@ -630,110 +632,3 @@ let inline_tables expressions =
 
 let optimise_program (env, exprs) = 
   map (optimise env) (inline_tables exprs)
-
-(* Testing stuff from here on down *)
-
-let parse = Parse.parse_string
-let parse_and_type env = List.hd -<- snd -<- Inference.type_program env -<- parse
-
-let strip = Syntax.redecorate (fun _ -> ());;
-
-let test () =
-  assert(opt_map strip (RewriteSyntax.bottomup fold_constant (parse_and_type [] "if (true) 3 else 4"))
-	 = Some (Integer (Num.Int 3, ())))
-  ;
-  assert(opt_map 
-	   strip (RewriteSyntax.bottomup renaming (parse_and_type [] "{x = 3; y = x; y}"))
-	 = Some (Let
-		   ("x",
-		    Integer (Num.Int 3, ()),
-		    Variable ("x", ()), ())))
-  ;
-  (* tests a bug where all subtrees of a node were reversed in order. *)
-  assert (opt_map
-	    strip (RewriteSyntax.bottomup (fun x -> Some x) (parse_and_type Library.type_env "2 + 3"))
-	    = Some (Syntax.Apply
-		      (Syntax.Apply
-			 (Syntax.Variable ("+", ()), Syntax.Integer (Num.Int 2, ()), ()),
-		       Syntax.Integer (Num.Int 3, ()), ())))
-  ;
-  assert (opt_map
-	    strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in for y <- (Table \"frump\" with {c : Int, d : Int} from db) in if (x.a == y.c) [(x.b, y.d)] else []}"))
-	  =
-      Some
-	(Let
-	   ("db", Database (String ("Rubbish", ()), ()),
-	    For
-	      (List_of
-		 (Record_extension
-		    ("1",
-		     Record_selection
-		       ("b", "g27", "g28", Variable ("x", ()),
-			Variable ("g27", ()), ()),
-		     Record_extension
-		       ("2",
-			Record_selection
-			  ("d", "g29", "g30", Variable ("x", ()),
-			   Variable ("g29", ()), ()),
-			Record_empty (), ()),
-		     ()),
-		  ()),
-	       "x",
-	       Table
-		 (Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
-		  failwith "This is broken.  Optimization tests should use pattern matching, not structural equality.",
-		  ()),
-	       ()),
-	    ())))
-  ;
-  assert(opt_map strip (RewriteSyntax.bottomup sql_joins (parse_and_type Library.type_env  "{db = database \"Rubbish\"; for x <- (Table \"foo\" with {a : Int, b : Int} from db) in  for y <- (Table \"frump\" with {c : Int, d : Int} from db) in    for z <- (Table \"frozz\" with {e : Int} from db) in if (x.b == z.e && x.a == y.c)         [(x.b, y.d)] else []}"))
-         =
-      Some
-        (Syntax.Let
-           ("db", Syntax.Database (Syntax.String ("Rubbish", ()), ()),
-            Syntax.For
-              (Syntax.Condition
-                 (Syntax.Condition
-                    (Syntax.Comparison
-                       (Syntax.Record_selection
-                          ("b", "g97", "g98", Syntax.Variable ("x", ()),
-                           Syntax.Variable ("g97", ()), ()),
-                        "==",
-                        Syntax.Record_selection
-                          ("e", "g99", "g100", Syntax.Variable ("x", ()),
-                           Syntax.Variable ("g99", ()), ()),
-                        ()),
-                     Syntax.Comparison
-                       (Syntax.Record_selection
-                          ("a", "g101", "g102", Syntax.Variable ("x", ()),
-                           Syntax.Variable ("g101", ()), ()),
-                        "==",
-                        Syntax.Record_selection
-                          ("c", "g103", "g104", Syntax.Variable ("x", ()),
-                           Syntax.Variable ("g103", ()), ()),
-                        ()),
-                     Syntax.Boolean (false, ()), ()),
-                  Syntax.List_of
-                    (Syntax.Record_extension
-                       ("1",
-                        Syntax.Record_selection
-                          ("b", "g105", "g106", Syntax.Variable ("x", ()),
-                           Syntax.Variable ("g105", ()), ()),
-                        Syntax.Record_extension
-                          ("2",
-                           Syntax.Record_selection
-                             ("d", "g107", "g108", Syntax.Variable ("x", ()),
-                              Syntax.Variable ("g107", ()), ()),
-                           Syntax.Record_empty (), ()),
-                        ()),
-                     ()),
-                  Syntax.Nil (), ()),
-               "x",
-               Syntax.Table
-                 (Syntax.Variable ("db", ()), "table \"foo\" with  {a:Int,b:Int}  ",
-                  failwith "This is broken.  Optimization tests should use pattern matching, not structural equality.",
-                  ()),
-               ()),
-            ())))
-  ;
-
