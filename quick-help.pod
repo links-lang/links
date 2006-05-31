@@ -43,7 +43,7 @@ has. In Links, values like these can be expressed as follows:
 
 The I<type> that includes such values is written as follows:
 
-  [|Automobile [|Diesel | Unleaded | Biodiesel|] | Camel Int |]
+  [|Automobile: [|Diesel:() | Unleaded:() | Biodiesel:()|] | Camel: Int |]
 
 The boxy brackets C<[| |]> delimit a variant type, and variant labels
 are separated by a pipe C<|>. After each variant label is the type of
@@ -55,7 +55,7 @@ In Links, I<a variant tag always begins with a capital letter>. Any
 string beginning with a capital letter, used in a value context,
 denotes a variant label.
 
-To use a variant, use pattern matching. Pattern matching is
+To inspect a variant value, use pattern matching. Pattern matching is
 accomplished using the C<switch> form, which has a target expression
 and a case for each variant label. The following expression determines
 the effective number of humps of a transport (autos have no humps):
@@ -94,15 +94,11 @@ match.
 
 Here we assume that nothing other than a camel has humps.
 
-=head2 Pattern matching on lists
-
-TBD: talk about pattern matching on lists.
-
 =head2 XML Quasiquotes
 
 Also called "quasis." Introduced by an XML start-tag such as
 C<E<lt>fooE<gt>>. Inside a quasi, Links code enclosed within braces 
-{ } will be evaluated to an XML forest and include, when the quasi 
+{ } will be evaluated to an XML forest which is included when the quasi
 is evaluated.
 
     <html>
@@ -134,25 +130,23 @@ True iff the operands evaluate to the same value.
 
 True iff the operands evaluate to different values.
 
-=item * <<
+=item * <
 
 True iff the left operand's value is less than the right operand's
-(only valid on numbers (?))
 
-=item * >>
+=item * >
 
 True iff the right operand's value is less than the left operand's
-(only valid on numbers (?))
 
 =item * <=
 
 True iff the left operand's value is less than or equal to the right
-operand's (only valid on numbers (?))
+operand's
 
 =item * >=
 
 True iff the right operand's value is less than or equal to the left
-operand's (only valid on numbers (?))
+operand's
 
 =back
 
@@ -164,7 +158,7 @@ Boolean expressions can be combined using the boolean operators:
 
 =item * ||
 
-=item * !
+=item * not
 
 =back
 
@@ -178,7 +172,7 @@ clause. None of the three may be omitted.
     else
         expr2
 
-Curly braces can be wrapped either clause, no matter how many
+Curly braces can be wrapped around either clause, no matter how many
 sub-expressions they contain, and I<must> be so wrapped if you want
 the clause to consist of more than one semicolon-separated expression.
 
@@ -220,18 +214,18 @@ C<if> expression:
 
 =head2 Blocks
 
-A sequence of assignments separated by semicolons is evaluated in
-turn, binding each value to the corresponding name in what
-follows. Variables are assigned only once per scope, and succeeding
-assignments will mask preceding ones:
+A sequence of variable bindings separated by semicolons is evaluated
+in text order, binding each value to the corresponding name in what
+follows. Variables cannot be rebound; later bindings of the same name
+shadow preceding ones:
 
     var x = 1;
     var y = 2;
     var x = 2;
     var z = x + y;    # z is now bound to 4
 
-The scope of an assignment is strictly within its immediate block. As
-a result, the following code may not do what you expect:
+The scope of a binding is strictly within its immediate block. As a
+result, the following code may not do what you expect:
 
     var x = 0;
     if (a == b)
@@ -241,14 +235,19 @@ a result, the following code may not do what you expect:
     alert(x);
 
 The value printed by C<alert> will be 0. That's because the other two
-assignments only create new bindings for x within the corresponding
-clauses of the conditional. This may come as a surprise to programmers
-from some languages.
+bindings only bind x within the corresponding clauses of the
+conditional. This may come as a surprise to programmers used to
+imperative languages.
 
 =head2 Lists
 
-A list is a finite sequence of values. A list can be created directly 
-by wrapping a series of expressions in brackets:
+A list is a finite sequence of values, constructed using C<[]>
+(pronounced "nil") and C<::> (pronounced "cons").
+
+   1 :: 4 :: 9 :: 16 :: []
+
+A list can be created directly by wrapping a series of comma-separated
+expressions between brackets:
 
     [1, 4, 9, 16]
     
@@ -266,9 +265,18 @@ characters:
 
 And they're comparable, with C<==>, as you can see!
 
+=head2 Pattern matching on lists
+
+Cons and nil can also be used in patterns, to deconstruct lists:
+
+  switch s {
+    case []    -> Empty;
+    case x::xs -> NonEmpty ;
+  }
+
 =head2 Functions
 
-Functions can be named or anonymous. Named functions look like
+Functions can be named or anonymous. Named functions look like this:
 
     fun foo(x, y, z)
     {
@@ -294,6 +302,11 @@ foo(...) {...}>, or a variable bound to a functional value, as
     inc(7)
 
 This block returns C<8>.
+
+Any expression that evaluates to a function value can be called:
+
+    (if (true) fun (x) { x + 1 }
+     else fun (x) { x + 2 })(3)
 
 =head2 Loops (List Comprehensions)
 
@@ -350,22 +363,22 @@ separated by colons:
 =head2 Concurrency
 
 A Links program begins as a single thread of control but can fork into
-many threads by executing the C<spawn> primitive:
+many processes by executing the C<spawn> primitive:
 
-  var newThreadID = spawn(func, arg)
+  var newProcID = spawn(func, arg)
 
-This starts a new thread which begins by applying C<func> to the
-single argument C<arg>. If the function ever returns, its return value
-is discarded. C<spawn> returns an identifier of the new thread to the
-calling thread. This identifier can be used to address messages to the
-new thread, with the C<send> primitive:
+This starts a new process which begins by evaluating
+C<expression>. The value of the expression is discarded if evaluation
+ever completes.  C<spawn> returns an identifier of the new process to
+the calling process. This identifier can be used to address messages
+to the new process, with the C<!> primitive (pronounced "send"):
 
-  send(threadID, msg)
+  procId ! msg
 
-This appends the value C<msg> to the mailbox for the thread identified
-by C<threadID>. The return value is just C<msg>. The mailbox is FIFO,
-so if you know that some message is sent before some other message,
-you know they will be received in that order.
+This appends the value C<msg> to the mailbox for the process
+identified by C<procID>. The return value is just C<()>. The mailbox
+is FIFO, so if you know that some message is sent before some other
+message, you know they will be received in that order.
 
 Each process's mailbox is given a static type according to the
 messages it expects to receive. Typically, a process will use variants
@@ -375,7 +388,7 @@ sightings might expect to receive either a value
 C<CelebritySighting(celebName, atVenue)> or a value
 C<PassingComet(cometID, zenith, azimuth)>. This process's mailbox
 would be given the type 
-C<[|CelebritySighting(String, String) | PassingComet(Int, Float, Float)|]>
+C<[|CelebritySighting:(String, String) | PassingComet:(Int, Float, Float)|]>
 
 A process can receive messages using the C<recv> function, which
 returns the next message in the current process's mailbox.
