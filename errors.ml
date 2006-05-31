@@ -130,17 +130,17 @@ let rec format_exception_html = function
   | Getopt.Error s -> s
   | Type_error ((pos,_,expr), s) -> 
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s. In expression:</p>\n<pre>%s</pre>\n")
-        pos.pos_fname pos.pos_lnum s expr
-  | WrongArgumentTypeError(pos, pexpr, paramtype, fexpr, fntype, mb) ->
-      let msg = "<code>" ^ pexpr ^ (get_mailbox_msg true mb) ^
-        "</code> has type " ^ string_of_datatype paramtype ^
-        " and cannot be passed as an argument to <code>"^ fexpr ^
-        "</code>, which has type <code>"^ string_of_datatype fntype ^ "</code>"
+        pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
+  | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
+      let msg = "<code>" ^ Utility.xml_escape(pexpr) ^ (get_mailbox_msg true mb) ^
+        "</code> has type <code>" ^ (Utility.xml_escape(string_of_datatype paramtype)) ^
+        "</code> and cannot be passed as an argument to <code>"^ Utility.xml_escape(fexpr) ^
+        "</code>, which has type <code>"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "<code>"^ fexpr ^"</code>, which has type <code>"^ string_of_datatype fntype ^
-        "</code>, cannot be applied to <code>"^ pexpr ^"</code>, of type <code>" ^ 
+        "</code>, cannot be applied to <code>"^ pexpr ^"<2/code>, of type <code>" ^ 
         string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
