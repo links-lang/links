@@ -114,8 +114,7 @@ fun numbers(start, l) {
 fun mandelBlock(pixSize, x, y, regionSize, r, i) {
   pixeldiv(x, y, pixSize/2, mandelbrot(r, i, the_limit)) ++
    pixeldiv(x+(pixSize/2), y, pixSize/2, mandelbrot(r+regionSize, i, the_limit)) ++
-   pixeldiv(x, y+(pixSize/2), pixSize/2, mandelbrot(r, i+regionSize, the_limit)) ++
-   pixeldiv(x+(pixSize/2), y+(pixSize/2), pixSize/2, mandelbrot(r+regionSize, i+regionSize, the_limit))
+   pixeldiv(x, y+(pixSize/2), pixSize/2, mandelbrot(r, i+regionSize, the_limit))
 }
 
 fun dilation(mina, minb, maxa, maxb, minc, mind, maxc, maxd)
