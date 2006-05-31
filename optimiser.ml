@@ -157,6 +157,24 @@ let unused_variables : RewriteSyntax.rewriter = function
                                && not (mem var (freevars body)) -> Some body
   | _ -> None
                                                         
+
+
+(*
+   s ~ let x in b
+       let x in s ~ b
+
+ In the following, the order of eval is unspecified:
+   f() ~ /{g()}/
+
+ eekc: what if we rule out such fancy regex splicings?
+*)
+
+
+let simplify_regex : RewriteSyntax.rewriter = function
+  | Apply (Apply (Variable ("~", _), lhs, _) as a, Let (v, e, rhs, d1), d2)  ->
+      Some (Let (v, e, Apply (a, rhs, d1), d2))
+  | _ -> None
+
 (** {3 SQL utility values} These values are provided to ease the writing of SQL optimisers. *)
 
 (** extract_tests
@@ -567,6 +585,7 @@ let fold_constant : RewriteSyntax.rewriter =
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
+  RewriteSyntax.topdown simplify_regex;
   RewriteSyntax.topdown (sql_sort);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
   RewriteSyntax.bottomup sql_selections;

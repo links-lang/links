@@ -17,6 +17,7 @@ let rec string_of_expression : expression -> string = function
   | Integer value            -> string_of_num value
   | Float value              -> string_of_float value
   | Boolean value            -> string_of_bool value
+  | LikeExpr v               -> Query.like_as_string v
   | Text value               -> "\'"^ value ^"\'"
   | Binary_op (symbol, l, r) -> "("^ string_of_expression l ^" "^ symbol ^" "^ string_of_expression r ^")"
   | Unary_op (symbol, expr)  -> "("^ symbol ^" "^ (string_of_expression expr) ^")"
@@ -76,6 +77,7 @@ let rec serialise_expression : (expression serialiser) =
     | Integer v -> serialise1 'd'  (serialise_int) v
     | Float v -> serialise1 'e'  (serialise_float) v
     | Boolean v -> serialise1 'f'  (serialise_bool) v
+    | LikeExpr _ -> failwith "serialising like expressions not supported"
     | Text v -> serialise1 'g'  (serialise_string) v
     | Binary_op v -> serialise3 'h'  (serialise_string, serialise_expression, serialise_expression) v
     | Unary_op v -> serialise2 'i'  (serialise_string, serialise_expression) v

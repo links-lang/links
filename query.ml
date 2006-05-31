@@ -1,6 +1,19 @@
 open Num
 open Types
 
+type like_expr = [`percent | `string of string | `variable of string | `seq of like_expr list]
+    deriving (Show, Pickle)
+
+(* Convert a like expression to a string. *)
+let rec like_as_string : like_expr -> string =
+  let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+    function
+      | `percent -> "%"
+      | `string s -> quote s
+      | `variable v -> "VARIABLE : " ^ v
+      | `seq rs -> String.concat "" (List.map like_as_string rs)
+
+
 (** A SQL expression to be used as the condition for a query. *)
 type expression =
   | Field of (string (* table name (as) *) * string (* field name (real) *))
@@ -9,6 +22,7 @@ type expression =
   | Integer of num
   | Float of float
   | Boolean of bool
+  | LikeExpr of like_expr
   | Text of string
   | Binary_op of (string * expression * expression)
   | Unary_op of (string * expression)

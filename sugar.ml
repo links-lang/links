@@ -577,15 +577,34 @@ and desugar_repeat pos : Regex.repeat -> phrasenode = function
   | Regex.Star      -> ConstructorLit ("Star", None)
   | Regex.Plus      -> ConstructorLit ("Plus", None)
   | Regex.Question  -> ConstructorLit ("Question", None)
-and desugar_regex desugar pos : regex -> phrasenode = function
-  | Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
-  | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
-  | Any             -> ConstructorLit ("Any", None)
-  | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> desugar_regex desugar pos s, pos) 
-                                                               rs), pos))
-  | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
-                                                                 desugar_regex desugar pos r, pos], pos))
-  | Splice e        -> ConstructorLit ("Simply", Some e)
+and desugar_regex desugar pos : regex -> phrasenode = 
+  (* Desugar a regex, making sure that only variables are embedded
+     within.  Any expressions that are spliced into the regex must be
+     let-bound beforehand.  *)
+  let exprs = ref [] in
+  let expr e = 
+    let v = gensym "_regex_" in
+      begin
+        exprs := (v, e) :: !exprs;
+        Var v, pos
+      end in
+  let rec aux = 
+    function
+      | Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
+      | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
+      | Any             -> ConstructorLit ("Any", None)
+      | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> aux s, pos) 
+                                                                   rs), pos))
+      | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
+                                                                     aux r, pos], pos))
+      | Splice e        -> ConstructorLit ("Simply", Some (expr e))
+  in fun e ->
+    let e = aux e in
+      Block 
+        (List.map
+           (fun (v, e1) -> Binding (Pattern (Var v, pos), e1), pos)
+           !exprs,
+         (e, pos))
           
 
 

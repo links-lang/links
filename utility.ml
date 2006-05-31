@@ -128,9 +128,9 @@ let concat_map f l =
 exception NONE
 
 (* association list utilities*)
-let alistmap f =
-  let cross f g = fun (x, y) -> f x, g y in
-    List.map (cross identity f)
+let cross f g = fun (x, y) -> f x, g y
+
+let alistmap f = List.map (cross identity f)
 
 (*** Strings ***)
 
@@ -267,7 +267,7 @@ let perhaps_apply f p = fromOption p (f p)
 
 let opt_sequence e = 
   let rec aux accum = function
-  | []             -> Some accum
+  | []             -> Some (List.rev accum)
   | Some x :: rest -> aux (x::accum) rest
   | None :: _      -> None
   in aux [] e
@@ -277,7 +277,7 @@ let opt_sum e =
   | []             -> None
   | Some x :: rest -> aux (x::accum) rest
   | None :: _      -> None
-  in aux [] e
+  in opt_map List.rev (aux [] e)
 
 (*** character encoding ***)
 

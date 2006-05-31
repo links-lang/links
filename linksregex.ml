@@ -1,16 +1,3 @@
-(* Reflect the OCaml representation of regular expressions into Links
-   land. Perhaps this will generate some ideas on how to expose such
-   OCaml values generally, which would be useful for (e.g.) writing
-   rewrite rules in Links rather than in OCaml. 
-
-   Here's one idea: add a derivable "Links" class that generates the
-   approrpriate functions when you add 
-
-     deriving (Links, ...)
-
-   to your type declaration.
-*)
-
 open Regex
 
 let unit = `Record []
@@ -22,7 +9,9 @@ sig
   val ofLinks : Result.result -> a
   val asLinks : a -> Result.result
 end
-  
+
+(* These conversions (and conversions from OCaml values generally)
+could be derived automatically using "deriving" *)
 module Repeat : Links_type with type a = repeat = 
 struct
   type a = repeat

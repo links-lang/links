@@ -129,6 +129,9 @@ let rec less l r =
 let less_or_equal l r = equal l r || less l r
         
 let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
+  let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
+      Text (Sql_transform.like_as_string (env @ toplevel) l)
+  in
   let rec normalise_expression : Query.expression -> Query.expression = function
       | Query.Variable name ->
           (try
@@ -149,6 +152,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
           Binary_op (symbol, normalise_expression left, normalise_expression right)
       | Query.Unary_op (symbol, expr) ->
           Unary_op (symbol, normalise_expression expr)
+      | Query.LikeExpr (like_expr) -> normalise_like_expression like_expr
       | Query.Query qry ->
           Query {qry with condition = normalise_expression qry.condition}
       | expr -> expr

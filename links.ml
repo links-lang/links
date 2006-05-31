@@ -152,6 +152,7 @@ let options : opt list =
     ]
 
 (* main *)
+
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
   if Settings.get_value(interacting) then interact stdenvs
