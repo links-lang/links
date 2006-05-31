@@ -146,7 +146,7 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   Inference.self_type_mailbox);
+   datatype "Mailbox a -> () -> Mailbox a");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -157,7 +157,7 @@ let env : (string * (primitive * Types.assumption)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (p1 (fun _ -> assert false),
-     Inference.recv_type_mailbox);
+     datatype "Mailbox a -> () -> a");
  
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -172,7 +172,7 @@ let env : (string * (primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   Inference.spawn_type_mailbox);
+   datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 

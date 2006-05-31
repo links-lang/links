@@ -87,3 +87,8 @@ stdout : @None *\(\) : \[|None:\(\) | Some:a | [0-9]*|\]
 Nested variant unification
 [C (A), C (B)]
 stdout : @\[C *\(A *\(\)\), C *\(B *\(\)\)\] : .*
+
+Type annotations
+fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])};;
+stdout : @fun : \(mu ([a-z]+) \. \[|Succ:\\1 | Zero:\(\)|]\) -> \[|Succ:mu ([a-z]+) . \[|Succ:\\2 | Zero:\(\)|\]|\]
+

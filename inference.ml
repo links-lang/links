@@ -1264,6 +1264,11 @@ let check_for_duplicate_defs : Types.environment -> untyped_expression list -> u
   in
     begin
       (* what in tarnation? *)
+      (* isn't this lovely...
+	 we're not actually doing rewriting here, just taking advantage of
+	 the 'visitor' functionality provided by the rewriter. The rewriter
+	 we define simply records duplicates.
+      *)
       List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; 
       report_errors()
     end
@@ -1271,6 +1276,7 @@ let check_for_duplicate_defs : Types.environment -> untyped_expression list -> u
 
 (* [HACK] *)
 (* types for special builtin functions *)
+(*
 let datatype = Parse.parse_datatype
 let self_type_mailbox = datatype "Mailbox a -> () -> Mailbox a"
 let self_type_pure = datatype "() -> Mailbox a"
@@ -1278,10 +1284,12 @@ let recv_type_mailbox = datatype "Mailbox a -> () -> a"
 let recv_type_pure = datatype "() -> a"
 let spawn_type_mailbox = datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b"
 let spawn_type_pure = datatype "(a -> b) -> a -> Mailbox c" 
+*)
 
 (* [HACK]
    remove mailbox typing for special functions
 *)
+(*
 let remove_special_mailboxes =
   List.map (fun (name, t) ->
 	      match name with
@@ -1289,6 +1297,7 @@ let remove_special_mailboxes =
 		| "recv" -> (name, recv_type_pure)
 		| "spawn" -> (name, spawn_type_pure)
 		| _ -> (name, t)) 
+*)
 
 (* [HACKS] *)
 (* two pass typing: yuck! *)
@@ -1299,7 +1308,7 @@ let type_program env expressions =
     debug_if_set (show_typechecking) (fun () -> "Typechecking without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
-	 type_program ((remove_special_mailboxes -<- unmailboxify_type_env) env) expressions) in
+	 type_program (unmailboxify_type_env env) expressions) in
   let env', expressions' =
     (* with mailbox parameters *)
     debug_if_set (show_typechecking) (fun () -> "Typechecking with mailbox parameters");
@@ -1317,13 +1326,13 @@ let type_expression env expression =
     (* without mailbox parameters *)	
 
   let env', expressions' =
-    debug_if_set (show_typechecking) (fun () -> "type checking without mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
 	 type_expression (unmailboxify_type_env env) expression) in
   let env', expressions' =
     (* with mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "type checking with mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking with mailbox parameters");
     let env, expression = 
       Types.with_mailbox_typing true
 	(fun () ->

@@ -58,14 +58,9 @@ let run_tests () =
 let print_result rtype result = 
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
-		   if Settings.get_value(Types.show_mailbox_parameter) then
-		     Types.with_mailbox_typing true
-		       (fun () -> 
-			  " : "^ Types.string_of_datatype rtype)
-		   else
-		     Types.with_mailbox_typing false
-		       (fun () ->
-			  " : "^ Types.string_of_datatype (Inference.remove_mailbox rtype))
+		   Types.with_mailbox_typing (Settings.get_value(Types.show_mailbox_annotations))
+		     (fun () -> 
+			" : "^ Types.string_of_datatype rtype)
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)

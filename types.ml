@@ -27,19 +27,27 @@ type environment = datatype environment_basis
 
 let (-->) x y = `Function (x,y)
 
-(* whether to display the mailbox parameter in types *)
-let show_mailbox_parameter = Settings.add_bool false "show_mailbox_parameter"
-
-(* mailbox typing *)
-let enable_mailbox_typing = Settings.add_bool true "enable_mailbox_typing"
+(* whether to display mailbox annotations on arrow types
+   [NOTE]
+      unused mailbox parameters are never shown
+ *)
+let show_mailbox_annotations = Settings.add_bool true "show_mailbox_annotations"
 
 (*
   [HACK]
   used to temporarily disable mailbox typing for two-pass type-checking
 *)
 let use_mailbox_typing = ref true
+
+(* return true if mailbox typing is currently switched on *)
 let using_mailbox_typing () = !use_mailbox_typing
 
+(* call f()
+   with mailbox typing switched on or off according to
+   the value of b
+   (guarantees that the state of mailbox typing is
+   restored afterwards)
+*)
 let with_mailbox_typing b f =
   let oldb = using_mailbox_typing ()
   in
@@ -88,7 +96,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
 
   let string_of_mailbox_arrow mailbox_type =
     begin
-      if Settings.get_value(show_mailbox_parameter) then
+      if Settings.get_value(show_mailbox_annotations) then
 	"-{" ^ sd mailbox_type ^ "}->"
       else
 	"->"
