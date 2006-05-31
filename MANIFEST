@@ -126,4 +126,5 @@ examples/factorial.links
 examples/progress.links
 examples/draggable.links
 examples/mandelbrot.links
+examples/mandelcolor.links
 examples/paginate.links
