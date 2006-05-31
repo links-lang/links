@@ -182,7 +182,7 @@ and string_of_row' sep vars (field_env, row_var) =
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
   let row_var_string = match row_var with
-      |	`RowVar (Some var) -> [string_of_int var]
+      |	`RowVar (Some var) -> [IntMap.find var vars]
       | `RowVar None -> []
       | `RecRowVar (var, row) -> 
 	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"] in
