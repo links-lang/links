@@ -6,10 +6,6 @@ fun waiting(id) client {
  }
 }
 
-fun swapNodeRefs(x, y) {
- domSwapNodeRefs(x, y)
-}
-
 fun dragging(id, elem) client {
   receive {
      case MouseUp                 -> waiting(id);
@@ -17,7 +13,7 @@ fun dragging(id, elem) client {
      case MouseOut(relatedTarget) -> {
          if (not(domIsNullRef(relatedTarget)) &&
            domGetAttributeFromRef(domGetParentFromRef(relatedTarget), "id") == id) {
-           swapNodeRefs(relatedTarget, elem);
+           domSwapNodeRefs(relatedTarget, elem);
            dragging(id, elem)          
          }
          else waiting(id)
@@ -34,9 +30,9 @@ fun draggableList(id, items)
   var x = id;
   var listMgr = spawn { waiting(id) };
    <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
-      l:onmouseup   = "{listMgr ! (MouseUp)}"
-      l:onmousedown = "{listMgr ! (MouseDown (eventGetTarget(event)))}"
-      l:onmouseout  = "{listMgr ! (MouseOut (eventGetRelatedTarget(event)))}"
+      l:onmouseup   = "{dragger ! (MouseUp)}"
+      l:onmousedown = "{dragger ! (MouseDown (eventGetTarget(event)))}"
+      l:onmouseout  = "{dragger ! (MouseOut (eventGetRelatedTarget(event)))}"
    >
     {for (item <- items)
          format(item)}

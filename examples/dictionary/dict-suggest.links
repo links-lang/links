@@ -2,11 +2,27 @@ table wordlist (
   word : String, 
   type : String, 
   meaning : String
-)
-database "postgresql:dictionary::5432:www-data:";
+) database "postgresql:dictionary::5432:www-data:";
 
 fun lowercase(s) server {
   for (c <- s) [toLower(c)]
+}
+
+fun suggest(prefix) client {
+ domReplaceChildren(
+  format(completions(lowercase(prefix))),
+  domGetRefById("suggestions") 
+ )
+} 
+
+fun format(words) client {
+ for (w <- words)
+  <span>
+   <b>{stringToXml(w.word)}</b>
+   <i>{stringToXml(w.type)}</i>:
+      {stringToXml(w.meaning)}
+   <br/>
+  </span>
 }
 
 fun completions(p) server {
@@ -20,26 +36,24 @@ fun completions(p) server {
   }
 }
 
-fun showdefs(suggestions) client {
- domReplaceChildren(
-      for (suggestion <- suggestions)
-        <span>
-          <strong>{stringToXml(suggestion.word)}</strong>
-               <i>{stringToXml(suggestion.type)}</i>:
-                  {stringToXml(suggestion.meaning)}
-               <br/>
-        </span>,
-    domGetRefById("defs")
-    )
-}
-
 <html>
- <body>
-  <form l:onkeyup="{showdefs(completions(lowercase(word)))}">
-    <input style="width: 500px" l:name="word" autocomplete="off" />
-    <div align="left" CLASS="box" id="defs" style="width:500px;background-color:#ccccff">
-    </div>
-   </form>
+ <head>
+  <title>Dictionary suggest</title>
+  <style>
+   {stringToXml("
+    .input { width:500px }
+    .suggestions { align:left; width:500px;
+                    background-color:#ccccff }
+   ")}
+  </style>
+ </head>
+<body>
+ <h1>Dictionary suggest</h1>
+ <form l:onkeyup="{suggest(prefix)}">
+  <input type="text" l:name="prefix"
+         class="input" autocomplete="off"/>
+ </form>
+ <div id="suggestions" class="suggestions"/>
  </body>
 </html>
 
