@@ -17,7 +17,7 @@ stderr : @.
 exit : 1
 
 Conversions between float and int types
-float_of_int(3)
+intToFloat(3)
 stdout : @3\..*
 
 Integer literals

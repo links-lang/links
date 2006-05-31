@@ -53,7 +53,7 @@ let keywords = [
 "switch" , SWITCH; "update"   ,  UPDATE;   "delete"    , DELETE;
 "insert" , INSERT; "into"     ,  INTO;     "values"    , VALUES;
 "client" , CLIENT; "server"   ,  SERVER;   "where"     , WHERE;
-"if"     , IF;     "else"     ,  ELSE;     "beginswith", BEGINSWITH;     
+"if"     , IF;     "else"     ,  ELSE;     
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
 "escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
 "false"  , FALSE;  "table"    ,  TABLE;    "case"      , CASE;

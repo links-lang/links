@@ -203,41 +203,31 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
   let visitor default : 'a Syntax.expression' -> (like_expr * projection_source list) option = function
     | Variant_injection ("Repeat", pair, _) -> 
-	prerr_endline "repeat variant";
         (match unpair pair with 
            | Some (Variant_injection ("Star", _, _), Variant_injection ("Any", _, _)) ->  
-	       prerr_endline "got a .* case";
 	       Some (`percent, [])
            | _ -> None)
     | Variant_injection ("Simply", String (s, _), _) -> 
-	prerr_endline "Simply variant";
 	Some (`string (quote s), [])
     | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> 
-	prerr_endline "variable";
 	(match trace_variable name bindings with
 	   | `Earlier (rename, origin) ->
 	       Some (`variable rename, origin) (*where origins come from*)
            | _ -> failwith "Internal error: Invalid expression in regex"
         )
     | Variant_injection ("Seq", rs, _) -> 
-	prerr_endline ("Seq! : " ^ string_of_int (List.length (unlist rs)));
-	
         let x = opt_sequence (List.map (likify_regex bindings) (unlist rs)) in 
         (match x with
            | None -> None
            | Some s -> let a, b = split s in 
                          Some (`seq a, List.concat b))
-    | other -> 
-	prerr_endline ("unrecognized case " ^ Syntax.string_of_expression(other));
-	default other
+    | other -> default other
   and combiner (_, (l : (like_expr * projection_source list) option list)) : (like_expr * projection_source list) option =  
     let f s =
       let likes, origin_lists = split s in
         (`seq likes, List.concat origin_lists) 
     in opt_map f (opt_sum l)
-  in 
-  prerr_endline ("input to likify : " ^ Syntax.string_of_expression e);
-Syntax.reduce_expression visitor combiner (*(snd ->- (cross opt_sum List.concat))*) e
+  in Syntax.reduce_expression visitor combiner e
 
 (** make_sql
     Converts an expression from the constant/variable sublanguage into
@@ -268,8 +258,6 @@ let make_binop_sql oper left_value right_value =
     | "<=" -> Binary_op ("<=", left_value, right_value)
     | "<"  -> Binary_op ("<", left_value, right_value)
     | "<>" -> Binary_op ("<>", left_value, right_value)
-    | "beginswith" -> 
-        Binary_op ("like", left_value, Binary_op("concat", right_value, Text "%"))
     | "like" | "~" ->
         Binary_op ("like", left_value, right_value)
     | _ -> failwith "Internal error: unknown boolean operator in make_binop_sql"
@@ -319,16 +307,12 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))
       | Syntax.Apply (Syntax.Apply (Syntax.Variable ("~" as oper, _), lhs, _), rhs, _)  ->
-	  prerr_endline "optimising regex";
           let left_binds, lhs = sep_assgmts bindings lhs in
           let right_binds, rhs = sep_assgmts bindings rhs in
             (match make_sql left_binds lhs, likify_regex right_binds rhs with
                | (Some (lsql, lorigin), Some (rsql, rorigin)) ->
-		   prerr_endline "make_sql/ likify_regex worked";
                    Some (make_binop_sql oper lsql (LikeExpr rsql), lorigin @ rorigin)
-               | _ -> 
-		   prerr_endline "make_sql/ likify_regex failed";
-		   None)
+               | _ -> None)
 
       | Syntax.Comparison (lhs, oper, rhs, _) ->
           let left_binds, lhs = sep_assgmts bindings lhs in

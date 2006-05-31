@@ -17,7 +17,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token EQ IN 
 %token FUN RARROW VAR
 %token IF ELSE
-%token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT BEGINSWITH
+%token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT
 %token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
 %token PLUSPLUS HATHAT HAT
 %token SWITCH RECEIVE CASE SPAWN
@@ -196,7 +196,6 @@ comparison_expression:
 | comparison_expression MORE      cons_expression              { InfixAppl (`Greater, $1, $3), pos() }
 | comparison_expression MOREEQUAL cons_expression              { InfixAppl (`GreaterEq, $1, $3), pos() }
 | comparison_expression DIFFERENT cons_expression              { InfixAppl (`NotEq, $1, $3), pos() }
-| comparison_expression BEGINSWITH cons_expression             { InfixAppl (`BeginsWith, $1, $3), pos() }
 
 logical_expression:
 | comparison_expression                                        { $1 }

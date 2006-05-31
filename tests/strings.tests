@@ -17,13 +17,3 @@ stdout : "Links" : String
 concatenation
 "abc" ++ "def"
 stdout : "abcdef" : String
-
-beginswith works on strings
-"" beginswith ""
-stdout : .
-exit : 0
-
-beginswith restricted to strings only
-fun (x,y) { (x+0) beginswith (y+0) }
-stderr : @.
-exit : 1

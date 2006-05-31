@@ -202,7 +202,7 @@ type unary_op = [
 | `FloatMinus
 | `Not
 ]
-type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `BeginsWith | `RegexMatch ]
+type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `RegexMatch ]
 type arith_binop = [`Times | `Div | `Exp | `Plus | `Minus | `FloatTimes | `FloatDiv | `FloatExp | `FloatPlus | `FloatMinus]
 type logical_binop = [`And | `Or]
 type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Cons]
@@ -369,7 +369,7 @@ let rec curried_apply (head : untyped_expression) (pos : position) : untyped_exp
 
 let uncompare : comparison_binop -> string = 
   (* FIXME: this is buggy: should eliminate greater, greatereq *)
-  flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `BeginsWith, "beginswith"; `RegexMatch, "~"]
+  flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `RegexMatch, "~"]
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
 

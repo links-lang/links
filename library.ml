@@ -83,7 +83,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->result) =
     fun x -> (box (conv (unbox x)))
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Types.assumption =
-  let f = conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string
+  let f = conversion_op' ~unbox:unbox ~conv:conv ~box:box
   in
     (`PFun f,
      ([], from --> into))

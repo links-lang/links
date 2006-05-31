@@ -29,8 +29,7 @@ fun completions(p) server {
   if (p == "") []
   else {
     take(10)(for (w <- wordlist)
-#             where (w.word ~ /{p}.*/)
-             where (w.word beginswith p)
+             where (w.word ~ /{p}.*/)
              orderby (w.word)
               [w])
   }
