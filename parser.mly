@@ -145,10 +145,13 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | block                                                        { $1 }
 | SPAWN block                                                  { Spawn $2, pos() }
-| postfix_expression LPAREN RPAREN                             { FnAppl ($1, []), pos() }
-| postfix_expression LPAREN exps RPAREN                        { FnAppl ($1, $3), pos() }
+| postfix_expression arg_spec                                  { FnAppl ($1, $2), pos() }
 /*| postfix_expression LPAREN labeled_exps RPAREN              { FnAppl ($1, $3), pos() }*/
 | postfix_expression DOT record_label                          { Projection ($1, $3), pos() }
+
+arg_spec:
+| LPAREN RPAREN                                                { [], pos() }
+| LPAREN exps RPAREN                                           { $2, pos() }
 
 exps:
 | exp COMMA exps                                               { $1 :: $3 }

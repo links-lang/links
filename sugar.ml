@@ -323,7 +323,7 @@ type phrasenode =
   | InfixAppl of (binop * phrase * phrase)
   | Regex of (regex)
   | UnaryAppl of (unary_op * phrase)
-  | FnAppl of (phrase * phrase list)
+  | FnAppl of (phrase * (phrase list * pposition))
   | Send of (phrase * phrase)
 (* Record operations *)
   | TupleLit of (phrase list)
@@ -402,7 +402,10 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
   | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
   | Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
-  | Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), [FunLit (None, [Pattern (RecordLit ([], None), pos')], e), pos']),pos'), []), pos')
+  | Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), 
+                                         ([FunLit (None, [Pattern (RecordLit ([], None), pos')], e), 
+                                           pos'], pos')),
+                                 pos'), ([], pos')), pos')
   | Section (#arith_binop as a) -> Variable (unarith a, pos)
   | Section (`Project name) -> (let var = unique_name () in
 				  desugar (FunLit (None, [Pattern (Var var, pos')], 
@@ -457,10 +460,10 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                     Let (name, Syntax.Escape("handler",  
                                              Apply (Variable ("return", pos), 
                                                     desugar e1, pos), pos), desugar e2, pos), pos)
-  | FnAppl (fn, [])  -> Apply (desugar fn, Record_empty pos, pos)
-  | FnAppl (fn, [p]) -> Apply (desugar fn, desugar p, pos)
-  | FnAppl (fn, ps)  -> Apply (desugar fn, desugar (TupleLit ps, pos'), pos)
-  | Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), [l]), pos'), [r]), pos')
+  | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
+  | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
+  | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
+  | Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), ([l], pos')), pos'), ([r], pos')), pos')
 
   | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
   | FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],
@@ -529,7 +532,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 	 pos
          default_case)
   | Receive (patterns, final) -> 
-      desugar (Switch ((FnAppl ((Var "recv", pos'), [TupleLit [], pos']), pos'),
+      desugar (Switch ((FnAppl ((Var "recv", pos'), ([TupleLit [], pos'], pos')), pos'),
                        patterns, final), pos')
 
       (* (\* TBD: We should die if the XML text literal has bare ampersands or *)
