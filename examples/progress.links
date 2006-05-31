@@ -6,7 +6,7 @@ fun compute(count, total) server {
 }
 
 fun showProgress(count, total) client {
- var percent = string_of_float(100.0 *. float_of_int(count) /. float_of_int(total));
+ var percent = floatToString(100.0 *. intToFloat(count) /. intToFloat(total));
  domReplaceNode(
 	<div id="bar"
              style="width:{percent}%; background-color: black">|</div>,
@@ -15,12 +15,15 @@ fun showProgress(count, total) client {
 }
 
 fun showAnswer(answer) client {
- replace("bar", <div id="bar">{enxml(answer)}</div>)
+ domReplaceNode(
+	<div id="bar">{stringToXml(answer)}</div>,
+        domGetRefById("bar")       
+	)
 }
 
 <html>
  <body>
-  <form l:onsubmit="{showAnswer(compute(0, int_of_string(n)))}">
+  <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">
    <input type="text" l:name="n"/>
    <input type="submit"/>
   </form>

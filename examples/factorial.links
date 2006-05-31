@@ -24,16 +24,16 @@ fun request(s) client {
 }
 
 fun response(s) client {
- var n = int_of_string(s);
+ var n = stringToInt(s);
  domReplaceDocument(
   <html>
    <body>
-    <h1>Factorials up to {enxml(string_of_int(n))}</h1>
+    <h1>Factorials up to {intToXml(n)}</h1>
     <table>{
      for ((i,f) <- factorialsUpto(n))
       <tr>
-       <td>{enxml(string_of_int(i))}</td>
-       <td>{enxml(string_of_int(f))}</td>
+       <td>{intToXml(i)}</td>
+       <td>{intToXml(f)}</td>
       </tr>
     }</table>
    </body>

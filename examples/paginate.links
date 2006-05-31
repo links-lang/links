@@ -16,14 +16,14 @@ fun query(n,c) {
 
 fun page(n, c) {
   next = n+1;
-  title = enxml("Results: page "++ string_of_int(n));
+  title = stringToXml("Results: page "++ intToString(n));
   <html>
     <head><title>{title}</title></head>
     <body>
        <h1>{title}</h1>
        <dl>
           {for (result <- query(n, c))
-               <dt><b>{enxml(result.word)}</b></dt><dd>{enxml(result.meaning)}</dd>}
+               <dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd>}
        </dl>
        {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
        <a l:href="{page(n+1,c)}">next</a>
@@ -38,7 +38,7 @@ fun page(n, c) {
     <h1>Dictionary browser</h1>
      <ul>
       {for (c <- "abcdefghijklmnopqrstuvwxyz")
-        <li><a l:href="{page(1, [c])}">Words beginning with {enxml([c])}</a></li>}
+        <li><a l:href="{page(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
      </ul>
   </body>
 </html>

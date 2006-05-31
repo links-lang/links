@@ -16,11 +16,11 @@ fun create_processes(n, prevpid) {
 fun run()
 {
   var input = 42;
-  print("Spawning " ++ string_of_int(num) ++ " server processes.
-Input is: "++string_of_int(input));
+  print("Spawning " ++ intToString(num) ++ " server processes.
+Input is: "++intToString(input));
   last_pid = create_processes(num, self());
   last_pid ! input;
-  print("Done. Output is: "++string_of_int(recv())++" isn't this ");
+  print("Done. Output is: "++intToString(recv())++" isn't this ");
   run
 }
 

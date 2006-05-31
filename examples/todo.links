@@ -16,7 +16,7 @@ fun todo(items) {
   </form>
   <table>
    {for (item <- items)
-     <tr><td>{enxml(item)}</td>
+     <tr><td>{stringToXml(item)}</td>
          <td><form l:onsubmit="{todo(remove(item,items))}" method="POST">
               <button type="submit">Done</button>
              </form>

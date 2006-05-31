@@ -539,7 +539,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
       (*    is otherwise ill-formed. It should also be made to properly handle *)
       (*    CDATA. *)
       (*    Where's a good place to do so? *)
-  | TextNode s -> Apply (Variable ("enxml", pos), String (s, pos), pos)
+  | TextNode s -> Apply (Variable ("stringToXml", pos), String (s, pos), pos)
   | Xml (tag, attrs, subnodes) -> 
       let concat a b = 
         Concat (desugar a, b, pos) in

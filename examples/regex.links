@@ -1,6 +1,6 @@
 fun f(number) client {
   domAppendChild(
-     <p>{enxml(number ++ (if (number ~ /[0-9]+/) " is a number" 
+     <p>{stringToXml(number ++ (if (number ~ /[0-9]+/) " is a number" 
                           else " is a non-number"))}</p>,
      domGetRefById("div"));
 }

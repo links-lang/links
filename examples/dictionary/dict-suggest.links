@@ -20,20 +20,13 @@ fun completions(p) server {
   }
 }
 
-fun replace(id, xml) client {
- var node = domGetRefById(id);
- domInsertBefore(xml, node);
- domRemoveRef(node);
-}
-#    <div align="left" CLASS="box" id="defs" style="width:500px;background-color:#ccccff">{
-#    }</div>,
 fun showdefs(suggestions) client {
  domReplaceChildren(
       for (suggestion <- suggestions)
         <span>
-          <strong>{enxml(suggestion.word)}</strong>
-               <i>{enxml(suggestion.type)}</i>:
-                  {enxml(suggestion.meaning)}
+          <strong>{stringToXml(suggestion.word)}</strong>
+               <i>{stringToXml(suggestion.type)}</i>:
+                  {stringToXml(suggestion.meaning)}
                <br/>
         </span>,
     domGetRefById("defs")

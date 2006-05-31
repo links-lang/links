@@ -78,10 +78,19 @@ let float_op impl : primitive * Types.assumption =
   (`PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y)))))),
   ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Types.assumption =
+let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
-  (`PFun (fun x -> (box (conv (unbox x)))),
-   ([], from --> into))
+    fun x -> (box (conv (unbox x)))
+
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Types.assumption =
+  let f = conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string
+  in
+    (`PFun f,
+     ([], from --> into))
+
+let string_to_xml = function 
+  | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
+  | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
 let char_test_op fn = 
   (`PFun (fun c -> (`Bool (fn (unbox_char c)))),
@@ -125,10 +134,10 @@ let env : (string * (primitive * Types.assumption)) list = [
   "^^", float_op ( ** );
 
   (** Conversions (any missing?) **)
-  "int_of_string",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
-  "float_of_int",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
-  "string_of_int",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
-  "string_of_float", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
+  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
+  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
+  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
+  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
 
   (** concurrency **)
   "send",
@@ -250,11 +259,15 @@ let env : (string * (primitive * Types.assumption)) list = [
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
 
-  "enxml",
-  (p1 (function 
-         | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
-         | _ -> failwith "internal error: non-string value passed to xml conversion routine"),
+  "stringToXml",
+  (p1 string_to_xml,
    ([], Types.string_type --> xml));
+
+  "intToXml",
+  (p1 (string_to_xml -<-
+	 (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string)),
+   ([], (`Primitive `Int) --> xml));
+
 
   (* [DEACTIVATED] *)
   (* "dom", *)

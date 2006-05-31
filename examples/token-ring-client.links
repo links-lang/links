@@ -12,7 +12,7 @@ fun append(xml) {
 fun f(pid) client {
   receive {
     case Message(n) -> {
-        append(enxml(". "));
+        append(stringToXml(". "));
         pid ! Message(n+1)
     };
   }
@@ -24,12 +24,12 @@ fun myspawn(pid, n) {
 }
 
 fun run(input) client {
-  append(enxml("Input is: "++input));
+  append(stringToXml("Input is: "++input));
   pid = myspawn(self(), num); ();
-  pid ! Message (int_of_string(input));
+  pid ! Message (stringToInt(input));
   receive {
     case Message(n) -> {
-        append(enxml(" Done. Output is: "++string_of_int(n)));
+        append(stringToXml(" Done. Output is: "++intToString(n)));
 	append(<br />)
     };
   }
@@ -37,7 +37,7 @@ fun run(input) client {
 
 <html>
 <body>
- <H1>Run {enxml(string_of_int(num))} client processes</H1>
+ <H1>Run {intToXml(num)} client processes</H1>
  <form l:onsubmit="{run(n)}">
    <input type="text" value="42" l:name="n" />
    <input type="submit" value="Run" />

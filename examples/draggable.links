@@ -26,7 +26,7 @@ fun dragging(id, elem) client {
 }
 
 fun format(item) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{enxml(item)}</li><span/>
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li><span/>
 }
 
 fun draggableList(id, items)

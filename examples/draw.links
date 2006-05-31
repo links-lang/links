@@ -5,8 +5,8 @@
 fun canvas (x, y, id) {
   domAppendChild(
          <div id="{id}"
-              style="width: {string_of_int(x)}px;
-                     height: {string_of_int(y)}px"> </div>,
+              style="width: {intToString(x)}px;
+                     height: {intToString(y)}px"> </div>,
          domGetRefById("body"));
   spawn{ draw(id) }
 }
@@ -21,8 +21,8 @@ fun draw(id) client {
                            background-color: red; 
                            width: 1px;
                            height: 1px;
-                           left: {string_of_int(x)}px;
-                           top: {string_of_int(y)}px"> </div>,
+                           left: {intToString(x)}px;
+                           top: {intToString(y)}px"> </div>,
                domGetRefById(id))
     };
   };
