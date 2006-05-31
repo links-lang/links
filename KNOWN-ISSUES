@@ -3,6 +3,8 @@ KNOWN ISSUES
  * Browsers other than Firefox are currently unsupported.
 
  * Pattern matching is not deep.
+ 
+ * Pattern matching on lists has many bugs.
 
  * The following web features have not yet been implemented.
    - URLs

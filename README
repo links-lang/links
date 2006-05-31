@@ -1,0 +1,15 @@
+Links is a blah blah blah
+
+FEATURES
+
+ * Allows web programs to be written in a single programming language
+ * Call-by-value functional language
+ * Server / Client annotations
+ * AJAX
+ * Scalability through defununctionalised server continuations.
+ * Statically typed database access a la Kleisli
+ * Concurrent processes on the client and the server using
+ resumption passing style.
+ * Statically typed Erlang-esque message passing
+ * Polymorphic records and variants
+ 
