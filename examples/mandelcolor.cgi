@@ -114,7 +114,8 @@ fun numbers(start, l) {
 fun mandelBlock(pixSize, x, y, regionSize, r, i) {
   pixeldiv(x, y, pixSize/2, mandelbrot(r, i, the_limit)) ++
    pixeldiv(x+(pixSize/2), y, pixSize/2, mandelbrot(r+regionSize, i, the_limit)) ++
-   pixeldiv(x, y+(pixSize/2), pixSize/2, mandelbrot(r, i+regionSize, the_limit))
+   pixeldiv(x, y+(pixSize/2), pixSize/2, mandelbrot(r, i+regionSize, the_limit)) ++
+   pixeldiv(x+(pixSize/2), y+(pixSize/2), pixSize/2, mandelbrot(r+regionSize, i+regionSize, the_limit))
 }
 
 fun dilation(mina, minb, maxa, maxb, minc, mind, maxc, maxd)
@@ -177,7 +178,7 @@ fun main() client {
     <div id="p0x0" />
   </body>);
   needless(1000);   # gives the DOM process time to draw the initial div
-  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 128)
+  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)
 }
 
 main()
