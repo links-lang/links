@@ -101,6 +101,7 @@ lib/js/yahoo/YAHOO.js
 lib/js/yahoo/event.js
 lib/js/json.js
 lib/js/jslib.js
+lib/js/regex.js
 
 tests
 tests/collections.tests
