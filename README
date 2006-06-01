@@ -1,3 +1,40 @@
+Links: Linking Theory to Practice for the Web
+
+e-Commerce, e-Government, e-Science --- the coining of such words
+reflects the growing importance of the World Wide Web in all aspects
+of our lives. Consumer spending on the web in Britain exceeds 12
+billion pounds a year.
+
+A typical web program involves three tiers. The front-end is the
+browser running on your computer. The middle-tier is a server,
+executing the logic that controls your interaction with the web
+site. The back-end is a database, providing the information you wish
+to access, such as a catalog of items for purchase, a collection of
+government records, or a store of scientific data.
+
+The programmer must master a myriad of languages: the logic is written
+in a mixture of Java, Python, and Perl; the forms in HTML, XML, and
+Javascript; and the queries are written in SQL or XQuery. There is no
+easy way to link these --- to be sure that a form in HTML or a query
+in SQL produces data of a type that the logic in Java expects. This is
+called the impedance mismatch problem.
+
+Links will solve the impedance mismatch problem by providing a single
+language for all three tiers. The system will be responsible for
+distributing tasks among tiers and translating into suitable languages
+for each tier --- for instance, translating part of a program into
+Javascript to run in the browser, Java to run on the server, and SQL
+to run on the database. Links will incorporate ideas proven in other
+programming languages: support for database programming from Kleisli,
+for XML programming from Xduce, for web interaction from PLT Scheme,
+and for distribution from Erlang. It will be developed by a
+consortium, as were ML and Haskell. Like all of these languages, it
+will be functional.
+
+VERSION 0.1 (Sichthill)
+
+This is our first (experimental) release.
+
 FEATURES
 
  * Allows web programs to be written in a single programming language
@@ -10,4 +47,3 @@ FEATURES
  resumption passing style.
  * Statically typed Erlang-esque message passing
  * Polymorphic records and variants
- 

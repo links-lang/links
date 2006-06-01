@@ -72,6 +72,8 @@ js.mli
 js.ml
 webif.ml
 links.ml
+linksregex.ml
+regex.ml
 
 deriving/
 deriving/lib
