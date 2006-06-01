@@ -15,12 +15,11 @@ If you can run OCaml, you should be able to compile and run Links. It
 is known to build from source with OCaml versions 3.08.3 and greater
 on Linux, Cygwin, and MacOS X.
 
-Windows users are encouraged to use the Links binary, available
-wherever Links is distributed. It is possible to using the MSVC
-version of OCaml to build from source, but this requires Cygwin or
-MinGW to be installed. Also, the MSVC binary version of OCaml 3.09.0
-on Windows will not build Links from source. This is due to a bug in
-OCaml.
+Windows users are encouraged to use the Links binary. It is possible
+to use the MSVC version of OCaml to build from source, but this
+requires Cygwin or MinGW to be installed. Also, the MSVC binary
+version of OCaml 3.09.0 on Windows will not build Links from
+source. This is due to a bug in OCaml.
 
 INSTALLING OCAML
 
@@ -65,6 +64,9 @@ to exit the interactive interpreter.
 To run Links web applications, see RUNNING WEB APPLICATIONS, below.
 
 RUNNING THE TESTS
+
+Note: make requires a unix-like environment in
+order to run (this includes Cygwin and MinGW on Windows).
 
 To check whether Links is working under your platform, try running the
 automated tests as follows:
