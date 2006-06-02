@@ -544,18 +544,25 @@ let fold_constant : RewriteSyntax.rewriter =
     | Collection_union (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
     | _ -> None 
 
+let trace name optimiser expression = 
+  match optimiser expression with 
+  | None -> None
+  | Some s -> (prerr_endline (name ^ " : " ^ string_of_expression expression
+			      ^     "\n   => " ^ string_of_expression s);
+	       Some s)
+
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
-  RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
-  RewriteSyntax.bottomup sql_selections;
+  trace "sql_joins" (RewriteSyntax.loop (RewriteSyntax.topdown sql_joins));
+  trace "sql_selections" (RewriteSyntax.bottomup sql_selections);
   RewriteSyntax.bottomup unused_variables;
-  RewriteSyntax.bottomup (sql_projections env);
+  trace "sql_projections" (RewriteSyntax.bottomup (sql_projections env));
 (*  optimiser2rewriter sql_sort;
   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown trivial_extensions;
-  RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
+  trace "takedrop" (RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop));
 ]
 
 let run_optimisers : Kind.environment -> RewriteSyntax.rewriter

@@ -208,6 +208,7 @@ and scheduler globals state stepf =
   incr process_steps;
   if (!process_steps mod switch_granularity == 0) then 
     begin
+      (* print_string (Utility.base64encode"\n"); flush stdout; *)
       process_steps := 0;
       Queue.push (state, !current_pid) Library.suspended_processes;
       switch_context globals

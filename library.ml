@@ -290,6 +290,13 @@ let env : (string * (result * Kind.assumption)) list = map
    )
   );
 
+
+  ("start",
+   (primfun "start"
+      (fun _ -> failwith "start not implemented on the server"),
+      ([], (xml --> unit_type))));
+
+
   ("drop",
    (primfun "drop"
       (function 
