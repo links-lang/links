@@ -41,9 +41,14 @@ let print_http_response immediate_endline headers =
 
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program p =
-  List.exists (function
-                 | Syntax.Define (_, _, `Client, _) -> true
-                 | _ -> false) p
+  let is_client_prim = Library.primitive_location ->-
+    function
+      | `Client -> true
+      | _ -> false in
+    List.exists (function
+                   | Syntax.Define (_, _, `Client, _) -> true
+                   | _ -> false) p
+    || List.exists (is_client_prim) (Utility.concat_map Syntax.freevars p)
 
 (* Hacky cache.  Should be neater, and moved somewhere else *)
 let read_file_cache filename : (Syntax.expression list) = 

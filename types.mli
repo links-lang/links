@@ -85,6 +85,7 @@ module TypeOps :
 	   and type row_var = row_var)
 
 val unit_type : datatype
+val tuplify : datatype list -> datatype
 
 (* From library.ml; there's probably another name for these *)
 val fresh_type : unit -> type_variable * datatype

@@ -70,23 +70,23 @@ type primitive =  [
   Result.result
 | `PFun of result -> primitive ]
 
-let int_op impl : primitive * Types.assumption = 
+type located_primitive = [ `Client | `Server of primitive | primitive ]
+
+let int_op impl : located_primitive * Types.assumption = 
   (`PFun (fun x -> `PFun (fun y -> `Int (impl (unbox_int x) (unbox_int y))))),
   ([], `Primitive `Int --> (`Primitive `Int --> `Primitive `Int))
 
-let float_op impl : primitive * Types.assumption = 
-  (`PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y)))))),
+let float_op impl : located_primitive * Types.assumption = 
+  `PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y))))),
   ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
-
+    
 let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
     fun x -> (box (conv (unbox x)))
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : primitive * Types.assumption =
-  let f = conversion_op' ~unbox:unbox ~conv:conv ~box:box
-  in
-    (`PFun f,
-     ([], from --> into))
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
+  (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
+   ([], from --> into))
 
 let string_to_xml = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
@@ -104,11 +104,11 @@ let float_fn fn =
   (`PFun (fun c ->  (box_float (fn (unbox_float c)))),
    ([], `Primitive `Float --> `Primitive `Float))
 
-let p1 fn : primitive = 
+let p1 fn = 
   `PFun (fun a ->  (fn a))
-and p2 fn : primitive = 
+and p2 fn = 
   `PFun (fun a -> `PFun (fun b ->  (fn a b)))
-and p3 fn : primitive = 
+and p3 fn = 
   `PFun (fun a -> `PFun (fun b -> `PFun (fun c ->  (fn a b c))))
 
 let client_only_1 fn = 
@@ -117,9 +117,8 @@ let client_only_2 fn =
   p2 (fun _ _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
 
 let datatype = Parse.parse_datatype
-let _UNTYPED_ = datatype "a"
 
-let env : (string * (primitive * Types.assumption)) list = [
+let env : (string * (located_primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
   "*", int_op ( */);
@@ -139,7 +138,15 @@ let env : (string * (primitive * Types.assumption)) list = [
   "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
 
-  (** concurrency **)
+  "stringToXml",
+  ((p1 string_to_xml :> located_primitive),
+   ([], Types.string_type --> xml));
+  
+  "intToXml",
+  ((p1 (string_to_xml -<-
+	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
+   ([], (`Primitive `Int) --> xml));
+  
   "send",
   (p2 (fun pid msg -> 
          let pid = int_of_num (unbox_int pid) in
@@ -236,9 +243,7 @@ let env : (string * (primitive * Types.assumption)) list = [
    datatype "XML -> XML");
 
   "objectType",
-  (client_only_1 "objectType",
-   let u', u = fresh_type () in
-     ([u'], u --> Types.string_type));
+  (`Client, datatype "a -> String");
 
   "attribute",
   (p1 (let none = `Variant ("None", `Record []) in
@@ -258,16 +263,6 @@ let env : (string * (primitive * Types.assumption)) list = [
                     | _ -> none)
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
-
-  "stringToXml",
-  (p1 string_to_xml,
-   ([], Types.string_type --> xml));
-
-  "intToXml",
-  (p1 (string_to_xml -<-
-	 (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string)),
-   ([], (`Primitive `Int) --> xml));
-
 
   (* [DEACTIVATED] *)
   (* "dom", *)
@@ -321,152 +316,111 @@ let env : (string * (primitive * Types.assumption)) list = [
 (*    datatype "a -> ()"); *)
 
   "domInsertBefore",
-  (p2 (fun _ _ -> failwith("`domInsertBefore' is only available on the client.");
-         `Record []),
-  datatype "(XML, DomRef) -> ()");
+  (`Client, datatype "(XML, DomRef) -> ()");
 
   "domAppendChild",
-  (p2 (fun _ _ -> failwith("`domAppendChild' is only available on the client.");
-         `Record []),
-  datatype "(XML, DomRef) -> ()");
+  (`Client, datatype "(XML, DomRef) -> ()");
 
   "domReplaceNode",
-  (client_only_2 "domReplaceNode",
-   datatype "(XML, DomRef) -> ()"); 
+  (`Client, datatype "(XML, DomRef) -> ()"); 
 
   "domReplaceDocument",
-  (client_only_1 "domReplaceDocument",
-   datatype "XML -> ()"); 
-
+  (`Client, datatype "XML -> ()"); 
 
   "domInsertBeforeRef",
-  (p2 (fun _ _ -> failwith("`domInsertBeforeRef' is only available on the client.");
-         `Record []),
-  datatype "(DomRef, DomRef) -> ()");
+  (`Client, datatype "(DomRef, DomRef) -> ()");
 
   "domAppendChildRef",
-  (p2 (fun _ _ -> failwith("`domAppendChildRef' is only available on the client.");
-         `Record []),
-  datatype "(DomRef, DomRef) -> ()");
+  (`Client, datatype "(DomRef, DomRef) -> ()");
 
   "domRemoveRef",
-  (p1 (fun _ -> failwith("`domAppendChild' is only available on the client.");
-         `Record []),
-   datatype "DomRef -> ()");
+  (`Client, datatype "DomRef -> ()");
 
 
   "domReplaceChildren",
-  (client_only_2 "domReplaceChildren",
-   datatype "(XML, DomRef) -> ()");
+  (`Client, datatype "(XML, DomRef) -> ()");
 
   "domSwapNodeRefs",
-  (client_only_2 "domSwapNodeRefs",
-  datatype "(DomRef, DomRef) -> ()");
-
+  (`Client, datatype "(DomRef, DomRef) -> ()");
 
   "domGetDocumentRef",
-  (p1 (fun message -> failwith("`domGetDocumentRef' is only available on the client.");
-         `Record []),
-   datatype "() -> DomRef");
+  (`Client, datatype "() -> DomRef");
 
   "domGetRefById",
-  (p1 (fun message -> failwith("`domGetRefById' is only available on the client.");
-         `Record []),
-   datatype "String -> DomRef");
+  (`Client, datatype "String -> DomRef");
 
   "domGetXml",
-  (p1 (fun message -> failwith("`domGetXml' is only available on the client.");
-         `Record []),
-   datatype "DomRef -> XML");
+  (`Client, datatype "DomRef -> XML");
 
   "domIsNullRef",
-   (client_only_1 "domIsNullRef",
-    datatype "DomRef -> Bool");
+  (`Client, datatype "DomRef -> Bool");
 
 (* Section: Accessors for XML *)
   "getTagName",
-    (client_only_1 "getTagName",
-     datatype "XML -> String");
+  (`Client, datatype "XML -> String");
 
   "getAttributes",
-    (client_only_1 "getAttributes",
-     datatype "XML -> a");
+  (`Client, datatype "XML -> a");
 
   "getTextContent",
-    (client_only_1 "getTextContent",
-     datatype "XML -> String");
+  (`Client, datatype "XML -> String");
 
   "getAttribute",
-  ((client_only_1 "getAttribute"),
-   datatype "(XML, String) -> String");
+  (`Client, datatype "(XML, String) -> String");
 
 (* Section: Navigation for XML *)
   "getChildNodes",
-  ((client_only_1 "getChildNodes"),
-   datatype "XML -> [XML]");
+  (`Client, datatype "XML -> [XML]");
 
 (* Section: Accessors for DomRefs *)
   "domGetTagNameFromRef",
-    (client_only_1 "domGetTagNameFromRef",
-     datatype "DomRef -> String");
+  (`Client, datatype "DomRef -> String");
 
   "domGetAttributeFromRef",
-  ((client_only_1 "domGetAttributeFromRef"),
-   datatype "(DomRef, String) -> String");
+  (`Client, datatype "(DomRef, String) -> String");
 
 (* Section:  Navigation for DomRefs *)
   "domGetParentFromRef",
-  ((client_only_1 "domGetParentFromRef"),
-   datatype "DomRef -> DomRef");
+  (`Client, datatype "DomRef -> DomRef");
 
   "domGetFirstChildFromRef",
-  ((client_only_1 "domGetFirstChildFromRef"),
-   datatype "DomRef -> DomRef");
+  (`Client, datatype "DomRef -> DomRef");
 
   "domGetNextSiblingFromRef",
-  ((client_only_1 "domGetNextSiblingFromRef"),
-   datatype "DomRef -> DomRef");
+  (`Client, datatype "DomRef -> DomRef");
 
 (* Section: DOM Event API *)
   "eventGetTarget",
-  ((client_only_1 "eventGetTarget"),
-   datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomRef");
 
   "eventGetTargetValue",
-  ((client_only_1 "eventGetTargetValue"),
-   datatype "Event -> String");
+  (`Client, datatype "Event -> String");
 
   "eventGetTargetResolveTextNode",
-  ((client_only_1 "eventGetTargetResolveTextNode"),
-   datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomRef");
 
 (* getPageX : Event -> Int *)
   "eventGetPageX",
-  ((client_only_1 "eventGetPageX"),
-   datatype "Event -> Int");
+  (`Client, datatype "Event -> Int");
 
 (* getPageY : Event -> Int *)
   "eventGetPageY",
-  ((client_only_1 "eventGetPageY"),
-   datatype "Event -> Int");
+  (`Client, datatype "Event -> Int");
 
 (* getRelatedTarget : Event -> DomRef *)
   "eventGetRelatedTarget",
-  ((client_only_1 "eventGetRelatedTarget"),
-   datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomRef");
 
 (* getTime : Event -> Int *)
   "eventGetTime",
-  ((client_only_1 "eventGetTime"),
-   datatype "Event -> Int");
+  (`Client, datatype "Event -> Int");
 
 (* # stopEvent : ??? *)
 (* # stopPropagation : ??? *)
 (* # preventDefault : ??? *)
 (* getCharCode : Event -> Char *)
   "eventGetCharCode",
-  ((client_only_1 "eventGetCharCode"),
-   datatype "Event -> Char");
+  (`Client, datatype "Event -> Char");
 
   "getCommandOutput",
   (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
@@ -480,56 +434,69 @@ let env : (string * (primitive * Types.assumption)) list = [
 
   (** Database functions **)
   "insertrow",
-  (p3 (fun table database row ->
-         match database with 
-           | `Database (db, _) -> 
-               (Database.execute_select 
-                 (`List unit_type)
-                 ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
-                 db :> primitive)
-           | _ -> failwith "Internal error: insert row into non-database"),
-   (* FIXME: reboxing of `RowVar <-> Row_variable *)
+  (`Server 
+     (p1 (function
+            | `Record fields ->
+                let table = assoc "1" fields
+                and database = assoc "2" fields
+                and row = assoc "3" fields in begin
+                    match database with 
+                      | `Database (db, _) -> 
+                          (Database.execute_select 
+                             (`List unit_type)
+                             ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
+                             db :> primitive)
+                      | _ -> failwith "Internal error: insert row into non-database"
+                  end
+            | _ -> failwith "Internal error unboxing args (insertrow)")),
    let r', r = fresh_row () in
      [r'],
-   Types.string_type --> (`DB --> (`Record r --> unit_type)));
+   tuplify [Types.string_type; `DB; `Record r] --> unit_type);
   
   "deleterows", 
-  (p3 (fun table database rows -> 
-       match database with 
-         | `Database (db, _)  ->
-             (Database.execute_select
-                (`List unit_type)
-                ("delete from " ^ unbox_string table ^ " where " ^ delete_condition db rows)
-                db :> primitive)
-         | _ -> failwith "Internal error: delete row from non-database"),
+  (`Server
+     (p1 (function
+            | `Record fields ->
+                let table = assoc "1" fields
+                and database = assoc "2" fields
+                and rows = assoc "3" fields in begin
+                    match database with 
+                      | `Database (db, _)  ->
+                          (Database.execute_select
+                             (`List unit_type)
+                             ("delete from " ^ unbox_string table ^ " where " ^ delete_condition db rows)
+                             db :> primitive)
+                      | _ -> failwith "Internal error: delete row from non-database"
+                  end
+            | _ -> failwith "Internal error unboxing args (deleterows)")),
    let r', r = fresh_row () in
      [r'],
-   Types.string_type --> (`DB --> (`List (`Record r) --> unit_type)));
+   tuplify [Types.string_type; `DB; `List (`Record r)] --> unit_type);
 
-
-  "updaterows", 
-  (p3 (fun table database rows ->
-         match database, rows with 
-           |  `Database (db, _), `List rows ->
-                List.iter (fun row -> 
-                             ignore (Database.execute_select
-                                       (`List unit_type)
-                                       ("update " ^ unbox_string table
-                                        ^ " set " ^ updates db (links_snd row)
-                                        ^ " where " ^ single_match db (links_fst row))
-                                       db))
-                  rows;
-                `Record []
-       | _ -> failwith "Internal error: bad value passed to `updaterows'"),
+    "updaterows", 
+  (p1 (function
+         | `Record fields ->
+             let table = assoc "1" fields
+             and database = assoc "2" fields
+             and rows = assoc "3" fields in begin
+                 match database, rows with 
+                   |  `Database (db, _), `List rows ->
+                        List.iter (fun row -> 
+                                     ignore (Database.execute_select
+                                               (`List unit_type)
+                                               ("update " ^ unbox_string table
+                                                ^ " set " ^ updates db (links_snd row)
+                                                ^ " where " ^ single_match db (links_fst row))
+                                               db))
+                          rows;
+                        `Record []
+                   | _ -> failwith "Internal error: bad value passed to `updaterows'"
+               end
+         | _ -> failwith "Internal error unboxing args (updaterows)"),
    let v', v = fresh_row () in
    let u', u = fresh_row () in
-   let pair = `Record
-     (TypeOps.set_field ("1", `Present (`Record u))
-        (TypeOps.set_field ("2", `Present (`Record v))
-           (TypeOps.make_empty_closed_row ())))
-   in
      [u'; v'],
-   Types.string_type --> (`DB --> (`List pair --> unit_type)));
+   tuplify [Types.string_type; `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
 
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
@@ -569,9 +536,6 @@ let env : (string * (primitive * Types.assumption)) list = [
             box_bool (Str.string_match regex string 0)),
     let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
       qs, (`List (`Primitive `Char) --> (regex --> `Primitive `Bool))));
-
-
-
 ]
 
 type continuationized_val = [
@@ -588,10 +552,26 @@ let rec continuationize : primitive -> continuationized_val = function
                             | prim         -> continuationize prim)
     | (#result as a) -> a
 
+let continuationize : located_primitive -> continuationized_val option = function
+  | `Client -> None
+  | `Server p
+  | (#primitive as p) -> Some (continuationize p)
+
 type primitive_environment = (string*continuationized_val) list
 
-let value_env = ref (List.map (fun (n, (v,_)) -> (n, continuationize v)) env)
+let continuationize_env = Utility.concat_map
+  (fun (n, (v,_)) ->
+    match continuationize v with
+      | None -> []
+      | Some v -> [n,v])
+
+let value_env = ref (continuationize_env env)
 and type_env : Types.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+
+let impl : located_primitive -> primitive = function
+  | `Client -> failwith "client function requested"
+  | `Server p
+  | (#primitive as p) -> p
 
 (* [DISGUSTING HACK] *)
 (* no mailbox type threaded through *)
@@ -607,7 +587,7 @@ let apply_pfun (apply_cont :continuation -> result -> result) cont (name : strin
           | []      -> apply_cont cont (`PFunction (name, args))
           | r::rest -> aux rest (f r) in
     if mem_assoc name env then
-      aux args (fst (assoc name env))
+      aux args (impl (fst (assoc name env)))
     else 
       let result_of_cval : continuationized_val -> result = function
         | #result as r -> r
@@ -623,4 +603,8 @@ let primitive_stub (name : string) : result =
     | `PFun _      -> `PFunction (name, [])
     | #result as r -> r
 
-
+let primitive_location p : Syntax.location = 
+  match fst (assoc p env) with
+  | `Client -> `Client
+  | `Server _ -> `Server
+  | #primitive -> `Unknown (* not the best nsme: this means "available on both client and server" *)

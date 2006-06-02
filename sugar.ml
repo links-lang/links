@@ -446,9 +446,19 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
   | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
   | ListLit  [] -> Nil (pos)
   | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
-  | DBUpdate (table, db, rows) -> curried_apply (Variable("updaterows", pos)) pos [String (table, pos); desugar db; desugar rows]
-  | DBDelete (table, db, rows) -> curried_apply (Variable("deleterows", pos)) pos [String (table, pos); desugar db; desugar rows]
-  | DBInsert (table, db, rows) -> curried_apply (Variable("insertrow",  pos)) pos [String (table, pos); desugar db; desugar rows]
+  | DBUpdate (table, db, rows)
+  | DBDelete (table, db, rows)
+  | DBInsert (table, db, rows) as op -> 
+      let fn =  match op with
+        | DBUpdate _ -> "updaterows"
+        | DBDelete _ -> "deleterows"
+        | DBInsert _ -> "insertrow" 
+        | _ -> assert false in
+      desugar (FnAppl ((Var fn, pos'),
+                       ([StringLit table, pos'; 
+                         db;
+                         rows
+                        ], pos')), pos')
   | DatabaseLit s -> Database (String (s, pos), pos)
   | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
   | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)

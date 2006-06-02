@@ -442,6 +442,14 @@ module TypeOps :
 
 let unit_type = `Record (TypeOps.make_empty_closed_row ())
 
+let tuplify types =
+  let ns = List.map string_of_int (Utility.fromTo 1 (1 + List.length types)) in
+    `Record 
+      (List.fold_right
+         (TypeOps.set_field -<- (fun (f,t) -> (f,`Present t)))
+         (List.combine ns types)
+         (TypeOps.make_empty_closed_row ()))
+
 (* fresh type_variable * type *)
 let fresh_type () =
   let var = fresh_raw_variable () in
