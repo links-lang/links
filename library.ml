@@ -468,6 +468,10 @@ let env : (string * (primitive * Types.assumption)) list = [
   ((client_only_1 "eventGetCharCode"),
    datatype "Event -> Char");
 
+  "getCommandOutput",
+  (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
+   datatype "String -> String");
+
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
   (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
