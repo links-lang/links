@@ -19,12 +19,7 @@ Continuation typing [2]
 escape e in { e(1) }
 stdout : 1 : Int
 
-string_of_cont typing [1]
-fun () { string_of_cont(3+1) }
-stderr : @.*
-exit : 1
-
-string_of_cont typing [2]
-fun () { string_of_cont((+)) }
-stderr : @.*
+continuation mailbox typing (see r321) 
+fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
+stderr : @..*
 exit : 1

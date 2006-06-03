@@ -901,7 +901,7 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
            could use instead. *)
       let conttype =
 	if Types.using_mailbox_typing () then
-	  let mailboxtype = ITO.fresh_type_variable () in
+	  let mailboxtype = instantiate env "_MAILBOX_" in
 	    `Function (mailboxtype, `Function (exprtype, contrettype))
 	else
 	  `Function (exprtype, contrettype) in
