@@ -9,8 +9,8 @@ open Syntax
 open Sql_transform
 
 (* This appears to be ignored *)
-let optimising = Settings.add_bool true "optimising"
-let show_optimisation = Settings.add_bool false "show_optimisation"
+let optimising = Settings.add_bool("optimising", true, true)
+let show_optimisation = Settings.add_bool("show_optimisation", false, true)
 
 module RewriteSyntax = 
   Rewrite

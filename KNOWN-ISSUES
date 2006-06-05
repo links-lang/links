@@ -6,6 +6,8 @@ KNOWN ISSUES
  
  * Pattern matching on lists has many bugs.
 
+ * Exceptions have not been implemented.
+
  * The following web features have not yet been implemented.
    - URLs
    - Cookies

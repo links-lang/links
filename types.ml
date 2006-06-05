@@ -31,7 +31,7 @@ let (-->) x y = `Function (x,y)
    [NOTE]
       unused mailbox parameters are never shown
  *)
-let show_mailbox_annotations = Settings.add_bool true "show_mailbox_annotations"
+let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, true)
 
 (*
   [HACK]

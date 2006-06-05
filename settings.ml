@@ -3,7 +3,7 @@
 *)
 module SettingsMap = Utility.StringMap
 
-type 'a setting = 'a ref * string
+type 'a setting = {mutable value: 'a; name: string; user: bool}
 (*
 [SUGGESTION]
   add an optional function to each setting
@@ -11,10 +11,10 @@ type 'a setting = 'a ref * string
 *)
 (* ('a * 'a -> unit) option*)
 
-let get_value ({contents=v}, _) = v
-let get_name (_, name) = name
+let get_value setting = setting.value
+let get_name setting = setting.name
 
-let set_value (r, _) v = r := v
+let set_value setting v = setting.value <- v
 
 type universal = [
 | `Bool of bool setting
@@ -34,52 +34,61 @@ let parse_bool = function
   | "nein"
   | "off" -> false
 
-let string_of_universal : universal -> string  = function
-  | `Bool (v,_) -> string_of_bool !v
-  | `Int (v,_) -> string_of_int !v
-  | `String (v, _) -> !v
+let is_user_setting = function
+  | `Bool setting -> setting.user
+  | `Int setting -> setting.user
+  | `String setting -> setting.user
 
-let settings = ref (SettingsMap.empty)
+let settings : ((universal SettingsMap.t) ref) = ref (SettingsMap.empty)
 
-let parse_and_set (name, value) =
+(* parse and set *)
+let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, value) ->
   if SettingsMap.mem name (!settings) then
-    match SettingsMap.find name (!settings) with
-      | `Bool setting ->
-	  begin
-	    try
-	      set_value setting (parse_bool value)
-	    with (Invalid_argument _) ->
-	      output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
-	  end
-      | `Int setting ->
-	  begin
-	    try
-	      set_value setting (int_of_string value)
-	    with Invalid_argument _ ->
-	      output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
-	  end
-      | `String setting ->
-	  set_value setting value
+    let universal_setting = SettingsMap.find name (!settings) in
+      if (user_check && is_user_setting (universal_setting)) then
+	match universal_setting with
+	  | `Bool setting ->
+	      begin
+		try
+		  set_value setting (parse_bool value)
+		with (Invalid_argument _) ->
+		  output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
+	      end
+	  | `Int setting ->
+	      begin
+		try
+		  set_value setting (int_of_string value)
+		with Invalid_argument _ ->
+		  output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
+	      end
+	  | `String setting ->
+	      set_value setting value
+      else
+	output_string stderr ("Cannot change system setting '" ^ name ^ "'"); flush stderr;
   else
      output_string stderr ("Unknown setting: " ^ name ^ "\n"); flush stderr
 
-let add universal_setting name =
+let parse_and_set = parse_and_set' false     (* any setting can be set *)
+let parse_and_set_user = parse_and_set' true (* only allow user settings to be set *)
+
+
+let add : string -> universal -> unit = fun name universal_setting ->
   if SettingsMap.mem name (!settings) then
     failwith ("Setting: "^name^" already present")
   else
     (settings := SettingsMap.add name universal_setting (!settings))
 
-let add_bool value name =
-  let setting = (ref value, name) in
-    add (`Bool setting) name;
+let add_bool (name, value, user) =
+  let setting = {value=value; name=name; user=user} in
+    add name (`Bool setting);
     setting
-let add_int value name =
-  let setting = (ref value, name) in
-    add (`Int setting) name;
+let add_int (name, value, user) =
+  let setting : int setting = {value=value; name=name; user=user} in
+    add name (`Int setting);
     setting
-let add_string value name =
-  let setting = (ref value, name) in
-    add (`String setting) name;
+let add_string (name, value, user) =
+  let setting = {value=value; name=name; user=user} in
+    add name (`String setting);
     setting
 
 let lookup name =
@@ -99,5 +108,30 @@ let lookup_string name =
     | `String setting -> setting
     | _ -> assert(false)
 
+
+let format_universal formatter : universal -> string = fun universal_setting ->
+  match universal_setting with
+    | `Bool setting ->
+	formatter setting.name (string_of_bool setting.value)
+    | `Int setting ->
+	formatter setting.name (string_of_int setting.value)
+    | `String setting ->
+	formatter setting.name setting.value
+
 let print_settings () = 
-  SettingsMap.fold (fun k v p -> Printf.sprintf "%-25s (%s)" k (string_of_universal v) ::p) !settings []
+  let get_settings user =
+    List.rev
+      (SettingsMap.fold (fun _ setting p ->
+			   if (user && (is_user_setting(setting)))
+			     || (not(user) && not(is_user_setting(setting))) then
+			       (format_universal
+				  (Printf.sprintf " %-25s %-7s") setting)::p
+			   else
+			     p) !settings []) in
+  let user_settings =
+    ("User settings" :: get_settings true) in
+  let system_settings =
+    ("System settings" :: get_settings false)
+  in
+    [""] @ user_settings @ [""] @ system_settings
+    

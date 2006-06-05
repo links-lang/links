@@ -8,15 +8,21 @@
 type 'a setting
 
 (* add a new setting *)
-val add_bool : bool -> string -> bool setting
-val add_int : int -> string -> int setting
-val add_string : string -> string -> string setting 
+val add_bool : (string * bool * bool) -> bool setting
+val add_int : (string * int * bool) -> int setting
+val add_string : (string * string * bool) -> string setting 
 
 (*
-  parse_and_set (name, value)
+  parse_and_set(name, value)
     bind name to the parsed value
 *)
 val parse_and_set : string * string -> unit
+
+(*
+ parse_and_set_user(name, value)
+   as parse_and_set(name, value), but only user settings can be set
+*)
+val parse_and_set_user : string * string -> unit
 
 (* lookup a setting *)
 val lookup_bool : string -> bool setting

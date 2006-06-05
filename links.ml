@@ -2,11 +2,17 @@ open Getopt
 open Utility
 open Debug
 
-(* Whether to run the interactive loop *)
-let interacting = Settings.add_bool true "interacting"
+(*
+ Whether to run the interactive loop
+ (default is true)
+*)
+let interacting = Settings.add_bool ("interacting", true, false)
+
+(* Whether we're in web mode or not *)
+let web_mode = Settings.add_bool ("web_mode", false, false)
 
 (* Whether to print types *)
-let printing_types = Settings.add_bool true "printing_types"
+let printing_types = Settings.add_bool ("printing_types", true, true)
 
 (* Prompt in interactive mode *)
 let ps1 = "links> "
@@ -28,7 +34,7 @@ let rec directives =
      "print available settings");
     
     "set",
-    ((function (name::value::_) -> Settings.parse_and_set (name, value)
+    ((function (name::value::_) -> Settings.parse_and_set_user (name, value)
         | _ -> prerr_endline "syntax : @set name value"),
      "change the value of a setting");
     
@@ -65,7 +71,6 @@ let print_result rtype result =
 
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
-  Settings.set_value interacting false;
   handle_errors
     (fun input ->
        let exprs =          Performance.measure "parse" parse input in 
@@ -81,7 +86,6 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
 (* Interactive loop *)
 let rec interact envs = 
 let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
-  Settings.set_value interacting false;
   handle_errors
     (fun input ->
        match Performance.measure "parse" parse input with 
@@ -103,11 +107,6 @@ let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler Parse.parse_sentence envs (stdin, "<stdin>"))
 
-let web_program filename =
-  prerr_endline "WARNING: -w flag is unnecessary and deprecated";
-  Settings.set_value interacting false;
-  Webif.serve_requests filename
-
 (** testenv
     Test whether an environment variable is set.
     TBD: Move me to Utility *)
@@ -119,6 +118,7 @@ let testenv env_var =
 let run_file filename = 
   if testenv "REQUEST_METHOD" then
     (Settings.set_value interacting false;
+     Settings.set_value web_mode true;
      Webif.serve_requests filename)
   else
     (ignore(evaluate Parse.parse_file stdenvs filename);
@@ -150,11 +150,9 @@ let options : opt list =
 (*
       ('s',     "serialize-expr",      None,                             Some (serialize_expr));
       ('t',     "run-tests",           Some run_tests,                   None);
-      ('w',     "web",                 None,                             Some web_program);
 *)    ]
 
 (* main *)
-
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
   if Settings.get_value(interacting) then interact stdenvs

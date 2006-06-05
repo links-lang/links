@@ -64,7 +64,7 @@ type stat = {
 
 *)
 
-let measuring = Settings.add_bool false "measure_performance"
+let measuring = Settings.add_bool("measure_performance", false, true)
 
 let notify_gc () = 
   Debug.debug ("Completing GC cycle")
