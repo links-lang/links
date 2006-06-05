@@ -72,11 +72,11 @@ stdout : <xml>&lt;</xml> : XML
 
 Amp-encoding (ill-formed XML)
 <xml>this & that</xml>
-stderr : @.*
+stderr : @..*
 exit : 1
 
 Amp-encoding (converting from string)
-x = "this & that"; <xml>{enxml(x)}</xml>
+x = "this & that"; <xml>{stringToXml(x)}</xml>
 stdout : <xml>this &amp; that</xml> : XML
 
 Looping in XML quasis, with multiple content elements.

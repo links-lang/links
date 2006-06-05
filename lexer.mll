@@ -162,7 +162,10 @@ and starttag lexers = parse
 and xmllex lexers = parse
   | "\\{"                               { CDATA "{" }
   | '\\'                                { CDATA "\\" }
-  | [^ '{' '<' '\\' ]* as cdata              { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
+  | [^ '{' '<' '\\' '&' ]* as cdata     { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
+  | "&amp;"                             { CDATA "&" } 
+  | "&lt;"                              { CDATA "<" } 
+  | "&gt;"                              { CDATA ">" } 
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex lexers) lexers; LBRACE }
   | "</" (def_qname as var) '>'         { (* fall back *)
