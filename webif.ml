@@ -11,33 +11,20 @@ type web_request = ContInvoke of continuation * query_params
                    | CallMain
 
 (*
+  [REMARKS]
+   - Currently print_http_response outputs the headers and body in
+   one go.
+   - At some point in the future we may want to consider implementing
+   some form of incremental output.
+   - Flushing the output stream prematurely (e.g. after outputting
+   the headers and newline) appears to break client calls.
+*)
+
+(* output the headers and content to stdout *)
 let print_http_response headers body =
   List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
   print_endline "";
   print_string body
-*)
-
-(* This is curried in order to ensure that the headers are output
-   immediately. This is necessary for server-side programs that
-   use the print function (otherwise the output appears before the
-   headers).
-
-   Unfortunately it also breaks programs that use server -> client
-   calls, which is why we have the extra parameter immediate_endline.
-   Currently this is only set to true for a server-side call main function.
-    
-   We need to think more about the correct behaviour in other situations.
- *)
-let print_http_response immediate_endline headers = 
-  List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
-  flush stdout;
-  if immediate_endline then
-    (print_endline ""; print_string)
-  else
-    fun body ->
-      print_endline "";
-      print_string body
-
 
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program p =
@@ -50,32 +37,13 @@ let is_client_program p =
                    | _ -> false) p
     || List.exists (is_client_prim) (Utility.concat_map Syntax.freevars p)
 
-(* Hacky cache.  Should be neater, and moved somewhere else *)
-let read_file_cache filename : (Syntax.expression list) = 
+(* Read in and optimise the program *)
+let read_and_optimise_program filename : (Syntax.expression list) = 
   Settings.set_value Performance.measuring false; (* temp *)
-  let cachename = filename ^ ".cache" in
-    try
-      if ((Unix.stat cachename).Unix.st_mtime > (Unix.stat filename).Unix.st_mtime) then
-        let infile = open_in cachename in
-        let program = Marshal.from_channel infile in
-          close_in infile;
-          program
-      else
-        raise (Sys_error "booyah")
-    with (Sys_error _| Unix.Unix_error _) ->
-      let program = 
-        (Performance.measure "optimise" Optimiser.optimise_program)
-          ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-             ((Performance.measure "type" (Inference.type_program Library.type_env))
-                ((Performance.measure "parse" Parse.parse_file) filename)))
-      in 
-	(try 
-	   let outfile = open_out cachename in 
-             Marshal.to_channel outfile program [Marshal.Closures] ;
-             close_out outfile
-	 with _ -> ());
-        program
-          
+  (Performance.measure "optimise" Optimiser.optimise_program)
+    ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
+       ((Performance.measure "type" (Inference.type_program Library.type_env))
+          ((Performance.measure "parse" Parse.parse_file) filename)))
               
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
@@ -222,35 +190,35 @@ let client_return_req env cgi_args =
 let perform_request program globals main req =
   match req with
     | ContInvoke (cont, params) ->
-	let f = print_http_response false [("Content-type", "text/html")]
+	let f = print_http_response [("Content-type", "text/html")]
 	in
           f (Result.string_of_result 
                (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        let f = print_http_response false [("Content-type", "text/html")]
+        let f = print_http_response [("Content-type", "text/html")]
 	in
           f (Result.string_of_result 
              (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
-	let f = print_http_response false [("Content-type", "text/plain")]
+	let f = print_http_response [("Content-type", "text/plain")]
 	in
           f (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
         let cont = [Result.FuncApply (func, [])] in
-        let f = print_http_response false [("Content-type", "text/plain")] in
+        let f = print_http_response [("Content-type", "text/plain")] in
 	  f (Utility.base64encode
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         if is_client_program program then
-          (let f = print_http_response false [("Content-type", "text/html")]
+          (let f = print_http_response [("Content-type", "text/html")]
 	   in
              f (Js.generate_program program main)
           )
         else (
-          let f = print_http_response true [("Content-type", "text/html")]
+          let f = print_http_response [("Content-type", "text/html")]
 	  in
             f (Result.string_of_result (snd (Interpreter.run_program globals [main])))
         )
@@ -274,7 +242,7 @@ let serve_requests filename =
   try 
     Settings.set_value Performance.measuring true;
     Pervasives.flush(Pervasives.stderr);
-    let program = read_file_cache filename in
+    let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise NoMainExpr
     else if (List.length main > 1) then raise ManyMainExprs
@@ -296,7 +264,7 @@ let serve_requests filename =
     in
       perform_request program global_env main request
   with
-      exc -> print_http_response false [("Content-type", "text/html; charset=utf-8")]
+      exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (format_exception_html exc))
           
 let serve_requests filename =
