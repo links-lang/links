@@ -108,7 +108,7 @@ Case-patterns [12]
 switch [1] { case x::[] -> 2; case x -> 1; }
 stdout : 2 : Int
 
-Case-patterns [13]
+Case-patterns (singleton list pattern)
 switch [1] { case [x] -> 2; case x -> 1; }
 stdout : 2 : Int
 

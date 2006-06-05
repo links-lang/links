@@ -71,7 +71,7 @@ type pattern =
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
 let rec patternize' = function 
-  | Syntax.Nil _
+  | Syntax.Nil _ as nil -> Constant nil
   | Syntax.Variable ("_", _) ->  Bind (unique_name ())
   | Syntax.Variable (name, _) -> Bind (name)
   | Syntax.Record_empty _ -> Empty_record
@@ -103,10 +103,14 @@ let and_expr l r pos =
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
   fun pat pos value body ->
     match pat with
-      | Constant _     -> failwith "Constants cannot be used in function parameter or let patterns"
+(*       | Constant _     -> failwith "Constants cannot be used in function parameter or let patterns" *)
       | Variant _      -> failwith "Variant selection cannot be used in function parameter or let patterns"
       | Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
       | Bind name -> Let (name, value, body, pos)
+      | Constant c ->
+          (Condition(Comparison(value, "==", c, pos),
+                     body,
+                     Syntax.Wrong pos, pos))
       | Cons (head, tail) -> 
           (polylet head pos (list_head value pos)
              (polylet tail pos (list_tail value pos)
@@ -373,6 +377,20 @@ let uncompare : comparison_binop -> string =
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
 
+(* TBD: Will be obviated when we use straightahead bindings with
+   failure, as in Walder/Peyton-Jones. *)
+let rec list_type_switch = function
+    [] -> false
+  | (Pattern(ListLit _, _), _) :: _ 
+  | (Pattern(TupleLit [ListLit _, _], _), _) :: _ 
+  | (Pattern(InfixAppl (`Cons, _, _), _), _) :: _
+  | (Pattern(TupleLit [InfixAppl (`Cons, _, _), _], _), _) :: _ 
+    -> true
+  | (Pattern(Var _, _), _) :: cases
+  | (Pattern(TupleLit [Var _, _], _), _) :: cases
+    -> list_type_switch cases
+  | _ -> false
+      
 (* Convert a syntax tree as returned by the parser into core syntax *)
 let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
   let pos = lookup_pos pos' in 
@@ -514,9 +532,12 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                           None, sort_expr),
                pos')
   | Binding _ -> failwith "Unexpected binding outside a block"
-  | Switch (exp, (((Pattern(InfixAppl (`Cons, _, _), _), _)::_) as patterns), dflt)       (* TBD: Remove the _ at the end of the Switch node *)
-  | Switch (exp, (((Pattern(ListLit [], _), _)::_) as patterns), dflt)
+
+      (* FIXME: The following is not correct when all cases are 
+         variable patterns *)
+  | Switch (exp, (patterns), dflt) when list_type_switch patterns
     -> open_list_match (desugar exp) patterns dflt lookup_pos pos
+
   | Switch (exp, patterns, _) ->
       let patterns, default_case = match (unsnoc patterns) with
           patterns, (Pattern(Var x, _), body) -> patterns, Some(x, desugar body)
@@ -533,7 +554,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                      name, content
                  | patt -> 
                      (ignore (patternize' (desugar patt));
-                     failwith("Internal error: Unknown expression used as pattern; patternize did not detect the error."))
+                     failwith("Internal error: Unknown expression used as pattern."))
 (*                      raise(RichSyntaxError{ *)
 (*                              Syntax.string_of_expression(desugar(patt, pos)) ^ " cannot appear in a pattern.", pos)) *)
                in
@@ -567,10 +588,15 @@ and patternize lookup_pos : ppattern -> pattern = function
   | Pattern p -> patternize' (desugar lookup_pos p)
 and list_patt_to_bool value pos = function
     Var _, _ -> Boolean(true, pos)
+  | TupleLit [p], _ -> list_patt_to_bool value pos p
+  | ListLit (head::tail), ppos ->
+      and_expr (is_not_null value pos)
+        (and_expr (list_patt_to_bool (list_head value pos) pos head)
+           (list_patt_to_bool (list_tail value pos) pos (ListLit tail, ppos)) pos) pos
   | InfixAppl(`Cons, head, tail), _ ->
       and_expr (is_not_null value pos)
-        (and_expr (list_patt_to_bool value pos head)
-           (list_patt_to_bool value pos tail) pos) pos
+        (and_expr (list_patt_to_bool (list_head value pos) pos head)
+           (list_patt_to_bool (list_tail value pos) pos tail) pos) pos
   | ListLit [], _ -> is_null value pos
 and open_list_match value cases default lookup_pos pos =
   let inner_case =

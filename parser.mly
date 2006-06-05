@@ -87,9 +87,9 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
-| TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON         { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
+| TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON     { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
-| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON                 { Foreign ($2, $3, $5), pos() }
+| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
@@ -204,7 +204,7 @@ logical_expression:
 
 typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression COLON datatype                                { TypeAnnotation ($1, $3), pos() }
+| logical_expression COLON datatype                            { TypeAnnotation ($1, $3), pos() }
 
 send_expression:
 | typed_expression                                             { $1 }
