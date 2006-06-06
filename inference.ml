@@ -43,11 +43,15 @@ let var_is_free_in_type var typ = mem var (free_type_vars typ)
 inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
+    let dm = debug_if_set (show_recursion) in
+
     (match (t1, t2) with
        | `Not_typed, `Not_typed -> true
        | `Primitive x, `Primitive y when x = y -> true
-       | `MetaTypeVar lpoint, `MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
-       | `Function (lvar, lbody), `Function (rvar, rbody) when lvar = rvar -> eq_types (lbody, rbody)
+       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
+	   Unionfind.equivalent lpoint rpoint
+       | `Function (lfrom, lto), `Function (rfrom, rto) ->
+	   eq_types (lfrom, rfrom) && eq_types (lto, rto)
        | `Record l, `Record r -> eq_rows (l, r)
        | `Variant l, `Variant r -> eq_rows (l, r)
        | `List t, `List t' -> eq_types (t, t')
@@ -67,8 +71,6 @@ and eq_field_envs (lfield_env, rfield_env) =
     StringMap.equal compare_specs lfield_env rfield_env
 and eq_row_vars = function
   | `RowVar (None), `RowVar (None) -> true
-  | `RowVar (Some lvar), `RowVar (Some rvar)
-  | `RecRowVar (lvar, _), `RecRowVar (rvar, _) -> lvar = rvar
   | `MetaRowVar lpoint, `MetaRowVar rpoint -> Unionfind.equivalent lpoint rpoint
   | _, _ -> false
 
