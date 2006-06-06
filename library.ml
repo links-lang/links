@@ -196,7 +196,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (* Deliberately non-quantified type.  Mailboxes are
         non-polymorphic, so this is a so-called "weak type
         variable". *)
-     ([], `Mailbox u));
+     ([], u));
 
   (** Lists and collections **)
   "hd",
