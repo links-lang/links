@@ -70,6 +70,7 @@ and eq_row_vars = function
   | `RowVar (Some lvar), `RowVar (Some rvar)
   | `RecRowVar (lvar, _), `RecRowVar (rvar, _) -> lvar = rvar
   | `MetaRowVar lpoint, `MetaRowVar rpoint -> Unionfind.equivalent lpoint rpoint
+  | _, _ -> false
 
 (*
   unification environment:

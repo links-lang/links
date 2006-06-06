@@ -64,7 +64,7 @@ let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, v
 	  | `String setting ->
 	      set_value setting value
       else
-	output_string stderr ("Cannot change system setting '" ^ name ^ "'"); flush stderr;
+	output_string stderr ("Cannot change system setting '" ^ name ^ "'\n"); flush stderr;
   else
      output_string stderr ("Unknown setting: " ^ name ^ "\n"); flush stderr
 
