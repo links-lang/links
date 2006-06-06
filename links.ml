@@ -137,15 +137,18 @@ let serialize_expr str =
     ()
 
 let set setting value = Some (fun () -> Settings.set_value setting value)
-    
+
+let evaluate_string v =
+  (Settings.set_value interacting false;
+   ignore(evaluate Parse.parse_string stdenvs v))
+
 let options : opt list = 
     [
       ('d',     "debug",               set Debug.debugging_enabled true, None);
       ('O',     "optimize",            set Optimiser.optimising true,    None);
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);
-      ('e',     "evaluate",            None,
-       Some (ignore -<- evaluate Parse.parse_string stdenvs));
+      ('e',     "evaluate",            None,                             Some evaluate_string);
 (* [DEACTIVATED] *)
 (*
       ('s',     "serialize-expr",      None,                             Some (serialize_expr));
