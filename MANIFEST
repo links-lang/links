@@ -14,6 +14,7 @@ quick-help.pod
 
 test-harness
 run-tests
+install-demos
 
 cgi.ml
 netencoding.ml
