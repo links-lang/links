@@ -115,3 +115,20 @@ program. The shebang line looks like this:
   #!/home/ezra/links/links
 
 Where /home/ezra/links/links is the path to your Links interpreter.
+
+You also need to make sure that the Links JavaScript libraries are
+accessible from the directory in which you put your Links program. The
+easiest way to do this on Unix systems is to create a softlink called
+'lib' in this directory, linking to /home/ezra/links/lib/js. Run:
+
+  % ln -s /home/ezra/links/lib/js lib
+
+from the Links directory. Alternatively (e.g. on Windows, which
+doesn't support soft links) you can copy the contents of
+/home/ezra/links/lib/js into lib:
+ 
+  % cp -r /home/ezra/links/lib/js lib
+
+or on Windows:
+
+  c:\web\linksprograms> copy C:\links\lib\js lib
