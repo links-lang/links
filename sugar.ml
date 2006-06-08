@@ -70,26 +70,32 @@ type pattern =
 
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
-let rec patternize' = function 
-  | Syntax.Nil _ as nil -> Constant nil
-  | Syntax.Variable ("_", _) ->  Bind (unique_name ())
-  | Syntax.Variable (name, _) -> Bind (name)
-  | Syntax.Record_empty _ -> Empty_record
-  | Syntax.Record_extension (name, value, record, _)
-    -> Record_extension (name, patternize' value, patternize' record)
-  | Syntax.Variant_injection (name, value, _)
-    -> Variant (name, patternize' value)
-  (* See note above `amper' *)
-  | Syntax.Apply(Syntax.Variable("&", _),
-                 Apply(Syntax.Variable (var, _), expr, _), _) -> 
-      Bind_using(var, patternize' expr)
-  | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
-      patternize_cons_pattern cons_patt
-  | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
+let rec patternize' = fun exp ->
+  match exp with
+    | Syntax.Nil _
+    | Syntax.Boolean _
+    | Syntax.Integer _
+    | Syntax.Char _
+    | Syntax.String _
+    | Syntax.Float _  -> Constant exp
+    | Syntax.Variable ("_", _) ->  Bind (unique_name ())
+    | Syntax.Variable (name, _) -> Bind (name)
+    | Syntax.Record_empty _ -> Empty_record
+    | Syntax.Record_extension (name, value, record, _)
+      -> Record_extension (name, patternize' value, patternize' record)
+    | Syntax.Variant_injection (name, value, _)
+      -> Variant (name, patternize' value)
+	(* See note above `amper' *)
+    | Syntax.Apply(Syntax.Variable("&", _),
+                   Apply(Syntax.Variable (var, _), expr, _), _) -> 
+	Bind_using(var, patternize' expr)
+    | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
+	patternize_cons_pattern cons_patt
+    | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
   | Concat (List_of (e1, _), e2, _) ->
       Cons(patternize' e1, patternize' e2)
-
+	
 let is_null expr pos = 
   Comparison(expr, "==", Nil pos, pos)
 
