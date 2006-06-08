@@ -175,7 +175,7 @@ let string_of_typed_expression (s : expression) : string =
 let with_label = (fun (_, _, lbl) ->
      " [" ^ fromOption "BOGUS" lbl ^ "] ")
 
-let string_of_expression s = show (fun _ -> " ") s
+let string_of_expression s = show (fun _ -> "") s
 
 let string_of_labelled_expression (s : expression) = show with_label s
 

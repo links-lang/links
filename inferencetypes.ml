@@ -139,19 +139,41 @@ let is_flattened_row : row -> bool =
 	       if IntSet.mem var rec_vars then true
 	       else is_flattened (IntSet.add var rec_vars) rec_row
 	   | (_ , `MetaRowVar _) -> false)
-    | (_, `RowVar (Some _ )) -> assert(false)
     | (_, `RowVar None) -> true
-    | (_, `RecRowVar (_, _)) ->
-	assert(false)
+    | (_, `RowVar (Some _ ))
+    | (_, `RecRowVar (_, _)) ->	assert(false)
   in
     is_flattened IntSet.empty
+
+let is_empty_row : row -> bool =
+  let rec is_empty = fun rec_vars -> fun (field_env, row_var) ->
+    StringMap.is_empty field_env &&
+      begin
+	match row_var with
+	  | `MetaRowVar point ->
+	      let (field_env, row_var) = Unionfind.find point
+	      in
+		StringMap.is_empty field_env &&
+		  begin
+		    match row_var with
+		      | `RowVar _ -> true
+		      | `RecRowVar (var, _) when IntSet.mem var rec_vars -> true
+		      | `RecRowVar (var, rec_row) -> is_empty (IntSet.add var rec_vars) rec_row
+		      | `MetaRowVar point -> is_empty rec_vars (Unionfind.find point)
+		  end
+	  | `RowVar None -> true
+	  | `RowVar (Some _)
+	  | `RecRowVar (_, _) -> assert(false)
+      end
+  in
+    is_empty IntSet.empty
 
 (* 
  convert a row to the form (field_env, row_var)
  where row_var is of the form:
     `RowVar None
-  | `MetaRowVar (`RowVar (Some var))
-  | `MetaRowVar (`RecRowVar (var, rec_row))
+  | `MetaRowVar (empty, `RowVar (Some var))
+  | `MetaRowVar (empty, `RecRowVar (var, rec_row))
  *)
 let flatten_row : row -> row =
   let rec flatten_row' : (row Unionfind.point) IntMap.t -> row -> row =
@@ -336,33 +358,37 @@ and field_spec_of_inference_field_spec = fun rec_vars ->
 and row_of_inference_row = fun rec_vars row ->
   let field_env, row_var = flatten_row row in
   let field_env' = StringMap.map (field_spec_of_inference_field_spec rec_vars) field_env in
-  let row_var' = 
-    match row_var with
-      | `MetaRowVar point ->
-	  (match Unionfind.find point with
-	     | (env, `RowVar var) ->
-		 assert(not (contains_present_fields env));
-		 `RowVar var
-	     | (_, `RecRowVar (var, rec_row)) ->
-		 if IntSet.mem var rec_vars then
-		   `RowVar (Some var)
-		 else
-		   `RecRowVar (var, row_of_inference_row (IntSet.add var rec_vars) rec_row)
-	     | (_, `MetaRowVar _) -> assert(false))
-      | `RowVar None ->
-	  `RowVar None
-      | `RowVar (Some _) ->
-	  assert(false)
-      | `RecRowVar (_, _) ->
-	  assert(false)
+  let row_var' = row_var_of_inference_row_var rec_vars row_var
   in
     field_env', row_var'
+and row_var_of_inference_row_var = fun rec_vars -> function
+  | `MetaRowVar point ->
+      begin
+	match Unionfind.find point with
+	  | (env, `RowVar var) ->
+	      assert(not (contains_present_fields env));
+	      `RowVar var
+	  | (_, `RecRowVar (var, rec_row)) ->
+	      if IntSet.mem var rec_vars then
+		`RowVar (Some var)
+	      else
+		`RecRowVar (var, row_of_inference_row (IntSet.add var rec_vars) rec_row)
+	  | (_, (`MetaRowVar _ as rv)) -> row_var_of_inference_row_var rec_vars rv (* assert(false)*)
+       end
+  | `RowVar None ->
+      `RowVar None
+  | `RowVar (Some _) ->
+      assert(false)
+  | `RecRowVar (_, _) ->
+      assert(false)
+
 (* implementation and interface *)
 
 (* interface *)
 let type_of_inference_type = type_of_inference_type IntSet.empty
 let field_spec_of_inference_field_spec = field_spec_of_inference_field_spec IntSet.empty
 let row_of_inference_row = row_of_inference_row IntSet.empty
+let row_var_of_inference_row_var = row_var_of_inference_row_var IntSet.empty
 
 
 (* assumptions *)
@@ -387,6 +413,7 @@ let expression_of_inference_expression : inference_expression -> Syntax.expressi
 let string_of_datatype = Types.string_of_datatype -<- type_of_inference_type
 let string_of_datatype_raw = Types.string_of_datatype_raw -<- type_of_inference_type
 let string_of_row : row -> string = Types.string_of_row -<- row_of_inference_row
+let string_of_row_var : row_var -> string = Types.string_of_row_var -<- row_var_of_inference_row_var
 
 let string_of_assumption = Types.string_of_assumption -<- assumption_of_inference_assumption
 let string_of_environment = Types.string_of_environment -<- environment_of_inference_environment

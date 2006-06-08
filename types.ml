@@ -181,12 +181,14 @@ and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
-  let row_var_string = match row_var with
+  let row_var_string = string_of_row_var' sep vars row_var in
+    String.concat sep (present_strings @ absent_strings @ row_var_string)
+and string_of_row_var' sep vars row_var =
+   match row_var with
       |	`RowVar (Some var) -> [IntMap.find var vars]
       | `RowVar None -> []
       | `RecRowVar (var, row) -> 
-	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"] in
-    String.concat sep (present_strings @ absent_strings @ row_var_string)
+	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"]
 
 let make_names vars =
   let first_letter = int_of_char 'a' in
@@ -246,19 +248,18 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `List (datatype)         -> free_bound_type_vars datatype
   | `Mailbox (datatype)      -> free_bound_type_vars datatype
   | `DB                      -> IntSet.empty
-
 and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
       (List.map (fun (_, t) -> free_bound_type_vars t) (get_present_fields field_env))
-      IntSet.empty
-  in
-  let row_var = match row_var with
+      IntSet.empty in
+  let row_var = free_bound_row_var_vars row_var in
+    IntSet.union field_type_vars row_var  
+and free_bound_row_var_vars row_var = 
+  match row_var with
     | `RowVar (Some var) -> IntSet.singleton var
     | `RowVar None -> IntSet.empty
     | `RecRowVar (var, row) -> IntSet.add var (free_bound_row_type_vars row)
-  in
-    IntSet.union field_type_vars row_var
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
@@ -271,6 +272,11 @@ let string_of_datatype_raw datatype =
 
 let string_of_row row = 
   string_of_row' "," (make_names (free_bound_row_type_vars row)) row
+
+let string_of_row_var row_var =
+  match string_of_row_var' "," (make_names (free_bound_row_var_vars row_var)) row_var with
+    | [] -> ""
+    | [s] -> s
 
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var

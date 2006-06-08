@@ -93,10 +93,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       else
 	[body]
     in
-      (if List.exists (fun t' -> eq_types (t, t')) ts then
+      (* break cycles *)
+      if List.exists (fun t' -> eq_types (t, t')) ts then
 	 ()
        else
-	 unify' (IntMap.add var (t::ts) rec_types, rec_rows) (body, t)) in
+	 unify' (IntMap.add var (t::ts) rec_types, rec_rows) (body, t) in
 
   let unify_rec2 ((lvar, lbody), (rvar, rbody)) =
     let lts =
@@ -111,11 +112,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       else
 	[rbody]
     in
-      if List.exists (fun t -> eq_types (t, rbody)) lts then
-	assert(List.exists (fun t -> eq_types (t, lbody)) rts)
+      (* break cycles *)
+      if (List.exists (fun t -> eq_types (t, rbody)) lts
+	  || List.exists (fun t -> eq_types (t, lbody)) rts) then
+	()
       else
-	(assert(not (List.exists (fun t -> eq_types (t, lbody)) rts));
-	 unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows) (lbody, rbody)) in
+	unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows) (lbody, rbody) in
     
     fun (t1, t2) ->
       (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -254,20 +256,46 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let unify_compatible_field_environments rec_env (field_env1, field_env2) =
 	ignore (extend_field_env rec_env field_env1 field_env2) in
 
-      let extend_row_var : row_var * row -> unit =
-	fun (row_var, extension_row) ->
-	  match row_var with
+      (*
+	instantiate_row_var rec_env (row_var, row)
+	  attempts to instantiate row_var with row
+	
+	However, row_var may already have been instantiated, in which case
+	it is unified with row.
+      *)
+      let instantiate_row_var : unify_env -> row_var * row -> unit = 
+	fun rec_env (row_var, extension_row) ->
+	  let rec extend = function
 	    | `MetaRowVar point ->
 		(* point should be a row variable *)
-		(match Unionfind.find point with
-		   | (env, `RowVar (Some var)) ->
-		       assert(not (contains_present_fields env));
-		       if mem var (free_row_type_vars extension_row) then
-			 Unionfind.change point (env, `RecRowVar (var, extension_row))
-		       else
-			 Unionfind.change point extension_row
-		   | _ -> assert(false))
-	    | `RowVar _ | `RecRowVar _ -> assert(false) in
+		let (field_env, row_var) as row = Unionfind.find point in
+		  if StringMap.is_empty field_env then
+		    begin
+		      match row_var with
+			| `RowVar (Some var) ->
+			    if mem var (free_row_type_vars extension_row) then
+			      Unionfind.change point (field_env, `RecRowVar (var, extension_row))
+			    else
+			      Unionfind.change point extension_row
+			| _ -> extend row_var
+		    end
+		  else
+		    unify_rows' rec_env (row, extension_row)
+	    | `RowVar None -> 
+		if is_empty_row (extension_row) then
+		  ()
+		else
+		  raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
+					^string_of_row extension_row))
+	    | `RowVar (Some _) -> assert(false)
+	    | (`RecRowVar (var, rec_row)) as row_var ->
+		unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
+	  in
+	    match row_var with
+	      | `MetaRowVar _ -> extend row_var
+	      | `RowVar _
+	      | `RecRowVar _ -> assert(false) in
+
 
       (* 
 	 matching_labels (big_field_env, small_field_env)
@@ -400,18 +428,19 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	      | None -> ()
 	      | Some rec_env ->
 		  let open_extension = extend_field_env rec_env closed_field_env' open_field_env' in
-		    extend_row_var (open_row_var', (open_extension, `RowVar None)) in
+		    instantiate_row_var rec_env (open_row_var', (open_extension, `RowVar None)) in
 
       let unify_both_open ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) =
 	let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
 	let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
-
+	let _ = assert(is_flattened_row rrow') in
 	let rec_env' =
 	  (register_rec_rows
 	     (lfield_env, lfield_env', lrec_row, rrow')
 	     (rfield_env, rfield_env', rrec_row, lrow')
 	     rec_env)
 	in
+	let _ = assert(is_flattened_row rrow') in
 	  match rec_env' with
 	    | None -> ()
 	    | Some rec_env ->
@@ -424,9 +453,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			 thus we call extend_field_env once in each direction *)
 		    let rextension =
 		      extend_field_env rec_env lfield_env' rfield_env' in
-		      extend_row_var (rrow_var', (rextension, fresh_row_var));
+		      (* [NOTE]
+			   extend_field_env may instantiate rrow_var' or lrow_var', as either
+			   could occur inside the body of lfield_env' or rfield_env'
+		      *)
+		      instantiate_row_var rec_env (rrow_var', (rextension, fresh_row_var));
 		      let lextension = extend_field_env rec_env rfield_env' lfield_env' in
-			extend_row_var (lrow_var', (lextension, fresh_row_var))
+			instantiate_row_var rec_env (lrow_var', (lextension, fresh_row_var))
 		  end in
       
       let _ =

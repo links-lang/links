@@ -40,7 +40,7 @@ type pattern =
   | Bind of string 
   | Bind_using of (string * pattern) 
   | Record_extension of (string * pattern * pattern) 
-  | Empty_record 
+  | Empty_record
   | Variant of (string * pattern) 
   | Cons of (pattern * pattern)
 
@@ -75,8 +75,10 @@ let rec patternize' = function
   | Syntax.Variable ("_", _) ->  Bind (unique_name ())
   | Syntax.Variable (name, _) -> Bind (name)
   | Syntax.Record_empty _ -> Empty_record
-  | Syntax.Record_extension (name, value, record, _) 
+  | Syntax.Record_extension (name, value, record, _)
     -> Record_extension (name, patternize' value, patternize' record)
+  | Syntax.Variant_injection (name, value, _)
+    -> Variant (name, patternize' value)
   (* See note above `amper' *)
   | Syntax.Apply(Syntax.Variable("&", _),
                  Apply(Syntax.Variable (var, _), expr, _), _) -> 
@@ -104,7 +106,13 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
   fun pat pos value body ->
     match pat with
 (*       | Constant _     -> failwith "Constants cannot be used in function parameter or let patterns" *)
-      | Variant _      -> failwith "Variant selection cannot be used in function parameter or let patterns"
+      | Variant (name, patt) ->
+	  let case_variable = unique_name () in
+	  let variable = unique_name () in
+	    Variant_selection(value, name,
+			      case_variable,
+			      (polylet patt pos (Variable (case_variable, pos)) body),
+			      variable, Syntax.Wrong pos, pos)
       | Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
       | Bind name -> Let (name, value, body, pos)
       | Constant c ->

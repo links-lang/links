@@ -39,6 +39,7 @@ val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 val contains_present_fields : field_spec_map -> bool
 
 val is_flattened_row : row -> bool
+val is_empty_row : row -> bool
 
 (* 
  convert a row to the form (field_env, row_var)
@@ -89,6 +90,7 @@ val expression_of_inference_expression : inference_expression -> Syntax.expressi
 val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
+val string_of_row_var : row_var -> string
 
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
