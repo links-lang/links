@@ -112,7 +112,9 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
 	    Variant_selection(value, name,
 			      case_variable,
 			      (polylet patt pos (Variable (case_variable, pos)) body),
-			      variable, Syntax.Wrong pos, pos)
+			      variable,
+			      Variant_selection_empty(Variable(variable, pos), pos),
+			      pos)
       | Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
       | Bind name -> Let (name, value, body, pos)
       | Constant c ->

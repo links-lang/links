@@ -188,7 +188,7 @@ and string_of_row_var' sep vars row_var =
       |	`RowVar (Some var) -> [IntMap.find var vars]
       | `RowVar None -> []
       | `RecRowVar (var, row) -> 
-	  ["(mu " ^ string_of_int var ^ " . " ^ string_of_row' sep vars row ^ ")"]
+	  ["(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")"]
 
 let make_names vars =
   let first_letter = int_of_char 'a' in
