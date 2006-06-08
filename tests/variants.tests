@@ -107,3 +107,15 @@ stdout : 1 : Int
 Constant patterns [2]
 switch A (1) { case A (0) -> 0; case _ -> 1; }
 stdout : 1 : Int
+
+Default pattern
+switch A { case _ -> 0; }
+stdout : 0 : Int
+
+Integer pattern
+switch 0 { case x -> x+1; }
+stdout : 1 : Int
+
+List pattern:
+switch A ([]) { case A (_::_) -> 0; case A ([]) -> 1; }
+stdout : 1 : Int
