@@ -91,3 +91,11 @@ stdout : @\[C *\(A *\(\)\), C *\(B *\(\)\)\] : .*
 Type annotations
 fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])};;
 stdout : @fun : \(mu ([a-z]+) \. \[|Succ:\\1 | Zero:\(\)|]\) -> \[|Succ:mu ([a-z]+) . \[|Succ:\\2 | Zero:\(\)|\]|\]
+
+Nested variant matching [1]
+switch A (A) { case A (A) -> 0; case A (B) -> 1; }
+stdout : 0 : Int
+
+Nested variant matching [2]
+switch A (A) { case A (B) -> 0; case A (A) -> 1; }
+stdout : 0 : Int
