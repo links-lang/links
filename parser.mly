@@ -43,6 +43,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token MU ALIEN
 %token QUESTION TILDE
 %token <char*char> RANGE
+%token UNDERSCORE
 
 %start parse_links
 %start just_datatype
@@ -108,6 +109,7 @@ constant:
 
 primary_expression:
 | VARIABLE                                                     { Var $1, pos() }
+| UNDERSCORE                                                   { Var "_", pos() }
 | constant                                                     { $1 }
 | LBRACKET RBRACKET                                            { ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 

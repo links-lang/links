@@ -92,6 +92,7 @@ rule lex lexers = parse
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}
   | '\n'                                { bump_lines lexbuf 1; lex lexers lexbuf }
+  | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
   | "=="                                { EQEQ }

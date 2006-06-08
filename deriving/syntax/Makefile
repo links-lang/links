@@ -1,8 +1,8 @@
 # $Id: Makefile,v 1.12 2002/02/04 10:21:44 ddr Exp $
 
-OCAMLC   = ocamlc
+OCAMLC   = ocamlc.opt
 CAMLP4   = "camlp4r -loc loc "
-OCAMLOPT = ocamlopt
+OCAMLOPT = ocamlopt.opt
 OCAMLDEP = ocamldep
 LIBDIR = `ocamlc -where`
 
