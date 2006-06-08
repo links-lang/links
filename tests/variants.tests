@@ -98,4 +98,12 @@ stdout : 0 : Int
 
 Nested variant matching [2]
 switch A (A) { case A (B) -> 0; case A (A) -> 1; }
-stdout : 0 : Int
+stdout : 1 : Int
+
+Constant patterns [1]
+switch A (1) { case A (0) -> 0; case A (1) -> 1; }
+stdout : 1 : Int
+
+Constant patterns [2]
+switch A (1) { case A (0) -> 0; case _ -> 1; }
+stdout : 1 : Int
