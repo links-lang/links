@@ -186,7 +186,7 @@ let lines (channel : in_channel) : string list =
     try
       next_line (input_line channel :: lines)
     with End_of_file -> lines
-  in next_line []
+  in List.rev (next_line [])
 
 let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
