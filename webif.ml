@@ -27,15 +27,31 @@ let print_http_response headers body =
   print_string body
 
 (* Does at least one of the functions have to run on the client? *)
-let is_client_program p =
-  let is_client_prim = Library.primitive_location ->-
-    function
-      | `Client -> true
-      | _ -> false in
-    List.exists (function
-                   | Syntax.Define (_, _, `Client, _) -> true
-                   | _ -> false) p
-    || List.exists (is_client_prim) (Utility.concat_map Syntax.freevars p)
+let is_client_program defs =
+  let is_client_def = function
+    | Syntax.Define (_, _, `Client, _) -> true
+    | _ -> false 
+  and toplevels = (concat_map 
+                     (function
+                        | Syntax.Define (n, _, _, _) -> [n]
+                        | _ -> [])) defs
+  and is_client_prim p = 
+    (* Sytnax.freevars is currently broken: it doesn't take l:name
+       bindings into account.  It's tricky to fix, because the Syntax
+       module doesn't know about l:name.  The problem that arises here
+       is that anything bound by l:name ends up looking like a
+       primitive (because analysis indicates that it's free in the
+       program).  When l:name goes away this problem will, too.  
+       Let's just work around it for now. *)
+    try 
+      (Library.primitive_location ->- (=) `Client) p
+    with Not_found ->  false
+  in
+  let freevars = Utility.concat_map Syntax.freevars defs in
+  let prims = List.filter (not -<- flip List.mem toplevels) freevars
+  in 
+    List.exists is_client_def defs || List.exists is_client_prim prims
+          
 
 (* Read in and optimise the program *)
 let read_and_optimise_program filename : (Syntax.expression list) = 
@@ -212,22 +228,10 @@ let perform_request program globals main req =
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
-        if is_client_program program then
-          (let f = print_http_response [("Content-type", "text/html")]
-	   in
-             f (Js.generate_program program main)
-          )
-        else (
-          let f = print_http_response [("Content-type", "text/html")]
-	  in
-            f (Result.string_of_result (snd (Interpreter.run_program globals [main])))
-        )
-          
-(*       let result = continue_from_client_call global_env cgi_args in *)
-(*         (print_http_response [("Content-type", "text/plain")]  *)
-(*            (\* FIXME: Why is this not JSON-encoded? *\) *)
-(*            (Utility.base64encode (Result.string_of_result result)); *)
-(*          exit 0) *)
+        print_http_response [("Content-type", "text/html")] 
+          (if is_client_program program then
+               Js.generate_program program main
+           else Result.string_of_result (snd (Interpreter.run_program globals [main])))
 
 let error_page_stylesheet = 
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee}</style>"
