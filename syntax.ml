@@ -356,14 +356,16 @@ let visit_expressions'
         let attrvals = map (fun (name, value) ->
                               let e, d = visitor visit_children (value, data) in 
                                 (e, d, name)) attrs in
-        let data1 = (match map (fun (_,d,_)->d) attrvals with
-                       | [] -> data
-                       | attrdata -> fold_left combiner (hd attrdata) (tl attrdata)) in
+        let data1 = (match attrvals with
+                       | [] -> unit data
+                       | _::_ -> 
+                           let attrdata = map (fun (_,d,_)->d) attrvals in
+                             fold_left combiner (hd attrdata) (tl attrdata)) in
         let bodyvals = map (fun value ->
                               let e, d = visitor visit_children (value, data) in
                                 (e, d)) elems in
         let data2 = (match map snd bodyvals with
-                       | [] -> data
+                       | [] -> unit data
                        | bodydata  -> fold_left combiner (hd bodydata) (tl bodydata)) in
           (Xml_node (tag, map (fun (a, _, b) -> (b, a)) attrvals, map fst bodyvals, d), 
            combiner data1 data2)
@@ -419,7 +421,8 @@ let simple_visit visitor expr = let visitor default (e, _) = (visitor (fun e -> 
 (* Could be made more efficient by not constructing the expression in
    parallel (i.e. discarding it, similar to `simple_visit'  *)
 let freevars : 'a expression' -> string list = 
-  (* FIXME : doesn't consider variables in the query *)
+  (* FIXME : doesn't consider variables in the query.
+             doesn't consider l:name-bound vars. *)
   fun expression ->
     let rec visit default (expr, vars) = 
       let childvars = snd -<- (visit default) in
@@ -440,8 +443,6 @@ let freevars : 'a expression' -> string list =
           | Table (_, _, query, _) -> expr, Query.freevars query
           | other -> default (other, vars)
     in snd (visit_expressions' (@) (fun _ -> []) visit (expression, []))
-
-let qnamep name = String.contains name ':'
 
 let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Define (a, b, loc, data) -> Define (a, redecorate f b, loc, f data)

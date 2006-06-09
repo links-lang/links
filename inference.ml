@@ -799,7 +799,6 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
 	let type' = `Function (variable_type, type_of_expression body) in
 	  Abstr (variable, body, (pos, type', None))
       end
-  | Let (variable, _, _, pos) when qnamep variable -> invalid_name pos variable "qualified names (containing ':') cannot be bound"
   | Let (variable, value, body, pos) ->
       let value = type_check env value in
       let vtype = (if is_value value then (generalize env (type_of_expression value))
