@@ -442,7 +442,7 @@ let freevars : 'a expression' -> string list =
 	  | Escape (var, body, _) -> expr, childvars (body, var::vars)
           | Table (_, _, query, _) -> expr, Query.freevars query
           | other -> default (other, vars)
-    in snd (visit_expressions' (@) (fun _ -> []) visit (expression, []))
+    in Utility.unduplicate (=) (snd (visit_expressions' (@) (fun _ -> []) visit (expression, [])))
 
 let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Define (a, b, loc, data) -> Define (a, redecorate f b, loc, f data)
