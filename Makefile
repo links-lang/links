@@ -57,7 +57,7 @@ SOURCES = $(OPC)                		\
           regex.ml                              \
           inferencetypes.mli inferencetypes.ml 	\
           sugar.ml              		\
-          result.ml             		\
+          result.ml result.mli         		\
           sql_transform.ml      		\
           parser.mly            		\
           $(DB_CODE)            		\
