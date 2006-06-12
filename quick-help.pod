@@ -396,7 +396,48 @@ it. (See L<Polymorphic variants>).
 
 =head2 Located code and remote procedure calls
 
-TBD: Describe client/server annotations and RPC calls
+A client-side Links program can make seamless remote procedure calls
+to the server, and the server can in turn make remote procedure calls
+to the client. The server stores no state while the computation is
+proceeding at the client.
+
+To use this feature, simply annotate functions with the keyword
+"client" or "server". For example:
+
+  fun lookupUserID(username) server {
+    for (user <- users)
+    where (user.name = username)
+      [user.id]
+  }
+
+  fun setPageBackground(color) client {
+    doc = domGetDocumentRef();
+    domSetAttributeRef(doc, "style", "background-color: " ++ color);
+  }
+
+A function annotated with "server" will always run on the server, even
+if it is called from code running on the client. Likewise for "client"
+functions.
+
+A server call is implemented as a distinguished HTTP request. A client
+call is implemented as a special HTTP response body which the
+client-side code recognizes as a remote call.
+
+Currently, the behavior is quite different between programs that have
+at least one client-annotated function, and those that have none at
+all. In the former case, the program is downloaded to the client as a
+stub that initiates the computation. The initialization part of the
+program may substantially take place on the server, but it will be
+initiated by the client as a client-to-server call. (This is a
+by-product of the current implementation, which only allows
+server-to-client calls in the context of an existing client-to-server
+call.)
+
+If you have no "client" annotations at all, however, the page is
+completely computed at the server and downladed as HTML per se. This
+does not preclude having code that runs on the client, for example
+user-event handlers embedded in HTML elements; this only prevents you
+from having named functions with the explicit "client" keyword.
 
 =head2 Handling User Actions
 
