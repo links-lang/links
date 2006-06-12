@@ -102,7 +102,7 @@ let string_of_unop = function
   | QueryOp _ -> "QueryOp(...)"
   | VrntSelect _ -> "VrntSelect(...)"
 
-type binop = EqEqOp | NotEqOp | LessEqOp | LessOp | BeginsWithOp
+type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
 	     | UnionOp
 	     | RecExtOp of string
                  deriving (Show, Pickle)

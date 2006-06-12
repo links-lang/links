@@ -159,9 +159,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
   in {qry with
         condition = normalise_expression qry.condition;
         offset = normalise_expression qry.offset;
-        max_rows = (match qry.max_rows with 
-                      | None   -> None
-                      | Some s -> Some (normalise_expression s))}
+        max_rows = opt_map normalise_expression qry.max_rows}
 
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function
@@ -169,7 +167,6 @@ let binopFromOpString = function
     | "<>" -> NotEqOp
     | "<=" -> LessEqOp
     | "<"  -> LessOp
-    | "beginswith" -> BeginsWithOp
     | opstr -> raise(Runtime_error("Evaluating unknown operator "^opstr))
 
 exception TopLevel of (Result.environment * Result.result)
@@ -267,7 +264,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | NotEqOp -> bool (not (equal lhsVal value))
                      | LessEqOp -> bool (less_or_equal lhsVal value)
                      | LessOp -> bool (less lhsVal value)
-                     | BeginsWithOp -> failwith("Beginswith not implemented except when pushable into SQL")
 	             | UnionOp -> 
                          (match lhsVal, value with
 	                    | `List (l), `List (r)
