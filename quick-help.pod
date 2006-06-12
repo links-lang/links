@@ -18,16 +18,54 @@ crestfallen.">.
 
 Characters: C<'a'>, C<'9'>, C<'\012'>.
 
+=head2 Arithmetic
+
+TBD: Describe arithmetic operators.
+
 =head2 Pairs, Tuples, and Records
 
 A tuple is a finite sequence of values, possibly of different
-types. An n-tuple is constructed by enclosing n expressions in
+types. An I<n>-tuple is constructed by enclosing I<n> expressions in
 parenthesis and separating them with commas:
 
    (a, "OK")
    (true, "a string", 42)
 
-TBD: talk about records.
+A record is something like a tuple, but its fields are indexed by
+field names rather than integer indices. A record is written like a
+tuple but with fieldnames preceeding the fields:
+
+  (lastname="Bond", firstname="James", license="To kill")
+
+Field names are not enclosed in quotes and are not expressions. They
+are not evaluated. Note that, whereas the content of a field can be
+any expression, the field name must be literally present when
+constructing a record. For example:
+
+  item = (drinkname = "latte", price = 2.0 +. 0.5)          # OK
+  item = ("drink" + "name" = "latte", price = 2.0 +. 0.5)   # NOT OK
+
+You can access the fields of a record by I<projecting> them, using 
+the dot notation:
+
+  item.drinkname == "latte"
+  (lastname="Bond", firstname="James").lastname == "Bond"
+
+You can also add a field to an arbitrary record using the I<record
+extension> operation.
+
+  (caffeineContent = 60 | item)
+
+With the previous definition, this yields a value
+
+  (caffeineContent = 60, drinkname = "latte", price = 2.5)
+
+Records do not need to be declared; a given field name can appear in
+any record. The only requirement is that a given field is used with a
+consistent type, insofar as the the values may interact. It is
+acceptable to use a particular field name with different types, as
+long as the two are used separately--that is, as long as the same
+value will never be used in differently-typed expressions.
 
 =head2 Polymorphic variants
 
