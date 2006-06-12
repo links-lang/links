@@ -191,25 +191,15 @@ let lines (channel : in_channel) : string list =
 let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
 
-(* safe_assoc is like assoc but uses option types instead of
+(* lookup is like assoc but uses option types instead of
    exceptions to signal absence *)
-
-let safe_assoc lbl alist = try Some(List.assoc lbl alist) with Not_found -> None
+let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
 
 (*** option types ***)
 let opt_map f = function
     None -> None
   | Some x -> Some (f x)
-
-let rec opt_find f = function
-    [] -> raise Not_found
-  | (h::t) ->
-      match f h with
-          Some x -> x
-        | None -> opt_find f t
             
-(* combinators for dealing with options and an Either type *)
-
 type ('a, 'b) either = Left of 'a | Right of 'b
 
 let option2either = function
@@ -222,11 +212,11 @@ let option_or = function
   | _, Some y -> Some y
   | _, _      -> None
 
-let either_assoc lbl1 lbl2 alist =
-  try
-    Left(List.assoc lbl1 alist)
-  with Not_found ->
-    Right(List.assoc lbl2 alist)
+let rec either_assoc k1 k2 = function
+  | [] -> raise Not_found
+  | (k,v)::_ when k = k1 -> Left v
+  | (k,v)::_ when k = k2 -> Right v
+  | _::r -> either_assoc k1 k2 r 
 
 let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
     : 'b list * 'c list =
@@ -240,8 +230,8 @@ let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
     
 
 let option_assoc2 lbl1 lbl2 alist =
-  option_or (safe_assoc lbl1 alist,
-	     safe_assoc lbl2 alist)
+  option_or (lookup lbl1 alist,
+	     lookup lbl2 alist)
     
 let getVal(optn, dflt) = 
   match optn with

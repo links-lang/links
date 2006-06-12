@@ -120,8 +120,6 @@ let get_remote_call_args env cgi_args =
   let args = untuple_single (parse_json args) in
     RemoteCall(List.assoc fname env, args)
 
-open Errors
-	
 let decode_continuation (cont : string) : Result.continuation =
   let fixup_cont = 
   (* At some point, '+' gets replaced with ' ' in our base64-encoded
@@ -147,29 +145,21 @@ let undelay_expr = function
   | `Function (_, _, _, p) -> p
   | _ -> raise Not_thunk
 
-let unpickle_expr_arg lookupf str = undelay_expr (deserialise_result_b64 lookupf str) 
+let unpickle_expr_arg program = unmarshal_result program ->- undelay_expr
 
 (* Extract continuation from the parameters passed in over CGI.*)
-let contin_invoke_req prim_lookup params =
+let contin_invoke_req program params =
   let pickled_continuation = (lookup_either "continuation%25" "continuation%" params) in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
-  let continuation =
-    (deserialise_continuation prim_lookup
-       (Utility.base64decode pickled_continuation))
-  in
-    ContInvoke(continuation, params)
+    ContInvoke(unmarshal_continuation program pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req program prim_lookup params =
   let pickled_expression = lookup_either "expression%25" "expression%" params in
   let pickled_environment = lookup_either "environment%25" "environment%"  params in
-  let environment =
-    if pickled_environment = "" then []
-    else
-      fst (deserialise_environment prim_lookup (Utility.base64decode pickled_environment))
-  in 
-  let expression = unpickle_expr_arg prim_lookup pickled_expression in
+  let environment = unmarshal_environment program pickled_environment in
+  let expression = unpickle_expr_arg program pickled_expression in
   let expression = resolve_placeholders_expr program expression in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
@@ -248,8 +238,8 @@ let serve_requests filename =
     Pervasives.flush(Pervasives.stderr);
     let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
-    if (List.length main < 1) then raise NoMainExpr
-    else if (List.length main > 1) then raise ManyMainExprs
+    if (List.length main < 1) then raise Errors.NoMainExpr
+    else if (List.length main > 1) then raise Errors.ManyMainExprs
     else
     let [main] = main in
     let global_env = stubify_client_funcs global_env in
@@ -269,7 +259,7 @@ let serve_requests filename =
       perform_request program global_env main request
   with
       exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
-        (error_page (format_exception_html exc))
+        (error_page (Errors.format_exception_html exc))
           
 let serve_requests filename =
   Errors.display_errors_fatal stderr

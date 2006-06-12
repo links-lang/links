@@ -54,9 +54,9 @@ let remove_toplevel_bindings toplevel env =
   filter (fun pair -> mem pair toplevel) env
 
 let lookup toplevel locals name = 
-  match safe_assoc name locals with
+  match lookup name locals with
     | Some v -> v
-    | None -> match safe_assoc name toplevel with
+    | None -> match lookup name toplevel with
         | Some v -> v
         | None -> Library.primitive_stub name
 
@@ -91,7 +91,7 @@ let rec equal l r =
     | `Int l   , `Int r    -> eq_num l r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
-    | `Function _, `Function _ -> serialise_result l = serialise_result r
+    | `Function _, `Function _ -> Pickle_result.pickleS l = Pickle_result.pickleS r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -110,7 +110,7 @@ let rec less l r =
     | `Int l, `Int r     -> lt_num l r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
-    | `Function _ , `Function _                  -> serialise_result l < serialise_result r
+    | `Function _ , `Function _                  -> Pickle_result.pickleS l < Pickle_result.pickleS r
         (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in

@@ -29,8 +29,9 @@ BUGS
   fails at rt with "Undefined variable y". Only projects (like 
   y.field) work
 
-* A lot of code takes care with bindings, but ignores l:name bindings.
-  (is there a test case here?)
+* A lot of code (for example, Syntax.freevars) takes care with
+  bindings, but ignores l:name bindings.  See Webif.is_client_program
+  for an example of this causing problems.
 
 * Partial applications of primitive functions are not serialized
   correctly. (Can we have a test case?)

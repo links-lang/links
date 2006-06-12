@@ -96,17 +96,10 @@ let hidden_input name value =
 let attrname = fst
 let attrval = snd
 
-let serialise_env_nopfuncs env =
-  serialise_environment (filter (not -<- is_pfunc) env)
-
 let serialize_exprenv expr env =
-  let env = strip_env env in
   let env = retain (freevars expr) env in
   let thunk = delay_expr expr in
-  let thunk = strip_result thunk in
-  (Utility.base64encode (serialise_result thunk),
-   Utility.base64encode (serialise_env_nopfuncs env))
-
+  (marshal_result thunk, marshal_environment env)
 
 let rec is_trivial_apply_aux = function
     Variable(_, _) -> true
@@ -131,12 +124,6 @@ let is_simple_apply = function
   | Variable _ -> false
   | expr -> is_simple_apply_aux expr
 
-
-let rec ultraclean_serialize_apply = function
-    Variable(f, _) -> [f]
-  | Apply(e, Variable(x, _), _) -> ultraclean_serialize_apply e @ [x]
-
-
 let rec list_of_appln = function
     Variable _ as v -> [v]
   | Apply(e, arg, _) -> list_of_appln e @ [arg]
@@ -153,11 +140,6 @@ let rec simplify lookup = function
                                    " was not declared."))
   | Apply(f, a, d) -> Apply(simplify lookup f, simplify lookup a, d)
   | expr -> expr
-
-let rec clean_serialize_apply = function
-    Variable(f, _) -> [f]
-  | Apply(e, arg, _) -> 
-      clean_serialize_apply e @ [serialise_expression arg]
 
 let is_constant _ = false
 
@@ -179,7 +161,7 @@ let plain_serialise_result = function
   | (`Int i) -> string_of_num i
   | (`Char ch) -> String.make 1 ch
   | (`Float f) -> string_of_float f
-  | `Function _ as f -> serialise_result f
+  | `Function _ (*as f -> Pickle_result.pickleS f*)
   | _ -> raise UnplainResult
 
 let plain_deserialise_result str = 
@@ -194,38 +176,31 @@ let plain_deserialise_result str =
 let xml_transform env lookup eval : expression -> expression = 
   function 
     | Xml_node ("form", attrs, contents, data) as form ->
-        (try 
-           let laction = either_assoc "l:onsubmit" "l:handler" attrs in
-           let new_fields = match laction with 
-               (* l:action holds a frozen expression *)
-             | Left laction -> 
-                 let expr_str, env_str = serialize_exprenv laction env in
-                   [hidden_input "expression%" expr_str;
-                    hidden_input "environment%" env_str]
-
-             (* an l:handler attribute holds an expression that
-                evaluates to a continuation. This continuation will be
-                applied to a record representing the form values, when
-                the form is submitted.  *)
-             | Right lhandler -> 
-                 (match eval lhandler [] with
-                      `Continuation c ->
-                        [hidden_input "continuation%"
-                           (Result.serialise_continuation_b64 c)]
-                    | _ -> failwith "Internal error: l:handler was not a continuation")
-           in
-             Xml_node ("form",
-                       substitute (fun attr ->
-                                     let name = attrname attr in
-                                       (name = "l:onsubmit" || name = "l:handler"))
-                         ("action", string "#") attrs, 
-                       new_fields @ contents, data)
-         with Not_found -> form)
+        let new_field = 
+          match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
+            | [] -> []
+            | ("l:onsubmit", laction)::_ -> (* l:action holds a frozen expression *)
+                [hidden_input "expression%" (marshal_result (delay_expr laction));
+                 hidden_input "environment%" (marshal_environment env)]
+            | ("l:handler", lhandler)::_ -> 
+                (* an l:handler attribute holds an expression that
+                   evaluates to a continuation. This continuation will
+                   be applied to a record representing the form values,
+                   when the form is submitted.  *)
+                (match eval lhandler [] with
+                   | `Continuation c ->
+                       [hidden_input "continuation%" (marshal_continuation c)]
+                   | _ -> failwith "Internal error: l:handler was not a continuation")
+        in
+          Xml_node ("form",
+                    substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"]) ("action", string "#") attrs, 
+                    new_field @ contents, 
+                    data)
 
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with
-           | String (name, _) -> Xml_node(tag, substitute (((=)"l:name") -<- attrname) ("name", string name) attrs, contents, data)
-           | _ -> failwith "Internal error transforming xml"
+           | String (name, _) -> Xml_node (tag, substitute (attrname ->- (=) "l:name") ("name", string name) attrs, contents, data)
+           | _ -> failwith ("Internal error transforming xml (no l:name found on " ^ tag)
          with Not_found -> input)
 
     | Xml_node ("a", attrs, contents, data) ->
@@ -236,7 +211,7 @@ let xml_transform env lookup eval : expression -> expression =
             let (Variable (func, _)::args) = list_of_appln href_expr in
             let arg_vals = map (value_of_simple_expr lookup) args in
               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
-(*               ^ "?environment%=" ^ ser_env *)
+                (*               ^ "?environment%=" ^ ser_env *)
           else
             "?environment%=" ^ ser_env ^ "&expression%=" ^ ser_expr
         in

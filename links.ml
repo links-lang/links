@@ -124,18 +124,6 @@ let run_file filename =
     (ignore(evaluate Parse.parse_file stdenvs filename);
     ())
 
-(* [BUG]
-     this is broken (the -s option doesn't work)
-*)
-let serialize_expr str = 
-  Settings.set_value interacting false;
-  let [expr] = Parse.parse_string str in
-  let _, expr = Inference.type_expression Library.type_env expr in
-  let expr_str, env_str = Forms.serialize_exprenv expr [] in
-    print_endline expr_str;
-    print_endline env_str;
-    ()
-
 let set setting value = Some (fun () -> Settings.set_value setting value)
 
 let evaluate_string v =
@@ -151,7 +139,6 @@ let options : opt list =
       ('e',     "evaluate",            None,                             Some evaluate_string);
 (* [DEACTIVATED] *)
 (*
-      ('s',     "serialize-expr",      None,                             Some (serialize_expr));
       ('t',     "run-tests",           Some run_tests,                   None);
 *)    ]
 

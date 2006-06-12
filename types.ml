@@ -1,7 +1,6 @@
 (* Representations of types *)
 
 open Debug
-open Pickler
 open Utility
 
 open Type_basis
@@ -286,124 +285,6 @@ let string_of_assumption = function
   | assums, datatype -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_datatype datatype
 let string_of_environment env =
   "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
-
-(* serialisation *) 
-let (serialise_primitive : primitive serialiser), 
-    (deserialise_primitive : primitive deserialiser)
-  = enumeration_serialisers [`Bool, 'b';  `Int, 'i';  `Char, 'c';  `Float, 'f';  `XMLitem, 'x']
-
-let rec serialise_datatype : datatype serialiser = 
-  function
-    | `Not_typed       -> serialise0 'a' () ()
-    | `Primitive v     -> serialise1 'b' (serialise_primitive) v
-    | `TypeVar v       -> serialise1 'c' (serialise_oint) v
-    | `Function v      -> serialise2 'd' (serialise_datatype, serialise_datatype) v
-    | `Record v        -> serialise_row 'e' v
-    | `Variant v       -> serialise_row 'f' v
-    | `Recursive v     -> serialise2 'g' (serialise_oint, serialise_datatype) v
-    | `List v          -> serialise1 'h' (serialise_datatype) v
-    | `Mailbox v       -> serialise1 'm' (serialise_datatype) v
-    | `DB              -> serialise0 'i' () ()
-and serialise_field_spec : field_spec serialiser =
-  function
-    | `Absent -> serialise0 'a' () ()
-    | `Present v -> serialise1 'b' (serialise_datatype) v
-and serialise_row_var : row_var serialiser = 
-  function
-    | `RowVar v        -> serialise1 'a' (serialise_option (serialise_oint)) v
-    | `RecRowVar v     -> serialise2 'b' (serialise_oint, serialise_row 'a') v
-and serialise_row : char -> row serialiser = fun t -> serialise2 t
-  ((serialise_list
-     (serialise2 'a' (serialise_string, serialise_field_spec))) -<- assoc_list_of_string_map,
-   serialise_row_var)
-  
-
-and deserialise_datatype : datatype deserialiser =
-  fun s ->
-    let t, obj, rest = extract_object s in
-    let r = 
-      (match t with
-         | 'a'        -> (deserialise0 () obj); `Not_typed
-         | 'b'        -> `Primitive (deserialise1 (deserialise_primitive) obj)
-         | 'c'        -> `TypeVar (deserialise1 (deserialise_oint) obj)
-         | 'd'        -> `Function (deserialise2 (deserialise_datatype, deserialise_datatype) obj)
-         | 'e'        -> `Record (fst (deserialise_row obj))
-         | 'f'        -> `Variant (fst (deserialise_row obj))
-	 | 'g'        -> `Recursive (deserialise2 (deserialise_oint, deserialise_datatype) obj)
-         | 'h'        -> `List (deserialise1 (deserialise_datatype) obj)
-         | 'm'        -> `Mailbox (deserialise1 (deserialise_datatype) obj)
-         | 'i'        -> (deserialise0 () obj); `DB
-         | _          -> failwith ("Unexpected character deserialising datatype : " ^ String.make 1 t))
-    in r, rest
-and deserialise_field_spec : field_spec deserialiser =
-  fun s ->
-    let t, obj, rest = extract_object s in
-    let r =
-      (match t with
-	 | 'a' -> `Absent
-	 | 'b' -> `Present (fst (deserialise_datatype obj))
-         | c   -> invalid_header "field_spec" c)
-    in
-      r, rest
-and deserialise_row_var : row_var deserialiser =
-  fun s ->
-    let t, obj, rest = extract_object s in
-    let r =
-      (match t with
-	 | 'a' -> `RowVar (deserialise1 (deserialise_option (deserialise_oint)) obj)
-	 | 'b' -> `RecRowVar (deserialise2 (deserialise_oint, deserialise_row) obj)
-         | c   -> invalid_header "row_var" c)
-    in
-      r, rest
-and deserialise_row : row deserialiser =
-  fun s ->
-    let _, obj, rest = extract_object s in
-    let r =
-      deserialise2
-	((fun (r, rest) -> string_map_of_assoc_list r, rest) -<-
-	   (deserialise_list (deserialiser2 (deserialise_string, deserialise_field_spec)))
-	,deserialise_row_var) obj
-    in
-      r, rest
-
-let serialise_quantifier : quantifier serialiser
-    = function
-      | `TypeVar i -> serialise1 't' serialise_oint i
-      | `RowVar i -> serialise1 'r' serialise_oint i
-
-let deserialise_quantifier : quantifier deserialiser
-    = fun s -> let t, obj, rest = extract_object s in
-      match t with 
-      | 't' -> `TypeVar (deserialise1 deserialise_oint obj), rest
-      | 'r' -> `RowVar (deserialise1 deserialise_oint obj), rest
-      | c   -> invalid_header "quantifier" c
-
-let serialise_assumption : assumption serialiser 
-    = serialise2 'a' (serialise_list (serialise_quantifier), serialise_datatype)
-
-let deserialise_assumption : assumption deserialiser
-    = fun s ->
-      let t, obj, rest = extract_object s in
-      match t with
-          | 'a'  -> deserialise2 (deserialise_list (deserialise_quantifier), deserialise_datatype) obj, rest
-          | _          -> failwith ("Unexpected character deserialising assumption : " ^ String.make 1 t)
-
-let serialise_environment : environment serialiser =
-  serialise1 'a' (serialise_list (serialise2 'a' (serialise_string, serialise_assumption)))
-
-let deserialise_environment : environment deserialiser =
-  let deserialise_binding : (string * assumption) deserialiser = 
-    fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'a' -> deserialise2 (deserialise_string, deserialise_assumption) obj, rest
-          | _          -> failwith ("Unexpected character deserialising binding : " ^ String.make 1 t)
-  in
-    fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'a' -> deserialise1 (deserialise_list (deserialise_binding)) obj, rest
-          | _          -> failwith ("Unexpected character deserialising environment : " ^ String.make 1 t)
 
 module BasicTypeOps :
   (Type_basis.BASICTYPEOPS

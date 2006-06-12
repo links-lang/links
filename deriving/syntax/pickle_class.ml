@@ -4,25 +4,18 @@
 (** / Pickle *)
 
 (* FIXME:
-   optimization: shouldn't pickle a tag for single-constructor types *)
+   optimization: shouldn't pickle a tag for single-constructor types. *)
 
 #load "pa_extend.cmo";
 #load "q_MLast.cmo";
 open Deriving;
-
-(* Generate names for type parameters (type variables) *)
-value param_names (params : list (string * (bool*bool))) : list (string * (string * string)) =
-    (List.map2
-       (fun (p,_) n -> (p, (Printf.sprintf "v%d" n, Printf.sprintf "V%d" n)))
-       params
-       (range 0 (List.length params - 1)));
-
 
 (* Generate a printer for each constructor parameter *)
 value rec gen_printer ({tname=self;loc=loc}as ti) = fun [
   c when ltype_of_ctyp c = Some ti.ltype -> <:module_expr< This >>
 | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Pickle_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
+| <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
 | <:ctyp< ( $list:params$ ) >>           -> (List.fold_left 
                                                (fun s param -> <:module_expr< $s$ $param$ >>)
                                                <:module_expr< $uid:Printf.sprintf "Pickle_%d" (List.length params)$ >>
@@ -82,7 +75,7 @@ value gen_unpickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
 ;
 
 
-value unpickle_failure loc = (<:patt< c >>, None, <:expr< failwith ("Unexpected tag : " ^ string_of_int c) >>);
+value unpickle_failure ({loc=loc}as ti) = (<:patt< c >>, None, <:expr< failwith (Printf.sprintf "Unexpected tag %d during unpickling of type : %s" c $str:ti.tname$) >>);
 
 (* Generate the pickle and unpickle functions. *)
 value gen_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item< 
@@ -91,7 +84,7 @@ value gen_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item<
              fun [ $list:List.map2 (gen_pickle_case ti) ctors (range 0 (List.length ctors - 1))$ ]
    and unpickle stream =
          let module This = $thismod$ in
-           match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1)) @ [unpickle_failure loc]$ ]
+           match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1)) @ [unpickle_failure ti]$ ]
 >>;
 
 (* Generate a `this' module given the type *)
@@ -187,7 +180,7 @@ value gen_funs_poly ({loc=loc} as ti) thismod row =
      and unpickle stream =
          let module This = $thismod$ in
            match Pickle_int.unpickle stream with
-             [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure loc]$ ] 
+             [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure ti]$ ] 
 >>;
 
 

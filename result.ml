@@ -3,8 +3,6 @@ open Num
 open List
 
 open Types
-open Pickler
-open Query
 open Syntax
 open Utility
 open Debug
@@ -16,8 +14,7 @@ object
   method show : string
 end
 
-open Show
-module Show_otherfield = ShowDefaults(
+module Show_otherfield = Show.ShowDefaults(
   struct
     type a = otherfield
     let showBuf obj buffer = Buffer.add_string buffer (obj # show)
@@ -28,12 +25,7 @@ type db_field_type = BoolField | TextField | IntField | FloatField
 		     | SpecialField of otherfield
     deriving (Show)
 
-let string_of_db_field_type = function
-  | BoolField -> "bool"
-  | TextField -> "text"
-  | IntField -> "int"
-  | FloatField -> "float"
-  | SpecialField ft -> ft # show
+let string_of_db_field_type = Show_db_field_type.show
 
 type db_status = QueryOk | QueryError of string
     deriving (Show)
@@ -57,8 +49,7 @@ module Show_database = Show_unprintable (struct type a = database end)
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
    deserialisation *)
-open Pickle
-module Pickle_database = Pickle_unpicklable (struct type a = database end)
+module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Result.database" end)
 
 type db_construtor = string -> (database * string)
 
@@ -92,15 +83,10 @@ type unop = MkColl
             | MkDatabase
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (query * datatype)
+            | QueryOp of (Query.query * datatype)
                 deriving (Show, Pickle)
 
-let string_of_unop = function
-  | MkColl -> "MkColl"
-  | MkDatabase -> "MkDatabase"
-  | MkVariant label -> "MkVariant " ^ label
-  | QueryOp _ -> "QueryOp(...)"
-  | VrntSelect _ -> "VrntSelect(...)"
+let string_of_unop = Show_unop.show
 
 type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
 	     | UnionOp
@@ -137,41 +123,43 @@ and string_of_item : xmlitem -> string =
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
 
-let rec serialise_item : xmlitem serialiser = function
-  | Text v -> serialise1 'a' (serialise_string) v
-  | Attr v -> serialise2 'b' (serialise_string, serialise_string) v
-  | Node v -> serialise2 'c' (serialise_string, serialise_xml) v
-and serialise_xml x = 
-  serialise1 'a' (serialise_list serialise_item) x
+(* Pickling a result value involves replacing expression nodes with
+   identifiers.
 
-let rec deserialise_item : xmlitem deserialiser = 
-  fun s -> let t, obj, rest = extract_object s in 
-  let e = 
-    (match t with 
-       | 'a' -> Text (deserialise1 (deserialise_string ) obj)
-       | 'b' -> Attr (deserialise2 (deserialise_string, deserialise_string ) obj)
-       | 'c' -> Node (deserialise2 (deserialise_string, deserialise_xml) obj)
-       | _   -> invalid_header "xmlitem" t)
-  in e, rest
-and deserialise_xml : xml deserialiser = 
-  fun s -> let t, obj, rest = extract_object s in
-    match t with
-      | 'a' -> deserialise1 (deserialise_list (deserialise_item)) obj, rest
-      | _   -> invalid_header "xml" t
+   This (rexpr) is pulled out as a separate type so that we can
+   provide a custom pickling strategy (namely replacing expressions
+   with labels while pickling).
+*)
+type rexpr = expression
+    deriving (Show)
+
+module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
+  struct
+    type a = rexpr
+    let pickle buffer e = 
+      match expression_data e with
+        | _, _, Some l -> Syntax.Pickle_label.pickle buffer l
+        | _             -> failwith ("Not labeled: " ^ string_of_expression e)
+    and unpickle stream = 
+      let label = Syntax.Pickle_label.unpickle stream in
+        (* sadly, we can't do resolution here at present because there's
+           no way to pass in the table *)
+        Syntax.Placeholder (label, (Syntax.dummy_position, `Not_typed, Some label))
+  end)
 
 type basetype = [
-  | `Bool of bool
-  | `Int of num
-  | `Float of float
-  | `Char of char
-  | `XML of xmlitem
-  | `Database of (database * string)
-]
+| `Bool of bool
+| `Int of num
+| `Float of float
+| `Char of char
+| `XML of xmlitem
+| `Database of (database * string)
+                ]
     deriving (Show, Pickle)
 
 type contin_frame = 
-  | Definition of (environment * string)
-  | FuncArg of (expression * environment) (* FIXME: This is twiddled *)
+    | Definition of (environment * string)
+    | FuncArg of (expression * environment) (* FIXME: This is twiddled *)
   | FuncApply of (result * environment )  (* FIXME: This is twiddled *)
   | LetCont of (environment * 
 		  string * expression)
@@ -200,9 +188,7 @@ type contin_frame =
   | Recv of (environment)
 and result = [
   | `PFunction of (string * result list)
-  | `Function of (string * environment (*locals*)
-                         * environment (*globals*) 
-		         * expression)
+  | `Function of  (string * environment (*locals*) * environment (*globals*) * rexpr)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `List of (result list)
@@ -267,81 +253,11 @@ let links_snd x = snd (pair_as_ocaml_pair x)
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let to_placeholder expr = 
-  let (pos, datatype, label) = expression_data expr in
-    match label with
-        Some str -> Placeholder(str, (pos, datatype, label))
-      | None -> failwith("Not labeled: " ^ string_of_expression expr)
-
-let rec strip_binding(name, value) = (name, strip_result value)
-and strip_env env = map strip_binding env
-and strip_continuation cont = map strip_cont_frame cont
-and strip_cont_frame = function
-  | FuncArg(expr, env) -> FuncArg(to_placeholder expr, strip_env env)
-  | FuncApply(func, env) -> FuncApply(strip_result func, strip_env env)
-  | LetCont(env, var, body) -> LetCont(strip_env env, var, to_placeholder body)
-  | BranchCont(env, conseq, altern) -> BranchCont(strip_env env, 
-                                                  to_placeholder conseq,
-                                                  to_placeholder altern)
-  | BinopRight(env, op, rhs) -> BinopRight(strip_env env, op, to_placeholder rhs)
-  | BinopApply(env, op, lhs) -> BinopApply(strip_env env, op, lhs)
-  | UnopApply(env, op) -> UnopApply(strip_env env, op)
-  | RecSelect(env, var, label, var2, body) -> RecSelect(strip_env env, 
-                                                        var, label, var2, 
-                                                        to_placeholder body)
-  | CollExtn(env, var, body, results, source) ->
-      CollExtn(strip_env env, var, to_placeholder body, 
-               map (map strip_result) results, map strip_result source)
-  | StartCollExtn(env, var, body) -> 
-      StartCollExtn(strip_env env, var, to_placeholder body)
-  | XMLCont(env, tagname, attrname, children, attrexprs, childexprs) ->
-      XMLCont(strip_env env, tagname, attrname, children, 
-              alistmap to_placeholder attrexprs, map to_placeholder childexprs)
-  | Ignore(env, body) -> Ignore(strip_env env, to_placeholder body)
-and strip_result = function
-  | `PFunction (name, pargs) ->
-      `PFunction (name, map strip_result pargs)
-  | #basetype as prim -> prim
-  | `Function(name, locals, globals, body) -> 
-      `Function(name, strip_env locals, strip_env globals, to_placeholder body)
-  | `Record(fields) -> `Record(map strip_binding fields)
-  | `Variant(label, value) ->  `Variant(label, strip_result value)
-  | `List(elements)-> `List(map strip_result elements)
-  | `Database(db, params) -> `Database(db, params)
-  | `Continuation(cont) -> `Continuation(strip_continuation cont)
-
-let strip_cont cont = map strip_cont_frame cont
-
-
-let serialise_continuation c = Marshal.to_string (strip_cont c) []
-
-let serialise_continuation_b64 = Utility.base64encode -<- serialise_continuation
-
-let deserialise_continuation _ str = 
-  Marshal.from_string str 0
-
-
 let delay_expr expr = `Function(gensym "", [], [], expr)
 
-
-let rec pp_continuation = String.concat "=->" -<-
-  map (function
-         | FuncArg _ -> "FuncArg"
-         | FuncApply _ -> "FuncApply"
-         | LetCont _ -> "LetCont"
-         | BranchCont _ -> "BranchCont"
-         | BinopRight _ -> "BinopRight"
-         | BinopApply _ -> "BinopApply"
-         | UnopApply _ -> "UnopApply"
-         | RecSelect _ -> "RecSelect"
-         | CollExtn _ -> "CollExtn"
-         | StartCollExtn _ -> "StartCollExtn"
-         | XMLCont _ -> "XMLCont"
-         | Ignore _ -> "Ignore")
+let pp_continuation = Show_continuation.show
   
 exception Not_tuple
-
-open Netencoding
 
 let rec char_of_primchar = function 
     `Char c -> c
@@ -401,111 +317,6 @@ and string_of_xresult = function
   | `Char c -> String.make 1 c
   | otherwise -> string_of_result otherwise
 
-let rec serialise_primitive : basetype serialiser = 
-  function
-    | `Bool v      -> serialise1 'b' (serialise_bool) v
-    | `Int v       -> serialise1 'i' (serialise_int) v
-    | `Float v     -> serialise1 'f' (serialise_float) v
-    | `Char v      -> serialise1 'c' (serialise_char) v
-    | `Database  v -> serialise2 'd' (null_serialiser, serialise_string) v
-    | `XML v       -> serialise1 'x' (serialise_item) v
-and serialise_result : result serialiser = 
-  let list, string = serialise_list, serialise_string in
-    function
-      | #basetype as b -> serialise_primitive b
-      | `PFunction (name, pargs) ->
-	  serialise1 'p'
-            (serialise_string)
-	    (name) (* This seems wrong: what about the args? *)
-          (* Remove self from bindings list to prevent infinite regress *)
-      | `Function (var, locals, globals, expr) as f ->  
-          (* I think this only works for top-level functions,
-             anonymous functions and non-recursive local functions
-             (i.e. everything except for recursive inner functions,
-             which are hardly uncommon.  The business with names needs
-             to be modified.  *)
-          (try 
-             (* temporarily remove filter to get a demo working *)
-             let globals = globals (*List.filter (function (_, `Primitive _) -> false
-                                     | _ -> true) globals *) in
-             let name = rassq f globals in
-             let v = name, var, locals, Utility.rremove_assq f globals, expr
-             in
-               serialise5 'f' (string, string, serialise_environment, 
-                               serialise_environment, serialise_expression) v
-           with Not_found ->
-             serialise5 'f' (string, string, serialise_environment, 
-                             serialise_environment, serialise_expression) 
-               ("", var, locals, globals, expr))
-      | `Record      v -> serialise1 'r' (list (serialise_binding)) v
-      | `Variant     v -> serialise2 'v' (string, serialise_result) v
-      | `List  v -> serialise1 'l' (list serialise_result) v
-      | `Continuation v -> serialise1 'C' (serialise_continuation) v
-and serialise_binding b
-    = serialise2 'B' (serialise_string, serialise_result) b
-and serialise_environment env
-    = serialise1 'E' (serialise_list serialise_binding) (minimize_env env)
-and minimize_env env = 
-  (* Make sure each name occurs at most once *)
-  let rec aux = function
-    | [], output -> rev output
-    | (name, _) :: rest, output when mem_assoc name output -> aux (rest, output)
-    | first :: rest, output -> aux (rest, (first :: output))
-  in aux (env, [])
-
-let rec deserialise_result resolve : result deserialiser =
-  fun s -> 
-    let t, obj, rest = extract_object s 
-    and result = deserialise_result resolve
-    and string = deserialise_string in
-    let r = 
-      (match t with  
-             (* Add the function back into its own environment *)
-         | 'f' -> let name, var, locals, globals, body =
-             (deserialise5 (string, string, 
-                            deserialise_environment resolve, 
-                            deserialise_environment resolve, 
-                            deserialise_expression)
-                obj) in
-             (match name with 
-                | "" -> `Function (var, locals, globals, body)
-                | name -> (let rec f = `Function (var, locals, (name, f) :: globals, body) 
-                           in f))
-         | 'r' -> `Record (deserialise1 (deserialise_list (deserialise_binding resolve)) obj)
-         | 'v' -> `Variant (deserialise2 (string, result) obj)
-         | 'l' -> `List (deserialise1 (deserialise_list (deserialise_result resolve)) obj)
-         | 'd' -> let _, dbstring = deserialise2 (null_deserialiser (), string) obj in
-	   let driver, params = parse_db_string dbstring in
-             `Database (db_connect driver params)
-	 | 'C' -> `Continuation (deserialise1 (deserialise_continuation resolve) obj)
-         | 'b' -> `Bool (deserialise1 deserialise_bool obj)
-         | 'i' -> `Int (deserialise1 deserialise_int obj)
-         | 'f' -> `Float   (deserialise1 deserialise_float obj)
-         | 'c' -> `Char    (deserialise1 deserialise_char obj)
-         | 'p' -> (* FIXME: Include pargs*)
-             resolve (deserialise1 (deserialise_string) obj)
-         | 'x' -> `XML     (deserialise1 deserialise_item obj)
-         | _ -> failwith "Error deserialising result")
-    in r, rest
-
-and deserialise_binding resolve :  binding deserialiser = 
-  fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'B' -> deserialise2 (deserialise_string, deserialise_result resolve) obj, rest
-          | x -> failwith ("Error deserialising binding header (expected 'B'; got '" ^ (String.make 1 x) ^ "')")
-and deserialise_environment resolve : environment deserialiser
-    = 
-  fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'E' -> deserialise1 (deserialise_list (deserialise_binding resolve)) obj, rest
-          | x -> failwith ("Error deserialising environment header (expected 'E'; got '" ^ (String.make 1 x) ^ "')")
-
-let deserialise_result_string lookup = fst -<- deserialise_result lookup
-
-let deserialise_result_b64 lookup = fst -<- deserialise_result lookup -<- Utility.base64decode 
-
 (* generic visitation functions for results *)
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
@@ -560,7 +371,7 @@ and map_cont result_f expr_f contframe_f kappa =
 
 (* resolving labels *)
 
-let label_table program = 
+let label_table (program : Syntax.expression) = 
   reduce_expression (fun visit_children expr ->
                        let (_, _, Some label) = expression_data expr in
                          (label, expr) :: visit_children expr
@@ -587,7 +398,7 @@ let resolve_placeholders_result program rslt =
   map_result identity (resolve_placeholder program) identity rslt
 
 let resolve_placeholders_cont program rslt = 
-  map_result identity (resolve_placeholder program) identity rslt
+  map_cont identity (resolve_placeholder program) identity rslt
 
 let resolve_placeholders_env program env = 
   map_env identity (resolve_placeholder program) identity env
@@ -597,17 +408,6 @@ let resolve_placeholders_expr program expr =
 
 let label_of_expression expr =
   let (_, _, label) = expression_data expr in fromOption "TUNLABELED" label
-
-
-(** result_to_xml
-    vestigial? *)
-    
-let result_to_xml = function
-  | `XML r -> r
-  | `List _ as r -> (charlist_as_string r) 
-  | `Continuation cont -> Utility.base64encode (serialise_continuation cont)
-  | _ -> "NOT IMPLEMENTED"
-
 
 (* boxing and unboxing of primitive types *)
 let box_bool b = `Bool b
@@ -630,3 +430,19 @@ and unbox_string : result -> string = charlist_as_string
 
 (* Retain only bindings in env named by members of `names' *)
 let retain names env = filter (fun (x, _) -> mem x names) env
+
+(* Pickling interface *)
+(* TODO: re-open db connections as necessary *)
+let marshal_result : result -> string
+  = Pickle_result.pickleS ->- Netencoding.Base64.encode
+let marshal_environment : environment -> string
+  = Pickle_environment.pickleS ->- Netencoding.Base64.encode
+let marshal_continuation : continuation -> string
+  = Pickle_continuation.pickleS ->- Netencoding.Base64.encode
+
+let unmarshal_result program : string -> result
+  = Netencoding.Base64.decode ->- Pickle_result.unpickleS
+let unmarshal_environment program : string -> environment
+  = Netencoding.Base64.decode ->- Pickle_environment.unpickleS
+let unmarshal_continuation program : string -> continuation
+  = Netencoding.Base64.decode ->- Pickle_continuation.unpickleS

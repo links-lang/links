@@ -477,11 +477,11 @@ module Pickle_num : Pickle with type a = Num.num = Pickle_defaults (
   end
 )
 
-module Pickle_unpicklable (P : sig type a end) : Pickle with type a = P.a = Pickle_defaults ( 
+module Pickle_unpicklable (P : sig type a val tname : string end) : Pickle with type a = P.a = Pickle_defaults ( 
   struct 
     type a = P.a
-    let pickle _ _ = failwith "boom"
-    let unpickle _ = failwith "boom"
+    let pickle _ _ = failwith ("attempt to pickle a value of unpicklable type : " ^ P.tname)
+    let unpickle _ = failwith ("attempt to unpickle a value of unpicklable type : " ^ P.tname)
   end
 )
 

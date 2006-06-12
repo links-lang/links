@@ -2,7 +2,6 @@
 
 open Num
 open List
-open Pickler
 open Query
 
 let sorting_to_sql = function
@@ -68,90 +67,3 @@ let rec disjunction = function
       | rhs -> Binary_op("OR", t, rhs)
 
 let rec negation t = Unary_op("NOT", t)
-
-let rec serialise_expression : (expression serialiser) = 
-  function
-    | Field v -> serialise2 'a' (serialise_string, serialise_string) v
-    | Variable v -> serialise1 'b'  (serialise_string) v
-    | Null -> serialise0 'c' () ()
-    | Integer v -> serialise1 'd'  (serialise_int) v
-    | Float v -> serialise1 'e'  (serialise_float) v
-    | Boolean v -> serialise1 'f'  (serialise_bool) v
-    | LikeExpr _ -> failwith "serialising like expressions not supported"
-    | Text v -> serialise1 'g'  (serialise_string) v
-    | Binary_op v -> serialise3 'h'  (serialise_string, serialise_expression, serialise_expression) v
-    | Unary_op v -> serialise2 'i'  (serialise_string, serialise_expression) v
-    | Query v -> serialise1 'j' (serialise_query) v
-and deserialise_expression : (expression deserialiser) =
-  fun s -> let t, obj, rest = extract_object s in
-  let e = 
-    (match t with
-    | 'a' -> Field (deserialise2 (deserialise_string, deserialise_string) obj)
-    | 'b' -> Variable (deserialise1 (deserialise_string) obj)
-    | 'c' -> (deserialise0 () obj); Null
-    | 'd' -> Integer (deserialise1 (deserialise_int) obj)
-    | 'e' -> Float (deserialise1  (deserialise_float) obj)
-    | 'f' -> Boolean (deserialise1 (deserialise_bool) obj)
-    | 'g' -> Text (deserialise1 (deserialise_string) obj)
-    | 'h' -> Binary_op (deserialise3 (deserialise_string, deserialise_expression, deserialise_expression) obj)
-    | 'i' -> Unary_op (deserialise2 (deserialise_string, deserialise_expression) obj)
-    | 'j' -> Query (deserialise1 (deserialise_query) obj)
-    | _ -> failwith "Error deserialising expression")
-  in e, rest
-
-and serialise_query : (query serialiser) =
-  function 
-    | s -> serialise7 'Q' (serialise_bool, 
-                           serialise_list serialise_column,
-                           serialise_list serialise_table,
-                           serialise_expression,
-                           serialise_list serialise_ordering,
-                           serialise_option serialise_expression,
-                           serialise_expression)
-        (s.distinct_only, s.result_cols, s.tables,
-	 s.condition, s.sortings, s.max_rows, s.offset)
-and deserialise_query : (query deserialiser) =
-  fun s ->
-    let t, obj, rest = extract_object s in 
-    let (d,r,t,c,s,m,o) = (match t with
-               | 'Q' -> deserialise7 (deserialise_bool, 
-                                      deserialise_list deserialise_column,
-                                      deserialise_list deserialise_table,
-                                      deserialise_expression,
-                                      deserialise_list deserialise_ordering,
-                                      deserialise_option deserialise_expression,
-                                      deserialise_expression) obj
-               | _ -> failwith "Error deserialising query")
-    in {distinct_only=d;result_cols=r;tables=t;condition=c;sortings=s;max_rows=m;offset=o}, rest
-and serialise_column : column serialiser
-    = fun b -> serialise4 'B' (serialise_string, serialise_string, serialise_string, Types.serialise_datatype) (b.table_renamed, b.name, b.renamed, b.col_type)
-and deserialise_column : column deserialiser
-    = fun s ->
-      let t, obj, rest = extract_object s in
-        let (t,n,r,k), rest = match t with
-          | 'B' -> deserialise4 (deserialise_string, deserialise_string, deserialise_string, Types.deserialise_datatype) obj, rest
-          | x -> failwith ("Error deserialising column header (expected 'B'; got '"^ String.make 1 x ^ "')")
-      in
-        {table_renamed=t; name=n; renamed=r; col_type=k}, rest
-
-and serialise_table : (string * string) serialiser
-    = fun b -> serialise2 'T' (serialise_string, serialise_string) b
-and deserialise_table : (string * string) deserialiser
-    = fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'T' -> deserialise2 (deserialise_string, deserialise_string) obj, rest
-          | x -> failwith ("Error deserialising column header (expected 'T'; got '"^ String.make 1 x ^"')")
-and serialise_ordering : ([`Asc of (string * string) | `Desc of (string * string)] serialiser) =
-  function
-    | `Asc v ->  serialise2 'A' (serialise_string, serialise_string) v
-    | `Desc v -> serialise2 'D'(serialise_string, serialise_string) v
-and deserialise_ordering : ([`Asc of (string * string) | `Desc of (string * string)] deserialiser) =
-  fun s -> let t, obj, rest = extract_object s in
-  let e = 
-    (match t with
-       | 'A' -> `Asc (deserialise2 (deserialise_string, deserialise_string) obj)
-       | 'D' -> `Desc (deserialise2 (deserialise_string, deserialise_string) obj)
-       | _ -> failwith "Error deserialising ordering")
-  in e, rest
-

@@ -832,10 +832,6 @@ let _ = add_qtest("fun f(x) { x+1 } f(1)",
                            -> true
                  )
 
-
-
-open Inference
-
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 
 let rhino_output linkscode = 

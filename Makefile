@@ -47,7 +47,6 @@ SOURCES = $(OPC)                		\
           settings.mli settings.ml 		\
           debug.mli debug.ml    		\
           rewrite.ml            		\
-          pickler.mli pickler.ml  		\
           performance.ml        		\
           graph.ml              		\
           type_basis.mli type_basis.ml 		\

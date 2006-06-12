@@ -51,32 +51,6 @@ val string_of_quantifier : quantifier -> string
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
-(* serialisation *) 
-val serialise_primitive : primitive Pickler.serialiser 
-val deserialise_primitive : primitive Pickler.deserialiser
-
-val serialise_datatype : datatype Pickler.serialiser 
-val serialise_field_spec : field_spec Pickler.serialiser
-val serialise_row_var : row_var Pickler.serialiser
-val serialise_row : char -> row Pickler.serialiser
-  
-
-val deserialise_datatype : datatype Pickler.deserialiser
-val deserialise_field_spec : field_spec Pickler.deserialiser
-val deserialise_row_var : row_var Pickler.deserialiser
-val deserialise_row : row Pickler.deserialiser
-
-val serialise_quantifier : quantifier Pickler.serialiser
-val deserialise_quantifier : quantifier Pickler.deserialiser
-
-val serialise_assumption : assumption Pickler.serialiser 
-val deserialise_assumption : assumption Pickler.deserialiser
-
-val serialise_environment : environment Pickler.serialiser
-val deserialise_environment : environment Pickler.deserialiser
-
-
-
 module BasicTypeOps :
   (BASICTYPEOPS with type typ = datatype
 		and type row_var' = row_var)

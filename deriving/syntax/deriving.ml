@@ -122,6 +122,13 @@ value is_polymorphic : MLast.type_decl -> bool = fun [
 | _                   -> False
 ];
 
+(* Generate names for type parameters (type variables) *)
+value param_names (params : list (string * (bool*bool))) : list (string * (string * string)) =
+    (List.map2
+       (fun (p,_) n -> (p, (Printf.sprintf "v%d" n, Printf.sprintf "V%d" n)))
+       params
+       (range 0 (List.length params - 1)));
+
 
 (* A association list of class names * instance generators *)
 value instantiators : ref (list (string * MLast.loc -> instantiator)) = ref [];

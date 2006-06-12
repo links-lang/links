@@ -3,7 +3,6 @@ open List
 
 open Utility
 open Debug
-open Pickler
 open Types
 open Sql
 
@@ -11,7 +10,7 @@ open Show
 open Pickle
 
 type lexpos = Lexing.position
-module LexposType = struct type a = lexpos end
+module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
 module Pickle_lexpos = Pickle_unpicklable (LexposType)
 
@@ -24,12 +23,6 @@ exception ASTSyntaxError of position * string
 
 type location = [`Client | `Server | `Unknown]
     deriving (Show, Pickle)
-
-(* This shouldn't be necessary: the "deriving" should cope with
-   instances defined in other modules *)
-type query = Query.query
-module Show_query = Query.Show_query
-module Pickle_query = Query.Pickle_query
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
@@ -66,7 +59,7 @@ type 'data expression' =
   | Database of ('data expression' * 'data)
   | Table of ((* the database: *) 'data expression' *
       (* the real name of some table associated with thsi query; not used: *) string * 
-      (* the query to run against database: *) query * 'data)
+      (* the query to run against database: *) Query.query * 'data)
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
@@ -89,7 +82,10 @@ let gensym =
         str ^ "_g" ^ string_of_int !counter
       end
 
-type expression = (position * datatype * string option (* label *)) expression'
+type label = string 
+    deriving (Show, Pickle)
+
+type expression = (position * datatype * label option) expression'
     deriving (Show, Pickle)
 type untyped_expression = position expression'
     deriving (Show, Pickle)
@@ -186,96 +182,6 @@ let string_of_order order = match order with
 let string_of_orders orders = match orders with 
   | [] -> " " 
   | _ -> "order [" ^ String.concat ", " (map string_of_order orders) ^ "]"
-
-
-let rec serialise_expression : ('data expression' serialiser) 
-    (* Ick.  Some introspection would help here. *)
-    = let string = serialise_string
-      and exp = serialise_expression
-      and data = null_serialiser in
-      (function 
-        | Define v                  -> serialise4 'd' (string, exp, serialise_location, data) v
-        | Boolean v                 -> serialise2 'b' (serialise_bool, data) v
-        | Integer v                 -> serialise2 'i' (serialise_int, data) v
-        | Char v                    -> serialise2 'c' (serialise_char, data) v
-        | String v                  -> serialise2 's' (string, data) v
-        | Float v                   -> serialise2 'f' (serialise_float, data) v
-        | Variable v                -> serialise2 'v' (string, data) v
-        | Apply v                   -> serialise3 'A' (exp, exp, data) v
-        | Condition v               -> serialise4 'C' (exp, exp, exp, data) v
-        | Comparison v              -> serialise4 'S' (exp, string, exp, data) v
-        | Abstr v                   -> serialise3 'F' (string, exp, data) v
-        | Let v                     -> serialise4 'L' (string, exp, exp, data) v
-        | Rec v                     -> serialise3 'N' (serialise_list serialise_recbinding, exp, data) v
-        | Xml_node v                -> serialise4 'g' (string, serialise_list serialise_recbinding (* temporary *), serialise_list serialise_expression, data) v
-        | Record_empty v            -> serialise1 'R' (data) v
-        | Record_extension v        -> serialise4 'E' (string, exp, exp, data) v
-        | Record_selection v        -> serialise6 'G' (string, string, string, exp, exp, data) v
-        | Record_selection_empty v  -> serialise3 'H' (exp, exp, data) v
-        | Variant_injection v       -> serialise3 'I' (string, exp, data) v
-        | Variant_selection v       -> serialise7 'J' (exp, string, string, exp, string, exp, data) v
-        | Variant_selection_empty v -> serialise1 'K' (data) v
-        | Nil v        -> serialise1 'O' (data) v
-        | List_of v       -> serialise2 'P' (exp, data) v
-        | Concat v        -> serialise3 'Q' (exp, exp, data) v
-        | For v    -> serialise4 'T' (exp, string, exp, data) v
-        | Database v                -> serialise2 'V' (exp, data) v
-        | Table v                   -> serialise4 'Z' (exp, string, serialise_query, data) v
-        | Escape v                  -> serialise3 'e' (string, exp, data) v
-        | Placeholder v             -> serialise2 'p' (string, data) v
-        | HasType v                 -> serialise3 '0' (exp, serialise_datatype, data) v
-        | Alien v                   -> serialise4 '1' (string, string, serialise_assumption, data) v
-      )
-and deserialise_expression : (expression deserialiser)
-    = let posdatatype = null_deserialiser (dummy_position, `Not_typed, None)
-      and string = deserialise_string
-      and exp = deserialise_expression in
-      fun s -> let t, obj, rest = extract_object s in
-        let e = 
-        (match t with 
-           | 'd' -> Define (deserialise4 (string, exp, deserialise_location, posdatatype) obj)
-           | 'b' -> Boolean (deserialise2 (deserialise_bool, posdatatype) obj)
-           | 'i' -> Integer (deserialise2 (deserialise_int, posdatatype) obj)
-           | 'c' -> Char (deserialise2 (deserialise_char, posdatatype) obj)
-           | 's' -> String (deserialise2 (deserialise_string, posdatatype) obj)
-           | 'f' -> Float (deserialise2 (deserialise_float, posdatatype) obj)
-           | 'v' -> Variable (deserialise2 (string, posdatatype) obj)
-           | 'A' -> Apply (deserialise3 (exp, exp, posdatatype) obj)
-           | 'C' -> Condition (deserialise4 (exp, exp, exp, posdatatype) obj)
-           | 'S' -> Comparison (deserialise4 (exp, string, exp, posdatatype) obj)
-           | 'F' -> Abstr (deserialise3 (string, exp, posdatatype) obj)
-           | 'L' -> Let (deserialise4 (string, exp, exp, posdatatype) obj)
-           | 'N' -> Rec (deserialise3 (deserialise_list deserialise_recbinding, exp, posdatatype) obj)
-           | 'g' -> Xml_node (deserialise4 (string, deserialise_list deserialise_recbinding, deserialise_list deserialise_expression, posdatatype) obj)
-           | 'R' -> Record_empty (deserialise1 (posdatatype) obj)
-           | 'E' -> Record_extension (deserialise4 (string, exp, exp, posdatatype) obj)
-           | 'G' -> Record_selection (deserialise6 (string, string, string, exp, exp, posdatatype) obj)
-           | 'H' -> Record_selection_empty (deserialise3 (exp, exp, posdatatype) obj)
-           | 'I' -> Variant_injection (deserialise3 (string, exp, posdatatype) obj)
-           | 'J' -> Variant_selection (deserialise7 (exp, string, string, exp, string, exp, posdatatype) obj)
-           | 'K' -> Variant_selection_empty (deserialise2 (exp, posdatatype) obj)
-           | 'O' -> Nil (deserialise1 (posdatatype) obj)
-           | 'P' -> List_of (deserialise2 (exp, posdatatype) obj)
-           | 'Q' -> Concat (deserialise3 (exp, exp, posdatatype) obj)
-           | 'T' -> For (deserialise4 (exp, string, exp, posdatatype) obj)
-           | 'V' -> Database (deserialise2 (exp, posdatatype) obj)
-           | 'Z' -> Table (deserialise4 (exp, string, deserialise_query, posdatatype) obj)
-           | 'p' -> Placeholder(deserialise2 (string, posdatatype) obj)
-           | x -> failwith ("Unexpected expression type header during deserialisation : "^ (String.make 1  x)))
-      in e, rest
-and serialise_recbinding : (string * expression) serialiser
-    = fun b -> serialise2 'B' (serialise_string, serialise_expression) b
-and deserialise_recbinding :  (string * expression) deserialiser
-    = fun s ->
-      let t, obj, rest = extract_object s in
-        match t with
-          | 'B' -> deserialise2 (deserialise_string, deserialise_expression) obj, rest
-          | x -> failwith ("Error deserialising binding header (expected 'B'; got '" ^ (String.make 1 x) ^ "')")
-and serialise_location : location serialiser
-    = function | `Client -> "c" | `Server -> "s" | `Unknown -> "u"
-and deserialise_location : location deserialiser
-    = fun s -> (assoc (String.sub s 0 1) ["c", `Client; "s", `Server; "u", `Unknown],
-                String.sub s 1 (String.length s - 1))
 
 (*
 Functions involved in a visit:

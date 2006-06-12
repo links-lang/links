@@ -24,8 +24,8 @@ type ('typ, 'row) type_basis = [
 
 type 'a stringmap = 'a Utility.StringMap.t
 
-module Show_stringmap (A : Show) = Show_unprintable (struct type a = A.a stringmap end)
-module Pickle_stringmap (A : Pickle) = Pickle_unpicklable (struct type a = A.a stringmap end)
+module Show_stringmap (A : Show) = Show_unprintable (struct type a = A.a stringmap  end)
+module Pickle_stringmap (A : Pickle) = Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]     deriving (Show, Pickle)

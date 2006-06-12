@@ -7,20 +7,12 @@ open Deriving;
 **)
 (** / Show *)
 
-
-(* Generate names for type parameters (type variables) *)
-value param_names (params : list (string * (bool*bool))) : list (string * (string * string)) =
-    (List.map2
-       (fun (p,_) n -> (p, (Printf.sprintf "v%d" n, Printf.sprintf "V%d" n)))
-       params
-       (range 0 (List.length params - 1)));
-
-
 (* Generate a printer for each constructor parameter *)
 value rec gen_printer ({tname=self;loc=loc}as ti) = fun [
   c when ltype_of_ctyp c = Some ti.ltype -> <:module_expr< This >>
 | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Show_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
+| <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
 | <:ctyp< ( $list:params$ ) >>           -> (List.fold_left 
                                                (fun s param -> <:module_expr< $s$ $param$ >>)
                                                <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
