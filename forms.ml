@@ -96,10 +96,11 @@ let hidden_input name value =
 let attrname = fst
 let attrval = snd
 
-let serialize_exprenv expr env =
+let serialize_exprenv expr env : string =
   let env = retain (freevars expr) env in
-  let thunk = delay_expr expr in
-  (marshal_result thunk, marshal_environment env)
+(*  let thunk = delay_expr expr in*)
+    marshal_exprenv (expr, env)
+(*  (marshal_result thunk, marshal_environment env)*)
 
 let rec is_trivial_apply_aux = function
     Variable(_, _) -> true
@@ -179,9 +180,8 @@ let xml_transform env lookup eval : expression -> expression =
         let new_field = 
           match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
             | [] -> []
-            | ("l:onsubmit", laction)::_ -> (* l:action holds a frozen expression *)
-                [hidden_input "expression%" (marshal_result (delay_expr laction));
-                 hidden_input "environment%" (marshal_environment env)]
+            | ("l:onsubmit", laction)::_ -> (* l:onsubmit holds a frozen expression *)
+                [hidden_input "_k" (serialize_exprenv laction env)]
             | ("l:handler", lhandler)::_ -> 
                 (* an l:handler attribute holds an expression that
                    evaluates to a continuation. This continuation will
@@ -189,7 +189,7 @@ let xml_transform env lookup eval : expression -> expression =
                    when the form is submitted.  *)
                 (match eval lhandler [] with
                    | `Continuation c ->
-                       [hidden_input "continuation%" (marshal_continuation c)]
+                       [hidden_input "_cont" (marshal_continuation c)]
                    | _ -> failwith "Internal error: l:handler was not a continuation")
         in
           Xml_node ("form",
@@ -205,15 +205,13 @@ let xml_transform env lookup eval : expression -> expression =
 
     | Xml_node ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in
-        let ser_expr, ser_env = serialize_exprenv href_expr env in
         let href_val = 
           if is_simple_apply href_expr then
             let (Variable (func, _)::args) = list_of_appln href_expr in
             let arg_vals = map (value_of_simple_expr lookup) args in
               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
                 (*               ^ "?environment%=" ^ ser_env *)
-          else
-            "?environment%=" ^ ser_env ^ "&expression%=" ^ ser_expr
+          else "?_k=" ^ serialize_exprenv href_expr env
         in
         let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
         in

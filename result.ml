@@ -433,16 +433,15 @@ let retain names env = filter (fun (x, _) -> mem x names) env
 
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
-let marshal_result : result -> string
-  = Pickle_result.pickleS ->- Netencoding.Base64.encode
-let marshal_environment : environment -> string
-  = Pickle_environment.pickleS ->- Netencoding.Base64.encode
+
+module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
+
 let marshal_continuation : continuation -> string
   = Pickle_continuation.pickleS ->- Netencoding.Base64.encode
+let marshal_exprenv : (expression * environment) -> string
+  = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
 
-let unmarshal_result program : string -> result
-  = Netencoding.Base64.decode ->- Pickle_result.unpickleS
-let unmarshal_environment program : string -> environment
-  = Netencoding.Base64.decode ->- Pickle_environment.unpickleS
 let unmarshal_continuation program : string -> continuation
   = Netencoding.Base64.decode ->- Pickle_continuation.unpickleS
+let unmarshal_exprenv program : string -> (expression * environment)
+  = Netencoding.Base64.decode ->- Pickle_ExprEnv.unpickleS

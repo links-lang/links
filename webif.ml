@@ -128,9 +128,7 @@ let decode_continuation (cont : string) : Result.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let is_special_param (k, _) =
-  List.mem k ["continuation%25"; "continuation%"; 
-              "environment%25"; "environment%";
-              "expression%25"; "expression%"]
+  List.mem k ["_cont"; "_k"]
 
 let string_dict_to_charlist_dict =
   dict_map Result.string_as_charlist
@@ -139,27 +137,16 @@ let lookup_either a b env =
   try List.assoc a env
   with Not_found -> List.assoc b env
 
-exception Not_thunk
-
-let undelay_expr = function
-  | `Function (_, _, _, p) -> p
-  | _ -> raise Not_thunk
-
-let unpickle_expr_arg program = unmarshal_result program ->- undelay_expr
-
 (* Extract continuation from the parameters passed in over CGI.*)
 let contin_invoke_req program params =
-  let pickled_continuation = (lookup_either "continuation%25" "continuation%" params) in
+  let pickled_continuation = List.assoc "_cont" params in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
     ContInvoke(unmarshal_continuation program pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req program prim_lookup params =
-  let pickled_expression = lookup_either "expression%25" "expression%" params in
-  let pickled_environment = lookup_either "environment%25" "environment%"  params in
-  let environment = unmarshal_environment program pickled_environment in
-  let expression = unpickle_expr_arg program pickled_expression in
+  let expression, environment = unmarshal_exprenv program (List.assoc "_k" params) in
   let expression = resolve_placeholders_expr program expression in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
@@ -175,17 +162,9 @@ let is_client_call_return params =
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
 let is_contin_invocation params = 
-  List.mem_assoc "continuation%" params
+  List.mem_assoc "_cont" params
 
-let is_expr_request params = 
-  try 
-    begin
-      ignore(lookup_either "expression%" "expression%25" params);
-      ignore(lookup_either "environment%" "environment%25" params);
-      true
-    end
-  with Not_found -> false
-      
+let is_expr_request = List.exists is_special_param
         
 let client_return_req env cgi_args = 
   let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in

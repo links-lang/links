@@ -127,11 +127,10 @@ val box_string : string -> result
 val unbox_string : result -> string
 val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
 
-val marshal_result : result -> string
-val marshal_environment : environment -> string
 val marshal_continuation : continuation -> string
-val unmarshal_result : 'a -> string -> result
-val unmarshal_environment : 'a -> string -> environment
+val marshal_exprenv : (Syntax.expression * environment) -> string
 val unmarshal_continuation : 'a -> string -> continuation
+val unmarshal_exprenv : 'a -> string -> (Syntax.expression * environment)
+
 module Pickle_result : Pickle.Pickle with type a = result
 module Show_result : Show.Show with type a = result
