@@ -161,9 +161,10 @@ and starttag lexers = parse
   | eof                                 { END }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and xmllex lexers = parse
-  | "\\{"                               { CDATA "{" }
-  | '\\'                                { CDATA "\\" }
-  | [^ '{' '<' '\\' '&' ]* as cdata     { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
+  | "{{"                                { CDATA "{" }
+  | "}}"                                { CDATA "}" }
+  | "}"                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+  | [^ '{' '}' '<' '&' ]* as cdata      { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
   | "&amp;"                             { CDATA "&" } 
   | "&lt;"                              { CDATA "<" } 
   | "&gt;"                              { CDATA ">" } 

@@ -3,8 +3,13 @@ Braced XML
 stdout : <f/> : XML
 
 Escaped braces
-<p>A left: \{ and a right: }</p>
+<p>A left: {{ and a right: }}</p>
 stdout : <p>A left: { and a right: }</p> : XML
+
+Escaped braces (not doubled)
+<p>A left: {{ and a right: }</p>
+stderr : @..*
+exit : 1
 
 Backslashes
 <p>A backslash \ </p>
