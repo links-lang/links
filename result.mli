@@ -112,7 +112,6 @@ val delay_expr : 'a -> [> `Function of string * 'b list * 'c list * 'a ]
 val charlist_as_string : result -> string
 val string_of_result : result -> string
 val string_of_primitive : basetype -> string
-val resolve_placeholders_expr : Syntax.expression list -> Syntax.expression -> Syntax.expression
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : result -> bool
 val box_int : 'a -> [> `Int of 'a ]
@@ -129,8 +128,8 @@ val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
 
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
-val unmarshal_continuation : 'a -> string -> continuation
-val unmarshal_exprenv : 'a -> string -> (Syntax.expression * environment)
+val unmarshal_continuation : Syntax.expression list -> string -> continuation
+val unmarshal_exprenv : Syntax.expression list -> string -> (Syntax.expression * environment)
 
 module Pickle_result : Pickle.Pickle with type a = result
 module Show_result : Show.Show with type a = result

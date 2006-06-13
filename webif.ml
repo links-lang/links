@@ -147,7 +147,7 @@ let contin_invoke_req program params =
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req program prim_lookup params =
   let expression, environment = unmarshal_exprenv program (List.assoc "_k" params) in
-  let expression = resolve_placeholders_expr program expression in
+(*  let expression = resolve_placeholders_expr program expression in*)
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
     ExprEval(expression, params @ environment)
@@ -229,7 +229,7 @@ let serve_requests filename =
       else if is_client_call_return cgi_args then
         client_return_req global_env cgi_args
       else if (is_contin_invocation cgi_args) then
-        contin_invoke_req global_env cgi_args 
+        contin_invoke_req program cgi_args 
       else if (is_expr_request cgi_args) then
         expr_eval_req program (flip List.assoc global_env) cgi_args           
       else

@@ -442,6 +442,13 @@ let marshal_exprenv : (expression * environment) -> string
   = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
 
 let unmarshal_continuation program : string -> continuation
-  = Netencoding.Base64.decode ->- Pickle_continuation.unpickleS
+  = Netencoding.Base64.decode
+  ->- Pickle_continuation.unpickleS
+  ->- resolve_placeholders_cont program 
 let unmarshal_exprenv program : string -> (expression * environment)
-  = Netencoding.Base64.decode ->- Pickle_ExprEnv.unpickleS
+  = let resolve (expr, env) = 
+     resolve_placeholders_expr program expr, 
+     resolve_placeholders_env program env  in
+  Netencoding.Base64.decode
+  ->- Pickle_ExprEnv.unpickleS
+  ->- resolve
