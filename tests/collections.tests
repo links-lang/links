@@ -123,3 +123,7 @@ stdout : 3 : Int
 Map function
 fun map (f,l) { switch l { case [] -> []; case x::xs -> f(x) :: map(f,xs); } }; map((+)(1), [1,2,3])
 stdout : [2, 3, 4] : [Int]
+
+Sorting:
+for (i <- [2,1,3]) orderby (i) [i]
+stdout : [1, 2, 3] : [Int]
