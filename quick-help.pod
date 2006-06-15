@@ -75,19 +75,19 @@ either Automobile or Camel. If it is Automobile, we want to know what
 fuel it takes; if it is Camel, we want to know how many humps it
 has. In Links, values like these can be expressed as follows:
 
-  Automobile Diesel
-  Automobile Unleaded
-  Camel 2
+  Automobile(Diesel)
+  Automobile(Unleaded)
+  Camel(2)
 
 The I<type> that includes such values is written as follows:
 
-  [|Automobile [|Diesel | Unleaded | Biodiesel|] | Camel Int |]
+  [|Automobile:[|Diesel | Unleaded | Biodiesel|] | Camel:Int|]
 
 The boxy brackets C<[| |]> delimit a variant type, and variant labels
-are separated by a pipe C<|>. After each variant label is the type of
-its contents--a Camel has a number of humps so its content type is
-C<Int>, whereas the Automobile content type is another variant type,
-C<[|Diesel | Unleaded|]>.
+are separated by a pipe C<|>. After each variant label, separated by a
+colon C<:>, is the type of its contents--a Camel has a number of humps
+so its content type is C<Int>, whereas the Automobile content type is
+another variant type, C<[|Diesel | Unleaded|]>.
 
 In Links, I<a variant tag always begins with a capital letter>. Any
 string beginning with a capital letter, used in a value context,
@@ -99,8 +99,8 @@ and a case for each variant label. The following expression determines
 the effective number of humps of a transport (autos have no humps):
 
   switch target {
-    case Automobile fuelType -> 0;
-    case Camel humpCount -> humpCount;
+    case Automobile(fuelType) -> 0;
+    case Camel(humpCount) -> humpCount;
   }
 
 The expression C<expr> is evaluated to produce a value of variant
@@ -117,8 +117,8 @@ the C<switch> expression. To handle arbitrary variant values, you can
 add an open case to the end of the switch:
 
   switch target {
-    case Automobile fuelType -> 0;
-    case Camel humpCount -> humpCount;
+    case Automobile(fuelType) -> 0;
+    case Camel(humpCount) -> humpCount;
     case other -> 0;
   }
 
@@ -286,11 +286,13 @@ from some languages.
 =head2 Lists
 
 A list is a finite sequence of values. A list can be created directly 
-by wrapping a series of expressions in brackets:
+by wrapping a comma-delimited series of expressions in brackets:
 
     [1, 4, 9, 16]
     
     ["apple", "banana", "pear"]
+
+    []
 
     x = true;
     [true, false, x, true]
@@ -303,6 +305,30 @@ characters:
     [1, 2] ++ [3, 4, 5] == [1, 2, 3, 4, 5]
 
 And they're comparable, with C<==>, as you can see!
+
+The ``Cons'' operator (C<::>) appends an element to the start of a
+list.
+
+  links> 1::[2,3,4,5];;
+  [1, 2, 3, 4, 5] : [Int]
+
+The head (C<hd>) and tail (C<tl>) functions each take a single list as
+an argument. They return respectively: the first element of the list;
+and the list consisting of all elements but the first from the
+original list.
+
+  links> hd([1,2,3]);;
+  1 : Int
+  links> tl([1,2,3]);;
+  [2, 3] : [Int]
+
+The take and drop functions return respectively: the first n elements of
+a list; and all but the first n elements of a list.
+
+  links> take(2)([1,2,3]);;
+  [1, 2] : [Int]
+  links> drop(2)([1,2,3]);;
+  [3] : [Int]
 
 =head2 Functions
 
