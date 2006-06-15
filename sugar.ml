@@ -14,6 +14,10 @@ module RewriteSyntax =
           let process_children = Syntax.perhaps_process_children
         end))
 
+(* 
+   subst e u v
+     substitutes the variable v for the free variable u in the expression e
+*)
 let subst : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
   match
     (RewriteSyntax.bottomup
@@ -57,10 +61,10 @@ let list_tail expr pos =
   Apply(Variable ("tl", pos), expr, pos)
 
 type pattern = [
-  | `Constant of untyped_expression 
-  | `Bind of string 
+  | `Constant of untyped_expression
+  | `Bind of string
   | `Bind_using of (string * pattern) (* [QUESTION] What's this? *)
-  | `Record_extension of (string * pattern * pattern) 
+  | `Record_extension of (string * pattern * pattern)
   | `Empty_record
   | `Variant of (string * pattern)
   | `Nil
@@ -138,11 +142,10 @@ let and_expr l r pos =
                          Boolean(false, pos), pos), 
             Boolean(false, pos), pos)
       
-
+(* pattern-matching let *)
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
   fun pat pos value body ->
     match pat with
-(*       | `Constant _     -> failwith "Constants cannot be used in function parameter or let patterns" *)
       | `Variant (name, patt) ->
 	  let case_variable = unique_name () in
 	  let variable = unique_name () in
@@ -311,7 +314,8 @@ let rec match_cases
 	    List.fold_right
 	      (fun equations exp ->
 		 match get_pattern_type (List.hd equations) with
-		   | `List -> match_list pos vars (partition_list_equations equations) exp
+		   | `List ->
+		       match_list pos vars (partition_list_equations equations) exp
 		   | `Variant ->
 		       match_variant pos vars (partition_variant_equations equations) exp
 		   | `Variable ->
@@ -784,12 +788,6 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                               None, sort_expr),
 		   pos')
       | Binding _ -> failwith "Unexpected binding outside a block"
-
-      (* FIXME: The following is not correct when all cases are 
-         variable patterns *)
-      | Switch (exp, (patterns), dflt) when list_type_switch patterns
-	  -> open_list_match (desugar exp) patterns dflt lookup_pos pos
-
       | Switch (exp, patterns, _) ->
 	  let x = unique_name () in
 	    Let(x, desugar exp,
