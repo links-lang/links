@@ -92,7 +92,7 @@ toplevel:
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
-| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN VARIABLE arg_list perhaps_location block                 { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
 perhaps_location:
 | SERVER                                                       { `Server }
@@ -315,8 +315,10 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 block:
-| LBRACE bindings exp perhaps_semi RBRACE                      { Block ($2, $3), pos() }
-| LBRACE exp perhaps_semi RBRACE                               { $2 }
+| LBRACE bindings exp SEMICOLON RBRACE                         { Block ($2 @ [$3], (RecordLit ([], None), pos())), pos() }
+| LBRACE bindings exp RBRACE                                   { Block ($2, $3), pos() }
+| LBRACE exp SEMICOLON RBRACE                                  { Block ([$2], (RecordLit ([], None), pos())), pos() }
+| LBRACE exp RBRACE                                            { $2 }
 | LBRACE perhaps_semi RBRACE                                   { Block ([], (TupleLit [], pos())), pos() }
 
 perhaps_semi:
