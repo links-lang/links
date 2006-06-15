@@ -23,39 +23,39 @@ Cons
 stdout : [1, 2, 3, 4] : [Int]
 
 Let-patterns [1]
-{x :: xs = [1,2,3] ; x}
+{var x :: xs = [1,2,3] ; x}
 stdout : 1 : Int
 
 Let-patterns [2]
-{(x :: y :: xs, z) = ([1,2,3],4) ; (x,y)}
+{var (x :: y :: xs, z) = ([1,2,3],4) ; (x,y)}
 stdout : (1, 2) : (Int, Int)
 
 Let-patterns [3]
-{((v,w) :: (x,y) :: z) = [(1,2),(3,4)] ; (w,x)}
+{var ((v,w) :: (x,y) :: z) = [(1,2),(3,4)] ; (w,x)}
 stdout : (2, 3) : (Int, Int)
 
 Let-patterns [4]
-{(x,y) :: [] = [(1,2),(3,4),(4,5)] ; (x,y)}
+{var (x,y) :: [] = [(1,2),(3,4),(4,5)] ; (x,y)}
 stderr : @..*
 exit : 1
 
 Let-patterns [5]
-{[(x,y)] = [(1,2),(3,4),(4,5)] ; (x,y)}
+{var [(x,y)] = [(1,2),(3,4),(4,5)] ; (x,y)}
 stderr : @..*
 exit : 1
 
 Let-patterns [6]
-{[] = [1,2,3] ; ()}
+{var [] = [1,2,3] ; ()}
 stderr : @..*
 exit : 1
 
 Let-patterns [7]
-{[x] = [] ; ()}
+{var [x] = [] ; ()}
 stderr : @..*
 exit : 1
 
 Let-patterns [8]
-{x::y = [] ; ()}
+{var x::y = [] ; ()}
 stderr : @..*
 exit : 1
 

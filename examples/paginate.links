@@ -15,8 +15,8 @@ fun query(n,c) {
 }
 
 fun page(n, c) {
-  next = n+1;
-  title = stringToXml("Results: page "++ intToString(n));
+  var next = n+1;
+  var title = stringToXml("Results: page "++ intToString(n));
   <html>
     <head><title>{title}</title></head>
     <body>

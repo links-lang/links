@@ -5,7 +5,7 @@
 var num=150;
 
 fun append(xml) {
-  progress = domGetRefById("progress");
+  var progress = domGetRefById("progress");
   domAppendChild(xml, progress)
 }
 
@@ -25,7 +25,7 @@ fun myspawn(pid, n) {
 
 fun run(input) client {
   append(stringToXml("Input is: "++input));
-  pid = myspawn(self(), num); ();
+  var pid = myspawn(self(), num); ();
   pid ! Message (stringToInt(input));
   receive {
     case Message(n) -> {

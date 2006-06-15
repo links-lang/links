@@ -89,7 +89,6 @@ toplevel_seq:
 toplevel:
 | exp SEMICOLON                                                { $1 }
 | TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON     { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
-| VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
@@ -306,7 +305,6 @@ parenthesized_pattern:
 
 binding:
 | VAR patt EQ exp SEMICOLON                                    { Binding ($2, $4), pos() }
-| patt EQ exp SEMICOLON                                        { Binding ($1, $3), pos() }
 | exp SEMICOLON                                                { $1 }
 | FUN VARIABLE arg_list block                                  { FunLit (Some $2, $3, $4), pos() }
 

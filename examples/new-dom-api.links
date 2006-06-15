@@ -1,55 +1,55 @@
 fun append() client {
- deck = domGetRefById("deck");
- newJoke = <ul><li> Q: Why don't Buddhists vacuum in the corners?</li>
+ var deck = domGetRefById("deck");
+ var newJoke = <ul><li> Q: Why don't Buddhists vacuum in the corners?</li>
                <li> A: Because they have no attachments. </li> </ul>;
  domAppendChild(newJoke, deck)
 }
 
 fun appendToDoc() client {
- doc = domGetDocumentRef();
- choreList = <ul id="chores"><li>laundry</li>
+ var doc = domGetDocumentRef();
+ var choreList = <ul id="chores"><li>laundry</li>
                              <li>fix bike</li></ul>;
  domAppendChild(choreList, doc)
 }
 
 fun remove() client {
-  chores = domGetRefById("chores");
+  var chores = domGetRefById("chores");
   domRemoveRef(chores)
 }
 
 fun removeDoc() client {
-  doc = domGetDocumentRef();
+  var doc = domGetDocumentRef();
   domRemoveRef(doc)
 }
 
 fun move() client {
-  setup = domGetRefById("setup");
-  punchline = domGetRefById("punchline");
+  var setup = domGetRefById("setup");
+  var punchline = domGetRefById("punchline");
   domInsertBeforeRef(punchline, setup)
 }
 
 fun moveAppend() client {
-  deck = domGetRefById("deck");
-  punchline = domGetRefById("punchline");
+  var deck = domGetRefById("deck");
+  var punchline = domGetRefById("punchline");
   domAppendChildRef(punchline, deck)
 }
 
 fun representation() client {
-  deckRef = domGetRefById("deck");
-  deckXml = domGetXml(deckRef);
-  doc = domGetDocumentRef();
+  var deckRef = domGetRefById("deck");
+  var deckXml = domGetXml(deckRef);
+  var doc = domGetDocumentRef();
   domAppendChild(deckXml,doc)
 }
 
 fun deckTagName() {
-  deck = domGetRefById("deck");
-  deckXml = domGetXml(deck);
+  var deck = domGetRefById("deck");
+  var deckXml = domGetXml(deck);
   debug(getTagName(deckXml))
 }
 
 fun deckStyle() {
-  deck = domGetRefById("deck");
-  deckXml = domGetXml(deck);
+  var deck = domGetRefById("deck");
+  var deckXml = domGetXml(deck);
   debug(getAttribute(deckXml, "style"))
 }
 

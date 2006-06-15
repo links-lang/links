@@ -7,11 +7,11 @@ Record comparisons
 stdout : true : Bool
 
 Record extension
-{z = (y="three"); (x=4|z) }
+{var z = (y="three"); (x=4|z) }
 stdout : (x=4,y="three") : (x:Int,y:String)
 
 Let pattern matching
-{(x=a,y=(z=b)) = (y=(z=3),x="four"); a}
+{var (x=a,y=(z=b)) = (y=(z=3),x="four"); a}
 stdout : "four" : String
 
 Lambda pattern matching
@@ -40,5 +40,5 @@ fun foo(x) { hd(x) } (foo([1,2]), foo("abc"))
 stdout : (1, 'a') : (Int, Char)
 
 Row types preserved across functions
-(fun (x) { (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
+(fun (x) { var (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
 stdout : 4 : Int

@@ -18,7 +18,7 @@ fun run()
   var input = 42;
   print("Spawning " ++ intToString(num) ++ " server processes.
 Input is: "++intToString(input));
-  last_pid = create_processes(num, self());
+  var last_pid = create_processes(num, self());
   last_pid ! input;
   print("Done. Output is: "++intToString(recv())++" isn't this ");
   run

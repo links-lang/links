@@ -4,16 +4,16 @@ stderr : @..*
 exit : 1
 
 Nested scopes
-{ x = 3; ({ x = 4; x }, x)}
+{ var x = 3; ({ var x = 4; x }, x)}
 stdout : (4, 3) : (Int, Int)
 
 Non-recursive top-level functions:
-f = fun(x) { f(x) }
+var f = fun(x) { f(x) }
 stderr : @..*
 exit : 1
 
 Non-recursive block-scope functions:
-{ f = fun(x) { f(x) }; () }
+{ var f = fun(x) { f(x) }; () }
 stderr : @..*
 exit : 1
 

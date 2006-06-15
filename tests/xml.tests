@@ -16,11 +16,11 @@ Backslashes
 stdout : <p>A backslash \ </p> : XML
 
 Top-level-bound XML object
-x = for (i <- []) <br/>; <f>{x}</f>
+var x = for (i <- []) <br/>; <f>{x}</f>
 stdout : <f/> : XML
 
 Let-bound XML object
-{x = for (i <- []) <br/>; <f>{x}</f>}
+{var x = for (i <- []) <br/>; <f>{x}</f>}
 stdout : <f/> : XML
 
 Whitespace preservation
@@ -28,19 +28,19 @@ Whitespace preservation
 stdout : <a b="c"> <d/> </a> : XML
 
 Element splicing [1]
-{x = "three"; <a b="c">{stringToXml(x)}</a>}
+{var x = "three"; <a b="c">{stringToXml(x)}</a>}
 stdout : <a b="c">three</a> : XML
 
 Element splicing [2]
-{x = "hre"; <a b="c">t{stringToXml(x)}e</a>}
+{var x = "hre"; <a b="c">t{stringToXml(x)}e</a>}
 stdout : <a b="c">three</a> : XML
 
 Attribute splicing [1]
-{x = "three"; <a b="{x}"><c/></a>}
+{var x = "three"; <a b="{x}"><c/></a>}
 stdout : <a b="three"><c/></a> : XML
 
 Attribute splicing [2]
-{x = "three"; <a b="a{x}b"><c/></a>}
+{var x = "three"; <a b="a{x}b"><c/></a>}
 stdout : <a b="athreeb"><c/></a> : XML
 
 Rejection of incorrectly nested elements
@@ -49,12 +49,12 @@ stderr : @.*
 exit : 1
 
 Rejection of incorrectly typed attributes
-{x = 3; <a b="{x}"><c/></a>}
+{var x = 3; <a b="{x}"><c/></a>}
 stderr : @.*
 exit : 1
 
 Rejection of incorrectly typed l:attributes
-{x = 3; <a l:href="{x}"><c/></a>}
+{var x = 3; <a l:href="{x}"><c/></a>}
 stderr : @.*
 exit : 1
 
@@ -68,7 +68,7 @@ Accept okay l:name attributes
 stdout : <form><input name="foo"/></form> : XML
 
 Looping in XML quasis
-things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
+var things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
 stdout : <ul><br/><br/></ul> : XML
 
 Amp-encoding (OK)
@@ -81,9 +81,9 @@ stderr : @..*
 exit : 1
 
 Amp-encoding (converting from string)
-x = "this & that"; <xml>{stringToXml(x)}</xml>
+var x = "this & that"; <xml>{stringToXml(x)}</xml>
 stdout : <xml>this &amp; that</xml> : XML
 
 Looping in XML quasis, with multiple content elements.
-things = [1, 2];<ul>{for (x <- things) <li>{stringToXml(intToString(x))}</li><li>1</li>}</ul>
+var things = [1, 2];<ul>{for (x <- things) <li>{stringToXml(intToString(x))}</li><li>1</li>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : XML

@@ -99,9 +99,9 @@ Plus/grouping [4]
 stdout : false : Bool
 
 Interpolation [1]
-x = "a"; "aaa" ~ /{x}*/
+var x = "a"; "aaa" ~ /{x}*/
 stdout : true : Bool
 
 Interpolation [2]
-x = "a"; "abc" ~ /{x}*/
+var x = "a"; "abc" ~ /{x}*/
 stdout : false : Bool

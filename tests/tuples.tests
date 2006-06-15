@@ -19,11 +19,11 @@ Tuple comparisons [exclusive]
 stdout : @true .*
 
 Tuple patterns [match]
-{((x,y,(z,a,b)), c) = (("string",3.21,(15,[1,2,3],(3,2,1))), ());  z}
+{var ((x,y,(z,a,b)), c) = (("string",3.21,(15,[1,2,3],(3,2,1))), ());  z}
 stdout : 15 : Int
 
 Tuple patterns [no match]
-{((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());  z}
+{var ((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());  z}
 stderr : @.
 exit : 1
 
@@ -32,7 +32,7 @@ Tuple/record interchangeability
 stdout : true : Bool
 
 Tuple extension
-{ x = (1,"two"); (3='3'|x) }
+{var x = (1,"two"); (3='3'|x) }
 stdout : (1, "two", '3') : (Int, String, Char)
 
 Tuple projection
