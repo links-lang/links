@@ -487,21 +487,11 @@ A server call is implemented as a distinguished HTTP request. A client
 call is implemented as a special HTTP response body which the
 client-side code recognizes as a remote call.
 
-Currently, the behavior is quite different between programs that have
-at least one client-annotated function, and those that have none at
-all. In the former case, the program is downloaded to the client as a
-stub that initiates the computation. The initialization part of the
-program may substantially take place on the server, but it will be
-initiated by the client as a client-to-server call. (This is a
-by-product of the current implementation, which only allows
-server-to-client calls in the context of an existing client-to-server
-call.)
-
-If you have no "client" annotations at all, however, the page is
-completely computed at the server and downladed as HTML per se. This
-does not preclude having code that runs on the client, for example
-user-event handlers embedded in HTML elements; this only prevents you
-from having named functions with the explicit "client" keyword.
+Programs that neither contain client-annotated definitions nor make
+use of client primitives (such as the DOM functions described below)
+are processed differently by Links.  In such cases plain HTML, not
+JavaScript, is sent to the browser, and all interaction takes place
+via standard HTML form submission.
 
 =head2 Handling User Actions
 
