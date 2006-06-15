@@ -28,17 +28,17 @@ stdout : true : Bool
 exit : 0
         
 Closures using anonymous functions
-fun addn(n) { fun(x) { x + n } }; addn(3)(4)
+fun addn(n) { fun(x) { x + n } } addn(3)(4)
 stdout : 7 : Int
 exit : 0
 
 Closures using named functions
-fun addn(n) { fun f(x) { x + n } f }; addn(3)(4)
+fun addn(n) { fun f(x) { x + n } f } addn(3)(4)
 stdout : 7 : Int
 exit : 0
 
 Closures where the environment contains a closure from a different scope
-fun add(x,y){x+y}; fun baz(z, w) {z + w}; fun foo(f, x) { fun bar(y) { f(3, y) } bar(x) }; foo(add,4)
+fun add(x,y){x+y} fun baz(z, w) {z + w} fun foo(f, x) { fun bar(y) { f(3, y) } bar(x) } foo(add,4)
 stdout : 7 : Int
 exit : 0
 
@@ -47,6 +47,6 @@ handle <html>{handler; <body/>}</html> with r -> r
 stdout : @<html>.*</html> : XML
 
 No value recursion
-fun f() { g() }; x = f(); fun g() { x }
+fun f() { g() } var x = f(); fun g() { x }
 stderr : @.
 exit : 1

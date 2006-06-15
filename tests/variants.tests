@@ -89,7 +89,7 @@ Nested variant unification
 stdout : @\[C *\(A *\(\)\), C *\(B *\(\)\)\] : .*
 
 Type annotations
-fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])};;
+fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])}
 stdout : @fun : \(mu ([a-z]+) \. \[|Succ:\\1 | Zero:\(\)|]\) -> \[|Succ:mu ([a-z]+) . \[|Succ:\\2 | Zero:\(\)|\]|\]
 
 Nested variant matching [1]

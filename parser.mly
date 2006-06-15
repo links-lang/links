@@ -92,7 +92,7 @@ toplevel:
 | VARIABLE perhaps_location EQ exp SEMICOLON                   { Definition ($1, $4, $2), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
-| FUN VARIABLE arg_list perhaps_location block                 { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
       
 perhaps_location:
 | SERVER                                                       { `Server }
