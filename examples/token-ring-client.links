@@ -6,7 +6,7 @@ var num=150;
 
 fun append(xml) {
   progress = domGetRefById("progress");
-  domAppendChild(xml, progress);
+  domAppendChild(xml, progress)
 }
 
 fun f(pid) client {

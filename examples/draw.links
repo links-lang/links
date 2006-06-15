@@ -26,7 +26,7 @@ fun draw(id) client {
                domGetRefById(id))
     };
   };
-  draw(id);
+  draw(id)
 }
 
 # [a..b]

@@ -18,7 +18,7 @@ fun draw(colour, id) client {
                  domGetRefById(id));
     };
   };
-  draw(colour, id);
+  draw(colour, id)
 }
 
 # Create a canvas and return its process id to the calling process.
@@ -67,7 +67,7 @@ fun makefreshname(colour, n) client {
 }
 
 fun getfreshid(colour) {
-  makefreshname(colour, 0);
+  makefreshname(colour, 0)
 }
 
 fun iterate(colour) client {

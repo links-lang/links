@@ -1,7 +1,7 @@
 fun compute(count, total) server {
  if (count < total) {
   showProgress(count, total);
-  compute(count+1, total);
+  compute(count+1, total)
  } else "done"
 }
 
@@ -11,7 +11,7 @@ fun showProgress(count, total) client {
 	<div id="bar"
              style="width:{percent}%; background-color: black">|</div>,
         domGetRefById("bar")
- );
+ )
 }
 
 fun showAnswer(answer) client {

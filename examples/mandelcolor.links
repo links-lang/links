@@ -37,8 +37,7 @@ fun mandelbrot(r, i, limit) {
   # c <- z + c^2
   c = (0, 0);
   z = (r, i);
-  result = mandelloop(c, z, 0);
-  result
+  mandelloop(c, z, 0)
 }
 
 fun mandelmatrix(r, i, result, minr, maxr, mini, maxi) {
@@ -52,7 +51,7 @@ fun mandelmatrix(r, i, result, minr, maxr, mini, maxi) {
     } else {
       point = mandelbrot(r, i, the_limit);
       result = (point :: hd(result)) :: tl(result);
-      mandelmatrix(r+1, i, result, minr, maxr, mini, maxi);
+      mandelmatrix(r+1, i, result, minr, maxr, mini, maxi)
     }
   }
 }
@@ -85,7 +84,7 @@ fun hexdigit(i) {
 fun redshade(i, max) {
   if (i == max) "#000"
   else
-    "#" ++ hexdigit(16*i/max) ++ "33";
+    "#" ++ hexdigit(16*i/max) ++ "33"
   
 }
 
@@ -121,7 +120,7 @@ fun mandelBlock(pixSize, x, y, regionSize, r, i) {
 fun dilation(mina, minb, maxa, maxb, minc, mind, maxc, maxd)
 {
   ((maxc - minc) / (maxa - mina),
-   (maxd - mind) / (maxb - minb));
+   (maxd - mind) / (maxb - minb))
 }
 
 fun mandelMadness(x, y, r, i, pixSize,
@@ -165,12 +164,12 @@ fun goMandelMadness(mini, minr, maxi, maxr, pixelWidth)
 {
   mandelMadness(0, 0, minr, mini, pixelWidth,
                 0, 0, pixelWidth, pixelWidth, 
-                mini, minr, maxi, maxr);
+                mini, minr, maxi, maxr)
 }
 
 fun needless(n) {
   if (n <= 0) ()
-  else needless(n-1);
+  else needless(n-1)
 }
 
 fun main() client {

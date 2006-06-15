@@ -2,7 +2,7 @@ fun f(number) client {
   domAppendChild(
      <p>{stringToXml(number ++ (if (number ~ /[0-9]+/) " is a number" 
                           else " is a non-number"))}</p>,
-     domGetRefById("div"));
+     domGetRefById("div"))
 }
 
 <html>
