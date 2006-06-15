@@ -899,7 +899,6 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
 	  unify (case_type, body_type);
 	  Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None))
   | Variant_selection_empty (value, pos) ->
-
       let value = type_check env value in
       let new_row_type = `Variant (ITO.make_empty_closed_row()) in
         unify(new_row_type, type_of_expression value);

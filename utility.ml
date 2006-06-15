@@ -10,7 +10,7 @@ module StringMap = Map.Make(OrderedString)
 module StringSet = Set.Make(OrderedString)
 
 let assoc_list_of_string_map env =
-  StringMap.fold (fun x y l -> (x, y) :: l) env []
+  List.rev (StringMap.fold (fun x y l -> (x, y) :: l) env [])
 
 let string_map_of_assoc_list l =
   List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 
