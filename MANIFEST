@@ -103,22 +103,24 @@ lib/js/jslib.js
 lib/js/regex.js
 
 tests
+tests/bindings.tests
+tests/booleans.tests
 tests/collections.tests
 tests/conditionals.tests
-tests/web-tests.pl
-tests/variants.tests
-tests/strings.tests
 tests/continuations.tests
-tests/bindings.tests
-tests/xml.tests
-tests/records.tests
-tests/polymorphism.tests
-tests/booleans.tests
 tests/database.tests
-tests/messages.tests
 tests/functions.tests
+tests/messages.tests
 tests/numbers.tests
+tests/optimization.tests
+tests/polymorphism.tests
+tests/records.tests
+tests/regex.tests
+tests/strings.tests
 tests/tuples.tests
+tests/variants.tests
+tests/web-tests.pl
+tests/xml.tests
 
 examples
 examples/lib
