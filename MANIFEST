@@ -33,8 +33,6 @@ settings.ml
 debug.mli
 debug.ml
 rewrite.ml
-pickler.mli
-pickler.ml
 performance.ml
 graph.ml
 type_basis.mli
@@ -123,7 +121,9 @@ tests/numbers.tests
 tests/tuples.tests
 
 examples
+examples/lib
 examples/dictionary
+examples/dictionary/lib
 examples/dictionary/dict-suggest.links
 examples/dictionary/get_data.sh
 examples/dictionary/create-table.sql

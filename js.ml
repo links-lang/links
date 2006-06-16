@@ -513,7 +513,8 @@ let rec generate : 'a expression' -> code =
                 Call(Var "__kappa", 
                      [Call (Var "_project", [strlit l; Var "__v"])]))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      failwith("record selection not implemented");
+(* Isn't this a correct implementation? *)
+(*      failwith("record selection not implemented");*)
       let v_cps = generate v in
       let b_cps = generate b in
         Fn(["__kappa"],
