@@ -37,7 +37,9 @@ Links supports the standard arithmetic operators.
  ^.               : (Float) -> (Float) -> Float
 
 As Links does not yet have any support for overloading, the floating
-point versions are distinguished using the "." suffix. The arithmetic operators can be used infix as is or postfix when enclosed in parentheses.
+point versions are distinguished using the "." suffix. The arithmetic
+operators can be used infix as is or prefix when enclosed in
+parentheses.
 
   1+2*3
 
