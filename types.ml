@@ -121,7 +121,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
       | `RowVar row_var ->
 	  let present_fields = get_present_fields field_env in
 	  let row_var_string = match row_var with
-	    |	Some var -> [string_of_int var]
+	    | Some var -> [IntMap.find var vars]
 	    | None -> [] in
 	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) @ row_var_string in
 	    "(" ^ String.concat ", " strings ^ ")"
