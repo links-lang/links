@@ -1,9 +1,9 @@
 Iteration
-for (i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
+for (var i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
 stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
 
 Where clause
-for (i <- [1,2,3,4,5]) where (i <> 3) [i, i]
+for (var i <- [1,2,3,4,5]) where (i <> 3) [i, i]
 stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
 
 Concatenation/union
@@ -125,5 +125,5 @@ fun map (f,l) { switch l { case [] -> []; case x::xs -> f(x) :: map(f,xs); } } m
 stdout : [2, 3, 4] : [Int]
 
 Sorting:
-for (i <- [2,1,3]) orderby (i) [i]
+for (var i <- [2,1,3]) orderby (i) [i]
 stdout : [1, 2, 3] : [Int]

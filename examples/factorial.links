@@ -30,7 +30,7 @@ fun response(s) client {
    <body>
     <h1>Factorials up to {intToXml(n)}</h1>
     <table>{
-     for ((i,f) <- factorialsUpto(n))
+     for (var (i,f) <- factorialsUpto(n))
       <tr>
        <td>{intToXml(i)}</td>
        <td>{intToXml(f)}</td>
@@ -42,7 +42,7 @@ fun response(s) client {
 }
 
 fun factorialsUpto(n) server {
- for (row <- factorials)
+ for (var row <- factorials)
   where (row.i <= n)
   orderby (row.i)
   [(row.i,row.f)]

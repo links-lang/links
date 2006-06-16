@@ -37,8 +37,8 @@ fun range(f, to) {
 
 fun scribble() {
   var c = canvas (100,100, "pad");
-  for (i <- range(0,50))
-    for (j <- range(0,50))
+  for (var i <- range(0,50))
+    for (var j <- range(0,50))
       [c ! Point(i*2,j*2)];
   ()
 }

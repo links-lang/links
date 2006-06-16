@@ -8,7 +8,7 @@ table wordlist (
 fun query(n,c) {
   take(results_per_page) (
        drop(results_per_page * (n-1)) (
-            for (r <- wordlist)
+            for (var r <- wordlist)
              where (r.word ~ /{c}.*/)
              orderby (r.word)
                 [r]))
@@ -22,7 +22,7 @@ fun page(n, c) {
     <body>
        <h1>{title}</h1>
        <dl>
-          {for (result <- query(n, c))
+          {for (var result <- query(n, c))
                <dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd>}
        </dl>
        {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
@@ -37,7 +37,7 @@ fun page(n, c) {
   <body>
     <h1>Dictionary browser</h1>
      <ul>
-      {for (c <- "abcdefghijklmnopqrstuvwxyz")
+      {for (var c <- "abcdefghijklmnopqrstuvwxyz")
         <li><a l:href="{page(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
      </ul>
   </body>

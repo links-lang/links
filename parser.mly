@@ -278,7 +278,10 @@ case_expression:
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR provider perhaps_where perhaps_orderby exp               { Iteration (fst $2, snd $2, $5, $3, $4),    pos() }
+| FOR LPAREN VAR patt LARROW exp RPAREN
+      perhaps_where
+      perhaps_orderby
+      exp                                                      { Iteration ($4, $6, $10, $8, $9),    pos() }
 
 perhaps_where:
 |                                                              { None }
@@ -337,9 +340,6 @@ labeled_exps:
 record_label:
 | VARIABLE                                                     { $1 } 
 | UINTEGER                                                     { Num.string_of_num $1 }
-
-provider:
-| LPAREN patt LARROW exp RPAREN                                { $2, $4 }
 
 patt:
 | cons_expression                                              { Pattern $1 }

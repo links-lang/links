@@ -5,7 +5,7 @@ table wordlist (
 ) database "postgresql:dictionary::5432:www-data:";
 
 fun lowercase(s) server {
-  for (c <- s) [toLower(c)]
+  for (var c <- s) [toLower(c)]
 }
 
 fun suggest(prefix) client {
@@ -16,7 +16,7 @@ fun suggest(prefix) client {
 } 
 
 fun format(words) client {
- for (w <- words)
+ for (var w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>
    <i>{stringToXml(w.type)}</i>:
@@ -28,7 +28,7 @@ fun format(words) client {
 fun completions(p) server {
   if (p == "") []
   else {
-    take(10)(for (w <- wordlist)
+    take(10)(for (var w <- wordlist)
              where (w.word ~ /{p}.*/)
              orderby (w.word)
               [w])
