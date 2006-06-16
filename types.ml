@@ -240,6 +240,19 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Not_typed               -> IntSet.empty
   | `Primitive _             -> IntSet.empty
   | `TypeVar var             -> IntSet.singleton var
+(*
+  [HACK]
+    uncommenting this prevents unused mailbox variables from being counted
+*)
+(*
+  | `Function (mailbox_type, `Function (from, into)) when using_mailbox_typing() ->
+      let mailbox_type_vars =
+	match mailbox_type with
+	  | `TypeVar _ -> IntSet.empty
+	  | _ -> free_bound_type_vars mailbox_type
+      in
+	IntSet.union mailbox_type_vars (IntSet.union (free_bound_type_vars from) (free_bound_type_vars into))
+*)
   | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
   | `Record row              -> free_bound_row_type_vars row
   | `Variant row             -> free_bound_row_type_vars row
