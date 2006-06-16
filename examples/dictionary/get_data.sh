@@ -3,7 +3,8 @@
 set -e
 
 # download, unpack
-wget http://msowww.anu.edu.au/%7Eralph/OPTED/v003.zip
+#wget http://msowww.anu.edu.au/%7Eralph/OPTED/v003.zip
+wget http://groups.inf.ed.ac.uk/links/dict/v003.zip
 unzip v003.zip
 cd v003
 
