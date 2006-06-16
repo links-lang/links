@@ -130,11 +130,12 @@ value will never be used in differently-typed expressions.
 
 =head2 Polymorphic variants
 
-A "Variant type" is one that uses a set of tags to differentiate
-values as to what they mean. For example, a mode of transport may be
-either Automobile or Camel. If it is Automobile, we want to know what
-fuel it takes; if it is Camel, we want to know how many humps it
-has. In Links, values like these can be expressed as follows:
+A "variant type" is one that uses explicit "tags" (or "labels") to
+distinguish different sets of possible values as to their meaning. For
+example, a mode of transport may be either Automobile or Camel. If it
+is Automobile, we want to know what fuel it takes; if it is Camel, we
+want to know how many humps it has. In Links, values like these can be
+expressed as follows:
 
   Automobile(Diesel)
   Automobile(Unleaded)
@@ -526,6 +527,108 @@ local variables.
 
 This example returns C<"Links">.
 
+=head1 Typing
+
+=head2 Types in Links
+
+Links is a strongly-typed, statically-typed programming
+language.
+
+This means that every value has a type, and every operation admits
+just certain types as arguments. The compiler will check that a
+program uses every value in a way consistent with a type. This way,
+for example, you can concatenate two lists but you can't concatenate
+two integers--it wouldn't make sense, and if you try to do it, the
+compiler will report an error up front. If a program passes the
+compiler, you can be certain that it doesn't have any type errors
+(modulo any bugs in the compiler!)
+
+When you use Links through the interactive shell, it tells you the
+type of every result value. You can use this shell to get familiar
+with the types of various values. For example:
+
+    links> 1 + 1;;
+    2 : Int
+    links> { var name = "Gallileo"; "Hi, " ++ name };;
+    "Hi, Gallileo" : String
+    links> (42, "The answer");;
+    (42, "The answer") : (Int, String)
+    links> [2, 4, 6, 8];;
+    [2, 4, 6, 8] : [Int]
+    links> (  price = 1.95, drinkName = "Latte" );;
+    (price=1.95,drinkName="Latte") : (drinkName:String,price:Float)
+    links> Red(7);;
+    Red(7) : [|Red:Int | a|]
+    links> Blue(7);;
+    Blue(7) : [|Blue:Int | a|]
+    links> [(42, "The answer"),
+            (7, "The number of wonders of the world")];;
+    [(42, "The answer"), (7, "The number of wonders of the world")]
+      : [(Int, String)]
+
+Note that the type of an integer sum is Int, and the type of a string
+is String. The I<pair> C<(42, "The answer")> has a type that indicates
+the first part of the pair is an C<Int> and the second part is a
+C<String>; this type is written C<(Int, String)>.
+
+A list type is written with square brackets around the type of its
+elements. Note that I<all elements of a list must be of the same
+type>. This allows you to apply an operation to an arbitary element of
+the list and to know what type it is. If you need to mix different
+types within a list, you can do so by assigning variant tags to
+each. There are a variety of tricks for getting what you want out of a
+strong type system. See L<TBD> for some ideas.
+
+By constrast, elements of a tuple can be of the same or of different
+types, but the number of elements of a tuple is fixed.
+
+The type of a record indicates exactly which fields should be present,
+and what their types are. The type of a variant tells you what its
+label is, and what type is contained in that label. (Note that, when
+you have a function, it may yield a variant type that allows more than
+one label. Each label has a specific type for its content.)
+
+When you try to evaluate an ill-typed expression, the system will give
+you a type error:
+
+    links> [2, 4, 6, 8, "Who do we appreciate?"];;
+    <stdin>:1: Type error: Couldn't match Int against String
+    In expression: [2, 4, 6, 8, "Who do we appreciate?"]
+    
+=head2 Type annotations
+
+Links can infer type information for any program you give it. This
+means that you typically don't have to declare any types. But if you
+get a type error, it may not point to the part of the code where you
+really made the mistake.
+
+To help the interpreter understand what you intend, and to help it pin
+down the error to the right place, you can give an optional type
+annotation on any expression. This is done using the colon as the type
+ascription operator, as follows:
+
+    2 + 2 : Int            # OK
+    "two plus two" : Int   # ERROR
+
+When dealing with constants, as above, the type is always
+obvious. Type annotation is more useful when dealing with functions,
+whose type may be inferred in a way that's not obvious. Suppose for
+example that you have a function h that you know should always return
+a list of Ints. You can tell the compiler this, and it will check that
+it is the case:
+
+  fun h(x, y) {
+    f(x) ++ g(y) : [Int]
+  }
+
+This can be useful because f and g may in fact return
+types that are compatible (such as C<[String]>), but are not what you
+expect. Since they are compatible, the function C<h> will be
+type-correct; but elsewhere in the program, you may get a confusing
+type error involving C<h>. Providing an annotation for C<h>, like
+this, well force the compiler to tell you if C<h> does not have the
+type you expect.
+
 =head1 Features
 
 =head2 Concurrency
@@ -897,8 +1000,6 @@ Returns a list of the child nodes of this xml node (NOT YET IMPLEMENTED).
 
 =back
 
-=head2 Database access
-
 =head1 Standard Library
 
 TBD: other standard operations.
@@ -910,7 +1011,7 @@ Links can be run either as a CGI script through a web server such as Apache, or 
 
 When run as a CGI script Links must be passed a filename as an argument.
 
- links filename
+  links filename
 
 
 From the command line Links can be invoked in a number of different ways:
