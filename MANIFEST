@@ -6,11 +6,10 @@ INSTALL
 README
 ACKNOWLEDGEMENTS
 COPYING
-MANIFEST
 VERSION # created by the release script
 KNOWN-ISSUES
 
-quick-help.pod
+quick-help.html
 
 test-harness
 run-tests
