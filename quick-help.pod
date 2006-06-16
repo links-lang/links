@@ -22,6 +22,67 @@ Characters: C<'a'>, C<'9'>, C<'\012'>.
 
 TBD: Describe arithmetic operators.
 
+=head2 Lists
+
+A list is a finite sequence of values, constructed using C<[]>
+(pronounced "nil") and C<::> (pronounced "cons").
+
+   1 :: 4 :: 9 :: 16 :: []
+
+A list can be created directly by wrapping a series of comma-separated
+expressions between brackets:
+
+    [1, 4, 9, 16]
+    
+    ["apple", "banana", "pear"]
+
+    []
+
+    x = true;
+    [true, false, x, true]
+
+Note that all elements of a list must be of the same type.
+
+Lists support the "concatenate" operation, denoted by two plus
+characters:
+
+    [1, 2] ++ [3, 4, 5] == [1, 2, 3, 4, 5]
+
+And they're comparable, with C<==>, as you can see!
+
+The ``Cons'' operator (C<::>) appends an element to the start of a
+list.
+
+  links> 1::[2,3,4,5];;
+  [1, 2, 3, 4, 5] : [Int]
+
+The head (C<hd>) and tail (C<tl>) functions each take a single list as
+an argument. They return respectively: the first element of the list;
+and the list consisting of all elements but the first from the
+original list.
+
+  links> hd([1,2,3]);;
+  1 : Int
+  links> tl([1,2,3]);;
+  [2, 3] : [Int]
+
+The take and drop functions return respectively: the first n elements of
+a list; and all but the first n elements of a list.
+
+  links> take(2)([1,2,3]);;
+  [1, 2] : [Int]
+  links> drop(2)([1,2,3]);;
+  [3] : [Int]
+
+=head2 Pattern matching on lists
+
+Cons and nil can also be used in patterns, to deconstruct lists:
+
+  switch s {
+    case []    -> Empty;
+    case x::xs -> NonEmpty;
+  }
+
 =head2 Pairs, Tuples, and Records
 
 A tuple is a finite sequence of values, possibly of different
@@ -81,7 +142,7 @@ has. In Links, values like these can be expressed as follows:
 
 The I<type> that includes such values is written as follows:
 
-  [|Automobile: [|Diesel:() | Unleaded:() | Biodiesel:()|] | Camel: Int |]
+  [|Automobile: [|Diesel:() | Unleaded:() | Biodiesel:()|] | Camel: Int|]
 
 The boxy brackets C<[| |]> delimit a variant type, and variant labels
 are separated by a pipe C<|>. After each variant label, separated by a
@@ -131,10 +192,6 @@ C<other> case will not by selected unless the previous cases do not
 match.
 
 Here we assume that nothing other than a camel has humps.
-
-=head2 Pattern matching on lists
-
-TBD: talk about pattern matching on lists.
 
 =head2 XML Quasiquotes
 
@@ -281,67 +338,6 @@ bindings only bind x within the corresponding clauses of the
 conditional. This may come as a surprise to programmers used to
 imperative languages.
 
-=head2 Lists
-
-A list is a finite sequence of values, constructed using C<[]>
-(pronounced "nil") and C<::> (pronounced "cons").
-
-   1 :: 4 :: 9 :: 16 :: []
-
-A list can be created directly by wrapping a series of comma-separated
-expressions between brackets:
-
-    [1, 4, 9, 16]
-    
-    ["apple", "banana", "pear"]
-
-    []
-
-    x = true;
-    [true, false, x, true]
-
-Note that all elements of a list must be of the same type.
-
-Lists support the "concatenate" operation, denoted by two plus
-characters:
-
-    [1, 2] ++ [3, 4, 5] == [1, 2, 3, 4, 5]
-
-And they're comparable, with C<==>, as you can see!
-
-The ``Cons'' operator (C<::>) appends an element to the start of a
-list.
-
-  links> 1::[2,3,4,5];;
-  [1, 2, 3, 4, 5] : [Int]
-
-The head (C<hd>) and tail (C<tl>) functions each take a single list as
-an argument. They return respectively: the first element of the list;
-and the list consisting of all elements but the first from the
-original list.
-
-  links> hd([1,2,3]);;
-  1 : Int
-  links> tl([1,2,3]);;
-  [2, 3] : [Int]
-
-The take and drop functions return respectively: the first n elements of
-a list; and all but the first n elements of a list.
-
-  links> take(2)([1,2,3]);;
-  [1, 2] : [Int]
-  links> drop(2)([1,2,3]);;
-  [3] : [Int]
-
-=head2 Pattern matching on lists
-
-Cons and nil can also be used in patterns, to deconstruct lists:
-
-  switch s {
-    case []    -> Empty;
-    case x::xs -> NonEmpty;
-  }
-
 =head2 Functions
 
 Functions can be named or anonymous. Named functions look like this:
@@ -425,6 +421,53 @@ type String. The database descriptor contains a number of fields
 separated by colons:
 
  driver:name:host:port:user:password
+
+=head2 General pattern matching
+
+As well as lists and variants, pattern matching can also be performed
+on constants.
+
+  switch name {
+    case "Ezra" -> "Cooper";
+    case "Jeremy" -> "Yallop";
+    case "Phil" -> "Wadler";
+    case "Sam" -> "Lindley";
+  }
+
+In common with other strongly-typed functional programming languages
+such as ML and Haskell, Links supports deep pattern matching.
+
+  fun firstChildId(tree) {
+    switch (tree:mu a.[|Node:(a, b, a) | Leaf|]) {
+      case Node(Node(_, id, _), _, _) -> Some(id);
+      case Node(Leaf, _, Node(_, id, _)) -> Some(id);
+      case _ -> None;
+    }
+  }
+
+This function takes a labelled binary tree, and returns the id of the
+first child of the root, if it exists. The wildcard pattern C<_>
+matches any value. The type annotation is necessary if we want to
+constrain the function to only operate on labelled binary trees.
+
+Using C<switch> it is possible to dispatch according to the structure
+of a value. If the structure of a value is already known, then
+patterns can also be used in other contexts. Patterns can be used to
+bind function arguments.
+
+  fun foo((x=a, y=b)) {a+b}
+  foo((x=2,y=3))
+
+This example returns C<5>. Patterns can also be used to bind
+local variables.
+
+  {
+    var language = Language("Links");
+    var Language(name) = language;
+    name
+  }
+
+This example returns C<"Links">.
 
 =head1 Features
 
