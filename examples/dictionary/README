@@ -1,5 +1,3 @@
 This is a Links implementation of the AJAX dictionary application
 described at http://www.objectgraph.com/dictionary/how.html.  The
-script `get_data.sh' downloads the dictionary data and creates an SQL
-file (`data.sql') that inserts it into the table created by
-`create-table.sql'.
+data is available from http://groups.inf.ed.ac.uk/links/data/dictionary.zip.
