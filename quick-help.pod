@@ -670,13 +670,11 @@ An event generally has a I<target>, a DomRef at which the event has
 occurred (for example, a mouse-down event will have as its target the leaf 
 node upon which the mouse was clicked). This method returns the target.
 
-=item C<eventGetTargetResolveTextNode>
+=item C<eventGetTargetElement>
 
-This method behaves like C<eventGetTarget>, except that if the node is a text 
-node (rather than an element node), it returns the node's parent, which must 
-be an element node.
-
-(TBD: rename this to C<eventGetTargetElement>)
+This method behaves like C<eventGetTarget>, except that if the node is
+a text node (rather than an element node), it returns the node's
+parent (which must be an element node).
 
 =item C<eventGetRelatedTarget>
 

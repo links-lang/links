@@ -396,7 +396,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetTargetValue",
   (`Client, datatype "Event -> String");
 
-  "eventGetTargetResolveTextNode",
+  "eventGetTargetElement",
   (`Client, datatype "Event -> DomRef");
 
 (* getPageX : Event -> Int *)
