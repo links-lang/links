@@ -450,7 +450,7 @@ The C<orderby> clause on C<for> comprehensions is used to sort the
 source before evaluating the body.
 
 For example, suppose "models" is a table previously declared (see
-L<Tables>), describing models of an automobile make. Then the
+L</"Tables">), describing models of an automobile make. Then the
 following will return a list of pairs describing the models, ordered
 by their year of release:
 
@@ -760,20 +760,19 @@ is registered as a handler for the corresponding event type. If the
 element is removed from the DOM, its event handlers become inactive.
 
 The content of one of these attributes should be a Links expression
-enclosed in braces C<{E<nbsp>}>, an expression of type unit (?) which
-may perform side-effects in response to the event. For example:
+enclosed in curly braces, an expression of type C<()> which may
+perform side-effects in response to the event. For example:
 
     <input type="button" value="Add Photo"
            l:onclick="{domAppendChild(container,
                                          <img src="..."/>)}" />
-
 
 =head3 Interpreting the Event
 
 In an l-event handler, there is a special variable in scope called
 C<event>.  This variable contains an object of type C<Event> which can
 be accessed using the following API. This API corresponds to the
-L<http://developer.yahoo.com/yui/|Yahoo! Web UI library>. These
+Yahoo! Web UI library (L<http://developer.yahoo.com/yui/>). These
 methods are implemented in a browser-independent way. These functions
 constitute the sole interface to the C<Event> object: the object is
 not a record and has no directly-accessible fields.
