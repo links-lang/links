@@ -359,7 +359,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getTagName",
   (`Client, datatype "XML -> String");
 
-  "getAttributes",
+  "getAttributes",   (* FIXME: undocumented; nonsensical type? *)
   (`Client, datatype "XML -> a");
 
   "getTextContent",

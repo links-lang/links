@@ -142,7 +142,8 @@ has. In Links, values like these can be expressed as follows:
 
 The I<type> that includes such values is written as follows:
 
-  [|Automobile: [|Diesel:() | Unleaded:() | Biodiesel:()|] | Camel: Int|]
+  [|Automobile: [|Diesel:() | Unleaded:() | Biodiesel:()|] |
+    Camel: Int |]
 
 The boxy brackets C<[| |]> delimit a variant type, and variant labels
 are separated by a pipe C<|>. After each variant label, separated by a
@@ -403,7 +404,50 @@ This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
 
 Other forms of looping can be implemented using tail recursion.
 
-TBD: where and orderby
+=head3 The C<where> clause
+
+A comprehension can be filtered using the C<where> clause.
+
+    var source = [2, 3, 4, 5, 6, 7];
+    for (var x <- source)
+    where (odd(x))
+      [x+1]
+
+returns C<[4, 6, 8]>. A where clause is equivalent to a condition
+nested within a comprehension:
+
+    for (var x <- src)
+    where (pred)
+      expr
+
+is equivalent to
+
+    for (var x <- src)
+      if (pred)
+        expr
+      else []
+
+C<where> is a clause on C<for> comprehensions: it cannot be used
+outside of a C<for>.
+
+=head3 The C<orderby> clause
+
+The C<orderby> clause on C<for> comprehensions is used to sort the
+source before evaluating the body.
+
+For example, suppose "models" is a table previously declared (see
+L<Tables>), describing models of an automobile make. Then the
+following will return a list of pairs describing the models, ordered
+by their year of release:
+
+    for (m <- models)
+    orderby (m.release_year)
+      [(m.model_number, m.model_name)]
+
+Note that the C<orderby> clause currently only has an effect on
+comprehensions against a database, and only when the ordering
+expression (C<m.release_year> in this case) is a field of the target
+table. This feature will be expanded in a future release.
 
 =head2 Tables
 
@@ -574,6 +618,12 @@ prefix. Widely-supported l-event attributes include:
 
 =item * C<l:onmouseup>
 
+=item * C<l:onmousemove>
+
+=item * C<l:onmouseout>
+
+=item * C<l:onmouseenter>
+
 =item * C<l:onkeyup>
 
 =item * C<l:onkeydown>
@@ -587,10 +637,6 @@ prefix. Widely-supported l-event attributes include:
 =item * C<l:onload>
 
 =back
-
-(TBD: need to rationalize this list a bit. In keeping with the
-C<Event> interface, we need a browser-independent set of event
-handlers.)
 
 When an element containing one of these attributes is installed in the
 current DOM document (see L<Modifying the DOM>), the associated code
@@ -608,11 +654,12 @@ may perform side-effects in response to the event. For example:
 
 =head3 Interpreting the Event
 
-In an l-event handler, there is a special variable in scope called C<event>. 
-This variable contains an object of type C<Event> which can be accessed using 
-the following API. This API corresponds to the Yahoo! Web UI library (TBD: Add 
-ref). These methods are implemented in a browser-independent way. These 
-functions constitute the sole interface to the C<Event> object: the object is 
+In an l-event handler, there is a special variable in scope called
+C<event>.  This variable contains an object of type C<Event> which can
+be accessed using the following API. This API corresponds to the
+L<http://developer.yahoo.com/yui/|Yahoo! Web UI library>. These
+methods are implemented in a browser-independent way. These functions
+constitute the sole interface to the C<Event> object: the object is
 not a record and has no directly-accessible fields.
 
 =over 4
@@ -633,9 +680,10 @@ be an element node.
 
 =item C<eventGetRelatedTarget>
 
-Besides their "target," some events have a I<related target>. For example, a
-mouse-out event (TBD: define this) identifies an element which the mouse moved
-I<out of> and one which it movedd I<into>.
+Besides their "target," some events have a I<related target>. For
+example, on a mouse-out event, there is an element which the mouse
+moved I<out of> and one which it moved I<into>. The related target in
+this case is the one which the mouse moved into.
 
 =item C<eventGetPageX>
 
@@ -644,9 +692,6 @@ I<out of> and one which it movedd I<into>.
 Some events refer to a particular point on the page. These methods return 
 the x and y coordinates of that point, relative to the top-left corner of the 
 page (I<right> and I<down> are the positive directions).
-
-(TBD: need methods for the position relative to the target, and rel. to the 
-screen. Also: how about C<eventGetPageXY> returning an (x, y) pair?)
 
 =item eventGetTime
 
@@ -663,20 +708,20 @@ There are two ways to install nodes in the active document:
 =over 4
 
 =item 1.
-An XML value returned by the final expression of a Links program is converted
-to a DOM node and installed as the (initial) active document. This is true for 
-a server-side program as well as a client/server program. (TBD: explain this 
-distinction.)
+An XML value returned by the final expression of a Links program is
+converted to a DOM node and installed as the (initial) active
+document. This is true in client context as well as server context.
 
 =item 2.
-A set of primitives (beginning with C<dom>-) are provided for making 
-modifications to particular parts of the document. These operations only work 
-in client context.
+A set of primitives (beginning with C<dom>-) are provided for making
+modifications to particular parts of the document. These operations
+only work in client context.
 
 =back
 
 Elements that are not installed are not visible, nor do events occur
-on them, so their event handlers cannot fire. (See L<Handling User Actions>.)
+on them, so their event handlers cannot fire. (See L<Handling User
+Actions>.)
 
 Links makes a distinction between XML trees, which are immutable,
 and DOM nodes, which are mutable objects. DOM nodes are owned by a DOM
@@ -761,7 +806,7 @@ Returns true if C<ref> is null.
 Note: when manipulating the DOM, care should be taken to ensure that a given 
 ID value appears only once amongst the installed DOM nodes. Some operations 
 may behave unreliably when IDs are duplicated. Orphaned DOM nodes may reuse 
-ID values (TBD: is this true?).
+ID values.
 
 You can also access attributes of DOM nodes, and navigate the DOM
 tree, in a read-only fashion using the following operations:
@@ -798,14 +843,48 @@ the first child (in document order).
 If the node pointed to by C<ref> has siblings occurring after it, this
 call returns a reference to the next sibling.
 
+=item domGetChildrenFromRef(ref)
+
+Returns a list of references to the child nodes of the node ref. NOT
+YET IMPLEMENTED
+
 =back
 
-(TBD: Document XML accessors getTagName, getAttribute, getTextContent, 
-getAttributes)
+=head2 XML operations
 
-(Note: The following are unimplemented as yet: domGetChildrenRef,
-getChildren, domGetFirstChildRef, domGetNextSiblingRef,
-domGetPrevSiblingRef)
+For inspecting pure XML values, the following functions are provided:
+
+=over 4
+
+=item getTagName(xml)
+
+Returns the tag name of the given XML node, as a string. For example:
+
+    getTagName(<h1>Dog Bites Man</h1>)
+
+returns the string C<"h1">. It is an error to apply this to an XML
+text node.
+
+=item getAttribute(xml, attrName)
+
+Fetches the named attribute of the given XML value, as a string. For
+example
+
+    getAttribute(<div class="sidebar" />, "class")
+
+returns C<"sidebar">. It is an error to apply this to an XML
+text node.
+
+=item getTextContent(xml)
+
+Given an XML text node C<xml>, returns the text as a string. It is an
+error to apply this to an element node.
+
+=item getChildren(xml)
+
+Returns a list of the child nodes of this xml node (NOT YET IMPLEMENTED).
+
+=back
 
 =head2 Database access
 

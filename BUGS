@@ -63,7 +63,19 @@ BUGS
   ugly. Instead we should create a real value that represents the
   request and force you to pass it around in the language. (?)
 
+* The following planned DOM ops are unimplemented as yet:
+  domGetFirstChildRef, domGetNextSiblingRef, domGetPrevSiblingRef
+
 TODO
+
+* We need UI methods for the position relative to the target, and
+  rel. to the screen. Also: how about eventGetPageXY, to return an
+  (x, y) pair?
+
+* getTextContent(xml) only works for text nodes. We should have
+  something that gets the doc-order concatenation of all the text-node
+  descendents of some xml; it should work for forests as well as
+  trees.
 
 * Why do we bother to write name="..." as l:name="..." ? Couldn't we
   just create variables for all named input fields?

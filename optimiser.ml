@@ -351,7 +351,8 @@ let rec sql_sort = function
            Some (Variable(sortByRecVar, data3), sortByFld)
              when sortByRecVar = loopVar
                -> Some(Table(db, dummy, Query.add_sorting query 
-                               (`Asc(Query.owning_table sortByFld query, sortByFld)), data1))
+                               (`Asc(Query.owning_table sortByFld query,
+				     sortByFld)), data1))
          | _ -> None)
   | _ -> None
       
