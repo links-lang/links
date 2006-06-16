@@ -380,7 +380,7 @@ Any expression that evaluates to a function value can be called:
 
 The principal loop construct in Links is the list comprehension:
 
-    for (x <- source)
+    for (var x <- source)
        body
 
 The body should be an expression that evaluates to a list.
@@ -390,14 +390,14 @@ produced by evaluating the body, once for each element of I<source>, and
 binding that element to the variable C<x>. For example:
 
     var source_list = [1, 2, 3];
-    for (x <- source_list)
+    for (var x <- source_list)
         [ x*x ]
 
 constructs a list of the squares of the values in C<source_list>. Note
 that more than one value can be included in the body list:
 
     var source_list = [2, 3, 7, 8, 9, 55];
-    for (n <- source_list)
+    for (var n <- source_list)
         if (odd(n))
            [n, n+1]
         else
@@ -486,7 +486,7 @@ To use this feature, simply annotate functions with the keyword
 "client" or "server". For example:
 
   fun lookupUserID(username) server {
-    for (user <- users)
+    for (var user <- users)
     where (user.name = username)
       [user.id]
   }
