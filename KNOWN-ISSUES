@@ -2,10 +2,6 @@ KNOWN ISSUES
 
  * Browsers other than Firefox are currently unsupported.
 
- * Pattern matching is not deep.
- 
- * Pattern matching on lists has many bugs.
-
  * Exceptions have not been implemented.
 
  * The following web features have not yet been implemented.
@@ -34,6 +30,10 @@ KNOWN ISSUES
   
  * Queries against two different databases may be erroneously joined.
 
+ * Function signatures are not yet implemented.
+
+ * Type annotations on patterns are not yet implemented.
+
  * Type errors sometimes print the wrong expression, e.g.:
 
      links> 1 + "a"
@@ -56,8 +56,9 @@ KNOWN ISSUES
         for y <- (...) in
           [(x, y)]
 
- * table declarations don't work in the interactive environment
+ * table declarations don't work in the interactive shell
 
  * database names are not first class - they must be string
    literals.
  
+ * database update is not yet implemented.

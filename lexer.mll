@@ -111,7 +111,7 @@ rule lex lexers = parse
   | "/."                                { SLASHDOT }
   | "++"                                { PLUSPLUS }
   | "^"                                 { HAT }
-  | "^^"                                { HATHAT }
+  | "^."                                { HATHAT }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | '{'                                 { Stack.push (lex lexers) lexers; LBRACE }

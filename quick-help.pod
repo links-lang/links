@@ -602,7 +602,7 @@ type>. This allows you to apply an operation to an arbitary element of
 the list and to know what type it is. If you need to mix different
 types within a list, you can do so by assigning variant tags to
 each. There are a variety of tricks for getting what you want out of a
-strong type system. See L<TBD> for some ideas.
+strong type system. See L</"TBD"> for some ideas.
 
 By constrast, elements of a tuple can be of the same or of different
 types, but the number of elements of a tuple is fixed.
@@ -1047,26 +1047,9 @@ These function convert between values of different types.
 The C<ord> and C<chr> functions converts between a character and its
 ASCII value as an integer.
 
-=head2 Output
-
- print            : (String) -> ()
-
-Print a string to the standard output. (This function has undefined behaviour when Links is running as a CGI script.)
-
- error            : (String) -> a
-
-Raise a fatal error.
-
- sleep            : (Int) -> ()
-
-Sleep for the specified time in seconds.
-
-=head2 not
+=head2 Negation
 
  not              : (Bool) -> Bool
-
-=head2 Negation of numbers
-
  negate           : (Int) -> Int
  negatef          : (Float) -> Float
 
@@ -1096,6 +1079,27 @@ Sleep for the specified time in seconds.
  tan              : (Float) -> Float
  log              : (Float) -> Float
  sqrt             : (Float) -> Float
+
+=head2 Miscellaneous
+
+ print            : (String) -> ()
+
+Print a string to the standard output. (This function has undefined behaviour when Links is running as a CGI script.)
+
+ error            : (String) -> a
+ 
+Raise a fatal error.
+
+ debug            : (String) -> ()
+
+Output a string to stderr. When running a client function this will
+output to a special window only if links is run with the -d flag. When
+running a server function stderr is typically forwarded to the web
+server's error log.
+
+ sleep            : (Int) -> ()
+
+Wait for the specified number of seconds.
 
 =head1 Running links
 

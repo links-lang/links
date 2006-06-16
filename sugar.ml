@@ -631,7 +631,7 @@ let uncompare : comparison_binop -> string =
   (* FIXME: this is buggy: should eliminate greater, greatereq *)
   flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `RegexMatch, "~"]
 and unarith : arith_binop -> string = 
-  flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^^"; `FloatPlus, "+."; `FloatMinus, "-."]
+  flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^."; `FloatPlus, "+."; `FloatMinus, "-."]
 
 (* TBD: Will be obviated when we use straightahead bindings with
    failure, as in Wadler/Peyton-Jones. *)

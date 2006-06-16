@@ -130,7 +130,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "-.", float_op (-.);
   "*.", float_op ( *.);
   "/.", float_op (/.);
-  "^^", float_op ( ** );
+  "^.", float_op ( ** );
 
   (** Conversions (any missing?) **)
   "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
@@ -263,11 +263,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                     | _ -> none)
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
-
-  (* [DEACTIVATED] *)
-  (* "dom", *)
-  (* Not available on the server *)
-(*  (`Int (num_of_int (-1)), datatype "Mailbox a");*)
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
@@ -422,9 +417,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetCharCode",
   (`Client, datatype "Event -> Char");
 
+(* [SL] Aarghhh... this is too dangerous *)
+(*
   "getCommandOutput",
   (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
    datatype "String -> String");
+*)
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
@@ -433,6 +431,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "Int -> ()");
 
   (** Database functions **)
+(* [BROKEN] *)
+(*
   "insertrow",
   (`Server 
      (p1 (function
@@ -497,7 +497,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    let u', u = fresh_row () in
      [u'; v'],
    tuplify [Types.string_type; `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
-
+*)
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
   "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
