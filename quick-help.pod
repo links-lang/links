@@ -214,7 +214,20 @@ information on these features.
 
 =head2 Forms
 
-...
+Links provides two special attributes for programming with HTML forms,
+C<l:name>, which binds the value of an input field to a variable, and
+C<l:onsubmit>, with which you can supply an expression to be evaluated
+when the form is submitted.
+
+   <form l:onsubmit="{say_hello(name)}>
+      What is your name? 
+      <input l:name="{name}"/>
+   </form>
+
+The "name" variable bound by the C<l:name> attribute is in scope in
+the C<l:onsubmit> expression, which may also contain references to
+other variables in the enclosing scope.  The values of these variables
+are passed from form to form automatically.
 
 =head2 Comparisons and Boolean Expressions
 
