@@ -126,7 +126,6 @@ examples/lib
 examples/dictionary
 examples/dictionary/lib
 examples/dictionary/dict-suggest.links
-examples/dictionary/get_data.sh
 examples/dictionary/create-table.sql
 examples/dictionary/README
 examples/todo.links
