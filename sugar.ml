@@ -61,14 +61,15 @@ let list_tail expr pos =
   Apply(Variable ("tl", pos), expr, pos)
 
 type pattern = [
-  | `Constant of untyped_expression
-  | `Bind of string
-  | `Bind_using of (string * pattern) (* [QUESTION] What's this? *)
-  | `Record_extension of (string * pattern * pattern)
-  | `Empty_record
-  | `Variant of (string * pattern)
   | `Nil
   | `Cons of (pattern * pattern)
+  | `Variant of (string * pattern)
+  | `Unit
+  | `Record_extension of (string * pattern * pattern)
+  | `Constant of untyped_expression
+  | `Bind of string
+  | `BindUsing of (string * pattern) (* What's this? 'as' in ML *)
+  | `HasType of pattern * Types.datatype
 ]
 
 (* [TODO]
@@ -79,20 +80,20 @@ let string_of_pattern = function
   | `Constant _ -> "Constant"
   | `Bind _ -> "Variable"
   | `Record_extension _ -> "Record_extension"
-  | `Empty_record -> "()"
+  | `Unit -> "()"
   | `Variant _ -> "Variant"
   | `Nil -> "[]"
   | `Cons _ -> "::"
-  | `Bind_using _ -> "?"
+  | `BindUsing _ -> "?"
 *)
 
 (* let rec string_of_pattern = function *)
 (*   | `Constant expr -> string_of_expression expr *)
 (*   | Variable name -> name *)
 (*   | `Bind name -> "^" ^ name *)
-(*   | `Bind_using (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
+(*   | `BindUsing (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
 (*   | `Record_extension (label, patt, rem_patt) -> "{#"^ label ^"="^ string_of_pattern patt ^"|"^ string_of_pattern rem_patt ^"}" *)
-(*   | `Empty_record -> "()" *)
+(*   | `Unit -> "()" *)
 (*   | `Variant (label, patt) -> "< " ^ label ^ "=" ^ (string_of_pattern patt) ^ ">" *)
 
 
@@ -115,7 +116,7 @@ let rec patternize' = fun exp ->
     | Syntax.Nil _ -> `Nil
     | Syntax.Variable ("_", _) ->  `Bind (unique_name ())
     | Syntax.Variable (name, _) -> `Bind (name)
-    | Syntax.Record_empty _ -> `Empty_record
+    | Syntax.Record_empty _ -> `Unit
     | Syntax.Record_extension (name, value, record, _)
       -> `Record_extension (name, patternize' value, patternize' record)
     | Syntax.Variant_injection (name, value, _)
@@ -123,9 +124,11 @@ let rec patternize' = fun exp ->
 	(* See note above `amper' *)
     | Syntax.Apply(Syntax.Variable("&", _),
                    Apply(Syntax.Variable (var, _), expr, _), _) -> 
-	`Bind_using(var, patternize' expr)
+	`BindUsing(var, patternize' expr)
     | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
 	patternize_cons_pattern cons_patt
+    | Syntax.HasType (exp, datatype, _) ->
+	`HasType (patternize' exp, datatype)
     | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
   | Concat (List_of (e1, _), e2, _) ->
@@ -144,45 +147,53 @@ let and_expr l r pos =
       
 (* pattern-matching let *)
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
-  fun pat pos value body ->
-    match pat with
-      | `Variant (name, patt) ->
-	  let case_variable = unique_name () in
-	  let variable = unique_name () in
-	    Variant_selection(value, name,
-			      case_variable,
-			      (polylet patt pos (Variable (case_variable, pos)) body),
-			      variable,
-			      Variant_selection_empty(Variable(variable, pos), pos),
-			      pos)
-      | `Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
-      | `Bind name -> Let (name, value, body, pos)
-      | `Constant c ->
-          (Condition(Comparison(value, "==", c, pos),
-                     body,
-                     Syntax.Wrong pos, pos))
-      | `Nil ->
-          (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
-                     body,
-                     Syntax.Wrong pos, pos))
-      | `Cons (head, tail) -> 
-          (polylet head pos (list_head value pos)
-             (polylet tail pos (list_tail value pos)
-                body))
-      | `Record_extension (label, patt, rem_patt) ->
-	  let temp_var_field = unique_name () in
-	  let temp_var_ext = unique_name () in
-	    Record_selection (label,
-                              temp_var_field,
-                              temp_var_ext,
-                              value,
-                              polylet patt pos
-                                (Variable (temp_var_field, pos))
-                                (polylet rem_patt pos
-                                   (Variable (temp_var_ext, pos))
-                                   body),
-                              pos)
-      | `Empty_record -> Record_selection_empty (value, body, pos)
+  let rec pl topt pat pos value body =
+    let value = match topt with
+      | None -> value
+      | Some t -> HasType (value, t, pos)
+    in
+      match pat with
+	| `Nil ->
+            (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
+                       body,
+                       Syntax.Wrong pos, pos))
+	| `Cons (head, tail) ->
+            (pl topt head pos (list_head value pos)
+               (pl topt tail pos (list_tail value pos)
+                  body))
+	| `Variant (name, patt) ->
+	    let case_variable = unique_name () in
+	    let variable = unique_name () in
+	      Variant_selection(value, name,
+				case_variable,
+				(pl topt patt pos (Variable (case_variable, pos)) body),
+				variable,
+				Variant_selection_empty(Variable(variable, pos), pos),
+				pos)
+	| `Unit -> Record_selection_empty (value, body, pos)
+	| `Record_extension (label, patt, rem_patt) ->
+	    let temp_var_field = unique_name () in
+	    let temp_var_ext = unique_name () in
+	      Record_selection (label,
+				temp_var_field,
+				temp_var_ext,
+				value,
+				pl topt patt pos
+                                  (Variable (temp_var_field, pos))
+                                  (pl topt rem_patt pos
+                                     (Variable (temp_var_ext, pos))
+                                     body),
+				pos)
+	| `Constant c ->
+            (Condition(Comparison(value, "==", c, pos),
+                       body,
+                       Syntax.Wrong pos, pos))
+	| `Bind name -> Let (name, value, body, pos)
+	| `BindUsing _ -> failwith "Bind-using cannot be used in function parameter or let patterns"
+	| `HasType (pat, t) ->
+	    pl (Some t) pat pos value body
+  in
+    pl None
 
 
 (*** pattern matching compiler ***)
@@ -201,7 +212,7 @@ let eq_pattern : equation * equation -> bool = fun ((pattern::_, _), (pattern'::
   match pattern, pattern' with
     | `Nil, `Nil | `Nil, `Cons _ | `Cons _, `Nil | `Cons _, `Cons _
     | `Variant _, `Variant _
-    | `Empty_record, `Empty_record
+    | `Unit, `Unit
     | `Record_extension _, `Record_extension _
     | `Constant _, `Constant _
     | `Bind _, `Bind _ -> true
@@ -211,15 +222,17 @@ type pattern_type = [
 | `List | `Variant | `Empty | `Record | `Constant | `Variable
 ]
 
-let get_pattern_type : equation -> pattern_type = fun (pattern::_, _) ->
+let rec get_pattern_type : equation -> pattern_type = fun (pattern::_, _) ->
   match pattern with
     | `Nil | `Cons _ -> `List
     | `Variant _ -> `Variant
-    | `Empty_record -> `Empty
+    | `Unit -> `Empty
     | `Record_extension _ -> `Record
     | `Constant _ -> `Constant
     | `Bind _ -> `Variable
-    | `Bind_using _ -> assert false
+    | `BindUsing _ -> assert false
+    | `HasType (pattern, _) -> failwith ("(get_pattern_type) Not implemented HasType yet")
+	(*get_pattern_type pattern*)
 
 let partition_equations : (equation * equation -> bool) -> equation list -> (equation list) list =
   fun equality_predicate ->
@@ -344,7 +357,7 @@ and match_empty
     match_cases pos vars
       (List.map (fun (pattern::ps, body) ->
 		   match pattern with
-		     | `Empty_record ->
+		     | `Unit ->
 			 (ps, body)
 		     | _ -> assert false) equations) def
 
