@@ -339,7 +339,7 @@ let inference_row_of_row = inference_row_of_row (empty_var_maps ())
 let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
-    | `Xml xml_type -> `Xml (Xml.Inference.extract_infered_type xml_type)
+    | `Xml xml_type -> `Xml (Xml.Inference.extract_inferred_type xml_type)
     | `Primitive p -> `Primitive p
     | `TypeVar var -> `TypeVar var
     | `Function (f, t) -> `Function (type_of_inference_type rec_vars f, type_of_inference_type rec_vars t)

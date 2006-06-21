@@ -588,7 +588,7 @@ let rec desugar_type_xml type_xml =
     | TypeXmlBinaryOp (left, op, right) ->
         op (desugar_type_as_xml_type left) (desugar_type_as_xml_type right)
     | TypeXmlElement (name, atts, contents) ->
-        Xml.Type.node
+        Xml.Type.element
           { Xml.ns = Xml.Type.epsilon;
             label = Xml.Type.from_string name;
             attributes =

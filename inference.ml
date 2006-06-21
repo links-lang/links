@@ -83,6 +83,8 @@ type unify_type_env = (datatype list) IntMap.t
 type unify_row_env = (row list) IntMap.t
 type unify_env = unify_type_env * unify_row_env
 
+let unify_custom' xml_unification =
+
 let rec unify' (rec_env : unify_env) : (datatype * datatype) -> unit =
   let rec_types, rec_rows = rec_env in
 
@@ -123,7 +125,7 @@ let rec unify' (rec_env : unify_env) : (datatype * datatype) -> unit =
       (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
-      | `Xml x, `Xml y -> Xml.Inference.unify x y
+      | `Xml x, `Xml y -> xml_unification x y
       | `Primitive x, `Primitive y when x = y -> ()
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  if Unionfind.equivalent lpoint rpoint then
@@ -476,9 +478,14 @@ and unify_rows' (rec_env : unify_env) ((lrow : row), (rrow : row)) : unit =
 	debug_if_set (show_row_unification)
 	  (fun () -> "Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
 
-let unify (t1, t2) =
-  (unify' (IntMap.empty, IntMap.empty) (t1, t2);
+in
+unify'
+
+let unify_custom xml_unification  (t1, t2) =
+  (unify_custom' xml_unification (IntMap.empty, IntMap.empty) (t1, t2);
    debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1))
+
+let unify = unify_custom Xml.Inference.unify
 
 (*
   instantiation environment:
@@ -844,7 +851,7 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       let contents_xml_type = Xml.Inference.fresh () in
       let _ = List.iter (fun node -> unify (type_of_expression node, `Xml contents_xml_type)) contents in
       let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
-      let xml_type = Xml.Inference.node
+      let xml_type = Xml.Inference.element
         { Xml.ns = Xml.Inference.epsilon;
           label = Xml.Inference.from_type (Xml.Type.from_string tag);
           attributes =
@@ -998,15 +1005,13 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       Wrong(pos, ITO.fresh_type_variable(), None)
   | HasType(expr, typ, pos) ->
       let expr = type_check env expr in
-      unify (type_of_expression expr, inference_type_of_type typ);
       begin
-        (* TM: TBD: unify sub-XML types as well *)
-        match typ with
-            `Xml typ_xml ->
-              let expr_xml_type = Xml.Inference.fresh () in
-              unify (type_of_expression expr, `Xml expr_xml_type);
-              Xml.Inference.less_than expr_xml_type typ_xml
-          | _ -> ()
+        (* TM: TBD: XML types can appear inside any structured types,
+           so I have to produce these constraints inductively. *)
+              unify_custom
+                (fun t1 t2 ->
+                   Xml.Inference.less_than t1 (Xml.Inference.retrieve_type t2))
+                (type_of_expression expr, inference_type_of_type typ);
       end;
       HasType(expr, typ, (pos, type_of_expression expr, None))
   | Placeholder _ 
