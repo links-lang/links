@@ -44,6 +44,7 @@ syntax.ml
 inferencetypes.mli
 inferencetypes.ml
 sugar.ml
+result.mli
 result.ml
 sql_transform.ml
 parser.mly
