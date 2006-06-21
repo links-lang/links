@@ -29,7 +29,7 @@ CLASSES=deriving.cmo show_class.cmo enum_class.cmo bounded_class.cmo pickle_clas
 PP='camlp4o -I $(DERIVING_DIR)/syntax $(CLASSES)'
 
 OCAMLOPT := ocamlopt.opt -pp $(PP)
-OCAMLC := ocamlfind ocamlc -package str -package unix -package netstring -package pxp -linkpkg -pp $(PP)
+OCAMLC := ocamlc.opt -pp $(PP)
 OCAMLDEP := ocamldep -pp $(PP)
 
 VPATH=regex
