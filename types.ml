@@ -8,8 +8,18 @@ open Type_basis
 type type_var_set = Type_basis.type_var_set
 type primitive = Type_basis.primitive
 
+(* TM: Hack to be able to use "deriving" on a variant with a
+   constructor the parameter of which is Xml.Type.t, that is a
+   type declared in a foreign module. *)
+
+type xml_type_t = Xml.Type.t
+
+module Show_xml_type_t = Xml.Type.Show_t
+
+module Pickle_xml_type_t = Xml.Type.Pickle_t
+
 (* Types for datatypes *)
-type datatype = (datatype, row) type_basis
+type datatype = (datatype, row, xml_type_t) type_basis
 and field_spec = datatype field_spec_basis
 and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
@@ -81,12 +91,17 @@ let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
 let string_type = `List (`Primitive `Char)
-let xml = `List (`Primitive `XMLitem)
+
+(* TM: XML datas are not longer typed as lists of XML items, but mere as XML
+   values, with a type attached with them. *)
+(*let xml xml_type = `Primitive (`Xml xml_type))*)
 
 (* Type printers *)
+
+(* TM: XML types are now printed by the Xml module. *)
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XMLitem -> "XMLitem" | `Abstract s -> s
+  | `Abstract s -> s
 
 exception Not_tuple
 
@@ -128,6 +143,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
   in
     match datatype with
       | `Not_typed       -> "not typed"
+      | `Xml xml_type -> Xml.Type.to_string xml_type 
       | `Primitive p     -> string_of_primitive p
       | `TypeVar var      -> IntMap.find var vars
       | `Function (mailbox_type, t) when using_mailbox_typing () ->
@@ -173,7 +189,9 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
      | `DB             ->                   "Database"
      | `List (`Primitive `Char) -> "String"
-     | `List (`Primitive `XMLitem) -> "XML"
+         (* TM: XML values are used to be lists at the typer level, we don't
+            need this anymore. *)
+(*     | `List (`Primitive `XMLitem) -> "XML" *)
      | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
      | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
 and string_of_row' sep vars (field_env, row_var) =
@@ -213,8 +231,10 @@ let make_names vars =
 *)
 let rec type_vars : datatype -> int list = fun datatype ->
   let rec aux = function
-    | `Not_typed               -> []
-    | `Primitive _             -> []
+    | `Not_typed
+    | `Xml _
+    | `Primitive _
+    | `DB                      -> []
     | `TypeVar var             -> [var]
     | `Function (from, into)   -> aux from @ aux into
     | `Record row              -> row_type_vars row
@@ -222,7 +242,6 @@ let rec type_vars : datatype -> int list = fun datatype ->
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
     | `List (datatype)             -> aux datatype
     | `Mailbox (datatype)          -> aux datatype
-    | `DB                      -> []
   in unduplicate (=) (aux datatype)
 and row_type_vars (field_env, row_var) =
   let field_type_vars =
@@ -237,8 +256,10 @@ and row_type_vars (field_env, row_var) =
     field_type_vars @ row_var
 
 let rec free_bound_type_vars : datatype -> IntSet.t = function
-  | `Not_typed               -> IntSet.empty
-  | `Primitive _             -> IntSet.empty
+  | `Not_typed
+  | `Xml _
+  | `Primitive _
+  | `DB                      -> IntSet.empty
   | `TypeVar var             -> IntSet.singleton var
 (*
   [HACK]
@@ -259,7 +280,6 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
   | `List (datatype)         -> free_bound_type_vars datatype
   | `Mailbox (datatype)      -> free_bound_type_vars datatype
-  | `DB                      -> IntSet.empty
 and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
@@ -378,6 +398,7 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
     function
         (* no children *)
       | `Not_typed
+      | `Xml _
       | `Primitive _
       | `DB
       | `TypeVar  _ -> None

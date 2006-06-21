@@ -140,12 +140,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "stringToXml",
   ((p1 string_to_xml :> located_primitive),
-   ([], Types.string_type --> xml));
+   ([], Types.string_type --> `Xml Xml.Type.latin1_string));
   
   "intToXml",
   ((p1 (string_to_xml -<-
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
-   ([], (`Primitive `Int) --> xml));
+   ([], (`Primitive `Int) --> `Xml Xml.Type.digit_string));
   
   "send",
   (p2 (fun pid msg -> 

@@ -4,13 +4,15 @@ open Utility
 
 type type_var_set = Utility.IntSet.t
 
+(* TM: The former `XMLitem constant constructor has been changed by the
+   `Xml constructor which takes in argument the XML type informations. *)
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem 
-                 | `Abstract of string ]
+type primitive = [ `Bool | `Int | `Char | `Float | `Abstract of string ]
     deriving (Show, Pickle)
 
-type ('typ, 'row) type_basis = [
+type ('typ, 'row, 'xml) type_basis = [
   | `Not_typed
+  | `Xml of 'xml
   | `Primitive of primitive
   | `TypeVar of int
   | `Function of ('typ * 'typ)

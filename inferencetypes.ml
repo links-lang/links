@@ -3,7 +3,7 @@ open Utility
 type type_var_set = Type_basis.type_var_set
 
 type datatype = [
-  | (datatype, row) Type_basis.type_basis
+  | (datatype, row, Xml.Inference.t) Type_basis.type_basis
   | `MetaTypeVar of datatype Unionfind.point ]
 and field_spec = datatype Type_basis.field_spec_basis
 and field_spec_map = field_spec StringMap.t
@@ -28,6 +28,7 @@ let
   let rec free_type_vars' : type_var_set -> datatype -> int list = fun rec_vars ->
     function
       | `Not_typed               -> []
+      | `Xml _                   -> []
       | `Primitive _             -> []
       | `TypeVar var             ->
 	  if IntSet.mem var rec_vars then
@@ -274,6 +275,7 @@ let empty_var_maps : unit ->
 (* implementation *)
 let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) -> function
   | `Not_typed -> `Not_typed
+  | `Xml xml_type -> `Xml (Xml.Inference.from_type xml_type)
   | `Primitive p -> `Primitive p
   | `TypeVar var ->
       if IntMap.mem var (!type_var_map) then
@@ -337,6 +339,7 @@ let inference_row_of_row = inference_row_of_row (empty_var_maps ())
 let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fun rec_vars ->
   function
     | `Not_typed -> `Not_typed
+    | `Xml xml_type -> `Xml (Xml.Inference.extract_infered_type xml_type)
     | `Primitive p -> `Primitive p
     | `TypeVar var -> `TypeVar var
     | `Function (f, t) -> `Function (type_of_inference_type rec_vars f, type_of_inference_type rec_vars t)

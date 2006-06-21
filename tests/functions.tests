@@ -31,3 +31,7 @@ stdout : fun : () -> Int
 Trailing semicolon means "ignore the final value" [4]
 fun () { 2; }
 stdout : fun : () -> ()
+
+Type annotations
+fun (x:Int) {x:Int}
+stdout : fun : (Int) -> Int

@@ -388,6 +388,7 @@ fun globals locals expr cont ->
   let eval = interpret globals locals in
   match expr with
   | Syntax.Define (name, expr, _, _) -> interpret globals [] expr (Definition (globals, name) :: cont)
+  | Syntax.Type_define _ -> apply_cont globals cont (`Record []) (* TM: ? *)
   | Syntax.Alien _ -> apply_cont globals cont (`Record [])
 (*  | Syntax.Define (name, value, _, _) -> failwith "DF 245"*)
   | Syntax.Boolean (value, _) -> apply_cont globals cont (bool value)
@@ -413,19 +414,21 @@ fun globals locals expr cont ->
   | Syntax.Rec (variables, body, _) ->
       let new_env = bind_rec globals locals variables in
         interpret globals new_env body cont
-  | Syntax.Xml_node _ as xml when Forms.islform xml ->
+  | Syntax.Xml_element _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
+  | Syntax.Xml_element _ as xml when Forms.isinput xml -> 
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
+  | Syntax.Xml_element _ as xml when Forms.islhref xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
 
-  | Syntax.Xml_node (tag, [], [], _) -> 
+  | Syntax.Xml_element (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
-  | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
+  | Syntax.Xml_element (tag, (k, v)::attrs, elems, _) -> 
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
-  | Syntax.Xml_node (tag, [], (child::children), _) -> 
+  | Syntax.Xml_element (tag, [], (child::children), _) -> 
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
+  | Syntax.Xml_cdata (text, _) ->
+      apply_cont globals cont (`List [`XML (Result.Text text)])
 
   | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
   | Syntax.Record_extension (label, value, record, _) ->
@@ -445,6 +448,8 @@ fun globals locals expr cont ->
   | Syntax.List_of (elem, _) ->
       eval elem (UnopApply(locals, MkColl) :: cont)
   | Syntax.Concat (l, r, _) ->
+      eval l (BinopRight(locals, UnionOp, r) :: cont)
+  | Syntax.Xml_concat (l, r, _) ->
       eval l (BinopRight(locals, UnionOp, r) :: cont)
 
   | Syntax.For (expr, var, value, _) as c ->

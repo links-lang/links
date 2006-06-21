@@ -130,7 +130,10 @@ let evaluate_string v =
   (Settings.set_value interacting false;
    ignore(evaluate Parse.parse_string stdenvs v))
 
-let options : opt list = 
+(* TM: Old option list.  Some names differ from the corresponding option,
+   what to do? *)
+
+let options : opt list =
     [
       ('d',     "debug",               set Debug.debugging_enabled true, None);
       ('O',     "optimize",            set Optimiser.optimising true,    None);
@@ -141,6 +144,13 @@ let options : opt list =
 (*
       ('t',     "run-tests",           Some run_tests,                   None);
 *)    ]
+
+let options =
+  let add_setting setting list =
+    let name = Settings.get_name setting in
+    (noshort, name, None,
+     Some (function value -> Settings.parse_and_set (name, value))) :: list in
+  Settings.fold add_setting add_setting add_setting options
 
 (* main *)
 let _ =

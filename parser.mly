@@ -16,10 +16,12 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token END
 %token EQ IN 
 %token FUN RARROW VAR
+%token TYPE
 %token IF ELSE
 %token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT
 %token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
-%token PLUSPLUS HATHAT HAT
+/* TM: Added a AT operator for the concatenation of XML values */
+%token PLUSPLUS AT HATHAT HAT
 %token SWITCH RECEIVE CASE SPAWN
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
@@ -91,7 +93,8 @@ toplevel:
 | TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON     { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
-| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN VARIABLE arg_list perhaps_location block SEMICOLON       { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| TYPE CONSTRUCTOR EQ datatype perhaps_semi                    { Type_definition ($2, $4), pos () }
       
 perhaps_location:
 | SERVER                                                       { `Server }
@@ -187,6 +190,8 @@ cons_expression:
 | addition_expression                                          { $1 }
 | addition_expression COLONCOLON cons_expression               { InfixAppl (`Cons, $1, $3), pos() }
 | addition_expression PLUSPLUS cons_expression                 { InfixAppl (`Concat, $1, $3), pos() }
+/* TM: AT is the concrete syntax for the `Xml_concat operator. */
+| addition_expression AT cons_expression                       { InfixAppl (`Xml_concat, $1, $3), pos() }
 
 comparison_expression:
 | cons_expression                                              { $1 }
@@ -345,39 +350,110 @@ patt:
 | cons_expression                                              { Pattern $1 }
 
 just_datatype:
-| datatype SEMICOLON                                               { $1 }
+| datatype SEMICOLON                                           { $1 }
 
 datatype:
-| mu_datatype                                                      { $1 }
-| mu_datatype RARROW datatype                                          { FunctionType ($1, $3) }
+| mu_datatype                                                  { $1 }
+| mu_datatype RARROW datatype                                  { FunctionType ($1, $3) }
+
+full_datatype:
+| full_mu_datatype                                             { $1 }
+| full_mu_datatype RARROW full_datatype                        { FunctionType ($1, $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                      { MuType ($2, $4) }
-| primary_datatype                                                 { $1 }
+| MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
+| primary_datatype                                             { $1 }
+
+full_mu_datatype:
+| MU VARIABLE DOT full_mu_datatype                             { MuType ($2, $4) }
+| union_datatype                                               { $1 }
+
+union_datatype:
+| datatype_sequence VBAR union_datatype                        { TypeXml (TypeXmlBinaryOp ($1, Xml.Type.union, $3)) }
+| datatype_sequence                                            { $1 }
+
+datatype_sequence:
+| primary_datatype datatype_sequence                           { TypeXml (TypeXmlBinaryOp ($1, Xml.Type.concat, $2)) }
+| primary_datatype                                             { $1 }
 
 primary_datatype:
 | LPAREN RPAREN                                                { UnitType }
-| LPAREN datatype RPAREN                                           { $2 }
-| LPAREN datatype COMMA datatypes RPAREN                               { TupleType ($2 :: $4) }
+| LPAREN full_datatype RPAREN                                  { $2 }
+| LPAREN full_datatype COMMA full_datatypes RPAREN             { TupleType ($2 :: $4) }
 | LPAREN row RPAREN                                            { RecordType $2 }
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
-| LBRACKET datatype RBRACKET                                       { ListType $2 }
+| LBRACKET datatype RBRACKET                                   { ListType $2 }
 | VARIABLE                                                     { TypeVar $1 }
+| primary_datatype STAR                                        { TypeXml (TypeXmlUnaryOp ($1, Xml.Type.star)) }
+| primary_datatype QUESTION                                    { TypeXml (TypeXmlUnaryOp ($1, Xml.Type.optional)) }
+| primary_datatype PLUS                                        { TypeXml (TypeXmlUnaryOp ($1, Xml.Type.one_or_more)) }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
-                                                                   | "XMLitem" -> PrimitiveType `XMLitem
+                                                                       (* TM: There is no longer `XMLitem... *)
+                                                                  (* | "XMLitem" -> PrimitiveType `XMLitem *)
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
-                                                                   | "XML"     -> ListType (PrimitiveType `XMLitem)
+                                                                       (* TM: XML is a synonym for Any. *)
+                                                                   | "XML" -> TypeXml (TypeXmlFixed Xml.Type.any)
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
 | CONSTRUCTOR primary_datatype                                     { match $1 with 
                                                                    | "Mailbox"    -> MailboxType $2
-                                                                   | t -> failwith ("Unknown unary type constructor : " ^ t)
-                                                               }
+                                                                   | t -> failwith ("Unknown unary type constructor : " ^ t) }
+| xml_datatype                                                 { $1 }
+
+/* TM: XML type syntax, just the same rules as the previous xml ones, but with
+   block_datatype instead of block, to have types between curly brackets.
+   Perhaps one good reason to switch to Menhir... */
+
+xml_datatype:
+| xml_forest_datatype                                          { TypeXml (TypeXmlForest $1) }
+| CHAR                                                         { TypeXml (TypeXmlCharInterval ($1, $1)) }
+| CHAR MINUS CHAR                                              { TypeXml (TypeXmlCharInterval ($1, $3)) }
+
+xml_forest_datatype:
+| xml_tree_datatype                                            { [$1] }
+| xml_tree_datatype xml_forest_datatype                        { $1 :: $2 }
+
+attr_list_datatype:
+| attr_datatype                                                { [$1] }
+| attr_list_datatype attr_datatype                             { $2 :: $1 }
+
+attr_datatype:
+| xmlid EQ LQUOTE attr_val_datatype RQUOTE                     { ($1, $4) }
+| xmlid EQ LQUOTE RQUOTE                                       { ($1, [TypeXml (TypeXmlCdata "")]) }
+
+attr_val_datatype:
+| block_datatype                                               { [$1] }
+| STRING                                                       { [TypeXml (TypeXmlCdata $1)] }
+| block_datatype attr_val_datatype                             { $1 :: $2 }
+| STRING attr_val_datatype                                     { (TypeXml (TypeXmlCdata $1)) :: $2 }
+
+xml_tree_datatype:
+| LXML SLASHRXML                                               { TypeXml (TypeXmlElement ($1, [], [])) } 
+| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (TypeXml (TypeXmlElement ($1, [], []))) } 
+| LXML RXML xml_contents_list_datatype ENDTAG                  { ensure_match (pos()) $1 $4 (TypeXml (TypeXmlElement ($1, [], $3))) } 
+| LXML attr_list_datatype RXML ENDTAG                          { ensure_match (pos()) $1 $4 (TypeXml (TypeXmlElement ($1, $2, []))) } 
+| LXML attr_list_datatype SLASHRXML                            { TypeXml (TypeXmlElement ($1, $2, [])) } 
+| LXML attr_list_datatype RXML xml_contents_list_datatype
+    ENDTAG                                                     { ensure_match (pos()) $1 $5 (TypeXml (TypeXmlElement ($1, $2, $4))) } 
+
+xml_contents_list_datatype:
+| xml_contents_datatype                                        { [$1] }
+| xml_contents_datatype xml_contents_list_datatype             { $1 :: $2 }
+
+xml_contents_datatype:
+| block_datatype                                               { $1 }
+| xml_tree_datatype                                            { $1 }
+| CDATA                                                        { TypeXml (TypeXmlCdata (Utility.xml_unescape $1)) }
+                                                               
+
+block_datatype:
+  LBRACE full_datatype RBRACE                                  { $2 }
+
 row:
 | fields                                                       { $1 }
 
@@ -385,8 +461,12 @@ vrow:
 | vfields                                                      { $1 }
 
 datatypes:
-| datatype                                                         { [$1] }
-| datatype COMMA datatypes                                             { $1 :: $3 }
+| datatype                                                     { [$1] }
+| datatype COMMA datatypes                                     { $1 :: $3 }
+
+full_datatypes:
+| full_datatype                                                { [$1] }
+| full_datatype COMMA datatypes                                { $1 :: $3 }
 
 /* this assumes that the type (a) is invalid.  Is that a reasonable assumption? 
   (i.e. that records cannot be open rows?)  The only reason to make such an

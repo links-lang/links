@@ -322,6 +322,7 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
 let rec generate : 'a expression' -> code = 
   let rec reduce_list : 'a expression' -> code = 
     function
+      | Xml_concat args -> reduce_list (Concat args)
       | Concat (c, Nil _, _) -> 
           reduce_list c
       | Concat (l, r, _) ->
@@ -396,6 +397,8 @@ let rec generate : 'a expression' -> code =
   | (Concat _) as c          -> 
       reduce_list c
 (*  | Concat (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
+  | (Xml_concat _) as c          -> 
+      reduce_list c
   | For (e, v, b, _)  -> 
       let b_cps = generate b in
       let e_cps = generate e in
@@ -405,12 +408,16 @@ let rec generate : 'a expression' -> code =
                                 [Fn(["__kappa"], 
                                     Fn([v], Call(e_cps, [Var "__kappa"])));
                                  Var "__b"]))]))
-  | Xml_node _ as xml when isinput xml -> lname_transformation xml
-  | Xml_node _ as xml -> laction_transformation xml
-  | Xml_node (tag, attrs, children, _)   -> 
+  | Xml_element _ as xml when isinput xml -> lname_transformation xml
+  | Xml_element _ as xml -> laction_transformation xml
+  | Xml_element (tag, attrs, children, _)   -> 
       let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
       let children_cps = map (fun e -> (gensym "__", generate e)) children in
         make_xml_cps attrs_cps [] children_cps [] tag
+
+  | Xml_cdata (text, data) ->
+      generate
+        (Apply (Variable ("stringToXml", data), String (text, data), data))
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
@@ -461,7 +468,8 @@ let rec generate : 'a expression' -> code =
   | Define (n, e, (`Client|`Unknown), _)-> 
       Defs ([n, Call(generate e,
 		     [Var "_idy"])])   (* definitions are always top 
-					   level, right? *)
+		|			   level, right? *)
+  | Type_define _ -> Nothing
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
@@ -586,7 +594,7 @@ let rec generate : 'a expression' -> code =
    scope is broken.  (This will need more care for less simple cases,
    e.g. where there are let bindings)
 *)
-and laction_transformation (Xml_node (tag, attrs, children, _) as xml) = 
+and laction_transformation (Xml_element (tag, attrs, children, _) as xml) = 
   (* 1. Remove l:action from the attrs 
      2. name the form if not named (TODO; not needed for simple example)
      3. Add an appropriate onSubmit to the attrs
@@ -642,7 +650,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
 			   )
       children_cps [] tag
 
-and lname_transformation (Xml_node (tag, attrs, children, d)) = 
+and lname_transformation (Xml_element (tag, attrs, children, d)) = 
   (* 1. Remove l:name from the attrs
      2. Add appropriate id and name to the attrs
      3. Add onFocus handlers
@@ -653,7 +661,7 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
     :: ("id", name)
     :: ("name", name)
     :: attrs in
-    generate (Xml_node (tag, attrs, children, Sugar.no_expr_data))
+    generate (Xml_element (tag, attrs, children, Sugar.no_expr_data))
 
 
 (* generate_noncps: generates CPS code for expr and immediately 

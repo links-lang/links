@@ -53,7 +53,7 @@ let keywords = [
 "switch" , SWITCH; "update"   ,  UPDATE;   "delete"    , DELETE;
 "insert" , INSERT; "into"     ,  INTO;     "values"    , VALUES;
 "client" , CLIENT; "server"   ,  SERVER;   "where"     , WHERE;
-"if"     , IF;     "else"     ,  ELSE;     
+"if"     , IF;     "else"     ,  ELSE;     "type"     ,  TYPE;
 "in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
 "escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
 "false"  , FALSE;  "table"    ,  TABLE;    "case"      , CASE;
@@ -61,7 +61,7 @@ let keywords = [
 "unique" , UNIQUE; "orderby"  ,  ORDERBY;  "asc"       , ASC;
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
 "var"    , VAR;    "spawn"    ,  SPAWN;    "mu"        , MU;
-"alien"  , ALIEN;
+"alien"  , ALIEN
 ] 
 exception LexicalError of (string * Lexing.position)
 
@@ -110,6 +110,8 @@ rule lex lexers = parse
   | "*."                                { STARDOT }
   | "/."                                { SLASHDOT }
   | "++"                                { PLUSPLUS }
+(* TM: "@" is the operator for the concatenation of XML values *)
+  | "@"                                 { AT }
   | "^"                                 { HAT }
   | "^."                                { HATHAT }
   | '('                                 { LPAREN }

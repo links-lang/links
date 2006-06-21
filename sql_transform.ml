@@ -199,6 +199,7 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
   let rec unlist = function
     | List_of (x,_) -> [x]
     | Concat (l, r,_) -> unlist l @ unlist r 
+    | Xml_concat (l, r,_) -> unlist l @ unlist r 
     | Nil _ -> [] in
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
   let visitor default : 'a Syntax.expression' -> (like_expr * projection_source list) option = function

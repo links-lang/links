@@ -40,3 +40,9 @@ val set_value : 'a setting -> 'a -> unit
 
 (* print all registered settings *)
 val print_settings : unit -> string list
+
+(* TM: iterate over settings *)
+val fold :
+  (bool setting -> 'a -> 'a)
+  -> (int setting -> 'a -> 'a)
+  -> (string setting -> 'a -> 'a) -> 'a -> 'a

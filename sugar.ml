@@ -61,14 +61,15 @@ let list_tail expr pos =
   Apply(Variable ("tl", pos), expr, pos)
 
 type pattern = [
-  | `Constant of untyped_expression
-  | `Bind of string
-  | `Bind_using of (string * pattern) (* [QUESTION] What's this? *)
-  | `Record_extension of (string * pattern * pattern)
-  | `Empty_record
-  | `Variant of (string * pattern)
   | `Nil
   | `Cons of (pattern * pattern)
+  | `Variant of (string * pattern)
+  | `Unit
+  | `Record_extension of (string * pattern * pattern)
+  | `Constant of untyped_expression
+  | `Bind of string
+  | `BindUsing of (string * pattern) (* What's this? 'as' in ML *)
+  | `HasType of pattern * Types.datatype
 ]
 
 (* [TODO]
@@ -79,20 +80,20 @@ let string_of_pattern = function
   | `Constant _ -> "Constant"
   | `Bind _ -> "Variable"
   | `Record_extension _ -> "Record_extension"
-  | `Empty_record -> "()"
+  | `Unit -> "()"
   | `Variant _ -> "Variant"
   | `Nil -> "[]"
   | `Cons _ -> "::"
-  | `Bind_using _ -> "?"
+  | `BindUsing _ -> "?"
 *)
 
 (* let rec string_of_pattern = function *)
 (*   | `Constant expr -> string_of_expression expr *)
 (*   | Variable name -> name *)
 (*   | `Bind name -> "^" ^ name *)
-(*   | `Bind_using (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
+(*   | `BindUsing (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
 (*   | `Record_extension (label, patt, rem_patt) -> "{#"^ label ^"="^ string_of_pattern patt ^"|"^ string_of_pattern rem_patt ^"}" *)
-(*   | `Empty_record -> "()" *)
+(*   | `Unit -> "()" *)
 (*   | `Variant (label, patt) -> "< " ^ label ^ "=" ^ (string_of_pattern patt) ^ ">" *)
 
 
@@ -115,7 +116,7 @@ let rec patternize' = fun exp ->
     | Syntax.Nil _ -> `Nil
     | Syntax.Variable ("_", _) ->  `Bind (unique_name ())
     | Syntax.Variable (name, _) -> `Bind (name)
-    | Syntax.Record_empty _ -> `Empty_record
+    | Syntax.Record_empty _ -> `Unit
     | Syntax.Record_extension (name, value, record, _)
       -> `Record_extension (name, patternize' value, patternize' record)
     | Syntax.Variant_injection (name, value, _)
@@ -123,13 +124,16 @@ let rec patternize' = fun exp ->
 	(* See note above `amper' *)
     | Syntax.Apply(Syntax.Variable("&", _),
                    Apply(Syntax.Variable (var, _), expr, _), _) -> 
-	`Bind_using(var, patternize' expr)
+	`BindUsing(var, patternize' expr)
     | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
 	patternize_cons_pattern cons_patt
+    | Syntax.HasType (exp, datatype, _) ->
+	`HasType (patternize' exp, datatype)
     | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
   | Concat (List_of (e1, _), e2, _) ->
       `Cons(patternize' e1, patternize' e2)
+(* TM: TBD(maybe):  | Xml_concat (List_of (e1, _), e2, _) -> ? *)
 	
 let is_null expr pos = 
   Comparison(expr, "==", Nil pos, pos)
@@ -144,45 +148,53 @@ let and_expr l r pos =
       
 (* pattern-matching let *)
 let rec polylet : (pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression) =
-  fun pat pos value body ->
-    match pat with
-      | `Variant (name, patt) ->
-	  let case_variable = unique_name () in
-	  let variable = unique_name () in
-	    Variant_selection(value, name,
-			      case_variable,
-			      (polylet patt pos (Variable (case_variable, pos)) body),
-			      variable,
-			      Variant_selection_empty(Variable(variable, pos), pos),
-			      pos)
-      | `Bind_using _   -> failwith "Bind-using cannot be used in function parameter or let patterns"
-      | `Bind name -> Let (name, value, body, pos)
-      | `Constant c ->
-          (Condition(Comparison(value, "==", c, pos),
-                     body,
-                     Syntax.Wrong pos, pos))
-      | `Nil ->
-          (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
-                     body,
-                     Syntax.Wrong pos, pos))
-      | `Cons (head, tail) -> 
-          (polylet head pos (list_head value pos)
-             (polylet tail pos (list_tail value pos)
-                body))
-      | `Record_extension (label, patt, rem_patt) ->
-	  let temp_var_field = unique_name () in
-	  let temp_var_ext = unique_name () in
-	    Record_selection (label,
-                              temp_var_field,
-                              temp_var_ext,
-                              value,
-                              polylet patt pos
-                                (Variable (temp_var_field, pos))
-                                (polylet rem_patt pos
-                                   (Variable (temp_var_ext, pos))
-                                   body),
-                              pos)
-      | `Empty_record -> Record_selection_empty (value, body, pos)
+  let rec pl topt pat pos value body =
+    let value = match topt with
+      | None -> value
+      | Some t -> HasType (value, t, pos)
+    in
+      match pat with
+	| `Nil ->
+            (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
+                       body,
+                       Syntax.Wrong pos, pos))
+	| `Cons (head, tail) ->
+            (pl topt head pos (list_head value pos)
+               (pl topt tail pos (list_tail value pos)
+                  body))
+	| `Variant (name, patt) ->
+	    let case_variable = unique_name () in
+	    let variable = unique_name () in
+	      Variant_selection(value, name,
+				case_variable,
+				(pl topt patt pos (Variable (case_variable, pos)) body),
+				variable,
+				Variant_selection_empty(Variable(variable, pos), pos),
+				pos)
+	| `Unit -> Record_selection_empty (value, body, pos)
+	| `Record_extension (label, patt, rem_patt) ->
+	    let temp_var_field = unique_name () in
+	    let temp_var_ext = unique_name () in
+	      Record_selection (label,
+				temp_var_field,
+				temp_var_ext,
+				value,
+				pl topt patt pos
+                                  (Variable (temp_var_field, pos))
+                                  (pl topt rem_patt pos
+                                     (Variable (temp_var_ext, pos))
+                                     body),
+				pos)
+	| `Constant c ->
+            (Condition(Comparison(value, "==", c, pos),
+                       body,
+                       Syntax.Wrong pos, pos))
+	| `Bind name -> Let (name, value, body, pos)
+	| `BindUsing _ -> failwith "Bind-using cannot be used in function parameter or let patterns"
+	| `HasType (pat, t) ->
+	    pl (Some t) pat pos value body
+  in
+    pl None
 
 
 (*** pattern matching compiler ***)
@@ -201,7 +213,7 @@ let eq_pattern : equation * equation -> bool = fun ((pattern::_, _), (pattern'::
   match pattern, pattern' with
     | `Nil, `Nil | `Nil, `Cons _ | `Cons _, `Nil | `Cons _, `Cons _
     | `Variant _, `Variant _
-    | `Empty_record, `Empty_record
+    | `Unit, `Unit
     | `Record_extension _, `Record_extension _
     | `Constant _, `Constant _
     | `Bind _, `Bind _ -> true
@@ -211,15 +223,17 @@ type pattern_type = [
 | `List | `Variant | `Empty | `Record | `Constant | `Variable
 ]
 
-let get_pattern_type : equation -> pattern_type = fun (pattern::_, _) ->
+let rec get_pattern_type : equation -> pattern_type = fun (pattern::_, _) ->
   match pattern with
     | `Nil | `Cons _ -> `List
     | `Variant _ -> `Variant
-    | `Empty_record -> `Empty
+    | `Unit -> `Empty
     | `Record_extension _ -> `Record
     | `Constant _ -> `Constant
     | `Bind _ -> `Variable
-    | `Bind_using _ -> assert false
+    | `BindUsing _ -> assert false
+    | `HasType (pattern, _) -> failwith ("(get_pattern_type) Not implemented HasType yet")
+	(*get_pattern_type pattern*)
 
 let partition_equations : (equation * equation -> bool) -> equation list -> (equation list) list =
   fun equality_predicate ->
@@ -344,7 +358,7 @@ and match_empty
     match_cases pos vars
       (List.map (fun (pattern::ps, body) ->
 		   match pattern with
-		     | `Empty_record ->
+		     | `Unit ->
 			 (ps, body)
 		     | _ -> assert false) equations) def
 
@@ -465,7 +479,8 @@ type unary_op = [
 type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `RegexMatch ]
 type arith_binop = [`Times | `Div | `Exp | `Plus | `Minus | `FloatTimes | `FloatDiv | `FloatExp | `FloatPlus | `FloatMinus]
 type logical_binop = [`And | `Or]
-type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Cons]
+(* TM: Added a Xml_concat binary operator for the concatenation of XML values *)
+type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Xml_concat | `Cons]
 
 type operator = [ unary_op | binop | `Project of name ]
 type location = Syntax.location
@@ -474,6 +489,10 @@ type location = Syntax.location
 type order = [`Asc of string | `Desc of string]
 
 type pposition = Lexing.position * Lexing.position (* start * end *)
+
+type type_xml_unary_op = Xml.Type.t -> Xml.Type.t
+
+type type_xml_binary_op = Xml.Type.t -> Xml.Type.t -> Xml.Type.t
 
 type datatype = 
   | TypeVar of string
@@ -487,6 +506,18 @@ type datatype =
   | MailboxType of datatype
   | PrimitiveType of Types.primitive
   | DBType
+
+      (* TM: Xml type constructors *)
+  | TypeXml of datatype_xml
+and datatype_xml =
+  | TypeXmlFixed of Xml.Type.t
+  | TypeXmlUnaryOp of datatype * type_xml_unary_op
+  | TypeXmlBinaryOp of datatype * type_xml_binary_op * datatype
+  | TypeXmlElement of string * (string * datatype list) list * datatype list
+  | TypeXmlCdata of string
+  | TypeXmlForest of datatype list
+  | TypeXmlCharInterval of char * char
+
 and row = (string * [`Present of datatype | `Absent]) list * string option
 
 type quantifier = [`TypeVar of string | `RowVar of string]
@@ -511,12 +542,71 @@ let rec typevars : datatype -> quantifier list =
     | MailboxType k -> typevars k
     | UnitType
     | PrimitiveType _
-    | DBType -> []
+    | DBType
+    | TypeXml _ -> []
 
 type assumption = quantifier list * datatype
 
 let generalize (k : datatype) : assumption =
   typevars k, k
+
+let xml_types = Hashtbl.create 16
+
+let () = Hashtbl.add xml_types "Empty" Xml.Type.empty
+
+let () = Hashtbl.add xml_types "Latin1" Xml.Type.latin1_char
+
+let () = Hashtbl.add xml_types "Any" Xml.Type.any
+
+let () = Hashtbl.add xml_types "Epsilon" Xml.Type.epsilon
+
+let find_xml_type name =
+  try Hashtbl.find xml_types name
+  with Not_found ->
+    let result = Xml.Type.create (Some name) Xml.Type.Not_defined in
+    Hashtbl.add xml_types name result;
+    result
+
+let define_xml_type name contents =
+  try Xml.Type.set (Hashtbl.find xml_types name) contents
+  with Not_found ->
+    let result = Xml.Type.create (Some name) contents in
+    Hashtbl.add xml_types name result
+
+let rec desugar_type_xml type_xml =
+  let desugar_sub_list list =
+    match list with
+        [] -> Xml.Type.epsilon
+      | [a] -> desugar_type_as_xml_type a
+      | list ->
+        List.fold_left
+          (fun xml_type datatype ->
+             Xml.Type.concat xml_type (desugar_type_as_xml_type datatype))
+          Xml.Type.epsilon list in
+  match type_xml with
+    | TypeXmlUnaryOp (ty, op) -> op (desugar_type_as_xml_type ty)
+    | TypeXmlBinaryOp (left, op, right) ->
+        op (desugar_type_as_xml_type left) (desugar_type_as_xml_type right)
+    | TypeXmlElement (name, atts, contents) ->
+        Xml.Type.node
+          { Xml.ns = Xml.Type.epsilon;
+            label = Xml.Type.from_string name;
+            attributes =
+              { Xml.map = Xml.String_map.empty;
+                closed = true };
+            contents = desugar_sub_list contents }
+    | TypeXmlCdata text -> Xml.Type.from_string text
+    | TypeXmlForest list -> desugar_sub_list list
+    | TypeXmlCharInterval (low, high) ->
+        Xml.Type.create None
+          (Xml.Type.Char_set
+             (Xml.Int_set.segment (int_of_char low) (int_of_char high + 1)))
+    | TypeXmlFixed ty -> ty
+and desugar_type_as_xml_type datatype =
+  match datatype with
+      TypeXml type_xml -> desugar_type_xml type_xml
+    | PrimitiveType (`Abstract name) -> find_xml_type name
+    | _ -> invalid_arg "Basic types cannot occur inside xml types"
 
 let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
   let max = length vars in
@@ -529,9 +619,12 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
   let rec desugar varmap = 
     let lookup = flip assoc varmap in
       function
-	| TypeVar s -> (try `TypeVar (lookup s)
-			with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
+	| TypeVar s ->
+            (try `TypeVar (lookup s)
+	     with Not_found -> 
+               failwith ("Not found `"^ s ^ "' while desugaring assumption"))
 	| FunctionType (k1, k2) -> `Function (desugar varmap k1, desugar varmap k2)
+
 	| MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
                              `Recursive (n, desugar ((v,n):: varmap) k)
 	| UnitType -> Types.unit_type
@@ -544,8 +637,12 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
 	| VariantType row -> `Variant (desugar_row varmap row)
 	| ListType k -> `List (desugar varmap k)
 	| MailboxType k -> `Mailbox (desugar varmap k)
+        | PrimitiveType (`Abstract name as k) ->
+            (try `Xml (Hashtbl.find xml_types name)
+             with Not_found -> `Primitive k)
 	| PrimitiveType k -> `Primitive k
 	| DBType -> `DB
+        | TypeXml type_xml -> `Xml (desugar_type_xml type_xml)
   and desugar_row varmap (fields, rv) = 
     let lookup = flip assoc varmap in
     let seed = match rv with
@@ -609,6 +706,10 @@ type phrasenode =
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)
+
+(* TM: Type declaration *)
+  | Type_definition of name * datatype
+
 and phrase = (phrasenode * pposition)
 and ppattern = Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
 and switchcase = ppattern * phrase
@@ -663,6 +764,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
       | Var v       -> Variable (v, pos)
       | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
       | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
+      | InfixAppl (`Xml_concat, e1, e2) -> Xml_concat (desugar e1, desugar e2, pos)
       | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
       | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
       | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
@@ -806,7 +908,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 (*    is otherwise ill-formed. It should also be made to properly handle *)
 (*    CDATA. *)
 (*    Where's a good place to do so? *)
-| TextNode s -> Apply (Variable ("stringToXml", pos), String (s, pos), pos)
+(* TM: TextNode are transformed to Xml_cdata *)
+| TextNode s -> Xml_cdata (s, pos)
 | Xml (tag, attrs, subnodes) -> 
     let concat a b = 
       Concat (desugar a, b, pos) in
@@ -814,10 +917,15 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
       | [] -> String ("", pos)
       | [x] -> desugar x
       | xs  -> (fold_right concat xs (Nil (pos))) in
-      Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
+      Xml_element (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
 | XmlForest []  -> Nil  (pos)
 | XmlForest [x] -> desugar x
-| XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
+| XmlForest (x::xs) -> Xml_concat (desugar x, desugar (XmlForest xs, pos'), pos)
+| Type_definition (name, ty) ->
+    let xml_type = desugar_type_as_xml_type ty in
+    define_xml_type name (Xml.Type.Sequence [xml_type]);
+    Type_define (name, (), pos)
+| _ -> Xml.not_implemented "Type definition for basic type"
 and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
        should convert directly from phrases to patterns *)

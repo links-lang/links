@@ -3,10 +3,16 @@
 type type_var_set = Utility.IntSet.t
 
 (* Types for datatypes *)
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `Abstract of string ]
 
-type ('typ, 'row) type_basis = [
+(* TM: The former `XMLitem constant constructor has been changed by the
+   `Xml constructor which takes in argument the XML type informations. *)
+
+type primitive =
+    [ `Bool | `Int | `Char | `Float | `Abstract of string ]
+
+type ('typ, 'row, 'xml) type_basis = [
   | `Not_typed
+  | `Xml of 'xml
   | `Primitive of primitive
   | `TypeVar of int
   | `Function of ('typ * 'typ)
@@ -100,7 +106,7 @@ module TypeOpsGen(BasicOps: BASICTYPEOPS) :
 )
 
 (* Eventually all this should be generated *)
-module Show_type_basis (A : Show.Show) (B : Show.Show) : Show.Show with type a = (A.a,B.a) type_basis
+module Show_type_basis (A : Show.Show) (B : Show.Show) (C : Show.Show) : Show.Show with type a = (A.a,B.a,C.a) type_basis
 module Show_field_spec_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_basis
 module Show_field_spec_map_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_map_basis
 module Show_row_var_basis (A : Show.Show) : Show.Show with type a = (A.a) row_var_basis
@@ -109,7 +115,7 @@ module Show_assumption_basis (A : Show.Show) : Show.Show with type a = (A.a) ass
 module Show_environment_basis (A : Show.Show) : Show.Show with type a = (A.a) environment_basis
 
 
-module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a) type_basis
+module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) (C : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a,C.a) type_basis
 module Pickle_field_spec_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_basis
 module Pickle_field_spec_map_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_map_basis
 module Pickle_row_var_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) row_var_basis

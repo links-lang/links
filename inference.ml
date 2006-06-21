@@ -47,6 +47,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 
     (match (t1, t2) with
        | `Not_typed, `Not_typed -> true
+       | `Xml x, `Xml y when x = y -> true
        | `Primitive x, `Primitive y when x = y -> true
        | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	   Unionfind.equivalent lpoint rpoint
@@ -82,8 +83,7 @@ type unify_type_env = (datatype list) IntMap.t
 type unify_row_env = (row list) IntMap.t
 type unify_env = unify_type_env * unify_row_env
 
-
-let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
+let rec unify' (rec_env : unify_env) : (datatype * datatype) -> unit =
   let rec_types, rec_rows = rec_env in
 
   let unify_rec ((var, body), t) =
@@ -123,6 +123,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
       | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
+      | `Xml x, `Xml y -> Xml.Inference.unify x y
       | `Primitive x, `Primitive y when x = y -> ()
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	  if Unionfind.equivalent lpoint rpoint then
@@ -197,8 +198,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
        debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
       )
 
-and unify_rows' : unify_env -> ((row * row) -> unit) = 
-  fun rec_env (lrow, rrow) ->
+and unify_rows' (rec_env : unify_env) ((lrow : row), (rrow : row)) : unit = 
       debug_if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
     (* 
@@ -511,6 +511,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	  let rec_type_env, rec_row_env = rec_env in
 	    match typ with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+              | `Xml _ -> typ
 	      | `Primitive _  -> typ
 	      | `TypeVar _ -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
 	      | `MetaTypeVar point ->
@@ -644,6 +645,7 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
     in
       function
 	| `Not_typed -> raise (Failure "Programming error (TY313)")
+        | `Xml _
 	| `Primitive _ -> []
 	| `TypeVar var when IntSet.mem var bound_vars -> []
 	| `TypeVar var -> [`TypeVar var]
@@ -686,7 +688,8 @@ let rec is_value : 'a expression' -> bool = function
   | String _
   | Float _
   | Variable _
-  | Xml_node _ (* ? *)
+  | Xml_element _ (* ? *)
+  | Xml_cdata _
   | Record_empty _
   | Nil _
   | Abstr _ -> true
@@ -697,6 +700,7 @@ let rec is_value : 'a expression' -> bool = function
   | List_of (e, _) -> is_value e
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
+  | Xml_concat (a, b, _)
   | For (a, _, b, _)
   | Record_extension (_, a, b, _)
   | Record_selection_empty (a, b, _)
@@ -713,6 +717,8 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match expression with
   | Define (variable, _, _, pos) -> nested_def pos variable
+  | Type_define (name, ty, pos) ->
+      Type_define (name, ty, (pos, inference_type_of_type Types.unit_type, None))
   | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
   | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))
@@ -809,7 +815,7 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       let best_env, vars = type_check_mutually env variables in
       let body = type_check best_env body in
 	Rec (vars, body, (pos, type_of_expression body, None))
-  | Xml_node (tag, atts, cs, pos) as xml -> 
+  | Xml_element (tag, atts, cs, pos) as xml -> 
       let separate = partition (is_special -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
       let bindings = 
@@ -835,13 +841,21 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       let attr_type = string_type in
         (* force contents to be XML, attrs to be strings
            unify is for side effect only! *)
-      let _ = List.iter (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
+      let contents_xml_type = Xml.Inference.fresh () in
+      let _ = List.iter (fun node -> unify (type_of_expression node, `Xml contents_xml_type)) contents in
       let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
+      let xml_type = Xml.Inference.node
+        { Xml.ns = Xml.Inference.epsilon;
+          label = Xml.Inference.from_type (Xml.Type.from_string tag);
+          attributes =
+            { Xml.map = Xml.String_map.empty;
+              closed = true };
+          contents = contents_xml_type } in
       let trimmed_node =
-        Xml_node (tag, 
+        Xml_element (tag, 
                   nonspecial_attrs,         (* +--> up here I mean *)
                   contents,                 (* | *)
-                  (pos, `List (`Primitive `XMLitem), None))
+                  (pos, `Xml xml_type, None))
       in                                    (* | *)
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
@@ -917,6 +931,20 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
 	  unify (type_of_expression r, type_of_expression l);
 	  let type' = `List (tvar) in
 	    Concat (l, r, (pos, type', None))
+  | Xml_concat (l, r, pos) ->
+      let tvar = ITO.fresh_type_variable () in
+      let l_xml_type = Xml.Inference.fresh () in
+      let l = type_check env l in
+      unify (type_of_expression l, `Xml l_xml_type);
+      let r = type_check env r in
+      let r_xml_type = Xml.Inference.fresh () in
+      unify (type_of_expression r, `Xml r_xml_type);
+      let type' =
+        `Xml (Xml.Inference.concat l_xml_type r_xml_type) in
+      Xml_concat (l, r, (pos, type', None))
+  | Xml_cdata (value, pos) ->
+      let xml_type = Xml.Inference.from_type (Xml.Type.from_string value) in
+      Xml_cdata (value, (pos, `Xml xml_type, None))
   | For (expr, var, value, pos) ->
       let value_tvar = ITO.fresh_type_variable () in
       let expr_tvar = ITO.fresh_type_variable () in
@@ -970,8 +998,17 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       Wrong(pos, ITO.fresh_type_variable(), None)
   | HasType(expr, typ, pos) ->
       let expr = type_check env expr in
-	unify(type_of_expression expr, inference_type_of_type typ);
-	HasType(expr, typ, (pos, type_of_expression expr, None))
+      unify (type_of_expression expr, inference_type_of_type typ);
+      begin
+        (* TM: TBD: unify sub-XML types as well *)
+        match typ with
+            `Xml typ_xml ->
+              let expr_xml_type = Xml.Inference.fresh () in
+              unify (type_of_expression expr, `Xml expr_xml_type);
+              Xml.Inference.less_than expr_xml_type typ_xml
+          | _ -> ()
+      end;
+      HasType(expr, typ, (pos, type_of_expression expr, None))
   | Placeholder _ 
   | Alien _ ->
       assert(false)

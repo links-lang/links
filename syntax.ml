@@ -26,6 +26,7 @@ type location = [`Client | `Server | `Unknown]
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
+  | Type_define of (string * unit * 'data)
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -40,8 +41,12 @@ type 'data expression' =
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * ('data expression')) list * 'data expression' * 'data)
-  | Xml_node of (string * ((string * 'data expression') list) * 
+      (* TM: Xml_node changed in favor of Xml_element. *)
+  | Xml_element of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
+      (* TM: Xml_cdata added, "Xml_cdata foo" has the same semantic than
+         "Appy (stringOfXml, foo), but a more precise type. "*)
+  | Xml_cdata of (string * 'data)
   | Record_empty of 'data
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
@@ -55,6 +60,9 @@ type 'data expression' =
   | Nil of ('data)
   | List_of of ('data expression' * 'data)
   | Concat of ('data expression' * 'data expression' * 'data)
+      (* TM: Xml_concat has the same semantic than Concat, but works with
+         Xml types instead list types. *)
+  | Xml_concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
   | Table of ((* the database: *) 'data expression' *
@@ -71,6 +79,7 @@ type 'data expression' =
 let is_define = 
   function
     | Define _
+    | Type_define _ (* TM: ? *)
     | Alien _ -> true
     | _ -> false
 
@@ -99,12 +108,16 @@ let rec unparse_sequence empty unit append = function
   | Concat (l, r, _) -> (append 
                                      (unparse_sequence empty unit append l) 
                                      (unparse_sequence empty unit append r))
+  | Xml_concat (l, r, _) -> (append 
+                                     (unparse_sequence empty unit append l) 
+                                     (unparse_sequence empty unit append r))
   | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
 and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
 and show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
+  | Type_define (variable, ty, data) -> "type " ^ variable ^ " = ..." ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -124,7 +137,8 @@ and show t : 'a expression' -> string = function
       "{" ^ (String.concat " ; " (map (function (label, expr) -> " " ^ label ^ "=" ^ show t expr) variables))
       ^ "; " ^ show t body ^ "}" ^ t data
   | Escape (var, body, data) -> "escape " ^ var ^ " in " ^ show t body ^ t data
-  | Xml_node (tag, attrs, elems, data) ->  
+(* TM: Xml_node is changed for Xml_element *)
+  | Xml_element (tag, attrs, elems, data) ->  
       let attrs = 
         let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ show t v ^ "\"") attrs) in
           match attrs with 
@@ -133,6 +147,9 @@ and show t : 'a expression' -> string = function
         (match elems with 
            | []    -> "<" ^ tag ^ attrs ^ "/>" ^ t data
            | elems -> "<" ^ tag ^ attrs ^ ">" ^ String.concat "" (map (show t) elems) ^ "</" ^ tag ^ ">" ^ t data)
+(* TM: CDATA are just printed like strings, but it should have to be
+   changed probably. *)
+  | Xml_cdata (s, data) -> "\"" ^ s ^ "\"" ^ t data
   | Record_empty (data) ->  "()" ^ t data
   | Record_extension (label, value, record, data) ->
       "(" ^ label ^ "=" ^ show t value ^ "|" ^ show t record ^ ")" ^ t data
@@ -153,6 +170,8 @@ and show t : 'a expression' -> string = function
   | List_of (elem, data)       -> "[" ^ show t elem ^ "]" ^ t data
   | Concat (left, right, data) -> 
       "(" ^ show t left ^ t data ^ "++" ^ show t right ^ ")" 
+  | Xml_concat (left, right, data) -> 
+      "(" ^ show t left ^ t data ^ "@" ^ show t right ^ ")" 
   | For (expr, variable, value, data) ->
       "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
@@ -169,7 +188,7 @@ let string_of_typed_expression (s : expression) : string =
 	  " : (" ^ (string_of_datatype datatype) ^ ")") s
 
 let with_label = (fun (_, _, lbl) ->
-     " [" ^ fromOption "BOGUS" lbl ^ "] ")
+                    " [" ^ fromOption "BOGUS" lbl ^ "] ")
 
 let string_of_expression s = show (fun _ -> "") s
 
@@ -184,13 +203,13 @@ let string_of_orders orders = match orders with
   | _ -> "order [" ^ String.concat ", " (map string_of_order orders) ^ "]"
 
 (*
-Functions involved in a visit:
+  Functions involved in a visit:
 
   1. The custom visitor.  This is provided by the user.
   2. The default visitor.  This just calls the custom visitor on each sub-node of the tree.
 
 
-How do we make it more general?
+  How do we make it more general?
 
   Add a further custom function that is called on each node and
   returns a result which is accumulated as in a fold.  The result of
@@ -224,6 +243,7 @@ let visit_expressions'
   let rec visit_children (expr, data) = match expr with
     | Define (s, e, l, d) -> let e, data = visitor visit_children (e, data) in
                                 Define (s, e, l, d), data
+    | Type_define (n, ty, d) -> Type_define (n, ty, d), data
     | Boolean (v, d) ->  Boolean (v, d), unit data
     | Integer (v, d) -> Integer (v, d), unit data
     | Char (v, d) -> Char (v, d), unit data
@@ -257,7 +277,7 @@ let visit_expressions'
         let body, data2 = visitor visit_children (body, data) in 
           (Rec (map (fun (e, _, name) -> (name, e)) boundvals, body, d),
            combiner data1 data2)
-    | Xml_node (tag, attrs, elems, d) -> 
+    | Xml_element (tag, attrs, elems, d) -> 
         (* Not 100% sure this is right *)
         let attrvals = map (fun (name, value) ->
                               let e, d = visitor visit_children (value, data) in 
@@ -273,8 +293,9 @@ let visit_expressions'
         let data2 = (match map snd bodyvals with
                        | [] -> unit data
                        | bodydata  -> fold_left combiner (hd bodydata) (tl bodydata)) in
-          (Xml_node (tag, map (fun (a, _, b) -> (b, a)) attrvals, map fst bodyvals, d), 
+          (Xml_element (tag, map (fun (a, _, b) -> (b, a)) attrvals, map fst bodyvals, d), 
            combiner data1 data2)
+    | Xml_cdata (s, d) -> Xml_cdata (s, d), unit data
 
     | Record_empty d -> Record_empty d, unit data
     | Record_extension (s, e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data) 
@@ -300,6 +321,9 @@ let visit_expressions'
     | Concat (e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
                                       and e2, data2 = visitor visit_children (e2, data) in
         Concat ( e1,  e2, d), combiner data1 data2
+    | Xml_concat (e1, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
+                                      and e2, data2 = visitor visit_children (e2, data) in
+        Xml_concat ( e1,  e2, d), combiner data1 data2
     | For (e1, s, e2, d) -> let e1, data1 = visitor visit_children (e1, data)
                             and e2, data2 = visitor visit_children (e2, data) in
         For ( e1, s, e2, d), combiner data1 data2
@@ -352,6 +376,7 @@ let freevars : 'a expression' -> string list =
 
 let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Define (a, b, loc, data) -> Define (a, redecorate f b, loc, f data)
+  | Type_define (a, b, data) -> Type_define (a, b, f data)
   | Boolean (a, data) -> Boolean (a, f data)
   | Integer (a, data) -> Integer (a, f data)
   | Float (a, data) -> Float (a, f data)
@@ -365,9 +390,10 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Let (a, b, c, data) -> Let (a, redecorate f b, redecorate f c, f data)
   | Rec (a, b, data) -> 
       Rec (map (fun (s,e) -> s, redecorate f e) a, redecorate f b, f data)
-  | Xml_node (a, b, c, data) -> 
-      Xml_node (a, map (fun (s,e) -> s, redecorate f e) b, 
+  | Xml_element (a, b, c, data) -> 
+      Xml_element (a, map (fun (s,e) -> s, redecorate f e) b, 
                 map (redecorate f) c, f data)
+  | Xml_cdata (a, data) -> Xml_cdata (a, f data)
   | Record_empty (data) -> Record_empty (f data)
   | Record_extension (a, b, c, data) -> Record_extension (a, redecorate f b, redecorate f c, f data)
   | Record_selection (a, b, c, d, e, data) -> Record_selection (a, b, c, redecorate f d, redecorate f e, f data)
@@ -378,6 +404,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Nil (data) -> Nil (f data)
   | List_of (a, data) -> List_of (redecorate f a, f data)
   | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
+  | Xml_concat (a, b, data) -> Xml_concat (redecorate f a, redecorate f b, f data)
   | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
   | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
@@ -425,7 +452,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Alien _
                | Placeholder _ 
                | Wrong _
-               | Variable _ -> []
+               | Variable _
+               | Xml_cdata _
+               | Type_define _ -> []
 
                | Variant_selection_empty (e, _)
                | Define (_, e, _, _)
@@ -444,6 +473,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_extension (_, e1, e2, _)
                | Record_selection_empty (e1, e2, _)
                | Concat (e1, e2, _)
+               | Xml_concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _) ->
                    [visitor visit_children e1; visitor visit_children e2]
@@ -454,7 +484,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_selection (e1, _, _, e2, _, e3, _) -> [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
 
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e) -> visitor visit_children e) b
-               | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
+               | Xml_element (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
 
   in
     visitor visit_children
@@ -489,7 +519,9 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Nil _
       | Wrong _
       | Alien _
-      | Record_empty _ -> None
+      | Record_empty _
+      | Xml_cdata _
+      | Type_define _ -> None
           
       (* fixed children *)
       | HasType (e, k, b)                          -> passto [e] (fun [e] -> HasType (e, k, b))
@@ -510,6 +542,7 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Record_selection (a, b, c, e1, e2, d)      -> passto [e1; e2] (fun [e1; e2] -> Record_selection (a, b, c, e1, e2, d))
       | Record_selection_empty (e1, e2, a)         -> passto [e1; e2] (fun [e1; e2] -> Record_selection_empty (e1, e2, a))
       | Concat (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Concat (e1, e2, a))
+      | Xml_concat (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Xml_concat (e1, e2, a))
       | For (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> For (e1, a, e2, b))
       | SortBy (e1, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> SortBy (e1, e2, b))
       | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
@@ -517,16 +550,17 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       (* varying children *)
       | Rec (es, e2, a) -> (let names, vals = split es in 
                               passto (e2::vals) (fun (e2::vals) -> Rec (combine names vals, e2, a)))
-      | Xml_node (a, es1, es2, b) -> 
+      | Xml_element (a, es1, es2, b) -> 
           (let anames, avals = split es1 in 
              passto
                (avals @ es2)
                (fun children -> let alength = length avals in 
-                  Xml_node (a, combine anames (take alength children), 
+                  Xml_element (a, combine anames (take alength children), 
                             drop alength children, b)))
             
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
+        | Type_define (_, _, data) -> data
 	| HasType (_, _, data) -> data
 	| Boolean (_, data) -> data
 	| Integer (_, data) -> data
@@ -540,7 +574,8 @@ let expression_data : ('a expression' -> 'a) = function
 	| Abstr (_, _, data) -> data
 	| Let (_, _, _, data) -> data
 	| Rec (_, _, data) -> data
-	| Xml_node (_, _, _, data) -> data
+	| Xml_element (_, _, _, data) -> data
+        | Xml_cdata (_, data) -> data
 	| Record_empty (data) -> data
 	| Record_extension (_, _, _, data) -> data
 	| Record_selection (_, _, _, _, _, data) -> data
@@ -551,6 +586,7 @@ let expression_data : ('a expression' -> 'a) = function
 	| Nil (data) -> data
 	| List_of (_, data) -> data
 	| Concat (_, _, data) -> data
+	| Xml_concat (_, _, data) -> data
 	| For (_, _, _, data) -> data
 	| Database (_, data) -> data
 	| Table (_, _, _, data) -> data

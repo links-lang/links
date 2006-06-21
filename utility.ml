@@ -335,8 +335,23 @@ let base64decode s =
 and base64encode s = Netencoding.Base64.encode s
 
 (*** ocaml versions ***)
-let ocaml_version_number = (List.map int_of_string
-                              (split_string Sys.ocaml_version '.'))
+
+(* TM: If the version name contains a '+', we only take the left
+   part.  (In CVS versions, the right part is a kind of revision number;
+   for example: 3.09.3+dev0 ) *)
+
+(*
+  let ocaml_version_number = (List.map int_of_string
+  (split_string Sys.ocaml_version '.'))
+*)
+
+let ocaml_version_number =
+  let version = 
+    if String.contains Sys.ocaml_version '+' then
+      let delim_index = String.index Sys.ocaml_version '+' in
+      String.sub Sys.ocaml_version 0 delim_index
+    else Sys.ocaml_version in
+  (List.map int_of_string (split_string version '.'))
 
 (* Ocaml team says string comparison would work here. Do we believe them? *)
 let rec version_atleast a b =

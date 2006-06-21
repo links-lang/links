@@ -32,7 +32,7 @@ open Result
 *)
 let lname_bound_vars : 'a expression' -> string list = 
   let rec lnames = function
-    | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
+    | Xml_element (("input"|"textarea"|"select"), attrs, contents, _) ->
         (try 
           let lname_attr = assoc "l:name" attrs in 
             (try
@@ -44,39 +44,40 @@ let lname_bound_vars : 'a expression' -> string list =
                | Match_failure _ ->failwith("l:name attribute was not a string: "
                                            ^ string_of_expression lname_attr))
         with Not_found -> concat (map lnames contents))
-    | Xml_node ("form", _, _, _) -> (* new scope *) []
-    | Xml_node (_, _, contents, _) -> concat (map lnames contents)
+    | Xml_element ("form", _, _, _) -> (* new scope *) []
+    | Xml_element (_, _, contents, _) -> concat (map lnames contents)
     | Concat (l, r, _) -> lnames l @ lnames r
+    | Xml_concat (l, r, _) -> lnames l @ lnames r
     | _ -> [] 
   in function
-    | Xml_node ("form", _, contents, _)  ->
+    | Xml_element ("form", _, contents, _)  ->
         concat (map lnames contents)
-    | Xml_node (_, _, _, _)  -> []
+    | Xml_element (_, _, _, _)  -> []
         
 
 let is_special x = String.length x > 2 && String.sub x 0 2 = "l:"
 
 let islform : 'data expression' -> bool = function
-  | Xml_node ("form", attrs, _, _) 
+  | Xml_element ("form", attrs, _, _) 
       when List.exists (is_special -<- fst) attrs -> true
   | _ -> false
 
 (** islhref
     should be something like is_transformable_anchor *)
 let islhref : 'data expression' -> bool = function
-  | Xml_node ("a", attrs, _, _) 
+  | Xml_element ("a", attrs, _, _) 
       when exists (fun (k,_) -> Str.string_match (Str.regexp "l:") k 0) attrs -> true
   | _ -> false
 
 (* Is an expression an <input l:name ...> expression? *)
 let isinput : 'data expression' -> bool = function
-  | Xml_node (("input"|"textarea"|"select"), attrs, _, _)
+  | Xml_element (("input"|"textarea"|"select"), attrs, _, _)
       when mem_assoc "l:name" attrs -> true
   | _ -> false
 
 let add_attrs new_attrs = function
-   | Xml_node (tag, attrs, c, d) ->
-       Xml_node (tag, attrs @ new_attrs, c, d)
+   | Xml_element (tag, attrs, c, d) ->
+       Xml_element (tag, attrs @ new_attrs, c, d)
    | o -> failwith ("Non-XML structure passed to add_attrs : " ^
                       string_of_expression o)
 
@@ -88,10 +89,10 @@ let string s =
   String (s, (Sugar._DUMMY_POS, Types.string_type, None))
 
 let hidden_input name value = 
-  Xml_node ("input", [("type", string "hidden");
+  Xml_element ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (Sugar._DUMMY_POS, `List (`Primitive `XMLitem), None))
+            (Sugar._DUMMY_POS, `Xml Xml.Type.any, None))
 
 let attrname = fst
 let attrval = snd
@@ -176,7 +177,7 @@ let plain_deserialise_result str =
 (* Serialise the continuation and environment, and adjust the form accordingly *)
 let xml_transform env lookup eval : expression -> expression = 
   function 
-    | Xml_node ("form", attrs, contents, data) as form ->
+    | Xml_element ("form", attrs, contents, data) as form ->
         let new_field = 
           match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
             | [] -> []
@@ -192,18 +193,18 @@ let xml_transform env lookup eval : expression -> expression =
                        [hidden_input "_cont" (marshal_continuation c)]
                    | _ -> failwith "Internal error: l:handler was not a continuation")
         in
-          Xml_node ("form",
+          Xml_element ("form",
                     substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"]) ("action", string "#") attrs, 
                     new_field @ contents, 
                     data)
 
-    | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
+    | Xml_element (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with
-           | String (name, _) -> Xml_node (tag, substitute (attrname ->- (=) "l:name") ("name", string name) attrs, contents, data)
+           | String (name, _) -> Xml_element (tag, substitute (attrname ->- (=) "l:name") ("name", string name) attrs, contents, data)
            | _ -> failwith ("Internal error transforming xml (no l:name found on " ^ tag)
          with Not_found -> input)
 
-    | Xml_node ("a", attrs, contents, data) ->
+    | Xml_element ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in
         let href_val = 
           if is_simple_apply href_expr then
@@ -215,4 +216,4 @@ let xml_transform env lookup eval : expression -> expression =
         in
         let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
         in
-          Xml_node ("a", attrs, contents, data)
+          Xml_element ("a", attrs, contents, data)

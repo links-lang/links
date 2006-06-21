@@ -5,7 +5,7 @@ open Type_basis
 type type_var_set = Type_basis.type_var_set
 type primitive = Type_basis.primitive
 
-type datatype = (datatype, row) type_basis
+type datatype = (datatype, row, Xml.Type.t) type_basis
 and field_spec = datatype field_spec_basis
 and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
@@ -30,7 +30,10 @@ val get_present_fields : 'typ field_spec_map_basis -> (string * 'typ) list
 val get_absent_fields : 'typ field_spec_map_basis -> string list
 
 val string_type : datatype
-val xml : datatype
+
+(* TM: when we build an XML type, we are now able to indicate the
+   contents regular type, so xml is no longer a value. *)
+(*val xml : Xml.Inference.t -> datatype*)
 
 (* Type printers *)
 val string_of_primitive : primitive -> string

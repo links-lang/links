@@ -45,7 +45,8 @@ let settings : ((universal SettingsMap.t) ref) = ref (SettingsMap.empty)
 let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, value) ->
   if SettingsMap.mem name (!settings) then
     let universal_setting = SettingsMap.find name (!settings) in
-      if (user_check && is_user_setting (universal_setting)) then
+    (* TM: was "user_check && ..", I think it was a mistake. *)
+      if (not user_check || is_user_setting (universal_setting)) then
 	match universal_setting with
 	  | `Bool setting ->
 	      begin
@@ -59,7 +60,7 @@ let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, v
 		try
 		  set_value setting (int_of_string value)
 		with Invalid_argument _ ->
-		  output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
+		  output_string stderr ("Setting '" ^ name ^ "' expects an integer\n"); flush stderr
 	      end
 	  | `String setting ->
 	      set_value setting value
@@ -135,3 +136,10 @@ let print_settings () =
   in
     [""] @ user_settings @ [""] @ system_settings
     
+let fold f_bool f_int f_string v =
+  let f _ setting v =
+    match setting with
+        `Bool setting -> f_bool setting v
+      | `Int setting -> f_int setting v
+      | `String setting -> f_string setting v in
+  SettingsMap.fold f !settings v
