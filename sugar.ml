@@ -67,8 +67,8 @@ type pattern = [
   | `Unit
   | `Record_extension of (string * pattern * pattern)
   | `Constant of untyped_expression
-  | `Bind of string
-  | `BindUsing of (string * pattern) (* What's this? 'as' in ML *)
+  | `Variable of string
+  | `As of (string * pattern)
   | `HasType of pattern * Types.datatype
 ]
 
@@ -78,20 +78,20 @@ type pattern = [
 (*
 let string_of_pattern = function
   | `Constant _ -> "Constant"
-  | `Bind _ -> "Variable"
+  | `Variable _ -> "Variable"
   | `Record_extension _ -> "Record_extension"
   | `Unit -> "()"
   | `Variant _ -> "Variant"
   | `Nil -> "[]"
   | `Cons _ -> "::"
-  | `BindUsing _ -> "?"
+  | `As _ -> "?"
 *)
 
 (* let rec string_of_pattern = function *)
 (*   | `Constant expr -> string_of_expression expr *)
 (*   | Variable name -> name *)
-(*   | `Bind name -> "^" ^ name *)
-(*   | `BindUsing (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
+(*   | `Variable name -> "^" ^ name *)
+(*   | `As (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
 (*   | `Record_extension (label, patt, rem_patt) -> "{#"^ label ^"="^ string_of_pattern patt ^"|"^ string_of_pattern rem_patt ^"}" *)
 (*   | `Unit -> "()" *)
 (*   | `Variant (label, patt) -> "< " ^ label ^ "=" ^ (string_of_pattern patt) ^ ">" *)
@@ -114,17 +114,20 @@ let rec patternize' = fun exp ->
     | Syntax.String _
     | Syntax.Float _  -> `Constant exp
     | Syntax.Nil _ -> `Nil
-    | Syntax.Variable ("_", _) ->  `Bind (unique_name ())
-    | Syntax.Variable (name, _) -> `Bind (name)
+    | Syntax.Variable ("_", _) ->  `Variable (unique_name ())
+    | Syntax.Variable (name, _) -> `Variable (name)
     | Syntax.Record_empty _ -> `Unit
     | Syntax.Record_extension (name, value, record, _)
       -> `Record_extension (name, patternize' value, patternize' record)
     | Syntax.Variant_injection (name, value, _)
       -> `Variant (name, patternize' value)
 	(* See note above `amper' *)
+(* This isn't really implemented some where is it? *)
+(*
     | Syntax.Apply(Syntax.Variable("&", _),
                    Apply(Syntax.Variable (var, _), expr, _), _) -> 
-	`BindUsing(var, patternize' expr)
+	`As(var, patternize' expr)
+*)
     | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
 	patternize_cons_pattern cons_patt
     | Syntax.HasType (exp, datatype, _) ->
@@ -188,8 +191,9 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
             (Condition(Comparison(value, "==", c, pos),
                        body,
                        Syntax.Wrong pos, pos))
-	| `Bind name -> Let (name, value, body, pos)
-	| `BindUsing _ -> failwith "Bind-using cannot be used in function parameter or let patterns"
+	| `Variable name -> Let (name, value, body, pos)
+	| `As (name, pattern) ->
+	    Let (name, value, pl topt pattern pos (Variable (name, pos)) body, pos)
 	| `HasType (pat, t) ->
 	    pl (Some t) pat pos value body
   in
@@ -215,24 +219,25 @@ let eq_pattern : equation * equation -> bool = fun ((pattern::_, _), (pattern'::
     | `Unit, `Unit
     | `Record_extension _, `Record_extension _
     | `Constant _, `Constant _
-    | `Bind _, `Bind _ -> true
+    | `Variable _, `Variable _ -> true
     | _, _ -> false
 
 type pattern_type = [
 | `List | `Variant | `Empty | `Record | `Constant | `Variable
 ]
 
-let rec get_pattern_type : equation -> pattern_type = fun (pattern::_, _) ->
-  match pattern with
-    | `Nil | `Cons _ -> `List
-    | `Variant _ -> `Variant
-    | `Unit -> `Empty
-    | `Record_extension _ -> `Record
-    | `Constant _ -> `Constant
-    | `Bind _ -> `Variable
-    | `BindUsing _ -> assert false
-    | `HasType (pattern, _) -> failwith ("(get_pattern_type) Not implemented HasType yet")
-	(*get_pattern_type pattern*)
+let rec get_pattern_type : pattern -> pattern_type = function
+  | `Nil | `Cons _ -> `List
+  | `Variant _ -> `Variant
+  | `Unit -> `Empty
+  | `Record_extension _ -> `Record
+  | `Constant _ -> `Constant
+  | `Variable _ -> `Variable
+  | `As (_, pattern) -> get_pattern_type pattern
+  | `HasType (pattern, _) -> get_pattern_type pattern
+
+let get_equations_pattern_type : equation list -> pattern_type =
+  fun ((pattern::_, _)::_) -> get_pattern_type pattern
 
 let partition_equations : (equation * equation -> bool) -> equation list -> (equation list) list =
   fun equality_predicate ->
@@ -326,7 +331,7 @@ let rec match_cases
 	  let equationss = partition_equations eq_pattern equations in
 	    List.fold_right
 	      (fun equations exp ->
-		 match get_pattern_type (List.hd equations) with
+		 match get_equations_pattern_type equations with
 		   | `List ->
 		       match_list pos vars (partition_list_equations equations) exp
 		   | `Variant ->
@@ -347,7 +352,7 @@ and match_var
     match_cases pos vars
       (List.map (fun (pattern::ps, body) ->
 		   match pattern with
-		     | `Bind var' ->
+		     | `Variable var' ->
 			 (ps, subst body var' var)
 		     | _ -> assert false) equations) def
 
@@ -448,9 +453,9 @@ and match_constant
 let rec polylets (bindings : (pattern * untyped_expression * position * bool) list) expression =  
   let folder (patt, value, pos, recp) expr = 
     match patt, value, expr, recp with 
-      | `Bind s, Abstr _, Rec (bindings, e, p), _ ->  
+      | `Variable s, Abstr _, Rec (bindings, e, p), _ ->  
           Rec ((s, value)  :: bindings, e, p) 
-      | `Bind s, Abstr _, _, true ->  
+      | `Variable s, Abstr _, _, true ->  
           Rec ([s, value], expr, pos) 
       | _ ->  
           polylet patt pos value expr in 
@@ -458,7 +463,7 @@ let rec polylets (bindings : (pattern * untyped_expression * position * bool) li
 
 
 let func (pos : position) (body : untyped_expression) : pattern -> untyped_expression = function
-      | `Bind name -> Abstr (name, body, pos)
+      | `Variable name -> Abstr (name, body, pos)
       | pat -> let temp_var = unique_name () in Abstr (temp_var, polylet pat pos (Variable (temp_var, pos)) body, pos)
 
 let rec polyfunc (patterns : pattern list) (pos : position) (expr : untyped_expression) : untyped_expression =
@@ -623,7 +628,8 @@ type phrasenode =
   | XmlForest of (phrase list)
   | TextNode of (string)
 and phrase = (phrasenode * pposition)
-and ppattern = Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
+and ppattern = | Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
+	       | AsPattern of string * phrase
 and switchcase = ppattern * phrase
 and regex = | Range of (char * char)
             | Simply of string
@@ -631,6 +637,8 @@ and regex = | Range of (char * char)
             | Seq of regex list
             | Repeat of (Regex.repeat * regex)
             | Splice of phrase
+
+let asPattern (Pattern phrase, name) = AsPattern (name, phrase)
 
 let _DUMMY_PHRASE = TupleLit [], (Lexing.dummy_pos, Lexing.dummy_pos)
 let _DUMMY_PATTERN = Pattern _DUMMY_PHRASE
@@ -646,20 +654,6 @@ let uncompare : comparison_binop -> string =
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^."; `FloatPlus, "+."; `FloatMinus, "-."]
 
-(* TBD: Will be obviated when we use straightahead bindings with
-   failure, as in Wadler/Peyton-Jones. *)
-let rec list_type_switch = function
-    [] -> false
-  | (Pattern(ListLit _, _), _) :: _ 
-  | (Pattern(TupleLit [ListLit _, _], _), _) :: _ 
-  | (Pattern(InfixAppl (`Cons, _, _), _), _) :: _
-  | (Pattern(TupleLit [InfixAppl (`Cons, _, _), _], _), _) :: _ 
-    -> true
-  | (Pattern(Var _, _), _) :: cases
-  | (Pattern(TupleLit [Var _, _], _), _) :: cases
-    -> list_type_switch cases
-  | _ -> false
-      
 (* Convert a syntax tree as returned by the parser into core syntax *)
 let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
   let pos = lookup_pos pos' in 
@@ -771,21 +765,21 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
                       | Binding (p, e), pos -> 
 			  (patternize p, desugar e, lookup_pos pos, false)
                       | FunLit (Some n, patts, body), pos -> 
-			  (`Bind n, desugar (FunLit (None, patts, body), pos), 
+			  (`Variable n, desugar (FunLit (None, patts, body), pos), 
 			   lookup_pos pos, true)
                       | expr, pos -> 
-			  `Bind "__", desugar (expr, pos), lookup_pos pos, false) es in
+			  `Variable "__", desugar (expr, pos), lookup_pos pos, false) es in
 	  polylets es (desugar exp)
       | Foreign (language, name, datatype) -> 
 	  Alien (language, name, desugar_assumption (generalize datatype), pos)
       | SortBy_Conc(patt, expr, sort_expr) ->
 	  (match patternize patt with
-             | `Bind var -> 
+             | `Variable var -> 
 		 SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
              | pattern -> failwith("orderby clause on non-simple pattern-matching for is not yet implemented."))
       | Iteration (pattern, from, body, None, None) ->
 	  (match patternize pattern with
-             | `Bind var -> For (desugar body, var, desugar from, pos)
+             | `Variable var -> For (desugar body, var, desugar from, pos)
              | pattern -> (let var = unique_name () in
 	                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
 				  var, desugar from, pos)))
@@ -807,8 +801,8 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 		match_cases
 		  pos
 		  [x]
-		  (List.map (fun (Pattern patt, body) ->
-			       [patternize' (desugar patt)], desugar body) patterns)
+		  (List.map (fun (patt, body) ->
+			       [patternize patt], desugar body) patterns)
 		  (Syntax.Wrong pos),
 	  pos)
 | Receive (patterns, final) -> 
@@ -835,6 +829,7 @@ and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
        should convert directly from phrases to patterns *)
   | Pattern p -> patternize' (desugar lookup_pos p)
+  | AsPattern (x, p) -> `As (x, patternize' (desugar lookup_pos p))
 and list_patt_to_bool value pos = function
     Var _, _ -> Boolean(true, pos)
   | TupleLit [p], _ -> list_patt_to_bool value pos p
@@ -847,17 +842,6 @@ and list_patt_to_bool value pos = function
         (and_expr (list_patt_to_bool (list_head value pos) pos head)
            (list_patt_to_bool (list_tail value pos) pos tail) pos) pos
   | ListLit [], _ -> is_null value pos
-and open_list_match value cases default lookup_pos pos =
-    let inner_case =
-      match default with
-          None -> Wrong pos
-	| Some(x, body) -> Let(x, value, desugar lookup_pos body, pos)
-    in
-      fold_right (fun (Pattern patt, body) otherwise ->
-                    Condition(list_patt_to_bool value pos patt,
-                              polylet (patternize' (desugar lookup_pos patt)) pos value (desugar lookup_pos body),
-                              otherwise, pos)
-		 ) cases inner_case
 and desugar_repeat pos : Regex.repeat -> phrasenode = function
   | Regex.Star      -> ConstructorLit ("Star", None)
   | Regex.Plus      -> ConstructorLit ("Plus", None)

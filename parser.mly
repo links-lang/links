@@ -43,7 +43,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token MU ALIEN
 %token QUESTION TILDE
 %token <char*char> RANGE
-%token UNDERSCORE
+%token UNDERSCORE AS
 
 %start parse_links
 %start just_datatype
@@ -343,6 +343,7 @@ record_label:
 
 patt:
 | cons_expression                                              { Pattern $1 }
+| cons_expression AS VARIABLE                                  { AsPattern ($3, $1) }
 
 just_datatype:
 | datatype SEMICOLON                                               { $1 }

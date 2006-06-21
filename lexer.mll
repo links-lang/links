@@ -62,6 +62,7 @@ let keywords = [
 "desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
 "var"    , VAR;    "spawn"    ,  SPAWN;    "mu"        , MU;
 "alien"  , ALIEN;
+"as"     , AS;
 ] 
 exception LexicalError of (string * Lexing.position)
 
