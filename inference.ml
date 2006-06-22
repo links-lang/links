@@ -724,8 +724,6 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match expression with
   | Define (variable, _, _, pos) -> nested_def pos variable
-  | Type_define (name, ty, pos) ->
-      Type_define (name, ty, (pos, inference_type_of_type Types.unit_type, None))
   | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
   | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))

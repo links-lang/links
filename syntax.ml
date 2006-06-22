@@ -26,7 +26,6 @@ type location = [`Client | `Server | `Unknown]
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
-  | Type_define of (string * unit * 'data)
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -79,7 +78,6 @@ type 'data expression' =
 let is_define = 
   function
     | Define _
-    | Type_define _ (* TM: ? *)
     | Alien _ -> true
     | _ -> false
 
@@ -117,7 +115,6 @@ and show t : 'a expression' -> string = function
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
-  | Type_define (variable, ty, data) -> "type " ^ variable ^ " = ..." ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -243,7 +240,6 @@ let visit_expressions'
   let rec visit_children (expr, data) = match expr with
     | Define (s, e, l, d) -> let e, data = visitor visit_children (e, data) in
                                 Define (s, e, l, d), data
-    | Type_define (n, ty, d) -> Type_define (n, ty, d), data
     | Boolean (v, d) ->  Boolean (v, d), unit data
     | Integer (v, d) -> Integer (v, d), unit data
     | Char (v, d) -> Char (v, d), unit data
@@ -376,7 +372,6 @@ let freevars : 'a expression' -> string list =
 
 let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Define (a, b, loc, data) -> Define (a, redecorate f b, loc, f data)
-  | Type_define (a, b, data) -> Type_define (a, b, f data)
   | Boolean (a, data) -> Boolean (a, f data)
   | Integer (a, data) -> Integer (a, f data)
   | Float (a, data) -> Float (a, f data)
@@ -453,8 +448,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Placeholder _ 
                | Wrong _
                | Variable _
-               | Xml_cdata _
-               | Type_define _ -> []
+               | Xml_cdata _ -> []
 
                | Variant_selection_empty (e, _)
                | Define (_, e, _, _)
@@ -520,8 +514,7 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Wrong _
       | Alien _
       | Record_empty _
-      | Xml_cdata _
-      | Type_define _ -> None
+      | Xml_cdata _ -> None
           
       (* fixed children *)
       | HasType (e, k, b)                          -> passto [e] (fun [e] -> HasType (e, k, b))
@@ -560,7 +553,6 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
             
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
-        | Type_define (_, _, data) -> data
 	| HasType (_, _, data) -> data
 	| Boolean (_, data) -> data
 	| Integer (_, data) -> data

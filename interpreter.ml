@@ -388,7 +388,6 @@ fun globals locals expr cont ->
   let eval = interpret globals locals in
   match expr with
   | Syntax.Define (name, expr, _, _) -> interpret globals [] expr (Definition (globals, name) :: cont)
-  | Syntax.Type_define _ -> apply_cont globals cont (`Record []) (* TM: ? *)
   | Syntax.Alien _ -> apply_cont globals cont (`Record [])
 (*  | Syntax.Define (name, value, _, _) -> failwith "DF 245"*)
   | Syntax.Boolean (value, _) -> apply_cont globals cont (bool value)

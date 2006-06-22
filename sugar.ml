@@ -568,7 +568,7 @@ let error_already_defined name =
 let error_cannot_mix_basic_types_and_xml_types () =
   raise (invalid_arg "Cannot mix basic types and xml types")
 
-let define_type name datatype =
+let define_basic_type name datatype =
   if Hashtbl.mem defined_types name then error_already_defined name
   else Hashtbl.add defined_types name datatype
 
@@ -675,6 +675,13 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
        
 let desugar_datatype k = snd (desugar_assumption ([], k))
 
+let define_datatype name ty =
+  let ty = desugar_datatype ty in
+  match ty with
+      `Xml xml_type ->
+        define_xml_type name (Xml.Type.Sequence [xml_type]);
+    | _ -> define_basic_type name ty
+
 type phrasenode =
 (* ... *)
   | FloatLit of (float)
@@ -725,9 +732,6 @@ type phrasenode =
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)
-
-(* TM: Type declaration *)
-  | Type_definition of name * datatype
 
 and phrase = (phrasenode * pposition)
 and ppattern = Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
@@ -940,14 +944,6 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 | XmlForest []  -> Nil  (pos)
 | XmlForest [x] -> desugar x
 | XmlForest (x::xs) -> Xml_concat (desugar x, desugar (XmlForest xs, pos'), pos)
-| Type_definition (name, ty) ->
-    let ty = desugar_datatype ty in
-    begin
-      match ty with
-          `Xml xml_type -> define_xml_type name (Xml.Type.Sequence [xml_type]);
-        | _ -> define_type name ty
-    end;
-    Type_define (name, (), pos)
 | _ -> Xml.not_implemented "Type definition for basic type"
 and patternize lookup_pos : ppattern -> pattern = function
     (* For now, simply delegate to the old patternize.  Eventually, we
@@ -1045,6 +1041,12 @@ let project_subset (fields : (string * string) list) (source : Syntax.expression
 
 
 type directive = string * string list
+(*
 type sentence = (phrase list, directive) either
 type sentence' = (untyped_expression list, directive) either
+*)
 
+type 'phrase sentence =
+    Phrases of 'phrase list
+  | Directive of directive
+  | Type_definition of name * datatype

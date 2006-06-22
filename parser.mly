@@ -55,15 +55,16 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %type <Sugar.phrase> xml_tree
 %type <Sugar.datatype> datatype
 %type <Sugar.datatype> just_datatype
-%type <Sugar.sentence> sentence
+%type <Sugar.phrase Sugar.sentence> sentence
 %type <Sugar.regex list> regex_pattern_sequence
 
 %%
 
 sentence:
-| parse_links                                                  { Left $1 }
-| directive                                                    { Right $1 }
-| SEMICOLON END                                                { Right ("quit", []) (* rather hackish *) }
+| parse_links                                                  { Phrases $1 }
+| directive                                                    { Directive $1 }
+| SEMICOLON END                                                { Directive ("quit", []) (* rather hackish *) }
+| TYPE CONSTRUCTOR EQ datatype perhaps_semi                    { Type_definition ($2, $4) }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -94,7 +95,6 @@ toplevel:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block SEMICOLON       { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| TYPE CONSTRUCTOR EQ datatype perhaps_semi                    { Type_definition ($2, $4), pos () }
       
 perhaps_location:
 | SERVER                                                       { `Server }

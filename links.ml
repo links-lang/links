@@ -89,18 +89,19 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
   handle_errors
     (fun input ->
        match Performance.measure "parse" parse input with 
-         | Left exprs -> 
+         | Sugar.Phrases exprs -> 
              let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
              let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
              let exprs = List.map Syntax.labelize exprs in
              let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
-               print_result (Syntax.node_datatype (last exprs)) result;
-               (valenv, typeenv)
-         | Right (directive : Sugar.directive) -> 
-             begin
-               (Utility.uncurry execute_directive) directive;
-               (valenv, typeenv)
-             end)
+             print_result (Syntax.node_datatype (last exprs)) result;
+             (valenv, typeenv)
+         | Sugar.Directive (directive : Sugar.directive) -> 
+             Utility.uncurry execute_directive directive;
+             (valenv, typeenv)
+         | Sugar.Type_definition (name, ty) ->
+             Sugar.define_datatype name ty;
+             (valenv, typeenv))
     input
 in
 let error_handler = Errors.display_errors stderr (fun _ -> envs) in

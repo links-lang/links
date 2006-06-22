@@ -469,7 +469,6 @@ let rec generate : 'a expression' -> code =
       Defs ([n, Call(generate e,
 		     [Var "_idy"])])   (* definitions are always top 
 		|			   level, right? *)
-  | Type_define _ -> Nothing
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 

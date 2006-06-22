@@ -181,6 +181,7 @@ let parse_datatype string =
 (* Parse a sentence *)
 let parse_sentence (channel, name) =
   read Parser.sentence (fun code -> function
-                          | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
-                          | Right directive -> Right directive)
+                          | Sugar.Phrases phrases   -> Sugar.Phrases (List.map (Sugar.desugar (lookup code)) phrases)
+                          | Sugar.Directive directive -> Sugar.Directive directive
+                          | Sugar.Type_definition (name, datatype) -> Sugar.Type_definition (name, datatype))
     (reader_of_channel channel) name
