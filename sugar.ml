@@ -550,30 +550,54 @@ type assumption = quantifier list * datatype
 let generalize (k : datatype) : assumption =
   typevars k, k
 
-let xml_types = Hashtbl.create 16
+let defined_types = Hashtbl.create 16
 
-let () = Hashtbl.add xml_types "Empty" Xml.Type.empty
+let () = Hashtbl.add defined_types "Empty" (`Xml Xml.Type.empty)
 
-let () = Hashtbl.add xml_types "Latin1" Xml.Type.latin1_char
+let () = Hashtbl.add defined_types "Latin1" (`Xml Xml.Type.latin1_char)
 
-let () = Hashtbl.add xml_types "Any" Xml.Type.any
+let () = Hashtbl.add defined_types "Any" (`Xml Xml.Type.any)
 
-let () = Hashtbl.add xml_types "Epsilon" Xml.Type.epsilon
+let () = Hashtbl.add defined_types "Epsilon" (`Xml Xml.Type.epsilon)
+
+let find_defined_type name = Hashtbl.find defined_types name
+
+let error_already_defined name =
+  raise (invalid_arg ("Already defined: " ^ name))
+
+let error_cannot_mix_basic_types_and_xml_types () =
+  raise (invalid_arg "Cannot mix basic types and xml types")
+
+let define_type name datatype =
+  if Hashtbl.mem defined_types name then error_already_defined name
+  else Hashtbl.add defined_types name datatype
 
 let find_xml_type name =
-  try Hashtbl.find xml_types name
+  try
+    begin
+      match find_defined_type name with
+          `Xml xml_type -> xml_type
+        | _ -> error_cannot_mix_basic_types_and_xml_types ()
+    end
   with Not_found ->
     let result = Xml.Type.create (Some name) Xml.Type.Not_defined in
-    Hashtbl.add xml_types name result;
+    Hashtbl.add defined_types name (`Xml result);
     result
 
 let define_xml_type name contents =
-  try Xml.Type.set (Hashtbl.find xml_types name) contents
+  try 
+    match Hashtbl.find defined_types name with
+        `Xml xml_type -> Xml.Type.set xml_type contents
+      | _ -> error_already_defined name
   with Not_found ->
     let result = Xml.Type.create (Some name) contents in
-    Hashtbl.add xml_types name result
+    Hashtbl.add defined_types name (`Xml result)
 
 let rec desugar_type_xml type_xml =
+  let desugar_type_as_xml_type ty =
+    match ty with
+        TypeXml type_xml -> desugar_type_xml type_xml
+      | _ -> error_cannot_mix_basic_types_and_xml_types () in
   let desugar_sub_list list =
     match list with
         [] -> Xml.Type.epsilon
@@ -584,7 +608,7 @@ let rec desugar_type_xml type_xml =
              Xml.Type.concat xml_type (desugar_type_as_xml_type datatype))
           Xml.Type.epsilon list in
   match type_xml with
-    | TypeXmlUnaryOp (ty, op) -> op (desugar_type_as_xml_type ty)
+      TypeXmlUnaryOp (ty, op) -> op (desugar_type_as_xml_type ty)
     | TypeXmlBinaryOp (left, op, right) ->
         op (desugar_type_as_xml_type left) (desugar_type_as_xml_type right)
     | TypeXmlElement (name, atts, contents) ->
@@ -602,11 +626,6 @@ let rec desugar_type_xml type_xml =
           (Xml.Type.Char_set
              (Xml.Int_set.segment (int_of_char low) (int_of_char high + 1)))
     | TypeXmlFixed ty -> ty
-and desugar_type_as_xml_type datatype =
-  match datatype with
-      TypeXml type_xml -> desugar_type_xml type_xml
-    | PrimitiveType (`Abstract name) -> find_xml_type name
-    | _ -> invalid_arg "Basic types cannot occur inside xml types"
 
 let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
   let max = length vars in
@@ -638,7 +657,7 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
 	| ListType k -> `List (desugar varmap k)
 	| MailboxType k -> `Mailbox (desugar varmap k)
         | PrimitiveType (`Abstract name as k) ->
-            (try `Xml (Hashtbl.find xml_types name)
+            (try Hashtbl.find defined_types name
              with Not_found -> `Primitive k)
 	| PrimitiveType k -> `Primitive k
 	| DBType -> `DB
@@ -922,8 +941,12 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 | XmlForest [x] -> desugar x
 | XmlForest (x::xs) -> Xml_concat (desugar x, desugar (XmlForest xs, pos'), pos)
 | Type_definition (name, ty) ->
-    let xml_type = desugar_type_as_xml_type ty in
-    define_xml_type name (Xml.Type.Sequence [xml_type]);
+    let ty = desugar_datatype ty in
+    begin
+      match ty with
+          `Xml xml_type -> define_xml_type name (Xml.Type.Sequence [xml_type]);
+        | _ -> define_type name ty
+    end;
     Type_define (name, (), pos)
 | _ -> Xml.not_implemented "Type definition for basic type"
 and patternize lookup_pos : ppattern -> pattern = function

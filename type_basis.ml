@@ -9,7 +9,7 @@ type type_var_set = Utility.IntSet.t
 
 type primitive = [ `Bool | `Int | `Char | `Float | `Abstract of string ]
     deriving (Show, Pickle)
-
+    
 type ('typ, 'row, 'xml) type_basis = [
   | `Not_typed
   | `Xml of 'xml
