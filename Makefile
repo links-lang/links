@@ -39,6 +39,9 @@ OCAMLYACC := ocamlyacc -v
 
 OCAMLFLAGS=-w Aef
 
+# additional files to clean
+TRASH=*.tmp *.output
+
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
 
@@ -115,5 +118,6 @@ docs: quick-help.html
 
 quick-help.html: quick-help.pod
 	pod2html quick-help.pod > quick-help.html
+	@rm pod2htm*.tmp
 
 clean : deriving-clean
