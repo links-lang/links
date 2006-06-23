@@ -17,14 +17,14 @@ let value_of_db_string (value:string) = function
   | IntField  -> Result.int (num_of_string value)
   | FloatField -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
-  | _ -> invalid_arg "value_of_db_string"
+  | _ -> failwith "value_of_db_string: unsupported datatype"
 
 let datatype_of_db_type = function
   | BoolField -> `Primitive `Bool
   | TextField -> `List (`Primitive `Char)
   | IntField -> `Primitive `Int
   | FloatField -> `Primitive `Float
-  | _ -> failwith "Unsupported datatype"
+  | _ -> failwith "datatype_of_db_type: unsupported datatype"
 
 let execute_select  (datatype:Types.datatype) (query:string) (db: database) : result =
   let fields = (match datatype with

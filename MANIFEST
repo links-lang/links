@@ -128,12 +128,16 @@ examples/lib
 examples/dictionary
 examples/dictionary/lib
 examples/dictionary/dict-suggest.links
+examples/dictionary/dict-suggest-mysql.links
 examples/dictionary/create-table.sql
+examples/dictionary/create-table-mysql.sql
 examples/dictionary/README
 examples/todo.links
 examples/factorial.links
+examples/factorial-mysql.links
 examples/progress.links
 examples/draggable.links
 examples/mandelbrot.links
 examples/mandelcolor.links
 examples/paginate.links
+examples/factorials.sql
