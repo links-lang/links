@@ -1,0 +1,58 @@
+table wordlist (
+  word : String, 
+  type : String, 
+  meaning : String
+) database "mysql:dictionary::3306:web:";
+
+fun lowercase(s) server {
+  for (var c <- s) [toLower(c)]
+}
+
+fun suggest(prefix) client {
+ domReplaceChildren(
+  format(completions(lowercase(prefix))),
+  domGetRefById("suggestions") 
+ )
+} 
+
+fun format(words) client {
+ for (var w <- words)
+  <span>
+   <b>{stringToXml(w.word)}</b>
+   <i>{stringToXml(w.type)}</i>:
+      {stringToXml(w.meaning)}
+   <br/>
+  </span>
+}
+
+fun completions(p) server {
+  if (p == "") []
+  else {
+    take(10)(for (var w <- wordlist)
+             where (w.word ~ /{p}.*/)
+             orderby (w.word)
+              [w])
+  }
+}
+
+<html>
+ <head>
+  <title>Dictionary suggest</title>
+  <style>
+   {stringToXml("
+    .input { width:500px }
+    .suggestions { text-align:left; width:500px;
+                    background-color:#ccccff }
+   ")}
+  </style>
+ </head>
+<body>
+ <h1>Dictionary suggest</h1>
+ <form l:onkeyup="{suggest(prefix)}">
+  <input type="text" l:name="prefix"
+         class="input" autocomplete="off"/>
+ </form>
+ <div id="suggestions" class="suggestions"/>
+ </body>
+</html>
+
