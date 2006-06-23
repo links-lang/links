@@ -31,19 +31,16 @@ and for distribution from Erlang. It will be developed by a
 consortium, as were ML and Haskell. Like all of these languages, it
 will be functional.
 
-VERSION 0.1 (Sichthill)
-
-This is our first (experimental) release.
-
 FEATURES
 
  * Allows web programs to be written in a single programming language
  * Call-by-value functional language
  * Server / Client annotations
  * AJAX
- * Scalability through defununctionalised server continuations.
+ * Scalability through defunctionalised server continuations.
  * Statically typed database access a la Kleisli
  * Concurrent processes on the client and the server using
  resumption passing style.
  * Statically typed Erlang-esque message passing
  * Polymorphic records and variants
+
