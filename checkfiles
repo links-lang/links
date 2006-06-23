@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # check files to make sure they're all accounted for
 checkdir=.check
 errorCode=0
