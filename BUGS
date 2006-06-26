@@ -22,8 +22,8 @@ BUGS
 
 * A bare loop variable is not rewritten in a loop body:
 
-      for x <- (...) in
-        for y <- (...) in
+      for (var x <- (...))
+        for (var y <- (...))
           [(x, y)]
 
   fails at rt with "Undefined variable y". Only projects (like 
@@ -68,6 +68,41 @@ BUGS
 
 TODO
 
+* It'd be more symmetric to allow arbitrary let-patterns (rather than
+  just variable and function bindings) at top level.  For example,
+
+       links> var (x,y) = (1,2);;
+
+* We should decide on the right semantics for type annotations.  What
+  should we do in each of these cases, for example?:
+
+       fun (x) { x + 1 } : a -> a
+       fun (x) { x } : Int -> Int
+       fun (x) { x : a } : (a -> a) -> (a -> a)
+       fun (x) { x : a } : a
+
+* It'd be nice if the type variable names in annotations were
+  preserved.  That is, instead of this
+
+       links> fun (x) { x } : c -> c;;
+       fun : (a) -> a
+
+  we'd have this:
+
+       links> fun (x) { x } : c -> c;;
+       fun : (c) -> c
+
+* We should take into account whether we're printing mailbox types
+  when assigning type variables.  That is, instead of this
+
+       links> fun (x) { x } ;;
+       fun : (b) -> b
+
+  we'd have this:
+
+       links> fun (x) { x } ;;
+       fun : (a) -> a
+
 * We need UI methods for the position relative to the target, and
   rel. to the screen. Also: how about eventGetPageXY, to return an
   (x, y) pair?
@@ -83,7 +118,7 @@ TODO
 * Add XML attributes as first-class values (to enable code like this:)
     <option value="1" {if (selected) [ `(selected="SELECTED") ] else []}>
   (eekc: Maybe these should be implemented as Variants? e.g.)
-    <option value="1" {if (selected) [Selected "SELECTED"] else []}>
+    <option value="1" {if (selected) [Selected ("SELECTED")] else []}>
 
 * CDATA literals are not handled in XML quasis.
 
