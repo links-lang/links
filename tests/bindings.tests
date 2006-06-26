@@ -54,3 +54,18 @@ exit : 1
 as patterns
 {var x::xs as y = [1,2,3]; y}
 stdout : [1, 2, 3] : [Int]
+
+Reject multiple occurrences of a name in a pattern [1]
+fun (x,x) { x }
+stderr : @.
+exit : 1
+
+Reject multiple occurrences of a name in a pattern [2]
+fun () { var (x,x) = (1,2); x }
+stderr : @.
+exit : 1
+
+Reject multiple occurrences of a name in a pattern [3]
+fun () { var (a=x,b=x) = (a=1,b=2); x }
+stderr : @.
+exit : 1
