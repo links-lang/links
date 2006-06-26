@@ -114,6 +114,7 @@ tests/functions.tests
 tests/messages.tests
 tests/numbers.tests
 tests/optimization.tests
+tests/patterns.tests
 tests/polymorphism.tests
 tests/records.tests
 tests/regex.tests
