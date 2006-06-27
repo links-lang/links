@@ -264,6 +264,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
 
+  "alertDialog",
+  (client_only_1 "alertDialog",
+   datatype "String -> ()");
+
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
    datatype "String -> ()");
@@ -373,6 +377,15 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "domGetAttributeFromRef",
   (`Client, datatype "(DomRef, String) -> String");
+
+  "domSetAttributeFromRef",
+  (`Client, datatype "(DomRef, String, String) -> String");
+
+  "domGetStyleAttrFromRef",
+  (`Client, datatype "(DomRef, String) -> String");
+
+  "domSetStyleAttrFromRef",
+  (`Client, datatype "(DomRef, String, String) -> String");
 
 (* Section:  Navigation for DomRefs *)
   "domGetParentFromRef",

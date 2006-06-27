@@ -1,0 +1,115 @@
+#!/home/s0567141/links/links
+
+fun dragging(left, top, width, height, mdownX, mdownY) client {
+  receive {
+    case MouseMove(x, y) -> {
+      var frame = domGetRefById("cropping-frame");
+      domSetStyleAttrFromRef(frame, "left",
+                             intToString(x - mdownX + left));
+      domSetStyleAttrFromRef(frame, "top",
+                             intToString(y - mdownY + top));
+      dragging(left, top, width, height, mdownX, mdownY)
+    };
+    case MouseUp(x, y) -> {
+      debug("got mouseup!");
+      frameMgr(left + x - mdownX, top + y - mdownY, width, height);
+    };
+    case _ -> {
+      dragging(left, top, width, height, mdownX, mdownY)
+    };
+  }
+}
+
+fun resizing(left, top, width, height, corner) client {
+  receive {
+    case MouseMove(x, y) -> {
+      var frame = domGetRefById("cropping-frame");
+      var frameSizer = domGetRefById("white-border");
+      var (l, t, w, h) = 
+        switch (corner) {
+          case NW -> (x, y, width - (x - left), height - y + top);
+          case NE -> (left, y, x - left, height - y + top);
+          case SW -> (x, top, width - (x - left), y-top);
+          case SE -> (left, top, x-left, y-top);
+        };
+      domSetStyleAttrFromRef(frame, "left", intToString(l) ++ "px");
+      domSetStyleAttrFromRef(frame, "top", intToString(t) ++ "px");
+      domSetStyleAttrFromRef(frameSizer, "width", intToString(w) ++ "px");
+      domSetStyleAttrFromRef(frameSizer, "height", intToString(h) ++ "px");
+      resizing(l, t, w, h, corner)
+    };
+    case MouseUp(x, y) -> {
+      frameMgr(left, top, width, height);
+    };
+    case _ -> {
+      resizing(left, top, width, height, corner)
+    };
+  }
+}
+
+fun frameMgr(left, top, width, height) client {
+  receive {
+    case MouseDown(x, y) ->
+      dragging(left, top, width, height, x, y);
+    case StartResize(corner) ->
+      resizing(left, top, width, height, corner);
+    case _ ->
+      frameMgr(left, top, width, height);
+  }
+}
+
+fun makeCroppingFrame(left, top, width, height) client{
+  var frameMgr = spawn {frameMgr(left, top, width, height)};
+  <div id="cropping-frame"
+    style="position: absolute;
+           display: block;
+           left: {intToString(left)}px;
+           top: {intToString(top)}px; 
+           z-index: 1000; 
+           cursor: pointer"
+    l:onmousedown="{frameMgr ! MouseDown(eventGetPageX(event),
+                                         eventGetPageY(event))}"
+    l:onmouseuppage="{  frameMgr ! MouseUp  (eventGetPageX(event),
+                                             eventGetPageY(event))}"
+    l:onmousemovepage="{frameMgr ! MouseMove(eventGetPageX(event),
+                                             eventGetPageY(event))}"
+>
+    <div id="black-border"
+      style="border: 1px solid black; ">
+      <div id="white-border" 
+        style="position: relative; border: 1px dashed white;
+               width: {intToString(width)}px; 
+               height: {intToString(height)}px; " />
+    </div>
+    <div id="nw-resize"
+      l:onmousedown="{frameMgr ! StartResize(NW)}"
+      style="position: absolute; display: block; cursor: nw-resize; top: 0px; left: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+    <div id="ne-resize"
+      l:onmousedown="{frameMgr ! StartResize(NE)}"
+      style="position: absolute; display: block; cursor: ne-resize; top: 0px; right: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+    <div id="sw-resize"
+      l:onmousedown="{frameMgr ! StartResize(SW)}"
+      style="position: absolute; display: block; cursor: sw-resize; bottom: 0px; left: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+    <div id="se-resize"
+      l:onmousedown="{frameMgr ! StartResize(SE)}"
+      style="position: absolute; display: block; cursor: se-resize; bottom: 0px; right: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+  </div>
+}
+
+
+<body>
+
+  <h1> Home of Robert Louis Stevenson </h1>
+
+  <div>
+    <div>
+    <img src="17-Heriot-Row.jpeg" />
+
+    { makeCroppingFrame(16, 112, 32, 32) }
+    </div>
+  </div>
+
+  Drag the cropping frame around the image; drag the wee handles in
+  the corners to resize it.
+
+</body>

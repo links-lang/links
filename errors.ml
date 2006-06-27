@@ -69,6 +69,8 @@ let invalid_name pos name message =
 let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
 
+
+(* ARGH! This breaks my structure for discriminating HTML/plaintext errors! *)
 let get_mailbox_msg add_code_tags =
   let wrap =
     if add_code_tags then
@@ -140,7 +142,7 @@ let rec format_exception_html = function
         format_exception_html(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "<code>"^ fexpr ^"</code>, which has type <code>"^ string_of_datatype fntype ^
-        "</code>, cannot be applied to <code>"^ pexpr ^"<2/code>, of type <code>" ^ 
+        "</code>, cannot be applied to <code>"^ pexpr ^"</code>, of type <code>" ^ 
         string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
