@@ -25,8 +25,7 @@ DERIVING_DIR=deriving
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
-CLASSES=deriving.cmo show_class.cmo enum_class.cmo bounded_class.cmo pickle_class.cmo
-PP='camlp4o -I $(DERIVING_DIR)/syntax $(CLASSES)'
+PP=deriving/syntax/deriving
 
 OCAMLOPT := ocamlopt.opt -pp $(PP)
 OCAMLC := ocamlc.opt -pp $(PP)
