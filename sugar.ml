@@ -71,6 +71,45 @@ type pattern = [
   | `As of (string * pattern)
   | `HasType of pattern * Types.datatype
 ]
+deriving (Show, Pickle)
+
+(*
+   copied with modifications from errors.ml
+     - can'tleave it there because it would create a cyclic dependency!
+     - we need to sort out our modules
+*)
+let string_of_pattern_pos ((pos : Lexing.position), _, expr) = 
+  Printf.sprintf "%s:%d:%s" pos.Lexing.pos_fname pos.Lexing.pos_lnum expr
+
+(* give an error if the pattern has duplicate names *)
+let check_for_duplicate_names pos pattern =
+  let rec check_and_add name env =
+    if StringSet.mem name env then
+      failwith ("Duplicate name '"^ name  ^"' in pattern "^string_of_pattern_pos pos)
+    else
+      StringSet.add name env in
+
+  let rec check env =
+    function
+      | `Nil -> env
+      | `Cons (pattern, pattern') ->
+	  let env' = check env pattern in
+	    check env' pattern'
+      | `Variant (name, pattern) ->
+	  check env pattern
+      | `Unit -> env
+      | `Record_extension (name, pattern, pattern') ->
+	  let env' = check env pattern in
+	    check env' pattern'
+      | `Constant _ -> env
+      | `Variable name -> check_and_add name env
+      | `As (name, pattern) ->
+	  let env = check_and_add name env in
+	    check env pattern
+      | `HasType (pattern, _) ->
+	  check env pattern
+  in
+    ignore (check StringSet.empty pattern)
 
 (* [TODO]
    - re-enable string_of_pattern
@@ -107,7 +146,7 @@ let string_of_constant = function
 (* TBD: add check for duplicate bindings *)
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
-let rec patternize' = fun exp ->
+let rec patternize_expression = fun exp ->
   match exp with
     | Syntax.Boolean _
     | Syntax.Integer _
@@ -119,24 +158,17 @@ let rec patternize' = fun exp ->
     | Syntax.Variable (name, _) -> `Variable (name)
     | Syntax.Record_empty _ -> `Unit
     | Syntax.Record_extension (name, value, record, _)
-      -> `Record_extension (name, patternize' value, patternize' record)
+      -> `Record_extension (name, patternize_expression value, patternize_expression record)
     | Syntax.Variant_injection (name, value, _)
-      -> `Variant (name, patternize' value)
-	(* See note above `amper' *)
-(* This isn't really implemented some where is it? *)
-(*
-    | Syntax.Apply(Syntax.Variable("&", _),
-                   Apply(Syntax.Variable (var, _), expr, _), _) -> 
-	`As(var, patternize' expr)
-*)
+      -> `Variant (name, patternize_expression value)
     | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
 	patternize_cons_pattern cons_patt
     | Syntax.HasType (exp, datatype, _) ->
-	`HasType (patternize' exp, datatype)
+	`HasType (patternize_expression exp, datatype)
     | other -> raise (ASTSyntaxError (untyped_pos other, Syntax.string_of_expression other ^ " cannot appear in a pattern"))
 and patternize_cons_pattern = function
   | Concat (List_of (e1, _), e2, _) ->
-      `Cons(patternize' e1, patternize' e2)
+      `Cons(patternize_expression e1, patternize_expression e2)
 	
 let is_null expr pos = 
   Comparison(expr, "==", Nil pos, pos)
@@ -787,7 +819,7 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 		condition = Query.Boolean true;
 		sortings = [];
 		max_rows = None;
-		offset = Query.Integer (Num.Int 0)} in
+		offset = Query.Integer (Int 0)} in
              Table (desugar db, "IGNORED", db_query name pos (desugar_datatype datatype) unique, pos))
       | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
       | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
@@ -892,11 +924,15 @@ let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
 | XmlForest []  -> Nil  (pos)
 | XmlForest [x] -> desugar x
 | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
-and patternize lookup_pos : ppattern -> pattern = function
-    (* For now, simply delegate to the old patternize.  Eventually, we
-       should convert directly from phrases to patterns *)
-  | Pattern p -> patternize' (desugar lookup_pos p)
-  | AsPattern (x, p) -> `As (x, patternize' (desugar lookup_pos p))
+and patternize lookup_pos : ppattern -> pattern = fun ppattern ->
+  (* For now, simply delegate to the old patternize.  Eventually, we
+     should convert directly from phrases to patterns *)
+  let pattern, pos = match ppattern with
+    | Pattern ((_, pos') as p) -> patternize_expression (desugar lookup_pos p), lookup_pos pos'
+    | AsPattern (x, ((_, pos') as p)) -> `As (x, patternize_expression (desugar lookup_pos p)), lookup_pos pos'
+  in
+    check_for_duplicate_names pos pattern;
+    pattern
 and list_patt_to_bool value pos = function
     Var _, _ -> Boolean(true, pos)
   | TupleLit [p], _ -> list_patt_to_bool value pos p

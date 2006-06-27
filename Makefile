@@ -61,12 +61,12 @@ SOURCES = $(OPC)                		\
           inferencetypes.mli inferencetypes.ml 	\
           sugar.ml              		\
           result.ml result.mli         		\
+          errors.mli errors.ml                  \
           sql_transform.ml      		\
           parser.mly            		\
           $(DB_CODE)            		\
           jsonparse.mly         		\
           json.ml               		\
-          errors.mli errors.ml  		\
           forms.mli forms.ml    		\
           database.mli database.ml 		\
           lexer.mll             		\
