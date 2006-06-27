@@ -12,9 +12,9 @@ DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
 OBJS=deriving.cmo $(DERIVER_OBJS)
 NOBJS=deriving.cmx $(addsuffix .cmx,$(DERIVERS))
 
+all: byte opt deriving
 byte: $(OBJS)
 opt: $(OBJS)
-all: byte opt deriving
 
 # Create a custom native camlp4 that incorporates the deriving
 # extension.
