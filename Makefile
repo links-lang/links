@@ -110,7 +110,7 @@ test: $(RESULT)
 	@perl -MTest::Harness -e 'Test::Harness::runtests("tests/web-tests.pl")'
 
 fixmes:
-	@grep FIXME *.ml*
+	@grep FIXME *.ml *.mli *.mly *.mll
 
 .PHONY: docs
 

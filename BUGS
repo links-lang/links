@@ -1,5 +1,13 @@
 BUGS
 
+* Returning a seq'ce of XML items at the toplevel gives "ASSERTION FAILED:
+  Top-level expression was not XML"
+
+* Event objects get their fields blanked out if you pass them to another 
+  process or yield while handling the event. Need to clone the object?
+
+* Comparison of variants is always false in JS target.
+
 * There is no way to add an external stylesheet to the doc produced by
   a Links program.
   Proposal: Generate as much of the page as possible on the server, 

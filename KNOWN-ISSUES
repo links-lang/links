@@ -2,6 +2,8 @@ KNOWN ISSUES
 
  * Browsers other than Firefox are currently unsupported.
 
+ * Comparison of variants is always false in JS target.
+
  * Exceptions have not been implemented.
 
  * The following web features have not yet been implemented.
@@ -17,6 +19,9 @@ KNOWN ISSUES
  * There is no way to get the value of a radio button element.
 
  * It is not possible to pass XML values across the client / server boundary.
+
+ * Returning a seq'ce of XML items at the toplevel gives "ASSERTION FAILED:
+   Top-level expression was not XML"
 
  * A top-level variable cannot be redefined in the interactive shell:
 
