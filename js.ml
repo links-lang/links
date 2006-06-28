@@ -28,6 +28,46 @@ type code = | Var   of string
             | Nothing
 
 
+let perhaps_process_children (f : code -> code option) :  code -> code option =
+  let passto = Rewrite.passto f in
+    function
+      | Var _
+      | Nothing
+      | Lit _ -> None
+      | Defs ds -> 
+          let names, vals = split ds in 
+            passto vals (fun vals -> Defs (combine names vals))
+      | Fn (vars, code) -> passto [code] (fun [code] -> Fn (vars, code))
+      | Call (fn, ps) -> passto (fn::ps) (fun (fn::ps) -> Call (fn,ps))
+      | Binop (l,s,r) -> passto [l;r] (fun [l;r] -> Binop (l,s,r))
+      | Cond (i,t,e) -> passto [i;t;e] (fun [i;t;e] -> Cond (i,t,e))
+      | Dict ds -> 
+          let names, vals = split ds in 
+            passto vals (fun vals -> Dict (combine names vals))
+      | Lst code -> passto code (fun code -> Lst code)
+      | Bind (n,e,b) -> passto [e;b] (fun [e;b] -> Bind (n,e,b))
+      | Seq (l,r) -> passto [l;r] (fun [l;r] -> Seq (l,r))
+
+module RewriteCode =
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+      (struct
+         type t = code
+         type rewriter = t -> t option
+         let process_children = perhaps_process_children
+       end))
+
+let collapse_extend : RewriteCode.rewriter = 
+  let unquote = Str.replace_first (Str.regexp ("^'\\(.*\\)'$")) "\\1" in
+    function
+      | Call (Var "_extend", [Dict d; Lit name; value]) -> Some (Dict ((unquote name, value)::d))
+      | _                                               -> None 
+
+let collapse_extends = RewriteCode.bottomup collapse_extend
+
+let optimise e = fromOption e (collapse_extends e)
+
+
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
 
@@ -756,6 +796,7 @@ let gen =
   Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
   ->- eliminate_admin_redexes
+  ->- optimise
   ->- show
 
 let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)

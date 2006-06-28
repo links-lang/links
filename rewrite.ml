@@ -119,3 +119,15 @@ end
 
 *)
 
+(* utility for writing the process_children function in an unpleasant but concise style *)
+let passto f exprs next = 
+  let rec aux passed es = function
+    | [] -> passed, es
+    | x::xs ->
+        (match f x with 
+           | Some x -> aux true (x::es) xs
+           | None   -> aux passed (x::es) xs) in
+    match aux false [] exprs with
+      | false, _ -> None
+      | true,  es -> Some (next (List.rev es))
+          

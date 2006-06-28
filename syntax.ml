@@ -462,22 +462,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
 (* Apply a function to each subnode.  Return Some c if any changes
    were made, otherwise None. *)
 let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a expression' -> 'a expression' option =
-  let transform = 
-    let rec aux passed es = function
-      | [] -> passed, es
-      | x::xs ->
-          (match f x with 
-             | Some x -> aux true (x::es) xs
-             | None   -> aux passed (x::es) xs) in
-      aux false [] in
-    (** passto: if applying f to any of the expressions has an effect, pass all
-        the transformed or original to `next' and return Some of the
-        result.  Otherwise, return None *)
-  let passto exprs next = 
-    match transform exprs with
-      | false, _ -> None
-      | true,  es -> Some (next (List.rev es))
-  in
+  let passto = Rewrite.passto f in
     function
         (* No children *)
       | Boolean _
