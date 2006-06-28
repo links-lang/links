@@ -329,9 +329,12 @@ and inference_row_of_row = fun ((_, row_var_map) as var_maps) -> function
 	      (field_env, `MetaRowVar point)
 
 (* interface *)
-let inference_type_of_type = inference_type_of_type (empty_var_maps ())
-let inference_field_spec_of_field_spec = inference_field_spec_of_field_spec (empty_var_maps ())
-let inference_row_of_row = inference_row_of_row (empty_var_maps ())
+(* [NOTE]
+     don't try eta reducing these, as this would be unsound!
+*)
+let inference_type_of_type datatype = inference_type_of_type (empty_var_maps ()) datatype
+let inference_field_spec_of_field_spec field_spec = inference_field_spec_of_field_spec (empty_var_maps ()) field_spec
+let inference_row_of_row row = inference_row_of_row (empty_var_maps ()) row
 
 (* implementation *)
 let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fun rec_vars ->
@@ -417,3 +420,104 @@ let string_of_row_var : row_var -> string = Types.string_of_row_var -<- row_var_
 
 let string_of_assumption = Types.string_of_assumption -<- assumption_of_inference_assumption
 let string_of_environment = Types.string_of_environment -<- environment_of_inference_environment
+
+
+
+
+(** check for well-foundedness **)
+
+(* return true if a variable occurs negatively in a type *)
+let rec is_negative : IntSet.t -> int -> datatype -> bool =
+  fun rec_vars var t ->
+    let isp = is_positive rec_vars var in
+    let isn = is_negative rec_vars var in
+    let ispr = is_positive_row rec_vars var in
+    let isnr = is_negative_row rec_vars var in
+      match t with
+	| `Not_typed -> false
+	| `Primitive x -> false
+	| `TypeVar var' -> false
+	| `MetaTypeVar point ->
+	    isn (Unionfind.find point)
+	| `Function (t, t') ->
+	    isp t || isn t'
+	| `Record row -> isnr row
+	| `Variant row -> isnr row
+	| `List t -> isn t
+	| `Mailbox t -> isn t
+	| `DB -> false
+	| `Recursive (var', t) ->
+	    is_negative (IntSet.add var' rec_vars) var t
+and is_negative_row : IntSet.t -> int -> row -> bool =
+  fun rec_vars var (field_env, row_var) ->
+    is_negative_field_env rec_vars var field_env || is_negative_row_var rec_vars var row_var
+and is_negative_field_env : IntSet.t -> int -> field_spec_map -> bool =
+  fun rec_vars var field_env ->
+    StringMap.fold (fun _ spec result ->
+		      match spec with
+			| `Absent -> result
+			| `Present t -> result || is_negative rec_vars var t
+		   ) field_env false
+and is_negative_row_var : IntSet.t -> int -> row_var -> bool =
+  fun rec_vars var -> function
+    | `RowVar _ -> false
+    | `RecRowVar (var', row) ->
+	if IntSet.mem var' rec_vars then
+	  false
+	else
+	  is_negative_row (IntSet.add var' rec_vars) var row
+    | `MetaRowVar point ->
+	is_negative_row rec_vars var (Unionfind.find point)
+
+and is_positive : IntSet.t -> int -> datatype -> bool =
+  fun rec_vars var t ->
+    let isp = is_positive rec_vars var in
+    let isn = is_negative rec_vars var in
+    let ispr = is_positive_row rec_vars var in
+    let isnr = is_negative_row rec_vars var in
+      match t with
+	| `Not_typed -> false
+	| `Primitive x -> false
+	| `TypeVar var' when var=var' -> true
+	| `TypeVar var' -> false
+	| `MetaTypeVar point ->
+	    isp (Unionfind.find point)
+	| `Function (t, t') ->
+	    isn t || isp t'
+	| `Record row -> ispr row
+	| `Variant row -> ispr row
+	| `List t -> isp t
+	| `Mailbox t -> isp t
+	| `DB -> false
+	| `Recursive (var', t) ->
+	    is_positive (IntSet.add var' rec_vars) var t
+and is_positive_row : IntSet.t -> int -> row -> bool =
+  fun rec_vars var (field_env, row_var) ->
+    is_positive_field_env rec_vars var field_env || is_positive_row_var rec_vars var row_var
+and is_positive_field_env : IntSet.t -> int -> field_spec_map -> bool =
+  fun rec_vars var field_env ->
+    StringMap.fold (fun _ spec result ->
+		      match spec with
+			| `Absent -> result
+			| `Present t -> result || is_positive rec_vars var t
+		   ) field_env false
+and is_positive_row_var : IntSet.t -> int -> row_var -> bool =
+  fun rec_vars var -> function
+    | `RowVar _ -> false
+    | `RecRowVar (var', row) ->
+	if IntSet.mem var' rec_vars then
+	  false
+	else
+	  is_positive_row (IntSet.add var' rec_vars) var row
+    | `MetaRowVar point ->
+	is_positive_row rec_vars var (Unionfind.find point)
+
+let is_negative = is_negative IntSet.empty
+let is_negative_row = is_negative_row IntSet.empty
+let is_negative_field_env = is_negative_field_env IntSet.empty
+let is_negative_row_var = is_negative_row_var IntSet.empty
+
+let is_positive = is_positive IntSet.empty
+let is_positive_row = is_positive_row IntSet.empty
+let is_positive_field_env = is_positive_field_env IntSet.empty
+let is_positive_row_var = is_positive_row_var IntSet.empty

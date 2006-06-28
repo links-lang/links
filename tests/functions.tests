@@ -35,3 +35,11 @@ stdout : fun : () -> ()
 Type annotations
 fun (x:Int) {x:Int}
 stdout : fun : (Int) -> Int
+
+Identity annotation
+fun (x:a) {x:a}
+stdout : @fun : \(([a-z]+)\) -> \1
+
+Negative recursive type
+fun (x) {x:a} : a
+stdout : @fun : \(mu ([a-z])\) \. \1 -> \1

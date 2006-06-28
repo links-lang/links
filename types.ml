@@ -32,6 +32,9 @@ let (-->) x y = `Function (x,y)
  *)
 let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, true)
 
+(* pretty-print type vars as raw numbers rather than letters *)
+let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, true)
+
 (*
   [HACK]
   used to temporarily disable mailbox typing for two-pass type-checking
@@ -190,24 +193,28 @@ and string_of_row_var' sep vars row_var =
 	  ["(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")"]
 
 let make_names vars =
-  let first_letter = int_of_char 'a' in
-  let last_letter = int_of_char 'z' in
-  let num_letters = last_letter - first_letter + 1 in
-    
-  let string_of_ascii n = Char.escaped (char_of_int n) in
-
-  let rec num_to_letters n =
-    let letter = string_of_ascii (first_letter + (n mod num_letters)) in
-      letter ^
-	(if n >= num_letters then (num_to_letters (n / num_letters))
-	 else "")
-  in
-    
-  let (_, name_map) = 
-    IntSet.fold (fun var (n, name_map) -> (n+1, IntMap.add var (num_to_letters n) name_map)) vars (0, IntMap.empty)
-  in
-    name_map
-
+  if Settings.get_value show_raw_type_vars then
+    IntSet.fold (fun var (name_map) -> IntMap.add var (string_of_int var) name_map) vars IntMap.empty
+  else
+    begin
+      let first_letter = int_of_char 'a' in
+      let last_letter = int_of_char 'z' in
+      let num_letters = last_letter - first_letter + 1 in
+	
+      let string_of_ascii n = Char.escaped (char_of_int n) in
+	
+      let rec num_to_letters n =
+	let letter = string_of_ascii (first_letter + (n mod num_letters)) in
+	  letter ^
+	    (if n >= num_letters then (num_to_letters (n / num_letters))
+	     else "")
+      in
+	
+      let (_, name_map) = 
+	IntSet.fold (fun var (n, name_map) -> (n+1, IntMap.add var (num_to_letters n) name_map)) vars (0, IntMap.empty)
+      in
+	name_map
+    end
 (* [TODO]
       change the return type to be IntSet.t
 *)

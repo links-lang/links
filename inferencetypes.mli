@@ -95,3 +95,13 @@ val string_of_row_var : row_var -> string
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
+(** well-foundedness checking **)
+val is_negative : int -> datatype -> bool
+val is_negative_row : int -> row -> bool
+val is_negative_field_env : int -> field_spec_map -> bool
+val is_negative_row_var : int -> row_var -> bool
+
+val is_positive : int -> datatype -> bool
+val is_positive_row : int -> row -> bool
+val is_positive_field_env : int -> field_spec_map -> bool
+val is_positive_row_var : int -> row_var -> bool

@@ -14,8 +14,11 @@ let show_row_unification = Settings.add_bool("show_row_unification", true, true)
 let show_instantiation = Settings.add_bool("show_instantiation", false, true)
 let show_generalization = Settings.add_bool("show_generalization", false, true)
 
-let show_typechecking = Settings.add_bool("show_typechecking", false, true)
+let show_typechecking = Settings.add_bool("show_typechecking", true, true)
 let show_recursion = Settings.add_bool("show_recursion", true, true)
+
+(* whether to allow negative recursive types to be inferred *)
+let infer_negative_types = Settings.add_bool("infer_negative_types", true, true)
 
 exception Unify_failure of string
 exception UndefinedVariable of string
@@ -36,8 +39,7 @@ let rec extract_row : datatype -> row = function
   | t -> failwith
       ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
-let var_is_free_in_type var typ = mem var (free_type_vars typ)
-
+let var_is_free_in_type var datatype = mem var (free_type_vars datatype)
 
 (* a special kind of structural equality on types that doesn't look
 inside points *)
@@ -118,6 +120,16 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	()
       else
 	unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows) (lbody, rbody) in
+
+  (* introduce a recursive type
+       give an error if it is non-well-founded and
+       non-well-founded type inference is switched off
+  *)
+  let rec_intro point (var, t) =
+    if Settings.get_value infer_negative_types || not (is_negative var t) then
+       Unionfind.change point (`Recursive (var, t))
+    else
+       failwith "non-well-founded type inferred!" in
     
     fun (t1, t2) ->
       (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -134,14 +146,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	       | `TypeVar var, t ->
 		   (if var_is_free_in_type var t then
 		      (debug_if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-		       Unionfind.change rpoint (`Recursive (var, t)))
+		       rec_intro rpoint (var, t))
 		    else
 		      ());
 		   Unionfind.union lpoint rpoint
 	       | t, `TypeVar var ->
 		   (if var_is_free_in_type var t then
 		      (debug_if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
-		       Unionfind.change lpoint (`Recursive (var, t)))
+		       rec_intro lpoint (var, t))
 		    else
 		      ());
 		   Unionfind.union rpoint lpoint
@@ -166,7 +178,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		 if var_is_free_in_type var t then
    		   (let _ = debug_if_set (show_recursion)
 		      (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")") in
-		     Unionfind.change point (`Recursive (var, t)))
+		      rec_intro point (var, t))
 		 else
 		   (debug_if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
 		   Unionfind.change point t)
@@ -185,8 +197,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
            unify' rec_env (lvar, rvar);
            unify' rec_env (lbody, rbody))
       | `Function (lvar, lbody), `Function (rvar, rbody) ->
-          unify' rec_env (lvar, rvar);
-          unify' rec_env (lbody, rbody)
+	  (if Types.using_mailbox_typing() then
+	     Debug.debug "mailbox typing assertion failure"
+	   else
+	     ());
+            unify' rec_env (lvar, rvar);
+            unify' rec_env (lbody, rbody)
       | `Record l, `Record r -> unify_rows' rec_env (l, r)
       | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
       | `List t, `List t' -> unify' rec_env (t, t')
@@ -256,6 +272,17 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let unify_compatible_field_environments rec_env (field_env1, field_env2) =
 	ignore (extend_field_env rec_env field_env1 field_env2) in
 
+      (* introduce a recursive row
+   	   give an error if it is non-well-founded and
+	   non-well-founded type inference is switched off
+      *)
+      let rec_row_intro point (field_env, var, row) =
+	if Settings.get_value infer_negative_types || not (is_negative_row var row) then
+	  Unionfind.change point (field_env, `RecRowVar (var, row))
+	else
+	  failwith "non-well-founded row type inferred!" in
+
+
       (*
 	instantiate_row_var rec_env (row_var, row)
 	  attempts to instantiate row_var with row
@@ -274,7 +301,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		      match row_var with
 			| `RowVar (Some var) ->
 			    if mem var (free_row_type_vars extension_row) then
-			      Unionfind.change point (field_env, `RecRowVar (var, extension_row))
+			      rec_row_intro point (field_env, var, extension_row)
 			    else
 			      Unionfind.change point extension_row
 			| _ -> extend row_var
@@ -507,11 +534,11 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	     | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
 	  ) (IntMap.empty, IntMap.empty) generics in
 	  
-	let rec inst : inst_env -> datatype -> datatype = fun rec_env typ ->
+	let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
 	  let rec_type_env, rec_row_env = rec_env in
-	    match typ with
+	    match datatype with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-	      | `Primitive _  -> typ
+	      | `Primitive _  -> datatype
 	      | `TypeVar _ -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
 	      | `MetaTypeVar point ->
 		  let t = Unionfind.find point in
@@ -520,7 +547,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 			   if IntMap.mem var tenv then
 			     IntMap.find var tenv
 			   else
-			     typ
+			     datatype
 			       (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
 		       | `Recursive (var, t) ->
 			   debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
@@ -779,7 +806,7 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
 	    an uninstantiated mailbox parameter then
 	    we can be sure that the body of the function
 	    cannot receive messages (unless further function application
-	    is performed arguments)
+	    is performed)
 	  *)
 	let mailbox_type = ITO.fresh_type_variable () in
 	let variable_type = ITO.fresh_type_variable () in
@@ -793,6 +820,10 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
       end
   | Abstr (variable, body, pos) ->
       begin
+	(if (Types.using_mailbox_typing ()) then
+	   Debug.debug "mailbox typing assertion failure"
+	 else
+	   ());
 	let variable_type = ITO.fresh_type_variable () in
 	let body_env = (variable, ([], variable_type)) :: env in
 	let body = type_check body_env body in
@@ -968,10 +999,12 @@ let rec type_check : environment -> untyped_expression -> inference_expression =
         SortBy(expr, byExpr, (pos, type_of_expression expr, None))
   | Wrong pos ->
       Wrong(pos, ITO.fresh_type_variable(), None)
-  | HasType(expr, typ, pos) ->
+  | HasType(expr, datatype, pos) ->
       let expr = type_check env expr in
-	unify(type_of_expression expr, inference_type_of_type typ);
-	HasType(expr, typ, (pos, type_of_expression expr, None))
+	let expr_type = type_of_expression expr in
+	let inference_datatype = inference_type_of_type datatype in
+	  unify(expr_type, inference_datatype);
+	  HasType(expr, datatype, (pos, type_of_expression expr, None))
   | Placeholder _ 
   | Alien _ ->
       assert(false)
@@ -1307,45 +1340,19 @@ let check_for_duplicate_defs : Types.environment -> untyped_expression list -> u
       report_errors()
     end
 
-
-(* [HACK] *)
-(* types for special builtin functions *)
-(*
-let datatype = Parse.parse_datatype
-let self_type_mailbox = datatype "Mailbox a -> () -> Mailbox a"
-let self_type_pure = datatype "() -> Mailbox a"
-let recv_type_mailbox = datatype "Mailbox a -> () -> a"
-let recv_type_pure = datatype "() -> a"
-let spawn_type_mailbox = datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b"
-let spawn_type_pure = datatype "(a -> b) -> a -> Mailbox c" 
-*)
-
-(* [HACK]
-   remove mailbox typing for special functions
-*)
-(*
-let remove_special_mailboxes =
-  List.map (fun (name, t) ->
-	      match name with
-		| "self" -> (name, self_type_pure)
-		| "recv" -> (name, recv_type_pure)
-		| "spawn" -> (name, spawn_type_pure)
-		| _ -> (name, t)) 
-*)
-
 (* [HACKS] *)
 (* two pass typing: yuck! *)
 let type_program env expressions = 
-  let _ = check_for_duplicate_defs env expressions in
+  check_for_duplicate_defs env expressions;
+  let _ =
     (* without mailbox parameters *)
-  let env', expressions' =
-    debug_if_set (show_typechecking) (fun () -> "Typechecking without mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
 	 type_program (unmailboxify_type_env env) expressions) in
   let env', expressions' =
     (* with mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "Typechecking with mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
     let env, expressions =
       Types.with_mailbox_typing true
 	(fun () ->
@@ -1356,17 +1363,16 @@ let type_program env expressions =
     env', expressions'
 
 let type_expression env expression =
-  let _ = check_for_duplicate_defs env [expression] in
+  check_for_duplicate_defs env [expression];
+  let _ =
     (* without mailbox parameters *)	
-
-  let env', expressions' =
-    debug_if_set (show_typechecking) (fun () -> "Typechecking without mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
 	 type_expression (unmailboxify_type_env env) expression) in
   let env', expressions' =
     (* with mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "Typechecking with mailbox parameters");
+    debug_if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
     let env, expression = 
       Types.with_mailbox_typing true
 	(fun () ->
