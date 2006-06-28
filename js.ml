@@ -405,8 +405,8 @@ let rec generate : 'a expression' -> code =
         Fn(["__kappa"],
            Call(b_cps, [Fn(["__b"],
                            Call(Call(Var "_accum", [Var "__kappa"]),
-                                [Fn(["__kappa"], 
-                                    Fn([v], Call(e_cps, [Var "__kappa"])));
+                                [Fn([v; "__kappa"],
+                                    Call(e_cps, [Var "__kappa"]));
                                  Var "__b"]))]))
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
@@ -554,6 +554,7 @@ let rec generate : 'a expression' -> code =
 		     Var "__kappa")
 	       ])
 	)
+  | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
   | Alien _ -> Nothing
 
   (* Unimplemented stuff *)
