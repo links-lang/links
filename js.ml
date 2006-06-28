@@ -152,8 +152,11 @@ and boiler_2 = ";</script>
 and boiler_3 =    "\n--> </script>
       </head>
       <!-- $Id$ -->
-      <body><script type='text/javascript'>" 
-and  boiler_4 = "</script></body>
+      <body><script type='text/javascript'>
+        _startTimer();
+      " 
+and  boiler_4 = ";
+      </script></body>
    </html>"
 
 (* Operators are represented as functions in the interpreter, but
@@ -416,8 +419,7 @@ let rec generate : 'a expression' -> code =
   | Abstr (arglist, body, _) ->
       Fn(["__kappa"], 
          Call(Var "__kappa", 
-	      [Fn(["__kappa"],
-		  Fn ([arglist], Call(generate body, [Var "__kappa"])))]))
+              [Fn ([arglist; "__kappa"], Call(generate body, [Var "__kappa"]))]))
         
   | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
       let l_cps = generate l in
@@ -427,13 +429,6 @@ let rec generate : 'a expression' -> code =
                 Call(r_cps, [Fn(["__r"],
                      Call(Var "__kappa",
                           [Binop (Var "__l", binop_name op, Var "__r")]))]))]))
-
-  | Apply (Variable ("domutate", _), p, _) -> 
-      let p_cps = generate p in
-        Fn(["__kappa"], 
-           Call(p_cps, [Fn(["__p"],
-                          Call(Var "__kappa",
-                               [Call(Var "_applyChanges", [Var "__p"])]))]))
 
   | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
@@ -564,7 +559,8 @@ let rec generate : 'a expression' -> code =
   (* Unimplemented stuff *)
   | Database _
   | Table _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
-  | x -> failwith("unknown ast object " ^ string_of_expression x)
+  | HasType (e, _, _) -> generate e
+  | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
 (* Specialness: 
    * Modify the l:action to pass the continuation to the top-level boilerplate
