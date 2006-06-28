@@ -256,14 +256,14 @@ let strip_lcolon evName =
 let generate_stub = function
   | Define (n, Rec ([_, (Abstr (arg,_,_))], Variable _, _), `Server, _) ->
       let arglist = [arg] in
-        Defs [n, Fn(["__kappa"], Fn (arglist, 
+        Defs [n, Fn (arglist @ ["__kappa"], 
                  Call(Call (Var "_remoteCall", [Var "__kappa"]),
                       [strlit n; Dict (
                          List.map2
                            (fun n v -> string_of_int n, Var v) 
                            (Utility.fromTo 1 (1 + List.length arglist))
                            arglist
-                       )])))]
+                       )]))]
   | e
     -> failwith ("Cannot generate stub for " ^ string_of_expression e)
 
