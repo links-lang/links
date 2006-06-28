@@ -1,4 +1,4 @@
-#!/home/s0567141/links/links
+#!/home/s0567141/links/links -d
 
 fun dragging(left, top, width, height, mdownX, mdownY) client {
   receive {
@@ -12,7 +12,7 @@ fun dragging(left, top, width, height, mdownX, mdownY) client {
     };
     case MouseUp(x, y) -> {
       debug("got mouseup!");
-      frameMgr(left + x - mdownX, top + y - mdownY, width, height);
+      frameMgr(left + x - mdownX, top + y - mdownY, width, height)
     };
     case _ -> {
       dragging(left, top, width, height, mdownX, mdownY)
@@ -39,7 +39,7 @@ fun resizing(left, top, width, height, corner) client {
       resizing(l, t, w, h, corner)
     };
     case MouseUp(x, y) -> {
-      frameMgr(left, top, width, height);
+      frameMgr(left, top, width, height)
     };
     case _ -> {
       resizing(left, top, width, height, corner)
