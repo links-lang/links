@@ -210,7 +210,7 @@ let rec show : code -> string =
     ^"{ "^
       (let names = String.concat ", " (local_names body) in
 	if names = "" then "" else "var " ^ names ^ ";\n")
-    ^"return "^ show body 
+    ^" "^ show body 
     ^"; }" 
   and arglist args = String.concat ", " (map show args) 
   and paren = function
