@@ -1,0 +1,145 @@
+#!/home/jeremy/code/links/svn/clean/links  -d
+#!/home/s0567141/links/./links -d
+#!/home/s0567141/links/links
+#!/Users/ezra/Development/links/links
+
+var precision = 10;
+var realUnit = precision;
+
+var minPixSize = 16;
+
+fun zmagsq(c) {
+  var r = c.1; var i = c.2;
+  (r*r + i*i) / precision
+}
+
+fun zsquare(c) {
+  var r = c.1; var i = c.2;
+  ((r * r - i * i)/precision, (2 * r * i)/precision)
+}
+
+fun zplus(z1, z2) {
+  (z1.1 + z2.1, z1.2 + z2.2)
+}
+
+var the_limit = 16;
+
+fun mandelloop(z, c, i) {
+  if (zmagsq(z) > 4 * precision) {
+    i
+  } else if (i >= the_limit) {
+    i
+  } else {
+    # z <- c + z^2
+    mandelloop(zplus(c, zsquare(z)), c, i+1)
+  }
+}
+
+# fun mandelbrot(r, i, limit) {
+#   mandelloop((0,0), (r,i), 0);
+# }
+
+fun hexdigit(i) {
+       if (i ==  0) "0"
+  else if (i ==  1) "1"
+  else if (i ==  2) "2"
+  else if (i ==  3) "3"
+  else if (i ==  4) "4"
+  else if (i ==  5) "5"
+  else if (i ==  6) "6"
+  else if (i ==  7) "7"
+  else if (i ==  8) "8"
+  else if (i ==  9) "9"
+  else if (i == 10) "a"
+  else if (i == 11) "a"
+  else if (i == 12) "b"
+  else if (i == 13) "c"
+  else if (i == 14) "d"
+  else if (i == 15) "e"
+  else # if (i == 16) 
+    "f"
+
+}
+
+fun redshade(i, max) {
+  if (i == max) "#000"
+  else
+    "#" ++ hexdigit(16*i/max) ++ "33"
+}
+
+fun pixeldiv(x, y, size, color) {
+  var s = intToString(size);
+  var sx = intToString(x);
+  var sy = intToString(y);
+  <div id="{"p" ++ sx ++ "x" ++ sy}"
+       style="width: {s}px; 
+              height: {s}px;
+              position: absolute;
+              left: {sx}px;
+              top: {sy}px;
+              background-color: {redshade(color, the_limit)}"/>
+}
+
+fun mandelBlock(pixSize, x, y, regionSize, r, i) {
+  pixeldiv(x, y, pixSize, mandelloop((0,0),(r,i),0)) ++
+  pixeldiv(x+pixSize, y, pixSize, mandelloop((0,0),(r+regionSize,i),0)) ++
+  pixeldiv(x, y+pixSize, pixSize, mandelloop((0,0),(r,i+regionSize),0)) ++
+  pixeldiv(x+pixSize, y+pixSize, pixSize, mandelloop((0,0),(r+regionSize,i+regionSize),0))
+}
+
+fun mandelMadness(x, y, r, i, pixSize,
+                  maxx, maxy,
+                  mini, minr, maxi, maxr)
+{
+  var docElt = domGetDocumentRef();
+  var xdil = (maxi - mini) / (maxx - 0);
+  var regionSize = pixSize * xdil;
+
+  fun mm(x,y,r,i,pixSize) {
+
+  if (x+pixSize >= maxx) {
+      mm(0, y+pixSize, minr, i+regionSize, pixSize)
+  } else {
+    if (y+pixSize >= maxy) {
+      if (pixSize <= minPixSize) {
+        ()
+      } else {
+        mm(0, 0, minr, mini, pixSize/2)
+      }
+    } else {
+#      debug("x is " ++ intToString(x));
+      domAppendChild(mandelBlock(pixSize, x, y,
+                                 regionSize, r, i), docElt);
+      mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,
+                    maxx, maxy,
+                    mini, minr, maxi, maxr)
+
+    }
+  }
+
+} mm(x,y,r,i,pixSize)
+}
+
+#fun goMandelMadness(minr, mini, maxr, maxi, pixelWidth)
+#{
+#}
+
+fun main() client {
+  domReplaceDocument(<body>
+    <div id="p0x0" />
+  </body>);
+
+
+
+  var minr = -20;
+  var mini = -15;
+  var maxr = 10;
+  var maxi = 15;
+  var pixelWidth = 256;
+  var aspect = (maxr-minr)/(maxi-mini);
+  mandelMadness(0, 0, minr, mini, pixelWidth/4,
+                pixelWidth * aspect, pixelWidth,
+                mini, minr, maxi, maxr)
+}
+
+main()
