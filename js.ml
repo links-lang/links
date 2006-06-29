@@ -67,9 +67,27 @@ let collapse_extend : RewriteCode.rewriter =
 
 let collapse_extends = RewriteCode.bottomup collapse_extend
 
+let stringp = flip (Str.string_match (Str.regexp "^[\"']")) 0
+
+let concat_lits : RewriteCode.rewriter = 
+  let join_strings l r = 
+    (Str.string_before l (String.length l - 1))  ^ (Str.string_after r 1)
+      in
+  function
+    | Call (Var "_concat", [Lit l; Lit r]) when stringp l && stringp r -> Some (Lit (join_strings l r))
+
+        (* Inline _concat when one argument is known to be a string *)
+    | Call (Var "_concat", [(Lit lit as l); r])
+    | Call (Var "_concat", [l; (Binop (Lit lit, _, _) as r)])
+    | Call (Var "_concat", [l; (Lit lit as r)]) when stringp lit -> Some (Binop (l, "+", r))
+    | _ -> None
+
+let concat_lits = RewriteCode.bottomup concat_lits
+
 let optimise e = 
   if Settings.get_value optimising then
-    fromOption e (collapse_extends e)
+    fromOption e 
+      (RewriteCode.all [collapse_extends; concat_lits] e)
   else e
 
 
