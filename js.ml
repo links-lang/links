@@ -732,14 +732,18 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   let handlers = map make_code_for_handler handlers in
   let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
   let children_cps = map (fun e -> (gensym "", generate e)) children in
-    make_xml_cps attrs_cps (["key", 
-                             Call(Var "_registerFormEventHandlers",
-                                  [Lst (map (fun (evName, code) -> 
-                                               Dict(["evName", strlit evName;
-                                                     "handler", 
-                                                        Fn (["event"], code)]))
-                                          handlers)]);
-                            ]
+  let keyattr = 
+    match handlers with
+      | [] -> []
+      | handlers -> ["key", 
+                     Call(Var "_registerFormEventHandlers",
+                          [Lst (map (fun (evName, code) -> 
+                                       Dict(["evName", strlit evName;
+                                             "handler", 
+                                             Fn (["event"], code)]))
+                                  handlers)]);
+                    ] in
+    make_xml_cps attrs_cps ( keyattr
                             @ essentialAttrs
                             (* @ map handlerInvoker handlers *)
 			   )
