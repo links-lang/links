@@ -28,7 +28,47 @@ type code = | Var   of string
             | Bind  of (string * code * code)
             | Seq   of (code * code)
             | Nothing
+ deriving (Show)
 
+let code_freevars : code -> string list = 
+  let rec aux bound = function
+    | Var x when List.mem x bound -> []
+    | Var x -> [x]
+    | Nothing -> []
+    | Lit _ -> []
+    | Defs (ds) -> concat_map (aux ((List.map fst ds) @ bound)) (List.map snd ds)
+    | Fn (args, body) -> aux (args @ bound) body
+    | Call (f, ps) -> aux bound f @ concat_map (aux bound) ps
+    | Seq (l, r)
+    | Binop (l,_,r) -> aux bound l @ aux bound r
+    | Cond (i,t,e) ->  aux bound i @ aux bound t @ aux bound e
+    | Dict (fs) -> concat_map (aux bound -<- snd) fs
+    | Lst elems -> concat_map (aux bound) elems
+    | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
+  in aux []
+
+(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
+let rec rename' renamer = function
+  | Var x -> Var (renamer x)
+  | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
+  | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
+  | Call(func, args) -> Call(rename' renamer func,
+                             map (rename' renamer) args)
+  | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
+                                 rename' renamer rhs)
+  | Cond(test, yes, no) ->  Cond(rename' renamer test,
+                                 rename' renamer yes,
+                                 rename' renamer no)
+  | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
+  | Lst(terms) -> Lst(map (rename' renamer) terms)
+  | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
+                                   rename' renamer body)
+  | Seq(first, second) -> Seq(rename' renamer first,
+                              rename' renamer second)
+  | simple_expr -> simple_expr
+and rename renamer body = rename' renamer body
+
+let freein name expr = List.mem name (code_freevars expr)
 
 let perhaps_process_children (f : code -> code option) :  code -> code option =
   let passto = Rewrite.passto f in
@@ -59,6 +99,27 @@ module RewriteCode =
          let process_children = perhaps_process_children
        end))
 
+let replace var repl : RewriteCode.rewriter =
+  function
+    | Var x when x = var -> Some (repl)
+    | _ -> None
+let replace var repl = RewriteCode.bottomup (replace var repl)
+
+let remove_renaming : RewriteCode.rewriter = 
+  function
+    | Bind (x, Var y, body) when not (freein x body) -> 
+        if x = "__r_g205" then failwith ("Error : " ^ Show_code.show body)
+        else (Some body )
+    | Bind (x, Var y, body) when not (freein y body) -> Some (rename 
+                                                                (fun name ->
+                                                                   if name = x then y
+                                                                   else name) body)
+        (* not really a renaming, but it goes here well enough.  In general this is a pessimisation, though *)
+(*    | Bind (x, (Call (Var "_project", ([Lit _; Var _])) as l), body)*)
+    | Bind (x, (Lit _ as l), body) -> Some (fromOption body (replace x l body) )
+
+    | _ -> None
+
 let collapse_extend : RewriteCode.rewriter = 
   let unquote = Str.replace_first (Str.regexp ("^'\\(.*\\)'$")) "\\1" in
     function
@@ -66,6 +127,7 @@ let collapse_extend : RewriteCode.rewriter =
       | _                                               -> None 
 
 let collapse_extends = RewriteCode.bottomup collapse_extend
+let remove_renamings = RewriteCode.bottomup remove_renaming
 
 let stringp = flip (Str.string_match (Str.regexp "^[\"']")) 0
 
@@ -87,7 +149,7 @@ let concat_lits = RewriteCode.bottomup concat_lits
 let optimise e = 
   if Settings.get_value optimising then
     fromOption e 
-      (RewriteCode.all [collapse_extends; concat_lits] e)
+      (RewriteCode.all [collapse_extends; remove_renamings; concat_lits] e)
   else e
 
 
@@ -337,27 +399,6 @@ let trivial_cps expr =
 (* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("_idy")
 
-
-(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
-let rec rename' renamer = function
-  | Var x -> Var (renamer x)
-  | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
-  | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
-  | Call(func, args) -> Call(rename' renamer func,
-                             map (rename' renamer) args)
-  | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
-                                 rename' renamer rhs)
-  | Cond(test, yes, no) ->  Cond(rename' renamer test,
-                                 rename' renamer yes,
-                                 rename' renamer no)
-  | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
-  | Lst(terms) -> Lst(map (rename' renamer) terms)
-  | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
-                                   rename' renamer body)
-  | Seq(first, second) -> Seq(rename' renamer first,
-                              rename' renamer second)
-  | simple_expr -> simple_expr
-and rename renamer body = rename' renamer body
 
 
 
