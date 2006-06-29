@@ -13,6 +13,8 @@ open Utility
 (*open Type *)
 open Syntax
 
+let optimising = Settings.add_bool("optimise_javascript", true, true)
+
 (* Intermediate language *)
 type code = | Var   of string
             | Lit   of string
@@ -65,7 +67,10 @@ let collapse_extend : RewriteCode.rewriter =
 
 let collapse_extends = RewriteCode.bottomup collapse_extend
 
-let optimise e = fromOption e (collapse_extends e)
+let optimise e = 
+  if Settings.get_value optimising then
+    fromOption e (collapse_extends e)
+  else e
 
 
 (*
@@ -919,6 +924,12 @@ let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
 
  (* TODO: imports *)
 let generate_program environment expression =
+
+  let environment = 
+    if Settings.get_value optimising then
+      Optimiser.inline (Optimiser.inline (Optimiser.inline environment)) 
+    else environment
+  in
   (boiler_1
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2

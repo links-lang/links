@@ -633,3 +633,77 @@ let inline_tables expressions =
 
 let optimise_program (env, exprs) = 
   map (optimise env) (inline_tables exprs)
+
+
+
+(** Inlining **)
+
+(* Number of nodes in a syntax tree *)
+let countNodes e = 
+  let count = ref 0 in 
+    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
+    !count;;
+
+(* Inline small, non-recursive functions *)
+let contains_no_extrefs : Syntax.expression -> bool =
+  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
+
+let recursivep : Syntax.expression -> bool = function
+  | Rec ([(name, fn)], Variable (v, _), _) when v = name 
+      -> List.mem name (freevars fn)
+  | _ -> false
+
+    
+let size_limit = 150
+
+let is_inline_candidate= function
+  | Define (_, (Rec _ as e), _, _) -> not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
+  | Define (_, e, _, _) when Inference.is_value e -> contains_no_extrefs e && pure e
+  | _ -> false
+
+let find_inline_candidates es : (string * expression) list = 
+  let is_inline_candidate = function
+    | Define (name, rhs,_,_) as e when is_inline_candidate e -> [name, rhs]
+    | _ -> []
+  in Utility.concat_map is_inline_candidate es
+
+let replace name rhs : RewriteSyntax.rewriter = function
+  | Variable (n, _) when n = name -> Some rhs
+  | _ -> None
+
+let replace name rhs e = fromOption e (RewriteSyntax.bottomup (replace name rhs) e)
+
+let perform_value_inlining name rhs e = 
+  List.map (replace name rhs)   e
+
+let replaceApplication name var body : RewriteSyntax.rewriter = function
+  | Apply (Variable (n, _), p, d) when n = name -> Some (Let (var, p, body, d))
+  | _ -> None
+
+let perform_function_inlining name var rhs = 
+  List.map
+    (fun e -> fromOption e (RewriteSyntax.bottomup (replaceApplication name var rhs) e))
+
+
+let inline program = 
+  let valuedefp = function
+    | _, Rec _ -> false
+    | _        -> true
+  in
+  let candidates = find_inline_candidates program in
+  let value_candidates, fn_candidates = List.partition valuedefp candidates in
+  let program' = 
+    List.fold_right 
+      (fun (name, rhs) program -> perform_value_inlining name rhs program)
+      value_candidates
+      program
+  in 
+  let program'' = 
+    List.fold_left 
+      (fun program (name, rhs)  ->
+         match rhs with
+           | Rec ([(name, Abstr (v, body, _))], _, _) ->
+               perform_function_inlining name v body program)
+      program'
+      fn_candidates
+  in program''
