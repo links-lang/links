@@ -410,9 +410,9 @@ let idy_js = Var("_idy")
 
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
-    Call(Call (Var "_XML",
-               [Var "__kappa"]),
-         [strlit tag;
+    Call(Var "_XML",
+         [Var "__kappa";
+          strlit tag;
           Dict (attrs_noncps @ map (fun (k, n, _) -> (k, Var n)) attrs_cps);
           Lst (children_noncps @ map (fun (n, _) -> Var n) children_cps)])
   in
