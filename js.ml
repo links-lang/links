@@ -237,7 +237,6 @@ let rec show : code -> string =
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
       | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  
-      | Call (Var "_call", [f; a; k]) -> "_call(" ^ paren f ^ ", " ^ paren a ^ ",\n" ^ paren k ^ ")"
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
@@ -553,14 +552,14 @@ let rec generate : 'a expression' -> code =
         match f with
           | Variable (l, _) when List.mem_assoc l (Library.type_env)
                 -> 
+              (* Don't yield when calling library functions.
+                 In the future library functions should be "native". *)
               Call(Var f_name,
                    (map (fun name -> Var name) arg_names) @ [kappa])
           | _ -> 
-              Call(Var "_call",
-                   [Var f_name;
-                    Lst(map (fun name -> Var name) arg_names);
-                    kappa]
-                   ) in 
+              Call (Var "_yield",
+                    [Var f_name] @ (map (fun name -> Var name) arg_names) @ [kappa])
+      in
       let arg_tower = fold_right wrap_cps_terms 
         (combine cps_args arg_names)
         innermost_call in
