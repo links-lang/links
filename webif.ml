@@ -81,7 +81,7 @@ let untuple_single = function
 let stubify_client_funcs env = 
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
-    | Syntax.Define (_, _, `Client, _) -> false
+    | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
     | e  -> failwith ("Unexpected non-definition in environment : " 
 		      ^ Syntax.string_of_expression e)

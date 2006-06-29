@@ -292,8 +292,8 @@ let untuple_call =
 let strip_lcolon evName = 
   String.sub evName 2 ((String.length evName) - 2)
 
-(* Generate a stub that calls the corresponding server function *)
-let generate_stub = function
+(* Generate a server stub that calls the corresponding server function *)
+let generate_server_stub = function
   | Define (n, Rec ([_, (Abstr (arg,_,_))], Variable _, _), `Server, _) ->
       let arglist = [arg] in
         Defs [n, Fn (arglist @ ["__kappa"], 
@@ -305,7 +305,8 @@ let generate_stub = function
                            arglist
                        )]))]
   | e
-    -> failwith ("Cannot generate stub for " ^ string_of_expression e)
+    -> failwith ("Cannot generate server stub for " ^ string_of_expression e)
+
 
 let trivial_cps expr = 
   Fn(["__kappa"], Call(Var "__kappa", [expr]))
@@ -492,8 +493,8 @@ let rec generate : 'a expression' -> code =
         Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 
   (* Binding *)
-  | Define (_, _, `Server, _) as d      -> generate_stub d
-  | Define (_, _, `Native, _) -> failwith ("native functions not implemented yet")
+  | Define (_, _, `Server, _) as d -> generate_server_stub d
+  | Define (_, _, `Native, _) as d -> generate_native_stub d
   | Define (n, e, (`Client|`Unknown), _)-> 
       Defs ([n, Call(generate e,
 		     [Var "_idy"])])   (* definitions are always top 
@@ -703,6 +704,120 @@ and end_thread expr = Call(expr, [idy_js])
    kappa. should only be used on trivial expressions--w/o subexprs *)
 and generate_easy_cps expr = 
         Fn(["__kappa"], Call(Var "__kappa", [generate expr]))
+
+(* generate direct style code *)
+and generate_direct_style : 'a expression' -> code =
+  let gcps = generate in
+  let gd = generate_direct_style
+  in
+    function
+  | Integer (v, _)                     -> Lit (string_of_num v)
+  | Float (v, _)                       -> Lit (string_of_float v)
+  | Boolean (v, _)                     -> Lit (string_of_bool v)
+  | Char (v, _)                        -> chrlit v
+  | String (v, _)                      -> strlit v
+  | Condition (i, t, e, _)             ->
+      Cond (gd i, gd t, gd e)
+  | Let (v, e, b, _)                   ->
+      Bind(v, gd e, gd b)
+  | Variable ("~", _)                  -> Var "tilde"
+  | Variable (v, _)                    -> Var v
+  | Comparison (l, "==", r, _)         -> 
+      Call(Var "_eq", [gd l; gd r])
+  | Comparison (l, op, r, _)           -> 
+      Binop(gd l, binop_name op, gd r)
+      (* Should strings be handled differently at this level? *)
+  | Nil _                 -> Lst []
+  | List_of (e, _)        ->
+      Lst [gd e]   
+  | Concat (l, r, _)      -> Call (Var "_concat", [gd l; gd r])
+  | For (e, v, b, _)  ->
+      failwith "not implemented native comprehensions yet"
+(*      Call(Var "_directAccum", [Fn([v], gd e); gd b])*)
+  | Xml_node _ -> failwith "not implemented handling of XML in native functions yet"
+(*
+  | Xml_node _ as xml when isinput xml -> lname_transformation xml
+  | Xml_node _ as xml -> laction_transformation xml
+  | Xml_node (tag, attrs, children, _)   -> 
+      let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
+      let children_cps = map (fun e -> (gensym "__", generate e)) children in
+        make_xml_cps attrs_cps [] children_cps [] tag
+*)
+  (* Functions *)
+  | Abstr (arglist, body, _) ->
+      Fn ([arglist], gd body)
+        
+  | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
+      Binop(gd l, binop_name op, gd r)
+
+  | Apply (f, p, _  ) ->
+      Call(gd f, [gd p])
+
+  (* Binding *)
+  | Define _ as d -> gcps d
+  | Rec (bindings, body, _) ->
+      List.fold_right
+	(fun (v, e) body ->
+	   Bind (v, gd e, body))
+	bindings
+	(gd body)
+
+  (* Records *)
+  | Record_empty _                    -> Dict []
+  | Record_extension (n, v, r, _)     ->
+      Call (Var "_extend", [gd r; strlit n; gd v])
+  | Record_selection_empty (Variable _, b, _)  -> 
+      gd b
+  | Record_selection_empty (v, b, _)  ->
+      Call(Fn(["ignored"], gd b), [gd v])
+  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
+      let name = gensym "r" in
+	Bind(name, gd r,
+	     Bind(lv, Call(Var "_project", [strlit l; Var name]),
+		  Bind(etcv, Var name, gd b)))
+  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv ->
+      (* Could use dot-notation instead of project call *)
+      Call(Var "_project", [strlit l; gd v])
+  | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
+(* Isn't this a correct implementation? *)
+(*      failwith("record selection not implemented");*)
+      Bind(lv, Call(Var "_project", [strlit l; gd v]), gd b)
+  (* Variants *)
+  | Variant_injection (l, e, _) -> 
+      Dict [("label", strlit l); ("value", gd e)]
+  | Variant_selection_empty (e, _) ->
+      Call(Var "_fail", [strlit "closed switch got value out of range"])
+  | Variant_selection (src, case_label, case_var, case_body, 
+                       else_var, else_body, _) ->
+      let src_var = gensym "s" in
+      Bind(src_var, gd src,
+	   Cond(Binop(Call(Var "_vrntLbl", [Var src_var]),
+                      "==",
+                      strlit case_label),
+		Bind(case_var,
+                     Call(Var "_vrntVal", [Var src_var]),
+                     Call(gd case_body, [Var "__kappa"])),
+		Bind(else_var,
+                     Var "__src",
+                gd else_body)))
+  | Escape (v, e, _) ->
+      failwith "escape cannot be called from native code"
+  | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
+  | Alien _ -> Nothing
+
+  (* Unimplemented stuff *)
+  | Database _
+  | Table _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+  | HasType (e, _, _) -> gd e
+  | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
+
+(* Generate a native stub that calls the corresponding native function *)
+and generate_native_stub = function
+  | Define (n, Rec ([_, (Abstr (arg,body,_))], Variable _, _), `Native, _) ->
+      let arglist = [arg] in
+        Defs [n, Fn (arglist @ ["__kappa"], Call(Var "__kappa", [generate_direct_style body]))]
+  | e
+    -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
       
 module StringSet = Set.Make(String)
 

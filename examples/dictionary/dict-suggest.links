@@ -39,11 +39,9 @@ fun completions(p) server {
  <head>
   <title>Dictionary suggest</title>
   <style>
-   {stringToXml("
-    .input { width:500px }
-    .suggestions { align:left; width:500px;
-                    background-color:#ccccff }
-   ")}
+    .input {{ width:500px }}
+    .suggestions {{ text-align:left; width:500px;
+                    background-color:#ccccff }}
   </style>
  </head>
 <body>
