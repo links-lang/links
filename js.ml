@@ -233,6 +233,10 @@ let rec show : code -> string =
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
       | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+(*       | Call (Var "_concat", [Lst l; Lst r; kappa]) -> Printf.sprintf "%s([%s])" (paren kappa) (arglist (l@r)) *)
+      | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
+      | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
+      | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  
       | Call (Var "_call", [f; a; k]) -> "_call(" ^ paren f ^ ", " ^ paren a ^ ",\n" ^ paren k ^ ")"
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
@@ -545,15 +549,21 @@ let rec generate : 'a expression' -> code =
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
       in
-      let innermost_call = Call(Var "_call",
-                                [Var f_name; 
-                                 Lst(map (fun name -> Var name) arg_names); 
-                                 kappa]
-                               ) in
+      let innermost_call =
+        match f with
+          | Variable (l, _) when List.mem_assoc l (Library.type_env)
+                -> 
+              Call(Var f_name,
+                   (map (fun name -> Var name) arg_names) @ [kappa])
+          | _ -> 
+              Call(Var "_call",
+                   [Var f_name;
+                    Lst(map (fun name -> Var name) arg_names);
+                    kappa]
+                   ) in 
       let arg_tower = fold_right wrap_cps_terms 
-                                 (combine cps_args arg_names)
-                                 innermost_call in
-        
+        (combine cps_args arg_names)
+        innermost_call in
         Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 
   (* Binding *)
@@ -987,7 +997,6 @@ let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
 
  (* TODO: imports *)
 let generate_program environment expression =
-
   let environment = 
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline environment)) 
