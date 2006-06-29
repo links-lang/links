@@ -21,7 +21,7 @@ let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
 exception ASTSyntaxError of position * string
 
-type location = [`Client | `Server | `Unknown]
+type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show, Pickle)
 
 type 'data expression' =
@@ -91,7 +91,7 @@ type untyped_expression = position expression'
     deriving (Show, Pickle)
 
 let string_of_location : location -> string = function
-  | `Client -> "client" | `Server -> "server" | `Unknown -> "unknown"
+  | `Client -> "client" | `Server -> "server" | `Native -> "native" | `Unknown -> "unknown"
 
 let rec unparse_sequence empty unit append = function 
   | Nil _ -> empty

@@ -493,6 +493,7 @@ let rec generate : 'a expression' -> code =
 
   (* Binding *)
   | Define (_, _, `Server, _) as d      -> generate_stub d
+  | Define (_, _, `Native, _) -> failwith ("native functions not implemented yet")
   | Define (n, e, (`Client|`Unknown), _)-> 
       Defs ([n, Call(generate e,
 		     [Var "_idy"])])   (* definitions are always top 

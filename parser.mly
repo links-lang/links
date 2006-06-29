@@ -29,7 +29,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token TABLE FROM DATABASE WITH UNIQUE ORDERBY ASC DESC 
 %token UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
-%token CLIENT SERVER 
+%token CLIENT SERVER NATIVE
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP BANG
@@ -96,6 +96,7 @@ toplevel:
 perhaps_location:
 | SERVER                                                       { `Server }
 | CLIENT                                                       { `Client }
+| NATIVE                                                       { `Native }
 | /* empty */                                                  { `Unknown }
 
 constant:

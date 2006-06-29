@@ -75,7 +75,7 @@ deriving (Show, Pickle)
 
 (*
    copied with modifications from errors.ml
-     - can'tleave it there because it would create a cyclic dependency!
+     - can't leave it there because it would create a cyclic dependency!
      - we need to sort out our modules
 *)
 let string_of_pattern_pos ((pos : Lexing.position), _, expr) = 
