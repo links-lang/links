@@ -25,7 +25,7 @@ struct
     let rec writeItems = function
       | []     -> ()
       | [x]    -> S.showBuf x buffer
-      | x::xs  -> S.showBuf x buffer; Buffer.add_char buffer ','; writeItems xs
+      | x::xs  -> S.showBuf x buffer; Buffer.add_char buffer ';'; writeItems xs
     in
       Buffer.add_char buffer '[';
       writeItems items;
