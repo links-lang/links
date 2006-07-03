@@ -1,5 +1,27 @@
 BUGS
 
+* Row variables are printed incorrectly.
+
+    links> fun (x) { (x.1, x.2); };;
+    fun : (b, c, d) -> ()
+
+  The type should be
+
+    (a, b | c) -> ()
+
+* Record case patterns, like record let patterns, should match closed
+  rows unless open rows are explicitly specified:
+
+     links> fun f(z) { switch z { case (x,y) -> x; } };;
+     fun : (b, c, d) -> b
+
+   The type should be
+
+     (b, c) -> b
+
+   (This one is open for debate, I think: what does everyone else think
+   about it?)
+
 * Recursive types expose continuation implementation in an undesirable way:
 
     links> var y = 3;;
