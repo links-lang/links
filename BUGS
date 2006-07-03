@@ -22,6 +22,24 @@ BUGS
    (This one is open for debate, I think: what does everyone else think
    about it?)
 
+* Closed rows should not contain absent fields.  This is not really
+  what we want:
+
+     links> fun f(x) { var (y=z|r) = x; r};;
+     fun : (y:b,c) -> (y -,c)
+     links> f((y=3));;
+     () : (y -)
+
+* There's no distinct read/print syntax for a record consisting of an
+  empty open row.  Currently empty open rows print like this:
+
+     (a)
+
+  which is ambiguous with other things.  A simple way to fix this is
+  to have some way of distinguishing row variables from other type
+  variables in the read/print syntax (for example by prefixing them
+  with '*', single quote, or some other special character).
+
 * Recursive types expose continuation implementation in an undesirable way:
 
     links> var y = 3;;
