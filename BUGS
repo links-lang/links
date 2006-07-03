@@ -1,5 +1,31 @@
 BUGS
 
+* Recursive types expose continuation implementation in an undesirable way:
+
+    links> var y = 3;;
+    3 : Int
+    links> var x = escape e in e;;
+    [Definition ([("y",`Int 3)],"x")] : (mu b . (b) -> c) -> c
+
+  Actually, this is pretty cool: since the actual interpreter is CPS
+  we can use continuations to capture and restore a previous state of
+  the toplevel:
+
+    links> var y = 3;;
+    3 : Int
+    links> var x = escape e in e;;
+    [Definition ([("y",`Int 3)],"x")] : (mu b . (b) -> c) -> c
+    links> var z = 4;;
+    4 : Int
+    links> z;;
+    4 : Int
+    links> x(x);;
+    [Definition ([("y",`Int 3)],"x")] : a
+    links> z;;
+    *** Fatal error : Internal error: Not_found while interpreting.
+
+  It needs to be made less icky, though.
+
 * Returning a seq'ce of XML items at the toplevel gives "ASSERTION FAILED:
   Top-level expression was not XML"
 
