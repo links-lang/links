@@ -1,5 +1,12 @@
 BUGS
 
+* Unused mu-variables should be eliminated:
+
+   links> fun(x){x(x)}(fun(x){x});;
+   fun : mu b . mu a . (b) -> b
+
+  The 'mu a.' shouldn't be there.
+
 * Row variables are printed incorrectly.
 
     links> fun (x) { (x.1, x.2); };;
