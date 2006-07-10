@@ -124,10 +124,13 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
       | `RowVar row_var ->
 	  let present_fields = get_present_fields field_env in
 	  let row_var_string = match row_var with
-	    | Some var -> [IntMap.find var vars]
-	    | None -> [] in
-	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) @ row_var_string in
-	    "(" ^ String.concat ", " strings ^ ")"
+	    | Some var -> Some (IntMap.find var vars)
+	    | None -> None in
+	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) in
+	    "(" ^ String.concat ", " strings ^
+	      (match row_var_string with
+		 | Some s -> " | "^s
+		 | None -> "") ^ ")"
   in
     match datatype with
       | `Not_typed       -> "not typed"
@@ -184,13 +187,16 @@ and string_of_row' sep vars (field_env, row_var) =
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
   let row_var_string = string_of_row_var' sep vars row_var in
-    String.concat sep (present_strings @ absent_strings @ row_var_string)
+    (String.concat sep (present_strings @ absent_strings)) ^
+      (match row_var_string with
+	 | None -> ""
+	 | Some s -> "|"^s)
 and string_of_row_var' sep vars row_var =
    match row_var with
-      |	`RowVar (Some var) -> [IntMap.find var vars]
-      | `RowVar None -> []
+      | `RowVar None -> None
+      |	`RowVar (Some var) -> Some (IntMap.find var vars)
       | `RecRowVar (var, row) -> 
-	  ["(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")"]
+	  Some ("(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")")
 
 let make_names vars =
   if Settings.get_value show_raw_type_vars then
@@ -294,8 +300,8 @@ let string_of_row row =
 
 let string_of_row_var row_var =
   match string_of_row_var' "," (make_names (free_bound_row_var_vars row_var)) row_var with
-    | [] -> ""
-    | [s] -> s
+    | None -> ""
+    | Some s -> s
 
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
