@@ -64,8 +64,7 @@ type pattern = [
   | `Nil
   | `Cons of (pattern * pattern)
   | `Variant of (string * pattern)
-  | `Unit
-  | `Record_extension of (string * pattern * pattern)
+  | `Record of (string * pattern * pattern)
   | `Constant of untyped_expression
   | `Variable of string
   | `As of (string * pattern)
@@ -97,8 +96,7 @@ let check_for_duplicate_names pos pattern =
 	    check env' pattern'
       | `Variant (name, pattern) ->
 	  check env pattern
-      | `Unit -> env
-      | `Record_extension (name, pattern, pattern') ->
+      | `Record (name, pattern, pattern') ->
 	  let env' = check env pattern in
 	    check env' pattern'
       | `Constant _ -> env
@@ -118,8 +116,7 @@ let check_for_duplicate_names pos pattern =
 let string_of_pattern = function
   | `Constant _ -> "Constant"
   | `Variable _ -> "Variable"
-  | `Record_extension _ -> "Record_extension"
-  | `Unit -> "()"
+  | `Record _ -> "Record_extension"
   | `Variant _ -> "Variant"
   | `Nil -> "[]"
   | `Cons _ -> "::"
@@ -131,8 +128,7 @@ let string_of_pattern = function
 (*   | Variable name -> name *)
 (*   | `Variable name -> "^" ^ name *)
 (*   | `As (name, patt) -> "^" ^ name ^ "&" ^ (string_of_pattern patt) *)
-(*   | `Record_extension (label, patt, rem_patt) -> "{#"^ label ^"="^ string_of_pattern patt ^"|"^ string_of_pattern rem_patt ^"}" *)
-(*   | `Unit -> "()" *)
+(*   | `Record (label, patt, rem_patt) -> "{#"^ label ^"="^ string_of_pattern patt ^"|"^ string_of_pattern rem_patt ^"}" *)
 (*   | `Variant (label, patt) -> "< " ^ label ^ "=" ^ (string_of_pattern patt) ^ ">" *)
 
 
@@ -142,6 +138,7 @@ let string_of_constant = function
   | Syntax.Char (v, _) -> string_of_char v
   | Syntax.String (v, _) -> v
   | Syntax.Float (v, _) -> string_of_float v
+  | Syntax.Record_empty _ -> "()"
 
 (* TBD: add check for duplicate bindings *)
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
@@ -156,9 +153,9 @@ let rec patternize_expression = fun exp ->
     | Syntax.Nil _ -> `Nil
     | Syntax.Variable ("_", _) ->  `Variable (unique_name ())
     | Syntax.Variable (name, _) -> `Variable (name)
-    | Syntax.Record_empty _ -> `Unit
+    | Syntax.Record_empty _ -> `Constant exp
     | Syntax.Record_extension (name, value, record, _)
-      -> `Record_extension (name, patternize_expression value, patternize_expression record)
+      -> `Record (name, patternize_expression value, patternize_expression record)
     | Syntax.Variant_injection (name, value, _)
       -> `Variant (name, patternize_expression value)
     | Syntax.Concat (List_of (_, _), _, _) as cons_patt ->
@@ -206,8 +203,7 @@ let rec polylet : (pattern -> position -> untyped_expression -> untyped_expressi
 				variable,
 				Variant_selection_empty(Variable(variable, pos), pos),
 				pos)
-	| `Unit -> Record_selection_empty (value, body, pos)
-	| `Record_extension (label, patt, rem_patt) ->
+	| `Record (label, patt, rem_patt) ->
 	    let temp_var_field = unique_name () in
 	    let temp_var_ext = unique_name () in
 	      Record_selection (label,
@@ -255,8 +251,7 @@ let rec eq_patterns : pattern * pattern -> bool =
   function
     | `Nil, `Nil | `Nil, `Cons _ | `Cons _, `Nil | `Cons _, `Cons _
     | `Variant _, `Variant _
-    | `Unit, `Unit
-    | `Record_extension _, `Record_extension _
+    | `Record _, `Record _
     | `Constant _, `Constant _
     | `Variable _, `Variable _ -> true
     | `As (_, pattern), pattern' | pattern, `As (_, pattern') -> eq_patterns(pattern, pattern')
@@ -267,14 +262,13 @@ let eq_equation_patterns : equation * equation -> bool =
   fun (((_, pattern)::_, _), ((_, pattern')::_, _)) -> eq_patterns (pattern, pattern')
 
 type pattern_type = [
-| `List | `Variant | `Unit | `Record | `Constant | `Variable
+| `List | `Variant | `Record | `Constant | `Variable
 ]
 
 let rec get_pattern_type : pattern -> pattern_type = function
   | `Nil | `Cons _ -> `List
   | `Variant _ -> `Variant
-  | `Unit -> `Unit
-  | `Record_extension _ -> `Record
+  | `Record _ -> `Record
   | `Constant _ -> `Constant
   | `Variable _ -> `Variable
   | `As (_, pattern) -> get_pattern_type pattern
@@ -357,7 +351,7 @@ let partition_record_equations
       (List.fold_right
 	 (fun (ps, body) env ->
 	    match ps with
-	      | (annotation, `Record_extension (name, pattern, ext_pattern))::ps ->
+	      | (annotation, `Record (name, pattern, ext_pattern))::ps ->
 		  let vars, annotated_equations =
 		    if StringMap.mem name env then
 		      StringMap.find name env
@@ -427,8 +421,6 @@ let rec match_cases
 		       match_variant pos vars (partition_variant_equations equations) exp
 		   | `Variable ->
 		       match_var pos vars equations exp
-		   | `Unit -> 		      
-		       match_empty pos vars equations exp
 		   | `Record ->
 		       match_record pos vars (partition_record_equations equations) exp
 		   | `Constant ->
@@ -447,19 +439,6 @@ and match_var
 			   (ps, subst body var' var)
 		       | _ -> assert false) equations) def    
       
-
-and match_empty
-    : Syntax.position -> string list -> equation list -> Syntax.untyped_expression -> Syntax.untyped_expression =
-  fun pos (var::vars) equations def ->
-    match_cases pos vars
-      (List.map (fun ((annotation, pattern)::ps, body) ->
-		   let body = apply_annotation pos var (annotation, body)
-		   in
-		     match pattern with
-		       | `Unit ->
-			   (ps, body)
-		       | _ -> assert false) equations) def
-
 and match_list
     : Syntax.position -> string list -> ((annotation * equation) list * annotated_equation list)
     -> Syntax.untyped_expression -> Syntax.untyped_expression =
