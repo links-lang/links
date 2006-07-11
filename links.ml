@@ -130,6 +130,50 @@ let evaluate_string v =
   (Settings.set_value interacting false;
    ignore(evaluate Parse.parse_string stdenvs v))
 
+let load_settings filename =
+  let file = open_in filename in
+
+  let strip_comment s = 
+    if String.contains s '#' then
+      let i = String.index s '#' in
+	String.sub s 0 i
+    else
+      s in
+
+  let is_empty s =
+    let empty = ref true in
+      String.iter (fun c ->
+		     if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) then
+		       empty := false) s;
+      !empty in
+
+  let parse_line n s =
+    let s = strip_comment s in
+      if not (is_empty s) then
+	(* ignore 'empty' lines *)
+	begin
+	  if String.contains s '=' then
+	    begin
+	      let i = String.index s '=' in
+	      let name = String.sub s 0 i in
+	      let value = String.sub s (i+1) ((String.length s) - (i+1))
+	      in
+		Settings.parse_and_set (name, value)
+	    end
+	  else
+	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
+			"Configuration options must be of the form <name>=<value>")
+	end in
+    
+  let rec parse_lines n =
+    try
+      parse_line n (input_line file);
+      parse_lines (n+1)
+    with
+	End_of_file -> close_in file
+  in
+    parse_lines 1
+
 let options : opt list = 
     [
       ('d',     "debug",               set Debug.debugging_enabled true, None);
@@ -137,6 +181,7 @@ let options : opt list =
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);
       ('e',     "evaluate",            None,                             Some evaluate_string);
+      (noshort, "config",              None,                             Some load_settings)
 (* [DEACTIVATED] *)
 (*
       ('t',     "run-tests",           Some run_tests,                   None);
