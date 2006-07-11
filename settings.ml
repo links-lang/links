@@ -45,7 +45,7 @@ let settings : ((universal SettingsMap.t) ref) = ref (SettingsMap.empty)
 let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, value) ->
   if SettingsMap.mem name (!settings) then
     let universal_setting = SettingsMap.find name (!settings) in
-      if (user_check && is_user_setting (universal_setting)) then
+      if ((not user_check) || is_user_setting (universal_setting)) then
 	match universal_setting with
 	  | `Bool setting ->
 	      begin
