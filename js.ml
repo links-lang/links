@@ -15,6 +15,10 @@ open Syntax
 
 let optimising = Settings.add_bool("optimise_javascript", true, true)
 
+let js_lib_url = Settings.add_string("jsliburl", "lib", true)
+
+let get_js_lib_url () = Settings.get_value js_lib_url
+
 (* Intermediate language *)
 type code = | Var   of string
             | Lit   of string
@@ -267,25 +271,27 @@ let chrlit s = Lit (string_quote (string_of_char s))
      (e.g. int_of_string, xml)
  *)
 
+let script_header base_url file =
+  "  <script type='text/javascript' src=\""^base_url^"/"^file^"\"></script>\n"
+
 let boiler_1 = "<html>
-       <head>
-          <script type='text/javascript' src=\"lib/json.js\"></script>
-          <script type='text/javascript' src=\"lib/regex.js\"></script>
-          <script type='text/javascript' src=\"lib/yahoo/YAHOO.js\"></script>
-          <script type='text/javascript' src=\"lib/yahoo/event.js\"></script>
-          <script type='text/javascript'>var DEBUGGING="
+ <head>
+ "^script_header (get_js_lib_url()) "json.js"^"
+ "^script_header (get_js_lib_url()) "regex.js"^"
+ "^script_header (get_js_lib_url()) "yahoo/YAHOO.js"^"
+ "^script_header (get_js_lib_url()) "yahoo/event.js"^"
+  <script type='text/javascript'>var DEBUGGING="
 and boiler_2 = ";</script>
-          <script type='text/javascript' src=\"lib/jslib.js\"></script>
-          <script type='text/javascript'><!-- \n"
+  "^script_header (get_js_lib_url()) "jslib.js"^"
+  <script type='text/javascript'><!-- \n"
 and boiler_3 =    "\n--> </script>
-      </head>
-      <!-- $Id$ -->
-      <body><script type='text/javascript'>
-        _startTimer();
-      " 
+ </head>
+ <!-- $Id$ -->
+  <body><script type='text/javascript'>
+   _startTimer();" 
 and  boiler_4 = ";
-      </script></body>
-   </html>"
+  </script></body>
+</html>"
 
 (* Operators are represented as functions in the interpreter, but
    operator names aren't valid JS function names.*)
