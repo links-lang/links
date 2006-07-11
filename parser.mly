@@ -40,7 +40,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <string> VARIABLE CONSTRUCTOR KEYWORD
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN
+%token MU ALIEN SIG
 %token QUESTION TILDE
 %token <char*char> RANGE
 %token UNDERSCORE AS
@@ -92,6 +92,18 @@ toplevel:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+/* doesn't work...
+  because the extent of the type annotation is just the body of the dummy function
+*/
+/*
+| SIG VARIABLE COLON datatype perhaps_semi                      
+   { let dummy = unique_name () in
+       Definition (dummy, (
+		     FunLit (Some dummy,
+			     [Pattern (RecordLit ([], None), pos())],
+			     (TypeAnnotation ((Var $2, pos()), $4), pos())), pos()), `Unknown), pos() }
+*/
+| SIG VARIABLE COLON datatype perhaps_semi                     { TypeSignature ($2, $4), pos() }
       
 perhaps_location:
 | SERVER                                                       { `Server }

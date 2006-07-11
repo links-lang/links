@@ -140,7 +140,6 @@ let string_of_constant = function
   | Syntax.Float (v, _) -> string_of_float v
   | Syntax.Record_empty _ -> "()"
 
-(* TBD: add check for duplicate bindings *)
 (** Convert an untyped_expression to a pattern.  Patterns and expressions are
     parsed in the same way, so this is a post-parsing phase *)
 let rec patternize_expression = fun exp ->
@@ -688,6 +687,7 @@ type phrasenode =
   | SortBy_Conc of (ppattern * phrase * phrase)
 
   | TypeAnnotation of (phrase * datatype)
+  | TypeSignature of (name * datatype)
 
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
