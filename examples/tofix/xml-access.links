@@ -1,4 +1,4 @@
-#!/home/jeremy/code/links/svn/links/trunk/links -w
+
 
 fun showAttr(id, attr) client {
   switch elementById(id) {

@@ -1,4 +1,4 @@
-#!/home/s0567141/links/links -w
+
 
 table chatlog (
   line : String, 
