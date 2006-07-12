@@ -15,7 +15,7 @@ open Syntax
 
 let optimising = Settings.add_bool("optimise_javascript", false, true)
 
-let js_lib_url = Settings.add_string("jsliburl", "lib", true)
+let js_lib_url = Settings.add_string("jsliburl", "lib/", true)
 
 let get_js_lib_url () = Settings.get_value js_lib_url
 
@@ -272,24 +272,24 @@ let chrlit s = Lit (string_quote (string_of_char s))
  *)
 
 let script_header base_url file =
-  "  <script type='text/javascript' src=\""^base_url^"/"^file^"\"></script>\n"
+  "  <script type='text/javascript' src=\""^base_url^file^"\"></script>"
 
-let boiler_1 = "<html>
+let boiler_1 () = "<html>
  <head>
  "^script_header (get_js_lib_url()) "json.js"^"
  "^script_header (get_js_lib_url()) "regex.js"^"
  "^script_header (get_js_lib_url()) "yahoo/YAHOO.js"^"
  "^script_header (get_js_lib_url()) "yahoo/event.js"^"
-  <script type='text/javascript'>var DEBUGGING="
-and boiler_2 = ";</script>
-  "^script_header (get_js_lib_url()) "jslib.js"^"
-  <script type='text/javascript'><!-- \n"
-and boiler_3 =    "\n--> </script>
+   <script type='text/javascript'>var DEBUGGING="
+and boiler_2 () = ";</script>
+ "^script_header (get_js_lib_url()) "jslib.js"^"
+   <script type='text/javascript'><!-- \n"
+and boiler_3 () =    "\n--> </script>
  </head>
  <!-- $Id$ -->
   <body><script type='text/javascript'>
    _startTimer();" 
-and  boiler_4 = ";
+and  boiler_4 () = ";
   </script></body>
 </html>"
 
@@ -1007,13 +1007,13 @@ let generate_program environment expression =
       Optimiser.inline (Optimiser.inline (Optimiser.inline environment)) 
     else environment
   in
-  (boiler_1
+  (boiler_1 ()
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
- ^ boiler_2
+ ^ boiler_2 ()
  ^ String.concat "\n" (map gen (but_last environment))
- ^ boiler_3
+ ^ boiler_3 ()
  ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
- ^ boiler_4)
+ ^ boiler_4 ())
 
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
