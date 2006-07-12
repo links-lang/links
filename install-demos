@@ -1,22 +1,83 @@
-#!/bin/sh
+#!/bin/bash
 
-path=$PWD/`dirname $0`/links
-echo -e Where are your web files kept? 
-read webdir
-cd examples/
-for i in *.links; do
-  dest=$webdir/$i;
-  dest=${dest/.links/.cgi};
-  echo $dest;
-  echo \#\!$path | cat - $i > $dest;
-  chmod +x $dest
+path=$PWD/links
+echo -e Where do you want to install the cgi scripts? 
+read cgidir
+
+echo -e What is the url for the cgi directory?
+read cgiurl
+
+echo -e Where do you want to install the javascript libraries?
+read libdir
+
+echo -e What is the url for the library directory?
+read liburl
+
+echo -e Where do you want to install the examples page and source files?
+read examplesdir
+
+echo -e What is the url for the examples directory?
+read examplesurl
+
+configfile="$cgidir/config"
+
+# ensure any required directories are created
+if [ ! -e $cgidir ]; then
+  mkdir -p $cgidir
+fi
+
+if [ ! -e $libdir ]; then
+  mkdir -p $libdir
+fi
+
+if [ ! -e $examplesdir ]; then
+  mkdir -p $examplesdir
+fi
+
+echo "Copying demos..."
+for i in $(find examples -name "*.links"); do
+  dest=$(echo $i | sed 's|^examples/||g');
+  destcgi=$(echo $dest | sed "s|^\(.*\)\.links|$cgidir/\1\.cgi|g");
+  desttxt=$(echo $dest | sed "s|^\(.*\)\.links|$examplesdir/\1\.txt|g");
+
+  echo -n " "; echo $destcgi;
+  echo -n " "; echo $desttxt;
+
+  # ensure any required directories are created
+  destdir=$(echo $destcgi | sed 's|/[^/]*$||g')
+  if [ ! -e $destdir ]; then
+    mkdir -p $destdir
+  fi
+
+  destdir=$(echo $desttxt | sed 's|/[^/]*$||g')
+  if [ ! -e $destdir ]; then
+    mkdir -p $destdir
+  fi
+
+  # copy cgi and set as executable
+  echo "#!$path --config=$configfile" | cat - $i > $destcgi;
+  chmod +x $destcgi
+
+  # create soft-link for displaying cgi source
+  ln -s $destcgi $desttxt
 done
 
-cd ..
-mkdir $webdir/lib
-mkdir $webdir/lib/yahoo
-cp lib/js/yahoo/YAHOO.js $webdir/lib/yahoo
-cp lib/js/yahoo/event.js $webdir/lib/yahoo
-cp lib/js/jslib.js $webdir/lib
-cp lib/js/json.js $webdir/lib
-cp lib/js/regex.js $webdir/lib
+echo "Generating examples page..."
+echo " $examplesdir/index.html"
+
+sed "s|href=\"\([^\.][^\.]*\)\.links|href=\"$cgiurl\1\.cgi|g" examples/index.html \
+| sed "s|href=\"\.\./examplessrc/\([^\.][^\.]*\)\.links|href=\"$examplesurl\1\.txt|g" \
+> $examplesdir/index.html
+
+echo "Copying libraries..."
+echo " $libdir/"
+mkdir $libdir/yahoo
+cp lib/js/yahoo/YAHOO.js $libdir/yahoo
+cp lib/js/yahoo/event.js $libdir/yahoo
+cp lib/js/jslib.js $libdir
+cp lib/js/json.js $libdir
+cp lib/js/regex.js $libdir
+
+echo "Creating configuration file..."
+echo " $configfile"
+echo -e "jsliburl=$liburl\n" > $configfile
