@@ -19,6 +19,27 @@ read examplesdir
 echo -e What is the url for the examples directory?
 read examplesurl
 
+# remove trailing slash
+function remove_trailing_slash {
+ echo $1 | sed 's|/$||g'
+}
+
+# add trailing slash
+#   if string is non-empty and doesn't already end in a slash
+function add_trailing_slash {
+ echo $1 | sed 's|\([^/]\)$|\1|g' 
+}
+
+# remove trailing slash from dirs
+cgidir=$(remove_trailing_slash $cgidir)
+libdir=$(remove_trailing_slash $libdir)
+examplesdir=$(remove_trailing_slash $examplesdir)
+
+# add trailing slash to non-empty urls
+cgiurl=$(add_trailing_slash $cgiurl)
+liburl=$(add_trailing_slash $liburl)
+examplesurl=$(add_trailing_slash $examplesurl)
+
 configfile="$cgidir/config"
 
 # ensure any required directories are created
@@ -74,9 +95,9 @@ echo " $libdir/"
 mkdir $libdir/yahoo
 cp lib/js/yahoo/YAHOO.js $libdir/yahoo
 cp lib/js/yahoo/event.js $libdir/yahoo
-cp lib/js/jslib.js $libdir
-cp lib/js/json.js $libdir
-cp lib/js/regex.js $libdir
+cp lib/js/jslib.js $libdir/
+cp lib/js/json.js $libdir/
+cp lib/js/regex.js $libdir/
 
 echo "Creating configuration file..."
 echo " $configfile"
