@@ -14,7 +14,7 @@ module RewriteSyntax =
           let process_children = Syntax.perhaps_process_children
         end))
 
-(* 
+(*
    subst e u v
      substitutes the variable v for the free variable u in the expression e
 *)
@@ -671,7 +671,7 @@ type phrasenode =
   | HandleWith of (phrase * name * phrase)
   | Section of ([arith_binop|`Project of name])
   | Conditional of (phrase * phrase * phrase)
-  | Binding of (ppattern * phrase)
+  | Binding of binder
   | Block of (phrase list * phrase)
   | Foreign of (name * name * datatype)
 (* Applications *)
@@ -692,8 +692,8 @@ type phrasenode =
 (* Variant operations *)
   | ConstructorLit of (name * phrase option)
 (*  TBD: remove `None' from Switch constructor *)
-  | Switch of (phrase * (switchcase list) * (name * phrase) option)
-  | Receive of ((switchcase list) * (name * phrase) option)
+  | Switch of (phrase * (binder list) * (name * phrase) option)
+  | Receive of ((binder list) * (name * phrase) option)
 
 (* Database operations *)
   | DatabaseLit of (string)
@@ -708,7 +708,7 @@ type phrasenode =
 and phrase = (phrasenode * pposition)
 and ppattern = | Pattern of phrase (* parse patterns as phrases, then convert later: avoids ambiguities in the grammar  *)
 	       | AsPattern of string * phrase
-and switchcase = ppattern * phrase
+and binder = ppattern * phrase
 and regex = | Range of (char * char)
             | Simply of string
             | Any
@@ -731,6 +731,84 @@ let uncompare : comparison_binop -> string =
   flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `RegexMatch, "~"]
 and unarith : arith_binop -> string = 
   flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^."; `FloatPlus, "+."; `FloatMinus, "-."]
+
+
+(* [TODO]
+     - change typevars to return a set
+     - implement typevars for phrases
+     - construct a map from typevars as strings to typevars as numbers
+     - use this to ensure that free type vars are identified and properly
+     quantified
+*)
+
+let rec get_type_vars : phrase -> quantifier list =
+  let empty = [] in
+  let union = (unduplicate (=)) -<- List.concat in
+  let flatten = List.concat in
+  let rec get_type_vars =
+    fun (s, _) ->
+      let tv datatype = [typevars datatype] in
+      let etv = get_type_vars in
+      let etvs = flatten -<- (List.map get_type_vars) in
+      let opt_etv = function
+	| None -> empty
+	| Some e -> etv e in
+      let opt_etv2 = function
+	| None -> empty
+	| Some (_, e) -> etv e in
+      let ptv = get_pattern_type_vars in
+      let btv (p, e) = flatten [ptv p; etv e] in
+      let btvs = flatten -<- (List.map btv) in
+	match s with
+	  | TypeAnnotation(e, k) -> flatten [etv e; tv k]
+	  | FloatLit _
+	  | IntLit _
+	  | StringLit _
+	  | BoolLit _
+	  | CharLit _
+	  | Var _ -> empty
+	  | InfixAppl (_, e1, e2) -> flatten [etv e1; etv e2]
+	  | ConstructorLit (_, e) -> opt_etv e
+	  | Escape (_, e)
+	  | Spawn e -> etv e
+	  | Section _ -> empty
+	  | Conditional (e1, e2, e3) -> flatten [etv e1; etv e2; etv e3]
+	  | Projection (e, name) -> etv e
+	  | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
+	  | UnaryAppl (_, e) -> etv e
+	  | ListLit es -> etvs es
+	  | DBUpdate (table, db, rows)
+	  | DBDelete (table, db, rows)
+	  | DBInsert (table, db, rows) as op -> flatten [etv db; etv rows]
+	  | DatabaseLit s -> empty
+	  | Definition (_, e, _) -> etv e
+	  | RecordLit (fields, e) ->
+	      flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
+	  | TupleLit fields -> etvs fields
+	  | HandleWith (e1, name, e2) ->
+	      flatten [etv e1; etv e2]
+	  | FnAppl (fn, (ps, _)) -> flatten [etv fn; etvs ps]
+	  | Send (l, r) -> flatten [etv l; etv r]
+	  | FunLit (None, patterns, body) -> flatten ((List.map ptv patterns) @ [etv body])
+	  | Block (es, exp) -> flatten [etvs es; etv exp]
+	  | Foreign (_, _, datatype) -> tv datatype
+	  | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
+	  | Iteration (pattern, from, body, filter, sort) ->
+	      flatten [ptv pattern; etv from; etv body; opt_etv filter; opt_etv sort]
+	  | Binding b -> btv b
+	  | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
+	  | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
+	  | TextNode _ -> empty
+	  | Xml (tag, attrs, subnodes) ->
+	      flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
+	  | XmlForest es -> etvs es
+  and get_pattern_type_vars = function
+    | Pattern e
+    | AsPattern (_, e) -> get_type_vars e
+  in
+    union -<- get_type_vars
+    
+
 
 (* Convert a syntax tree as returned by the parser into core syntax *)
 let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
