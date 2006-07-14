@@ -74,6 +74,34 @@ let is_define =
     | Alien _ -> true
     | _ -> false
 
+let rec is_value : 'a expression' -> bool = function
+  | Boolean _
+  | Integer _
+  | Char _
+  | String _
+  | Float _
+  | Variable _
+  | Xml_node _ (* ? *)
+  | Record_empty _
+  | Nil _
+  | Abstr _ -> true
+  | Variant_injection (_, e, _)
+  | Variant_selection_empty (e, _)
+  | Database (e, _)
+  | Table (e, _, _, _)
+  | List_of (e, _) -> is_value e
+  | Comparison (a,_,b,_)
+  | Concat (a, b, _)
+  | For (a, _, b, _)
+  | Record_extension (_, a, b, _)
+  | Record_selection_empty (a, b, _)
+  | Record_selection (_, _, _, a, b, _)
+  | Let (_, a, b,_)  -> is_value a && is_value b
+  | Variant_selection (a, _, _, b, _, c, _)
+  | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
+  | Rec (bs, e, _) -> List.for_all (is_value -<- snd) bs && is_value e
+  | _ -> false
+
 let gensym =
   let counter = ref 0 in
     function str ->

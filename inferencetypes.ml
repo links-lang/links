@@ -67,7 +67,9 @@ let
 type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
 
-
+type inference_type_map =
+    ((datatype Unionfind.point) IntMap.t ref *
+       (row Unionfind.point) IntMap.t ref)
 
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS
@@ -260,9 +262,7 @@ module InferenceTypeOps :
    with type typ = datatype
    and type row_var = row_var) = Type_basis.TypeOpsGen(BasicInferenceTypeOps)
 
-let empty_var_maps : unit ->
-    ((datatype Unionfind.point) IntMap.t ref *
-     (row Unionfind.point) IntMap.t ref) =
+let empty_var_maps : unit -> inference_type_map =
   fun () ->
     let type_var_map : (datatype Unionfind.point) IntMap.t ref = ref IntMap.empty in
     let row_var_map : (row Unionfind.point) IntMap.t ref = ref IntMap.empty in
@@ -328,13 +328,20 @@ and inference_row_of_row = fun ((_, row_var_map) as var_maps) -> function
 	      Unionfind.change point (StringMap.empty, `RecRowVar (var, rec_row'));
 	      (field_env, `MetaRowVar point)
 
+
+(* 
+  This is now disabled in order to force the user to supply 
+  the var_maps as the maps have to be shared throughout type inference.
+*)
 (* interface *)
 (* [NOTE]
      don't try eta reducing these, as this would be unsound!
 *)
+(*
 let inference_type_of_type datatype = inference_type_of_type (empty_var_maps ()) datatype
 let inference_field_spec_of_field_spec field_spec = inference_field_spec_of_field_spec (empty_var_maps ()) field_spec
 let inference_row_of_row row = inference_row_of_row (empty_var_maps ()) row
+*)
 
 (* implementation *)
 let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fun rec_vars ->
@@ -395,20 +402,20 @@ let row_var_of_inference_row_var = row_var_of_inference_row_var IntSet.empty
 
 
 (* assumptions *)
-let inference_assumption_of_assumption : Types.assumption -> assumption = function
-  | (quantifiers, t) -> (quantifiers, inference_type_of_type t)
+let inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption = fun env -> function
+  | (quantifiers, t) -> (quantifiers, inference_type_of_type env t)
 let assumption_of_inference_assumption : assumption -> Types.assumption = function
   | (quantifiers, t) -> (quantifiers, type_of_inference_type t)
 
 (* environments *)
-let inference_environment_of_environment : Types.environment -> environment =
-  List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption assumption))
+let inference_environment_of_environment : inference_type_map -> Types.environment -> environment = fun env ->
+  List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption env assumption))
 let environment_of_inference_environment : environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, assumption_of_inference_assumption assumption))
 
 (* conversions between expressions and inference expressions *)
-let inference_expression_of_expression : Syntax.expression -> inference_expression =
-  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type t, label))
+let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun env ->
+  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type env t, label))
 let expression_of_inference_expression : inference_expression -> Syntax.expression =
   Syntax.redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 

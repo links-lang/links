@@ -9,4 +9,3 @@ val unretype_primitives : Types.environment -> Types.environment
 
 val remove_mailbox : Types.datatype  -> Types.datatype
 
-val is_value : 'a Syntax.expression' -> bool

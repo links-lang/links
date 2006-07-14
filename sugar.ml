@@ -30,6 +30,34 @@ let subst : untyped_expression -> string -> string -> untyped_expression = fun e
       None -> exp
     | Some exp -> exp
 
+(*
+  ensure that distinct type variables have distinct names
+*)
+let freshen_type_vars : untyped_expression -> untyped_expression = fun exp ->
+  let rec freshen_exp freshen_me freshen_descendants exp =
+    let var_map = ref IntMap.empty in
+    let freshen_value = freshen_exp freshen_descendants freshen_descendants in
+    let rec recurse = fun exp ->
+      match
+	(RewriteSyntax.maxonce_td
+	   (function
+	      | HasType (e, datatype, pos) ->
+		  Some (HasType (e, freshen_me var_map datatype, pos))
+	      | Let (variable, value, body, pos) when is_value value ->
+		  Some (Let (variable, freshen_value value, recurse body, pos))
+	      | Rec (defs, body, pos) ->
+		  Some (Rec (alistmap freshen_value defs, recurse body, pos))
+	      | Define (variable, value, loc, pos) when is_value value ->
+		  Some (Define (variable, freshen_value value, loc, pos))
+	      | _ -> None) exp)
+      with
+	  None -> exp
+	| Some exp -> exp
+    in
+      recurse exp
+  in
+    freshen_exp (fun _ datatype -> datatype) Types.freshen_free_type_vars exp
+
 exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
 
 let _DUMMY_POS = Syntax.dummy_position
@@ -613,22 +641,27 @@ type assumption = quantifier list * datatype
 let generalize (k : datatype) : assumption =
   typevars k, k
 
-let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
-  let max = length vars in
-  let vars, varmap = split (map (fun m ->
-                                   let n = Type_basis.fresh_raw_variable () in
-                                     match m with 
-				       | `TypeVar x -> `TypeVar n, (x, n)
-				       | `RowVar x  -> `RowVar n, (x, n))
-				    vars) in
+let generate_var_mapping : quantifier list -> (Types.quantifier list * int StringMap.t) =
+  fun vars ->
+    List.fold_right
+      (fun v (vars, varmap) ->
+	 let var = Type_basis.fresh_raw_variable () in
+	   match v with
+	     | `TypeVar name ->
+		 (`TypeVar var::vars, StringMap.add name var varmap)
+	     | `RowVar name ->
+		 (`RowVar var::vars, StringMap.add name var varmap)) vars ([], StringMap.empty)
+
+let desugar_datatype varmap k =
   let rec desugar varmap = 
-    let lookup = flip assoc varmap in
+    let lookup = flip StringMap.find varmap in
+    let extend = fun (name, value) -> StringMap.add name value varmap in
       function
 	| TypeVar s -> (try `TypeVar (lookup s)
 			with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
 	| FunctionType (k1, k2) -> `Function (desugar varmap k1, desugar varmap k2)
 	| MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
-                             `Recursive (n, desugar ((v,n):: varmap) k)
+                             `Recursive (n, desugar (extend (v,n)) k)
 	| UnitType -> Types.unit_type
 	| TupleType ks -> 
 	    let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
@@ -641,8 +674,8 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
 	| MailboxType k -> `Mailbox (desugar varmap k)
 	| PrimitiveType k -> `Primitive k
 	| DBType -> `DB
-  and desugar_row varmap (fields, rv) = 
-    let lookup = flip assoc varmap in
+  and desugar_row varmap (fields, rv) =
+    let lookup = flip StringMap.find varmap in
     let seed = match rv with
       | None    -> Types.TypeOps.make_empty_closed_row ()
       | Some rv -> Types.TypeOps.make_empty_open_row_with_var (lookup rv)
@@ -650,9 +683,11 @@ let desugar_assumption ((vars, k)  : assumption) : Types.assumption =
 			| `Absent -> (k, `Absent)
 			| `Present v -> (k, `Present (desugar varmap v))) fields 
     in fold_right Types.TypeOps.set_field fields seed
-  in (vars, desugar varmap k)
-       
-let desugar_datatype k = snd (desugar_assumption ([], k))
+  in desugar varmap k
+
+let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
+  let vars, varmap = generate_var_mapping vars in
+    vars, desugar_datatype varmap k
 
 type phrasenode =
 (* ... *)
@@ -734,8 +769,6 @@ and unarith : arith_binop -> string =
 
 
 (* [TODO]
-     - change typevars to return a set
-     - implement typevars for phrases
      - construct a map from typevars as strings to typevars as numbers
      - use this to ensure that free type vars are identified and properly
      quantified
@@ -760,253 +793,247 @@ let rec get_type_vars : phrase -> quantifier list =
       let btv (p, e) = flatten [ptv p; etv e] in
       let btvs = flatten -<- (List.map btv) in
 	match s with
-	  | TypeAnnotation(e, k) -> flatten [etv e; tv k]
 	  | FloatLit _
 	  | IntLit _
 	  | StringLit _
 	  | BoolLit _
 	  | CharLit _
 	  | Var _ -> empty
-	  | InfixAppl (_, e1, e2) -> flatten [etv e1; etv e2]
-	  | ConstructorLit (_, e) -> opt_etv e
-	  | Escape (_, e)
+	  | FunLit (_, patterns, body) -> flatten ((List.map ptv patterns) @ [etv body])
 	  | Spawn e -> etv e
+	  | ListLit es -> etvs es
+	  | Definition (_, e, _) -> etv e
+	  | Iteration (pattern, from, body, filter, sort) ->
+	      flatten [ptv pattern; etv from; etv body; opt_etv filter; opt_etv sort]
+	  | Escape (_, e) ->  etv e
+	  | HandleWith (e1, name, e2) -> flatten [etv e1; etv e2]
 	  | Section _ -> empty
 	  | Conditional (e1, e2, e3) -> flatten [etv e1; etv e2; etv e3]
-	  | Projection (e, name) -> etv e
-	  | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
+	  | Binding b -> btv b
+	  | Block (es, exp) -> flatten [etvs es; etv exp]
+	  | Foreign (_, _, datatype) -> tv datatype
+
+	  | InfixAppl (_, e1, e2) -> flatten [etv e1; etv e2]
+	  | Regex _ -> empty
 	  | UnaryAppl (_, e) -> etv e
-	  | ListLit es -> etvs es
+	  | FnAppl (fn, (ps, _)) -> flatten [etv fn; etvs ps]
+	  | Send (l, r) -> flatten [etv l; etv r]
+
+	  | TupleLit fields -> etvs fields
+	  | RecordLit (fields, e) ->
+	      flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
+	  | Projection (e, name) -> etv e
+	  | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
+
+	  | TypeAnnotation(e, k) -> flatten [etv e; tv k]
+
+	  | ConstructorLit (_, e) -> opt_etv e
+	  | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
+	  | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
+
+	  | DatabaseLit s -> empty
+	  | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
 	  | DBUpdate (table, db, rows)
 	  | DBDelete (table, db, rows)
 	  | DBInsert (table, db, rows) as op -> flatten [etv db; etv rows]
-	  | DatabaseLit s -> empty
-	  | Definition (_, e, _) -> etv e
-	  | RecordLit (fields, e) ->
-	      flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
-	  | TupleLit fields -> etvs fields
-	  | HandleWith (e1, name, e2) ->
-	      flatten [etv e1; etv e2]
-	  | FnAppl (fn, (ps, _)) -> flatten [etv fn; etvs ps]
-	  | Send (l, r) -> flatten [etv l; etv r]
-	  | FunLit (None, patterns, body) -> flatten ((List.map ptv patterns) @ [etv body])
-	  | Block (es, exp) -> flatten [etvs es; etv exp]
-	  | Foreign (_, _, datatype) -> tv datatype
-	  | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
-	  | Iteration (pattern, from, body, filter, sort) ->
-	      flatten [ptv pattern; etv from; etv body; opt_etv filter; opt_etv sort]
-	  | Binding b -> btv b
-	  | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
-	  | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
-	  | TextNode _ -> empty
+
 	  | Xml (tag, attrs, subnodes) ->
 	      flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
 	  | XmlForest es -> etvs es
+	  | TextNode _ -> empty
   and get_pattern_type_vars = function
     | Pattern e
     | AsPattern (_, e) -> get_type_vars e
   in
     union -<- get_type_vars
     
-
-
 (* Convert a syntax tree as returned by the parser into core syntax *)
-let rec desugar lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression = 
-  let pos = lookup_pos pos' in 
-  let desugar = desugar lookup_pos
-  and patternize = patternize lookup_pos in
-    match s with
-      | TypeAnnotation(e, k) -> HasType(desugar e, 
-					snd (desugar_assumption (generalize k)), pos)
-      | FloatLit f  -> Float (f, pos)
-      | IntLit i    -> Integer (i, pos)
-      | StringLit s -> String (s, pos)
-      | BoolLit b   -> Boolean (b, pos)
-      | CharLit c   -> Char (c, pos)
-      | Var v       -> Variable (v, pos)
-      | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-      | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
-      | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
-      | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
-      | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
-	  Apply (Apply (Variable ("~", pos), desugar e1, pos), 
-		 desugar (desugar_regex desugar pos' r, pos'), pos)
-      | InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
-      | InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
-      | InfixAppl (#arith_binop as a, e1, e2)  -> Apply (Apply (Variable (unarith a, pos), desugar e1, pos), desugar e2, pos) 
-      | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
-      | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
-      | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
-      | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
-      | Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
-      | Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), 
-                                             ([FunLit (None, [Pattern (RecordLit ([], None), pos')], e), 
-                                               pos'], pos')),
-                                     pos'), ([], pos')), pos')
-      | Section (#arith_binop as a) -> Variable (unarith a, pos)
-      | Section (`Project name) -> (let var = unique_name () in
-				      desugar (FunLit (None, [Pattern (Var var, pos')], 
-						       (Projection ((Var var, pos'), name), pos')), pos'))
-      | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
-      | Projection (e, name) -> (let s = unique_name ()
-				 in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
-      | TableLit (name, datatype, unique, db) -> 
-	  (let db_query (name:string) (pos:position) (datatype:Types.datatype) (unique:bool) : Query.query =
-             (* FIXME: this is not the appropriate place to gensym the
-		table name. The table will move around later. The right place
-		to do it is when joining two queries: at that point,
-		alpha-convert to ensure that the involved tables have
-		different names. *)
-             let table_name = (db_unique_name ()) in
-             let selects = match datatype with
-               | `Record (field_env, `RowVar row_var) ->
-		   let present_fields, absent_fields = Types.split_fields field_env in
-	             if row_var = None && absent_fields = [] then
-	               List.map (fun
-				   (field_name, field_datatype) ->
-			             {table_renamed = table_name;
-			              name=field_name; renamed=field_name; 
-                                      col_type = field_datatype})
-			 present_fields
-	             else raise (ASTSyntaxError (pos, "Table datatypes are records with only field present elements"))
-               | _ -> raise (ASTSyntaxError (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
-               {distinct_only = unique;
-		result_cols = selects;
-		tables = [(name, table_name)];
-		condition = Query.Boolean true;
-		sortings = [];
-		max_rows = None;
-		offset = Query.Integer (Int 0)} in
-             Table (desugar db, "IGNORED", db_query name pos (desugar_datatype datatype) unique, pos))
-      | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
-      | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
-      | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
-      | ListLit  [] -> Nil (pos)
-      | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
-      | DBUpdate (table, db, rows)
-      | DBDelete (table, db, rows)
-      | DBInsert (table, db, rows) as op -> 
-	  let fn =  match op with
-            | DBUpdate _ -> "updaterows"
-            | DBDelete _ -> "deleterows"
-            | DBInsert _ -> "insertrow" 
-            | _ -> assert false in
-	    desugar (FnAppl ((Var fn, pos'),
-			     ([StringLit table, pos'; 
-                               db;
-                               rows
-                              ], pos')), pos')
-      | DatabaseLit s -> Database (String (s, pos), pos)
-      | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
-      | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
-      | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
-      | TupleLit [field] -> desugar field
-      | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
-      | HandleWith (e1, name, e2) -> 
-	  Syntax.Escape("return", 
-			Let (name, Syntax.Escape("handler",  
-						 Apply (Variable ("return", pos), 
-							desugar e1, pos), pos), desugar e2, pos), pos)
-      | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
-      | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
-      | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
-      | Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), ([l], pos')), pos'), ([r], pos')), pos')
+let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
+  let _, varmap = (generate_var_mapping -<- get_type_vars) e in
+  let rec desugar' lookup_pos ((s, pos') : phrase) : Syntax.untyped_expression =
+    let pos = lookup_pos pos' in
+    let desugar = desugar' lookup_pos
+    and patternize = patternize' lookup_pos in
+      match s with
+	| TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype varmap k, pos)
+	| FloatLit f  -> Float (f, pos)
+	| IntLit i    -> Integer (i, pos)
+	| StringLit s -> String (s, pos)
+	| BoolLit b   -> Boolean (b, pos)
+	| CharLit c   -> Char (c, pos)
+	| Var v       -> Variable (v, pos)
+	| InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
+	| InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
+	| InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
+	| InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
+	| InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
+	    Apply (Apply (Variable ("~", pos), desugar e1, pos), 
+		   desugar (desugar_regex desugar pos' r, pos'), pos)
+	| InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
+	| InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
+	| InfixAppl (#arith_binop as a, e1, e2)  -> Apply (Apply (Variable (unarith a, pos), desugar e1, pos), desugar e2, pos) 
+	| InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
+	| InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
+	| ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
+	| ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
+	| Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
+	| Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), 
+                                               ([FunLit (None, [Pattern (RecordLit ([], None), pos')], e), 
+						 pos'], pos')),
+                                       pos'), ([], pos')), pos')
+	| Section (#arith_binop as a) -> Variable (unarith a, pos)
+	| Section (`Project name) -> (let var = unique_name () in
+					desugar (FunLit (None, [Pattern (Var var, pos')], 
+							 (Projection ((Var var, pos'), name), pos')), pos'))
+	| Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
+	| Projection (e, name) -> (let s = unique_name ()
+				   in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
+	| TableLit (name, datatype, unique, db) -> 
+	    (let db_query (name:string) (pos:position) (datatype:Types.datatype) (unique:bool) : Query.query =
+               (* FIXME: this is not the appropriate place to gensym the
+		  table name. The table will move around later. The right place
+		  to do it is when joining two queries: at that point,
+		  alpha-convert to ensure that the involved tables have
+		  different names. *)
+               let table_name = (db_unique_name ()) in
+               let selects = match datatype with
+		 | `Record (field_env, `RowVar row_var) ->
+		     let present_fields, absent_fields = Types.split_fields field_env in
+	               if row_var = None && absent_fields = [] then
+			 List.map (fun
+				     (field_name, field_datatype) ->
+			               {table_renamed = table_name;
+					name=field_name; renamed=field_name; 
+					col_type = field_datatype})
+			   present_fields
+	               else raise (ASTSyntaxError (pos, "Table datatypes are records with only field present elements"))
+		 | _ -> raise (ASTSyntaxError (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
+		 {distinct_only = unique;
+		  result_cols = selects;
+		  tables = [(name, table_name)];
+		  condition = Query.Boolean true;
+		  sortings = [];
+		  max_rows = None;
+		  offset = Query.Integer (Int 0)} in
+               Table (desugar db, "IGNORED", db_query name pos (desugar_datatype varmap datatype) unique, pos))
+	| UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
+	| UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
+	| UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
+	| ListLit  [] -> Nil (pos)
+	| ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
+	| DBUpdate (table, db, rows)
+	| DBDelete (table, db, rows)
+	| DBInsert (table, db, rows) as op -> 
+	    let fn =  match op with
+              | DBUpdate _ -> "updaterows"
+              | DBDelete _ -> "deleterows"
+              | DBInsert _ -> "insertrow" 
+              | _ -> assert false in
+	      desugar (FnAppl ((Var fn, pos'),
+			       ([StringLit table, pos'; 
+				 db;
+				 rows
+				], pos')), pos')
+	| DatabaseLit s -> Database (String (s, pos), pos)
+	| Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
+	| RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
+	| RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
+	| TupleLit [field] -> desugar field
+	| TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
+	| HandleWith (e1, name, e2) -> 
+	    Syntax.Escape("return", 
+			  Let (name, Syntax.Escape("handler",  
+						   Apply (Variable ("return", pos), 
+							  desugar e1, pos), pos), desugar e2, pos), pos)
+	| FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
+	| FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
+	| FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
+	| Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), ([l], pos')), pos'), ([r], pos')), pos')
 
-      | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
-      | FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],
-						   Variable (name, pos),
-						   pos)
-      | Block (es, exp) -> let es = 
-	  List.map (function (* pattern * untyped_expression * position * recursivep *)
-                      | Binding (p, e), pos -> 
-			  (patternize p, desugar e, lookup_pos pos, false)
-                      | FunLit (Some n, patts, body), pos -> 
-			  (`Variable n, desugar (FunLit (None, patts, body), pos), 
-			   lookup_pos pos, true)
-                      | expr, pos -> 
-			  `Variable "__", desugar (expr, pos), lookup_pos pos, false) es in
-	  polylets es (desugar exp)
-      | Foreign (language, name, datatype) -> 
-	  Alien (language, name, desugar_assumption (generalize datatype), pos)
-      | SortBy_Conc(patt, expr, sort_expr) ->
-	  (match patternize patt with
-             | `Variable var -> 
-		 SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
-             | pattern -> failwith("orderby clause on non-simple pattern-matching for is not yet implemented."))
-      | Iteration (pattern, from, body, None, None) ->
-	  (match patternize pattern with
-             | `Variable var -> For (desugar body, var, desugar from, pos)
-             | pattern -> (let var = unique_name () in
-	                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
-				  var, desugar from, pos)))
-      | Iteration (pattern, from, body, filter_cond, Some sort_expr) -> 
-	  desugar (Iteration (pattern, (SortBy_Conc(pattern, from, sort_expr), pos'),
-                              body, filter_cond, None),
-		   pos')
-      | Iteration (pattern, from, body, Some exp, sort_expr) -> 
-	  desugar (Iteration (pattern, from, 
-                              (Conditional (exp,
-                                            body,
-                                            (ListLit [], pos')), pos'), 
-                              None, sort_expr),
-		   pos')
-      | Binding _ -> failwith "Unexpected binding outside a block"
-      | Switch (exp, patterns, _) ->
-	  let x = unique_name () in
-	    Let(x, desugar exp,
-		match_cases
-		  pos
-		  [x]
-		  (List.map (fun (patt, body) ->
-			       reduce_equation ([patternize patt], desugar body)) patterns)
-		  (Syntax.Wrong pos),
-	  pos)
-| Receive (patterns, final) -> 
-    desugar (Switch ((FnAppl ((Var "recv", pos'), ([TupleLit [], pos'], pos')), pos'),
-                     patterns, final), pos')
+	| FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
+	| FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],
+						     Variable (name, pos),
+						     pos)
+	| Block (es, exp) -> let es = 
+	    List.map (function (* pattern * untyped_expression * position * recursivep *)
+			| Binding (p, e), pos -> 
+			    (patternize p, desugar e, lookup_pos pos, false)
+			| FunLit (Some n, patts, body), pos -> 
+			    (`Variable n, desugar (FunLit (None, patts, body), pos), 
+			     lookup_pos pos, true)
+			| expr, pos -> 
+			    `Variable "__", desugar (expr, pos), lookup_pos pos, false) es in
+	    polylets es (desugar exp)
+	| Foreign (language, name, datatype) -> 
+	    Alien (language, name, desugar_assumption (generalize datatype), pos)
+	      (*	  Alien (language, name, desugar_datatype varmap datatype, pos)*)
+	| SortBy_Conc(patt, expr, sort_expr) ->
+	    (match patternize patt with
+               | `Variable var -> 
+		   SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
+               | pattern -> failwith("orderby clause on non-simple pattern-matching for is not yet implemented."))
+	| Iteration (pattern, from, body, None, None) ->
+	    (match patternize pattern with
+               | `Variable var -> For (desugar body, var, desugar from, pos)
+               | pattern -> (let var = unique_name () in
+	                       For (polylet pattern pos (Variable (var, pos)) (desugar body),
+				    var, desugar from, pos)))
+	| Iteration (pattern, from, body, filter_cond, Some sort_expr) -> 
+	    desugar (Iteration (pattern, (SortBy_Conc(pattern, from, sort_expr), pos'),
+				body, filter_cond, None),
+		     pos')
+	| Iteration (pattern, from, body, Some exp, sort_expr) -> 
+	    desugar (Iteration (pattern, from, 
+				(Conditional (exp,
+                                              body,
+                                              (ListLit [], pos')), pos'), 
+				None, sort_expr),
+		     pos')
+	| Binding _ -> failwith "Unexpected binding outside a block"
+	| Switch (exp, patterns, _) ->
+	    let x = unique_name () in
+	      Let(x, desugar exp,
+		  match_cases
+		    pos
+		    [x]
+		    (List.map (fun (patt, body) ->
+				 reduce_equation ([patternize patt], desugar body)) patterns)
+		    (Syntax.Wrong pos),
+		  pos)
+	| Receive (patterns, final) -> 
+	    desugar (Switch ((FnAppl ((Var "recv", pos'), ([TupleLit [], pos'], pos')), pos'),
+			     patterns, final), pos')
 
-(* (\* TBD: We should die if the XML text literal has bare ampersands or *)
-(*    is otherwise ill-formed. It should also be made to properly handle *)
-(*    CDATA. *)
-(*    Where's a good place to do so? *)
-| TextNode s -> Apply (Variable ("stringToXml", pos), String (s, pos), pos)
-| Xml (tag, attrs, subnodes) -> 
-    let concat a b = 
-      Concat (desugar a, b, pos) in
-    let desugar_attr = function
-      | [] -> String ("", pos)
-      | [x] -> desugar x
-      | xs  -> (fold_right concat xs (Nil (pos))) in
-      Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
-| XmlForest []  -> Nil  (pos)
-| XmlForest [x] -> desugar x
-| XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
-and patternize lookup_pos : ppattern -> pattern = fun ppattern ->
-  (* For now, simply delegate to the old patternize.  Eventually, we
-     should convert directly from phrases to patterns *)
-  let pattern, pos = match ppattern with
-    | Pattern ((_, pos') as p) -> patternize_expression (desugar lookup_pos p), lookup_pos pos'
-    | AsPattern (x, ((_, pos') as p)) -> `As (x, patternize_expression (desugar lookup_pos p)), lookup_pos pos'
-  in
-    check_for_duplicate_names pos pattern;
-    pattern
-and list_patt_to_bool value pos = function
-    Var _, _ -> Boolean(true, pos)
-  | TupleLit [p], _ -> list_patt_to_bool value pos p
-  | ListLit (head::tail), ppos ->
-      and_expr (is_not_null value pos)
-        (and_expr (list_patt_to_bool (list_head value pos) pos head)
-           (list_patt_to_bool (list_tail value pos) pos (ListLit tail, ppos)) pos) pos
-  | InfixAppl(`Cons, head, tail), _ ->
-      and_expr (is_not_null value pos)
-        (and_expr (list_patt_to_bool (list_head value pos) pos head)
-           (list_patt_to_bool (list_tail value pos) pos tail) pos) pos
-  | ListLit [], _ -> is_null value pos
-and desugar_repeat pos : Regex.repeat -> phrasenode = function
-  | Regex.Star      -> ConstructorLit ("Star", None)
-  | Regex.Plus      -> ConstructorLit ("Plus", None)
-  | Regex.Question  -> ConstructorLit ("Question", None)
-and desugar_regex desugar pos : regex -> phrasenode = 
+	(* (\* TBD: We should die if the XML text literal has bare ampersands or *)
+	(*    is otherwise ill-formed. It should also be made to properly handle *)
+	(*    CDATA. *)
+	(*    Where's a good place to do so? *)
+	| TextNode s -> Apply (Variable ("stringToXml", pos), String (s, pos), pos)
+	| Xml (tag, attrs, subnodes) -> 
+	    let concat a b = 
+	      Concat (desugar a, b, pos) in
+	    let desugar_attr = function
+	      | [] -> String ("", pos)
+	      | [x] -> desugar x
+	      | xs  -> (fold_right concat xs (Nil (pos))) in
+	      Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
+	| XmlForest []  -> Nil  (pos)
+	| XmlForest [x] -> desugar x
+	| XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
+  and patternize' lookup_pos : ppattern -> pattern = fun ppattern ->
+    (* For now, simply delegate to the old patternize.  Eventually, we
+       should convert directly from phrases to patterns *)
+    let pattern, pos = match ppattern with
+      | Pattern ((_, pos') as p) -> patternize_expression (desugar' lookup_pos p), lookup_pos pos'
+      | AsPattern (x, ((_, pos') as p)) -> `As (x, patternize_expression (desugar' lookup_pos p)), lookup_pos pos'
+    in
+      check_for_duplicate_names pos pattern;
+      pattern
+  and desugar_repeat pos : Regex.repeat -> phrasenode = function
+    | Regex.Star      -> ConstructorLit ("Star", None)
+    | Regex.Plus      -> ConstructorLit ("Plus", None)
+    | Regex.Question  -> ConstructorLit ("Question", None)
+  and desugar_regex desugar pos : regex -> phrasenode = 
     (* Desugar a regex, making sure that only variables are embedded
        within.  Any expressions that are spliced into the regex must be
        let-bound beforehand.  *)
@@ -1034,8 +1061,11 @@ and desugar_regex desugar pos : regex -> phrasenode =
              (fun (v, e1) -> Binding (Pattern (Var v, pos), e1), pos)
              !exprs,
            (e, pos))
-          
+  in
+    desugar' lookup_pos e
 
+let desugar lookup_pos =
+  freshen_type_vars -<- desugar lookup_pos
 
 (* (\* project_subset *)
 

@@ -658,7 +658,7 @@ let size_limit = 150
 
 let is_inline_candidate= function
   | Define (_, (Rec _ as e), _, _) -> not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
-  | Define (_, e, _, _) when Inference.is_value e -> contains_no_extrefs e && pure e
+  | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
   | _ -> false
 
 let find_inline_candidates es : (string * expression) list = 

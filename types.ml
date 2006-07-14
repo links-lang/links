@@ -286,6 +286,66 @@ and free_bound_row_var_vars row_var =
     | `RowVar None -> IntSet.empty
     | `RecRowVar (var, row) -> IntSet.add var (free_bound_row_type_vars row)
 
+(* [TODO]
+    - make sure TypeVars and RowVars with clashing names are
+    treated correctly
+    - perhaps this function should be in sugar.ml
+*)
+(*
+  freshen the free type variables in a type
+
+  freshen_free_type_vars var_map datatype
+     - var_map contains an initial mapping from free variables to new names
+     - on exit var_map contain mappings from any additional free variables
+     in datatype to their new names
+*)
+let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun var_map datatype ->
+  let rec freshen_datatype : IntSet.t -> datatype -> datatype = fun bound_vars t ->
+    let ftv = freshen_datatype bound_vars in
+    let rftv = freshen_row bound_vars in
+      match t with
+	| `Not_typed               
+	| `Primitive _ -> t
+	| `TypeVar var ->
+	    if IntSet.mem var bound_vars then
+	      t
+	    else if IntMap.mem var !var_map then
+	      `TypeVar (IntMap.find var !var_map)
+	    else
+	      let fresh_var = fresh_raw_variable () in
+		var_map := IntMap.add var fresh_var !var_map;
+		`TypeVar fresh_var
+	| `Function (from, into) ->
+	    `Function (ftv from, ftv into)
+	| `Record row              -> `Record (rftv row)
+	| `Variant row             -> `Variant (rftv row)
+	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
+	| `List (datatype)         -> `List (ftv datatype)
+	| `Mailbox (datatype)      -> `Mailbox (ftv datatype)
+	| `DB                      -> `DB
+  and freshen_row bound_vars (field_env, row_var) =
+    let field_env =
+      StringMap.map (function
+		       | `Absent -> `Absent
+		       | `Present t -> `Present (freshen_datatype bound_vars t)) field_env in
+    let row_var = freshen_row_var bound_vars row_var in
+      (field_env, row_var)
+  and freshen_row_var bound_vars row_var =
+    match row_var with
+      | `RowVar None -> row_var
+      | `RowVar (Some var) ->
+	  if IntSet.mem var bound_vars then
+	    row_var
+	  else if IntMap.mem var !var_map then
+	    `RowVar (Some (IntMap.find var !var_map))
+	  else
+	    let fresh_var = fresh_raw_variable () in
+	      var_map := IntMap.add var fresh_var !var_map;
+	      `RowVar (Some fresh_var)
+      | `RecRowVar (var, row) -> `RecRowVar (var, freshen_row (IntSet.add var bound_vars) row)
+  in
+    freshen_datatype IntSet.empty datatype
+
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
   string_of_datatype' (make_names (free_bound_type_vars datatype)) datatype

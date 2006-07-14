@@ -69,22 +69,28 @@ module InferenceTypeOps :
    with type typ = datatype
    and type row_var = row_var)
 
-val inference_type_of_type : Types.datatype -> datatype
-val inference_field_spec_of_field_spec : Types.field_spec -> field_spec
-val inference_row_of_row : Types.row -> row
+type inference_type_map =
+    ((datatype Unionfind.point) Utility.IntMap.t ref *
+       (row Unionfind.point) Utility.IntMap.t ref)
+
+val empty_var_maps : unit -> inference_type_map
+
+val inference_type_of_type : inference_type_map -> Types.datatype -> datatype
+val inference_field_spec_of_field_spec : inference_type_map -> Types.field_spec -> field_spec
+val inference_row_of_row : inference_type_map -> Types.row -> row
 
 val type_of_inference_type : datatype -> Types.datatype
 val field_spec_of_inference_field_spec : field_spec -> Types.field_spec
 val row_of_inference_row : row -> Types.row
 
-val inference_assumption_of_assumption : Types.assumption -> assumption
+val inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption
 val assumption_of_inference_assumption : assumption -> Types.assumption
 
 
-val inference_environment_of_environment : Types.environment -> environment
+val inference_environment_of_environment : inference_type_map -> Types.environment -> environment
 val environment_of_inference_environment : environment -> Types.environment
 
-val inference_expression_of_expression : Syntax.expression -> inference_expression
+val inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression
 val expression_of_inference_expression : inference_expression -> Syntax.expression
 
 val string_of_datatype : datatype -> string
