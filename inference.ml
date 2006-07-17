@@ -1267,54 +1267,30 @@ let rewrite_annotations : RewriteSyntaxU.rewriter = function
 let rewrite_annotations k = fromOption k (RewriteSyntaxU.bottomup rewrite_annotations k)
 
 
-(* [HACK]
-   This is a rather ugly way of checking for duplicate top-level definitions.
-   It probably shouldn't appear in the type inference module.
+(* Check for duplicate top-level definitions.  This probably shouldn't
+   appear in the type inference module.
 
    (Duplicate top-level definitions are simply not allowed.)
 
    In future we should probably allow duplicate top-level definitions, but
    only if we implement the correct semantics!
 *)
-let check_for_duplicate_defs : Types.environment -> untyped_expression list -> unit = fun type_env expressions ->
-  let env = ref (List.fold_right (fun (name, _) env ->
-				    StringSet.add name env) type_env StringSet.empty) in
-  let duplicates = ref StringMap.empty in
-    
-  let check : RewriteSyntaxU.rewriter = function
+let check_for_duplicate_defs 
+    (type_env : Types.environment)
+    (expressions :  untyped_expression list) =
+  let check (env, defined) = function
+    | Define (name, _, _, position) when StringMap.mem name defined ->
+        (env, StringMap.add name (position :: StringMap.find name defined) defined)
+    | Define (name, _, _, position) when StringSet.mem name env ->
+        (env, StringMap.add name [position] defined)
     | Define (name, _, _, position) ->
-	(if StringSet.mem name !env then
-	   begin
-	     let ps =
-	       if StringMap.mem name !duplicates
-	       then (StringMap.find name !duplicates)
-	       else []
-	     in
-	       duplicates := StringMap.add name (position::ps) !duplicates
-	   end
-	 else
-	   begin
-	     env := StringSet.add name !env
-	   end);
-	None
-    | _ -> None in
-    
-  let report_errors () =
-    if not (StringMap.is_empty !duplicates) then
-      raise(Errors.MultiplyDefinedToplevelNames !duplicates)
-    else
-      ()
-  in
-    begin
-      (* what in tarnation? *)
-      (* isn't this lovely...
-	 we're not actually doing rewriting here, just taking advantage of
-	 the 'visitor' functionality provided by the rewriter. The rewriter
-	 we define simply records duplicates.
-      *)
-      List.iter (ignore -<- (RewriteSyntaxU.topdown check)) expressions; 
-      report_errors()
-    end
+        (StringSet.add name env, defined)
+    | _ -> 
+        (env, defined) in 
+  let env = List.fold_right (fst ->- StringSet.add) type_env StringSet.empty in
+  let _, duplicates = List.fold_left check (env,StringMap.empty) expressions in
+    if not (StringMap.is_empty duplicates) then
+      raise (Errors.MultiplyDefinedToplevelNames duplicates)
 
 (* [HACKS] *)
 (* two pass typing: yuck! *)
