@@ -1,20 +1,20 @@
 BUGS
 
+* The following sequence of events happens.  It shouldn't.
+
+    * set mailbox typing off.
+    * raise exception concerning type k
+    * set mailbox typing on
+    * catch exception containing type k
+    * note that mailbox typing is on, and rewrite k
+    * give a confusing error message.
+
 * Unused mu-variables should be eliminated:
 
    links> fun(x){x(x)}(fun(x){x});;
    fun : mu b . mu a . (b) -> b
 
   The 'mu a.' shouldn't be there.
-
-* Row variables are printed incorrectly.
-
-    links> fun (x) { (x.1, x.2); };;
-    fun : (b, c, d) -> ()
-
-  The type should be
-
-    (a, b | c) -> ()
 
 * Record case patterns, like record let patterns, should match closed
   rows unless open rows are explicitly specified:
