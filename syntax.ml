@@ -85,6 +85,7 @@ let rec is_value : 'a expression' -> bool = function
   | Record_empty _
   | Nil _
   | Abstr _ -> true
+  | HasType (e, _, _) 
   | Variant_injection (_, e, _)
   | Variant_selection_empty (e, _)
   | Database (e, _)
