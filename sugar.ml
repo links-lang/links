@@ -32,6 +32,15 @@ let subst : untyped_expression -> string -> string -> untyped_expression = fun e
 
 (*
   ensure that distinct type variables have distinct names
+
+  This isn't what we want, because sometimes we want types to have
+  a bigger scope than the nearest enclosing generalisation point
+  e.g.
+    links> fun f(x:a) {var id = fun (y:a) {y:a}; id};;
+    fun : (a) -> (a) -> a
+
+  in System F restricted to use let polymorphism this looks something like
+   let f:(forall a. a->a->a) = /\a . \x:a . let f:a->a = \y:a . y in f
 *)
 let freshen_type_vars : untyped_expression -> untyped_expression = fun exp ->
   let rec freshen_exp freshen_me freshen_descendants exp =
@@ -1065,7 +1074,7 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
     desugar' lookup_pos e
 
 let desugar lookup_pos =
-  freshen_type_vars -<- desugar lookup_pos
+  (*freshen_type_vars -<-*) desugar lookup_pos
 
 (* (\* project_subset *)
 

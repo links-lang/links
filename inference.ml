@@ -551,11 +551,12 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    match datatype with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
 	      | `Primitive _  -> datatype
+	      | `RigidTypeVar _
 	      | `TypeVar _ -> assert false
-	      | `RigidTypeVar l -> failwith ("Cannot instantiate rigid type var" ^ string_of_int l)
 	      | `MetaTypeVar point ->
 		  let t = Unionfind.find point in
 		    (match t with
+		       | `RigidTypeVar var
 		       | `TypeVar var ->
 			   if IntMap.mem var tenv then
 			     IntMap.find var tenv
@@ -620,8 +621,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    match row_var with
 	      | `MetaRowVar point ->
 		  (match Unionfind.find point with
-                     | (_, `RigidRowVar r) -> 
-                         failwith ("Cannot instantiate rigid row var" ^ string_of_int r)
+                     | (_, `RigidRowVar var)
 		     | (_, `RowVar (Some var)) ->
 			 (* assert(StringMap.is_empty env); *)
 			 if IntMap.mem var renv then
@@ -642,8 +642,8 @@ let instantiate : environment -> string -> datatype = fun env var ->
 			   ))
 	      | `RowVar None ->
 		  `RowVar None
-	      | `RigidRowVar r ->
-                  failwith ("Cannot instantiate rigid row var" ^ string_of_int r)
+	      | `RigidRowVar _
+	      | `RowVar (Some _)
 	      | `RecRowVar (_, _) ->
 		  assert(false)
 	  in
