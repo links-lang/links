@@ -46,4 +46,5 @@ stdout : @fun : \(([a-z]+), \1\) -> \(\1, \1\)
 
 Negative recursive type
 fun (x) {x:a} : a
-stdout : @fun : \(mu ([a-z]+) \. \(\1\) -> \1\) -> mu ([a-z]+) \. \(\1\) -> \1
+stderr : @.*
+exit : 1

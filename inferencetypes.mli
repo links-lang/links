@@ -3,12 +3,16 @@ type type_var_set = Type_basis.type_var_set
 
 type datatype = [
   | (datatype, row) Type_basis.type_basis
-  | `MetaTypeVar of datatype Unionfind.point ]
+  | `MetaTypeVar of datatype Unionfind.point 
+  | `RigidTypeVar of int
+]
 and field_spec = datatype Type_basis.field_spec_basis
 and field_spec_map = field_spec Utility.StringMap.t
 and row_var = [
   | row Type_basis.row_var_basis
-  | `MetaRowVar of row Unionfind.point ]
+  | `MetaRowVar of row Unionfind.point 
+  | `RigidRowVar of int
+]
 and row = (datatype, row_var) Type_basis.row_basis
 
 type type_variable = Type_basis.type_variable

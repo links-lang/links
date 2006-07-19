@@ -17,6 +17,8 @@ let show_generalization = Settings.add_bool("show_generalization", false, true)
 let show_typechecking = Settings.add_bool("show_typechecking", false, true)
 let show_recursion = Settings.add_bool("show_recursion", false, true)
 
+let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, true)
+
 (* whether to allow negative recursive types to be inferred *)
 let infer_negative_types = Settings.add_bool("infer_negative_types", true, true)
 
@@ -47,7 +49,7 @@ let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
     (match (t1, t2) with
        | `Not_typed, `Not_typed -> true
-       | `Primitive x, `Primitive y when x = y -> true
+       | `Primitive x, `Primitive y -> x = y
        | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
 	   Unionfind.equivalent lpoint rpoint
        | `Function (lfrom, lto), `Function (rfrom, rto) ->
@@ -139,6 +141,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	    ()
 	  else
 	    (match (Unionfind.find lpoint, Unionfind.find rpoint) with
+	       | `RigidTypeVar l, `RigidTypeVar r ->
+                   if l <> r then 
+                     raise (Unify_failure ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match"))
+                   else 
+		     Unionfind.union lpoint rpoint
 	       | `TypeVar _, `TypeVar _ ->
 		   Unionfind.union lpoint rpoint
 	       | `TypeVar var, t ->
@@ -155,6 +162,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		    else
 		      ());
 		   Unionfind.union rpoint lpoint
+               | `RigidTypeVar l, t
+               | t, `RigidTypeVar l -> 
+                     raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
 	       | `Recursive (lvar, t), `Recursive (rvar, t') ->
 		   assert(lvar <> rvar);
 		   debug_if_set (show_recursion)
@@ -172,6 +182,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	       | t, t' -> unify' rec_env (t, t'); Unionfind.union lpoint rpoint)
       | `MetaTypeVar point, t | t, `MetaTypeVar point ->
 	  (match (Unionfind.find point) with
+             | `RigidTypeVar l -> 
+                 raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
 	     | `TypeVar var ->
 		 if var_is_free_in_type var t then
    		   (let _ = debug_if_set (show_recursion)
@@ -312,13 +324,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		else
 		  raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
 					^string_of_row extension_row))
-	    | `RowVar (Some _) -> assert(false)
+	    | `RigidRowVar r -> raise  (Unify_failure ("Rigid row variable "^ string_of_int r ^"cannot be instantiated\n"
+					               ^string_of_row extension_row))
 	    | (`RecRowVar _) as row_var ->
 		unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
 	  in
 	    match row_var with
 	      | `MetaRowVar _ -> extend row_var
 	      | `RowVar _
+	      | `RigidRowVar _
 	      | `RecRowVar _ -> assert(false) in
 
 
@@ -537,7 +551,8 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    match datatype with
 	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
 	      | `Primitive _  -> datatype
-	      | `TypeVar _ -> failwith "Internal error: (instantiate) TypeVar should be inside a MetaTypeVar"
+	      | `TypeVar _ -> assert false
+	      | `RigidTypeVar l -> failwith ("Cannot instantiate rigid type var" ^ string_of_int l)
 	      | `MetaTypeVar point ->
 		  let t = Unionfind.find point in
 		    (match t with
@@ -605,6 +620,8 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    match row_var with
 	      | `MetaRowVar point ->
 		  (match Unionfind.find point with
+                     | (_, `RigidRowVar r) -> 
+                         failwith ("Cannot instantiate rigid row var" ^ string_of_int r)
 		     | (_, `RowVar (Some var)) ->
 			 (* assert(StringMap.is_empty env); *)
 			 if IntMap.mem var renv then
@@ -625,8 +642,8 @@ let instantiate : environment -> string -> datatype = fun env var ->
 			   ))
 	      | `RowVar None ->
 		  `RowVar None
-	      | `RowVar (Some _) ->
-		  assert(false)
+	      | `RigidRowVar r ->
+                  failwith ("Cannot instantiate rigid row var" ^ string_of_int r)
 	      | `RecRowVar (_, _) ->
 		  assert(false)
 	  in
@@ -654,7 +671,9 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
       let row_vars = 
 	match row_var with
 	  | `RowVar (None) -> []
+          | `RigidRowVar var
 	  | `RowVar (Some var) when IntSet.mem var bound_vars -> []
+          | `RigidRowVar var
 	  | `RowVar (Some var) -> [`RowVar var]
 	  | `RecRowVar (var, rec_row) ->
 	      debug_if_set (show_recursion) (fun () -> "rec (row_generics): " ^(string_of_int var));
@@ -668,9 +687,11 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
 	field_vars @ row_vars
     in
       function
-	| `Not_typed -> raise (Failure "Programming error (TY313)")
+	| `Not_typed -> failwith "Internal error: Not_typed encountered in get_quantifiers"
 	| `Primitive _ -> []
+	| `RigidTypeVar var
 	| `TypeVar var when IntSet.mem var bound_vars -> []
+	| `RigidTypeVar var
 	| `TypeVar var -> [`TypeVar var]
 	| `MetaTypeVar point ->
 	    get_quantifiers bound_vars (Unionfind.find point)
@@ -1132,59 +1153,6 @@ let remove_mailbox : RewriteTypes.rewriter = function
 
 let remove_mailbox k = fromOption k (RewriteTypes.topdown remove_mailbox k)
 
-type tvar = [`TypeVar of int]
-
-(* This rewriting may not be correct.  If we have a function that
-   takes another function as argument, e.g.
-
-     (a -> b) -> c -> d
-
-   then the passed-in-function may not use the same mailbox as the
-   receiving function (consider the function passed to spawn for a
-   concrete example).  This rewriter gives the same type to both
-   mailboxes.  Can we do any better?  Are there some criteria for
-   determining whether the mailboxes should be the same (I think not).
-
-   [SL: They should never be the same except for our
-   hacks for send, spawn and self, which should be primitives in
-   the language (as opposed to built-in functions).]
-
-   Regardless, in our current library we have no higher-order
-   functions (except spawn and curried functions), so it probably
-   doesn't matter.
-
-   [SL: it now works correctly for higher-order functions]
-*)
-
-
-(* rewrite an unquantified datatype type *)
-(* let retype_primfun (var : Types.datatype) : RewriteTypes.rewriter = function *)
-(*   | `Function _ as f -> Some (`Function (`Mailbox var, f)) *)
-(*   | _                -> None *)
-
-(* rewrite a quantified datatype type *)
-(* let retype_primfun (var : tvar) (quants, datatype as k : Types.assumption) = *)
-(*   match RewriteTypes.bottomup (retype_primfun (var :> Types.datatype)) datatype with *)
-(*     | None -> k *)
-(*     | Some datatype -> ((var :> Types.quantifier) :: quants, datatype) *)
-
-(* find a suitable tvar name *)
-(* let new_typevar quants = *)
-(*   let tint = function *)
-(*     | `TypeVar i *)
-(*     | `RowVar  i -> i  *)
-(*   and candidates = Utility.fromTo 0 (1 + List.length quants) *)
-(*   in  *)
-(*     (\* Create a type variable not already in the list *\) *)
-(*     `TypeVar (List.hd (snd (List.partition *)
-(*                               (flip mem (List.map tint quants))  *)
-(*                               candidates))) *)
-
-(* Find a suitable type variable and rewrite a quantified datatype type *)
-(* let retype_primfun (quants, _ as k) = *)
-(*   retype_primfun (new_typevar quants) k *)
-
-
 (* Correct (hopefully), albeit imperative code for introducing mailboxes *)
 let mailboxify_assumption (quantifiers, datatype) =
   let mailboxify mailboxes : RewriteTypes.rewriter = function
@@ -1283,7 +1251,7 @@ let check_for_duplicate_defs
         (env, StringMap.add name (position :: StringMap.find name defined) defined)
     | Define (name, _, _, position) when StringSet.mem name env ->
         (env, StringMap.add name [position] defined)
-    | Define (name, _, _, position) ->
+    | Define (name, _, _, _) ->
         (StringSet.add name env, defined)
     | _ -> 
         (env, defined) in 
@@ -1291,6 +1259,26 @@ let check_for_duplicate_defs
   let _, duplicates = List.fold_left check (env,StringMap.empty) expressions in
     if not (StringMap.is_empty duplicates) then
       raise (Errors.MultiplyDefinedToplevelNames duplicates)
+
+(* ... *)
+let create_var_maps expressions = 
+  if Settings.get_value rigid_type_variables then
+    let rec type_vars e = 
+      let annotations default = function
+        | HasType (e, datatype, _) -> type_vars e @ Types.type_vars datatype
+        | e -> default e in
+        reduce_expression annotations (snd ->- List.concat) e in
+    let tvars, rows = Inferencetypes.empty_var_maps () in
+      List.iter (fun tv -> 
+                   if not (IntMap.mem tv !tvars) 
+                   then
+                     tvars := IntMap.add tv (Unionfind.fresh (`RigidTypeVar tv)) !tvars)
+        (Utility.concat_map type_vars expressions);
+      tvars, rows
+  else 
+    Inferencetypes.empty_var_maps ()
+
+(*  (Inferencetypes.empty_var_maps())*)
 
 (* [HACKS] *)
 (* two pass typing: yuck! *)
@@ -1301,14 +1289,14 @@ let type_program env expressions =
     debug_if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
-	 type_program (Inferencetypes.empty_var_maps()) (unmailboxify_type_env env) expressions) in
+	 type_program (create_var_maps expressions) (unmailboxify_type_env env) expressions) in
   let env', expressions' =
     (* with mailbox parameters *)
     debug_if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
     let env, expressions =
       Types.with_mailbox_typing true
 	(fun () ->
-	   type_program (Inferencetypes.empty_var_maps()) env (List.map (rewrite_annotations -<- add_parameter) expressions))
+	   type_program (create_var_maps expressions) env (List.map (rewrite_annotations -<- add_parameter) expressions))
     in
       env, List.map remove_parameter expressions
   in
@@ -1321,14 +1309,14 @@ let type_expression env expression =
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
-	 type_expression (Inferencetypes.empty_var_maps()) (unmailboxify_type_env env) expression) in
+	 type_expression (create_var_maps [expression]) (unmailboxify_type_env env) expression) in
   let env', expressions' =
     (* with mailbox parameters *)
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
     let env, expression = 
       Types.with_mailbox_typing true
 	(fun () ->
-	   type_expression (Inferencetypes.empty_var_maps()) env ((rewrite_annotations -<- add_parameter)(expression)))
+	   type_expression (create_var_maps [expression]) env ((rewrite_annotations -<- add_parameter)(expression)))
     in
       env, remove_parameter expression
   in

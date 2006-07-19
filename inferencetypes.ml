@@ -4,12 +4,16 @@ type type_var_set = Type_basis.type_var_set
 
 type datatype = [
   | (datatype, row) Type_basis.type_basis
-  | `MetaTypeVar of datatype Unionfind.point ]
+  | `MetaTypeVar of datatype Unionfind.point 
+  | `RigidTypeVar of int
+]
 and field_spec = datatype Type_basis.field_spec_basis
 and field_spec_map = field_spec StringMap.t
 and row_var = [
   | row Type_basis.row_var_basis
-  | `MetaRowVar of row Unionfind.point ]
+  | `MetaRowVar of row Unionfind.point
+  | `RigidRowVar of int
+]
 and row = (datatype, row_var) Type_basis.row_basis
 
 type type_variable = Type_basis.type_variable
@@ -29,11 +33,12 @@ let
     function
       | `Not_typed               -> []
       | `Primitive _             -> []
-      | `TypeVar var             ->
-	  if IntSet.mem var rec_vars then
-	    []
-	  else
-	    [var]
+      | `RigidTypeVar var        -> [var]
+      | `TypeVar var ->
+(* 	  if IntSet.mem var rec_vars then *)
+(* 	    [] *)
+(* 	  else *)
+            [var]
       | `Function (from, into)   -> free_type_vars' rec_vars from @ free_type_vars' rec_vars into
       | `Record row              -> free_row_type_vars' rec_vars row
       | `Variant row             -> free_row_type_vars' rec_vars row
@@ -51,6 +56,7 @@ let
       let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Types.get_present_fields field_env)) in
       let row_vars =
         match row_var with
+	  | `RigidRowVar var
 	  | `RowVar (Some var) -> [var]
 	  | `RowVar None -> []
 	  | `RecRowVar (var, row) -> if IntSet.mem var rec_vars then
@@ -98,13 +104,15 @@ struct
 	     ((IntSet.mem var rec_vars) or (is_closed_row' (IntSet.add var rec_vars) row))
 	| (_, `MetaRowVar point) ->
 	    is_closed_row' rec_vars (Unionfind.find point)
+	| (_, `RigidRowVar _) -> false
     in
       is_closed_row' IntSet.empty
 
   let get_row_var = fun (_, row_var) ->
     let rec get_row_var' = fun rec_vars -> function
       | `RowVar None -> None
-      | `RowVar (Some var) -> Some var
+      | `RowVar (Some r)
+      | `RigidRowVar r -> Some r
       | `RecRowVar (var, (_, row_var')) ->
 	  if IntSet.mem var rec_vars then
 	    None
@@ -134,6 +142,7 @@ let is_flattened_row : row -> bool =
     | (_, `MetaRowVar point) ->
 	(match Unionfind.find point with 
 	   | (_, `RowVar None) -> false
+	   | (field_env', `RigidRowVar _)
 	   | (field_env', `RowVar (Some _)) ->
 	       assert(not (contains_present_fields field_env')); true
 	   | (field_env', `RecRowVar (var, rec_row)) ->
@@ -141,6 +150,7 @@ let is_flattened_row : row -> bool =
 	       if IntSet.mem var rec_vars then true
 	       else is_flattened (IntSet.add var rec_vars) rec_row
 	   | (_ , `MetaRowVar _) -> false)
+    | (_, `RigidRowVar _)
     | (_, `RowVar None) -> true
     | (_, `RowVar (Some _ ))
     | (_, `RecRowVar (_, _)) ->	assert(false)
@@ -158,11 +168,13 @@ let is_empty_row : row -> bool =
 		StringMap.is_empty field_env &&
 		  begin
 		    match row_var with
+	              | `RigidRowVar _
 		      | `RowVar _ -> true
 		      | `RecRowVar (var, _) when IntSet.mem var rec_vars -> true
 		      | `RecRowVar (var, rec_row) -> is_empty (IntSet.add var rec_vars) rec_row
 		      | `MetaRowVar point -> is_empty rec_vars (Unionfind.find point)
 		  end
+	  | `RigidRowVar _
 	  | `RowVar None -> true
 	  | `RowVar (Some _)
 	  | `RecRowVar (_, _) -> assert(false)
@@ -185,9 +197,10 @@ let flatten_row : row -> row =
 	  | (field_env, `MetaRowVar point) ->
 	      let row' = Unionfind.find point in
 		(match row' with
-		   | (field_env', `RowVar None) ->
-		       field_env_union (field_env, field_env'), `RowVar None
-		   | (field_env', `RowVar (Some var)) ->
+		   | (field_env', (`RigidRowVar _ as r))
+		   | (field_env', (`RowVar None as r)) ->
+		       field_env_union (field_env, field_env'), r
+                   | (field_env', `RowVar (Some var)) ->
 		       assert(not (contains_present_fields field_env'));
 		       if IntMap.mem var rec_env then
 			 (field_env, `MetaRowVar (IntMap.find var rec_env))
@@ -227,6 +240,8 @@ let unwrap_row : row -> (row * (int * row) option) =
     fun rec_env -> function
       | (field_env, `MetaRowVar point) as row ->
 	  (match Unionfind.find point with
+	     | (field_env', (`RigidRowVar _ as r)) ->
+		 (field_env_union (field_env, field_env'), r), None
 	     | (field_env', `RowVar None) ->
 		 (field_env_union (field_env, field_env'), `RowVar None), None
 	     | (field_env', `RowVar (Some var)) ->
@@ -272,7 +287,10 @@ let empty_var_maps : unit -> inference_type_map =
 (*** Conversions ***)
 
 (* implementation *)
-let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) -> function
+
+let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) t -> 
+  let itoft = inference_type_of_type var_maps in
+    match t with
   | `Not_typed -> `Not_typed
   | `Primitive p -> `Primitive p
   | `TypeVar var ->
@@ -283,7 +301,7 @@ let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) -> function
 	in
 	  type_var_map := IntMap.add var point (!type_var_map);
 	  `MetaTypeVar point
-  | `Function (f, t) -> `Function (inference_type_of_type var_maps f, inference_type_of_type var_maps t)
+  | `Function (f, t) -> `Function (itoft f, itoft t)
   | `Record row -> `Record (inference_row_of_row var_maps row)
   | `Variant row -> `Variant (inference_row_of_row var_maps row)
   | `Recursive (var, t) ->
@@ -293,13 +311,13 @@ let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) -> function
 	let point = Unionfind.fresh (`TypeVar var)
 	in
 	  type_var_map := IntMap.add var point (!type_var_map);
-	  let t' = `Recursive (var, inference_type_of_type var_maps t) in
+	  let t' = `Recursive (var, itoft t) in
 	    Unionfind.change point t';
 	    `MetaTypeVar point
-  | `List (t) -> `List (inference_type_of_type var_maps t)
-  | `Mailbox (t) -> `Mailbox (inference_type_of_type var_maps t)
+  | `List (t) -> `List (itoft t)
+  | `Mailbox (t) -> `Mailbox (itoft t)
   | `DB -> `DB
-and inference_field_spec_of_field_spec var_maps = function
+and inference_field_spec_of_field_spec var_maps  = function
   | `Present t -> `Present (inference_type_of_type var_maps t)
   | `Absent -> `Absent
 and inference_row_of_row = fun ((_, row_var_map) as var_maps) -> function
@@ -308,7 +326,7 @@ and inference_row_of_row = fun ((_, row_var_map) as var_maps) -> function
   | fields, `RowVar (Some var) ->
       let field_env : field_spec_map = StringMap.map (inference_field_spec_of_field_spec var_maps) fields
       in
-	if IntMap.mem var (!row_var_map) then
+        if IntMap.mem var (!row_var_map) then
 	  (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
 	else
 	  let point = Unionfind.fresh (StringMap.empty, `RowVar (Some var))
@@ -348,6 +366,7 @@ let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fu
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
+    | `RigidTypeVar var
     | `TypeVar var -> `TypeVar var
     | `Function (f, t) -> `Function (type_of_inference_type rec_vars f, type_of_inference_type rec_vars t)
     | `Record row -> `Record (row_of_inference_row rec_vars row)
@@ -375,9 +394,12 @@ and row_var_of_inference_row_var = fun rec_vars -> function
   | `MetaRowVar point ->
       begin
 	match Unionfind.find point with
-	  | (env, `RowVar var) ->
+	  | (env, `RowVar None) ->
+              `RowVar None
+	  | (env, `RigidRowVar var)
+	  | (env, `RowVar (Some var)) ->
 	      assert(not (contains_present_fields env));
-	      `RowVar var
+              `RowVar (Some var)
 	  | (_, `RecRowVar (var, rec_row)) ->
 	      if IntSet.mem var rec_vars then
 		`RowVar (Some var)
@@ -387,6 +409,8 @@ and row_var_of_inference_row_var = fun rec_vars -> function
        end
   | `RowVar None ->
       `RowVar None
+  | `RigidRowVar s ->
+      `RowVar (Some s)
   | `RowVar (Some _) ->
       assert(false)
   | `RecRowVar (_, _) ->
@@ -402,20 +426,20 @@ let row_var_of_inference_row_var = row_var_of_inference_row_var IntSet.empty
 
 
 (* assumptions *)
-let inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption = fun env -> function
-  | (quantifiers, t) -> (quantifiers, inference_type_of_type env t)
+let inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption = fun var_map -> function
+  | (quantifiers, t) -> (quantifiers, inference_type_of_type var_map t)
 let assumption_of_inference_assumption : assumption -> Types.assumption = function
   | (quantifiers, t) -> (quantifiers, type_of_inference_type t)
 
 (* environments *)
-let inference_environment_of_environment : inference_type_map -> Types.environment -> environment = fun env ->
-  List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption env assumption))
+let inference_environment_of_environment : inference_type_map -> Types.environment -> environment = fun var_map ->
+  List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption var_map assumption))
 let environment_of_inference_environment : environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, assumption_of_inference_assumption assumption))
 
 (* conversions between expressions and inference expressions *)
-let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun env ->
-  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type env t, label))
+let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun var_map ->
+  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type var_map t, label))
 let expression_of_inference_expression : inference_expression -> Syntax.expression =
   Syntax.redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 
@@ -442,8 +466,9 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
     let isnr = is_negative_row rec_vars var in
       match t with
 	| `Not_typed -> false
-	| `Primitive x -> false
-	| `TypeVar var' -> false
+	| `Primitive _ -> false
+	| `RigidTypeVar _
+	| `TypeVar _ -> false
 	| `MetaTypeVar point ->
 	    isn (Unionfind.find point)
 	| `Function (t, t') ->
@@ -467,6 +492,7 @@ and is_negative_field_env : IntSet.t -> int -> field_spec_map -> bool =
 		   ) field_env false
 and is_negative_row_var : IntSet.t -> int -> row_var -> bool =
   fun rec_vars var -> function
+    | `RigidRowVar _
     | `RowVar _ -> false
     | `RecRowVar (var', row) ->
 	if IntSet.mem var' rec_vars then
@@ -484,9 +510,9 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
     let isnr = is_negative_row rec_vars var in
       match t with
 	| `Not_typed -> false
-	| `Primitive x -> false
-	| `TypeVar var' when var=var' -> true
-	| `TypeVar var' -> false
+	| `Primitive _ -> false
+	| `RigidTypeVar var'
+	| `TypeVar var' ->  var = var'
 	| `MetaTypeVar point ->
 	    isp (Unionfind.find point)
 	| `Function (t, t') ->
@@ -510,6 +536,8 @@ and is_positive_field_env : IntSet.t -> int -> field_spec_map -> bool =
 		   ) field_env false
 and is_positive_row_var : IntSet.t -> int -> row_var -> bool =
   fun rec_vars var -> function
+    (* BUG: var = var' *)
+    | `RigidRowVar _
     | `RowVar _ -> false
     | `RecRowVar (var', row) ->
 	if IntSet.mem var' rec_vars then
