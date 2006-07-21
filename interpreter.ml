@@ -411,7 +411,7 @@ fun globals locals expr cont ->
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (variables, body, _) ->
-      let new_env = bind_rec globals locals variables in
+      let new_env = bind_rec globals locals (List.map (fun (n,v,_) -> (n,v)) variables) in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont

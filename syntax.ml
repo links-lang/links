@@ -39,7 +39,7 @@ type 'data expression' =
   | Comparison of ('data expression' * string * 'data expression' * 'data)
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * ('data expression')) list * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
   | Record_empty of 'data
@@ -85,7 +85,7 @@ let rec is_value : 'a expression' -> bool = function
   | Record_empty _
   | Nil _
   | Abstr _ -> true
-  | HasType (e, _, _) 
+  | HasType (e, _, _)
   | Variant_injection (_, e, _)
   | Variant_selection_empty (e, _)
   | Database (e, _)
@@ -100,7 +100,7 @@ let rec is_value : 'a expression' -> bool = function
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
-  | Rec (bs, e, _) -> List.for_all (is_value -<- snd) bs && is_value e
+  | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
 let gensym =
@@ -150,7 +150,7 @@ and show t : 'a expression' -> string = function
   | Let (variable, value, body, data) ->
       "{ var " ^ variable ^ "=" ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Rec (variables, body, data) ->
-      "{" ^ (String.concat " ; " (map (function (label, expr) -> " " ^ label ^ "=" ^ show t expr) variables))
+      "{" ^ (String.concat " ; " (map (function (label, expr, _) -> " " ^ label ^ "=" ^ show t expr) variables))
       ^ "; " ^ show t body ^ "}" ^ t data
   | Escape (var, body, data) -> "escape " ^ var ^ " in " ^ show t body ^ t data
   | Xml_node (tag, attrs, elems, data) ->  
@@ -278,13 +278,13 @@ let visit_expressions'
 
     | Rec (b, body, d) -> 
         (* Would a fold across the boundvals be better? *)
-        let boundvals = map (fun (name, value) -> 
+        let boundvals = map (fun (name, value, t) -> 
                                let e, d = visitor visit_children (value, data) in
-                                 (e, d, name)) b in
-        let bindings_data = map (fun (_,d,_) -> d)  boundvals in 
+                                 (e, d, name, t)) b in
+        let bindings_data = map (fun (_,d,_,_) -> d)  boundvals in 
         let data1 = fold_left combiner (hd bindings_data) (tl bindings_data) in
         let body, data2 = visitor visit_children (body, data) in 
-          (Rec (map (fun (e, _, name) -> (name, e)) boundvals, body, d),
+          (Rec (map (fun (e, _, name, t) -> (name, e, t)) boundvals, body, d),
            combiner data1 data2)
     | Xml_node (tag, attrs, elems, d) -> 
         (* Not 100% sure this is right *)
@@ -372,8 +372,8 @@ let freevars : 'a expression' -> string list =
           | Variant_selection (value, _, cvar, cbody, var, body, _) ->
               expr, childvars (value, vars) @ childvars (cbody, cvar::vars) @ childvars (body, var::vars)
           | Rec (bindings, body, _) ->
-              let vars = map fst bindings @ vars in  
-                expr, List.concat (map (fun value -> (childvars (value, vars))) (map snd bindings)) @ childvars (body, vars)
+              let vars = map (fun (v,_,_) -> v) bindings @ vars in  
+                expr, List.concat (map (fun value -> (childvars (value, vars))) (map (fun (_,x,_) -> x) bindings)) @ childvars (body, vars)
 	  | Escape (var, body, _) -> expr, childvars (body, var::vars)
           | Table (_, _, query, _) -> expr, Query.freevars query
           | other -> default (other, vars)
@@ -393,7 +393,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Abstr (a, b, data) -> Abstr (a, redecorate f b, f data)
   | Let (a, b, c, data) -> Let (a, redecorate f b, redecorate f c, f data)
   | Rec (a, b, data) -> 
-      Rec (map (fun (s,e) -> s, redecorate f e) a, redecorate f b, f data)
+      Rec (map (fun (s,e,t) -> s, redecorate f e,t) a, redecorate f b, f data)
   | Xml_node (a, b, c, data) -> 
       Xml_node (a, map (fun (s,e) -> s, redecorate f e) b, 
                 map (redecorate f) c, f data)
@@ -482,7 +482,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Condition (e1, e2, e3, _)
                | Variant_selection (e1, _, _, e2, _, e3, _) -> [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
 
-               | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e) -> visitor visit_children e) b
+               | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
 
   in
@@ -529,8 +529,8 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
       | Condition (e1, e2, e3, a)                  -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Condition (e1, e2, e3, a))
       (* varying children *)
-      | Rec (es, e2, a) -> (let names, vals = split es in 
-                              passto (e2::vals) (fun (e2::vals) -> Rec (combine names vals, e2, a)))
+      | Rec (es, e2, a) -> (let names, vals, types = split3 es in 
+                              passto (e2::vals) (fun (e2::vals) -> Rec (combine3 (names, vals, types), e2, a)))
       | Xml_node (a, es1, es2, b) -> 
           (let anames, avals = split es1 in 
              passto

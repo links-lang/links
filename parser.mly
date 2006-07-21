@@ -25,8 +25,8 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW HANDLE WHERE 
-%token AMPER COMMA VBAR DOT COLON COLONCOLON
-%token TABLE FROM DATABASE WITH UNIQUE ORDERBY ASC DESC 
+%token COMMA VBAR DOT COLON COLONCOLON
+%token TABLE FROM DATABASE WITH UNIQUE ORDERBY
 %token UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -91,20 +91,19 @@ toplevel:
 | TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON     { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
+| SIG 
+  VARIABLE COLON datatype 
+  FUN VARIABLE arg_list perhaps_location block perhaps_semi    { if $2 <> $6 then 
+                                                                   raise (ConcreteSyntaxError
+                                                                            ("Signature for `" ^ $2 ^ "' should precede definition of `"
+                                                                             ^ $2 ^ "', not `"^ $6 ^"'.",
+                                                                             pos ()));
+                                                                 TypeAnnotation (
+                                                                                  (Definition ($6, (FunLit (Some $6, $7, $9), pos()), $8), pos()),
+                                                                                  $4),
+                                                                 pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
-/* doesn't work...
-  because the extent of the type annotation is just the body of the dummy function
-*/
-/*
-| SIG VARIABLE COLON datatype perhaps_semi                      
-   { let dummy = unique_name () in
-       Definition (dummy, (
-		     FunLit (Some dummy,
-			     [Pattern (RecordLit ([], None), pos())],
-			     (TypeAnnotation ((Var $2, pos()), $4), pos())), pos()), `Unknown), pos() }
-*/
-| SIG VARIABLE COLON datatype perhaps_semi                     { TypeSignature ($2, $4), pos() }
-      
+
 perhaps_location:
 | SERVER                                                       { `Server }
 | CLIENT                                                       { `Client }

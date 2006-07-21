@@ -388,7 +388,7 @@ let strip_lcolon evName =
 
 (* Generate a server stub that calls the corresponding server function *)
 let generate_server_stub = function
-  | Define (n, Rec ([_, (Abstr (arg,_,_))], Variable _, _), `Server, _) ->
+  | Define (n, Rec ([_, (Abstr (arg,_,_)), _], Variable _, _), `Server, _) ->
       let arglist = [arg] in
         Defs [n, Fn (arglist @ ["__kappa"], 
                  Call(Call (Var "_remoteCall", [Var "__kappa"]),
@@ -581,7 +581,7 @@ let rec generate : 'a expression' -> code =
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
-            (fun (v, e) body ->
+            (fun (v, e,_) body ->
 	       Call(generate e, [Fn(["__e"],
 				    Bind (v, Var "__e", body))]))
             bindings
@@ -840,7 +840,7 @@ and generate_direct_style : 'a expression' -> code =
   | Define _ as d -> gcps d
   | Rec (bindings, body, _) ->
       List.fold_right
-	(fun (v, e) body ->
+	(fun (v, e,_) body ->
 	   Bind (v, gd e, body))
 	bindings
 	(gd body)
@@ -896,7 +896,7 @@ and generate_direct_style : 'a expression' -> code =
 
 (* Generate a native stub that calls the corresponding native function *)
 and generate_native_stub = function
-  | Define (n, Rec ([_, (Abstr (arg,body,_))], Variable _, _), `Native, _) ->
+  | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = [arg] in
         Defs [n, Fn (arglist @ ["__kappa"], Call(Var "__kappa", [generate_direct_style body]))]
   | e

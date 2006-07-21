@@ -1019,26 +1019,26 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       - do the functions have to be recursive?
 *)
 and
-    type_check_mutually var_maps env (defns : (string * untyped_expression) list) =
-      let var_env = (map (fun (name, _) ->
-	                      (name, ([], ITO.fresh_type_variable ())))
+    type_check_mutually var_maps env (defns : (string * untyped_expression * Types.datatype option) list) =
+      let var_env = (map (fun (name, _, t) ->
+                            match t with
+                              | Some t -> (name, generalize env (inference_type_of_type var_maps t))
+                              | None -> (name, ([], ITO.fresh_type_variable ())))
 		       defns) in
-      let inner_env = (var_env @ env) in
-
-      let type_check var_maps result (name, expr) = 
+      let inner_env = var_env @ env in
+      let type_check var_maps result (name, expr, t) = 
         let expr = type_check var_maps inner_env expr in
-	let expr_type = type_of_expression expr in
-          match expr_type with
-            | `Function _ ->(
-		  unify (snd (assoc name var_env), expr_type);
-		  (name, expr) :: result)
+          match type_of_expression expr with
+            | `Function _ as f  ->
+		unify (snd (assoc name var_env), f);
+		(name, expr, t) :: result
             | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
       let defns = fold_left (type_check var_maps) [] defns in
       let defns = rev defns in
 
-      let env = (alistmap (fun value -> 
-			     (generalize env (type_of_expression value))) defns
+      let env = (List.map (fun (name, value,_) -> 
+			     (name, generalize env (type_of_expression value))) defns
 		 @ env) in
         env, defns     
 
@@ -1078,12 +1078,12 @@ let find_cliques (bindings : (string * untyped_expression) list)
       map (map (fun name -> name, assoc name bindings)) orders 
 
 let mutually_type_defs
-    : inference_type_map -> Types.environment -> (string * untyped_expression) list -> (Types.environment * (string * expression) list) =
+    : inference_type_map -> Types.environment -> (string * untyped_expression * 'a option) list -> (Types.environment * (string * expression * 'c) list) =
   fun var_maps env defs ->
     let env = inference_environment_of_environment var_maps env in
     let new_type_env, new_defs = type_check_mutually var_maps env defs in
       environment_of_inference_environment new_type_env,
-    List.map (fun (name, exp) -> name, expression_of_inference_expression exp) new_defs
+    List.map (fun (name, exp, t) -> name, expression_of_inference_expression exp, t) new_defs
 
 let regroup exprs = 
   let regroup_defs defs = 
@@ -1122,8 +1122,8 @@ let type_program : inference_type_map -> Types.environment -> untyped_expression
             env, typed_exprs @ [expression]
       | xs  -> (* A group of potentially mutually-recursive definitions *)
           let defparts = map (fun (Define x) -> x) xs in
-          let env, defs = mutually_type_defs var_maps env (map (fun (name, expr, _, _) -> name, expr) defparts) in
-          let defs = (map2 (fun (name, _, location, _) (_, expr) -> 
+          let env, defs = mutually_type_defs var_maps env (map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> name, expr, t) defparts) in
+          let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
                               Define (name, expr, location, expression_data expr)) 
 			defparts defs) in
             env, typed_exprs @ defs
@@ -1229,6 +1229,8 @@ and remove_parameter s = fromOption s (RewriteSyntax.bottomup remove_parameter s
 
 (* rewrite type annotations appearing in expressions *)
 let rewrite_annotations : RewriteSyntaxU.rewriter = function
+  | Rec (bs, body, d)    -> Some (Rec (List.map (fun (e,v,t) -> e,v, opt_map (snd -<- mailboxify_assumption -<- (fun t -> ([], t))) t) bs, body, d))
+
   | HasType (e, k, d)    -> Some (HasType (e, snd (mailboxify_assumption ([], k)), d))
   | Alien (s1, s2, k, d) -> Some (Alien (s1, s2, mailboxify_assumption k, d))
   | _                    -> None
@@ -1266,6 +1268,7 @@ let create_var_maps expressions =
     let rec type_vars e = 
       let annotations default = function
         | HasType (e, datatype, _) -> type_vars e @ Types.type_vars datatype
+        | Rec (bs, e, _) -> Utility.concat_map (fun (_,e,t) -> fromOption [] (opt_map Types.type_vars t) @ type_vars e) bs @ type_vars e
         | e -> default e in
         reduce_expression annotations (snd ->- List.concat) e in
     let tvars, rows = Inferencetypes.empty_var_maps () in

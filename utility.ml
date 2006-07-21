@@ -188,6 +188,20 @@ let lines (channel : in_channel) : string list =
     with End_of_file -> lines
   in List.rev (next_line [])
 
+let call_with_open_infile,
+    call_with_open_outfile = 
+  let call opener closer filename f = 
+    let fd = opener filename in
+      try
+        let rv = f fd in
+          closer fd;
+          rv
+      with x -> 
+        closer fd;
+        raise x
+  in ((fun x -> call open_in close_in x),
+      (fun x -> call open_out close_out x))
+
 let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
 
@@ -347,3 +361,13 @@ let rec version_atleast a b =
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
 
+
+let split3 (s :  ('a * 'b * 'c) list):  'a list * 'b list * 'c list
+  =  List.fold_right (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z::zs))  s ([],[],[])
+
+let rec combine3 : 'a list * 'b list * 'c list ->  ('a * 'b * 'c) list = function
+  | [], [], [] -> []
+  | x::xs, y::ys, z::zs -> (x,y,z) :: combine3 (xs,ys,zs)
+  | _          -> invalid_arg "combine3"
+
+  

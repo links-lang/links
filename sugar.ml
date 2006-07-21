@@ -55,7 +55,7 @@ let freshen_type_vars : untyped_expression -> untyped_expression = fun exp ->
 	      | Let (variable, value, body, pos) when is_value value ->
 		  Some (Let (variable, freshen_value value, recurse body, pos))
 	      | Rec (defs, body, pos) ->
-		  Some (Rec (alistmap freshen_value defs, recurse body, pos))
+		  Some (Rec (List.map (fun (a,b,c) -> a, freshen_value b,c) defs, recurse body, pos))
 	      | Define (variable, value, loc, pos) when is_value value ->
 		  Some (Define (variable, freshen_value value, loc, pos))
 	      | _ -> None) exp)
@@ -568,9 +568,9 @@ let rec polylets (bindings : (pattern * untyped_expression * position * bool) li
   let folder (patt, value, pos, recp) expr = 
     match patt, value, expr, recp with 
       | `Variable s, Abstr _, Rec (bindings, e, p), _ ->  
-          Rec ((s, value)  :: bindings, e, p) 
+          Rec ((s, value, None)  :: bindings, e, p) 
       | `Variable s, Abstr _, _, true ->  
-          Rec ([s, value], expr, pos) 
+          Rec ([s, value, None], expr, pos) 
       | _ ->  
           polylet patt pos value expr in 
     fold_right folder bindings expression 
@@ -864,6 +864,12 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
     let desugar = desugar' lookup_pos
     and patternize = patternize' lookup_pos in
       match s with
+	| TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), dpos), t)  -> 
+            Define (name,
+                    Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype varmap t)],
+			 Variable (name, pos),
+			 pos),
+                    loc,pos)
 	| TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype varmap k, pos)
 	| FloatLit f  -> Float (f, pos)
 	| IntLit i    -> Integer (i, pos)
@@ -960,7 +966,7 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
 	| Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), ([l], pos')), pos'), ([r], pos')), pos')
 
 	| FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
-	| FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos')],
+	| FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos'), None],
 						     Variable (name, pos),
 						     pos)
 	| Block (es, exp) -> let es = 

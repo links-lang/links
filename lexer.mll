@@ -50,18 +50,40 @@ let count_newlines str =
 let isupper = function 'A'..'Z' -> true | _ -> false
 
 let keywords = [
-"switch" , SWITCH; "update"   ,  UPDATE;   "delete"    , DELETE;
-"insert" , INSERT; "into"     ,  INTO;     "values"    , VALUES;
-"client" , CLIENT; "server"   ,  SERVER;   "native"    , NATIVE;
-"where"  , WHERE;  "if"       ,  IF;       "else"      , ELSE;     
-"in"     , IN;     "fun"      ,  FUN;      "for"       , FOR;
-"escape" , ESCAPE; "handle"   ,  HANDLE;   "true"      , TRUE;
-"false"  , FALSE;  "table"    ,  TABLE;    "case"      , CASE;
-"from"   , FROM;   "with"     ,  WITH;     "by"        , BY;
-"unique" , UNIQUE; "orderby"  ,  ORDERBY;  "asc"       , ASC;
-"desc"   , DESC;   "database" ,  DATABASE; "receive"   , RECEIVE;
-"var"    , VAR;    "spawn"    ,  SPAWN;    "mu"        , MU;
-"alien"  , ALIEN;  "sig"      ,  SIG;      "as"        , AS;
+ "alien"    , ALIEN;
+ "as"       , AS;
+ "by"       , BY;
+ "case"     , CASE;
+ "client"   , CLIENT; 
+ "database" , DATABASE;
+ "delete"   , DELETE;
+ "else"     , ELSE; 
+ "escape"   , ESCAPE; 
+ "false"    , FALSE; 
+ "for"      , FOR;
+ "from"     , FROM; 
+ "fun"      , FUN; 
+ "handle"   , HANDLE; 
+ "if"       , IF; 
+ "in"       , IN; 
+ "insert"   , INSERT; 
+ "into"     , INTO; 
+ "mu"       , MU; 
+ "native"   , NATIVE;
+ "orderby"  , ORDERBY; 
+ "receive"  , RECEIVE;
+ "server"   , SERVER; 
+ "sig"      , SIG;
+ "spawn"    , SPAWN;
+ "switch"   , SWITCH; 
+ "table"    , TABLE; 
+ "true"     , TRUE;
+ "unique"   , UNIQUE; 
+ "update"   , UPDATE; 
+ "values"   , VALUES;
+ "var"      , VAR; 
+ "where"    , WHERE; 
+ "with"     , WITH; 
 ] 
 exception LexicalError of (string * Lexing.position)
 
@@ -127,7 +149,6 @@ rule lex lexers = parse
   | "&&"                                { AMPAMP }
   | "!"                                 { BANG }
   | '|'                                 { VBAR }
-  | '&'                                 { AMPER }
   | '~'                                 { Stack.push (regex' lexers) lexers; TILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }

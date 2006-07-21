@@ -51,9 +51,9 @@ let uniquify_expression : RewriteSyntax.rewriter =
         let name = gensym v in
           Some (Let (name, e, rename_var v name b, data))
     | Rec (vs, b, data) -> 
-        let bindings = List.map (fun (name, _) -> (name, gensym name)) vs in
+        let bindings = List.map (fun (name, _, _) -> (name, gensym name)) vs in
         let rename = List.fold_right (uncurry rename_var) bindings in
-          Some(Rec(List.map (fun (n, v) -> (List.assoc n bindings, rename v)) vs,
+          Some(Rec(List.map (fun (n, v, t) -> (List.assoc n bindings, rename v, t)) vs,
                      rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym lvar
@@ -130,7 +130,7 @@ let renaming : RewriteSyntax.rewriter =
       | Escape (v, _, _) when v = var -> true
       | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
-      | Rec (bindings, _, _) when mem var (map fst bindings) -> true
+      | Rec (bindings, _, _) when List.exists (fun (v,_,_) -> v = var) bindings -> true
       | other -> default other
     and combiner l = fold_left (||) false l 
     in reduce_expression binds (combiner -<- snd) 
@@ -649,7 +649,7 @@ let contains_no_extrefs : Syntax.expression -> bool =
   (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
 
 let recursivep : Syntax.expression -> bool = function
-  | Rec ([(name, fn)], Variable (v, _), _) when v = name 
+  | Rec ([(name, fn, t)], Variable (v, _), _) when v = name 
       -> List.mem name (freevars fn)
   | _ -> false
 
@@ -702,7 +702,7 @@ let inline program =
     List.fold_left 
       (fun program (name, rhs)  ->
          match rhs with
-           | Rec ([(name, Abstr (v, body, _))], _, _) ->
+           | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
                perform_function_inlining name v body program)
       program'
       fn_candidates
