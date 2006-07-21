@@ -479,7 +479,8 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
 	| `Mailbox t -> isn t
 	| `DB -> false
 	| `Recursive (var', t) ->
-	    is_negative (IntSet.add var' rec_vars) var t
+	    not (IntSet.mem var' rec_vars) &&
+	      is_negative (IntSet.add var' rec_vars) var t
 and is_negative_row : IntSet.t -> int -> row -> bool =
   fun rec_vars var (field_env, row_var) ->
     is_negative_field_env rec_vars var field_env || is_negative_row_var rec_vars var row_var
@@ -495,9 +496,7 @@ and is_negative_row_var : IntSet.t -> int -> row_var -> bool =
     | `RigidRowVar _
     | `RowVar _ -> false
     | `RecRowVar (var', row) ->
-	if IntSet.mem var' rec_vars then
-	  false
-	else
+	not (IntSet.mem var' rec_vars) &&
 	  is_negative_row (IntSet.add var' rec_vars) var row
     | `MetaRowVar point ->
 	is_negative_row rec_vars var (Unionfind.find point)
@@ -512,7 +511,7 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
 	| `Not_typed -> false
 	| `Primitive _ -> false
 	| `RigidTypeVar var'
-	| `TypeVar var' ->  var = var'
+	| `TypeVar var' -> var = var'
 	| `MetaTypeVar point ->
 	    isp (Unionfind.find point)
 	| `Function (t, t') ->
@@ -523,7 +522,8 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
 	| `Mailbox t -> isp t
 	| `DB -> false
 	| `Recursive (var', t) ->
-	    is_positive (IntSet.add var' rec_vars) var t
+	    not (IntSet.mem var' rec_vars) &&
+	      is_positive (IntSet.add var' rec_vars) var t
 and is_positive_row : IntSet.t -> int -> row -> bool =
   fun rec_vars var (field_env, row_var) ->
     is_positive_field_env rec_vars var field_env || is_positive_row_var rec_vars var row_var
@@ -536,13 +536,11 @@ and is_positive_field_env : IntSet.t -> int -> field_spec_map -> bool =
 		   ) field_env false
 and is_positive_row_var : IntSet.t -> int -> row_var -> bool =
   fun rec_vars var -> function
-    (* BUG: var = var' *)
-    | `RigidRowVar _
-    | `RowVar _ -> false
+    | `RowVar None -> false
+    | `RigidRowVar var'
+    | `RowVar (Some var') -> var = var'
     | `RecRowVar (var', row) ->
-	if IntSet.mem var' rec_vars then
-	  false
-	else
+	not (IntSet.mem var' rec_vars) &&
 	  is_positive_row (IntSet.add var' rec_vars) var row
     | `MetaRowVar point ->
 	is_positive_row rec_vars var (Unionfind.find point)
