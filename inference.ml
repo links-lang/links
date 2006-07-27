@@ -58,7 +58,6 @@ let rec eq_types : (datatype * datatype) -> bool =
        | `Variant l, `Variant r -> eq_rows (l, r)
        | `List t, `List t' -> eq_types (t, t')
        | `Mailbox t, `Mailbox t' -> eq_types (t, t')
-       | `DB, `DB -> true
        | _, _ -> false)
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
@@ -217,7 +216,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
       | `List t, `List t' -> unify' rec_env (t, t')
       | `Mailbox t, `Mailbox t' -> unify' rec_env (t, t')
-      | `DB, `DB -> ()
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
        debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
@@ -601,7 +599,6 @@ let instantiate : environment -> string -> datatype = fun env var ->
 		  `List (inst rec_env elem_type)
 	      | `Mailbox (elem_type) ->
 		  `Mailbox (inst rec_env elem_type)
-	      | `DB -> `DB
 	and inst_row : inst_env -> row -> row = fun rec_env row ->
 	  let rec_type_env, rec_row_env = rec_env in
 	  let field_env, row_var = flatten_row row in
@@ -712,7 +709,6 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
 	    get_quantifiers bound_vars elem_type
 	| `Mailbox (elem_type) ->
 	    get_quantifiers bound_vars elem_type
-	| `DB -> []
 
 (** generalize: 
     Universally quantify any free type variables in the expression.
@@ -974,7 +970,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   | Database (params, pos) ->
       let params = type_check env params in
         unify (type_of_expression params, `List(`Primitive `Char));
-        Database (params, (pos, `DB, None))
+        Database (params, (pos, `Primitive `DB, None))
   | Table (db, s, query, pos) ->
       let row =
 	(List.fold_right
@@ -984,7 +980,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let datatype =  `List (`Record row) in
       let db = type_check env db in
-	unify (type_of_expression db, `DB);
+	unify (type_of_expression db, `Primitive `DB);
 	unify (datatype, `List (`Record (ITO.make_empty_open_row ())));
         Table (db, s, query, (pos, datatype, None))
   | SortBy(expr, byExpr, pos) ->

@@ -89,7 +89,7 @@ let xml = `List (`Primitive `XMLitem)
 (* Type printers *)
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XMLitem -> "XMLitem" | `Abstract s -> s
+  | `XMLitem -> "XMLitem" | `DB -> "Database" | `Abstract s -> s
 
 exception Not_tuple
 
@@ -177,7 +177,6 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
      | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
-     | `DB             ->                   "Database"
      | `List (`Primitive `Char) -> "String"
      | `List (`Primitive `XMLitem) -> "XML"
      | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
@@ -235,7 +234,6 @@ let rec type_vars : datatype -> int list = fun datatype ->
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
     | `List (datatype)             -> aux datatype
     | `Mailbox (datatype)          -> aux datatype
-    | `DB                      -> []
   in unduplicate (=) (aux datatype)
 and row_type_vars (field_env, row_var) =
   let field_type_vars =
@@ -272,7 +270,6 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
   | `List (datatype)         -> free_bound_type_vars datatype
   | `Mailbox (datatype)      -> free_bound_type_vars datatype
-  | `DB                      -> IntSet.empty
 and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
@@ -322,7 +319,6 @@ let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun va
 	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
 	| `List (datatype)         -> `List (ftv datatype)
 	| `Mailbox (datatype)      -> `Mailbox (ftv datatype)
-	| `DB                      -> `DB
   and freshen_row bound_vars (field_env, row_var) =
     let field_env =
       StringMap.map (function
@@ -452,7 +448,6 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
         (* no children *)
       | `Not_typed
       | `Primitive _
-      | `DB
       | `TypeVar  _ -> None
           (* one child *)
       | `Recursive (v, k) -> (match f k with 

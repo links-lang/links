@@ -301,7 +301,7 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
     possible. To be considered for optimisation, a condition must be
     of the form '{i if cond then [] else ...}' or '{i if cond then
     ... else []}', where '{i cond}' is a comparison between a
-    constant and a variable or between two variables (comming from the
+    constant and a variable or between two variables (coming from the
     database). The optimisation will stop looking for conditions in
     the body expression if it encouters any other node than a
     condition, a {i let}, a record selection or a collection

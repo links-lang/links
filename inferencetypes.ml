@@ -49,7 +49,6 @@ let
 	    free_type_vars' (IntSet.add var rec_vars) body
       | `List (datatype)             -> free_type_vars' rec_vars datatype
       | `Mailbox (datatype)          -> free_type_vars' rec_vars datatype
-      | `DB                      -> []
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> row -> int list = 
     fun rec_vars (field_env, row_var) ->
@@ -316,7 +315,6 @@ let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) t ->
 	    `MetaTypeVar point
   | `List (t) -> `List (itoft t)
   | `Mailbox (t) -> `Mailbox (itoft t)
-  | `DB -> `DB
 and inference_field_spec_of_field_spec var_maps  = function
   | `Present t -> `Present (inference_type_of_type var_maps t)
   | `Absent -> `Absent
@@ -378,7 +376,6 @@ let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fu
 	  `Recursive (var, type_of_inference_type (IntSet.add var rec_vars) t)
     | `List (t) -> `List (type_of_inference_type rec_vars t)
     | `Mailbox (t) -> `Mailbox (type_of_inference_type rec_vars t)
-    | `DB -> `DB
     | `MetaTypeVar point -> type_of_inference_type rec_vars (Unionfind.find point)
 and field_spec_of_inference_field_spec = fun rec_vars ->
   function
@@ -477,7 +474,6 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
 	| `Variant row -> isnr row
 	| `List t -> isn t
 	| `Mailbox t -> isn t
-	| `DB -> false
 	| `Recursive (var', t) ->
 	    not (IntSet.mem var' rec_vars) &&
 	      is_negative (IntSet.add var' rec_vars) var t
@@ -520,7 +516,6 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
 	| `Variant row -> ispr row
 	| `List t -> isp t
 	| `Mailbox t -> isp t
-	| `DB -> false
 	| `Recursive (var', t) ->
 	    not (IntSet.mem var' rec_vars) &&
 	      is_positive (IntSet.add var' rec_vars) var t

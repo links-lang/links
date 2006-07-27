@@ -682,7 +682,7 @@ let desugar_datatype varmap k =
 	| ListType k -> `List (desugar varmap k)
 	| MailboxType k -> `Mailbox (desugar varmap k)
 	| PrimitiveType k -> `Primitive k
-	| DBType -> `DB
+	| DBType -> `Primitive `DB
   and desugar_row varmap (fields, rv) =
     let lookup = flip StringMap.find varmap in
     let seed = match rv with
@@ -742,9 +742,9 @@ type phrasenode =
 (* Database operations *)
   | DatabaseLit of (string)
   | TableLit of (string * datatype * bool (* unique *) * phrase)
-  | DBUpdate of (string * phrase * phrase)
-  | DBDelete of (string * phrase * phrase)
-  | DBInsert of (string * phrase * phrase)
+(*  | DBUpdate of (string * phrase * phrase)*)
+  | DBDelete of (phrase * phrase * phrase)
+  | DBInsert of (phrase * phrase * phrase)
 (* Xml *)
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
@@ -842,7 +842,7 @@ let rec get_type_vars : phrase -> quantifier list =
 
 	  | DatabaseLit s -> empty
 	  | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
-	  | DBUpdate (table, db, rows)
+(*	  | DBUpdate (table, db, rows)*)
 	  | DBDelete (table, db, rows)
 	  | DBInsert (table, db, rows) as op -> flatten [etv db; etv rows]
 
@@ -936,16 +936,16 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
 	| UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
 	| ListLit  [] -> Nil (pos)
 	| ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
-	| DBUpdate (table, db, rows)
+(*	| DBUpdate (table, db, rows)*)
 	| DBDelete (table, db, rows)
 	| DBInsert (table, db, rows) as op -> 
 	    let fn =  match op with
-              | DBUpdate _ -> "updaterows"
+(*              | DBUpdate _ -> "updaterows"*)
               | DBDelete _ -> "deleterows"
               | DBInsert _ -> "insertrow" 
               | _ -> assert false in
 	      desugar (FnAppl ((Var fn, pos'),
-			       ([StringLit table, pos'; 
+			       ([table; 
 				 db;
 				 rows
 				], pos')), pos')

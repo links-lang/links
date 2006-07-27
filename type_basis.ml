@@ -4,8 +4,7 @@ open Utility
 
 type type_var_set = Utility.IntSet.t
 
-
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem 
+type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `DB
                  | `Abstract of string ]
     deriving (Show, Pickle)
 
@@ -18,8 +17,7 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Recursive of (int * 'typ)
   | `List of ('typ)
-  | `Mailbox of ('typ)
-  | `DB ]
+  | `Mailbox of ('typ) ]
     deriving (Show, Pickle)
 
 type 'a stringmap = 'a Utility.StringMap.t

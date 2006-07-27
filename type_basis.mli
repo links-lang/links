@@ -3,7 +3,7 @@
 type type_var_set = Utility.IntSet.t
 
 (* Types for datatypes *)
-type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `Abstract of string ]
+type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `DB | `Abstract of string ]
 
 type ('typ, 'row) type_basis = [
   | `Not_typed
@@ -14,8 +14,7 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Recursive of (int * 'typ)
   | `List of ('typ)
-  | `Mailbox of ('typ)
-  | `DB ]
+  | `Mailbox of ('typ) ]
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
 type 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t

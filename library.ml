@@ -464,7 +464,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             | _ -> failwith "Internal error unboxing args (insertrow)")),
    let r', r = fresh_row () in
      [r'],
-   tuplify [Types.string_type; `DB; `Record r] --> unit_type);
+   tuplify [Types.string_type; `Primitive `DB; `Record r] --> unit_type);
   
   "deleterows", 
   (`Server
@@ -484,7 +484,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             | _ -> failwith "Internal error unboxing args (deleterows)")),
    let r', r = fresh_row () in
      [r'],
-   tuplify [Types.string_type; `DB; `List (`Record r)] --> unit_type);
+   tuplify [Types.string_type; `Primitive `DB; `List (`Record r)] --> unit_type);
 
     "updaterows", 
   (p1 (function
@@ -509,7 +509,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    let v', v = fresh_row () in
    let u', u = fresh_row () in
      [u'; v'],
-   tuplify [Types.string_type; `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
+   tuplify [Types.string_type; `Primitive `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
 *)
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);

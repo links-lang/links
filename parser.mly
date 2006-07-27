@@ -127,6 +127,8 @@ primary_expression:
 | xml                                                          { $1 }
 | parenthesized_thing                                          { $1 }
 | FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
+| DATABASE STRING                                              { DatabaseLit $2, pos() }
+| TABLE VARIABLE datatype unique exp                           { TableLit ($2, $3, $4, $5), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -225,9 +227,9 @@ send_expression:
 
 db_expression:
 | send_expression                                              { $1 }
-| UPDATE LPAREN STRING COMMA exp RPAREN BY exp                 { DBUpdate ($3, $5, $8), pos() }
-| DELETE FROM LPAREN STRING COMMA exp RPAREN VALUES exp        { DBDelete ($4, $6, $9), pos() }
-| INSERT INTO LPAREN STRING COMMA exp RPAREN VALUES exp        { DBInsert ($4, $6, $9), pos() }
+/*| UPDATE LPAREN STRING COMMA exp RPAREN BY exp                 { DBUpdate ($3, $5, $8), pos() }*/
+| DELETE FROM LPAREN exp COMMA exp RPAREN VALUES exp           { DBDelete ($4, $6, $9), pos() }
+| INSERT INTO LPAREN exp COMMA exp RPAREN VALUES exp           { DBInsert ($4, $6, $9), pos() }
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }
