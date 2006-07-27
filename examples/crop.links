@@ -1,4 +1,7 @@
-fun dragging(left, top, width, height, mdownX, mdownY) client {
+#!/home/s0567141/links/links -d
+
+fun dragging(offsetLeft, offsetTop, left, top, width, height, 
+             mdownX, mdownY) client {
   receive {
     case MouseMove(x, y) -> {
       var frame = domGetRefById("cropping-frame");
@@ -6,21 +9,40 @@ fun dragging(left, top, width, height, mdownX, mdownY) client {
                              intToString(x - mdownX + left));
       domSetStyleAttrFromRef(frame, "top",
                              intToString(y - mdownY + top));
-      dragging(left, top, width, height, mdownX, mdownY)
+
+      var pictureFrame = domGetRefById("picture-frame");
+
+      # FIXME: should actually be a method that sums up the offsetXxxxs 
+      # of all ancestor nodes.
+      var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
+      var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
+
+      var preview = domGetRefById("crop-preview");
+      domSetStyleAttrFromRef(preview, "marginTop",
+                             intToString(-(y - mdownY + top - offsetTop)));
+      domSetStyleAttrFromRef(preview, "marginLeft",
+                             intToString(-(x - mdownX + left - offsetLeft)));
+
+      dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
     };
-    case MouseUp(x, y) -> {
-      debug("got mouseup!");
-      frameMgr(left + x - mdownX, top + y - mdownY, width, height)
-    };
-    case _ -> {
-      dragging(left, top, width, height, mdownX, mdownY)
-    };
+    case MouseUp(x, y) ->
+      frameMgr(offsetLeft, offsetTop,
+               left + x - mdownX, top + y - mdownY,
+               width, height);
+    case _ -> 
+      dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
+    ;
   }
 }
 
-fun resizing(left, top, width, height, corner) client {
+fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
   receive {
     case MouseMove(x, y) -> {
+
+      var pictureFrame = domGetRefById("picture-frame");
+      var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
+      var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
+
       var frame = domGetRefById("cropping-frame");
       var frameSizer = domGetRefById("white-border");
       var (l, t, w, h) = 
@@ -30,35 +52,47 @@ fun resizing(left, top, width, height, corner) client {
           case SW -> (x, top, width - (x - left), y-top);
           case SE -> (left, top, x-left, y-top);
         };
-      domSetStyleAttrFromRef(frame, "left", intToString(l) ++ "px");
-      domSetStyleAttrFromRef(frame, "top", intToString(t) ++ "px");
-      domSetStyleAttrFromRef(frameSizer, "width", intToString(w) ++ "px");
-      domSetStyleAttrFromRef(frameSizer, "height", intToString(h) ++ "px");
-      resizing(l, t, w, h, corner)
+      domSetStyleAttrFromRef(frame, "left", intToString(l-offsetLeft));
+      domSetStyleAttrFromRef(frame, "top", intToString(t));
+      domSetStyleAttrFromRef(frameSizer, "width", intToString(w));
+      domSetStyleAttrFromRef(frameSizer, "height", intToString(h));
+
+      var previewFrame = domGetRefById("crop-preview-frame");
+      domSetStyleAttrFromRef(previewFrame, "width",
+                             intToString(w));
+      domSetStyleAttrFromRef(previewFrame, "height",
+                             intToString(h));
+      var preview = domGetRefById("crop-preview");
+      domSetStyleAttrFromRef(preview, "marginTop",
+                             intToString(-t+offsetTop));
+      domSetStyleAttrFromRef(preview, "marginLeft",
+                             intToString(-l+offsetLeft));
+
+      resizing(offsetLeft, offsetTop, l, t, w, h, corner)
     };
     case MouseUp(x, y) -> {
-      frameMgr(left, top, width, height)
+      frameMgr(offsetLeft, offsetTop, left, top, width, height);
     };
     case _ -> {
-      resizing(left, top, width, height, corner)
+      resizing(offsetLeft, offsetTop, left, top, width, height, corner)
     };
   }
 }
 
-fun frameMgr(left, top, width, height) client {
+fun frameMgr(offsetLeft, offsetTop, left, top, width, height) client {
   receive {
     case MouseDown(x, y) ->
-      dragging(left, top, width, height, x, y);
+      dragging(offsetLeft, offsetTop, left, top, width, height, x, y);
     case StartResize(corner) ->
-      resizing(left, top, width, height, corner);
+      resizing(offsetLeft, offsetTop, left, top, width, height, corner);
     case _ ->
-      frameMgr(left, top, width, height);
+      frameMgr(offsetLeft, offsetTop, left, top, width, height);
   }
 }
 
 fun makeCroppingFrame(left, top, width, height) client{
-  var frameMgr = spawn {frameMgr(left, top, width, height)};
-  <div id="cropping-frame"
+  var frameMgr = spawn {frameMgr(left, top, left, top, width, height)};
+  <div id="cropping-frame"    # need a gensym of sorts here
     style="position: absolute;
            display: block;
            left: {intToString(left)}px;
@@ -67,8 +101,8 @@ fun makeCroppingFrame(left, top, width, height) client{
            cursor: pointer"
     l:onmousedown="{frameMgr ! MouseDown(eventGetPageX(event),
                                          eventGetPageY(event))}"
-    l:onmouseuppage="{  frameMgr ! MouseUp  (eventGetPageX(event),
-                                             eventGetPageY(event))}"
+    l:onmouseuppage="{frameMgr ! MouseUp  (eventGetPageX(event),
+                                           eventGetPageY(event))}"
     l:onmousemovepage="{frameMgr ! MouseMove(eventGetPageX(event),
                                              eventGetPageY(event))}"
 >
@@ -81,16 +115,16 @@ fun makeCroppingFrame(left, top, width, height) client{
     </div>
     <div id="nw-resize"
       l:onmousedown="{frameMgr ! StartResize(NW)}"
-      style="position: absolute; display: block; cursor: nw-resize; top: 0px; left: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+      style="position: absolute; display: block; cursor: nw-resize; top: 1px; left: 1px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
     <div id="ne-resize"
       l:onmousedown="{frameMgr ! StartResize(NE)}"
-      style="position: absolute; display: block; cursor: ne-resize; top: 0px; right: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+      style="position: absolute; display: block; cursor: ne-resize; top: 1px; right: 1px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
     <div id="sw-resize"
       l:onmousedown="{frameMgr ! StartResize(SW)}"
-      style="position: absolute; display: block; cursor: sw-resize; bottom: 0px; left: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+      style="position: absolute; display: block; cursor: sw-resize; bottom: 1px; left: 1px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
     <div id="se-resize"
       l:onmousedown="{frameMgr ! StartResize(SE)}"
-      style="position: absolute; display: block; cursor: se-resize; bottom: 0px; right: 0px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
+      style="position: absolute; display: block; cursor: se-resize; bottom: 1px; right: 1px; background-color: rgb(255, 255, 255); width: 6px; height: 6px;" />
   </div>
 }
 
@@ -100,14 +134,21 @@ fun makeCroppingFrame(left, top, width, height) client{
   <h1> Home of Robert Louis Stevenson </h1>
 
   <div>
-    <div>
-    <img src="17-Heriot-Row.jpeg" />
+    <div id="picture-frame">
 
-    { makeCroppingFrame(16, 112, 32, 32) }
+      <img src="17-Heriot-Row.jpeg" />
+      { makeCroppingFrame(16, 112, 32, 32) }
     </div>
   </div>
 
   Drag the cropping frame around the image; drag the wee handles in
   the corners to resize it.
+
+  <div id="crop-preview-frame" 
+       style="border: 1px solid black; overflow: hidden; 
+              width: 32; height: 32">
+    <img id="crop-preview" style="display: block;"
+         src="17-Heriot-Row.jpeg" />
+  </div>
 
 </body>

@@ -31,6 +31,7 @@ type code = | Var   of string
             | Lst   of (code list)
             | Bind  of (string * code * code)
             | Seq   of (code * code)
+            | Die   of (string)
             | Nothing
  deriving (Show)
 
@@ -197,6 +198,7 @@ let rec local_names : code -> string list = function
   | Var _
   | Lit _
   | Fn _
+  | Die _
   | Nothing -> []
   | Call (c, cs) -> local_names c @ List.concat (map local_names cs)
   | Cond (a, b, c) -> local_names a @ local_names b @ local_names c
@@ -251,6 +253,7 @@ let rec show : code -> string =
           show value ^", "^ show body ^")"
       | Seq (l, r) -> "(" ^ show l ^ ", " ^ show r ^ ")"
       | Nothing -> ""
+      | Die msg -> "error('" ^ msg ^ "', __kappa)"
 
 (* create a string literal, quoting special characters *)
 let string_quote s = 
@@ -618,10 +621,10 @@ let rec generate : 'a expression' -> code =
                              Call (Var "_project",
                                    [strlit l; Var name]),
                              Bind (etcv, 
-                                   Var name,
+                                   Call(Var "_remove", [Var name; strlit l]),
                                    Call(b_cps, [Var "__kappa"]))))))]))
 
-  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv ->
+  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv -> (* When is lv != lv ? *)
       (* Could use dot-notation instead of project call *)
       let v_cps = generate v in
         Fn(["__kappa"],
@@ -675,7 +678,9 @@ let rec generate : 'a expression' -> code =
 		     Var "__kappa")
 	       ])
 	)
-  | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
+  | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
+            (* `Wrong' happens to correspond to pattern matching now, 
+               but perhaps not in the future? *)
   | Alien _ -> Nothing
 
   (* Unimplemented stuff *)
@@ -782,11 +787,6 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
   gives idy as the cont. *)
 and generate_noncps expr = Call(generate expr, [idy_js])
 and end_thread expr = Call(expr, [idy_js])
-(* generate_easy_cps: generates CPS code for expr and wraps it to
-   accept a continuation kappa and immediately pass the result to 
-   kappa. should only be used on trivial expressions--w/o subexprs *)
-and generate_easy_cps expr = 
-        Fn(["__kappa"], Call(Var "__kappa", [generate expr]))
 
 (* generate direct style code *)
 and generate_direct_style : 'a expression' -> code =
