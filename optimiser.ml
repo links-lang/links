@@ -661,11 +661,15 @@ let is_inline_candidate= function
   | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
   | _ -> false
 
-let find_inline_candidates es : (string * expression) list = 
+let find_inline_candidates es : (string * expression * location) list = 
   let is_inline_candidate = function
-    | Define (name, rhs,_,_) as e when is_inline_candidate e -> [name, rhs]
+    | Define (name, rhs, location, _) as e when is_inline_candidate e -> [name, rhs, location]
     | _ -> []
   in Utility.concat_map is_inline_candidate es
+
+let location_matches location = function
+  | Define (_, _, location', _) -> location=location'
+  | _ -> false
 
 let replace name rhs : RewriteSyntax.rewriter = function
   | Variable (n, _) when n = name -> Some rhs
@@ -673,37 +677,46 @@ let replace name rhs : RewriteSyntax.rewriter = function
 
 let replace name rhs e = fromOption e (RewriteSyntax.bottomup (replace name rhs) e)
 
-let perform_value_inlining name rhs e = 
-  List.map (replace name rhs)   e
+let perform_value_inlining location name rhs =
+  List.map (fun exp ->
+    if location_matches location exp then
+      replace name rhs exp
+    else
+      exp)
 
 let replaceApplication name var body : RewriteSyntax.rewriter = function
   | Apply (Variable (n, _), p, d) when n = name -> Some (Let (var, p, body, d))
   | _ -> None
 
-let perform_function_inlining name var rhs = 
+let perform_function_inlining location name var rhs = 
   List.map
-    (fun e -> fromOption e (RewriteSyntax.bottomup (replaceApplication name var rhs) e))
+    (fun exp -> fromOption exp (
+       if location_matches location exp then
+	 RewriteSyntax.bottomup (replaceApplication name var rhs) exp
+       else
+	 None))
 
 
 let inline program = 
   let valuedefp = function
-    | _, Rec _ -> false
+    | _, Rec _, _ -> false
     | _        -> true
   in
   let candidates = find_inline_candidates program in
   let value_candidates, fn_candidates = List.partition valuedefp candidates in
   let program' = 
     List.fold_right 
-      (fun (name, rhs) program -> perform_value_inlining name rhs program)
+      (fun (name, rhs, location) program ->
+	 perform_value_inlining location name rhs program)
       value_candidates
       program
   in 
   let program'' = 
     List.fold_left 
-      (fun program (name, rhs)  ->
+      (fun program (name, rhs, location)  ->
          match rhs with
            | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
-               perform_function_inlining name v body program)
+	       perform_function_inlining location name v body program)
       program'
       fn_candidates
   in program''
