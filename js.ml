@@ -39,7 +39,8 @@ let code_freevars : code -> string list =
   let rec aux bound = function
     | Var x when List.mem x bound -> []
     | Var x -> [x]
-    | Nothing -> []
+    | Nothing
+    | Die _
     | Lit _ -> []
     | Defs (ds) -> concat_map (aux ((List.map fst ds) @ bound)) (List.map snd ds)
     | Fn (args, body) -> aux (args @ bound) body
@@ -80,6 +81,7 @@ let perhaps_process_children (f : code -> code option) :  code -> code option =
     function
       | Var _
       | Nothing
+      | Die _
       | Lit _ -> None
       | Defs ds -> 
           let names, vals = split ds in 
@@ -227,6 +229,7 @@ let rec show : code -> string =
     | Lst _
     | Seq _
     | Bind _
+    | Die _
     | Nothing as c -> show c
     | c -> "(" ^ show c ^ ")" in
   let show_def = function
