@@ -54,11 +54,14 @@ let remove_toplevel_bindings toplevel env =
   filter (fun pair -> mem pair toplevel) env
 
 let lookup toplevel locals name = 
-  match lookup name locals with
-    | Some v -> v
-    | None -> match lookup name toplevel with
-        | Some v -> v
-        | None -> Library.primitive_stub name
+  try 
+    (match lookup name locals with
+      | Some v -> v
+      | None -> match lookup name toplevel with
+          | Some v -> v
+          | None -> Library.primitive_stub name)
+  with Not_found -> 
+    failwith("Internal error: variable \"" ^ name ^ "\" not in environment")
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -126,7 +129,7 @@ let rec less l r =
          with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
     | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
 
-let less_or_equal l r = equal l r || less l r
+let less_or_equal l r = less l r || equal l r
         
 let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
@@ -224,8 +227,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	           value which will later be applied *)
                 interpret globals locals param
 	          (FuncApply(value, locals) :: cont)
-            | (FuncApply(func, locals)) -> 
-                (match func with
+            | (FuncApply(func, locals)) ->  
+               (match func with
                    | `Function (var, fnlocals, fnglobals, body) ->
 		       (* Interpret the body in the following environments:
 		          locals are augmented with function locals and
@@ -294,9 +297,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
-	               apply_cont globals cont (let args = charlist_as_string value in
-                                                let driver, params = parse_db_string args in
-                                                  `Database (db_connect driver params))
+	               apply_cont globals cont
+                         (let args = charlist_as_string value in
+                          let driver, params = parse_db_string args in
+                            `Database (db_connect driver params))
                    | QueryOp(query, datatype) ->
                        let result = 
                          match value with
