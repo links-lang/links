@@ -158,32 +158,32 @@ type basetype = [
     deriving (Show, Pickle)
 
 type contin_frame = 
-    | Definition of (environment * string)
-    | FuncArg of (expression * environment) (* FIXME: This is twiddled *)
+  | Definition of (environment * string)
+  | FuncArg of (rexpr * environment) (* FIXME: This is twiddled *)
   | FuncApply of (result * environment )  (* FIXME: This is twiddled *)
   | LetCont of (environment * 
-		  string * expression)
+		  string * rexpr)
   | BranchCont of (environment * 
-		     expression * expression)
+		     rexpr * rexpr)
   | BinopRight of (environment * 
-		     binop * expression)
+		     binop * rexpr)
   | BinopApply of (environment * 
 		     binop * result)
   | UnopApply of (environment * unop )
-  | RecSelect of (environment * string * string * string * expression)
+  | RecSelect of (environment * string * string * string * rexpr)
   | CollExtn of (environment * 
-		   string * expression * 
+		   string * rexpr * 
 		   result list list * result list)
   | StartCollExtn of (environment *
-			string * expression)
+			string * rexpr)
   | XMLCont of (environment 
                 * string                     (* tag *)
                 * string option              (* attr name, if any *)
                 * xml                        (* child nodes *)
-                * (string * expression) list (* unevaluated attributes *)
-                * expression list            (* unevaluated elements *)
+                * (string * rexpr) list (* unevaluated attributes *)
+                * rexpr list            (* unevaluated elements *)
                 )
-  | Ignore of (environment * expression )
+  | Ignore of (environment * rexpr )
 
   | Recv of (environment)
 and result = [
@@ -274,17 +274,19 @@ and charlist_as_string chlist =
 and string_of_result : result -> string = function
   | #basetype as p -> string_of_primitive p
   | `PFunction (name, _) -> name
-  | `Function (_, _, _, Placeholder (str, _)) -> "fun (" ^ str ^ ")"
+  | `Function (_, _, _, Placeholder (str, _)) -> "fun [" ^ str ^ "]"
   | `Function _ -> "fun"
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
-         "(" ^ String.concat "," (map (fun (label, value) -> label ^ "=" ^ string_of_result value) fields) ^ ")")
+         "(" ^ mapstrcat "," (fun (label, value) -> 
+                                label ^ "=" ^ string_of_result value) 
+           fields ^ ")")
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_result value ^ ")"
   | `List [] -> "[]"
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
-  | `List ((`XML _)::_ as elems) -> String.concat "" (map string_of_xresult elems)
+  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_xresult elems
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
   | `Continuation cont -> pp_continuation cont
 and string_of_primitive : basetype -> string = function
