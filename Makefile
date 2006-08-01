@@ -2,20 +2,20 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-ifdef BUILD_SQLITE
+ifdef SQLLITE_LIBDIR
    DB_CODE    += lite_database.ml
    DB_AUXLIBS += $(SQLLITE_LIBDIR)
    DB_CLIBS   += cclib lsqlite_stubs
    DB_LIBS    += sqlite
 endif
 
-ifdef BUILD_MYSQL
+ifdef MYSQL_LIBDIR
    DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
 
-ifdef BUILD_POSTGRESQL
+ifdef POSTGRESQL_LIBDIR
    DB_CODE    += pg_database.ml
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
