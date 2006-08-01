@@ -15,7 +15,6 @@ fun query(n,c) {
 }
 
 fun page(n, c) {
-  var next = n+1;
   var title = stringToXml("Results: page "++ intToString(n));
   <html>
     <head><title>{title}</title></head>
@@ -27,7 +26,6 @@ fun page(n, c) {
        </dl>
        {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
        <a l:href="{page(n+1,c)}">next</a>
-       <a l:href="{page(next,c)}">next</a>
     </body>
   </html>
 }
