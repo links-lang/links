@@ -456,9 +456,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun cookieName -> 
          try 
            let cookieName = charlist_as_string cookieName in
-             prerr_endline "hi";
              let cookie_header = getenv "HTTP_COOKIE" in
-               prerr_endline(cookie_header);
                let cookies = Str.split (Str.regexp ",") cookie_header in
                let cookies = map (fun str -> 
                                     let [nm; vl] = Str.split (Str.regexp "=") str in 
