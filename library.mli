@@ -9,6 +9,8 @@ val messages : (pid, result Queue.t) Hashtbl.t
 val current_pid : pid ref
 val debug_process_status : unit -> unit
 
+val http_headers : (string * string) list ref
+
 (* Primitive functions and values *)
 type continuationized_val = [
   result

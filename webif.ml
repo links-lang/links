@@ -1,7 +1,6 @@
 open Utility
 open Result
 
-
 type query_params = (string * result) list
 
 type web_request = ContInvoke of continuation * query_params
@@ -11,21 +10,28 @@ type web_request = ContInvoke of continuation * query_params
                    | CallMain
 
 (*
-  [REMARKS]
+  [REMARKS (sl)]
    - Currently print_http_response outputs the headers and body in
-   one go.
+     one go.
    - At some point in the future we may want to consider implementing
-   some form of incremental output.
+     some form of incremental output.
    - Flushing the output stream prematurely (e.g. after outputting
-   the headers and newline) appears to break client calls.
+     the headers and newline) appears to break client calls.
+  [FURTHER REMARKS (eekc)]
+   - Generally, many of the HTTP response headers will only be
+     determined by running the program. It's fairly standard for a
+     web app to wait until it knows there are no more headers coming
+     (e.g., the program is finished) before printing the headers.
 *)
 
 (* output the headers and content to stdout *)
 let print_http_response headers body =
-  List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
-  print_endline "";
-  print_string body
-
+  let headers = headers @ !Library.http_headers in
+(*   let headers = ("Content-type: " ^ content_type) :: headers in  *)
+    List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
+    print_endline "";
+    print_string body
+      
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program defs =
   let is_client_def = function
@@ -51,7 +57,6 @@ let is_client_program defs =
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
     List.exists is_client_def defs || List.exists is_client_prim prims
-          
 
 (* Read in and optimise the program *)
 let read_and_optimise_program filename : (Syntax.expression list) = 
@@ -175,31 +180,28 @@ let client_return_req env cgi_args =
 let perform_request program globals main req =
   match req with
     | ContInvoke (cont, params) ->
-	let f = print_http_response [("Content-type", "text/html")]
-	in
-          f (Result.string_of_result 
-               (Interpreter.apply_cont_safe globals cont (`Record params)))
+        print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result 
+             (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        let f = print_http_response [("Content-type", "text/html")]
-	in
-          f (Result.string_of_result 
+        print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result 
              (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
-	let f = print_http_response [("Content-type", "text/plain")]
-	in
-          f (Utility.base64encode 
+        print_http_response [("Content-type", "text/plain")]
+          (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
         let cont = [Result.FuncApply (func, [])] in
-        let f = print_http_response [("Content-type", "text/plain")] in
-	  f (Utility.base64encode
+	  print_http_response [("Content-type", "text/plain")]
+            (Utility.base64encode
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
-               Js.generate_program program main
+             Js.generate_program program main
            else Result.string_of_result (snd (Interpreter.run_program globals [main])))
 
 let error_page_stylesheet = 
@@ -211,7 +213,7 @@ let error_page body =
     body ^ 
     "\n  </body></html>"
 
-let serve_requests filename = 
+let serve_request filename = 
   try 
     Settings.set_value Performance.measuring true;
     Pervasives.flush(Pervasives.stderr);
@@ -240,6 +242,6 @@ let serve_requests filename =
       exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_requests filename =
+let serve_request filename =
   Errors.display_errors_fatal stderr
-    serve_requests filename
+    serve_request filename

@@ -119,7 +119,7 @@ let run_file filename =
   if testenv "REQUEST_METHOD" then
     (Settings.set_value interacting false;
      Settings.set_value web_mode true;
-     Webif.serve_requests filename)
+     Webif.serve_request filename)
   else
     (ignore(evaluate Parse.parse_file stdenvs filename);
     ())

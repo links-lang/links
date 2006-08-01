@@ -18,6 +18,10 @@ and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtb
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 
+(* http_headers: this is state for the webif interface. it's rubbish
+   having it here. *)
+let http_headers = ref []
+
 let debug_process_status () =
   prerr_endline("processes : " ^ 
                   string_of_int (Queue.length suspended_processes));
@@ -147,14 +151,22 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
    ([], (`Primitive `Int) --> xml));
   
+  "toplevel",   (* or `exit' *)
+  (`Continuation [],
+   (datatype "a -> b")
+  );
+
   "send",
   (p2 (fun pid msg -> 
          let pid = int_of_num (unbox_int pid) in
            (try 
               Queue.push msg (Hashtbl.find messages pid)
-            with Not_found -> failwith ("Internal error while sending message: no mailbox for " ^ string_of_int pid));
+            with Not_found -> 
+              (* Is this really an internal error? Maybe target has finished? *)
+              failwith ("Internal error while sending message: no mailbox for "
+                        ^ string_of_int pid));
            (try 
-              Queue.push (Hashtbl.find blocked_processes pid) suspended_processes;
+              Queue.push(Hashtbl.find blocked_processes pid) suspended_processes;
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
@@ -335,7 +347,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domRemoveRef",
   (`Client, datatype "DomRef -> ()");
 
-
   "domReplaceChildren",
   (`Client, datatype "(XML, DomRef) -> ()");
 
@@ -429,6 +440,39 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 (* getCharCode : Event -> Char *)
   "eventGetCharCode",
   (`Client, datatype "Event -> Char");
+
+(* Cookies *)
+  "setCookie",
+  (p2 (fun cookieName cookieVal ->
+         let cookieName = charlist_as_string cookieName in
+         let cookieVal = charlist_as_string cookieVal in
+           http_headers := 
+             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_headers;
+           `Record []
+      ),
+   datatype "String -> String -> unit");
+
+  "getCookie",
+  (p1 (fun cookieName -> 
+         try 
+           let cookieName = charlist_as_string cookieName in
+             prerr_endline "hi";
+             let cookie_header = getenv "HTTP_COOKIE" in
+               prerr_endline(cookie_header);
+               let cookies = Str.split (Str.regexp ",") cookie_header in
+               let cookies = map (fun str -> 
+                                    let [nm; vl] = Str.split (Str.regexp "=") str in 
+                                      nm, vl) cookies in
+               let the_cookie = snd (find (fun (nm, vl) -> nm = cookieName) 
+                                       cookies) in
+                 match string_as_charlist the_cookie with
+                     `List _ as result -> result
+                   | _ -> failwith "Internal Error library l469"
+         with Not_found ->
+           `List []
+      ),
+   datatype "String -> String");
+
 
 (* [SL] Aarghhh... this is too dangerous *)
 (*
@@ -564,7 +608,7 @@ let rec continuationize : primitive -> continuationized_val = function
                             | #result as r -> (applycont cont r :> continuationized_val)
                             | prim         -> continuationize prim)
     | (#result as a) -> a
-
+        
 let continuationize : located_primitive -> continuationized_val option = function
   | `Client -> None
   | `Server p
@@ -579,7 +623,8 @@ let continuationize_env = Utility.concat_map
       | Some v -> [n,v])
 
 let value_env = ref (continuationize_env env)
-and type_env : Types.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+and type_env : Types.environment = 
+  Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
 
 let impl : located_primitive -> primitive = function
   | `Client -> failwith "client function requested"
