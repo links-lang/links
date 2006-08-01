@@ -486,6 +486,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "Int -> ()");
 
   (** Database functions **)
+  "asList",
+  (p1 (fun th -> failwith "Unoptimized table access!!!"),
+   datatype "TableHandle(r) -> [{r}]");
+
 (* [BROKEN] *)
 (*
   "insertrow",

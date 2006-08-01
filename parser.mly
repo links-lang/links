@@ -26,7 +26,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW HANDLE WHERE 
 %token COMMA VBAR DOT COLON COLONCOLON
-%token TABLE FROM DATABASE WITH UNIQUE ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE WITH UNIQUE ORDERBY
 %token UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -88,7 +88,6 @@ toplevel_seq:
 
 toplevel:
 | exp SEMICOLON                                                { $1 }
-| TABLE VARIABLE datatype unique DATABASE STRING SEMICOLON     { Definition ($2, (TableLit ($2, $3, $4, (DatabaseLit $6, pos())), pos()), `Server), pos() }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
 | SIG 
@@ -360,23 +359,28 @@ patt:
 | cons_expression AS VARIABLE                                  { AsPattern ($3, $1) }
 
 just_datatype:
-| datatype SEMICOLON                                               { $1 }
+| datatype SEMICOLON                                           { $1 }
 
 datatype:
-| mu_datatype                                                      { $1 }
-| mu_datatype RARROW datatype                                          { FunctionType ($1, $3) }
+| mu_datatype                                                  { $1 }
+| mu_datatype RARROW datatype                                  { FunctionType ($1, $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                      { MuType ($2, $4) }
-| primary_datatype                                                 { $1 }
+| MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
+| primary_datatype                                             { $1 }
 
 primary_datatype:
 | LPAREN RPAREN                                                { UnitType }
-| LPAREN datatype RPAREN                                           { $2 }
-| LPAREN datatype COMMA datatypes RPAREN                               { TupleType ($2 :: $4) }
+| LPAREN datatype RPAREN                                       { $2 }
+| LPAREN datatype COMMA datatypes RPAREN                       { TupleType ($2 :: $4) }
+
 | LPAREN row RPAREN                                            { RecordType $2 }
+| LBRACE VARIABLE RBRACE                                       { RecordType ([], Some $2) }
+
+| TABLEHANDLE LPAREN zrow RPAREN                               { TableType $3 }
+
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
-| LBRACKET datatype RBRACKET                                       { ListType $2 }
+| LBRACKET datatype RBRACKET                                   { ListType $2 }
 | VARIABLE                                                     { TypeVar $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
@@ -396,18 +400,25 @@ primary_datatype:
 row:
 | fields                                                       { $1 }
 
+zrow:
+| zfields                                                       { $1 }
+
 vrow:
 | vfields                                                      { $1 }
 
 datatypes:
-| datatype                                                         { [$1] }
-| datatype COMMA datatypes                                             { $1 :: $3 }
+| datatype                                                     { [$1] }
+| datatype COMMA datatypes                                     { $1 :: $3 }
 
 /* this assumes that the type (a) is invalid.  Is that a reasonable assumption? 
   (i.e. that records cannot be open rows?)  The only reason to make such an
   assumption is that "(a)" is ambiguous (is it an empty open record or a 
   parenthesized regular type variable?).
 */
+zfields:
+| fields                                                       { $1 }
+| VARIABLE                                                     { [], Some $1 }
+
 fields:
 | field                                                        { [$1], None }
 | field COMMA VARIABLE                                         { [$1], Some $3 }

@@ -11,6 +11,8 @@ and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
 and row = (datatype, row_var) row_basis
 
+module Show_row : Show.Show with type a = row
+module Pickle_row : Pickle.Pickle with type a = row
 
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier

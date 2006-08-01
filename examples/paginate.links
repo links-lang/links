@@ -1,14 +1,16 @@
 var results_per_page = 10;
 
-table wordlist (
-   word: String,
-   meaning: String
-) database "postgresql:dictionary::5432:www-data:";
+var db = database "postgresql:dictionary::5432:www-data:";
 
 fun query(n,c) {
+  var wordlist = table wordlist (
+     word: String,
+     meaning: String
+  ) db;
+
   take(results_per_page) (
        drop(results_per_page * (n-1)) (
-            for (var r <- wordlist)
+            for (var r <- asList(wordlist))
              where (r.word ~ /{c}.*/)
              orderby (r.word)
                 [r]))

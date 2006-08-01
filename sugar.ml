@@ -615,6 +615,7 @@ type datatype =
   | TupleType of (datatype list)
   | RecordType of row
   | VariantType of row
+  | TableType of row
   | ListType of datatype
   | MailboxType of datatype
   | PrimitiveType of Types.primitive
@@ -638,7 +639,8 @@ let rec typevars : datatype -> quantifier list =
     | MuType (v, k) -> snd (partition ((=)(`TypeVar v)) (typevars k))
     | TupleType ks -> Utility.concat_map typevars ks
     | RecordType r
-    | VariantType r -> rvars r
+    | VariantType r
+    | TableType r -> rvars r
     | ListType k -> typevars k
     | MailboxType k -> typevars k
     | UnitType
@@ -661,7 +663,7 @@ let generate_var_mapping : quantifier list -> (Types.quantifier list * int Strin
 	     | `RowVar name ->
 		 (`RowVar var::vars, StringMap.add name var varmap)) vars ([], StringMap.empty)
 
-let desugar_datatype varmap k =
+let desugar_datatype, desugar_row =
   let rec desugar varmap = 
     let lookup = flip StringMap.find varmap in
     let extend = fun (name, value) -> StringMap.add name value varmap in
@@ -679,6 +681,7 @@ let desugar_datatype varmap k =
 	    in `Record (fold_right2 (curry (Types.TypeOps.set_field -<- present)) labels (map (desugar varmap) ks) unit)
 	| RecordType row -> `Record (desugar_row varmap row)
 	| VariantType row -> `Variant (desugar_row varmap row)
+	| TableType row -> `Table (desugar_row varmap row)
 	| ListType k -> `List (desugar varmap k)
 	| MailboxType k -> `Mailbox (desugar varmap k)
 	| PrimitiveType k -> `Primitive k
@@ -692,7 +695,7 @@ let desugar_datatype varmap k =
 			| `Absent -> (k, `Absent)
 			| `Present v -> (k, `Present (desugar varmap v))) fields 
     in fold_right Types.TypeOps.set_field fields seed
-  in desugar varmap k
+  in desugar, desugar_row
 
 let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
   let vars, varmap = generate_var_mapping vars in
@@ -925,12 +928,17 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
 		 | _ -> raise (ASTSyntaxError (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
 		 {distinct_only = unique;
 		  result_cols = selects;
-		  tables = [(name, table_name)];
+		  tables = [(`TableName name, table_name)];
 		  condition = Query.Boolean true;
 		  sortings = [];
 		  max_rows = None;
 		  offset = Query.Integer (Int 0)} in
-               Table (desugar db, "IGNORED", db_query name pos (desugar_datatype varmap datatype) unique, pos))
+	       (* the null query against this table: db_query name pos (desugar_datatype varmap datatype) unique *)
+	     let row = match datatype with
+		 RecordType row ->
+		   desugar_row varmap row
+	     in
+               TableHandle (desugar db, name, row, pos))
 	| UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
 	| UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
 	| UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)

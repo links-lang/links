@@ -95,7 +95,9 @@ let pure : expression -> bool =
   *)
   let pure default = function 
     | Apply _    -> false
-    | Table _    -> false
+(*    | Table _    -> false*)
+    | TableQuery _ -> false
+    | TableHandle _ -> false
     | Database _ -> false
     | Escape _   -> false
     | e       -> default e
@@ -116,8 +118,9 @@ let rename_var var repl : RewriteSyntax.rewriter =
      ignoring bindings *)
   let rewrite = function
     | Variable (v, d) when v = var -> Some (Variable (repl, d))
-    | Table (db, s, q, data) -> Some (Table (db, s, Query.query_replace_var var (Query.Variable repl)  q, data)) 
-    | _                            -> None
+    | TableQuery(th, q, data) -> 
+        Some (TableQuery (th, Query.query_replace_var var (Query.Variable repl) q, data)) 
+    | _ -> None
   in RewriteSyntax.topdown rewrite
 
 let renaming : RewriteSyntax.rewriter = 
@@ -157,7 +160,7 @@ let unused_variables : RewriteSyntax.rewriter = function
   | Let (var, expr, body, _) when pure expr 
                                && not (mem var (freevars body)) -> Some body
   | _ -> None
-                                                        
+      (* FIXME: this ignores variables that are hidden inside queries *)
 
 
 (*
@@ -283,14 +286,14 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
         | other -> default other
     in reduce_expression (visitor var) (merge_needed -<- snd) in
   let rewrite = function
-    | For (body, variable, Table (db, s, query, tdata), data) ->
+    | For (body, variable, TableQuery(th, query, tdata), data) ->
         (match needed_fields variable body with
            | Fields needs ->
                Some (For (body, variable,
-                                           Table (db, s, 
-                                                  (if needs = [] then null_query else project needs) query,
-                                                  tdata),
-                                           data))
+                          TableQuery(th, 
+                                     (if needs = [] then null_query else project needs) query,
+                                     tdata),
+                          data))
            | All -> None)
     | _ -> None in
     RewriteSyntax.bottomup rewrite
@@ -307,9 +310,9 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
     condition, a {i let}, a record selection or a collection
     extension. *)
 let sql_selections : RewriteSyntax.rewriter = function 
-  | For (expr, variable, Table (db, s, query, tdata), data) ->
+  | For (expr, variable, TableQuery(th, query, tdata), data) ->
       let positive, negative, expr, origin = extract_tests [`Table_loop (variable, query)] expr in
-      let table = Table (db, s, select (positive, negative) query, tdata) in
+      let table = TableQuery(th, select (positive, negative) query, tdata) in
         Some (select_by_origin origin (For (expr, variable, table, data)))
   | _ -> None
 
@@ -345,17 +348,53 @@ let read_proj = function
   | _ -> None
 
 let rec sql_sort = function
-  | SortBy(Table(db, dummy, query, data1), 
+  | SortBy(TableQuery(th, query, data1), 
            Abstr(loopVar, sortByExpr, data2), data3) ->
       (match read_proj sortByExpr with
            Some (Variable(sortByRecVar, data3), sortByFld)
              when sortByRecVar = loopVar
-               -> Some(Table(db, dummy, Query.add_sorting query 
+               -> Some(TableQuery(th, Query.add_sorting query 
                                (`Asc(Query.owning_table sortByFld query,
 				     sortByFld)), data1))
          | _ -> None)
   | _ -> None
       
+let sql_aslist : RewriteSyntax.rewriter =
+  function 
+    | Apply(Variable("asList", _), th, data) ->
+        let th_type = node_datatype th in
+        let th_row = match th_type with
+            `Table th_row -> th_row
+          | _ -> failwith "Internal Error"
+        in
+        let fresh_table_name = gensym "Table_" in
+	let rowFieldToTableCol colName = function
+	  | `Present fieldType -> {Query.table_renamed = fresh_table_name; Query.name = colName; 
+				   Query.renamed = colName; Query.col_type = fieldType}
+	  | _ -> failwith "Internal Error TF8736729**"
+	in
+	let fields, _ = th_row in
+	let columns = StringMap.fold (fun colName colData result -> 
+					rowFieldToTableCol colName colData :: result) fields [] in
+        let th_var = match th with
+          | Variable(var, _) -> var
+          | _ -> gensym "_t" in
+	let select_all = {Query.distinct_only = false;
+			  Query.result_cols = columns;
+			  Query.tables = [(`TableVariable th_var, fresh_table_name)];
+			  Query.condition = Query.Boolean true;
+			  Query.sortings = [];
+			  Query.max_rows = None;
+			  Query.offset = Query.Integer (Num.Int 0)} in
+        let th_list_type = `List(`Record(th_row)) in
+        let table_query = TableQuery(Variable(th_var, (Sugar._DUMMY_POS, th_type, None)), select_all,
+                                                     (Sugar._DUMMY_POS, th_list_type, None))
+        in
+          (match th with
+             | Variable _ -> Some(table_query)
+             | _ -> Some(Let(th_var, th, table_query, data)))
+    | _ -> None
+
 (** check_join
     Inspects an expression for possible collection extension
     operators that can be joined with some outer comprhsn, the
@@ -388,7 +427,7 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 	     | Some (positive, negative, query, projs, var, e) ->
                  Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
 	     | None -> None)
-      | For (expr, variable, Table (_, _, query, _), _) ->
+      | For (expr, variable, TableQuery(_, query, _), _) ->
           (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
                (*  ([], [], _, _) -> None *)
@@ -406,7 +445,7 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 *)
 let rec sql_joins : RewriteSyntax.rewriter = 
   function
-    | For (body, outer_var, (Table (db, s, query, tdata)), data) ->
+    | For (body, outer_var, (TableQuery (th, query, tdata)), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var "dummy" bindings body with
            | Some(positives, negatives, inner_query, origins, inner_var, body) ->
@@ -420,7 +459,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                in
                let expr = For(body,
                               outer_var, 
-                              Table (db, s, query, tdata), 
+                              TableQuery (th, query, tdata), 
                               data) in
 (*                (\* finally, wrap the whole expression in the  *)
 (*                   projections returned from check_join; *)
@@ -436,11 +475,10 @@ let rec sql_joins : RewriteSyntax.rewriter =
                   should be handled the same as 2-join, 3-join, etc. *)
                let (pos, neg, body, proj_srcs) = extract_tests bindings body in
                  (* This positive/negatives business is retarded, I think *)
-               debug("extract_tests returned " ^ String.concat " AND " (map Sql.string_of_expression pos) ^ " AND NOT " ^ String.concat " AND " (map Sql.string_of_expression neg));
                  if (pos <> [] || neg <> []) then
                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in
                      Some (For(body, outer_var, 
-                               Table (db, s, query, tdata), data))
+                               TableQuery(th, query, tdata), data))
                  else None
         ) (* match check_join .... with *)
     | _ -> None
@@ -543,16 +581,16 @@ let push_takedrop : RewriteSyntax.rewriter =
     function
       | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as e1), _), 
                Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as e2), _), 
-                      Table (e, s, q, d5), _), _) ->
-          Some (Table (e, s, {q with
+                      TableQuery (e, q, d5), _), _) ->
+          Some (TableQuery (e, {q with
                                 Query.max_rows = Some (queryize e1);
                                 Query.offset   = queryize e2}, d5))
       | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
-               Table (e, s, q, d4), _) -> 
-	  Some (Table (e, s, {q with Query.max_rows = Some (queryize n)}, d4))
+               TableQuery (e, q, d4), _) -> 
+	  Some (TableQuery (e, {q with Query.max_rows = Some (queryize n)}, d4))
       | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
-               Table (e, s, q, d4), _) -> 
-	  Some (Table (e, s, {q with Query.offset = queryize n}, d4))
+               TableQuery (e, q, d4), _) -> 
+	  Some (TableQuery (e, {q with Query.offset = queryize n}, d4))
       | _ -> None
 
 
@@ -588,6 +626,7 @@ let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.topdown simplify_regex;
+  RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.topdown (sql_sort);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
   RewriteSyntax.bottomup sql_selections;
@@ -606,8 +645,8 @@ let optimise env expr =
   match run_optimisers env expr with
       None -> debug_if_set show_optimisation (fun () -> "Optimization had no effect"); expr
     | Some expr' -> (debug_if_set show_optimisation
-                       (fun () -> "Before optimization : " ^ Show_expression.show expr ^ 
-			  "\nAfter optimization  : " ^ Show_expression.show expr');
+                       (fun () -> "Before optimization : " ^ Show_stripped_expression.show (strip_data expr) ^ 
+			  "\nAfter optimization  : " ^ Show_stripped_expression.show (strip_data expr'));
 		     expr')
 
 (* Not really an optimisation.  This /must/ be run, or the program
@@ -622,7 +661,8 @@ let inline_tables expressions =
   let tabledefs, sanstables = 
     either_partition
       (function
-         | Define (name, (Table _ as t), _, _) -> Left (name, t)
+(*         | Define (name, (Table _ as t), _, _) -> Left (name, t)*)
+         | Define (name, (TableHandle _ as t), _, _) -> Left (name, t)
          | e -> Right e)
       expressions
   in

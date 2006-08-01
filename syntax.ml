@@ -57,9 +57,14 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | Table of ((* the database: *) 'data expression' *
-      (* the real name of some table associated with thsi query; not used: *) string * 
-      (* the query to run against database: *) Query.query * 'data)
+  | TableQuery of ((* the table: *) 'data expression'
+      * (* the query: *) Query.query 
+      * 'data)
+  | TableHandle of ((* the database: *) 'data expression' 
+      * (* the table name: *) string 
+      * (* the type of a table row: *) row
+      * 'data)
+     
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Escape of (string * 'data expression' * 'data)
   | Wrong of 'data
@@ -74,6 +79,10 @@ let is_define =
     | Alien _ -> true
     | _ -> false
 
+(* This doesn't seem right:
+     e.g. Let _ is never a value
+   What is the definition of a value?
+ *)
 let rec is_value : 'a expression' -> bool = function
   | Boolean _
   | Integer _
@@ -89,7 +98,7 @@ let rec is_value : 'a expression' -> bool = function
   | Variant_injection (_, e, _)
   | Variant_selection_empty (e, _)
   | Database (e, _)
-  | Table (e, _, _, _)
+  | TableHandle (e, _, _, _)
   | List_of (e, _) -> is_value e
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
@@ -118,6 +127,9 @@ type expression = (position * datatype * label option) expression'
     deriving (Show, Pickle)
 type untyped_expression = position expression'
     deriving (Show, Pickle)
+type stripped_expression = unit expression'
+  deriving (Show, Pickle)
+
 
 let string_of_location : location -> string = function
   | `Client -> "client" | `Server -> "server" | `Native -> "native" | `Unknown -> "unknown"
@@ -185,8 +197,10 @@ and show t : 'a expression' -> string = function
   | For (expr, variable, value, data) ->
       "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
-  | Table (daba, s, query, data) ->
-      "("^ s ^" from "^ show t daba ^"["^string_of_query query^"])" ^ t data
+  | TableHandle (db, s, row, data) ->
+      "("^ s ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
+  | TableQuery (th, query, data) ->
+      "("^ show t th ^"["^string_of_query query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")"
   | Wrong data -> "wrong" ^ t data
@@ -335,8 +349,10 @@ let visit_expressions'
 
     | Database (e, d) -> let e, data = visitor visit_children (e, data) in
         Database (e, d), data
-    | Table (e, s, q, d) -> let e, data = visitor visit_children (e, data) in
-        Table (e, s, q, d), data
+    | TableQuery (e, q, d) -> let e, data = visitor visit_children (e, data) in
+        TableQuery (e, q, d), data
+    | TableHandle (e, n, r, d) -> let e, data = visitor visit_children (e, data) in
+        TableHandle (e, n, r, d), data
     | Escape (n, e, d) -> let e, data = visitor visit_children (e, data) in
         Escape (n, e, d), data
     | HasType (e, k, d) -> let e, data = visitor visit_children (e, data) in
@@ -375,7 +391,7 @@ let freevars : 'a expression' -> string list =
               let vars = map (fun (v,_,_) -> v) bindings @ vars in  
                 expr, List.concat (map (fun value -> (childvars (value, vars))) (map (fun (_,x,_) -> x) bindings)) @ childvars (body, vars)
 	  | Escape (var, body, _) -> expr, childvars (body, var::vars)
-          | Table (_, _, query, _) -> expr, Query.freevars query
+          | TableQuery (_, query, _) -> expr, Query.freevars query
           | other -> default (other, vars)
     in Utility.unduplicate (=) (snd (visit_expressions' (@) (fun _ -> []) visit (expression, [])))
 
@@ -409,13 +425,17 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
   | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
-  | Table (a, b, c, data) -> Table (redecorate f a, b, c, f data)
+  | TableHandle (a, b, c, data) -> TableHandle (redecorate f a, b, c, f data)
+  | TableQuery (a, b, data) -> TableQuery (redecorate f a, b, f data)
   | SortBy (a, b, data) -> SortBy (redecorate f a, redecorate f b, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
   | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
   | Wrong (data) -> Wrong (f data)
   | Placeholder (s, data) -> Placeholder (s, f data) 
   | Alien (s1, s2, k, data) -> Alien (s1, s2, k, f data)
+
+let strip_data : 'a expression' -> stripped_expression =
+  fun e -> redecorate (fun _ -> ()) e
 
 let erase : expression -> untyped_expression = 
   redecorate (fun (pos, _, _) -> pos)
@@ -464,7 +484,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | List_of (e, _)
                | Escape (_, e, _)
                | HasType (e, _, _)
-               | Table (e, _, _, _) -> [visitor visit_children e]
+               | TableQuery (e, _, _)
+               | TableHandle (e, _, _, _) -> [visitor visit_children e]
 
 
                | Apply (e1, e2, _)
@@ -513,7 +534,8 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
       | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
       | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
-      | Table (e, a, b, c)                         -> passto [e] (fun [e] -> Table (e, a, b, c))
+      | TableHandle (e, a, b, c)                   -> passto [e] (fun [e] -> TableHandle (e, a, b, c))
+      | TableQuery (e, a, b)                       -> passto [e] (fun [e] -> TableQuery (e, a, b))
       | Escape (a, e, b)                           -> passto [e] (fun [e] -> Escape (a, e, b))
       | Variant_selection_empty (e, d)             -> passto [e] (fun [e] -> Variant_selection_empty (e, d))
 
@@ -567,7 +589,8 @@ let expression_data : ('a expression' -> 'a) = function
 	| Concat (_, _, data) -> data
 	| For (_, _, _, data) -> data
 	| Database (_, data) -> data
-	| Table (_, _, _, data) -> data
+	| TableQuery (_, _, data) -> data
+	| TableHandle (_, _, _, data) -> data
 	| SortBy (_, _, data) -> data
 	| Escape (_, _, data) -> data
         | Wrong data -> data

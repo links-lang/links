@@ -13,6 +13,11 @@ let rec like_as_string : like_expr -> string =
       | `variable v -> "VARIABLE : " ^ v
       | `seq rs -> String.concat "" (List.map like_as_string rs)
 
+type table_spec = [ `TableName of string | `TableVariable of string ]
+    deriving (Show, Pickle)
+
+type table_instance = table_spec * string (* (real_name, alias) *)
+    deriving (Show, Pickle)
 
 (** A SQL expression to be used as the condition for a query. *)
 type expression =
@@ -46,8 +51,6 @@ and query = {distinct_only : bool;
              max_rows : expression option; (* The maximum number of rows to be returned *)
              offset : expression; (* The row in the table to start from *)
             }
-
-and table_instance = string * string (* (real_name, as_name) *)
 
 and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;

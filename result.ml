@@ -81,11 +81,14 @@ and reconstruct_db_string : (string * string) -> string =
 type unop = MkColl
             | MkVariant of string
             | MkDatabase
+	    | MkTableHandle of ( 
+		(* table name: *) string *
+		(* field spec: *) row)
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (Query.query * datatype)
+            | QueryOp of (Query.query)
                 deriving (Show, Pickle)
-
+		
 let string_of_unop = Show_unop.show
 
 type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
@@ -147,13 +150,17 @@ module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
         Syntax.Placeholder (label, (Syntax.dummy_position, `Not_typed, Some label))
   end)
 
-type basetype = [
+type table = database * string * Types.row
+   deriving (Show, Pickle)
+
+type primitive_value = [
 | `Bool of bool
 | `Int of num
 | `Float of float
 | `Char of char
 | `XML of xmlitem
 | `Database of (database * string)
+| `Table of table
                 ]
     deriving (Show, Pickle)
 
@@ -193,7 +200,7 @@ and result = [
   | `Variant of (string * result)
   | `List of (result list)
   | `Continuation of continuation
-  |  basetype
+  |  primitive_value
 
 ]
 and continuation = contin_frame list
@@ -272,7 +279,7 @@ and charlist_as_string chlist =
 
     
 and string_of_result : result -> string = function
-  | #basetype as p -> string_of_primitive p
+  | #primitive_value as p -> string_of_primitive p
   | `PFunction (name, _) -> name
   | `Function (_, _, _, Placeholder (str, _)) -> "fun [" ^ str ^ "]"
   | `Function _ -> "fun"
@@ -289,13 +296,14 @@ and string_of_result : result -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_xresult elems
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
   | `Continuation cont -> pp_continuation cont
-and string_of_primitive : basetype -> string = function
+and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
   | `Float value -> string_of_float value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
+  | `Table (db, table_name, row) -> "(table " ^ table_name ^")"
 
 and string_of_tuple (fields : (string * result) list) : string = 
     let fields = map (function
@@ -322,7 +330,7 @@ and string_of_xresult = function
 (* generic visitation functions for results *)
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
-  | #basetype as x -> result_f x
+  | #primitive_value as x -> result_f x
   | `PFunction (str, pargs) ->
       result_f(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs))
 
@@ -375,9 +383,12 @@ and map_cont result_f expr_f contframe_f kappa =
 
 let label_table (program : Syntax.expression) = 
   reduce_expression (fun visit_children expr ->
-                       let (_, _, Some label) = expression_data expr in
-                         (label, expr) :: visit_children expr
-                    ) (fun (_, lists) -> concat lists) program 
+		       match expression_data expr with
+			 | (_, _, Some label) ->
+                             (label, expr) :: visit_children expr
+			 | (_, _, None) ->
+			     visit_children expr
+		    ) (fun (_, lists) -> concat lists) program 
     
 (** resolve_label
     Given a program and label, return the expression having the

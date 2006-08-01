@@ -29,7 +29,7 @@ and string_of_query (qry:query) : string =
      ^ (match selects with
 	  | [] -> "NULL as null"
 	  | _ -> (String.concat ", " (map (fun col -> col.table_renamed ^"."^ col.name ^" AS "^ col.renamed) qry.result_cols)))
-     ^ " FROM " ^ (String.concat ", " (map (fun (table, rename) -> table ^ " AS " ^ rename) tables)) ^
+     ^ " FROM " ^ (String.concat ", " (map (fun (table, rename) -> string_of_table_spec table ^ " AS " ^ rename) tables)) ^
        string_of_condition where
      ^ (match order with
 	  | [] -> "" 
@@ -38,6 +38,9 @@ and string_of_query (qry:query) : string =
           | None   -> ""
           | Some m -> " limit " ^ string_of_expression m
 	      ^ " offset " ^ string_of_expression qry.offset)
+and string_of_table_spec = function
+    `TableName name -> name
+  | `TableVariable vrbl -> "VARIABLE:" ^ vrbl
 
 and string_of_condition cond = match string_of_expression cond with
   | "true" -> ""

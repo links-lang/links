@@ -688,7 +688,8 @@ let rec generate : 'a expression' -> code =
 
   (* Unimplemented stuff *)
   | Database _
-  | Table _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+  | TableHandle _
+  | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | HasType (e, _, _) -> generate e
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
@@ -893,7 +894,8 @@ and generate_direct_style : 'a expression' -> code =
 
   (* Unimplemented stuff *)
   | Database _
-  | Table _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+  | TableHandle _
+  | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | HasType (e, _, _) -> gd e
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 

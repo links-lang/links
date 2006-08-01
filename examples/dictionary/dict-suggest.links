@@ -1,9 +1,3 @@
-table wordlist (
-  word : String, 
-  type : String, 
-  meaning : String
-) database "postgresql:dictionary::5432:www-data:";
-
 fun lowercase(s) server {
   for (var c <- s) [toLower(c)]
 }
@@ -26,9 +20,15 @@ fun format(words) client {
 }
 
 fun completions(p) server {
+ var wordlist = table wordlist (
+   word : String, 
+   type : String, 
+   meaning : String
+ ) (database "postgresql:dictionary::5432:www-data:");
+
   if (p == "") []
   else {
-    take(10)(for (var w <- wordlist)
+    take(10)(for (var w <- asList(wordlist))
              where (w.word ~ /{p}.*/)
              orderby (w.word)
               [w])

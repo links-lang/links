@@ -1,9 +1,3 @@
-table factorials ( 
-  i : Int,
-  f : Int
-)
-database "postgresql:factorials::5432:www-data:";
-
 fun request(s) client {
  domReplaceDocument(
   <html>
@@ -42,10 +36,16 @@ fun response(s) client {
 }
 
 fun factorialsUpto(n) server {
- for (var row <- factorials)
+  var db = database "postgresql:factorials::5432:www-data:";
+  var factorials = table factorials ( 
+   i : Int,
+   f : Int
+  ) db;
+
+ for (var row <- asList(factorials))
   where (row.i <= n)
   orderby (row.i)
-  [(row.i,row.f)]
+  [(row.i, row.f)]
 }
 
 request("")

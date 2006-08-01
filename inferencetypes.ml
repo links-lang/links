@@ -40,9 +40,10 @@ let
 (* 	  else *)
             [var]
       | `Function (from, into)   -> free_type_vars' rec_vars from @ free_type_vars' rec_vars into
-      | `Record row              -> free_row_type_vars' rec_vars row
-      | `Variant row             -> free_row_type_vars' rec_vars row
-      | `Recursive (var, body)    ->
+      | `Record row
+      | `Variant row
+      | `Table row               -> free_row_type_vars' rec_vars row
+      | `Recursive (var, body)   ->
 	  if IntSet.mem var rec_vars then
 	    []
 	  else
@@ -303,6 +304,7 @@ let rec inference_type_of_type = fun ((type_var_map, _) as var_maps) t ->
   | `Function (f, t) -> `Function (itoft f, itoft t)
   | `Record row -> `Record (inference_row_of_row var_maps row)
   | `Variant row -> `Variant (inference_row_of_row var_maps row)
+  | `Table row -> `Table (inference_row_of_row var_maps row)
   | `Recursive (var, t) ->
       if IntMap.mem var (!type_var_map) then
 	`MetaTypeVar (IntMap.find var (!type_var_map))
@@ -369,6 +371,7 @@ let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fu
     | `Function (f, t) -> `Function (type_of_inference_type rec_vars f, type_of_inference_type rec_vars t)
     | `Record row -> `Record (row_of_inference_row rec_vars row)
     | `Variant row -> `Variant (row_of_inference_row rec_vars row)
+    | `Table row -> `Table (row_of_inference_row rec_vars row)
     | `Recursive (var, t) ->
 	if IntSet.mem var rec_vars then
 	  `TypeVar var
@@ -472,6 +475,7 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
 	    isp t || isn t'
 	| `Record row -> isnr row
 	| `Variant row -> isnr row
+	| `Table row -> isnr row
 	| `List t -> isn t
 	| `Mailbox t -> isn t
 	| `Recursive (var', t) ->
@@ -514,6 +518,7 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
 	    isn t || isp t'
 	| `Record row -> ispr row
 	| `Variant row -> ispr row
+	| `Table row -> ispr row
 	| `List t -> isp t
 	| `Mailbox t -> isp t
 	| `Recursive (var', t) ->

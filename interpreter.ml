@@ -159,7 +159,16 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
       | Query.Query qry ->
           Query {qry with condition = normalise_expression qry.condition}
       | expr -> expr
+  in
+  let normalise_tables  = map (function 
+                                 | `TableName t, alias -> `TableName t, alias
+                                 | `TableVariable var, alias ->
+                                     (match lookup toplevel env var with
+                                         `Table(_, tableName, _) -> `TableName tableName, alias
+                                       | _ -> failwith "Internal Error: table source was not a table!")
+                              ) 
   in {qry with
+        tables = normalise_tables qry.tables;
         condition = normalise_expression qry.condition;
         offset = normalise_expression qry.offset;
         max_rows = opt_map normalise_expression qry.max_rows}
@@ -297,17 +306,22 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
-	               apply_cont globals cont
-                         (let args = charlist_as_string value in
-                          let driver, params = parse_db_string args in
-                            `Database (db_connect driver params))
-                   | QueryOp(query, datatype) ->
+                       let result = (let args = charlist_as_string value in
+                                                let driver, params = parse_db_string args in
+                                                  `Database (db_connect driver params)) in
+	               apply_cont globals cont result
+	           | MkTableHandle (table_name, row) ->
+		       (match value with
+			  | `Database (db, _) ->
+			      apply_cont globals cont (`Table(db, table_name, row))
+			  | _ -> failwith ("Internal Error #56143432"))
+                   | QueryOp(query) ->
                        let result = 
                          match value with
-                           | `Database (db, _) ->
+                           | `Table(db, tableName, row)->
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
-		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 let result = Database.execute_select datatype query_string db in
+                                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
+		                 let result = Database.execute_select (`List(`Record row)) query_string db in
                                    (* debug("    result:" ^ string_of_result result); *)
                                    result
                                      (* disable actual queries *)
@@ -455,8 +469,16 @@ fun globals locals expr cont ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-  | Syntax.Table (database, s, query, (_, datatype, _)) ->
-      eval database (UnopApply(locals, QueryOp(query, datatype)) :: cont)
+	(* FIXME: the datatype should be explicit in the type-erased TableHandle *)
+(*   | Syntax.Table (database, s, query, _) -> *)
+(*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
+
+  | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
+      eval database (UnopApply(locals, MkTableHandle(table_name, row)) :: cont)
+
+  | Syntax.TableQuery (th, query, _) ->   (* getting type from inferred type *)
+      eval th (UnopApply(locals, QueryOp(query)) :: cont)
+
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont

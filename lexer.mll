@@ -77,6 +77,7 @@ let keywords = [
  "spawn"    , SPAWN;
  "switch"   , SWITCH; 
  "table"    , TABLE; 
+ "TableHandle", TABLEHANDLE; 
  "true"     , TRUE;
  "unique"   , UNIQUE; 
  "update"   , UPDATE; 

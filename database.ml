@@ -29,11 +29,12 @@ let datatype_of_db_type = function
 let execute_select  (datatype:Types.datatype) (query:string) (db: database) : result =
   let fields = (match datatype with
 		  | `List (`Record (field_env, _)) ->
-		      (StringMap.fold
+		      (StringMap.fold (* refactor this as stringmap_to_pairlist *)
 			 (fun label field_spec fields ->
 			    match field_spec with
 			      | `Present t -> (label, t) :: fields
-			      | `Absent -> raise (Runtime_error "SQ072")) field_env [])
+			      | `Absent -> raise (Runtime_error "SQ072"))
+			 field_env [])
                   | _ -> failwith "internal error: unexpected type in select")
   in 
   let result = (db#exec query) in

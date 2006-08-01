@@ -12,6 +12,7 @@ type ('typ, 'row) type_basis = [
   | `Function of ('typ * 'typ)
   | `Record of 'row
   | `Variant of 'row
+  | `Table of 'row
   | `Recursive of (int * 'typ)
   | `List of ('typ)
   | `Mailbox of ('typ) ]

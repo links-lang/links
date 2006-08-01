@@ -42,10 +42,12 @@ val reconstruct_db_string : string * string -> string
 type unop = | MkColl
             | MkVariant of string
             | MkDatabase
+	    | MkTableHandle of ( (* table name: *) string *
+		                 (* field spec: *) Types.row)
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
-            | QueryOp of (Query.query * Types.datatype)
+            | QueryOp of (Query.query)
 type binop =
     | EqEqOp
     | NotEqOp
@@ -58,10 +60,12 @@ type xmlitem =
     | Attr of (string * string) 
     | Node of (string * xml)
 and xml = xmlitem list
-type basetype =
+type table = database * string * Types.row
+type primitive_value =
     [ `Bool of bool
     | `Char of char
-    | `Database of database * string
+    | `Database of (database * string)
+    | `Table of table
     | `Float of float
     | `Int of Num.num
     | `XML of xmlitem ]
@@ -84,7 +88,7 @@ type contin_frame =
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
     | Recv of environment
-and result = [ basetype
+and result = [ primitive_value
 | `Continuation of continuation
 | `Function of string * environment * environment * Syntax.expression
 | `List of result list
@@ -111,7 +115,7 @@ val escape : string -> string
 val delay_expr : 'a -> [> `Function of string * 'b list * 'c list * 'a ]
 val charlist_as_string : result -> string
 val string_of_result : result -> string
-val string_of_primitive : basetype -> string
+val string_of_primitive : primitive_value -> string
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : result -> bool
 val box_int : 'a -> [> `Int of 'a ]

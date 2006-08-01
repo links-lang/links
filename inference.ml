@@ -214,6 +214,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
             unify' rec_env (lbody, rbody)
       | `Record l, `Record r -> unify_rows' rec_env (l, r)
       | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
+      | `Table l, `Table r -> unify_rows' rec_env (l, r)
       | `List t, `List t' -> unify' rec_env (t, t')
       | `Mailbox t, `Mailbox t' -> unify' rec_env (t, t')
       | _, _ ->
@@ -514,8 +515,10 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	  (fun () -> "Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
 
 let unify (t1, t2) =
-  (unify' (IntMap.empty, IntMap.empty) (t1, t2);
-   debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1))
+  unify' (IntMap.empty, IntMap.empty) (t1, t2)
+(* debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
+and unify_rows (row1, row2) =
+  unify_rows' (IntMap.empty, IntMap.empty) (row1, row2)
 
 (*
   instantiation environment:
@@ -579,6 +582,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	      | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
 	      | `Record row -> `Record (inst_row rec_env row)
 	      | `Variant row ->  `Variant (inst_row rec_env row)
+	      | `Table row -> `Table (inst_row rec_env row)
 	      | `Recursive (var, t) ->
 		  (*assert(false)*)
 		  debug_if_set (show_recursion) (fun () -> "rec (instantiate)2: " ^(string_of_int var));
@@ -697,8 +701,9 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
             let var_gens = get_quantifiers bound_vars var
             and body_gens = get_quantifiers bound_vars body in
               unduplicate (=) (var_gens @ body_gens)
-	| `Record row -> row_generics bound_vars row
-	| `Variant row -> row_generics bound_vars row
+	| `Record row
+	| `Variant row 
+	| `Table row -> row_generics bound_vars row
 	| `Recursive (var, body) ->
 	    debug_if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
 	    if IntSet.mem var bound_vars then
@@ -971,7 +976,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let params = type_check env params in
         unify (type_of_expression params, `List(`Primitive `Char));
         Database (params, (pos, `Primitive `DB, None))
-  | Table (db, s, query, pos) ->
+  | TableQuery (th, query, pos) ->
       let row =
 	(List.fold_right
 	   (fun col env ->
@@ -979,10 +984,17 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 		(`Present (inference_type_of_type var_maps col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let datatype =  `List (`Record row) in
+      let row' = ITO.make_empty_open_row () in
+      let th = type_check env th
+      in
+	unify (type_of_expression th, `Table row');
+	unify_rows (row, row');
+        TableQuery (th, query, (pos, datatype, None))
+  | TableHandle (db, tableName, row, pos) ->
+      let datatype =  `Table (inference_row_of_row var_maps row) in
       let db = type_check env db in
 	unify (type_of_expression db, `Primitive `DB);
-	unify (datatype, `List (`Record (ITO.make_empty_open_row ())));
-        Table (db, s, query, (pos, datatype, None))
+        TableHandle (db, tableName, row, (pos, datatype, None))
   | SortBy(expr, byExpr, pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any
          orderable type, of which there are at least several. How to

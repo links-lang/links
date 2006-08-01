@@ -175,6 +175,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
 			    else
 			      "(" ^ string_of_row' "," vars row ^ ")")
      | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
+     | `Table row      -> "TableHandle(" ^ string_of_row' "," vars row ^ ")"
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
      | `List (`Primitive `Char) -> "String"
@@ -231,6 +232,7 @@ let rec type_vars : datatype -> int list = fun datatype ->
     | `Function (from, into)   -> aux from @ aux into
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
+    | `Table row               -> row_type_vars row
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
     | `List (datatype)             -> aux datatype
     | `Mailbox (datatype)          -> aux datatype
@@ -265,8 +267,9 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
 	IntSet.union mailbox_type_vars (IntSet.union (free_bound_type_vars from) (free_bound_type_vars into))
 *)
   | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
-  | `Record row              -> free_bound_row_type_vars row
-  | `Variant row             -> free_bound_row_type_vars row
+  | `Record row
+  | `Variant row
+  | `Table row               -> free_bound_row_type_vars row
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
   | `List (datatype)         -> free_bound_type_vars datatype
   | `Mailbox (datatype)      -> free_bound_type_vars datatype
@@ -316,6 +319,7 @@ let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun va
 	    `Function (ftv from, ftv into)
 	| `Record row              -> `Record (rftv row)
 	| `Variant row             -> `Variant (rftv row)
+	| `Table row               -> `Table (rftv row)
 	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
 	| `List (datatype)         -> `List (ftv datatype)
 	| `Mailbox (datatype)      -> `Mailbox (ftv datatype)
@@ -471,4 +475,7 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
                            | None ->     None)
       | `Variant row -> (match rewrite_row row with 
                            | Some row -> Some (`Variant row)
+                           | None ->     None)
+      | `Table row  -> (match rewrite_row row with 
+                           | Some row -> Some (`Table row)
                            | None ->     None)
