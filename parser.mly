@@ -395,8 +395,8 @@ primary_datatype:
                                                                    | "XML"     -> ListType (PrimitiveType `XMLitem)
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
-| CONSTRUCTOR primary_datatype                                     { match $1 with 
-                                                                   | "Mailbox"    -> MailboxType $2
+| CONSTRUCTOR LPAREN primary_datatype RPAREN                   { match $1 with 
+                                                                   | "Mailbox"    -> MailboxType $3
                                                                    | t -> failwith ("Unknown unary type constructor : " ^ t)
                                                                }
 row:

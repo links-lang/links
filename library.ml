@@ -170,11 +170,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   datatype "Mailbox a -> a -> ()");
+   datatype "Mailbox (a) -> a -> ()");
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "Mailbox a -> () -> Mailbox a");
+   datatype "Mailbox (a) -> () -> Mailbox (a)");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -185,7 +185,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (p1 (fun _ -> assert false),
-     datatype "Mailbox a -> () -> a");
+     datatype "Mailbox (a) -> () -> (a)");
  
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -200,7 +200,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
+   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 
