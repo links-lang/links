@@ -1,7 +1,7 @@
 var db = database "mysql:todo::3306:web:";
 var items = table items (
     name : String 
- ) db;
+ ) from db;
 
 fun showList() {
 <html>

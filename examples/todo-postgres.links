@@ -1,7 +1,7 @@
 var db = database "postgresql:todo::5432:www-data:";
 var items = table items (
     name : String 
- ) db;
+ ) from db;
 
 fun showList() {
 <html>

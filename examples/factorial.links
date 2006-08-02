@@ -40,7 +40,7 @@ fun factorialsUpto(n) server {
   var factorials = table factorials ( 
    i : Int,
    f : Int
-  ) db;
+  ) from db;
 
  for (var row <- asList(factorials))
   where (row.i <= n)

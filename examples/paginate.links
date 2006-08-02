@@ -6,7 +6,7 @@ fun query(n,c) {
   var wordlist = table wordlist (
      word: String,
      meaning: String
-  ) db;
+  ) from db;
 
   take(results_per_page) (
        drop(results_per_page * (n-1)) (

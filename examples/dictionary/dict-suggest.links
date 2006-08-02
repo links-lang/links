@@ -24,7 +24,7 @@ fun completions(p) server {
    word : String, 
    type : String, 
    meaning : String
- ) (database "postgresql:dictionary::5432:www-data:");
+ ) from database "postgresql:dictionary::5432:www-data:";
 
   if (p == "") []
   else {

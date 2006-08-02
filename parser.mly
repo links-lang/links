@@ -127,7 +127,6 @@ primary_expression:
 | parenthesized_thing                                          { $1 }
 | FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
 | DATABASE STRING                                              { DatabaseLit $2, pos() }
-| TABLE VARIABLE datatype unique exp                           { TableLit ($2, $3, $4, $5), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -311,6 +310,10 @@ handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
 
+table_expression:
+| handlewith_expression { $1 }
+| TABLE VARIABLE datatype unique FROM exp                      { TableLit ($2, $3, $4, $6), pos()} 
+
 arg_list:
 | parenthesized_pattern                                        { [$1] }
 | parenthesized_pattern arg_list                               { $1 :: $2 }
@@ -339,7 +342,7 @@ perhaps_semi:
 |                                                              {}
 
 exp:
-| handlewith_expression                                        { $1 }
+| table_expression                                            { $1 }
 
 unique:
 | UNIQUE                                                       { true }
