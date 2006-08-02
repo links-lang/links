@@ -491,47 +491,40 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "TableHandle(r) -> [{r}]");
 
 (* [BROKEN] *)
-(*
   "insertrow",
   (`Server 
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and database = assoc "2" fields
-                and row = assoc "3" fields in begin
-                    match database with 
-                      | `Database (db, _) -> 
+                and row = assoc "2" fields in begin
+                    match table with 
+                      | `Table (db, table_name, _) -> 
                           (Database.execute_select 
                              (`List unit_type)
-                             ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
+                             ("insert into " ^ table_name ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
                              db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
-   let r', r = fresh_row () in
-     [r'],
-   tuplify [Types.string_type; `Primitive `DB; `Record r] --> unit_type);
-  
+   datatype "(TableHandle(r), {r}) -> ()");
+
   "deleterows", 
   (`Server
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and database = assoc "2" fields
-                and rows = assoc "3" fields in begin
-                    match database with 
-                      | `Database (db, _)  ->
+                and rows = assoc "2" fields in begin
+                    match table with 
+                      | `Table (db, table_name, _)  ->
                           (Database.execute_select
                              (`List unit_type)
-                             ("delete from " ^ unbox_string table ^ " where " ^ delete_condition db rows)
+                             ("delete from " ^ table_name ^ " where " ^ delete_condition db rows)
                              db :> primitive)
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
-   let r', r = fresh_row () in
-     [r'],
-   tuplify [Types.string_type; `Primitive `DB; `List (`Record r)] --> unit_type);
-
+   datatype "(TableHandle(r), [{r}]) -> ()");
+(*
     "updaterows", 
   (p1 (function
          | `Record fields ->

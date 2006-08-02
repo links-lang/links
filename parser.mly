@@ -226,9 +226,8 @@ send_expression:
 
 db_expression:
 | send_expression                                              { $1 }
-/*| UPDATE LPAREN STRING COMMA exp RPAREN BY exp                 { DBUpdate ($3, $5, $8), pos() }*/
-| DELETE FROM LPAREN exp COMMA exp RPAREN VALUES exp           { DBDelete ($4, $6, $9), pos() }
-| INSERT INTO LPAREN exp COMMA exp RPAREN VALUES exp           { DBInsert ($4, $6, $9), pos() }
+| DELETE FROM LPAREN exp RPAREN VALUES exp                     { DBDelete ($4, $7), pos() }
+| INSERT INTO LPAREN exp RPAREN VALUES exp                     { DBInsert ($4, $7), pos() }
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }
@@ -401,7 +400,7 @@ row:
 | fields                                                       { $1 }
 
 zrow:
-| zfields                                                       { $1 }
+| zfields                                                      { $1 }
 
 vrow:
 | vfields                                                      { $1 }

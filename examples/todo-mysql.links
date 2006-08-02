@@ -1,0 +1,36 @@
+var db = database "mysql:todo::3306:web:";
+var items = table items (
+    name : String 
+ ) db;
+
+fun showList() {
+<html>
+ <body>
+  <form l:onsubmit="{add(item)}" method="POST">
+    <input l:name="item"/>
+    <button type="submit">Add item</button>
+  </form>
+  <table>
+   {for (var item <- asList(items))
+     <tr><td>{stringToXml(item.name)}</td>
+         <td><form l:onsubmit="{remove(item.name)}" method="POST">
+              <button type="submit">Done</button>
+             </form>
+         </td>
+     </tr>}
+   </table>
+  </body>
+</html>
+}
+
+fun add(name) {
+ insert into (items) values (name=name);
+ showList()
+}
+
+fun remove(name) {
+ delete from (items) values [(name=name)];
+ showList()
+}
+
+showList()

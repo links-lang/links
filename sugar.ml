@@ -745,9 +745,8 @@ type phrasenode =
 (* Database operations *)
   | DatabaseLit of (string)
   | TableLit of (string * datatype * bool (* unique *) * phrase)
-(*  | DBUpdate of (string * phrase * phrase)*)
-  | DBDelete of (phrase * phrase * phrase)
-  | DBInsert of (phrase * phrase * phrase)
+  | DBDelete of (phrase * phrase)
+  | DBInsert of (phrase * phrase)
 (* Xml *)
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
@@ -845,9 +844,8 @@ let rec get_type_vars : phrase -> quantifier list =
 
 	  | DatabaseLit s -> empty
 	  | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
-(*	  | DBUpdate (table, db, rows)*)
-	  | DBDelete (table, db, rows)
-	  | DBInsert (table, db, rows) as op -> flatten [etv db; etv rows]
+	  | DBDelete (table, rows)
+	  | DBInsert (table, rows) as op -> flatten [etv table; etv rows]
 
 	  | Xml (tag, attrs, subnodes) ->
 	      flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
@@ -944,19 +942,16 @@ let desugar lookup_pos (e : phrase) : Syntax.untyped_expression =
 	| UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
 	| ListLit  [] -> Nil (pos)
 	| ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
-(*	| DBUpdate (table, db, rows)*)
-	| DBDelete (table, db, rows)
-	| DBInsert (table, db, rows) as op -> 
-	    let fn =  match op with
-(*              | DBUpdate _ -> "updaterows"*)
-              | DBDelete _ -> "deleterows"
-              | DBInsert _ -> "insertrow" 
-              | _ -> assert false in
-	      desugar (FnAppl ((Var fn, pos'),
-			       ([table; 
-				 db;
-				 rows
-				], pos')), pos')
+	| DBDelete (table, rows) ->
+	    desugar (FnAppl ((Var "deleterows", pos'),
+			     ([table;
+			       rows
+			      ], pos')), pos')
+	| DBInsert (table, row) -> 
+	    desugar (FnAppl ((Var "insertrow", pos'),
+			     ([table;
+			       row
+			      ], pos')), pos')
 	| DatabaseLit s -> Database (String (s, pos), pos)
 	| Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
 	| RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
