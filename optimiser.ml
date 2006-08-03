@@ -86,7 +86,6 @@ let pure : expression -> bool =
   *)
   let pure default = function 
     | Apply _    -> false
-(*    | Table _    -> false*)
     | TableQuery _ -> false
     | TableHandle _ -> false
     | Database _ -> false

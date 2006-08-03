@@ -78,7 +78,7 @@ and phrasenode =
   | ConstructorLit of (name * phrase option)
   | Switch of (phrase * (binder list) * (name * phrase) option)
   | Receive of ((binder list) * (name * phrase) option)
-  | DatabaseLit of (string)
+  | DatabaseLit of (phrase)
   | TableLit of (string * datatype * bool (* unique *) * phrase)
   | DBDelete of (phrase * phrase)
   | DBInsert of (phrase * phrase)

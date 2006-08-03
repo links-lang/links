@@ -45,7 +45,6 @@ let unique_name, db_unique_name, col_unique_name =
      incr base_value;
      "col_" ^ string_of_int !base_value)
 
-
 let list_head expr pos = 
   Apply(Variable ("hd", pos), expr, pos)
 
@@ -526,7 +525,7 @@ module Desugarer =
              | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
              | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
 
-             | DatabaseLit s -> empty
+             | DatabaseLit e -> etv e
              | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
              | DBDelete (table, rows)
              | DBInsert (table, rows) as op -> flatten [etv table; etv rows]
@@ -565,27 +564,26 @@ module Desugarer =
        (i.e.  bindings occuring textually previously.
    *)
    (* pattern-matching let *)
-   let rec polylet : simple_pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression =
-     let rec pl topt pat pos value body =
-       let value = match topt with
-         | None -> value
-         | Some t -> HasType (value, t, pos)
-       in
+   let polylet : simple_pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression =
+     fun pat pos value body ->
+       let rec pl pat pos value body =
          match fst pat with
            | `Nil ->
                (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
                           body,
                           Syntax.Wrong pos, pos))
            | `Cons (head, tail) ->
-               (pl topt head pos (list_head value pos)
-                  (pl topt tail pos (list_tail value pos)
-                     body))
+	       let name = unique_name () in
+	       let var = Variable (name, pos) in
+		 Let(name, value,
+		     pl head pos (list_head var pos)
+		       (pl tail pos (list_tail var pos) body), pos)
            | `Variant (name, patt) ->
                let case_variable = unique_name () in
                let variable = unique_name () in
                  Variant_selection(value, name,
                                    case_variable,
-                                   (pl topt patt pos (Variable (case_variable, pos)) body),
+                                   (pl patt pos (Variable (case_variable, pos)) body),
                                    variable,
                                    Variant_selection_empty(Variable(variable, pos), pos),
                                    pos)
@@ -596,9 +594,9 @@ module Desugarer =
                                    temp_var_field,
                                    temp_var_ext,
                                    value,
-                                   pl topt patt pos
+                                   pl patt pos
                                      (Variable (temp_var_field, pos))
-                                     (pl topt rem_patt pos
+                                     (pl rem_patt pos
                                         (Variable (temp_var_ext, pos))
                                         body),
                                    pos)
@@ -608,11 +606,11 @@ module Desugarer =
                           Syntax.Wrong pos, pos))
            | `Variable name -> Let (name, value, body, pos)
            | `As (name, pattern) ->
-               Let (name, value, pl topt pattern pos (Variable (name, pos)) body, pos)
+               Let (name, value, pl pattern pos (Variable (name, pos)) body, pos)
            | `HasType (pat, t) ->
-               pl (Some t) pat pos value body
-     in
-       pl None
+               pl pat pos (HasType (value, t, pos)) body
+       in
+	 pl pat pos value body
 
    let rec polylets (bindings : (simple_pattern * untyped_expression * position * bool) list) expression =  
      let folder (patt, value, pos, recp) expr = 
@@ -761,7 +759,7 @@ module Desugarer =
                                 ([table;
                                   row
                                  ], pos')), pos')
-           | DatabaseLit s -> Database (String (s, pos), pos)
+           | DatabaseLit e -> Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
            | Definition (_, _, _) -> failwith "top-level patterns not yet implemented"
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)

@@ -126,7 +126,7 @@ primary_expression:
 | xml                                                          { $1 }
 | parenthesized_thing                                          { $1 }
 | FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
-| DATABASE STRING                                              { DatabaseLit $2, pos() }
+| DATABASE exp                                                 { DatabaseLit $2, pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -312,7 +312,7 @@ handlewith_expression:
 
 table_expression:
 | handlewith_expression { $1 }
-| TABLE VARIABLE datatype unique FROM exp                      { TableLit ($2, $3, $4, $6), pos()} 
+| TABLE STRING datatype unique FROM exp                        { TableLit ($2, $3, $4, $6), pos()} 
 
 arg_list:
 | parenthesized_pattern                                        { [$1] }

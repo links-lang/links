@@ -1,0 +1,17 @@
+var db = database "postgresql:factorials::5432:www-data:";
+var factorials = table factorials ( 
+ i : Int,
+ f : Int
+) db;
+
+fun insertFactorials(i, f, n) {
+ delete from (factorials) values [(i=i, f=f)];
+ insert into (factorials) values (i=i, f=f);
+ if(i < n) {
+  insertFactorials(i+1, f*(i+1), n)
+ } else {
+  
+ }
+}
+
+insertFactorials(0,1,20)
