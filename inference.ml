@@ -993,7 +993,9 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   | TableHandle (db, tableName, row, pos) ->
       let datatype =  `Table (inference_row_of_row var_maps row) in
       let db = type_check env db in
+      let tableName = type_check env tableName in
 	unify (type_of_expression db, `Primitive `DB);
+	unify (type_of_expression tableName, `List (`Primitive `Char)); 
         TableHandle (db, tableName, row, (pos, datatype, None))
   | SortBy(expr, byExpr, pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any

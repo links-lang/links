@@ -79,7 +79,7 @@ and phrasenode =
   | Switch of (phrase * (binder list) * (name * phrase) option)
   | Receive of ((binder list) * (name * phrase) option)
   | DatabaseLit of (phrase)
-  | TableLit of (string * datatype * bool (* unique *) * phrase)
+  | TableLit of (phrase * datatype * bool (* unique *) * phrase)
   | DBDelete of (phrase * phrase)
   | DBInsert of (phrase * phrase)
   | Xml of (name * (string * (phrase list)) list * phrase list)

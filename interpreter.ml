@@ -289,6 +289,11 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		            | `Record fields -> 
 		                `Record ((label, value) :: fields)
 		            | _ -> raise (Runtime_error "TF077"))
+	             | MkTableHandle (row) ->
+			 (match lhsVal with
+			    | `Database (db, _) ->
+				apply_cont globals cont (`Table(db, charlist_as_string value, row))
+			    | _ -> failwith ("Internal Error #56143432"))
 	          )
 	        in
 	          apply_cont globals cont result
@@ -310,11 +315,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                                                 let driver, params = parse_db_string args in
                                                   `Database (db_connect driver params)) in
 	               apply_cont globals cont result
-	           | MkTableHandle (table_name, row) ->
-		       (match value with
-			  | `Database (db, _) ->
-			      apply_cont globals cont (`Table(db, table_name, row))
-			  | _ -> failwith ("Internal Error #56143432"))
                    | QueryOp(query) ->
                        let result = 
                          match value with
@@ -474,7 +474,8 @@ fun globals locals expr cont ->
 (*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
 
   | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
-      eval database (UnopApply(locals, MkTableHandle(table_name, row)) :: cont)
+      eval database (BinopRight(locals, MkTableHandle(row), table_name) :: cont)
+(*      eval database (UnopApply(locals, MkTableHandle(table_name, row)) :: cont)*)
 
   | Syntax.TableQuery (th, query, _) ->   (* getting type from inferred type *)
       eval th (UnopApply(locals, QueryOp(query)) :: cont)

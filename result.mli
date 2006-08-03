@@ -42,8 +42,8 @@ val reconstruct_db_string : string * string -> string
 type unop = | MkColl
             | MkVariant of string
             | MkDatabase
-	    | MkTableHandle of ( (* table name: *) string *
-		                 (* field spec: *) Types.row)
+(* 	    | MkTableHandle of ( (\* table name: *\) Syntax.expression * *)
+(* 		                 (\* field spec: *\) Types.row) *)
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
@@ -55,6 +55,7 @@ type binop =
     | LessOp
     | UnionOp
     | RecExtOp of string
+    | MkTableHandle of Types.row
 type xmlitem =
     | Text of string 
     | Attr of (string * string) 

@@ -20,7 +20,7 @@ fun format(words) client {
 }
 
 fun completions(p) server {
- var wordlist = table "wordlist" (
+ var wordlist = table "wordlist" with (
    word : String, 
    type : String, 
    meaning : String

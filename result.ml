@@ -81,9 +81,9 @@ and reconstruct_db_string : (string * string) -> string =
 type unop = MkColl
             | MkVariant of string
             | MkDatabase
-	    | MkTableHandle of ( 
-		(* table name: *) string *
-		(* field spec: *) row)
+(* 	    | MkTableHandle of (  *)
+(* 		(\* table name: *\) expression * *)
+(* 		(\* field spec: *\) row) *)
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
             | QueryOp of (Query.query)
@@ -94,6 +94,7 @@ let string_of_unop = Show_unop.show
 type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
 	     | UnionOp
 	     | RecExtOp of string
+	     | MkTableHandle of row
                  deriving (Show, Pickle)
 
 type xmlitem =   Text of string

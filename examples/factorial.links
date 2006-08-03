@@ -36,11 +36,9 @@ fun response(s) client {
 }
 
 fun factorialsUpto(n) server {
-  var db = database "postgresql:factorials::5432:www-data:";
-  var factorials = table factorials ( 
-   i : Int,
-   f : Int
-  ) from db;
+  var descriptor = "postgresql:factorials::5432:www-data:";
+  var db = database descriptor;
+  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
  for (var row <- asList(factorials))
   where (row.i <= n)

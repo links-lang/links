@@ -61,7 +61,7 @@ type 'data expression' =
       * (* the query: *) Query.query 
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
-      * (* the table name: *) string 
+      * (* the table name: *) 'data expression'
       * (* the type of a table row: *) row
       * 'data)
      
@@ -98,8 +98,8 @@ let rec is_value : 'a expression' -> bool = function
   | Variant_injection (_, e, _)
   | Variant_selection_empty (e, _)
   | Database (e, _)
-  | TableHandle (e, _, _, _)
   | List_of (e, _) -> is_value e
+  | TableHandle (a, b, _, _)
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
   | For (a, _, b, _)
@@ -197,8 +197,8 @@ and show t : 'a expression' -> string = function
   | For (expr, variable, value, data) ->
       "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
-  | TableHandle (db, s, row, data) ->
-      "("^ s ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
+  | TableHandle (db, name, row, data) ->
+      "("^ show t name ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
   | TableQuery (th, query, data) ->
       "("^ show t th ^"["^string_of_query query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
@@ -351,8 +351,9 @@ let visit_expressions'
         Database (e, d), data
     | TableQuery (e, q, d) -> let e, data = visitor visit_children (e, data) in
         TableQuery (e, q, d), data
-    | TableHandle (e, n, r, d) -> let e, data = visitor visit_children (e, data) in
-        TableHandle (e, n, r, d), data
+    | TableHandle (e1, e2, r, d) -> let e1, data1 = visitor visit_children (e1, data)
+				    and e2, data2 = visitor visit_children (e2, data) in
+        TableHandle (e1, e2, r, d), combiner data1 data2
     | Escape (n, e, d) -> let e, data = visitor visit_children (e, data) in
         Escape (n, e, d), data
     | HasType (e, k, d) -> let e, data = visitor visit_children (e, data) in
@@ -425,7 +426,7 @@ let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
   | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
   | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
   | Database (a, data) -> Database (redecorate f a, f data)
-  | TableHandle (a, b, c, data) -> TableHandle (redecorate f a, b, c, f data)
+  | TableHandle (a, b, c, data) -> TableHandle (redecorate f a, redecorate f b, c, f data)
   | TableQuery (a, b, data) -> TableQuery (redecorate f a, b, f data)
   | SortBy (a, b, data) -> SortBy (redecorate f a, redecorate f b, f data)
   | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
@@ -484,10 +485,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | List_of (e, _)
                | Escape (_, e, _)
                | HasType (e, _, _)
-               | TableQuery (e, _, _)
-               | TableHandle (e, _, _, _) -> [visitor visit_children e]
+               | TableQuery (e, _, _) -> [visitor visit_children e]
 
-
+               | TableHandle (e1, e2, _, _)
                | Apply (e1, e2, _)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
@@ -495,8 +495,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_selection_empty (e1, e2, _)
                | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
-               | For (e1, _, e2, _) ->
-                   [visitor visit_children e1; visitor visit_children e2]
+               | For (e1, _, e2, _)
                | SortBy (e1, e2, _) ->
                    [visitor visit_children e1; visitor visit_children e2]
                    
@@ -534,11 +533,11 @@ let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a
       | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
       | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
       | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
-      | TableHandle (e, a, b, c)                   -> passto [e] (fun [e] -> TableHandle (e, a, b, c))
       | TableQuery (e, a, b)                       -> passto [e] (fun [e] -> TableQuery (e, a, b))
       | Escape (a, e, b)                           -> passto [e] (fun [e] -> Escape (a, e, b))
       | Variant_selection_empty (e, d)             -> passto [e] (fun [e] -> Variant_selection_empty (e, d))
 
+      | TableHandle (e1, e2, a, b)                 -> passto [e1; e2] (fun [e1; e2] -> TableHandle (e1, e2, a, b))
       | Apply (e1, e2, a)                          -> passto [e1; e2] (fun [e1; e2] -> Apply (e1, e2, a))
       | Comparison (e1, a, e2, b)                  -> passto [e1; e2] (fun [e1; e2] -> Comparison (e1, a, e2, b))
       | Let (a, e1, e2, b)                         -> passto [e1; e2] (fun [e1; e2] -> Let (a, e1, e2, b))

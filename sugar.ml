@@ -743,7 +743,7 @@ module Desugarer =
                     RecordType row ->
                       desugar_row varmap row
                 in
-                  TableHandle (desugar db, name, row, pos))
+                  TableHandle (desugar db, desugar name, row, pos))
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
            | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
