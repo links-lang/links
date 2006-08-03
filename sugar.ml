@@ -674,7 +674,7 @@ module Desugarer =
        let desugar = desugar' lookup_pos
        and patternize = simple_pattern_of_pattern varmap lookup_pos in
          match s with
-           | TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), dpos), t)  -> 
+           | TypeAnnotation ((Definition ((`Variable name, _), (FunLit (Some _, patterns, body),_), loc), dpos), t)  -> 
                Define (name,
                        Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype varmap t)],
                             Variable (name, pos),
@@ -762,7 +762,8 @@ module Desugarer =
                                   row
                                  ], pos')), pos')
            | DatabaseLit s -> Database (String (s, pos), pos)
-           | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
+           | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
+           | Definition (_, _, _) -> failwith "top-level patterns not yet implemented"
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
            | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
            | TupleLit [field] -> desugar field

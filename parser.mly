@@ -90,7 +90,7 @@ toplevel_seq:
 toplevel:
 | exp SEMICOLON                                                { $1 }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
-| VAR VARIABLE perhaps_location EQ exp SEMICOLON               { Definition ($2, $5, $3), pos() }
+| VAR pattern perhaps_location EQ exp SEMICOLON                { Definition ($2, $5, $3), pos() }
 | SIG 
   VARIABLE COLON datatype 
   FUN VARIABLE arg_list perhaps_location block perhaps_semi    { if $2 <> $6 then 
@@ -99,10 +99,10 @@ toplevel:
                                                                              ^ $2 ^ "', not `"^ $6 ^"'.",
                                                                              pos ()));
                                                                  TypeAnnotation (
-                                                                                  (Definition ($6, (FunLit (Some $6, $7, $9), pos()), $8), pos()),
+                                                                                  (Definition ((`Variable $6, pos()), (FunLit (Some $6, $7, $9), pos()), $8), pos()),
                                                                                   $4),
                                                                  pos() }
-| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ((`Variable $2, pos()), (FunLit (Some $2, $3, $5), pos()), $4), pos() }
 
 perhaps_location:
 | SERVER                                                       { `Server }

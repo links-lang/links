@@ -55,7 +55,7 @@ and phrasenode =
   | FunLit of (name option * ppattern list * phrase)
   | Spawn of phrase
   | ListLit of (phrase list)
-  | Definition of (name * phrase * location)
+  | Definition of (ppattern * phrase * location)
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
   | Escape of (name * phrase)
   | HandleWith of (phrase * name * phrase)
