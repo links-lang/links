@@ -17,9 +17,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token EQ IN 
 %token FUN RARROW VAR
 %token IF ELSE
-%token EQEQ LESS LESSEQUAL MORE MOREEQUAL DIFFERENT
-%token PLUS MINUS STAR SLASH PLUSDOT MINUSDOT STARDOT SLASHDOT
-%token PLUSPLUS HATHAT HAT
+%token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
@@ -32,7 +30,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
 %token TRUE FALSE
-%token BARBAR AMPAMP BANG
+%token BARBAR AMPAMP
 %token <Num.num> UINTEGER
 %token <float> UFLOAT 
 %token <string> STRING CDATA
@@ -41,9 +39,19 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG
-%token QUESTION TILDE
+%token QUESTION TILDE PLUS STAR SLASH
 %token <char*char> RANGE
 %token UNDERSCORE AS
+%token <string> INFIX0 INFIXL0 INFIXR0
+%token <string> INFIX1 INFIXL1 INFIXR1
+%token <string> INFIX2 INFIXL2 INFIXR2
+%token <string> INFIX3 INFIXL3 INFIXR3
+%token <string> INFIX4 INFIXL4 INFIXR4
+%token <string> INFIX5 INFIXL5 INFIXR5
+%token <string> INFIX6 INFIXL6 INFIXR6
+%token <string> INFIX7 INFIXL7 INFIXR7
+%token <string> INFIX8 INFIXL8 INFIXR8
+%token <string> INFIX9 INFIXL9 INFIXR9
 
 %start parse_links
 %start just_datatype
@@ -142,16 +150,42 @@ parenthesized_thing:
 | LPAREN exps RPAREN                                           { TupleLit ($2), pos() }
 
 binop:
-| STAR                                                         { `Times }
-| SLASH                                                        { `Div }
-| HAT                                                          { `Exp }
-| PLUS                                                         { `Plus }
 | MINUS                                                        { `Minus }
-| STARDOT                                                      { `FloatTimes }
-| SLASHDOT                                                     { `FloatDiv }
-| HATHAT                                                       { `FloatExp }
-| PLUSDOT                                                      { `FloatPlus }
 | MINUSDOT                                                     { `FloatMinus }
+| op                                                           { `Name $1 }
+
+op:
+| INFIX0                                                       { $1 }
+| INFIXL0                                                      { $1 }
+| INFIXR0                                                      { $1 }
+| INFIX1                                                       { $1 }
+| INFIXL1                                                      { $1 }
+| INFIXR1                                                      { $1 }
+| INFIX2                                                       { $1 }
+| INFIXL2                                                      { $1 }
+| INFIXR2                                                      { $1 }
+| INFIX3                                                       { $1 }
+| INFIXL3                                                      { $1 }
+| INFIXR3                                                      { $1 }
+| INFIX4                                                       { $1 }
+| INFIXL4                                                      { $1 }
+| INFIXR4                                                      { $1 }
+| INFIX5                                                       { $1 }
+| INFIXL5                                                      { $1 }
+| INFIXR5                                                      { $1 }
+| INFIX6                                                       { $1 }
+| INFIXL6                                                      { $1 }
+| INFIXR6                                                      { $1 }
+| INFIX7                                                       { $1 }
+| INFIXL7                                                      { $1 }
+| INFIXR7                                                      { $1 }
+| INFIX8                                                       { $1 }
+| INFIXL8                                                      { $1 }
+| INFIXR8                                                      { $1 }
+| INFIX9                                                       { $1 }
+| INFIXL9                                                      { $1 }
+| INFIXR9                                                      { $1 }
+ 
 
 postfix_expression:
 | primary_expression                                           { $1 }
@@ -175,55 +209,111 @@ unary_expression:
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
-exponentiation_expression:
+infixr_9:
 | unary_expression                                             { $1 }
-| exponentiation_expression HAT    unary_expression            { InfixAppl (`Exp,      $1, $3), pos() }
-| exponentiation_expression HATHAT unary_expression            { InfixAppl (`FloatExp, $1, $3), pos() }
+| unary_expression INFIX9 unary_expression                     { InfixAppl (`Name $2, $1, $3), pos() }
+| unary_expression INFIXR9 infixr_9                            { InfixAppl (`Name $2, $1, $3), pos() }
 
-multiplicative_expression:
-| exponentiation_expression                                    { $1 }
-| multiplicative_expression STAR exponentiation_expression     { InfixAppl (`Times, $1, $3), pos() }
-| multiplicative_expression SLASH   exponentiation_expression  { InfixAppl (`Div, $1, $3), pos() }
-| multiplicative_expression STARDOT  exponentiation_expression { InfixAppl (`FloatTimes, $1, $3), pos() }
-| multiplicative_expression SLASHDOT exponentiation_expression { InfixAppl (`FloatDiv, $1, $3), pos() }
+infixl_9:
+| infixr_9                                                     { $1 }
+| infixl_9 INFIXL9 infixr_9                                    { InfixAppl (`Name $2, $1, $3), pos() }
 
-addition_expression: 
-| multiplicative_expression                                    { $1 }
-| addition_expression PLUS  multiplicative_expression          { InfixAppl (`Plus, $1, $3), pos() }
-| addition_expression MINUS multiplicative_expression          { InfixAppl (`Minus, $1, $3), pos() }
-| addition_expression PLUSDOT   multiplicative_expression      { InfixAppl (`FloatPlus, $1, $3), pos() }
-| addition_expression MINUSDOT  multiplicative_expression      { InfixAppl (`FloatMinus, $1, $3), pos() }
+infixr_8:
+| infixl_9                                                     { $1 }
+| infixl_9 INFIX8  infixl_9                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_9 INFIXR8 infixr_8                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_9 COLONCOLON infixr_8                                 { InfixAppl (`Cons, $1, $3), pos() }
 
-cons_expression:
-| addition_expression                                          { $1 }
-| addition_expression COLONCOLON cons_expression               { InfixAppl (`Cons, $1, $3), pos() }
-| addition_expression PLUSPLUS cons_expression                 { InfixAppl (`Concat, $1, $3), pos() }
+infixl_8:
+| infixr_8                                                     { $1 }
+| infixl_8 INFIXL8 infixr_8                                    { InfixAppl (`Name $2, $1, $3), pos() }
 
-comparison_expression:
-| cons_expression                                              { $1 }
-| comparison_expression TILDE     regex                        { InfixAppl (`RegexMatch, $1, $3), pos() }
-| comparison_expression EQEQ      cons_expression              { InfixAppl (`Eq, $1, $3), pos() }
-| comparison_expression LESS      cons_expression              { InfixAppl (`Less, $1, $3), pos() }
-| comparison_expression LESSEQUAL cons_expression              { InfixAppl (`LessEq, $1, $3), pos() }
-| comparison_expression MORE      cons_expression              { InfixAppl (`Greater, $1, $3), pos() }
-| comparison_expression MOREEQUAL cons_expression              { InfixAppl (`GreaterEq, $1, $3), pos() }
-| comparison_expression DIFFERENT cons_expression              { InfixAppl (`NotEq, $1, $3), pos() }
+infixr_7:
+| infixl_8                                                     { $1 }
+| infixl_8 INFIX7  infixl_8                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_8 INFIXR7 infixr_7                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_7:
+| infixr_7                                                     { $1 }
+| infixl_7 INFIXL7 infixr_7                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_6:
+| infixl_7                                                     { $1 }
+| infixl_7 INFIX6  infixl_7                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_7 INFIXR6 infixr_6                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_6:
+| infixr_6                                                     { $1 }
+| infixl_6 INFIXL6 infixr_6                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_6 MINUS infixr_6                                      { InfixAppl (`Minus, $1, $3), pos() }
+| infixl_6 MINUSDOT infixr_6                                   { InfixAppl (`FloatMinus, $1, $3), pos() }
+
+infixr_5:
+| infixl_6                                                     { $1 }
+| infixl_6 INFIX5  infixl_6                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_6 INFIXR5 infixr_5                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_5:
+| infixr_5                                                     { $1 }
+| infixl_5 INFIXL5 infixr_5                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_4:
+| infixl_5                                                     { $1 }
+| infixl_5 INFIX4    infixl_5                                  { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_5 INFIXR4   infixr_4                                  { InfixAppl (`Name $2, $1, $3), pos() }
+| infixr_5 TILDE     regex                                     { InfixAppl (`RegexMatch, $1, $3), pos() }
+
+infixl_4:
+| infixr_4                                                     { $1 }
+| infixl_4 INFIXL4 infixr_4                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_3:
+| infixl_4                                                     { $1 }
+| infixl_4 INFIX3  infixl_4                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_4 INFIXR3 infixr_3                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_3:
+| infixr_3                                                     { $1 }
+| infixl_3 INFIXL3 infixr_3                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_2:
+| infixl_3                                                     { $1 }
+| infixl_3 INFIX2  infixl_3                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_3 INFIXR2 infixr_2                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_2:
+| infixr_2                                                     { $1 }
+| infixl_2 INFIXL2 infixr_2                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_1:
+| infixl_2                                                     { $1 }
+| infixl_2 INFIX1  infixl_2                                    { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_2 INFIXR1 infixr_1                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_1:
+| infixr_1                                                     { $1 }
+| infixl_1 INFIXL1 infixr_1                                    { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixr_0:
+| infixl_1                                                     { $1 }
+| infixl_1 INFIX0    infixl_1                                  { InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_1 INFIXR0   infixr_0                                  { InfixAppl (`Name $2, $1, $3), pos() }
+
+infixl_0:
+| infixr_0                                                     { $1 }
+| infixl_0 INFIXL0 infixr_0                                    { InfixAppl (`Name $2, $1, $3), pos() }
 
 logical_expression:
-| comparison_expression                                        { $1 }
-| logical_expression BARBAR comparison_expression              { InfixAppl (`Or, $1, $3), pos() }
-| logical_expression AMPAMP comparison_expression              { InfixAppl (`And, $1, $3), pos() }
+| infixl_0                                                     { $1 }
+| logical_expression BARBAR infixl_0                           { InfixAppl (`Or, $1, $3), pos() }
+| logical_expression AMPAMP infixl_0                           { InfixAppl (`And, $1, $3), pos() }
 
 typed_expression:
 | logical_expression                                           { $1 }
 | logical_expression COLON datatype                            { TypeAnnotation ($1, $3), pos() }
 
-send_expression:
-| typed_expression                                             { $1 }
-| typed_expression BANG logical_expression                     { Send ($1, $3), pos() }
-
 db_expression:
-| send_expression                                              { $1 }
+| typed_expression                                             { $1 }
 | DELETE FROM LPAREN exp RPAREN VALUES exp                     { DBDelete ($4, $7), pos() }
 | INSERT INTO LPAREN exp RPAREN VALUES exp                     { DBInsert ($4, $7), pos() }
 
@@ -241,7 +331,6 @@ xmlid:
 attr_list:
 | attr                                                         { [$1] }
 | attr_list attr                                               { $2 :: $1 }
-
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
 | xmlid EQ LQUOTE RQUOTE                                       { ($1, [StringLit "", pos()]) }
@@ -465,7 +554,6 @@ regex_pattern:
 regex_pattern_sequence:
 | regex_pattern                                                { [$1] }
 | regex_pattern regex_pattern_sequence                         { $1 :: $2 }
-
 
 
 /*

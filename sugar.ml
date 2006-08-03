@@ -462,12 +462,6 @@ module Desugarer =
      let vars, varmap = generate_var_mapping vars in
        vars, desugar_datatype varmap k
 
-   let uncompare : comparison_binop -> string = 
-     (* FIXME: this is buggy: should eliminate greater, greatereq *)
-     flip List.assoc [`Eq, "=="; `Less, "<"; `LessEq, "<="; `Greater, ">"; `GreaterEq, ">="; `NotEq, "<>"; `RegexMatch, "~"]
-   and unarith : arith_binop -> string = 
-     flip List.assoc [`Times, "*"; `Div, "/"; `Exp, "^"; `Plus, "+"; `Minus, "-"; `FloatTimes, "*."; `FloatDiv, "/."; `FloatExp, "^."; `FloatPlus, "+."; `FloatMinus, "-."]
-
    let rec get_type_vars : phrase -> quantifier list =
      let empty = [] in
      let union = (unduplicate (=)) -<- List.concat in
@@ -511,8 +505,6 @@ module Desugarer =
              | Regex _ -> empty
              | UnaryAppl (_, e) -> etv e
              | FnAppl (fn, (ps, _)) -> flatten [etv fn; etvs ps]
-             | Send (l, r) -> flatten [etv l; etv r]
-
              | TupleLit fields -> etvs fields
              | RecordLit (fields, e) ->
                  flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
@@ -685,16 +677,18 @@ module Desugarer =
            | BoolLit b   -> Boolean (b, pos)
            | CharLit c   -> Char (c, pos)
            | Var v       -> Variable (v, pos)
+           | InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, "<", desugar e1, pos)
+           | InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, "<=", desugar e1, pos)
+           | InfixAppl (`Name ("=="|"<"|"<="|"<>" as op), e1, e2)  -> Comparison (desugar e1, op, desugar e2, pos)
+           | InfixAppl (`Name "++", e1, e2)  -> Concat (desugar e1, desugar e2, pos)
+           | InfixAppl (`Name "!", e1, e2)  -> Apply (Apply (Variable ("send", pos), desugar e1, pos), desugar e2, pos) 
+           | InfixAppl (`Name n, e1, e2)  -> Apply (Apply (Variable (n, pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | InfixAppl (`Concat, e1, e2) -> Concat (desugar e1, desugar e2, pos)
-           | InfixAppl (`Greater, e1, e2) -> desugar (InfixAppl (`Less, e2, e1), pos')
-           | InfixAppl (`GreaterEq, e1, e2) -> desugar (InfixAppl (`LessEq, e2, e1), pos')
-           | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> 
-               Apply (Apply (Variable ("~", pos), desugar e1, pos), 
-                      desugar (desugar_regex desugar pos' r, pos'), pos)
+           | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> Apply (Apply (Variable ("~", pos), desugar e1, pos), 
+                                                                 desugar (desugar_regex desugar pos' r, pos'), pos)
            | InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
-           | InfixAppl (#comparison_binop as p, e1, e2) -> Comparison (desugar e1, uncompare p, desugar e2, pos)
-           | InfixAppl (#arith_binop as a, e1, e2)  -> Apply (Apply (Variable (unarith a, pos), desugar e1, pos), desugar e2, pos) 
+           | InfixAppl (`FloatMinus, e1, e2)  -> Apply (Apply (Variable ("-.", pos), desugar e1, pos), desugar e2, pos) 
+           | InfixAppl (`Minus, e1, e2)  -> Apply (Apply (Variable ("-", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
            | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
            | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
@@ -704,10 +698,12 @@ module Desugarer =
                                                   ([FunLit (None, [`Record ([],None), pos'], e), 
                                                     pos'], pos')),
                                           pos'), ([], pos')), pos')
-           | Section (#arith_binop as a) -> Variable (unarith a, pos)
+           | Section (`FloatMinus) -> Variable ("-.", pos)
+           | Section (`Minus) -> Variable ("-", pos)
            | Section (`Project name) -> (let var = unique_name () in
                                            desugar (FunLit (None, [`Variable var, pos'], 
                                                             ((Projection ((Var var, pos'), name), pos'):Sugartypes.phrase)), pos'))
+           | Section (`Name name) -> Variable (name, pos)
            | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | Projection (e, name) -> (let s = unique_name ()
                                       in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
@@ -746,7 +742,6 @@ module Desugarer =
                   TableHandle (desugar db, desugar name, row, pos))
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
-           | UnaryAppl (`Not, e)        -> Apply (Variable ("not", pos), desugar e, pos)
            | ListLit  [] -> Nil (pos)
            | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
            | DBDelete (table, rows) ->
@@ -774,8 +769,6 @@ module Desugarer =
            | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
            | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
            | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
-           | Send (l, r)      -> desugar (FnAppl ((FnAppl ((Var "send", pos'), ([l], pos')), pos'), ([r], pos')), pos')
-
            | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
            | FunLit (Some name, patterns, body) -> Rec ([name, desugar (FunLit (None, patterns, body), pos'), None],
                                                         Variable (name, pos),

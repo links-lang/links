@@ -1,15 +1,21 @@
 (* The syntax tree created by the parser. *)
 
 type name = string
+
+(* The operators named here are the ones that it is difficult or
+   impossible to define as "user" infix operators:
+
+      - -.  are both infix and prefix
+     && ||  have special evaluation
+     ::     is also used in patterns
+     ~      triggers a lexer state switch
+*)
 type unary_op = [
 | `Minus
 | `FloatMinus
-| `Not
-                ]
-type comparison_binop = [`Eq | `Less | `LessEq | `Greater | `GreaterEq | `NotEq | `RegexMatch ]
-type arith_binop = [`Times | `Div | `Exp | `Plus | `Minus | `FloatTimes | `FloatDiv | `FloatExp | `FloatPlus | `FloatMinus]
+]
 type logical_binop = [`And | `Or]
-type binop = [comparison_binop | logical_binop | arith_binop | `Concat | `Cons]
+type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name]
 
 type operator = [ unary_op | binop | `Project of name ]
 
@@ -59,7 +65,7 @@ and phrasenode =
   | Iteration of (ppattern * phrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
   | Escape of (name * phrase)
   | HandleWith of (phrase * name * phrase)
-  | Section of ([arith_binop|`Project of name])
+  | Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
   | Conditional of (phrase * phrase * phrase)
   | Binding of binder
   | Block of (phrase list * phrase)
@@ -68,7 +74,6 @@ and phrasenode =
   | Regex of (regex)
   | UnaryAppl of (unary_op * phrase)
   | FnAppl of (phrase * (phrase list * pposition))
-  | Send of (phrase * phrase)
   | TupleLit of (phrase list)
   | RecordLit of ((name * phrase) list * phrase option)
   | Projection of (phrase * name)
@@ -97,4 +102,3 @@ and regex = | Range of (char * char)
 type directive = string * string list
 type sentence = (phrase list, directive) Utility.either
 type sentence' = (Syntax.untyped_expression list, directive) Utility.either
-
