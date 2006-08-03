@@ -33,9 +33,6 @@ val letrec_nonfunction : Syntax.position ->
   (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
   'a
 
-val string_of_pos : (Lexing.position * 'a * string) -> string
-
-
 val invalid_name : Syntax.position -> string -> string -> 'a
 
 val format_exception : exn -> string

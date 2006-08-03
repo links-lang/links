@@ -58,6 +58,7 @@ SOURCES = $(OPC)                		\
           syntax.ml             		\
           regex.ml                              \
           inferencetypes.mli inferencetypes.ml 	\
+          sugartypes.mli              		\
           sugar.ml              		\
           result.ml result.mli         		\
           errors.mli errors.ml                  \

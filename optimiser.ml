@@ -12,15 +12,6 @@ open Sql_transform
 let optimising = Settings.add_bool("optimising", true, true)
 let show_optimisation = Settings.add_bool("show_optimisation", false, true)
 
-module RewriteSyntax = 
-  Rewrite
-    (SimpleRewrite
-       (struct
-          type t = Syntax.expression
-          type rewriter = t -> t option
-          let process_children = Syntax.perhaps_process_children
-        end))
-    
 let gensym =
   let counter = ref 0 in
     function str ->
@@ -387,8 +378,8 @@ let sql_aslist : RewriteSyntax.rewriter =
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
         let th_list_type = `List(`Record(th_row)) in
-        let table_query = TableQuery(Variable(th_var, (Sugar._DUMMY_POS, th_type, None)), select_all,
-                                                     (Sugar._DUMMY_POS, th_list_type, None))
+        let table_query = TableQuery(Variable(th_var, (Syntax.dummy_position, th_type, None)), select_all,
+                                                     (Syntax.dummy_position, th_list_type, None))
         in
           (match th with
              | Variable _ -> Some(table_query)

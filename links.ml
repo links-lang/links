@@ -96,7 +96,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
              let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
                print_result (Syntax.node_datatype (last exprs)) result;
                (valenv, typeenv)
-         | Right (directive : Sugar.directive) -> 
+         | Right (directive : Sugartypes.directive) -> 
              begin
                (Utility.uncurry execute_directive) directive;
                (valenv, typeenv)

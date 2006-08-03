@@ -780,11 +780,11 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
   let attrs = 
-    ("onfocus", Syntax.String ("_focused = this.id", Sugar.no_expr_data))
+    ("onfocus", Syntax.String ("_focused = this.id", Syntax.no_expr_data))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
-    generate (Xml_node (tag, attrs, children, Sugar.no_expr_data))
+    generate (Xml_node (tag, attrs, children, Syntax.no_expr_data))
 
 
 (* generate_noncps: generates CPS code for expr and immediately 

@@ -607,3 +607,23 @@ and untyped_pos  : (untyped_expression -> position) = expression_data
 
 let stringlit_value = function
   | String (name, _) -> name
+
+module RewriteUntypedExpression = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = untyped_expression
+          type rewriter = t -> t option
+          let process_children = perhaps_process_children
+        end))
+
+module RewriteSyntax = 
+  Rewrite.Rewrite
+    (Rewrite.SimpleRewrite
+       (struct
+          type t = expression
+          type rewriter = t -> t option
+          let process_children = perhaps_process_children
+        end))
+
+let no_expr_data = (dummy_position, `Not_typed, None)

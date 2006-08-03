@@ -85,13 +85,13 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (Sugar._DUMMY_POS, Types.string_type, None))
+  String (s, (Syntax.dummy_position, Types.string_type, None))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (Sugar._DUMMY_POS, `List (`Primitive `XMLitem), None))
+            (Syntax.dummy_position, `List (`Primitive `XMLitem), None))
 
 let attrname = fst
 let attrval = snd

@@ -2,12 +2,12 @@
 
 open Utility
 open List
-open Sugar
+open Sugartypes
 
 let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-			    (start, finish)))
+  | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
+			                   (start, finish)))
 
 let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
@@ -49,12 +49,13 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %start just_datatype
 %start sentence
 
-%type <Sugar.phrase list> parse_links
-%type <Sugar.phrase> xml_tree
-%type <Sugar.datatype> datatype
-%type <Sugar.datatype> just_datatype
-%type <Sugar.sentence> sentence
-%type <Sugar.regex list> regex_pattern_sequence
+%type <Sugartypes.phrase list> parse_links
+%type <Sugartypes.phrase> xml_tree
+%type <Sugartypes.datatype> datatype
+%type <Sugartypes.datatype> just_datatype
+%type <Sugartypes.sentence> sentence
+%type <Sugartypes.regex list> regex_pattern_sequence
+%type <Sugartypes.ppattern> pattern
 
 %%
 
@@ -93,7 +94,7 @@ toplevel:
 | SIG 
   VARIABLE COLON datatype 
   FUN VARIABLE arg_list perhaps_location block perhaps_semi    { if $2 <> $6 then 
-                                                                   raise (ConcreteSyntaxError
+                                                                   raise (Sugar.ConcreteSyntaxError
                                                                             ("Signature for `" ^ $2 ^ "' should precede definition of `"
                                                                              ^ $2 ^ "', not `"^ $6 ^"'.",
                                                                              pos ()));
@@ -119,7 +120,6 @@ constant:
 
 primary_expression:
 | VARIABLE                                                     { Var $1, pos() }
-| UNDERSCORE                                                   { Var "_", pos() }
 | constant                                                     { $1 }
 | LBRACKET RBRACKET                                            { ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
@@ -279,7 +279,7 @@ cases:
 | case cases                                                   { $1 :: $2 }
 
 case:
-| CASE patt RARROW exp SEMICOLON                               { $2, $4 }
+| CASE pattern RARROW exp SEMICOLON                            { $2, $4 }
 
 // TBD: remove `None' from Switch constructor
 case_expression:
@@ -289,7 +289,7 @@ case_expression:
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR LPAREN VAR patt LARROW exp RPAREN
+| FOR LPAREN VAR pattern LARROW exp RPAREN
       perhaps_where
       perhaps_orderby
       exp                                                      { Iteration ($4, $6, $10, $8, $9),    pos() }
@@ -318,11 +318,8 @@ arg_list:
 | parenthesized_pattern                                        { [$1] }
 | parenthesized_pattern arg_list                               { $1 :: $2 }
 
-parenthesized_pattern:
-| parenthesized_thing                                          { Pattern $1 }
-
 binding:
-| VAR patt EQ exp SEMICOLON                                    { Binding ($2, $4), pos() }
+| VAR pattern EQ exp SEMICOLON                                 { Binding ($2, $4), pos() }
 | exp SEMICOLON                                                { $1 }
 | FUN VARIABLE arg_list block                                  { FunLit (Some $2, $3, $4), pos() }
 
@@ -356,10 +353,9 @@ record_label:
 | VARIABLE                                                     { $1 } 
 | UINTEGER                                                     { Num.string_of_num $1 }
 
-patt:
-| cons_expression                                              { Pattern $1 }
-| cons_expression AS VARIABLE                                  { AsPattern ($3, $1) }
-
+/*
+ * Datatype grammar
+ */
 just_datatype:
 | datatype SEMICOLON                                           { $1 }
 
@@ -395,6 +391,7 @@ primary_datatype:
                                                                    | "XML"     -> ListType (PrimitiveType `XMLitem)
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
+
 | CONSTRUCTOR LPAREN primary_datatype RPAREN                   { match $1 with 
                                                                    | "Mailbox"    -> MailboxType $3
                                                                    | t -> failwith ("Unknown unary type constructor : " ^ t)
@@ -444,6 +441,10 @@ fname:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 
+
+/*
+ * Regular expression grammar
+ */
 regex:
 | SLASH regex_pattern_sequence SLASH                           { Regex (Seq $2), pos() }
 | SLASH SLASH                                                  { Regex (Simply ""), pos() }
@@ -462,3 +463,47 @@ regex_pattern_sequence:
 | regex_pattern                                                { [$1] }
 | regex_pattern regex_pattern_sequence                         { $1 :: $2 }
 
+
+
+/*
+ * Pattern grammar
+ */
+pattern:
+| typed_pattern                                             { $1 }
+| typed_pattern COLON primary_datatype                      { `HasType ($1, $3), pos() }
+
+typed_pattern:
+| cons_pattern                                              { $1 }
+| cons_pattern AS VARIABLE                                  { `As ($3, $1), pos() }
+
+cons_pattern:
+| constructor_pattern                                       { $1 }
+| constructor_pattern COLONCOLON cons_pattern               { `Cons ($1, $3), pos() }
+
+constructor_pattern:
+| primary_pattern                                           { $1 }
+| CONSTRUCTOR                                               { `Variant ($1, None), pos() }
+| CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }
+
+parenthesized_pattern:
+| LPAREN RPAREN                                             { `Tuple [], pos() }
+| LPAREN pattern RPAREN                                     { $2 }
+| LPAREN pattern COMMA patterns RPAREN                      { `Tuple ($2 :: $4), pos() }
+| LPAREN labeled_patterns VBAR pattern RPAREN               { `Record ($2, Some $4), pos() }
+| LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
+
+primary_pattern:
+| VARIABLE                                                  { `Variable $1, pos() }
+| UNDERSCORE                                                { `Any, pos() }
+| constant                                                  { `Constant $1, pos() }
+| LBRACKET RBRACKET                                         { `Nil, pos() }
+| LBRACKET patterns RBRACKET                                { `List $2, pos() }
+| parenthesized_pattern                                     { $1 }
+
+patterns:
+| pattern                                                   { [$1] }
+| pattern COMMA patterns                                    { $1 :: $3 }
+
+labeled_patterns:
+| record_label EQ pattern                                   { [($1, $3)] }
+| record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }

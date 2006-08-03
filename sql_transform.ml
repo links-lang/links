@@ -333,8 +333,8 @@ let select_by_origin origin expr =
                Syntax.Record_selection(origin.field_name, origin.field_var,
                                        origin.etc_var, 
                                        Syntax.Variable(origin.source_var,
-                                                       Sugar.no_expr_data),
-                                       expr, Sugar.no_expr_data)
+                                                       Syntax.no_expr_data),
+                                       expr, Syntax.no_expr_data)
             ) expr origin
 
 (** pos_and_neg

@@ -1225,7 +1225,7 @@ module RewriteSyntax =
 (* add / remove mailbox parameter to / from expressions *)
 let add_parameter : RewriteSyntaxU.rewriter = function
   | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
-  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
+  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Syntax.dummy_position), Syntax.dummy_position), a, d))
   | _                  -> None
 and remove_parameter : RewriteSyntax.rewriter = function
   | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))

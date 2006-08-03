@@ -209,10 +209,10 @@ and environment = (binding list)
     deriving (Show, Pickle)
 
 let expr_of_prim_val : result -> expression option = function
-    `Bool b -> Some(Boolean(b, Sugar.no_expr_data))
-  | `Int i -> Some(Integer(i, Sugar.no_expr_data))
-  | `Char ch -> Some(Char(ch, Sugar.no_expr_data))
-  | `Float f -> Some(Float(f, Sugar.no_expr_data))
+    `Bool b -> Some(Boolean(b, Syntax.no_expr_data))
+  | `Int i -> Some(Integer(i, Syntax.no_expr_data))
+  | `Char ch -> Some(Char(ch, Syntax.no_expr_data))
+  | `Float f -> Some(Float(f, Syntax.no_expr_data))
   | _ -> None
 
 let prim_val_of_expr : expression -> result option = function

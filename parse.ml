@@ -91,7 +91,6 @@ let read parse desugarer (infun : string -> int -> int) (name : string)  =
  		with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
       desugarer code (parse (Lexer.lexer ()) lexbuf)
-(*        List.map (desugar (lookup code)) (parse (Lexer.lexer ()) lexbuf)*)
     with 
       | Parsing.Parse_error -> 
 	  let line, column = find_line code lexbuf.lex_curr_p in
@@ -176,7 +175,7 @@ let parse_file filename =
 
 (* Parse a datatype *)
 let parse_datatype string = 
-  Sugar.desugar_assumption (Sugar.generalize (Parser.just_datatype (Lexer.lexer ()) (from_string (string ^ ";"))))
+  Sugar.desugar_datatype (Parser.just_datatype (Lexer.lexer ()) (from_string (string ^ ";")))
 
 (* Parse a sentence *)
 let parse_sentence (channel, name) =

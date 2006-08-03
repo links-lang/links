@@ -59,10 +59,6 @@ let letrec_nonfunction pos (form, _)
                               ^"\n  but `" ^ string_of_expression form 
                               ^"' is not a function form"))
 
-let string_of_pos ((pos : Lexing.position), _, expr) = 
-  Printf.sprintf "%s:%d:\nexpression: %s" pos.pos_fname pos.pos_lnum expr
-
-
 let invalid_name pos name message = 
   raise (ASTSyntaxError (pos, "`"^ name ^"' is an invalid name: " ^ message))
 
