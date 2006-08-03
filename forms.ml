@@ -27,71 +27,18 @@ open Result
 
 (* exception InvalidLNameExpr of 'a expression' *)
 
-(* Walk the XML tree, looking for <input l:name> bindings that are
-   inside the top <form> element, with no intervening <form>s.
-*)
-let lname_bound_vars : 'a expression' -> string list = 
-  let rec lnames = function
-    | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
-        (try 
-          let lname_attr = assoc "l:name" attrs in 
-            (try
-               [stringlit_value(lname_attr)]
-             with
-                 (* TBD: we need a way to extract position information 
-                    from a typed or untyped expression in an ad-hoc 
-                    polymorphic way. *)
-               | Match_failure _ ->failwith("l:name attribute was not a string: "
-                                           ^ string_of_expression lname_attr))
-        with Not_found -> concat (map lnames contents))
-    | Xml_node ("form", _, _, _) -> (* new scope *) []
-    | Xml_node (_, _, contents, _) -> concat (map lnames contents)
-    | Concat (l, r, _) -> lnames l @ lnames r
-    | _ -> [] 
-  in function
-    | Xml_node ("form", _, contents, _)  ->
-        concat (map lnames contents)
-    | Xml_node (_, _, _, _)  -> []
-        
-
-let is_special x = String.length x > 2 && String.sub x 0 2 = "l:"
-
-let islform : 'data expression' -> bool = function
-  | Xml_node ("form", attrs, _, _) 
-      when List.exists (is_special -<- fst) attrs -> true
-  | _ -> false
-
-(** islhref
-    should be something like is_transformable_anchor *)
-let islhref : 'data expression' -> bool = function
-  | Xml_node ("a", attrs, _, _) 
-      when exists (fun (k,_) -> Str.string_match (Str.regexp "l:") k 0) attrs -> true
-  | _ -> false
-
-(* Is an expression an <input l:name ...> expression? *)
-let isinput : 'data expression' -> bool = function
-  | Xml_node (("input"|"textarea"|"select"), attrs, _, _)
-      when mem_assoc "l:name" attrs -> true
-  | _ -> false
-
-let add_attrs new_attrs = function
-   | Xml_node (tag, attrs, c, d) ->
-       Xml_node (tag, attrs @ new_attrs, c, d)
-   | o -> failwith ("Non-XML structure passed to add_attrs : " ^
-                      string_of_expression o)
-
 let is_pfunc = function
   | (_, `PFunction _) -> true
   | _ -> false
 
 let string s = 
-  String (s, (Syntax.dummy_position, Types.string_type, None))
+  String (s, (Sugar._DUMMY_POS, Types.string_type, None))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (Syntax.dummy_position, `List (`Primitive `XMLitem), None))
+            (Sugar._DUMMY_POS, `List (`Primitive `XMLitem), None))
 
 let attrname = fst
 let attrval = snd
@@ -172,16 +119,26 @@ let plain_deserialise_result str =
     | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+$") str 0) -> `Int (int_of_string str)
     | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+.[0-9]*(E(+|-)?[0-9*])?$") str 0) -> `Float (float_of_string str)
 
-
 (* Serialise the continuation and environment, and adjust the form accordingly *)
 let xml_transform env lookup eval : expression -> expression = 
+  prerr_endline "entering xml_transform, watch for inf. loop";
   function 
     | Xml_node ("form", attrs, contents, data) as form ->
-        let new_field = 
-          match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
-            | [] -> []
-            | ("l:onsubmit", laction)::_ -> (* l:onsubmit holds a frozen expression *)
-                [hidden_input "_k" (serialize_exprenv laction env)]
+	if List.mem_assoc "l:onsubmit" attrs then
+	  (* the expression in l:onsubmit is compiled to javascript *)
+	  (* TBD: include l:name-bound vars *)
+	  (*      need to ... dereference them? *)
+	  let onsubmit_expr = List.assoc "l:onsubmit" attrs in
+	  let onsubmit_js = (Js.tl_gen) onsubmit_expr in
+	  let attrs = substitute (((=)"l:onsubmit") -<- attrname) ("onsubmit", string onsubmit_js) attrs in
+	    Xml_node ("form", attrs, contents, data)
+	else
+          let (attr_name, new_field) = 
+          match List.find_all (fst ->- flip List.mem ["l:action"; "l:handler"]) attrs with 
+            | [] -> ("", [])
+            | ("l:action", laction)::_ -> 
+		(* the expression in l:action gets frozen and we gen a URL *)
+                ("l:action", [hidden_input "_k" (serialize_exprenv laction env)])
             | ("l:handler", lhandler)::_ -> 
                 (* an l:handler attribute holds an expression that
                    evaluates to a continuation. This continuation will
@@ -189,11 +146,11 @@ let xml_transform env lookup eval : expression -> expression =
                    when the form is submitted.  *)
                 (match eval lhandler [] with
                    | `Continuation c ->
-                       [hidden_input "_cont" (marshal_continuation c)]
+                       ("l:handler", [hidden_input "_cont" (marshal_continuation c)])
                    | _ -> failwith "Internal error: l:handler was not a continuation")
         in
           Xml_node ("form",
-                    substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"]) ("action", string "#") attrs, 
+                    substitute (attrname ->- (=) attr_name) ("action", string "#") attrs, 
                     new_field @ contents, 
                     data)
 
@@ -204,15 +161,26 @@ let xml_transform env lookup eval : expression -> expression =
          with Not_found -> input)
 
     | Xml_node ("a", attrs, contents, data) ->
-        let href_expr = assoc "l:href" attrs in
-        let href_val = 
-          if is_simple_apply href_expr then
-            let (Variable (func, _)::args) = list_of_appln href_expr in
-            let arg_vals = map (value_of_simple_expr lookup) args in
-              String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
-                (*               ^ "?environment%=" ^ ser_env *)
-          else "?_k=" ^ serialize_exprenv href_expr env
-        in
-        let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
-        in
-          Xml_node ("a", attrs, contents, data)
+	let expr_to_url expr =   (* Lift me to top level? *)
+	  if is_simple_apply expr then
+	    let (Variable (func, _)::args) = list_of_appln expr in
+	    let arg_vals = map (value_of_simple_expr lookup) args in
+	      String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
+		(* ^ "?environment%=" ^ ser_env *)
+	  else "?_k=" ^ serialize_exprenv expr env
+	in
+	try
+          let href_expr = assoc "l:href" attrs in
+          let href_val = expr_to_url href_expr in
+          let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
+          in
+            Xml_node ("a", attrs, contents, data)
+	with
+	    Not_found ->
+	      let onclick_expr = assoc "l:onclick" attrs in
+	      let onclick_js = (Js.tl_gen) onclick_expr in
+              let attrs = substitute (((=)"l:onclick") -<- attrname) ("onclick", string onclick_js) attrs in
+	      let attrs = ("href", string "#")::attrs
+	      in
+		Xml_node ("a", attrs, contents, data)
+		

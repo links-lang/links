@@ -9,21 +9,6 @@ type web_request = ContInvoke of continuation * query_params
                    | RemoteCall of result * result
                    | CallMain
 
-(*
-  [REMARKS (sl)]
-   - Currently print_http_response outputs the headers and body in
-     one go.
-   - At some point in the future we may want to consider implementing
-     some form of incremental output.
-   - Flushing the output stream prematurely (e.g. after outputting
-     the headers and newline) appears to break client calls.
-  [FURTHER REMARKS (eekc)]
-   - Generally, many of the HTTP response headers will only be
-     determined by running the program. It's fairly standard for a
-     web app to wait until it knows there are no more headers coming
-     (e.g., the program is finished) before printing the headers.
-*)
-
 (* output the headers and content to stdout *)
 let print_http_response headers body =
   let headers = headers @ !Library.http_headers in
@@ -199,10 +184,28 @@ let perform_request program globals main req =
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
-        print_http_response [("Content-type", "text/html")] 
+	let response_xml = 
           (if is_client_program program then
-             Js.generate_program program main
-           else Result.string_of_result (snd (Interpreter.run_program globals [main])))
+             (* We used to translate the whole program into JS *)
+(*                Js.generate_program program main *)
+             (* Now: run the program, embed JS into the result *)
+             let program_value = snd (Interpreter.run_program globals [main]) in
+             let response_xml = match program_value with
+               | `XML xml_doc
+               | `List ((`XML xml_doc)::_) -> `XML xml_doc
+               | _ -> failwith "Web program returned non-XML value"
+             in
+             let program_defs_script_tag = Js.generate_program_defs_script_tag program
+             in
+               Result.insert_head_elements 
+                 (Js.jsheader (Settings.get_value(Debug.debugging_enabled))
+                  @ [program_defs_script_tag]) 
+                 response_xml
+           else
+             snd (Interpreter.run_program globals [main]))
+	in
+          print_http_response [("Content-type", "text/html")] 
+	    (Result.string_of_result response_xml)
 
 let error_page_stylesheet = 
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee}</style>"

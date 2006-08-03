@@ -52,7 +52,7 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
           case SW -> (x, top, width - (x - left), y-top);
           case SE -> (left, top, x-left, y-top);
         };
-      domSetStyleAttrFromRef(frame, "left", intToString(l-offsetLeft));
+      domSetStyleAttrFromRef(frame, "left", intToString(l));
       domSetStyleAttrFromRef(frame, "top", intToString(t));
       domSetStyleAttrFromRef(frameSizer, "width", intToString(w));
       domSetStyleAttrFromRef(frameSizer, "height", intToString(h));

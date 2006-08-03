@@ -431,15 +431,21 @@ fun globals locals expr cont ->
   | Syntax.Rec (variables, body, _) ->
       let new_env = bind_rec globals locals (List.map (fun (n,v,_) -> (n,v)) variables) in
         interpret globals new_env body cont
-  | Syntax.Xml_node _ as xml when Forms.islform xml ->
+  | Syntax.Xml_node _ as xml when Xml_util.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
+  | Syntax.Xml_node _ as xml when Xml_util.isinput xml -> 
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
+  | Syntax.Xml_node _ as xml when Xml_util.islhref xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
 
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
+
+  | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) when beginswithl k -> 
+      let attrName, js_code = (Js.compile_event_handler_to_str
+				 (* l:name-bound vars: *) [] (k, v)) in
+	apply_cont globals ((XMLCont (locals, tag, Some attrName, [], attrs, elems) :: cont))
+	  (string_as_charlist js_code)
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_node (tag, [], (child::children), _) -> 

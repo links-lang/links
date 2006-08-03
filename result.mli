@@ -59,6 +59,7 @@ type xmlitem =
     | Text of string 
     | Attr of (string * string) 
     | Node of (string * xml)
+    | Comment of string 
 and xml = xmlitem list
 type table = database * string * Types.row
 type primitive_value =
@@ -137,3 +138,6 @@ val unmarshal_exprenv : Syntax.expression list -> string -> (Syntax.expression *
 
 module Pickle_result : Pickle.Pickle with type a = result
 module Show_result : Show.Show with type a = result
+
+val insert_head_elements : xmlitem list -> [`XML of xmlitem] -> [> `XML of xmlitem]
+

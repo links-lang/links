@@ -99,8 +99,16 @@ type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
+               | Comment of string
 and xml = xmlitem list
     deriving (Show, Pickle)
+
+let insert_head_elements elems doc =
+  match doc with
+    | `XML(Node("html", (Node("head", head_elems))::etc)) ->
+	`XML(Node("html", (Node("head", elems @ head_elems))::etc))
+    | `XML(Node("html", body)) ->
+	`XML(Node("html", (Node("head", elems))::body))
 
 let is_attr = function
   | Attr _ -> true
@@ -119,9 +127,16 @@ and string_of_item : xmlitem -> string =
     function
       | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
       | Text s -> xml_escape s
+      | Comment s -> "<!--" ^ s ^ "-->"  (* TBD: escape close-comment brackets *)
       | Node (tag, children) -> let attrs, nodes = attrs children, nodes children in
           match nodes with 
-            | [] -> "<" ^ tag ^ format_attrs attrs ^ "/>"
+            | [] -> 
+		if (tag = "script") then
+		  (* sigh; some browsers need script tags to be 
+		     separately closed (at least in HTML 4 mode). *)
+		  "<" ^ tag ^ format_attrs attrs ^ "></script>"
+		else
+		  "<" ^ tag ^ format_attrs attrs ^ " />"
             | _  -> ("<" ^ tag ^ format_attrs attrs ^ ">" 
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
@@ -209,10 +224,10 @@ and environment = (binding list)
     deriving (Show, Pickle)
 
 let expr_of_prim_val : result -> expression option = function
-    `Bool b -> Some(Boolean(b, Syntax.no_expr_data))
-  | `Int i -> Some(Integer(i, Syntax.no_expr_data))
-  | `Char ch -> Some(Char(ch, Syntax.no_expr_data))
-  | `Float f -> Some(Float(f, Syntax.no_expr_data))
+    `Bool b -> Some(Boolean(b, Sugar.no_expr_data))
+  | `Int i -> Some(Integer(i, Sugar.no_expr_data))
+  | `Char ch -> Some(Char(ch, Sugar.no_expr_data))
+  | `Float f -> Some(Float(f, Sugar.no_expr_data))
   | _ -> None
 
 let prim_val_of_expr : expression -> result option = function
@@ -226,7 +241,7 @@ let (toplevel: continuation) = []
 
 let xmlitem_of : result -> xmlitem = function
   | `XML x -> x
-  | _ -> raise (Match_failure ("", 0,0))
+  | _ -> raise (Match_failure ("xmlitem_of", 226,0))
 
 and bool b =`Bool b
 and int i = `Int i

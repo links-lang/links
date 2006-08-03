@@ -1,5 +1,9 @@
 BUGS
 
+* Some things are called "foo_as_bar" and others are called
+  "bar_of_foo". The latter seems to be the OCaml standard, so let's
+  standardize on that.
+
 * The following sequence of events happens.  It shouldn't.
 
     * set mailbox typing off.

@@ -4,7 +4,6 @@ open Utility
 open Debug
 open Syntax
 open Inferencetypes
-open Forms
 open Errors
 
 (* debug flags *)
@@ -839,11 +838,11 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let body = type_check best_env body in
 	Rec (vars, body, (pos, type_of_expression body, None))
   | Xml_node (tag, atts, cs, pos) as xml -> 
-      let separate = partition (is_special -<- fst) in
+      let separate = partition (Xml_util.is_special_links_attr -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
       let bindings = 
 (*         try *)
-          lname_bound_vars xml 
+          Xml_util.lname_bound_vars xml 
 (*         with InvalidLNameExpr ->  *)
 (*           raise UndefinedVariable "Invalid l:name parameter " ^ string_of_expression  *)
       in
@@ -873,7 +872,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
                   (pos, `List (`Primitive `XMLitem), None))
       in                                    (* | *)
         (* could just tack these on up there --^ *)
-        add_attrs special_attrs trimmed_node
+        Xml_util.add_attrs special_attrs trimmed_node
 
   | Record_empty (pos) ->
       Record_empty (pos, `Record (ITO.make_empty_closed_row ()), None)
@@ -1225,7 +1224,7 @@ module RewriteSyntax =
 (* add / remove mailbox parameter to / from expressions *)
 let add_parameter : RewriteSyntaxU.rewriter = function
   | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
-  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Syntax.dummy_position), Syntax.dummy_position), a, d))
+  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Sugar._DUMMY_POS), Sugar._DUMMY_POS), a, d))
   | _                  -> None
 and remove_parameter : RewriteSyntax.rewriter = function
   | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))

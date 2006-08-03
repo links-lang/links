@@ -371,3 +371,4 @@ let rec combine3 : 'a list * 'b list * 'c list ->  ('a * 'b * 'c) list = functio
   | _          -> invalid_arg "combine3"
 
   
+let beginswithl str = Str.string_match (Str.regexp "l:") str 0 

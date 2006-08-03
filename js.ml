@@ -6,12 +6,14 @@ open Num
 open Netencoding
 open List
 
-open Pickle
-open Forms
 open Debug
 open Utility
-(*open Type *)
+
+open Pickle
 open Syntax
+
+(* but_last: a utility? *)	  
+let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
 
 let optimising = Settings.add_bool("optimise_javascript", false, true)
 
@@ -35,6 +37,9 @@ type code = | Var   of string
             | Nothing
  deriving (Show)
 
+let set_from_list l =
+  fold_left StringSet.union StringSet.empty (map (StringSet.singleton) l)
+
 let code_freevars : code -> string list = 
   let rec aux bound = function
     | Var x when List.mem x bound -> []
@@ -52,6 +57,20 @@ let code_freevars : code -> string list =
     | Lst elems -> concat_map (aux bound) elems
     | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
   in aux []
+
+let rec freevars_js = function
+  | Var x -> StringSet.singleton x
+  | Defs _ -> StringSet.empty
+  | Fn(args, body) -> StringSet.diff (freevars_js body) (set_from_list args)
+  | Call(func, args) -> 
+      (fold_left StringSet.union  (freevars_js func) (map freevars_js args))
+  | Binop (lhs, op, rhs) -> StringSet.union (freevars_js lhs) (freevars_js rhs)
+  | Cond(a, b, c) -> StringSet.union (StringSet.union (freevars_js a) (freevars_js b)) (freevars_js c)
+  | Dict(terms) -> fold_left StringSet.union StringSet.empty (map snd (alistmap freevars_js terms))
+  | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars_js terms)
+  | Bind(var, src, body) -> StringSet.union (freevars_js src) (StringSet.remove var (freevars_js body))
+  | Seq(first, rest) -> StringSet.union (freevars_js first) (freevars_js rest)
+  | _ -> StringSet.empty
 
 (* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
 let rec rename' renamer = function
@@ -97,6 +116,7 @@ let perhaps_process_children (f : code -> code option) :  code -> code option =
       | Bind (n,e,b) -> passto [e;b] (fun [e;b] -> Bind (n,e,b))
       | Seq (l,r) -> passto [l;r] (fun [l;r] -> Seq (l,r))
 
+
 module RewriteCode =
   Rewrite.Rewrite
     (Rewrite.SimpleRewrite
@@ -106,11 +126,11 @@ module RewriteCode =
          let process_children = perhaps_process_children
        end))
 
-let replace var repl : RewriteCode.rewriter =
+let replace_blindly var repl : RewriteCode.rewriter =
   function
     | Var x when x = var -> Some (repl)
     | _ -> None
-let replace var repl = RewriteCode.bottomup (replace var repl)
+let replace_blindly var repl = RewriteCode.bottomup (replace_blindly var repl)
 
 let remove_renaming : RewriteCode.rewriter = 
   function
@@ -123,9 +143,79 @@ let remove_renaming : RewriteCode.rewriter =
                                                                    else name) body)
         (* not really a renaming, but it goes here well enough.  In general this is a pessimisation, though *)
 (*    | Bind (x, (Call (Var "_project", ([Lit _; Var _])) as l), body)*)
-    | Bind (x, (Lit _ as l), body) -> Some (fromOption body (replace x l body) )
+    | Bind (x, (Lit _ as l), body) -> Some (fromOption body (replace_blindly x l body) )
 
     | _ -> None
+
+
+(* FIXME: There is some problem with this whereby variables are captured *)
+let rec replace' var replcmt fvs = function
+  | Var x when x = var -> replcmt
+  | Defs defs -> Defs(alistmap (replace' var replcmt (freevars_js replcmt)) defs)
+  | Fn(args, body) when not(mem var args) -> 
+      (* this may be unnecessary, if whole expr. is uniquified previously *)
+     let args, body =
+        if StringSet.is_empty (StringSet.inter (set_from_list args) fvs)
+        then (args, body) else
+          uniquify_args(args, body)
+     in
+        Fn(args, replace' var replcmt fvs body)
+  | Call(func, args) -> Call(replace' var replcmt fvs func,
+                             map (replace' var replcmt fvs) args)
+  | Binop(lhs, op, rhs) -> Binop(replace' var replcmt fvs lhs, op,
+                                 replace' var replcmt fvs rhs)
+  | Cond(test, yes, no) ->  Cond(replace' var replcmt fvs test,
+                                 replace' var replcmt fvs yes,
+                                 replace' var replcmt fvs no)
+  | Dict(terms) -> Dict(alistmap (replace' var replcmt fvs) terms)
+  | Lst(terms) -> Lst(map (replace' var replcmt fvs) terms)
+  | Bind(name, expr, body) -> Bind(name, replace' var replcmt fvs expr, 
+                                   if name <> var then (* NOT CORRECT! *)
+                                     replace' var replcmt fvs body
+                                   else body)
+  | Seq(first, second) -> Seq(replace' var replcmt fvs first,
+                              replace' var replcmt fvs second)
+  | simple_expr -> simple_expr
+and replace var expr body = replace' var expr (freevars_js expr) body
+and uniquify_args = function
+    (args, body) ->
+      let subst = map (fun x -> (x, gensym x)) args in
+        (map snd subst,
+         fold_right (fun (old, noo) body ->
+                       replace' old (Var noo) (StringSet.singleton noo) body)
+           subst body)
+
+let rec simplify : code -> code = function
+  | Call(Fn([formal_arg], body), [actual_arg]) 
+      when Str.string_match (Str.regexp "^__") formal_arg 0
+    ->
+      replace formal_arg actual_arg body
+
+  | Call(Var "_idy", [arg]) -> arg
+      
+      (* The other cases are just compatible closure *)
+  | Call(f, args) -> Call(simplify f, map (simplify) args )
+  | Defs defs -> Defs(alistmap (simplify) defs)
+  | Fn(args, body) -> Fn(args, simplify body)
+  | Call(func, args) -> Call(simplify func, map (simplify) args)
+  | Binop(lhs, op, rhs) -> Binop(simplify lhs, op, simplify rhs)
+  | Cond(test, yes, no) ->  Cond(simplify test, simplify yes, simplify no)
+  | Dict(terms) -> Dict(alistmap (simplify) terms)
+  | Lst(terms) -> Lst(map (simplify) terms)
+  | Bind(name, expr, body) -> Bind(name, simplify expr, simplify body)
+  | Seq(first, second) -> Seq(simplify first, simplify second)
+  | simple_expr -> simple_expr
+
+let rec simplify_completely expr = 
+  let expr2 = simplify expr in
+    if expr = expr2 then
+      expr2
+    else
+      simplify_completely expr2
+
+let rec eliminate_admin_redexes = 
+  simplify_completely (* ->-
+     rename (Str.global_replace (Str.regexp "\*\(.*\\)\*") "\1") *)
 
 let collapse_extend : RewriteCode.rewriter = 
   let unquote = Str.replace_first (Str.regexp ("^'\\(.*\\)'$")) "\\1" in
@@ -277,18 +367,43 @@ let chrlit s = Lit (string_quote (string_of_char s))
      (e.g. int_of_string, xml)
  *)
 
-let script_header base_url file =
+let script_include_tag_text base_url file =
   "  <script type='text/javascript' src=\""^base_url^file^"\"></script>"
+
+let script_include_tag_xml base_url file =
+  Result.Node("script", [Result.Attr("type", "text/javascript");
+			 Result.Attr("src", base_url ^ file)])
+
+let script_tag_xml value =
+  Result.Node("script", [Result.Attr("type", "text/javascript");
+			 Result.Comment("\n" ^ value ^ "\n")])
+    (* The newlines here are very important: they separate the code
+       from the XML comment brackets *)
+
+let jsheader debugFlag = [
+  script_include_tag_xml (get_js_lib_url()) "json.js";
+  Result.Text("\n");
+  script_include_tag_xml (get_js_lib_url()) "regex.js";
+  Result.Text("\n");
+  script_include_tag_xml (get_js_lib_url()) "yahoo/YAHOO.js";
+  Result.Text("\n");
+  script_include_tag_xml (get_js_lib_url()) "yahoo/event.js";
+  Result.Text("\n");
+  script_tag_xml ("DEBUGGING=" ^ if debugFlag then "true;" else "false;");
+  Result.Text("\n");
+  script_include_tag_xml (get_js_lib_url()) "jslib.js";
+  Result.Text("\n");
+]
 
 let boiler_1 () = "<html>
  <head>
- "^script_header (get_js_lib_url()) "json.js"^"
- "^script_header (get_js_lib_url()) "regex.js"^"
- "^script_header (get_js_lib_url()) "yahoo/YAHOO.js"^"
- "^script_header (get_js_lib_url()) "yahoo/event.js"^"
+ "^script_include_tag_text (get_js_lib_url()) "json.js"^"
+ "^script_include_tag_text (get_js_lib_url()) "regex.js"^"
+ "^script_include_tag_text (get_js_lib_url()) "yahoo/YAHOO.js"^"
+ "^script_include_tag_text (get_js_lib_url()) "yahoo/event.js"^"
    <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>
- "^script_header (get_js_lib_url()) "jslib.js"^"
+ "^script_include_tag_text (get_js_lib_url()) "jslib.js"^"
    <script type='text/javascript'><!-- \n"
 and boiler_3 () =    "\n--> </script>
  </head>
@@ -436,7 +551,6 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
                          ) attrs_cps tower in
     Fn(["__kappa"], tower)
       
-
 (** generate
     Generate javascript code for a Links expression
     
@@ -528,7 +642,7 @@ let rec generate : 'a expression' -> code =
                                 [Fn([v; "__kappa"],
                                     Call(e_cps, [Var "__kappa"]));
                                  Var "__b"]))]))
-  | Xml_node _ as xml when isinput xml -> lname_transformation xml
+  | Xml_node _ as xml when Xml_util.isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
   | Xml_node (tag, attrs, children, _)   -> 
       let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
@@ -693,7 +807,8 @@ let rec generate : 'a expression' -> code =
   | HasType (e, _, _) -> generate e
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
-(* Specialness: 
+(* Transformation of l:event handlers.
+   Why it's special:
    * Modify the l:action to pass the continuation to the top-level boilerplate
    * lift the continuation out of the form.
 
@@ -713,6 +828,19 @@ let rec generate : 'a expression' -> code =
    scope is broken.  (This will need more care for less simple cases,
    e.g. where there are let bindings)
 *)
+and compile_event_handler free_vars (event_name, code_ir)
+    : (string * code) =
+  (* compile the given code *)
+  let code_js = eliminate_admin_redexes(end_thread(generate code_ir)) in
+    (strip_lcolon event_name, 
+     (* bind the l:name-bound variables using _val to get their values
+	(correct?). *)
+     fold_left
+       (fun expr var -> 
+	  Bind (var, Call (Var "_val", [strlit var]), expr))
+       code_js
+       free_vars)
+
 and laction_transformation (Xml_node (tag, attrs, children, _) as xml) = 
   (* 1. Remove l:action from the attrs 
      2. name the form if not named (TODO; not needed for simple example)
@@ -732,28 +860,16 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
       | _ -> []
   in
     
-  let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
   let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
-  let vars = Forms.lname_bound_vars xml in
-    (* handlerInvoker generates onFoo="..." attributes--the first 
-       thing invoked when that event occurs. *)
-(*
-  let handlerInvoker (evName, _) = 
-    (evName, strlit ("_eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
-*)
-  (* [BUG] the id tag isn't necessarily static! *)
-(*   let elem_id =  *)
-(*     try  *)
-(*       match (assoc "id" attrs) with *)
-(* 	  String(idStr, _) -> strlit idStr *)
-(*     with Not_found -> Lit "0" in *)
+  let lname_vars = Xml_util.lname_bound_vars xml in
 
-  let make_code_for_handler (evName, code) = 
-    strip_lcolon evName, (fold_left
-                            (fun expr var -> Bind (var, Call (Var "_val", [strlit var]), expr))
-                            (end_thread(generate code))
-                            vars) in
-  let handlers = map make_code_for_handler handlers in
+(*   let make_code_for_handler (evName, code) =  *)
+(*     strip_lcolon evName, (fold_left *)
+(*                             (fun expr var ->  *)
+(* 			       Bind (var, Call (Var "_val", [strlit var]), expr)) *)
+(*                             (end_thread(generate code)) *)
+(*                             lname_vars) in *)
+  let handlers = map (compile_event_handler lname_vars) handlers in
   let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
   let children_cps = map (fun e -> (gensym "", generate e)) children in
   let keyattr = 
@@ -780,17 +896,17 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
   let attrs = 
-    ("onfocus", Syntax.String ("_focused = this.id", Syntax.no_expr_data))
+    ("onfocus", Syntax.String ("_focused = this.id", Sugar.no_expr_data))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
-    generate (Xml_node (tag, attrs, children, Syntax.no_expr_data))
-
+    generate (Xml_node (tag, attrs, children, Sugar.no_expr_data))
 
 (* generate_noncps: generates CPS code for expr and immediately 
   gives idy as the cont. *)
 and generate_noncps expr = Call(generate expr, [idy_js])
 and end_thread expr = Call(expr, [idy_js])
+and toplevel_thread expr = Call(expr, [Var "_start"])
 
 (* generate direct style code *)
 and generate_direct_style : 'a expression' -> code =
@@ -866,8 +982,6 @@ and generate_direct_style : 'a expression' -> code =
       (* Could use dot-notation instead of project call *)
       Call(Var "_project", [strlit l; gd v])
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-(* Isn't this a correct implementation? *)
-(*      failwith("record selection not implemented");*)
       Bind(lv, Call(Var "_project", [strlit l; gd v]), gd b)
   (* Variants *)
   | Variant_injection (l, e, _) -> 
@@ -906,104 +1020,31 @@ and generate_native_stub = function
         Defs [n, Fn (arglist @ ["__kappa"], Call(Var "__kappa", [generate_direct_style body]))]
   | e
     -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
+
+let compile_event_handler_to_str lname_vars attr = 
+  let (event_name, code_js) = compile_event_handler lname_vars attr in
+    event_name, show code_js
       
 module StringSet = Set.Make(String)
 
-let set_from_list l =
-  fold_left StringSet.union StringSet.empty (map (StringSet.singleton) l)
-
-let rec freevars = function
-  | Var x -> StringSet.singleton x
-  | Defs _ -> StringSet.empty
-  | Fn(args, body) -> StringSet.diff (freevars body) (set_from_list args)
-  | Call(func, args) -> 
-      (fold_left StringSet.union  (freevars func) (map freevars args))
-  | Binop (lhs, op, rhs) -> StringSet.union (freevars lhs) (freevars rhs)
-  | Cond(a, b, c) -> StringSet.union (StringSet.union (freevars a) (freevars b)) (freevars c)
-  | Dict(terms) -> fold_left StringSet.union StringSet.empty (map snd (alistmap freevars terms))
-  | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars terms)
-  | Bind(var, src, body) -> StringSet.union (freevars src) (StringSet.remove var (freevars body))
-  | Seq(first, rest) -> StringSet.union (freevars first) (freevars rest)
-  | _ -> StringSet.empty
-
-(* FIXME: There is some problem with this whereby variables are captured *)
-let rec replace' var replcmt fvs = function
-  | Var x when x = var -> replcmt
-  | Defs defs -> Defs(alistmap (replace' var replcmt (freevars replcmt)) defs)
-  | Fn(args, body) when not(mem var args) -> 
-      (* this may be unnecessary, if whole expr. is uniquified previously *)
-     let args, body =
-        if StringSet.is_empty (StringSet.inter (set_from_list args) fvs)
-        then (args, body) else
-          uniquify_args(args, body)
-     in
-        Fn(args, replace' var replcmt fvs body)
-  | Call(func, args) -> Call(replace' var replcmt fvs func,
-                             map (replace' var replcmt fvs) args)
-  | Binop(lhs, op, rhs) -> Binop(replace' var replcmt fvs lhs, op,
-                                 replace' var replcmt fvs rhs)
-  | Cond(test, yes, no) ->  Cond(replace' var replcmt fvs test,
-                                 replace' var replcmt fvs yes,
-                                 replace' var replcmt fvs no)
-  | Dict(terms) -> Dict(alistmap (replace' var replcmt fvs) terms)
-  | Lst(terms) -> Lst(map (replace' var replcmt fvs) terms)
-  | Bind(name, expr, body) -> Bind(name, replace' var replcmt fvs expr, 
-                                   if name <> var then (* NOT CORRECT! *)
-                                     replace' var replcmt fvs body
-                                   else body)
-  | Seq(first, second) -> Seq(replace' var replcmt fvs first,
-                              replace' var replcmt fvs second)
-  | simple_expr -> simple_expr
-and replace var expr body = replace' var expr (freevars expr) body
-and uniquify_args = function
-    (args, body) ->
-      let subst = map (fun x -> (x, gensym x)) args in
-        (map snd subst,
-         fold_right (fun (old, noo) body ->
-                       replace' old (Var noo) (StringSet.singleton noo) body)
-           subst body)
-
-
-let rec simplify = function
-  | Call(Fn([formal_arg], body), [actual_arg]) 
-      when Str.string_match (Str.regexp "^__") formal_arg 0
-    ->
-      replace formal_arg actual_arg body
-
-  | Call(Var "_idy", [arg]) -> arg
-      
-      (* The other cases are just compatible closure *)
-  | Call(f, args) -> Call(simplify f, map (simplify) args )
-  | Defs defs -> Defs(alistmap (simplify) defs)
-  | Fn(args, body) -> Fn(args, simplify body)
-  | Call(func, args) -> Call(simplify func, map (simplify) args)
-  | Binop(lhs, op, rhs) -> Binop(simplify lhs, op, simplify rhs)
-  | Cond(test, yes, no) ->  Cond(simplify test, simplify yes, simplify no)
-  | Dict(terms) -> Dict(alistmap (simplify) terms)
-  | Lst(terms) -> Lst(map (simplify) terms)
-  | Bind(name, expr, body) -> Bind(name, simplify expr, simplify body)
-  | Seq(first, second) -> Seq(simplify first, simplify second)
-  | simple_expr -> simple_expr
-
-let rec simplify_completely expr = 
-  let expr2 = simplify expr in
-    if expr = expr2 then
-      expr2
-    else
-      simplify_completely expr2
-
-let rec eliminate_admin_redexes = 
-  simplify_completely (* ->-
-     rename (Str.global_replace (Str.regexp "\*\(.*\\)\*") "\1") *)
-
-let gen = 
+let gen : Syntax.expression -> string = 
   Utility.perhaps_apply Optimiser.uniquify_expression
   ->- generate 
   ->- eliminate_admin_redexes
   ->- optimise
   ->- show
 
-let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
+let tl_gen = 
+  Utility.perhaps_apply Optimiser.uniquify_expression
+  ->- generate 
+  ->- toplevel_thread
+  ->- eliminate_admin_redexes
+  ->- optimise
+  ->- show
+
+let generate_program_defs_script_tag environment = 
+  let defs = (mapstrcat "\n" gen (but_last environment)) in
+    script_tag_xml defs
 
  (* TODO: imports *)
 let generate_program environment expression =
@@ -1017,7 +1058,10 @@ let generate_program environment expression =
  ^ boiler_2 ()
  ^ String.concat "\n" (map gen (but_last environment))
  ^ boiler_3 ()
- ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
+(* TBD: use tl_gen here *)
+ ^ ((generate ->- toplevel_thread
+       ->- eliminate_admin_redexes
+	 ->- show) expression)
  ^ boiler_4 ())
 
 (* FIXME: The tests below create an unnecessary dependency on
@@ -1058,8 +1102,8 @@ let run_tests() =
              ) !test_list)
 
 
-(* ******************* *)
-(*   Hereafter tests   *)
+(* ************************************************* *)
+(*                  Hereafter tests                  *)
 
 let _ = add_qtest("1+1",
                   fun rslt ->
