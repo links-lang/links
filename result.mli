@@ -1,6 +1,7 @@
+(** Defines the "values" of Links, and ops on them, including continuations **)
+
 exception Runtime_error of string
 
-(** Database connectivity **)
 class type otherfield
  = object method show : string end
 

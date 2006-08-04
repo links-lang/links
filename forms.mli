@@ -1,4 +1,5 @@
-(** <form> manipulation **)
+(** Transformations on XHTML <form> elements *)
+
 (* Is an expression a <form l:action ... > expression? *)
 val islform : 'data Syntax.expression' -> bool
 
@@ -14,7 +15,7 @@ val islhref : 'data Syntax.expression' -> bool
 (* Which variables are l:name-bound? *)
 val lname_bound_vars : 'data Syntax.expression' -> string list
 
-(* Serialise the continuation and environment, and adjust the form accordingly *)
+(** Serialise the continuation and environment; adjust the form accordingly *)
 val xml_transform : Result.environment -> (string -> Result.result) -> (Syntax.expression -> Result.continuation -> Result.result) -> Syntax.expression -> Syntax.expression
 
 val is_special : string -> bool
