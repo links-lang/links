@@ -33,7 +33,7 @@ Unary negation [1]
 stdout : @-3 .*
 
 Unary negation [2]
-{var x = 21342; x == --x}
+{var x = 21342; x == - -x}
 stdout : @true .*
 
 Prefix arithmetic operators
