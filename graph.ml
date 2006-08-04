@@ -75,8 +75,14 @@ let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) =
                    | node, None -> (if not (Hashtbl.mem table node)
                                     then Hashtbl.add table node (ref [node]))
                    | node, Some partner -> 
-                       ignore (pushnew node (set table node (find_def table partner (ref []))));
-                       ignore (pushnew partner (set table partner (find_def table node (ref []))))) nodes;
+                       let partner_comp = find_def table partner (ref [partner]) in
+                       let node_comp = find_def table node (ref [node]) in
+                       let comp = unduplicate (=) (!partner_comp @ !node_comp) in
+                         partner_comp := comp;
+                         node_comp := comp;
+                         ignore(set table partner partner_comp);
+                         ignore(set table node partner_comp)
+                ) nodes;
       unduplicate (=) (List.map (snd ->- (!)) (hashtbl_as_list table)) in
   let f, _, _ = dfs nodes edges in 
   let _, _, p = (dfs
