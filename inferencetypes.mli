@@ -102,6 +102,7 @@ val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 
+val string_of_quantifier : quantifier -> string
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 

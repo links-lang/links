@@ -313,11 +313,19 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		  if StringMap.is_empty field_env then
 		    begin
 		      match row_var with
+			| `RowVar None -> 
+			    if is_empty_row (extension_row) then
+			      ()
+			    else
+			      raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
+						    ^string_of_row extension_row))
 			| `RowVar (Some var) ->
 			    if mem var (free_row_type_vars extension_row) then
 			      rec_row_intro point (field_env, var, extension_row)
 			    else
 			      Unionfind.change point extension_row
+			| (`RecRowVar _) as row_var ->
+			    unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
 			| _ -> extend row_var
 		    end
 		  else
@@ -328,16 +336,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		else
 		  raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
 					^string_of_row extension_row))
-	    | `RigidRowVar r -> raise  (Unify_failure ("Rigid row variable "^ string_of_int r ^"cannot be instantiated\n"
-					               ^string_of_row extension_row))
-	    | (`RecRowVar _) as row_var ->
-		unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
+	    | `RowVar _
+	    | `RigidRowVar _
+	    | `RecRowVar _ -> assert false
 	  in
 	    match row_var with
 	      | `MetaRowVar _ -> extend row_var
 	      | `RowVar _
 	      | `RigidRowVar _
-	      | `RecRowVar _ -> assert(false) in
+	      | `RecRowVar _ -> assert false in
 
 
       (* 
@@ -543,99 +550,89 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	t
       else
 	(
-	let _ = debug_if_set (show_instantiation)
-	  (fun () -> "Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
+	  let _ = debug_if_set (show_instantiation)
+	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
 
-	let tenv, renv = List.fold_left
-	  (fun (tenv, renv) -> function
-	     | `TypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv
-	     | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
-	  ) (IntMap.empty, IntMap.empty) generics in
-	  
-	let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
-	  let rec_type_env, rec_row_env = rec_env in
-	    match datatype with
-	      | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-	      | `Primitive _  -> datatype
-	      | `RigidTypeVar _
-	      | `TypeVar _ -> assert false
-	      | `MetaTypeVar point ->
-		  let t = Unionfind.find point in
-		    (match t with
-		       | `RigidTypeVar var
-		       | `TypeVar var ->
-			   if IntMap.mem var tenv then
-			     IntMap.find var tenv
-			   else
-			     datatype
-			       (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
-		       | `Recursive (var, t) ->
-			   debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
-
-			   if IntMap.mem var rec_type_env then
-			     (`MetaTypeVar (IntMap.find var rec_type_env))
-			   else
-			     (
-			       let var' = Type_basis.fresh_raw_variable () in
-			       let point' = Unionfind.fresh (`TypeVar var') in
-			       let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-			       let _ = Unionfind.change point' (`Recursive (var', t')) in
-				 `MetaTypeVar point'
-			   )
-
-		       | _ -> inst rec_env t)
-	      | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
-	      | `Record row -> `Record (inst_row rec_env row)
-	      | `Variant row ->  `Variant (inst_row rec_env row)
-	      | `Table row -> `Table (inst_row rec_env row)
-	      | `Recursive (var, t) ->
-		  (*assert(false)*)
-		  debug_if_set (show_recursion) (fun () -> "rec (instantiate)2: " ^(string_of_int var));
-
-		  if IntMap.mem var rec_type_env then
-		    (`MetaTypeVar (IntMap.find var rec_type_env))
-		  else
-		    (
-		      let var' = Type_basis.fresh_raw_variable () in
-		      let point' = Unionfind.fresh (`TypeVar var') in
-		      let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-		      let _ = Unionfind.change point' (`Recursive (var', t')) in
-			`MetaTypeVar point'
-		    )
-
-		  (*`Recursive (var, inst (IntSet.add var rec_vars) t) *)
-	      | `List (elem_type) ->
-		  `List (inst rec_env elem_type)
-	      | `Mailbox (elem_type) ->
-		  `Mailbox (inst rec_env elem_type)
-	and inst_row : inst_env -> row -> row = fun rec_env row ->
-	  let rec_type_env, rec_row_env = rec_env in
-	  let field_env, row_var = flatten_row row in
+	  let tenv, renv = List.fold_left
+	    (fun (tenv, renv) -> function
+	       | `TypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv
+	       | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
+	    ) (IntMap.empty, IntMap.empty) generics in
 	    
-	  let is_closed = (row_var = `RowVar None) in
-	    
-	  let field_env' = StringMap.fold
-	    (fun label field_spec field_env' ->
-	       match field_spec with
-		 | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-		 | `Absent ->
-		     if is_closed then field_env'
-		     else StringMap.add label `Absent field_env'
-	    ) field_env StringMap.empty in
+	  let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
+	    let rec_type_env, rec_row_env = rec_env in
+	      match datatype with
+		| `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+		| `Primitive _  -> datatype
+		| `MetaTypeVar point ->
+		    let t = Unionfind.find point in
+		      (match t with
+			 | `RigidTypeVar var
+			 | `TypeVar var ->
+			     if IntMap.mem var tenv then
+			       IntMap.find var tenv
+			     else
+			       datatype
+				 (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
+			 | `Recursive (var, t) ->
+			     debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
 
-	  let row_var' =
+			     if IntMap.mem var rec_type_env then
+			       (`MetaTypeVar (IntMap.find var rec_type_env))
+			     else
+			       (
+				 let var' = Type_basis.fresh_raw_variable () in
+				 let point' = Unionfind.fresh (`TypeVar var') in
+				 let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+				 let _ = Unionfind.change point' (`Recursive (var', t')) in
+				   `MetaTypeVar point'
+			       )
+
+			 | _ -> inst rec_env t)
+		| `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
+		| `Record row -> `Record (inst_row rec_env row)
+		| `Variant row ->  `Variant (inst_row rec_env row)
+		| `Table row -> `Table (inst_row rec_env row)
+		| `List (elem_type) ->
+		    `List (inst rec_env elem_type)
+		| `Mailbox (elem_type) ->
+		    `Mailbox (inst rec_env elem_type)
+		| `Recursive _
+		| `RigidTypeVar _
+		| `TypeVar _ -> assert false
+	  and inst_row : inst_env -> row -> row = fun rec_env row ->
+	    let field_env, row_var = flatten_row row in
+	      
+	    let is_closed = (row_var = `RowVar None) in
+	      
+	    let field_env' = StringMap.fold
+	      (fun label field_spec field_env' ->
+		 match field_spec with
+		   | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
+		   | `Absent ->
+		       if is_closed then field_env'
+		       else StringMap.add label `Absent field_env'
+	      ) field_env StringMap.empty in
+	    let row_var' = inst_row_var rec_env row_var
+	    in
+	      field_env', row_var'
+          (* precondition: row_var has been flattened *)
+	  and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
+	    debug ("Instantiating row var: "^string_of_row_var row_var);
 	    match row_var with
 	      | `MetaRowVar point ->
 		  (match Unionfind.find point with
-                     | (_, `RigidRowVar var)
-		     | (_, `RowVar (Some var)) ->
-			 (* assert(StringMap.is_empty env); *)
+		     | (_, `RowVar None)
+		     | (_, `MetaRowVar _) -> assert(false)
+                     | (field_env, `RigidRowVar var)
+		     | (field_env, `RowVar (Some var)) ->
+			 assert(StringMap.is_empty field_env);
 			 if IntMap.mem var renv then
 			   IntMap.find var renv
 			 else
 			   row_var
-		     | (_, `RowVar None) | (_, `MetaRowVar _) -> assert(false)
 		     | (field_env, `RecRowVar (var, rec_row)) ->
+			 assert(StringMap.is_empty field_env);
 			 if IntMap.mem var rec_row_env then
 			   (`MetaRowVar (IntMap.find var rec_row_env))
 			 else
@@ -650,75 +647,94 @@ let instantiate : environment -> string -> datatype = fun env var ->
 		  `RowVar None
 	      | `RigidRowVar _
 	      | `RowVar (Some _)
-	      | `RecRowVar (_, _) ->
-		  assert(false)
+	      | `RecRowVar (_, _) -> assert false
 	  in
-	    field_env', row_var'
-	in
-	  inst (IntMap.empty, IntMap.empty) t)
+	    inst (IntMap.empty, IntMap.empty) t)
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
+
+(*
+ get the quantifiers for a datatype
+ i.e. the quantifiers required to close a datatype
+ 
+ (the first argument specifies type variables that should remain free)
+*)
 let rec get_quantifiers : type_var_set -> datatype -> quantifier list = 
   fun bound_vars -> 
- 
-    let rec row_generics : type_var_set -> row -> quantifier list = fun bound_vars (field_env, row_var) ->
-      let free_field_spec_vars : field_spec -> quantifier list =
-	function
-	  | `Present t -> get_quantifiers bound_vars t
-	  | `Absent -> [] in
+    function
+      | `Not_typed -> failwith "Internal error: Not_typed encountered in get_quantifiers"
+      | `Primitive _ -> []
+      | `Recursive _
+      | `RigidTypeVar _
+      | `TypeVar _ -> assert false
+      | `MetaTypeVar point ->
+	  (match Unionfind.find point with
+	     | `RigidTypeVar var
+	     | `TypeVar var when IntSet.mem var bound_vars -> []
+	     | `RigidTypeVar var
+	     | `TypeVar var -> [`TypeVar var]
+	     | `Recursive (var, body) ->
+		 debug_if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
+		 if IntSet.mem var bound_vars then
+		   []
+		 else
+		   get_quantifiers (IntSet.add var bound_vars) body
+	     | t -> get_quantifiers bound_vars t)
+      | `Function (var, body) ->
+          let var_gens = get_quantifiers bound_vars var
+          and body_gens = get_quantifiers bound_vars body in
+            unduplicate (=) (var_gens @ body_gens)
+      | `Record row
+      | `Variant row 
+      | `Table row -> get_row_quantifiers bound_vars row
+      | `List (elem_type) ->
+	  get_quantifiers bound_vars elem_type
+      | `Mailbox (elem_type) ->
+	  get_quantifiers bound_vars elem_type
 
+and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
+  fun bound_vars ->
+    function
+      | `RowVar (None) -> []
+      | `RecRowVar _
+      | `RigidRowVar _
+      | `RowVar (Some _) -> assert false
+      | `MetaRowVar point ->
+	  let field_env, row_var = Unionfind.find point in
+	    if StringMap.is_empty field_env then
+	      (match row_var with
+		 | `RowVar (None) -> []
+		 | `RigidRowVar var
+		 | `RowVar (Some var) when IntSet.mem var bound_vars -> []
+		 | `RigidRowVar var
+		 | `RowVar (Some var) -> [`RowVar var]
+		 | `RecRowVar (var, rec_row) ->
+		     debug_if_set (show_recursion) (fun () -> "rec (row_generics): " ^(string_of_int var));
+		     (if IntSet.mem var bound_vars then
+			[]
+		      else
+			get_row_quantifiers (IntSet.add var bound_vars) rec_row)
+		 | `MetaRowVar _ -> get_row_var_quantifiers bound_vars row_var)
+	    else
+	      get_row_quantifiers bound_vars (field_env, row_var)
+
+and get_field_spec_quantifiers : type_var_set -> field_spec -> quantifier list =
+    fun bound_vars ->
+      function
+	| `Present t -> get_quantifiers bound_vars t
+	| `Absent -> []
+
+and get_row_quantifiers : type_var_set -> row -> quantifier list =
+    fun bound_vars (field_env, row_var) ->
       let field_vars = StringMap.fold
 	(fun _ field_spec vars ->
-	   free_field_spec_vars field_spec @ vars
+	   get_field_spec_quantifiers bound_vars field_spec @ vars
 	) field_env [] in
-
-
-      let row_vars = 
-	match row_var with
-	  | `RowVar (None) -> []
-          | `RigidRowVar var
-	  | `RowVar (Some var) when IntSet.mem var bound_vars -> []
-          | `RigidRowVar var
-	  | `RowVar (Some var) -> [`RowVar var]
-	  | `RecRowVar (var, rec_row) ->
-	      debug_if_set (show_recursion) (fun () -> "rec (row_generics): " ^(string_of_int var));
-	      if IntSet.mem var bound_vars then
-		[]
-	      else
-		row_generics (IntSet.add var bound_vars) rec_row
-	  | `MetaRowVar point -> row_generics bound_vars (Unionfind.find point)
-
+      let row_vars = get_row_var_quantifiers bound_vars (row_var:row_var)
       in
 	field_vars @ row_vars
-    in
-      function
-	| `Not_typed -> failwith "Internal error: Not_typed encountered in get_quantifiers"
-	| `Primitive _ -> []
-	| `RigidTypeVar var
-	| `TypeVar var when IntSet.mem var bound_vars -> []
-	| `RigidTypeVar var
-	| `TypeVar var -> [`TypeVar var]
-	| `MetaTypeVar point ->
-	    get_quantifiers bound_vars (Unionfind.find point)
-	      
-	| `Function (var, body) ->
-            let var_gens = get_quantifiers bound_vars var
-            and body_gens = get_quantifiers bound_vars body in
-              unduplicate (=) (var_gens @ body_gens)
-	| `Record row
-	| `Variant row 
-	| `Table row -> row_generics bound_vars row
-	| `Recursive (var, body) ->
-	    debug_if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
-	    if IntSet.mem var bound_vars then
-	      []
-	    else
-	      get_quantifiers (IntSet.add var bound_vars) body
-	| `List (elem_type) ->
-	    get_quantifiers bound_vars elem_type
-	| `Mailbox (elem_type) ->
-	    get_quantifiers bound_vars elem_type
+
 
 (** generalize: 
     Universally quantify any free type variables in the expression.
@@ -748,7 +764,8 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))
   | String (value, pos) -> String (value, (pos, `List (`Primitive `Char), None))
   | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
-  | Variable (name, pos) -> Variable (name, (pos, instantiate env name, None))
+  | Variable (name, pos) ->
+      Variable (name, (pos, instantiate env name, None))
   | Apply (Apply (f, mb, inner_pos), p, pos) when Types.using_mailbox_typing () ->
       let f = type_check env f in
       let mb = type_check env mb in
@@ -767,7 +784,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	    Unify_failure _ -> mistyped_application pos (f, f_type) (p, p_type) (Some (mb, mb_type))
       in
 	Apply (Apply (f, mb, (inner_pos, `Function (p_type, return_type), None)), p, (pos, return_type, None))
-  | Apply (f, p, pos) ->	  
+  | Apply (f, p, pos) ->
       let f = type_check env f in
       let p = type_check env p in
       let f_type = type_of_expression f in
@@ -1037,11 +1054,12 @@ and
     type_check_mutually var_maps env (defns : (string * untyped_expression * Types.datatype option) list) =
       let var_env = (map (fun (name, _, t) ->
                             match t with
-                              | Some t -> (name, generalize env (inference_type_of_type var_maps t))
+                              | Some t ->
+                                  (name, generalize env (inference_type_of_type var_maps t))
                               | None -> (name, ([], ITO.fresh_type_variable ())))
 		       defns) in
       let inner_env = var_env @ env in
-      let type_check var_maps result (name, expr, t) = 
+      let type_check var_maps result (name, expr, t) =
         let expr = type_check var_maps inner_env expr in
           match type_of_expression expr with
             | `Function _ as f  ->
@@ -1277,26 +1295,38 @@ let check_for_duplicate_defs
     if not (StringMap.is_empty duplicates) then
       raise (Errors.MultiplyDefinedToplevelNames duplicates)
 
-(* ... *)
-let create_var_maps expressions = 
+
+(*
+  Create var maps for keeping track of mapping between typevars / rowvars and
+  points. Initially these are primed with rigid vars occurring in type annotations.
+  (Currently all type vars in type annotations are rigid.)
+*)
+let create_var_maps expressions =
   if Settings.get_value rigid_type_variables then
-    let rec type_vars e = 
+    let var_maps = Inferencetypes.empty_var_maps () in
+    let tv = (get_quantifiers IntSet.empty)  -<- (inference_type_of_type var_maps) in
+    let rec get_quantifiers e = 
       let annotations default = function
-        | HasType (e, datatype, _) -> type_vars e @ Types.type_vars datatype
-        | Rec (bs, e, _) -> Utility.concat_map (fun (_,e,t) -> fromOption [] (opt_map Types.type_vars t) @ type_vars e) bs @ type_vars e
+        | HasType (e, datatype, _) -> get_quantifiers e @ tv datatype
+        | Rec (bs, e, _) -> Utility.concat_map (fun (_,e,t) -> fromOption [] (opt_map tv t) @ get_quantifiers e) bs @ get_quantifiers e
         | e -> default e in
         reduce_expression annotations (snd ->- List.concat) e in
+      
+    let quantifiers = Utility.concat_map get_quantifiers expressions in
     let tvars, rows = Inferencetypes.empty_var_maps () in
-      List.iter (fun tv -> 
-                   if not (IntMap.mem tv !tvars) 
-                   then
-                     tvars := IntMap.add tv (Unionfind.fresh (`RigidTypeVar tv)) !tvars)
-        (Utility.concat_map type_vars expressions);
+      List.iter (function
+		   | `TypeVar var ->
+                       if not (IntMap.mem var !tvars) 
+                       then
+			 tvars := IntMap.add var (Unionfind.fresh (`RigidTypeVar var)) !tvars
+		   | `RowVar var ->
+                       if not (IntMap.mem var !rows) 
+                       then
+			 rows := IntMap.add var (Unionfind.fresh (StringMap.empty, `RigidRowVar var)) !rows)
+        quantifiers;
       tvars, rows
   else 
     Inferencetypes.empty_var_maps ()
-
-(*  (Inferencetypes.empty_var_maps())*)
 
 (* [HACKS] *)
 (* two pass typing: yuck! *)
