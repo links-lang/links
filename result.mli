@@ -112,6 +112,7 @@ val recfields : result -> (string * result) list
 val string_as_charlist : string -> result
 val links_fst : [> `Record of ('a * 'b) list ] -> 'b
 val links_snd : [> `Record of ('a * 'b) list ] -> 'b
+val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
 val delay_expr : 'a -> [> `Function of string * 'b list * 'c list * 'a ]
 val charlist_as_string : result -> string

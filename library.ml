@@ -22,6 +22,10 @@ and current_pid = (ref 0 :  pid ref)
    having it here. *)
 let http_headers = ref []
 
+(* default database settings *)
+let database_driver = Settings.add_string("database_driver", "", true)
+let database_args = Settings.add_string("database_args", "", true)
+
 let debug_process_status () =
   prerr_endline("processes : " ^ 
                   string_of_int (Queue.length suspended_processes));
@@ -490,7 +494,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun th -> failwith "Unoptimized table access!!!"),
    datatype "TableHandle(r) -> [{r}]");
 
-(* [BROKEN] *)
   "insertrow",
   (`Server 
      (p1 (function
@@ -524,6 +527,21 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
    datatype "(TableHandle(r), [{r}]) -> ()");
+
+  "getDatabaseConfig",
+  (`Server
+     (p1 (fun _ ->
+	    let driver = Settings.get_value database_driver
+	    and args = Settings.get_value database_args in
+	    if driver = "" then
+	      failwith "Internal error: default database driver not defined"
+	    else
+	      `Record(["driver", string_as_charlist driver;
+		       "args", string_as_charlist args])
+	 )),
+     datatype "() -> (driver:String, args:String)");
+	   
+(* [BROKEN] *)
 (*
     "updaterows", 
   (p1 (function

@@ -27,6 +27,11 @@ exception UndefinedVariable of string
 
 module ITO = InferenceTypeOps
 
+let db_descriptor_type =
+  inference_type_of_type
+    (Inferencetypes.empty_var_maps ())
+    (snd (Parse.parse_datatype "(driver:String, name:String, args:String)"))
+
 (* extract data from inference_expressions *)
 let type_of_expression : inference_expression -> datatype =
   fun exp -> let _, t, _ = expression_data exp in t
@@ -974,7 +979,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
         Escape(var, body, (pos, type_of_expression body, None))
   | Database (params, pos) ->
       let params = type_check env params in
-        unify (type_of_expression params, `List(`Primitive `Char));
+        unify (type_of_expression params, db_descriptor_type);
         Database (params, (pos, `Primitive `DB, None))
   | TableQuery (th, query, pos) ->
       let row =

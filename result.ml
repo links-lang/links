@@ -258,6 +258,10 @@ let pair_as_ocaml_pair = function
 let links_fst x = fst (pair_as_ocaml_pair x)
 let links_snd x = snd (pair_as_ocaml_pair x)
 
+let links_project name = function
+  | (`Record fields) -> List.assoc name fields
+  | _ -> failwith ("Match failure in record projection")
+
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 

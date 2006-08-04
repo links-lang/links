@@ -311,9 +311,17 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
-                       let result = (let args = charlist_as_string value in
-                                                let driver, params = parse_db_string args in
-                                                  `Database (db_connect driver params)) in
+                       let result = (let driver = charlist_as_string (links_project "driver" value)
+				     and name = charlist_as_string (links_project "name" value)
+				     and args = charlist_as_string (links_project "args" value) in
+				     let params =
+				       (if args = "" then name
+					else name ^ ":" ^ args)
+				     in
+                                       `Database (db_connect driver params)) in
+(*                        let result = (let args = charlist_as_string value in *)
+(*                                                 let driver, params = parse_db_string args in *)
+(*                                                   `Database (db_connect driver params)) in *)
 	               apply_cont globals cont result
                    | QueryOp(query) ->
                        let result = 
