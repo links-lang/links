@@ -104,7 +104,11 @@ let optable =
     ">>" , infixl1;
   ]
 
-let precedence table x = List.assoc x table x
+let precedence table x = 
+  try
+    List.assoc x table x
+  with Not_found ->
+    infixl9 x
 
 let bump_lines lexbuf n = 
   lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_lnum = lexbuf.lex_curr_p.pos_lnum + n}
@@ -173,6 +177,8 @@ let directive_prefix = ['' '@' '$' '%']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
+let opchar = [ '!' '#' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' ]
+
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 
    will be called next;  when each action starts it's the current lexer.
@@ -180,6 +186,8 @@ let xml_closing_tag = ('<' '/' def_id '>')
    Each rule takes two arguments: the currently operative precedence
    table and the stack.
 *)
+
+
 
 rule lex optable lexers = parse
   | '#' ([^ '\n'] *)                    { lex optable lexers lexbuf }
@@ -192,22 +200,6 @@ rule lex optable lexers = parse
   | "->"                                { RARROW }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
-  | "=="                                { optable "==" }
-  | "<="                                { optable "<=" }
-  | "<"                                 { optable "<" }
-  | ">="                                { optable ">=" }
-  | ">"                                 { optable ">" }
-  | "<>"                                { optable "<>" }
-  | '+'                                 { optable "+" }
-  | '*'                                 { optable "*" }
-  | '/'                                 { optable "/" }
-  | "+."                                { optable "+." }
-  | "*."                                { optable "*." }
-  | "/."                                { optable "/." }
-  | "++"                                { optable "++" }
-  | "^"                                 { optable "^" }
-  | "^."                                { optable "^^" }
-  | "!"                                 { optable "!" }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | '{'                                 { Stack.push (lex optable lexers) lexers; LBRACE }
@@ -227,6 +219,10 @@ rule lex optable lexers = parse
   | '.'                                 { DOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
+  | opchar + as op                      { optable op }
+  | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || isupper var.[0] then
+                                              raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
+                                          else optable var }
   | "'\\\\'"                            { CHAR '\\' }
   | "'\\''"                             { CHAR '\'' }
   | "'" (_ as c) "'"                    { CHAR c }
