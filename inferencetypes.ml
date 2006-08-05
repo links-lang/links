@@ -327,14 +327,10 @@ and inference_row_of_row = fun ((_, row_var_map) as var_maps) -> function
       let field_env : field_spec_map = StringMap.map (inference_field_spec_of_field_spec var_maps) fields
       in
         if IntMap.mem var (!row_var_map) then
-          (
-            Debug.debug "boom";
             (field_env, `MetaRowVar (IntMap.find var (!row_var_map)))
-          )
         else
           let point = Unionfind.fresh (StringMap.empty, `RowVar (Some var))
           in
-            Debug.debug "baam";
             row_var_map := IntMap.add var point (!row_var_map);
             (field_env, `MetaRowVar point)
   | fields, `RecRowVar (var, rec_row) ->

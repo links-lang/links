@@ -165,6 +165,9 @@ module PatternCompiler =
      (* partition list equations by constructor *)
      let partition_list_equations : equation list -> (annotated_equation list * annotated_equation list) =
        fun equations ->
+	 (* Why does a fold_right work here?
+            (A fold_left is used in all the other partition_.*_equations functions)
+         *)
          List.fold_right (fun (ps, body) (nil_equations, cons_equations) ->
                             match ps with
                               | (annotation, (`Nil,_))::ps ->
@@ -180,8 +183,8 @@ module PatternCompiler =
          : equation list -> (string * ((string * string) * (annotation * equation) list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_right
-              (fun (ps, body) env ->
+           (List.fold_left
+              (fun env (ps, body) ->
                  match ps with
                    | (annotation, (`Variant (name, pattern),_))::ps ->
                        let vars, annotated_equations = 
@@ -193,15 +196,15 @@ module PatternCompiler =
                        in
                          StringMap.add name (vars, (annotation, (pattern::ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) equations StringMap.empty)
+              ) StringMap.empty equations)
 
      (* partition record equations by label *)
      let partition_record_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_right
-              (fun (ps, body) env ->
+           (List.fold_left
+              (fun env (ps, body) ->
                  match ps with
                    | (annotation, (`Record (name, pattern, ext_pattern),_))::ps ->
                        let vars, annotated_equations =
@@ -214,15 +217,15 @@ module PatternCompiler =
                        in
                          StringMap.add name (vars, (annotation, (pattern::ext_pattern::ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) equations StringMap.empty)
+              ) StringMap.empty equations)
 
      (* partition constant equations by constant value *)
      let partition_constant_equations
          : equation list -> (string * (untyped_expression * annotated_equation list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_right
-              (fun (ps, body) env ->
+           (List.fold_left
+              (fun env (ps, body) ->
                  match ps with
                    | (annotation, (`Constant exp,_))::ps ->
                        let name = string_of_constant exp in
@@ -234,7 +237,7 @@ module PatternCompiler =
                        in
                          StringMap.add name (exp, (annotation, (ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) equations StringMap.empty)
+              ) StringMap.empty equations)
 
      (* apply an annotation to an expression
         - rename variables
@@ -292,7 +295,7 @@ module PatternCompiler =
                             | _ -> assert false) equations) def    
            
      and match_list
-         : Syntax.position -> string list -> ((annotation * equation) list * annotated_equation list)
+         : Syntax.position -> string list -> (annotated_equation list * annotated_equation list)
          -> untyped_expression -> untyped_expression =
        fun pos (var::vars) (nil_equations, cons_equations) def ->
          let nil_equations = apply_annotations pos var nil_equations in
@@ -892,7 +895,7 @@ module Desugarer =
              List.fold_right
                (fun pattern list ->
                   `Cons (desugar pattern, list), pos)
-               ps
+	       ps
                (`Nil, pos)
          | `As (name, p) -> `As (name, desugar p), pos
          | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype varmap datatype), pos
