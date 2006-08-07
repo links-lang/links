@@ -1,3 +1,5 @@
+(* Some of the errors that Links produces, and ways of displaying them. *)
+
 type synerrspec = {filename : string; linespec : string; 
                    message : string; linetext : string;
                    marker : string}
