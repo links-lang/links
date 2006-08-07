@@ -5,11 +5,23 @@ open Deriving;
 (**
    Generate Show instances
 **)
-(** / Show *)
+
+value currents = ref ([] : list (string * string));
+
+value currentp = fun [
+  None -> False
+| Some (_, s) -> List.mem_assoc s currents.contents
+];
+
+value module_name = fun [
+  None -> assert False
+| Some (_, s) -> List.assoc s currents.contents
+];
+
 
 (* Generate a printer for each constructor parameter *)
 value rec gen_printer ({tname=self;loc=loc}as ti) = fun [
-  c when ltype_of_ctyp c = Some ti.ltype -> <:module_expr< This >>
+  c when currentp (ltype_of_ctyp c)      -> <:module_expr< $uid:(module_name (ltype_of_ctyp c))$ >>
 | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Show_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
 | <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
@@ -57,9 +69,8 @@ value gen_case ({tname=self} as ti) (loc, name, params') =
 ];
 
 (* Generate the showBuf function, the meat of the thing. *)
-value gen_showBuf_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item< 
+value gen_showBuf_sum ({tname=self;loc=loc} as ti) ctors = <:str_item< 
    value rec showBuf obj buffer = 
-         let module This = $thismod$ in 
              match obj with [ $list:List.map (gen_case ti) ctors$ ]
 >>;
 
@@ -107,10 +118,9 @@ value gen_polycase ({loc=loc; tname=tname} as ti) = fun [
 ]
 ;
 
-value gen_showBuf_polyv ({loc=loc;tname=tname} as ti) thismod (row : list MLast.row_field) =
+value gen_showBuf_polyv ({loc=loc;tname=tname} as ti) (row : list MLast.row_field) =
 <:str_item< 
    value rec showBuf obj buffer = 
-         let module This = $thismod$ in 
              match obj with [ $list:List.map (gen_polycase ti) row$ ]
 >>;
 
@@ -126,7 +136,7 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
  let rec gen = fun [
   <:ctyp< [ $list:ctors$ ] >>  -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
-                                                                  $gen_showBuf_sum ti (gen_this_module loc atype) ctors$;
+                                                                  $gen_showBuf_sum ti ctors$;
                                                                 end) : Show with type a = $atype$) >>
 | <:ctyp< $lid:id$ >>          -> <:module_expr< $uid:"Show_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>         -> <:module_expr< $gen t1$ $gen t2$ >>
@@ -142,44 +152,81 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
 | <:ctyp< '$a$ >>              -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
 | <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
-                                                                  $gen_showBuf_polyv ti (gen_this_module loc atype) row$;
+                                                                  $gen_showBuf_polyv ti row$;
                                                                 end) : Show with type a = $atype$) >>
 | _                            -> error loc ("Cannot currently generate show instances for "^ tname)
 ] in gen rtype
 ;
 
-(* Generate a single instance, possibly a functor *)
-value gen_instance ((loc, tname), params, ctyp, constraints) =
-  let params = param_names params in
-  let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in
-  let ltype = gen_type_l tname params in
-  let struct_expr = gen_module_expr {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params} in
-    <:str_item< declare
-        open Show; 
-        open Primitives; 
-        module $uid:"Show_"^ tname$ = $gen_functor loc "Show" params struct_expr$; 
-     end >> ;
-
-(* Generate n mutually-recursive instances (which are /not/ functors) *)
+(* Generate n mutually-recursive instances (/not/ functors) *)
 value gen_instances loc tdl = 
   let modules = 
     let exprs = (List.map
-                   (fun ((loc,tname),_,ctype,_) -> 
+                   (fun ((loc,tname),(*params*)_,ctype,(*constraints*)_) -> 
                       ("Show_" ^  tname, 
                        <:module_type< Show with type a = $lid:tname$ >>, 
                        gen_module_expr {loc=loc; argmap=[]; tname=tname; atype= <:ctyp< $lid:tname$ >>; ltype= ([],tname); rtype=ctype})) tdl) in
       <:str_item< module rec $list:exprs$ >>
-    in
+  in
  <:str_item< declare
    open Show;
    open Primitives;
-   $modules$;
+      $modules$;
  end >>;
 
-value gen_instances loc : instantiator = fun [
-  [td] -> gen_instance td
-| tdl when List.exists is_polymorphic tdl -> error loc "Cannot (currently!) generate Show instances for polymoprhic mutually recursive types"
-| tdl  -> gen_instances loc tdl
+value apply_functor loc funct params =
+    List.fold_left 
+      (fun expr (_,(_,param)) ->
+         <:module_expr< $expr$ $uid:param$>>) funct params
+
+;
+
+(* Generate n mutually-recursive instances (possibly functors) *)
+value gen_finstances loc tdl = 
+  match tdl with [
+ [(_,params,_,_)::_] ->
+
+    let tnames = List.map (fun ((_,tname),_,_,_) -> (tname, "Show_" ^ tname)) tdl in
+   do {
+    currents.contents := tnames;
+    let params = param_names params in
+    let modules = 
+      let exprs = (List.map
+                     (fun ((loc,tname),(*params*)_,ctype,(*constraints*)_) ->
+                        let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in 
+                        ("Show_" ^  tname, 
+                         <:module_type< Show with type a = $atype$ >>, 
+                             gen_module_expr {loc=loc; argmap=params; tname=tname; atype= atype; ltype= ([],tname); rtype=ctype})) tdl) in
+        <:str_item< module rec $list:exprs$ >>
+    in
+    let (enclosing, projections) = 
+      let rid = random_id 32 in
+      let body = <:module_expr< struct $modules$; end >> in
+                 (<:str_item< module $uid:"Show_"^ rid$ = 
+                   $gen_functor loc "Show" params body$ >>,
+                  List.map (fun (tname, mname) ->
+                               let body = 
+                                 let funct = <:module_expr< $uid:"Show_"^ rid$ >> in
+                                 <:module_expr< struct module S = $apply_functor loc funct params$ ; include S.$uid:mname$; end >>
+                                   in
+                               <:str_item< 
+                                 module $uid:mname$ = $gen_functor loc "Show" params body$
+                               >>) tnames)
+    in <:str_item< declare
+                    open Show;
+                    open Primitives;
+                    $enclosing$;
+                    declare $list:projections$ end;
+                  end >>}
+ | _ -> assert False
 ];
+
+value gen_instances loc : instantiator = do {
+currents.contents := [];
+fun [
+  tdl when List.exists is_polymorphic tdl -> gen_finstances loc tdl
+| tdl  -> gen_instances loc tdl
+
+]};
 
 instantiators.val :=   [("Show"    , gen_instances):: instantiators.val];

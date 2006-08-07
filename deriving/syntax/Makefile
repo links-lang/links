@@ -25,7 +25,7 @@ deriving:
 	$(OCAMLOPT) -linkall -o $@ -I `camlp4 -where` odyl.cmxa camlp4.cmxa pa_o.cmx pa_op.cmx pr_dump.cmx $(NOBJS) camlp4/odyl.cmx 
 
 clean:
-	rm -f *.cm[oix] *.o
+	rm -f *.cm[oix] *.o deriving
 
 depend:
 	$(OCAMLDEP) -pp $(CAMLP4) *.ml* > .depend

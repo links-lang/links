@@ -22,16 +22,6 @@ value notyp = ref False;
 Pcaml.add_option "-notyp" (Arg.Set notyp)
   "       Don't generate types definitions.";
 
-value print_version () =
-  do {
-    Printf.eprintf "IoXML version %s\n" version;
-    flush stderr;
-    exit 1
-  };
-
-Pcaml.add_option "-ioxml_v" (Arg.Unit print_version)
-  "     Print IoXML version number and exit.";
-
 (* Various utility bits *)
 value rec range f t = 
  if f > t then []
@@ -54,6 +44,14 @@ value rec index pred =
 value curry f x y = f (x,y);
 value uncurry f (x, y) = f x y;
 
+value random_id length = 
+  let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
+  let nidchars = String.length idchars in
+  let s = String.create length in 
+   do {for i = 0 to length - 1 do {
+         s.[i] := idchars.[Random.int nidchars]
+       };
+       s};
 
 exception NotImpl of (Lexing.position * Lexing.position);
 
@@ -111,7 +109,7 @@ value ltype_of_ctyp = ltype_of_ctyp [];
 (* Generate a functor from a module and a list of type parameters (to
  * be converted to module functor-parameters).
  *)
-value gen_functor loc classname = 
+value gen_functor loc classname : list 'a -> 'b -> 'b = 
   List.fold_right 
     (fun (_,(_,mname)) m -> <:module_expr< functor ($mname$ : $uid:classname$) -> $m$ >>)
 ;
