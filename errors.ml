@@ -10,7 +10,7 @@ type synerrspec = {filename : string; linespec : string;
 exception NoMainExpr
 exception ManyMainExprs
 exception Type_error of (Syntax.position * string)
-exception MultiplyDefinedToplevelNames of (Utility.StringMap.t (Syntax.position list))
+exception MultiplyDefinedToplevelNames of ((Syntax.position list) Utility.stringmap)
 exception RichSyntaxError of synerrspec
 
 exception WrongArgumentTypeError of (Syntax.position *

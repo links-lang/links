@@ -7,6 +7,9 @@ struct
   let compare : string -> string -> int = String.compare
 end
 module StringMap = Map.Make(OrderedString)
+
+type 'a stringmap = 'a StringMap.t
+
 module StringSet = Set.Make(OrderedString)
 
 let assoc_list_of_string_map env =
