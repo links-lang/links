@@ -618,7 +618,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	      field_env', row_var'
           (* precondition: row_var has been flattened *)
 	  and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
-	    debug ("Instantiating row var: "^string_of_row_var row_var);
+(*	    debug ("Instantiating row var: "^string_of_row_var row_var);*)
 	    match row_var with
 	      | `MetaRowVar point ->
 		  (match Unionfind.find point with
@@ -938,11 +938,34 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       
       let case_var_type = ITO.fresh_type_variable() in
       let body_row = ITO.make_empty_open_row () in
-      let body_var_type = `Variant body_row in
       let variant_type = `Variant (ITO.set_field (case_label, `Present case_var_type) body_row) in
 	unify (variant_type, value_type);
 
 	let case_body = type_check ((case_variable, ([], case_var_type)) :: env) case_body in
+
+	(*
+           We take advantage of absence information to give a more refined type when
+           the variant does not match the label i.e. inside 'body'.
+
+           This allows us to type functions such as the following which fail to
+           typecheck in OCaml!
+
+            fun f(x) {
+             switch x {
+              case A(B) -> B;
+              case A(y) -> A(f(y));
+             }
+            }
+           
+           On the right-hand-side of the second case y is assigned the type:
+             [|B - | c|]
+           which unifies with the argument to f whose type is:
+             [|A:[|B:() | c|] |]
+           as opposed to:
+             [|B:() | c|]
+           which clearly doesn't!
+        *)
+	let body_var_type = `Variant (ITO.set_field (case_label, `Absent) body_row) in
 	let body = type_check ((variable, ([], body_var_type)) :: env) body in
 
 	let case_type = type_of_expression case_body in

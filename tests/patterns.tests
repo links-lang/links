@@ -40,7 +40,7 @@ stderr : @..*
 exit : 1
 
 HasType pattern [3]
-switch A {case A -> 0; case (x:[|A | B:[|C:String|] |]) -> 1;}
+switch A {case A -> 0; case (x:[|B:[|C:String|] |]) -> 1;}
 stdout : 0 : Int
 
 HasType pattern [4]
@@ -50,3 +50,7 @@ stdout : 0 : Int
 As pattern
 switch 1 {case 1 as x -> x;}
 stdout : 1 : Int
+
+Absence typing in variant patterns
+fun f(x) {switch x {case A(B) -> B; case A(y) -> A(f(y));}}
+stdout : @fun : \(\[|A:\[|B:()|\(mu ([a-z]+) . A:\[|B:\(\)|\1|\]\)|\]|\]\) -> mu ([a-z]+) . \[|A:\2 | B:()|[a-z]+|\]
