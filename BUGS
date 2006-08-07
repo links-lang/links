@@ -16,19 +16,6 @@ BUGS
 
   The 'mu a.' shouldn't be there.
 
-* Record case patterns, like record let patterns, should match closed
-  rows unless open rows are explicitly specified:
-
-     links> fun f(z) { switch z { case (x,y) -> x; } };;
-     fun : (b, c, d) -> b
-
-   The type should be
-
-     (b, c) -> b
-
-   (This one is open for debate, I think: what does everyone else think
-   about it?)
-
 * Closed rows should not contain absent fields.  This is not really
   what we want:
 
@@ -36,16 +23,6 @@ BUGS
      fun : (y:b,c) -> (y -,c)
      links> f((y=3));;
      () : (y -)
-
-* There's no distinct read/print syntax for a record consisting of an
-  empty open row.  Currently empty open rows print like this:
-
-     (a)
-
-  which is ambiguous with other things.  A simple way to fix this is
-  to have some way of distinguishing row variables from other type
-  variables in the read/print syntax (for example by prefixing them
-  with '*', single quote, or some other special character).
 
 * Recursive types expose continuation implementation in an undesirable way:
 
@@ -91,15 +68,6 @@ BUGS
 
 * Some demos and comments in the code refer to l:action.
   The code now uses l:onsubmit instead.
-
-* .cache files are written right alongside the .cgi script, a location
-  which typically won't be writable (webservers writing to the CGI dir
-  is often seen as a security hole).
-
-* JavaScript generation assumes that jslib.js and json.js are
-  alongside the generated program; in /cgi-bin/ they won't be
-  executable, and hence not accessible. We need to be able control how
-  they are located.
 
 * A bare loop variable is not rewritten in a loop body:
 
@@ -153,14 +121,6 @@ TODO
   just variable and function bindings) at top level.  For example,
 
        links> var (x,y) = (1,2);;
-
-* We should decide on the right semantics for type annotations.  What
-  should we do in each of these cases, for example?:
-
-       fun (x) { x + 1 } : a -> a
-       fun (x) { x } : Int -> Int
-       fun (x) { x : a } : (a -> a) -> (a -> a)
-       fun (x) { x : a } : a
 
 * It'd be nice if the type variable names in annotations were
   preserved.  That is, instead of this
