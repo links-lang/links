@@ -1,4 +1,4 @@
-(* inference types *)
+(* Definitions of types used during inference--not for public consumption. *)
 type type_var_set = Type_basis.type_var_set
 
 type datatype = [
