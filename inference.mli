@@ -1,4 +1,4 @@
-(** Type inference via the Damas-Milner algorithm, with support for rows **)
+(** Type inference via the Damas-Milner algorithm, with support for rows *)
 
 val type_program    : Types.environment -> Syntax.untyped_expression list -> Types.environment * Syntax.expression list
 

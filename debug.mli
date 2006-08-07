@@ -1,4 +1,4 @@
-(*** debugging ***)
+(** Facilities for optional debugging messages. *)
 
 val debugging_enabled : bool Settings.setting
 
