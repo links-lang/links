@@ -1,4 +1,4 @@
-(* Representations of types *)
+(** Definitions of Links types, facing on the rest of the code. *)
 
 open Type_basis
 

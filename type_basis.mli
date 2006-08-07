@@ -1,4 +1,4 @@
-(* Basis for types *)
+(** Low-level implementation of Links types. *)
 
 type type_var_set = Utility.IntSet.t
 

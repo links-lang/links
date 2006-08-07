@@ -1,4 +1,4 @@
-(** Defines the "values" of Links, and ops on them, including continuations **)
+(** Defines the "values" of Links, and ops on them, including continuations *)
 
 exception Runtime_error of string
 

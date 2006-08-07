@@ -1,4 +1,4 @@
-(* The syntax tree created by the parser. *)
+(** The syntax tree created by the parser. *)
 
 type name = string
 
