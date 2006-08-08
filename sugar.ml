@@ -81,7 +81,8 @@ module PatternCompiler =
          | `Variant _,  `Variant _
          | `Record _,   `Record _
          | `Constant _, `Constant _
-         | `Variable _, `Variable _ -> true
+         | `Variable _, `Variable _ -> false
+             (* [HACK] ensures that the correct default pattern is picked *)
          | `As (_, (pattern,_)), pattern'
          | pattern, `As (_, (pattern',_)) -> eq (pattern, pattern')
          | `HasType (((pattern,_):simple_pattern), _), pattern' 
@@ -258,9 +259,10 @@ module PatternCompiler =
         - rename variables
         - move type annotations into the expression
      *)
-     (* TODO: OCaml-style 'as' patterns (which refine the type)
-         - change var to be an expression
-         - change subst to be a let if this is not a variable
+     (* [TODO]
+         OCaml-style 'as' patterns (which refine the type)
+           - change var to be an expression
+           - change subst to be a let if this is not a variable
      *)
      let apply_annotation : Syntax.position -> string -> annotation * untyped_expression -> untyped_expression =
        fun pos var ((names, datatypes), exp) ->
@@ -276,6 +278,15 @@ module PatternCompiler =
        fun pos var annotated_equations ->
          map (fun (annotation, (ps, body)) ->
                 (ps, apply_annotation pos var (annotation, body))) annotated_equations
+
+     (* 
+        [TODO]
+           decide on what to do with redundant patterns
+        e.g.
+          fun (x) {switch x {case x -> 0; A -> 1;}}
+        (currently this is the same as
+          fun (x) {switch x {case x -> 0}} : a -> Int)
+     *)
 
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
@@ -304,20 +315,23 @@ module PatternCompiler =
      and match_var
          : Syntax.position -> string list -> equation list -> bound_expression -> bound_expression =
        fun pos vars equations def var ->
+(*
          let bind_or_subst (var, exp, body, pos) =
            match exp with
              | Variable (var', _) ->
                  subst body var var'
              | _ -> Let (var, exp, body, pos)
          in
-           match_cases pos vars
-             (List.map (fun ((annotation, pattern)::ps, body) ->
-                          let body = apply_annotation pos var (annotation, body)
-                          in
-                            match pattern with
-                              | (`Variable var',_) ->
-                                  (ps, subst body var' var)
-                              | _ -> assert false) equations) def
+*)
+         match_cases pos vars
+           (List.map (fun ((annotation, pattern)::ps, body) ->
+                        let body = apply_annotation pos var (annotation, body)
+                        in
+                          match pattern with
+                            | (`Variable var',_) ->
+                                (ps, subst body var' var)
+                            | _ -> assert false) equations) def
+
              
      and match_list
          : Syntax.position -> string list -> (annotated_equation list * annotated_equation list)
