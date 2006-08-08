@@ -96,17 +96,23 @@ struct
   let make_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
 
   let is_closed_row =
-    let rec is_closed_row' rec_vars =
+    let rec is_closed rec_vars =
       function
-        | (_, `RowVar (Some var)) -> IntSet.mem var rec_vars
         | (_, `RowVar None) -> true
-        | (_, `RecRowVar (var, row)) ->
-             ((IntSet.mem var rec_vars) or (is_closed_row' (IntSet.add var rec_vars) row))
         | (_, `MetaRowVar point) ->
-            is_closed_row' rec_vars (Unionfind.find point)
-        | (_, `RigidRowVar _) -> false
+            begin
+              match Unionfind.find point with
+                | (_, `RowVar None) -> true
+                | (_, `RigidRowVar _)
+                | (_, `RowVar (Some _)) -> false
+                | (_, `RecRowVar (var, row)) ->
+                    ((IntSet.mem var rec_vars) or (is_closed (IntSet.add var rec_vars) row))
+                | (_, `MetaRowVar _) as row ->
+                    is_closed rec_vars row
+            end
+        | _ -> assert false
     in
-      is_closed_row' IntSet.empty
+      is_closed IntSet.empty
 
   let get_row_var = fun (_, row_var) ->
     let rec get_row_var' = fun rec_vars -> function
@@ -136,6 +142,41 @@ let contains_present_fields field_env =
          | `Present _ -> true
          | `Absent -> present
     ) field_env false
+
+let is_canonical_row_var =
+  function
+    | `RowVar None -> true
+    | `MetaRowVar point ->
+        begin
+          match snd (Unionfind.find point) with
+            | `RigidRowVar _
+            | `RowVar (Some _) -> true
+            | `RowVar None
+            | `RecRowVar _
+            | `MetaRowVar _ -> false
+        end
+    | `RowVar (Some _)
+    | `RigidRowVar _
+    | `RecRowVar _ -> assert false
+
+let is_rigid_row : row -> bool =
+  let rec is_rigid rec_vars =
+    function
+      | (_, `RowVar None) -> true
+      | (_, `MetaRowVar point) ->
+          begin
+            match Unionfind.find point with
+              | (_, `RowVar (Some _)) -> false
+              | (_, `RowVar None)
+              | (_, `RigidRowVar _)  -> true
+              | (_, `RecRowVar (var, row)) ->
+                  ((IntSet.mem var rec_vars) or (is_rigid (IntSet.add var rec_vars) row))
+              | (_, `MetaRowVar _) as row ->
+                  is_rigid rec_vars row
+          end
+      | _ -> assert false
+  in
+    is_rigid IntSet.empty
 
 let is_flattened_row : row -> bool =
   let rec is_flattened = fun rec_vars -> function
@@ -240,26 +281,24 @@ let unwrap_row : row -> (row * (int * row) option) =
     fun rec_env -> function
       | (field_env, `MetaRowVar point) as row ->
           (match Unionfind.find point with
-             | (field_env', (`RigidRowVar _ as r)) ->
-                 (field_env_union (field_env, field_env'), r), None
+             | (field_env', `RowVar (Some _))
+             | (field_env', `RigidRowVar _)
+             | (field_env', `RecRowVar _) when (contains_present_fields field_env')
+                 -> assert false
              | (field_env', `RowVar None) ->
                  (field_env_union (field_env, field_env'), `RowVar None), None
-             | (field_env', `RowVar (Some var)) ->
-                 assert(not (contains_present_fields field_env'));
-                 if IntMap.mem var rec_env then
-                   (field_env, `MetaRowVar (IntMap.find var rec_env)), None
-                 else
-                   row, None
-             | (field_env', `RecRowVar ((var, body) as rec_row)) ->
-                 assert(not (contains_present_fields field_env'));
+             | (_, `RowVar (Some _))
+             | (_, `RigidRowVar _) ->
+                 row, None
+             | (_, `RecRowVar ((var, body) as rec_row)) ->
                  if IntMap.mem var rec_env then
                    (field_env, `MetaRowVar (IntMap.find var rec_env)), Some rec_row
                  else
-                   (let point' = Unionfind.fresh (field_env', `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
+                   (let point' = Unionfind.fresh (StringMap.empty, `RecRowVar (var, (StringMap.empty, `RowVar (Some var)))) in
                     let unwrapped_body, _ = unwrap_row' (IntMap.add var point' rec_env) body in
-                      Unionfind.change point' (field_env', `RecRowVar (var, unwrapped_body));
-                      let field_env'', row_var' = unwrapped_body in
-                        (field_env_union ((field_env_union (field_env, field_env')), field_env''), row_var')), Some rec_row
+                      Unionfind.change point' (StringMap.empty, `RecRowVar (var, unwrapped_body));
+                      let field_env', row_var' = unwrapped_body in
+                        (field_env_union (field_env, field_env'), row_var')), Some rec_row
              | (_, `MetaRowVar _) as row' ->
                  let (field_env', row_var'), rec_row = unwrap_row' rec_env row' in
                    (field_env_union (field_env, field_env'), row_var'), rec_row)
@@ -402,16 +441,15 @@ and row_of_inference_row = fun rec_vars row ->
           let (field_env, row_var) = Unionfind.find point in
             assert(not (contains_present_fields field_env));
             (match row_var with
-               | `MetaRowVar _
-               | `RowVar None -> assert false
-               | `RigidRowVar var
-               | `RowVar (Some var) -> `RowVar (Some var)
+               | `RowVar None -> `RowVar None
+               | `RowVar (Some var)
+               | `RigidRowVar var -> `RowVar (Some var)
                | `RecRowVar (var, rec_row) ->
                    if IntSet.mem var rec_vars then
                      `RowVar (Some var)
                    else
                      `RecRowVar (var, row_of_inference_row (IntSet.add var rec_vars) rec_row)
-               | `RowVar None -> `RowVar None)
+               | `MetaRowVar _ -> assert false)
       | `RigidRowVar _
       | `RowVar (Some _)
       | `RecRowVar (_, _) -> assert false

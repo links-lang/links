@@ -31,8 +31,6 @@ val free_row_type_vars : row -> int list
 type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
 
-
-
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS
    with type typ = datatype
@@ -41,6 +39,9 @@ module BasicInferenceTypeOps :
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
 val contains_present_fields : field_spec_map -> bool
+
+val is_canonical_row_var : row_var -> bool
+val is_rigid_row : row -> bool
 
 val is_flattened_row : row -> bool
 val is_empty_row : row -> bool
