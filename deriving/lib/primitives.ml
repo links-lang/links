@@ -23,15 +23,15 @@ module Bool = struct
 
   let numbering = [false, 0; true, 1]
 
-  let showBuf item buffer =
+  let format formatter item =
     match item with
-      | true  -> Buffer.add_string buffer "true"
-      | false -> Buffer.add_string buffer "false"
+      | true  -> Format.pp_print_string formatter "true"
+      | false -> Format.pp_print_string formatter "false"
 end 
 
 module Bounded_bool = (Bool : Bounded with type a = Bool.a)
 module Enum_bool = EnumDefaults (Bool)
-module Show_bool = ShowDefaults (WriteBufDefault (Bool))
+module Show_bool = ShowDefaults (Bool)
 
 module Character = struct
   type a = char
@@ -41,12 +41,12 @@ module Character = struct
   let maxBound = Char.chr 0xff (* Is this guaranteed? *)
   let fromEnum = Char.code
   let toEnum = Char.chr
-  let showBuf item buffer = Buffer.add_string buffer ("'" ^ Char.escaped item ^ "'")
+  let format formatter item = Format.pp_print_string formatter ("'" ^ Char.escaped item ^ "'")
 end 
 
 module Bounded_char = (Character : Bounded with type a = Character.a)
 module Enum_char = EnumDefaults' (Character) (Bounded_char)
-module Show_char = ShowDefaults (WriteBufDefault (Character))
+module Show_char = ShowDefaults (Character)
 
 module Int = struct
   type a = int
@@ -56,30 +56,28 @@ module Int = struct
   and maxBound = (1 lsl (Sys.word_size - 2)) - 1
   let fromEnum i = i
   let toEnum i = i
-  let showBuf item buffer = Buffer.add_string buffer (string_of_int item)
+  let format formatter item = Format.pp_print_string formatter (string_of_int item)
 end
 
 module Bounded_int = (Int : Bounded with type a = Int.a)
 module Enum_int = EnumDefaults' (Int) (Bounded_int)
-module Show_int = ShowDefaults (WriteBufDefault (Int))
-
-
+module Show_int = ShowDefaults (Int)
 
 module Num = struct
   type a = num
-  let showBuf item buffer = Buffer.add_string buffer (string_of_num item)
+  let format formatter item = Format.pp_print_string formatter (string_of_num item)
 end
 
-module Show_num = ShowDefaults (WriteBufDefault (Num))
+module Show_num = ShowDefaults (Num)
 
 module Float = struct
   type a = float
   let eq = (=)
   let le = (<=)
-  let showBuf item buffer = Buffer.add_string buffer (string_of_float item)
+  let format formatter item = Format.pp_print_string formatter (string_of_float item)
 end 
 
-module Show_float = ShowDefaults (WriteBufDefault (Float))
+module Show_float = ShowDefaults (Float)
 (* Can `instance Enum Float' be justified?
    For some floats `f' we have `succ f == f'. 
    Furthermore, float is wider than int, so fromEnum will necessarily
@@ -89,12 +87,12 @@ module Strings = struct
   type a = string
   let eq l r = String.compare l r =  0
   let le l r = String.compare l r <= 0
-  let showBuf item buffer = 
-    Buffer.add_char buffer '"';
-    Buffer.add_string buffer (String.escaped item);
-    Buffer.add_char buffer '"'
+  let format formatter item = 
+    Format.pp_print_char formatter '"';
+    Format.pp_print_string formatter (String.escaped item);
+    Format.pp_print_char formatter '"'
 end 
-module Show_string = ShowDefaults (WriteBufDefault (Strings))
+module Show_string = ShowDefaults (Strings)
 
 module Unit = struct
   type a = unit
@@ -106,9 +104,9 @@ module Unit = struct
   let toEnum = function
     | 0 -> ()
     | _ -> raise (Invalid_argument "toEnum")
-  let showBuf () buffer = Buffer.add_string buffer "()"
+  let format formatter () = Format.pp_print_string formatter "()"
 end 
 
 module Bounded_unit = (Unit : Bounded with type a = Unit.a)
 module Enum_unit = EnumDefaults' (Unit) (Bounded_unit)
-module Show_unit = ShowDefaults (WriteBufDefault (Unit))
+module Show_unit = ShowDefaults (Unit)

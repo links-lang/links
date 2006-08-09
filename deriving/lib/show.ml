@@ -3,17 +3,15 @@ type showS = string -> string
 
 module type Show = sig
   type a
-    (* showsPrec seems unnecessary without infix constructors *)
-    (*  val showsPrec : int -> a -> showS
-        val show : a -> string
-        val showList : a list -> showS
-    *)
+  val format : Format.formatter -> a -> unit
+  val formatList : Format.formatter -> a list -> unit
   val show : a -> string
   val showList : a list -> string
-  val showBuf : a -> Buffer.t -> unit
-  val showBufList : a list -> Buffer.t -> unit
+(*  val showBuf : a -> Buffer.t -> unit
+  val showBufList : a list -> Buffer.t -> unit*)
 end
 
+(*
 module WriteBufDefault 
   (S : (sig
           type a
@@ -31,105 +29,144 @@ struct
       writeItems items;
       Buffer.add_char buffer ']'
 end
+*)
+module ShowFormatterDefault
+  (S : (sig
+          type a
+          val format : Format.formatter -> a -> unit
+        end)) =
+struct
+  include S
+  let formatList formatter items = 
+    let rec writeItems = function
+      | []      -> ()
+      | [x]     -> S.format formatter x;
+      | x :: xs -> 
+          begin
+            S.format formatter x; 
+            Format.pp_print_char formatter ';';
+            Format.pp_print_break formatter 1 0;
+            writeItems xs
+          end
+    in 
+      Format.pp_open_hovbox formatter 1;
+      Format.pp_print_char formatter '['; 
+      writeItems items;
+      Format.pp_print_char formatter ']';
+      Format.pp_close_box formatter ()
+end
 
 module ShowDefaults' 
   (S : (sig
           type a
-          val showBuf : a -> Buffer.t -> unit
-          val showBufList : a list -> Buffer.t -> unit
+          val format : Format.formatter -> a -> unit
+          val formatList : Format.formatter -> a list -> unit
         end)) : Show with type a = S.a =
 struct
   include S
-  let show item = 
+  let showFormatted f item =
     let b = Buffer.create 16 in 
-      S.showBuf item b;
+    let formatter = Format.formatter_of_buffer b in
+      Format.pp_open_hovbox formatter 0;
+      f formatter item;
+      Format.pp_close_box formatter ();
+      Format.pp_print_flush formatter ();
       Buffer.sub b 0 (Buffer.length b)
-  let showList items = 
-    let b = Buffer.create 16 in 
-      S.showBufList items b;
-      Buffer.sub b 0 (Buffer.length b)
+
+  (* Warning: do not eta-reduce *)
+  let show item = showFormatted S.format item
+  (* Warning: do not eta-reduce *)
+  let showList items = showFormatted S.formatList items
+
 end
 
 module ShowDefaults (S : (sig
                             type a
-                            val showBuf : a -> Buffer.t -> unit
+                            val format : Format.formatter -> a -> unit
                           end)) : Show with type a = S.a =
-  ShowDefaults' (WriteBufDefault (S))
+  ShowDefaults' (ShowFormatterDefault (S))
 
 
 module Show_unprintable (S : sig type a end) (*: Show with type a = S.a *) = 
   ShowDefaults (struct
                   type a = S.a
-                  let showBuf _ buffer = Buffer.add_string buffer "..."
+                  let format formatter _ = Format.pp_print_string formatter "..."
                 end)
     
 (* instance Show a => Show [a] *)
 module Show_list (S : Show) : Show with type a = S.a list = 
   ShowDefaults (struct
                   type a = S.a list
-                  let showBuf = S.showBufList
+                  let format = S.formatList
                 end)
     
 (* instance Show a => Show (a ref) *)
 module Show_ref (S : Show) : Show with type a = S.a ref =
   ShowDefaults (struct
                   type a = S.a ref
-                  let showBuf obj buffer = 
-                    Buffer.add_string buffer "ref ";
-                    S.showBuf !obj buffer;
+                  let format formatter obj = 
+                    Format.pp_print_string formatter "ref ";
+                    S.format formatter !obj;
                 end)
 
 (* instance Show a => Show (a option) *)
 module Show_option (S : Show) : Show with type a = S.a option =
   ShowDefaults (struct
                   type a = S.a option
-                  let showBuf obj buffer = 
-                    match obj with
-                      | None ->
-                          Buffer.add_string buffer "None";
-                      | Some s -> 
-                          Buffer.add_string buffer "Some ";
-                          S.showBuf s buffer;
+                  let format formatter obj = 
+                    Format.pp_open_box formatter 0;
+                    begin
+                      match obj with
+                        | None ->
+                            Format.pp_print_string formatter "None";
+                        | Some s -> 
+                            Format.pp_print_string formatter "Some ";
+                            S.format formatter s;
+                    end;
+                    Format.pp_close_box formatter ()
                 end)
+
 
 (* instance Show a => Show (a array) *)
 module Show_array (S : Show) : Show with type a = S.a array =
   ShowDefaults (struct
                   type a = S.a array
-                  let showBuf obj buffer = 
+                  let format formatter obj = 
                     let length = Array.length obj in
-                      Buffer.add_string buffer "[|";
+                      Format.pp_print_string formatter "[|";
                       for i = 0 to length - 2 do
-                        S.showBuf (Array.get obj i) buffer;
-                        Buffer.add_string buffer "; ";
+                        S.format formatter (Array.get obj i);
+                        Format.pp_print_string formatter "; ";
                       done;
                       if length <> 0 then
-                        S.showBuf (Array.get obj (length -1)) buffer;
-                      Buffer.add_string buffer "|]"
+                        S.format formatter (Array.get obj (length -1));
+                      Format.pp_print_string formatter "|]"
                 end)
 
+let comma formatter = 
+  Format.pp_print_char formatter ',';
+  Format.pp_print_break formatter 1 0;
 
 module Show_0 : Show with type a = unit = 
   ShowDefaults (struct
                   type a = unit
-                  let showBuf () buffer = Buffer.add_string buffer "()"
+                  let format formatter () = Format.pp_print_string formatter "()"
                 end)
-
 module Show_1 (S1 : Show) : Show with type a = S1.a =
   ShowDefaults (struct
                   type a = S1.a
-                  let showBuf s1 b = 
-                    S1.showBuf s1 b;
+                  let format formatter s1 = 
+                    S1.format formatter s1;
                 end)
-
-
 module Show_2 (S1 : Show) (S2 : Show) : Show with type a = S1.a * S2.a = 
   ShowDefaults (struct
                   type a = S1.a * S2.a
-                  let showBuf (s1, s2) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_3
   (S1 : Show)
@@ -138,11 +175,13 @@ module Show_3
   : Show with type a = S1.a * S2.a * S3.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a
-                  let showBuf (s1, s2, s3) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_4
   (S1 : Show)
@@ -152,12 +191,14 @@ module Show_4
   : Show with type a = S1.a * S2.a * S3.a * S4.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a
-                  let showBuf (s1, s2, s3, s4) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_5
   (S1 : Show)
@@ -168,13 +209,15 @@ module Show_5
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a * S5.a
-                  let showBuf (s1, s2, s3, s4, s5) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ',';
-                    S5.showBuf s5 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4, s5) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; comma formatter;
+                    S5.format formatter s5; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_6
   (S1 : Show)
@@ -186,14 +229,16 @@ module Show_6
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
-                  let showBuf (s1, s2, s3, s4, s5, s6) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ',';
-                    S5.showBuf s5 b; Buffer.add_char b ',';
-                    S6.showBuf s6 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4, s5, s6) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; comma formatter;
+                    S5.format formatter s5; comma formatter;
+                    S6.format formatter s6; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_7
   (S1 : Show)
@@ -206,15 +251,17 @@ module Show_7
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
-                  let showBuf (s1, s2, s3, s4, s5, s6, s7) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ',';
-                    S5.showBuf s5 b; Buffer.add_char b ',';
-                    S6.showBuf s6 b; Buffer.add_char b ',';
-                    S7.showBuf s7 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4, s5, s6, s7) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; comma formatter;
+                    S5.format formatter s5; comma formatter;
+                    S6.format formatter s6; comma formatter;
+                    S7.format formatter s7; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_8
   (S1 : Show)
@@ -228,16 +275,18 @@ module Show_8
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
-                  let showBuf (s1, s2, s3, s4, s5, s6, s7, s8) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ',';
-                    S5.showBuf s5 b; Buffer.add_char b ',';
-                    S6.showBuf s6 b; Buffer.add_char b ',';
-                    S7.showBuf s7 b; Buffer.add_char b ',';
-                    S8.showBuf s8 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4, s5, s6, s7, s8) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; comma formatter;
+                    S5.format formatter s5; comma formatter;
+                    S6.format formatter s6; comma formatter;
+                    S7.format formatter s7; comma formatter;
+                    S8.format formatter s8; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
 module Show_9
   (S1 : Show)
@@ -252,79 +301,18 @@ module Show_9
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a =
   ShowDefaults (struct
                   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
-                  let showBuf (s1, s2, s3, s4, s5, s6, s7, s8, s9) b = 
-                    Buffer.add_char b '(';
-                    S1.showBuf s1 b; Buffer.add_char b ',';
-                    S2.showBuf s2 b; Buffer.add_char b ',';
-                    S3.showBuf s3 b; Buffer.add_char b ',';
-                    S4.showBuf s4 b; Buffer.add_char b ',';
-                    S5.showBuf s5 b; Buffer.add_char b ',';
-                    S6.showBuf s6 b; Buffer.add_char b ',';
-                    S7.showBuf s7 b; Buffer.add_char b ',';
-                    S8.showBuf s8 b; Buffer.add_char b ',';
-                    S9.showBuf s9 b; Buffer.add_char b ')';
+                  let format formatter (s1, s2, s3, s4, s5, s6, s7, s8, s9) = 
+                    Format.pp_open_hovbox formatter 1;
+                    Format.pp_print_char formatter '(';
+                    S1.format formatter s1; comma formatter;
+                    S2.format formatter s2; comma formatter;
+                    S3.format formatter s3; comma formatter;
+                    S4.format formatter s4; comma formatter;
+                    S5.format formatter s5; comma formatter;
+                    S6.format formatter s6; comma formatter;
+                    S7.format formatter s7; comma formatter;
+                    S8.format formatter s8; comma formatter;
+                    S9.format formatter s9; Format.pp_print_char formatter ')';
+                    Format.pp_close_box formatter ()
                 end)
-(*
 
-type 'a fruit = 
-  | Apple
-  | Banana of 'a
-  | Orange of ('a * int * ('a fruit))
-*)
-
-
-(*
-  Doesn't work (unsafe module recursion)
-
-  module rec Fix
-  : functor (A : functor (S : Show)->Show) -> Show = functor (A : functor (S : Show) -> Show) -> 
-  A (Fix (A))
-*)
-
-(* It'd be great if we could use `module rec ...' here, but O'Caml
-   decides that it's not safe (because of the recursion, apparently) *)
-(*
-module Show_fruit (A : Show) : Show with type a = A.a fruit = 
-  ShowDefaults (struct
-                  type a = A.a fruit
-                  let rec showBuf obj buffer = 
-                    let module This = ShowDefaults (struct
-                                                      type a = A.a fruit
-                                                      let showBuf = showBuf
-                                                    end) in
-                      match obj with 
-                        | Apple -> Buffer.add_string buffer "Apple "
-                        | Banana (a) -> Buffer.add_string buffer "Banana ";
-                            let module Shower = Show_1 (A) in
-                              Shower.showBuf a buffer
-                        | Orange (a,b,c) ->
-                            Buffer.add_string buffer "Orange ";
-                            let module Shower = Show_3 (A) (Show_int) (This) in
-                              Shower.showBuf (a,b,c) buffer
-                end)
-*)
-(*
-showable
-    <:ctyp< $t1$ . $t2$ >>: access in module. 
-    <:ctyp< $t1$ as $t2$ >>: type alias. 
-    <:ctyp< $t1$ $t2$ >>: application. 
-    <:ctyp< $lid:s$ >>: identifier starting with a lowercase letter. 
-    <:ctyp< ! $list:sl$ . $t$ >>: polymorphic type. 
-    <:ctyp< '$s$ >>: type variable. 
-    <:ctyp< { $list:sbtl$ } >>: record definition. 
-    <:ctyp< [ $list:stll$ ] >>: concrete type definition. 
-    <:ctyp< ( $list:tl$ ) >>: tuple. 
-    <:ctyp< $uid:s$ >>: identifier starting with an uppercase letter. 
-    <:ctyp< [| $list:rfl$ |] >>: variant type definition. 
-
-not showable
-    <:ctyp< _ >>: wildcard. 
-    <:ctyp< $t1$ -> $t2$ >>: arrow. 
-    <:ctyp< # $list:sl$ >>: class type. 
-    <:ctyp< < $list:fl$ > >>: object type. 
-
-unknown:
-    <:ctyp< ~ $s$ : $t$ >>: label type. 
-    <:ctyp< $t1$ == $t2$ >>: type manifest. 
-    <:ctyp< ? $s$ : $t$ >>: optional label type. 
-*)

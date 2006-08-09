@@ -17,7 +17,7 @@ end
 module Show_otherfield = Show.ShowDefaults(
   struct
     type a = otherfield
-    let showBuf obj buffer = Buffer.add_string buffer (obj # show)
+    let format formatter obj = Format.pp_print_string formatter (obj # show)
   end)
 
 

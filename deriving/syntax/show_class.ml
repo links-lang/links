@@ -41,14 +41,14 @@ value gen_printers ({tname=self;loc=loc} as ti) tuple params =
             (fun s param -> <:module_expr< $s$ $param$ >>)
             <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
             (List.map (gen_printer ti) params)) in
-   <:expr< let module S = $m$ in S.showBuf $tuple$ buffer >>;
+   <:expr< let module S = $m$ in S.format formatter $tuple$ >>;
 
-(* Generate an individual case clause for the showBuf function. 
+(* Generate an individual case clause for the format function. 
 case:
      | $(Ctor-name) $(params) -> 
-         Buffer.add_string buffer $(Ctor-name + space)
+         Format.pp_print_string formatter $(Ctor-name + space)
          let module S = Show_$(|params|) $(modularized_param_types) in
-             S.showBuf $(params) buffer
+             S.format formatter $(params)
 *)
 value gen_case ({tname=self} as ti) (loc, name, params') =
   let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
@@ -57,7 +57,7 @@ value gen_case ({tname=self} as ti) (loc, name, params') =
                 (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< $uid:name$>> params) in
   match params' with [
     [] -> 
-      (patt, None, <:expr< Buffer.add_string buffer $str:name$ >>)
+      (patt, None, <:expr< Format.pp_print_string formatter $str:name$ >>)
   | _ -> 
       let tuple = 
         match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with [ (* 0-tuples and 1-tuples are invalid *)
@@ -65,31 +65,35 @@ value gen_case ({tname=self} as ti) (loc, name, params') =
         | [x]    -> x
         | params -> <:expr< ( $list:params$ )>> 
         ]
-      in (patt, None, <:expr< do { Buffer.add_string buffer $str:name ^" "$; $gen_printers ti tuple params'$ } >>)
+      in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                                   Format.pp_print_string formatter $str:name$;
+                                   Format.pp_print_break formatter 1 2;
+                                   $gen_printers ti tuple params'$;
+                                   Format.pp_close_box formatter () } >>)
 ];
 
-(* Generate the showBuf function, the meat of the thing. *)
-value gen_showBuf_sum ({tname=self;loc=loc} as ti) ctors = <:str_item< 
-   value rec showBuf obj buffer = 
-             match obj with [ $list:List.map (gen_case ti) ctors$ ]
+(* Generate the format function, the meat of the thing. *)
+value gen_format_sum ({tname=self;loc=loc} as ti) ctors = <:str_item< 
+   value rec format formatter = 
+             fun [ $list:List.map (gen_case ti) ctors$ ]
 >>;
 
-value gen_showBuf_record ({loc=loc;tname=self}as ti) fields = 
+value gen_format_record ({loc=loc;tname=self}as ti) fields = 
   let showfields = List.map2 (fun (loc,k,_(* what is this? *),v) endp ->
                                 let sep = if endp then <:expr< () >>
-                                else <:expr< Buffer.add_string buffer "; " >> in
+                                else <:expr< Format.pp_print_string formatter "; " >> in
                                 <:expr< let module S = $gen_printer ti v$ in
-                                            do { Buffer.add_string buffer $str:k ^ "="$; 
-                                                 S.showBuf obj.$lid:k$ buffer ; 
+                                            do { Format.pp_print_string formatter $str:k ^ "="$; 
+                                                 S.format formatter obj.$lid:k$ ; 
                                                  $sep$
                                                } >>) 
     fields (endmarker fields)
     in
 <:str_item<
-   value showBuf obj buffer = do {
-      Buffer.add_char buffer '{';
+   value format formatter obj = do {
+      Format.pp_print_char formatter '{';
       do { $list:showfields$ };
-      Buffer.add_char buffer '}';
+      Format.pp_print_char formatter '}';
    }
 >>;
 
@@ -100,35 +104,37 @@ value gen_polycase ({loc=loc; tname=tname} as ti) = fun [
     let patt = (List.fold_left 
                   (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< `$name$>> params) in
       match params' with [
-        [] -> (patt, None, <:expr< Buffer.add_string buffer $str:"`" ^ name$ >>)
+        [] -> (patt, None, <:expr< Format.pp_print_string formatter $str:"`" ^ name$ >>)
       | _ -> (let tuple = match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with [ (* 0-tuples and 1-tuples are invalid *)
                 []     -> <:expr< () >>
               | [x]    -> x
               | params -> <:expr< ( $list:params$ )>> 
               ] 
-              in (patt, None, <:expr< do { Buffer.add_string buffer $str:"`" ^ name ^" "$; 
-					   $gen_printers ti tuple params'$ }
+              in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                                           Format.pp_print_string formatter $str:"`" ^ name ^" "$; 
+					   $gen_printers ti tuple params'$;
+                                           Format.pp_close_box formatter () }
 		              >>))
       ]
 | MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
                                                 (<:patt< (# $[tname]$ as $lid:tname$) >>, None, 
-   <:expr< let module S = $gen_printer ti ctyp$ in S.showBuf $lid:tname$ buffer >>)
+   <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
 
 | MLast.RfInh _ -> error loc ("Cannot generate show instance for " ^ tname)
 ]
 ;
 
-value gen_showBuf_polyv ({loc=loc;tname=tname} as ti) (row : list MLast.row_field) =
+value gen_format_polyv ({loc=loc;tname=tname} as ti) (row : list MLast.row_field) =
 <:str_item< 
-   value rec showBuf obj buffer = 
-             match obj with [ $list:List.map (gen_polycase ti) row$ ]
+   value rec format formatter = 
+             fun [ $list:List.map (gen_polycase ti) row$ ]
 >>;
 
 (* Generate a `this' module given the type *)
 value gen_this_module loc atype = <:module_expr< 
    ShowDefaults (struct
                    type a = $atype$; 
-                   value showBuf = (showBuf : $atype$ -> Buffer.t -> unit); 
+                   value showBuf = (showBuf : Format.formatter -> $atype$ -> unit); 
                  end) >>;
 
 (* TODO: merge with gen_printer *)
@@ -136,14 +142,14 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
  let rec gen = fun [
   <:ctyp< [ $list:ctors$ ] >>  -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
-                                                                  $gen_showBuf_sum ti ctors$;
+                                                                  $gen_format_sum ti ctors$;
                                                                 end) : Show with type a = $atype$) >>
 | <:ctyp< $lid:id$ >>          -> <:module_expr< $uid:"Show_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>         -> <:module_expr< $gen t1$ $gen t2$ >>
 | <:ctyp< $uid:m$ . $t2$ >>    -> <:module_expr< $uid:m$ . $gen t2$ >>
 | <:ctyp< { $list:fields$ } >> -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
-                                                                  $gen_showBuf_record ti fields$;
+                                                                  $gen_format_record ti fields$;
                                                                 end) : Show with type a = $atype$) >>
 | <:ctyp< ( $list:params$ ) >> -> (List.fold_left 
                                      (fun s param -> <:module_expr< $s$ $param$ >>)
@@ -152,7 +158,7 @@ value gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
 | <:ctyp< '$a$ >>              -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
 | <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (ShowDefaults (struct
                                                                   type a = $atype$;
-                                                                  $gen_showBuf_polyv ti row$;
+                                                                  $gen_format_polyv ti row$;
                                                                 end) : Show with type a = $atype$) >>
 | _                            -> error loc ("Cannot currently generate show instances for "^ tname)
 ] in gen rtype

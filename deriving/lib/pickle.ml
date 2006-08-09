@@ -487,7 +487,7 @@ module Pickle_unpicklable (P : sig type a val tname : string end) : Pickle with 
 
 (* Uses Marshal to pickle the values that the parse-the-declarations
    technique can't reach. *)
-module Pickle_via_marshal (P : sig type a end) : Pickle with type a = P.a = Pickle_defaults (
+module Pickle_via_marshal (P : sig type a end) = Pickle_defaults (
 (* Rather inefficient. *)
   struct
     include P
@@ -505,57 +505,3 @@ module Pickle_via_marshal (P : sig type a end) : Pickle with type a = P.a = Pick
       let datapart = readn datasize in
         Marshal.from_string (header ^ datapart) 0
   end)
-
-type 'a fruit = 
-  | Apple
-  | Banana of 'a
-  | Orange of ('a * int * ('a fruit))
-
-module Pickle_fruit (P1 : SimplePickle) : Pickle with type a = P1.a fruit =
-Pickle_defaults(
-  struct
-    type a = P1.a fruit
-    let rec pickle buffer = 
-      let module This =
-        struct
-          type a = P1.a fruit
-          let pickle = pickle
-          and unpickle = unpickle
-        end 
-      in
-        function
-          | Apple    -> Pickle_int.pickle buffer 0
-          | Banana v -> 
-              begin
-		Pickle_int.pickle buffer 1;
-                let module S = Pickle_1(P1) in
-                  S.pickle buffer v
-              end
-          | Orange v ->
-              begin
-		Pickle_int.pickle buffer 2;
-                let module S = Pickle_3 (P1) (Pickle_int) (This) in
-                  S.pickle buffer v
-              end
-    and unpickle stream = 
-      let module This = 
-        struct
-          type a = P1.a fruit
-          let pickle = pickle
-          and unpickle = unpickle
-        end
-      in
-      match Pickle_int.unpickle stream with
-        | 0 -> Apple
-        | 1 -> 
-            let v1 = P1.unpickle stream in
-              Banana (v1) 
-        | 2 ->
-            let v1 = P1.unpickle stream in
-            let v2 = Pickle_int.unpickle stream in
-            let v3 = This.unpickle stream in
-              Orange (v1, v2, v3)
-        | i -> bad_tag i stream "fruit"
-  end
-)
-
