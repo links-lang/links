@@ -4,7 +4,6 @@ module type Bounded = sig
   val minBound : a
   val maxBound : a
 end
-
 module Bounded_2
   (B1 : Bounded)
   (B2 : Bounded)
@@ -105,16 +104,3 @@ struct
   let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound, B6.minBound, B7.minBound, B8.minBound, B9.minBound
   let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound, B6.maxBound, B7.maxBound, B8.maxBound, B9.maxBound
 end
-
-(* Generate instances of Bounded. *)
-let gen_bounded = Printf.sprintf "
-module %s = (struct type a = %s let minBound = %s let maxBound = %s end : Bounded)
-"
-let bounded_name = Printf.sprintf "Bounded_%s"
-
-let gen_bounded : Type.typedecl -> string = function
-  | (name, [], `Sum ctors) -> gen_bounded (bounded_name name) name (List.hd ctors).Type.name (Util.last ctors).Type.name
-  | _                      -> failwith ("instances of bounded must be enumeration types")
-      (* TODO: support single constructors where the parameter is bounded *)
-
-

@@ -13,7 +13,6 @@ module type Enum = sig
   val enumFromThenTo : a -> a -> a -> a list
 end
 
-
 let startThenTo (start : int) (next : int) (until : int) : int list = 
   let step = next - start in
   let rec upFrom current =
@@ -70,31 +69,3 @@ struct
                              else firstCon))
   let enumFrom x = enumFromTo x lastCon
 end
-  
-
-
-(* Generate instances of Enum *)
-let enum_template = Printf.sprintf "
-module %s = EnumDefaults(struct type a = %s let numbering = %s end)
-"
-
-let enum_name = Printf.sprintf "Enum_%s"
-let check_nullary ctor = 
-  if List.length ctor.Type.args <> 0 then 
-    failwith ("Only nullary constructors are allowed for instances of Enum.
-  ("^ ctor.Type.name ^" is not nullary)")
-
-let numbering ctors = 
-  Printf.sprintf
-    "[%s]" 
-    (String.concat "; " 
-       (List.map2
-          (fun n d -> Printf.sprintf "%s, %d" n.Type.name d) ctors (range 0 (List.length ctors - 1))))
-
-      
-let gen_enum : Type.typedecl -> string = function
-  | (name, [], `Sum ctors) -> (List.iter check_nullary ctors;
-                               enum_template (enum_name name) name (numbering ctors))
-  | _          -> failwith ("gen_enum can only currently generate instances for non-parametric sum types")
-
-

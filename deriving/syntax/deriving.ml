@@ -1,26 +1,6 @@
-(*
-
-  We can't handle mutually recursive polymorphic types with this
-  compilation scheme because functors (which we use to encode
-  instances for polymorphic types) are never permitted to be recursive.
-
-  See 
-    "A proposal for recursive modules in Objective Caml"
-    Xavier Leroy
-    Version 1.1, 13 May 2003.
-    (footnote, p6)
-*)
-
 (* camlp4r *)
-
 #load "pa_extend.cmo";
 #load "q_MLast.cmo";
-
-value version = "0.6";
-
-value notyp = ref False;
-Pcaml.add_option "-notyp" (Arg.Set notyp)
-  "       Don't generate types definitions.";
 
 (* Various utility bits *)
 value rec range f t = 
@@ -59,7 +39,6 @@ exception NotImpl of (Lexing.position * Lexing.position);
    possibly-mutually-recursive type declarations *)
 type instantiator = list MLast.type_decl -> MLast.str_item;
 
-
 (* Display a fatal error and exit *)
 value error loc msg = do {
   Pcaml.warning.val loc msg;
@@ -77,42 +56,29 @@ type thisinfo = {
   rtype  : MLast.ctyp              (* The rhs of the type definitions *)
 };
 
-value show_thisinfo i = 
-  Printf.sprintf "{
-  argmap : %s;
-  tname  : %s;
-  ltype  : %s;
-  rtype  : %s;
-}" ("["^ String.concat "," (List.map (fun (x,(y,z)) -> Printf.sprintf "(%s,(%s,%s))" x y z) i.argmap) ^ "]")
-    i.tname
-    "<lhs>"
-    "<rhs>";
-
 (* Generate the 'a' type element of the generated module by applying
  * all the type parameters (looked up in the corresponding module
  * functor-parameters) to the type name *)
 value gen_type_a loc = 
     List.fold_left
-      (fun t (_,(_,mname)) -> <:ctyp< $t$ $uid:mname$ . a >>)
-;
-value gen_type_l id params = (List.map fst params, id)
-;
+      (fun t (_,(_,mname)) -> <:ctyp< $t$ $uid:mname$ . a >>);
+
+value gen_type_l id params = (List.map fst params, id);
 
 value rec ltype_of_ctyp args = fun [
   <:ctyp< $t1$ '$lid:tv$ >> -> ltype_of_ctyp [tv :: args] t1
 | <:ctyp< $lid:t1$ >>       -> Some (args, t1)
 | _ -> None
 ];
-value ltype_of_ctyp = ltype_of_ctyp [];
 
+value ltype_of_ctyp = ltype_of_ctyp [];
 
 (* Generate a functor from a module and a list of type parameters (to
  * be converted to module functor-parameters).
  *)
 value gen_functor loc classname : list 'a -> 'b -> 'b = 
   List.fold_right 
-    (fun (_,(_,mname)) m -> <:module_expr< functor ($mname$ : $uid:classname$) -> $m$ >>)
-;
+    (fun (_,(_,mname)) m -> <:module_expr< functor ($mname$ : $uid:classname$) -> $m$ >>);
 
 (* Does a type declaration declare a "scheme" or a concrete type? *)
 value is_polymorphic : MLast.type_decl -> bool = fun [
@@ -127,10 +93,8 @@ value param_names (params : list (string * (bool*bool))) : list (string * (strin
        params
        (range 0 (List.length params - 1)));
 
-
 (* A association list of class names * instance generators *)
 value instantiators : ref (list (string * MLast.loc -> instantiator)) = ref [];
-
 
 DELETE_RULE Pcaml.str_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
 

@@ -57,7 +57,7 @@ module Pickle_intN (P : sig
                       val shift_left : t -> int -> t
                       val of_int : int -> t
                       val to_int : t -> int
-                    end) : Pickle with type a = P.t = Pickle_defaults (
+                    end) = Pickle_defaults (
   struct
     type a = P.t
 	(* Format an integer using the following scheme:
@@ -100,7 +100,7 @@ module Pickle_intN (P : sig
 module Pickle_int32 = Pickle_intN (Int32)
 module Pickle_int64 = Pickle_intN (Int64)
 module Pickle_nativeint = Pickle_intN (Nativeint)
-module Pickle_int : Pickle with type a = int = Pickle_defaults (
+module Pickle_int = Pickle_defaults (
   struct
     type a = int
     let pickle buffer int = Pickle_nativeint.pickle buffer (Nativeint.of_int int)
@@ -108,7 +108,7 @@ module Pickle_int : Pickle with type a = int = Pickle_defaults (
   end
 )
 
-module Pickle_char : Pickle with type a = char = Pickle_defaults (
+module Pickle_char = Pickle_defaults (
   struct
     type a = char
     let pickle = Buffer.add_char
@@ -116,7 +116,7 @@ module Pickle_char : Pickle with type a = char = Pickle_defaults (
   end
 )
 
-module Pickle_string : Pickle with type a = string = Pickle_defaults (
+module Pickle_string = Pickle_defaults (
   struct
     type a = string
     let pickle buffer string = 
@@ -134,7 +134,7 @@ module Pickle_string : Pickle with type a = string = Pickle_defaults (
   end
 )
 
-module Pickle_float : Pickle with type a = float = Pickle_defaults (
+module Pickle_float = Pickle_defaults (
   struct
     type a = float
     let pickle buffer f = Pickle_int64.pickle buffer (Int64.bits_of_float f)
@@ -142,7 +142,7 @@ module Pickle_float : Pickle with type a = float = Pickle_defaults (
   end
 )
 
-module Pickle_list (P : SimplePickle) : Pickle with type a = P.a list = Pickle_defaults (
+module Pickle_list (P : SimplePickle) = Pickle_defaults (
   (* This could perhaps be more efficient by pickling the list in
      reverse: this would result in only one traversal being needed
      during pickling, and no "reverse" being needed during unpickling.
@@ -162,7 +162,7 @@ module Pickle_list (P : SimplePickle) : Pickle with type a = P.a list = Pickle_d
   end
 )
 
-module Pickle_ref (P : SimplePickle) : Pickle with type a = P.a ref = Pickle_defaults (
+module Pickle_ref (P : SimplePickle) = Pickle_defaults (
   struct
     type a = P.a ref
     let pickle buffer item = P.pickle buffer (!item)
@@ -170,7 +170,7 @@ module Pickle_ref (P : SimplePickle) : Pickle with type a = P.a ref = Pickle_def
   end
 )
 
-module Pickle_option (P : SimplePickle) : Pickle with type a = P.a option = Pickle_defaults (
+module Pickle_option (P : SimplePickle) = Pickle_defaults (
   struct
     type a = P.a option
     let pickle buffer = function
@@ -188,7 +188,7 @@ module Pickle_option (P : SimplePickle) : Pickle with type a = P.a option = Pick
   end
 )
 
-module Pickle_array (P : SimplePickle) : Pickle with type a = P.a array = Pickle_defaults (
+module Pickle_array (P : SimplePickle) = Pickle_defaults (
   struct
     type a = P.a array
         (* rather inefficient *)
@@ -201,7 +201,7 @@ module Pickle_array (P : SimplePickle) : Pickle with type a = P.a array = Pickle
   end
 )
 
-module Pickle_bool : Pickle with type a = bool = Pickle_defaults (
+module Pickle_bool = Pickle_defaults (
   struct
     type a = bool
     let pickle buffer = function
@@ -215,7 +215,7 @@ module Pickle_bool : Pickle with type a = bool = Pickle_defaults (
   end
 )
 
-module Pickle_unit : Pickle with type a = unit = Pickle_defaults (
+module Pickle_unit = Pickle_defaults (
   struct
     type a = unit
     let pickle _ () = ()
@@ -223,11 +223,10 @@ module Pickle_unit : Pickle with type a = unit = Pickle_defaults (
   end
 )
 
-
 module Pickle_0 = Pickle_unit
 module Pickle_1
   (P1 : SimplePickle)
-  : Pickle with type a = (P1.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a)
       let pickle buffer (p1) = 
@@ -241,7 +240,7 @@ module Pickle_1
 module Pickle_2
   (P1 : SimplePickle)
   (P2 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a)
       let pickle buffer (p1, p2) = 
@@ -258,7 +257,7 @@ module Pickle_3
   (P1 : SimplePickle)
   (P2 : SimplePickle)
   (P3 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a * P3.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a)
       let pickle buffer (p1, p2, p3) = 
@@ -279,7 +278,7 @@ module Pickle_4
   (P2 : SimplePickle)
   (P3 : SimplePickle)
   (P4 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a * P3.a * P4.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a * P4.a)
       let pickle buffer (p1, p2, p3, p4) = 
@@ -302,7 +301,7 @@ module Pickle_5
   (P3 : SimplePickle)
   (P4 : SimplePickle)
   (P5 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a * P3.a * P4.a * P5.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a * P4.a * P5.a)
       let pickle buffer (p1, p2, p3, p4, p5) = 
@@ -329,7 +328,7 @@ module Pickle_6
   (P4 : SimplePickle)
   (P5 : SimplePickle)
   (P6 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a)
       let pickle buffer (p1, p2, p3, p4, p5, p6) = 
@@ -358,7 +357,7 @@ module Pickle_7
   (P5 : SimplePickle)
   (P6 : SimplePickle)
   (P7 : SimplePickle)
-  : Pickle with type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a)
       let pickle buffer (p1, p2, p3, p4, p5, p6, p7) = 
@@ -390,7 +389,7 @@ module Pickle_8
   (P6 : SimplePickle)
   (P7 : SimplePickle)
   (P8 : SimplePickle)
-  : Pickle  with type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a * P8.a) = Pickle_defaults (
+  = Pickle_defaults (
     struct
       type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a * P8.a)
       let pickle buffer (p1, p2, p3, p4, p5, p6, p7, p8) = 
@@ -466,7 +465,7 @@ module Pickle_9
     end)
 
 
-module Pickle_num : Pickle with type a = Num.num = Pickle_defaults (
+module Pickle_num = Pickle_defaults (
   struct
     (* TODO: a less wasteful pickler for nums.  A good start would be
        using half a byte per decimal-coded digit, instead of a whole
@@ -477,7 +476,7 @@ module Pickle_num : Pickle with type a = Num.num = Pickle_defaults (
   end
 )
 
-module Pickle_unpicklable (P : sig type a val tname : string end) : Pickle with type a = P.a = Pickle_defaults ( 
+module Pickle_unpicklable (P : sig type a val tname : string end) = Pickle_defaults ( 
   struct 
     type a = P.a
     let pickle _ _ = failwith ("attempt to pickle a value of unpicklable type : " ^ P.tname)

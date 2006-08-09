@@ -1,8 +1,6 @@
 #load "pa_extend.cmo";
 #load "q_MLast.cmo";
 open Deriving;
-(** Generate Enum instances.
- **)
 
 value fill_enum_template loc tname numbering = <:str_item< 
   declare
@@ -30,7 +28,5 @@ value gen_enum_instance = fun [
 
 value gen_enum_instances loc : instantiator = fun tdl ->
   <:str_item< declare $list:List.map gen_enum_instance tdl$ end >>;
-
-(** / Enum *)
 
 instantiators.val :=   [("Enum"    , gen_enum_instances):: instantiators.val];

@@ -2,10 +2,6 @@
 #load "q_MLast.cmo";
 open Deriving;
 
-(**
-   Generate Show instances
-**)
-
 value currents = ref ([] : list (string * string));
 
 value currentp = fun [

@@ -1,8 +1,3 @@
-(**
-   Generate Pickle instances
-**)
-(** / Pickle *)
-
 (* FIXME:
    optimization: shouldn't pickle a tag for single-constructor types. *)
 

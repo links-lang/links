@@ -7,7 +7,7 @@ OCAMLDEP := ocamldep
 
 OCAMLFLAGS=-w Ae
 
-SOURCES = util.ml type.ml show.ml bounded.ml enum.ml pickle.ml primitives.ml
+SOURCES = util.ml show.ml bounded.ml enum.ml pickle.ml primitives.ml
 
 LIBS    = nums
 RESULT  = deriving
