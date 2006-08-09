@@ -81,8 +81,7 @@ module PatternCompiler =
          | `Variant _,  `Variant _
          | `Record _,   `Record _
          | `Constant _, `Constant _
-         | `Variable _, `Variable _ -> false
-             (* [HACK] ensures that the correct default pattern is picked *)
+         | `Variable _, `Variable _ -> true
          | `As (_, (pattern,_)), pattern'
          | pattern, `As (_, (pattern',_)) -> eq (pattern, pattern')
          | `HasType (((pattern,_):simple_pattern), _), pattern' 
@@ -279,14 +278,35 @@ module PatternCompiler =
          map (fun (annotation, (ps, body)) ->
                 (ps, apply_annotation pos var (annotation, body))) annotated_equations
 
-     (* 
-        [TODO]
-           decide on what to do with redundant patterns
-        e.g.
-          fun (x) {switch x {case x -> 0; A -> 1;}}
-        (currently this is the same as
-          fun (x) {switch x {case x -> 0}} : a -> Int)
+     (*
+       [TODO]
+         - better error messages
      *)
+     (**
+        Report an error if there are any redundant patterns
+         e.g in:
+           fun f(x) { switch x { case x -> x; case A -> A; }}
+         the second pattern is redundant
+     *)
+     let redundant_pattern_check vars equationss =
+       match vars with
+         | [] ->
+             ignore (
+             List.fold_left
+               (fun last_was_var equations ->
+                  match get_equations_pattern_type equations with
+                    | `Variable ->
+                        assert (not (last_was_var));
+                        if List.length equations > 1 then
+                          failwith "Redundant pattern"
+                        else
+                          true
+                    | _ ->
+                        if last_was_var then
+                          failwith "Redundant pattern"
+                        else
+                          false) false equationss)
+         | _ -> ()
 
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
@@ -297,6 +317,7 @@ module PatternCompiler =
            | [], ([], body)::_ -> body
            | (var::vars), _ ->
                let equationss = partition_equations eq_equation_patterns equations in
+                 redundant_pattern_check vars equationss;
                  List.fold_right
                    (fun equations exp ->
                       match get_equations_pattern_type equations with
