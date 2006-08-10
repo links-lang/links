@@ -30,7 +30,15 @@ let hashtbl_as_list tbl =
     Hashtbl.iter (fun k v -> list := (k,v) :: !list) tbl;
     !list 
 
+(** unroll_edges: given an alist that maps an x to a list nbhd(x) of
+    the same type, return a list of all the pairs (u, v) where 
+    v \in nbhd(u) *)
+let unroll_edges l = concat_map (fun (f, callers) -> 
+                                 List.map (fun caller -> (f, caller)) 
+                                   callers) l
+
 (* CLR 23.3 *)
+(** Depth-first search *)
 let dfs nodes edges = 
   let nnodes = List.length nodes in
   let color = Hashtbl.create nnodes 
@@ -67,26 +75,38 @@ let topological_sort nodes edges =
 let transpose_edges : ('a * 'b) list -> ('b * 'a) list = 
   fun list -> List.map (fun (x,y) -> (y,x)) list
 
+let iter_over list f = List.iter f list
+
+(* flatten_forest
+   Takes a tree given in "parent-pointer" form, and returns a list
+   of the nodes in each tree. *)
+let flatten_forest nodes = (* Probably not the best way *)
+  let table = Hashtbl.create (List.length nodes) in
+    (* For each of the nodes... *)
+    iter_over nodes
+      (function
+           (* if it's a root, just stick it in the table *)
+         | node, None -> (if not (Hashtbl.mem table node)
+                          then Hashtbl.add table node (ref [node]))
+             (* if it has a parent, set the content for both
+                to be a list of all things that both are connected to. *)
+         | node, Some partner -> 
+             let partner_comp = find_def table partner (ref [partner]) in
+             let node_comp = find_def table node (ref [node]) in
+             let comp = unduplicate (=) (!partner_comp @ !node_comp) in
+               partner_comp := comp;
+               node_comp := comp;
+               ignore(set table partner partner_comp);
+               ignore(set table node partner_comp))
+    ;
+    unduplicate (=) (List.map (snd ->- (!)) (hashtbl_as_list table))
+  
+let cmp_snd_desc (_,y1) (_,y2) = (- compare y1 y2)
+
 (* CLR 23.5 *)
 let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) = 
-  let group nodes = (* Probably not the best way *)
-    let table = Hashtbl.create (List.length nodes) in
-      List.iter (function
-                   | node, None -> (if not (Hashtbl.mem table node)
-                                    then Hashtbl.add table node (ref [node]))
-                   | node, Some partner -> 
-                       let partner_comp = find_def table partner (ref [partner]) in
-                       let node_comp = find_def table node (ref [node]) in
-                       let comp = unduplicate (=) (!partner_comp @ !node_comp) in
-                         partner_comp := comp;
-                         node_comp := comp;
-                         ignore(set table partner partner_comp);
-                         ignore(set table node partner_comp)
-                ) nodes;
-      unduplicate (=) (List.map (snd ->- (!)) (hashtbl_as_list table)) in
   let f, _, _ = dfs nodes edges in 
-  let _, _, p = (dfs
-                 (let cmp_snd_desc (_,y1) (_,y2) = - compare y1 y2 in
-                    (List.map fst (List.sort cmp_snd_desc (hashtbl_as_list f))))
-                 (transpose_edges edges)) in
-    group (hashtbl_as_list p)
+  let edges_reversed = transpose_edges edges in
+  let nodes_sorted = (List.map fst (List.sort cmp_snd_desc (hashtbl_as_list f))) in
+  let _, _, p = (dfs nodes_sorted edges_reversed) in
+    flatten_forest (hashtbl_as_list p)

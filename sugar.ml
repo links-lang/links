@@ -27,23 +27,14 @@ type 'r a_pattern = [
 type simple_pattern = simple_pattern a_pattern * Syntax.position
 
 (* Various flavours of a sort of `gensym'*)
-let unique_name, db_unique_name, col_unique_name = 
+let unique_name, db_unique_name = 
   let base_value = ref 0 in
   (fun () ->
      incr base_value; 
      "_g" ^ string_of_int !base_value ^ ""),
   (fun () ->
      incr base_value; 
-     "Table_" ^ string_of_int !base_value),
-
-  (* col_unique_name
-     Make up a globally-unique name for a db column usage.
-     Note: this is sensitive to capitalization. PostgreSQL, at least, is
-     case insensitive, and normalizes table names (?), but our syntax for
-     records is case sensitive. *)
-  (fun () ->
-     incr base_value;
-     "col_" ^ string_of_int !base_value)
+     "Table_" ^ string_of_int !base_value)
 
 let list_head expr pos = 
   Apply(Variable ("hd", pos), expr, pos)

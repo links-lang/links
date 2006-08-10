@@ -936,8 +936,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let nonspecial_attrs = map (fun (k,v) -> k, type_check env v) nonspecial_attrs in
 (*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
       let attr_type = string_type in
-        (* force contents to be XML, attrs to be strings
-           unify is for side effect only! *)
+        (* force contents to be XML, attrs to be strings *)
       let _ = List.iter (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
       let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
       let trimmed_node =
@@ -1163,27 +1162,40 @@ and
     3. Collapse cycles to single nodes and perform a topological sort
        to obtain the ordering.
 *)
-let order_via_caller_lists (functions : (string * string list) list) : string list list =
-(* [(fn1, [calls_1; calls_2; ...]);
-    (fn2, [calls_1; calls_2; ...]);
-    ...] 
-   -> [[fn_i]; [fn_j; fn_k]; ...]
-*)
+let order_by_callgraph (func_callers : (string * string list) list) : string list list =
+  (* arg `func_callers' is an alist, mapping each function to the
+     list of functions it calls, like so:
+       [(fn1, [calls_1; calls_2; ...]);
+        (fn2, [calls_1; calls_2; ...])] 
+  *)
   let find_clique cliques f = find (mem f) cliques in
-  let edges = concat (map (fun (f, callers) -> map (fun caller -> f, caller) callers) functions) 
-  and nodes = map fst functions in
-  let cliques = Graph.strongly_connected_components nodes edges in
-  let group_callers = map (fun nodes -> 
-                             (nodes, unduplicate (=) (concat (map (flip assoc functions) nodes)))) cliques in
-  let group_callers = map (fun (f, calls) -> f, map (find_clique cliques) calls) group_callers in
-  let group_edges = concat (map (fun (f, callers) -> map (fun caller -> f, caller) callers) group_callers) in
+    
+  let nodes = map fst func_callers
+    (*  unfold func_callers: let `edges' be the list of all 
+        (u, v) where u calls v *)
+  and edges = Graph.unroll_edges func_callers in
+  let cliques : string list list = Graph.strongly_connected_components nodes edges in
+    (* Let's say a "callknot" is a set of mutually-recursive funtions *)
+    (* Now, For each callknot, find the functions that call it: *)
+  let clique_callers = map2alist 
+    (fun nodes -> concat_map_uniq (lookup_in func_callers) nodes) cliques in
+    (* Map each such caller to its clique: *)
+  let clique_callers = 
+    alistmap (fun calls -> map (find_clique cliques) calls) clique_callers in
+  let group_edges : (string list * string list) list
+      = Graph.unroll_edges clique_callers 
+  in
     rev (map fst (Graph.topological_sort cliques group_edges))
-
+      
 let find_cliques (bindings : (string * untyped_expression) list) 
     : (string * untyped_expression) list list = 
-    let callers = map (fun (name, expr) -> (name, filter (flip mem_assoc bindings) (freevars expr))) bindings in
-    let orders = order_via_caller_lists callers in
-      map (map (fun name -> name, assoc name bindings)) orders 
+
+  let callers = (alistmap (fun expr -> 
+                             filter (flip mem_assoc bindings) (freevars expr)) 
+                   bindings)
+  in
+  let orders = order_by_callgraph callers in
+    map (map (fun name -> name, assoc name bindings)) orders 
 
 let mutually_type_defs
     : inference_type_map -> Types.environment -> (string * untyped_expression * 'a option) list -> (Types.environment * (string * expression * 'c) list) =
@@ -1240,7 +1252,8 @@ let type_program : inference_type_map -> Types.environment -> untyped_expression
       | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
       | _ ->  false
     in
-      fold_left type_group (env, []) (regroup (groupBy bothdefs exprs))
+    let def_seqs = groupBy bothdefs exprs in
+      fold_left type_group (env, []) (regroup def_seqs)
 
 (** message typing trick.
     This might be better off somewhere else (but where?).

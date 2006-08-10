@@ -61,30 +61,63 @@ let span (p : 'a -> bool) : 'a list -> ('a list * 'a list) =
     | xs              -> [], xs in
     span
         
-let groupBy eq = 
+(** [groupBy rel list]: given a binary rel'n [rel], partition [list]
+    into chunks s.t. successive elements [x], [y] in a chunk give the
+    same value under [rel]. *)
+let groupBy eq : 'a list -> 'a list list = 
   let rec group = function
     | [] -> []
     | x::xs -> (let ys, zs = span (eq x) xs in 
                   (x::ys)::group zs) 
   in group
 
+(** [groupByPred pred] partitions [list] into chunks where all
+    elements in the chunk give the same value under [pred]. *)
+let groupByPred pred = 
+  let rec group state result = function
+    | [] -> List.rev (List.map List.rev result)
+    | x::etc -> let predx = pred x in
+      let new_result = (if (predx = state) then
+                          (x::List.hd result) :: List.tl result
+                        else
+                          [x] :: result)
+      in
+        group predx new_result etc
+  in group
+
+(** [groupByPred']: Alternate implementation of groupByPred. *)
+let groupByPred' pred : 'a list -> 'a list list = 
+  let rec group = function
+    | [] -> []
+    | x::xs -> 
+        let predx = pred x in
+          (let ys, zs = span (fun y -> pred y = predx) xs in 
+             (x::ys)::group zs) 
+  in group
+
+(** [unsnoc list]: Partition [list] into its last element and all the
+    others. @return (others, lastElem) *)
 let rec unsnoc = 
   function
     |  [x] -> [], x
     | (x::xs) -> let ys, y = unsnoc xs in x :: ys, y
     | []   -> raise (Invalid_argument "unsnoc")
 
+(** [last list]: Return the last element of a list *)
 let last l = snd (unsnoc l)
 
+(** [butlast list]: Return a copy of the list with the last element removed. *)
 let butlast l = fst (unsnoc l)
 
-(** Comparison function from a less-than function *)
+(** Convert a (bivalent) less-than function into a (three-valued)
+    comparison function. *)
 let less_to_cmp less l r = 
   if less r l then 1
   else if less l r then -1
   else 0
 
-(** Remove duplicates from a list *)
+(** Remove duplicates from a list, using the given relation to
+    determine `duplicates' *)
 let rec unduplicate equal = function
   | [] -> []
   | elem :: elems -> (let _, others = List.partition (equal elem) elems in
@@ -103,12 +136,12 @@ let rec take n list = match n, list with
   | 0, _ -> []
   | _, [] -> []
   | _, h :: t -> h :: take (n - 1) t
-  
+      
 let rec rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = fun value ->
-    function
-      | (k, v) :: _ when eq v value -> k
-      | _ :: rest -> rassoc_eq eq value rest
-      | [] -> raise Not_found
+  function
+    | (k, v) :: _ when eq v value -> k
+    | _ :: rest -> rassoc_eq eq value rest
+    | [] -> raise Not_found
 
 let rassoc i l = rassoc_eq (=) i l
 and rassq i l = rassoc_eq (==) i l
@@ -128,14 +161,31 @@ let concat_map f l =
     | f, x :: xs -> f x @ aux (f, xs)
   in aux (f,l)
 
-exception NONE
+let concat_map_uniq f l = unduplicate (=) (concat_map f l)
 
-(* association list utilities*)
+let concat_map_undup cmp f l = unduplicate cmp (concat_map f l)
+
+(** Section: Functional combinators *)
+
 let cross f g = fun (x, y) -> f x, g y
 
+(**** Association-list utilities ****)
+
+(** alistmap maps f on the contents-parts of the entries, producing a
+    new alist *)
 let alistmap f = List.map (cross identity f)
 
-(*** Strings ***)
+(** alistmap' produces an alist by applying f to each element of the
+    alist--f should produce a new contents-part for the entry. *)
+let alistmap' f = List.map (fun (x, y) -> (x, f(x, y)))
+
+(** [[map2alist f list]]
+    makes an alist that maps [[x]] to [[f x]] for each item in [[list]].
+    In category theory this is called the `graph' of f (restricted by list).
+ *)
+let map2alist f list = List.map (fun x -> (x, f x)) list
+
+(** Section: Strings ***)
 
 let string_of_char = String.make 1
 
@@ -173,6 +223,13 @@ let find_char (s : string) (c : char) : int list =
 
 let mapstrcat glue f list = String.concat glue (List.map f list)
 
+(** Given a list-of-lists, [groupingsToString] concatenates them using
+    [", "] as the delimiter between elements and ["; "] as the delimiter
+    between lists. *)
+let groupingsToString : ('a -> string) -> 'a list list -> string =
+  fun f -> 
+    mapstrcat "; " (mapstrcat ", " f)
+
 let numberp s = try ignore (int_of_string s); true with _ -> false
 
 let index pred list = 
@@ -192,7 +249,7 @@ let lines (channel : in_channel) : string list =
   in List.rev (next_line [])
 
 let call_with_open_infile,
-    call_with_open_outfile = 
+  call_with_open_outfile = 
   let call opener closer filename f = 
     let fd = opener filename in
       try
@@ -208,7 +265,10 @@ let call_with_open_infile,
 let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
 
-(* lookup is like assoc but uses option types instead of
+(** [lookup_in alist] is a function that looks up its argument in [alist] *)
+let lookup_in alist x = List.assoc x alist (* why didn't [flip assoc] work? *)
+
+(** lookup is like assoc but uses option types instead of
    exceptions to signal absence *)
 let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
 
@@ -374,3 +434,15 @@ let rec combine3 : 'a list * 'b list * 'c list ->  ('a * 'b * 'c) list = functio
   | _          -> invalid_arg "combine3"
 
   
+
+(** col_unique_name
+   Make up a globally-unique name for a db column usage.
+   Note: this is sensitive to capitalization. PostgreSQL, at least, is
+   case insensitive, and normalizes table names (?), but our syntax for
+   records is case sensitive. *)
+let col_unique_name =
+  let base_value = ref 0 in
+    (fun () ->
+       incr base_value;
+       "col_" ^ string_of_int !base_value)
+      

@@ -112,6 +112,17 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
+let rec is_variable = function 
+    Variable _ -> true
+  | HasType (e, _, _) -> is_variable e
+  | _ -> false
+
+let rec is_tuple = function
+    Record_empty _ -> true
+  | Record_extension (_, field, etc, _) -> is_tuple etc && is_variable field
+  | HasType (e, _, _) -> is_tuple e
+  | _ -> false
+
 let gensym =
   let counter = ref 0 in
     function str ->
@@ -245,13 +256,36 @@ How do we make it more general?
 
 *)
 
-(* combiner should have type 
-      expression -> data -> data
-   (or perhaps 
-      data -> expression -> data)
+(** [visit_expressions' combiner unit visitor (expr, data)]
+    Recursively visit an expression top-down, passing data in both
+    directions (down into the leaves as we recurse and back up towards
+    the roots as we return). This is something like a fancy "fold" for
+    expression trees.
 
-   Currently it doesn't get to see the nodes, which is wrong.  (Is
-   this right?  Or is it sufficient that visitor sees the nodes?)
+    [visitor] will be called, on each sub-expression [expr], as
+    [visitor f (expr, data)] and should return a new [(expr', data')]
+    pair. ([data'] can be a different type from [data].) To
+    recursively visit the children, just call the given [f] on the
+    whole node (it takes care of finding the children and descending
+    into them).
+
+    [unit] tell how to generate the output data for leaf nodes. It
+    gets as argument the data passed down from the parent nodes and
+    should return the data to attach to the leaf (NOTE: this is
+    asymmetrical; why shouldn't [unit] get the data on the node
+    itself?)
+
+    As we return back up the tree, we have lots of data items from
+    sub-expressions that we need to congeal together. [combiner] does
+    this. We assume that the operation to combine data items is
+    associative, so [combiner] only takes two arguments: [left_data]
+    and [right_data]. There is an implicit left-to-right ordering for
+    child nodes, so [combiner] need not be commutative (but this is a
+    bit sketchy).
+
+    (Currently, [combiner] doesn't get to see the nodes themselves,
+    only the data items. Consider passing the present node as a
+    parameter to [combiner].)
 *)
 let visit_expressions'
     (* This could be made better by combining `visitor' and `combiner'
@@ -367,8 +401,12 @@ let visit_expressions'
   in visitor visit_children
        
 (* A simplified version which doesn't pass data around *)
-let simple_visit visitor expr = let visitor default (e, _) = (visitor (fun e -> fst (default (e, ()))) e, ()) in
-  fst (visit_expressions' (fun () () -> ()) (fun () -> ()) visitor (expr, ()))
+let simple_visit visitor expr = 
+  let visitor default (e, _) = 
+    (visitor (fun e -> fst (default (e, ()))) e, ()) in
+  fst (visit_expressions'
+         (* combiner: *) (fun () () -> ()) (* unit: *) (fun () -> ()) 
+         visitor (expr, ()))
 
 (* Could be made more efficient by not constructing the expression in
    parallel (i.e. discarding it, similar to `simple_visit'  *)
