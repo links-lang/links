@@ -1,4 +1,4 @@
-(* Definitions of types used during inference--not for public consumption. *)
+(** Definitions of types used during inference--not for public consumption. *)
 type type_var_set = Type_basis.type_var_set
 
 type datatype = [
@@ -46,14 +46,16 @@ val is_rigid_row : row -> bool
 val is_flattened_row : row -> bool
 val is_empty_row : row -> bool
 
-(* 
- convert a row to the form (field_env, row_var)
- where row_var is of the form:
+val flatten_row : row -> row
+
+(** 
+ Convert a row to the form (field_env, row_var)
+ where row_var is of the form: {[
     `RowVar None
   | `MetaRowVar (`RowVar (Some var))
   | `MetaRowVar (`RecRowVar (var, rec_row))
+]}
  *)
-val flatten_row : row -> row
 
 
 (*
@@ -103,11 +105,10 @@ val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 
-val string_of_quantifier : quantifier -> string
+(* val string_of_quantifier : quantifier -> string *)
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
-(** well-foundedness checking **)
 val is_negative : int -> datatype -> bool
 val is_negative_row : int -> row -> bool
 val is_negative_field_env : int -> field_spec_map -> bool
