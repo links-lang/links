@@ -1,8 +1,7 @@
-(** Low-level implementation of Links types. *)
+(** Low-level representation of Links types. *)
 
-type type_var_set = Utility.IntSet.t
+(** {1 Representation of datatypes} *)
 
-(* Types for datatypes *)
 type primitive = [ `Bool | `Int | `Char | `Float | `XMLitem | `DB | `Abstract of string ]
 
 type ('typ, 'row) type_basis = [
@@ -27,13 +26,17 @@ type 'row row_var_basis =
 type type_variable = [`TypeVar of int | `RowVar of int]
 type quantifier = type_variable
 
+type type_var_set = Utility.IntSet.t
+
 type 'typ assumption_basis = ((quantifier list) * 'typ)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
 
 val environment_values : 'typ environment_basis -> 'typ assumption_basis list
 val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
+  (** [lookup var typing_env] returns the type of the variable [var] in
+      the environment [typing_env]*)
 
-(* Generation of fresh type variables *)
+(** Generate a fresh type variable *)
 val fresh_raw_variable : unit -> int
 
 module type TYPEOPS =

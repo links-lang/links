@@ -5,6 +5,7 @@
 
 open Utility
 
+let map = List.map
 
 
 (* Utility bits for hashtables and mutable lists *)
@@ -17,15 +18,51 @@ let pushnew elem list =
     push elem list
   else list
 
-let find_def table elem def = 
+let hashfind_dflt table elem def = 
   try Hashtbl.find table elem
   with Not_found -> def
 
-let set table k v = 
-  Hashtbl.replace table k v;
-  v
+(** Crazy notation for hashtable updates. Suggestions are welcomed.
 
-let hashtbl_as_list tbl = 
+   [table *->! k $ v] updates k to v in table
+   [table *-> k |-> d] returns the value for [k] in [table], or [d] 
+     if [k] is not set.
+   [table *+> k ++= newVal] cons'es newVal onto the list stored 
+     under k
+
+  It's hard to know what symbols OCaml will accept as an operator.
+*)
+
+let ( *->!) table k v = Hashtbl.replace table k v
+let ($) op arg = op arg
+
+let ( *-> ) table k default =
+  try Hashtbl.find table k
+  with Not_found -> default
+let (|->) op arg = op arg
+
+
+let ( *+> ) table k v =
+  (table *->! k) (v :: (table *-> k |-> []))
+let ( ++= ) op arg = op arg
+
+let hashtbl_invert table = 
+  let result = Hashtbl.create (Hashtbl.length table) in
+    Hashtbl.iter (fun k v ->
+                    result *+> v ++= k) table;
+    result
+
+let hashtbl_values table = Hashtbl.fold (fun k v rslt -> v :: rslt) table []
+
+(** [hashtbl_regions table] is the list of equivalence classes of keys
+    in [table], where equivalence is determined through lookup in [table].
+    If you think of the value under each key as its "color", this gives
+    you the list of groups having the same color.
+*)
+let hashtbl_regions table = 
+  hashtbl_values(hashtbl_invert table)
+
+let hashtbl_as_alist tbl = 
   let list = ref [] in
     Hashtbl.iter (fun k v -> list := (k,v) :: !list) tbl;
     !list 
@@ -34,72 +71,85 @@ let hashtbl_as_list tbl =
     the same type, return a list of all the pairs (u, v) where 
     v \in nbhd(u) *)
 let unroll_edges l = concat_map (fun (f, callers) -> 
-                                 List.map (fun caller -> (f, caller)) 
+                                 map (fun caller -> (f, caller)) 
                                    callers) l
+
+let edge_to_str (u, v) = u ^ "->" ^ v
+
+let reverse = List.rev
 
 (* CLR 23.3 *)
 (** Depth-first search *)
 let dfs nodes edges = 
   let nnodes = List.length nodes in
   let color = Hashtbl.create nnodes 
-  and pi = Hashtbl.create nnodes 
-  and d = Hashtbl.create nnodes 
-  and f = Hashtbl.create nnodes in
+  and parent = Hashtbl.create nnodes 
+  and discover = Hashtbl.create nnodes 
+  and finish = Hashtbl.create nnodes in
     List.iter (fun u ->
 		 Hashtbl.add color u `white;
-		 Hashtbl.add pi u None;
+		 Hashtbl.add parent u None;
               ) nodes;
     let time = ref 0 in
     let rec dfs_visit u = 
       Hashtbl.replace color u `grey;
-      Hashtbl.replace d u (incr time; !time);
+      Hashtbl.replace discover u (incr time; !time);
       List.iter (fun (_, v) -> if Hashtbl.find color v = `white 
-                 then (Hashtbl.replace pi v (Some u);
+                 then (Hashtbl.replace parent v (Some u);
                        dfs_visit v))
         (List.filter ((=) u -<- fst) edges);
       Hashtbl.replace color u `black ;
-      Hashtbl.replace f u (incr time; !time)
+      Hashtbl.replace finish u (incr time; !time)
     in
       List.iter (fun u ->
 		   if Hashtbl.find color u = `white
 		   then dfs_visit u) nodes;
-      (f, d, pi)
-
+      (finish, discover, parent)
 
 (* CLR 23.4 *)
-let topological_sort nodes edges = 
+let topological_sort' nodes edges = 
   let f, _, _ = dfs nodes edges in
-    List.sort (fun (_,y1) (_,y2) -> - (compare y1 y2)) (hashtbl_as_list f)
+    List.sort (fun (_,y1) (_,y2) -> - (compare y1 y2)) (hashtbl_as_alist f)
+      
+let topological_sort nodes edges = 
+  map fst (topological_sort' nodes edges)
+
 
 (* CLR Ex 23.1-3 *)
 let transpose_edges : ('a * 'b) list -> ('b * 'a) list = 
-  fun list -> List.map (fun (x,y) -> (y,x)) list
+  fun list -> map (fun (x,y) -> (y,x)) list
 
-let iter_over list f = List.iter f list
+let string_of_parent_tree = 
+  mapstrcat "\n" (function a, None -> a ^ " root" 
+                    | a, Some b -> a ^ " -> " ^ b)
 
-(* flatten_forest
-   Takes a tree given in "parent-pointer" form, and returns a list
-   of the nodes in each tree. *)
-let flatten_forest nodes = (* Probably not the best way *)
+(**Takes a tree given in "parent-pointer" form, and returns a list
+   of the nodes in each tree. More or less duplicates the union-find 
+   algorithm? *)
+let flatten_forest nodes : 'a list list=
   let table = Hashtbl.create (List.length nodes) in
-    (* For each of the nodes... *)
+  let counter = ref 0 in
+  let bump_counter () = counter := !counter+1; !counter in
+
     iter_over nodes
       (function
            (* if it's a root, just stick it in the table *)
-         | node, None -> (if not (Hashtbl.mem table node)
-                          then Hashtbl.add table node (ref [node]))
-             (* if it has a parent, set the content for both
-                to be a list of all things that both are connected to. *)
-         | node, Some partner -> 
-             let partner_comp = find_def table partner (ref [partner]) in
-             let node_comp = find_def table node (ref [node]) in
-             let comp = unduplicate (=) (!partner_comp @ !node_comp) in
-               partner_comp := comp;
-               node_comp := comp;
-               ignore(set table partner partner_comp);
-               ignore(set table node partner_comp))
-    ;
-    unduplicate (=) (List.map (snd ->- (!)) (hashtbl_as_list table))
+         | node, None -> 
+             Hashtbl.replace table node 
+                      (hashfind_dflt table node (bump_counter()));
+           (* if it has a parent, set them both to the same color. *)
+         | node, Some parent -> 
+             let parent_comp = hashfind_dflt table parent (bump_counter()) in
+             let node_comp = hashfind_dflt table node 0 in
+               Hashtbl.replace table node parent_comp;
+               Hashtbl.replace table parent parent_comp;
+               (* also update anybody that had node's old color. *)
+               Hashtbl.iter (fun k v ->
+                               if v = node_comp then
+                                 Hashtbl.replace table k parent_comp)
+                 table
+      );
+    hashtbl_regions table
   
 let cmp_snd_desc (_,y1) (_,y2) = (- compare y1 y2)
 
@@ -107,6 +157,38 @@ let cmp_snd_desc (_,y1) (_,y2) = (- compare y1 y2)
 let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) = 
   let f, _, _ = dfs nodes edges in 
   let edges_reversed = transpose_edges edges in
-  let nodes_sorted = (List.map fst (List.sort cmp_snd_desc (hashtbl_as_list f))) in
+  let nodes_sorted = (map fst (List.sort cmp_snd_desc (hashtbl_as_alist f))) in
   let _, _, p = (dfs nodes_sorted edges_reversed) in
-    flatten_forest (hashtbl_as_list p)
+    flatten_forest (hashtbl_as_alist p)
+
+(** [topo_sort_cliques]: given a graph in adjacency-list
+    representation, find all the cliques and topologically sort them;
+    return the result as a list of cliques, the cliques represented as the
+    list of their members. *)
+let topo_sort_cliques (adj_list : (string * string list) list) : string list list =
+  (* [adj_list] is an alist, mapping each node to the
+     list of nodes it points to, like so:
+     [(u, [v; w; ...]);
+      (v, [u; s; t; ...])] 
+  *)
+  (* [clique_of cliques]: lookup (in [cliques]) the clique that [v] belongs to *)
+  let clique_of cliques v = List.find (List.mem v) cliques in
+    
+  let nodes = map fst adj_list in
+    (*  unfold adj_list: let `edges' be the list of all 
+        (u, v) where (u, v) is an edge in the graph *)
+  let edges = unroll_edges adj_list in
+  let cliques = strongly_connected_components nodes edges in
+    (* Now, for each clique, find the nodes that it points to: *)
+  let clique_innodes = 
+    map2alist (fun nodes -> concat_map_uniq (lookup_in adj_list) nodes) 
+      cliques in
+    (* Map each such node to its clique, so that we have, for each
+       clique, the list of cliques that it points to: *)
+  let clique_innodes = 
+    alistmap (fun calls -> map (clique_of cliques) calls) clique_innodes in
+    (* Now unroll that to get a list of pairs (U, V) where U and V are
+       cliques and there is an edge from U to V *)
+  let clique_edges = unroll_edges clique_innodes in
+    let result = reverse (topological_sort cliques clique_edges) in
+      result

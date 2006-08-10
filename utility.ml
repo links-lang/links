@@ -33,9 +33,9 @@ let intset_of_list l =
 
 
 
-(*** Functional programming ***)
+(** {1 Functional combinators} *)
 
-(* compose operators (arrow indicates direction of composition) *)
+(** "compose" operators (arrow indicates direction of composition) *)
 let (-<-) = fun f g x -> f (g x)
 let (->-) f g x = g (f x)
 
@@ -46,8 +46,11 @@ let identity x = x
 let notany f = List.for_all (not -<- f)
 let flip f x y = f y x
 
+let cross f g = fun (x, y) -> f x, g y
 
-(*** Lists ***)
+let zip_with = List.map2
+
+(** {1 Lists} *)
 
 let rec fromTo f t = 
   if f = t then []
@@ -73,7 +76,7 @@ let groupBy eq : 'a list -> 'a list list =
 
 (** [groupByPred pred] partitions [list] into chunks where all
     elements in the chunk give the same value under [pred]. *)
-let groupByPred pred = 
+let groupByPred pred list = 
   let rec group state result = function
     | [] -> List.rev (List.map List.rev result)
     | x::etc -> let predx = pred x in
@@ -83,7 +86,7 @@ let groupByPred pred =
                           [x] :: result)
       in
         group predx new_result etc
-  in group
+  in if (list == []) then [] else  group (pred (List.hd list)) [] list
 
 (** [groupByPred']: Alternate implementation of groupByPred. *)
 let groupByPred' pred : 'a list -> 'a list list = 
@@ -94,6 +97,8 @@ let groupByPred' pred : 'a list -> 'a list list =
           (let ys, zs = span (fun y -> pred y = predx) xs in 
              (x::ys)::group zs) 
   in group
+
+let iter_over list f = List.iter f list
 
 (** [unsnoc list]: Partition [list] into its last element and all the
     others. @return (others, lastElem) *)
@@ -137,6 +142,18 @@ let rec take n list = match n, list with
   | _, [] -> []
   | _, h :: t -> h :: take (n - 1) t
       
+let concat_map f l = 
+  let rec aux = function
+    | _, [] -> []
+    | f, x :: xs -> f x @ aux (f, xs)
+  in aux (f,l)
+
+let concat_map_uniq f l = unduplicate (=) (concat_map f l)
+
+let concat_map_undup cmp f l = unduplicate cmp (concat_map f l)
+
+(** {1 Association-list utilities} *)
+
 let rec rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = fun value ->
   function
     | (k, v) :: _ when eq v value -> k
@@ -155,22 +172,6 @@ let rec rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = fun value
 let rremove_assoc i l = rremove_assoc_eq (=) i l
 and rremove_assq i l = rremove_assoc_eq (==) i l
 
-let concat_map f l = 
-  let rec aux = function
-    | _, [] -> []
-    | f, x :: xs -> f x @ aux (f, xs)
-  in aux (f,l)
-
-let concat_map_uniq f l = unduplicate (=) (concat_map f l)
-
-let concat_map_undup cmp f l = unduplicate cmp (concat_map f l)
-
-(** Section: Functional combinators *)
-
-let cross f g = fun (x, y) -> f x, g y
-
-(**** Association-list utilities ****)
-
 (** alistmap maps f on the contents-parts of the entries, producing a
     new alist *)
 let alistmap f = List.map (cross identity f)
@@ -185,7 +186,9 @@ let alistmap' f = List.map (fun (x, y) -> (x, f(x, y)))
  *)
 let map2alist f list = List.map (fun x -> (x, f x)) list
 
-(** Section: Strings ***)
+let finite_function_graph = map2alist
+
+(** {1 Strings} *)
 
 let string_of_char = String.make 1
 
