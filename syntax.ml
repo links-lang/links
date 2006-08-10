@@ -119,8 +119,8 @@ let rec is_variable = function
 
 let rec is_xyggyz = function
     Record_empty _ -> true
-  | Record_extension (_, field, etc, _) -> is_tuple etc && is_variable field
-  | HasType (e, _, _) -> is_tuple e
+  | Record_extension (_, field, etc, _) -> is_xyggyz etc && is_variable field
+  | HasType (e, _, _) -> is_xyggyz e
   | _ -> false
 
 let gensym =
