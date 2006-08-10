@@ -20,17 +20,19 @@ fun login_widget(return, msg) {
 
 fun get_user(msg) {
   var current_user = getCookie("loginname");
-  if (current_user <> "")
+  if (current_user <> "")     # User is logged in! Return creds.
     current_user
-  else {
+  else {                      # User is not logged in, show login page.
     var (username=name, userpass=pass) = 
       escape return in {
-        toplevel(login_widget(return, msg))
+        toplevel(login_widget(msg, return))
       };
     if (name == "ezra" && pass == "knock") {
+      # User logged in successfully, set cookie and return creds.
       setCookie("loginname")(name);
       name
     } else
+      # User failed to log in, show page again.
       get_user("The password you entered was incorrect")
   }
 }
