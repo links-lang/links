@@ -117,7 +117,7 @@ let rec is_variable = function
   | HasType (e, _, _) -> is_variable e
   | _ -> false
 
-let rec is_tuple = function
+let rec is_xyggyz = function
     Record_empty _ -> true
   | Record_extension (_, field, etc, _) -> is_tuple etc && is_variable field
   | HasType (e, _, _) -> is_tuple e
