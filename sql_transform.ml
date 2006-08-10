@@ -66,19 +66,6 @@ type origin = [
   | `Unavailable (** The variable cannot be used in a query *)
 ]
 
-let string_of_projection_source proj = 
-  "#" ^ proj.field_name ^ "=" ^ proj.field_var ^ "|" ^ proj.etc_var ^ " from " ^ proj.source_var
-
-
-let string_of_binding = function
-  | `Table_loop (variable, query) -> variable ^ " <- " ^ string_of_query query
-  | `Selected proj -> string_of_projection_source proj
-  | `Calculated (variable, expr) -> variable ^ " is calculated"
-  | `Unavailable variable -> variable ^ " is unavailable"
-      
-let string_of_bindings bindings =
-  String.concat "; " (map string_of_binding bindings)
-
 (** Finds a binding for a particular variable name in a binding list.
 	@param bindings The binding list to search.
 	@param name The name of the variable to lookup.

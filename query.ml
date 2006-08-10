@@ -1,5 +1,5 @@
 open Num
-open Types
+open Utility
 
 type like_expr = [`percent | `string of string | `variable of string | `seq of like_expr list]
     deriving (Show, Pickle)
@@ -56,15 +56,11 @@ and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;
               name : string;
               renamed : string;
-              col_type : datatype}
+              col_type : Types.datatype}
     deriving (Show, Pickle)
 
 (* Simple accessors *)
-
 let get_renaming col = col.renamed
-
-let table_real_name = fst
-let table_as_name = snd
 
 let add_sorting query col = 
   {query with
@@ -74,20 +70,15 @@ let owning_table of_col qry =
   let col_rec = (List.find (fun c -> c.name = of_col) qry.result_cols) in
     col_rec.table_renamed
 
-let table_as_name_to_real_name renamed qry = 
-  table_real_name (List.find (fun t -> table_as_name t = renamed) qry.tables)
-
-let table_real_name_to_as_name real_name qry = 
-  table_as_name (List.find (fun t -> table_real_name t = real_name) qry.tables)
-
-let rec freevars query =
-  qexpr_freevars query.condition
-
+let rec freevars {condition = condition;
+                  offset = offset;
+                  max_rows = max_rows} =
+  qexpr_freevars condition @ qexpr_freevars offset @ fromOption [] (opt_map qexpr_freevars max_rows)
 and qexpr_freevars = function
     Variable name -> [name]
-  | Binary_op(_, lhs, rhs) -> qexpr_freevars lhs @ qexpr_freevars rhs
-  | Unary_op(_, arg) -> qexpr_freevars arg
-  | Query(q) -> freevars q
+  | Binary_op (_, lhs, rhs) -> qexpr_freevars lhs @ qexpr_freevars rhs
+  | Unary_op (_, arg) -> qexpr_freevars arg
+  | Query q -> freevars q
   | _ -> []
 
 let rec replace_var name expr = function

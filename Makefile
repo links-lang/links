@@ -53,8 +53,8 @@ SOURCES = $(OPC)                		\
           graph.ml              		\
           type_basis.mli type_basis.ml 		\
           types.mli types.ml      		\
-          query.ml              		\
-          sql.ml                		\
+          query.ml query.mli          		\
+          sql.ml sql.mli               		\
           syntax.ml syntax.mli        		\
           regex.ml                              \
           inferencetypes.mli inferencetypes.ml 	\
@@ -62,7 +62,7 @@ SOURCES = $(OPC)                		\
           sugar.ml sugar.mli    		\
           result.ml result.mli         		\
           errors.mli errors.ml                  \
-          sql_transform.ml      		\
+          sql_transform.ml sql_transform.mli	\
           parser.mly            		\
           $(DB_CODE)            		\
           jsonparse.mly         		\
@@ -76,7 +76,7 @@ SOURCES = $(OPC)                		\
           library.mli library.ml 		\
           jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
-          optimiser.ml          		\
+          optimiser.ml optimiser.mli   		\
           js.mli js.ml          		\
           webif.ml              		\
           links.ml              		\
