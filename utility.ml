@@ -266,7 +266,7 @@ let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
 
 (** [lookup_in alist] is a function that looks up its argument in [alist] *)
-let lookup_in alist x = List.assoc x alist (* why didn't [flip assoc] work? *)
+let lookup_in alist x = List.assoc x alist
 
 (** lookup is like assoc but uses option types instead of
    exceptions to signal absence *)

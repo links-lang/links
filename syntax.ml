@@ -24,6 +24,8 @@ exception ASTSyntaxError of position * string
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show, Pickle)
 
+let string_of_location = Show_location.show
+
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
   | Boolean of (bool * 'data)
@@ -112,17 +114,6 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-let rec is_variable = function 
-    Variable _ -> true
-  | HasType (e, _, _) -> is_variable e
-  | _ -> false
-
-let rec is_xyggyz = function
-    Record_empty _ -> true
-  | Record_extension (_, field, etc, _) -> is_xyggyz etc && is_variable field
-  | HasType (e, _, _) -> is_xyggyz e
-  | _ -> false
-
 let gensym =
   let counter = ref 0 in
     function str ->
@@ -141,19 +132,7 @@ type untyped_expression = position expression'
 type stripped_expression = unit expression'
   deriving (Show, Pickle)
 
-
-let string_of_location : location -> string = function
-  | `Client -> "client" | `Server -> "server" | `Native -> "native" | `Unknown -> "unknown"
-
-let rec unparse_sequence empty unit append = function 
-  | Nil _ -> empty
-  | List_of (elem, _) -> unit elem
-  | Concat (l, r, _) -> (append 
-                                     (unparse_sequence empty unit append l) 
-                                     (unparse_sequence empty unit append r))
-  | other -> failwith ("Unexpected argument to unparse_sequence : " ^ show (fun _ -> "") other)
-and unparse_list x = unparse_sequence [] (fun x -> [x]) (@) x
-and show t : 'a expression' -> string = function 
+let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ string_of_location location ^ "]; " ^ t data
@@ -222,20 +201,7 @@ let string_of_typed_expression (s : expression) : string =
   show (function (_, datatype, _) -> 
 	  " : (" ^ (string_of_datatype datatype) ^ ")") s
 
-let with_label = (fun (_, _, lbl) ->
-     " [" ^ fromOption "BOGUS" lbl ^ "] ")
-
 let string_of_expression s = show (fun _ -> "") s
-
-let string_of_labelled_expression (s : expression) = show with_label s
-
-let string_of_order order = match order with
-  | `Asc name -> ""^ name ^":asc"
-  | `Desc name -> ""^ name ^":asc"
-
-let string_of_orders orders = match orders with 
-  | [] -> " " 
-  | _ -> "order [" ^ String.concat ", " (map string_of_order orders) ^ "]"
 
 (*
 Functions involved in a visit:
@@ -487,16 +453,7 @@ let labelize (expr:expression) : expression =
   redecorate 
     (fun (a,b,_) ->
        let label = new_label_str () in
-(*          debug("labelizing " ^ label ^ " at " ^ string_of_expression expr); *)
 	 (a, b, Some label)) expr
-
-let labelize_ut (expr:untyped_expression) : expression = redecorate 
-  (fun a ->
-     (a, `Not_typed, Some(new_label_str ()))) expr
-
-let labelize_env env = alistmap labelize env
-
-let labelize_program (env, exprs) = (env, map labelize exprs)
 
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
@@ -639,7 +596,6 @@ and snd3 (_, b, _) = b
 and thd3 (_, _, c) = c
 
 let node_datatype : (expression -> datatype) = snd3 -<- expression_data
-and node_pos  : (expression -> position) = fst3 -<- expression_data 
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 
 let stringlit_value = function

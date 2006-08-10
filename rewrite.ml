@@ -23,15 +23,28 @@ sig
   val process_children : rewriter -> rewriter
 end
   
-module Rewrite (T : RewritePrimitives) =
+module type Rewrite = 
+sig
+  type t
+  type rewriter = t -> t option
+  val both : rewriter -> rewriter -> rewriter
+  val either : rewriter -> rewriter -> rewriter
+  val never : rewriter
+  val always : rewriter
+  val any : rewriter list -> rewriter
+  val all : rewriter list -> rewriter
+  val topdown : rewriter -> rewriter
+  val bottomup : rewriter -> rewriter
+  val maxonce_td : rewriter -> rewriter
+  val maxonce_bu : rewriter -> rewriter
+  val loop : rewriter -> rewriter
+end
+
+module Rewrite (T : RewritePrimitives) : Rewrite 
+  with type t = T.t  =
 struct
   include T
 
-  let try_once (re : rewriter) : t -> t = 
-    fun expr -> match re expr with
-        Some expr -> expr
-      | None -> expr
-          
   (* Apply a sequence of rewriters in sequence, stopping as soon as one succeeds *)
   let any : rewriter list -> rewriter = List.fold_left T.either T.never
 
@@ -130,4 +143,3 @@ let passto f exprs next =
     match aux false [] exprs with
       | false, _ -> None
       | true,  es -> Some (next (List.rev es))
-          
