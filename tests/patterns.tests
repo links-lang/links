@@ -69,3 +69,12 @@ Redundant pattern [3]
 fun (x) { switch x { case x -> x; case A -> A; }}
 stderr : @..*
 exit : 1
+
+Redundant pattern [4]
+fun (x) {switch x { case(A(B(C(1,2,3)))) -> 0; case(A(B(C(1,2,3)))) -> 1;}}
+stderr : @..*
+exit : 1
+
+Type-based redundant pattern
+fun (x) {switch x { case(true) -> 0; case(false) -> 1; case(y) -> 2;}}
+stdout : fun : (Bool) -> Int
