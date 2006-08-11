@@ -1,5 +1,5 @@
-var db = database "postgresql:todo::5432:www-data:";
-var items = table items (
+var db = database (driver="postgresql", name="todo", args=":5432:www-data:");
+var items = table "items" with (
     name : String 
  ) from db;
 
