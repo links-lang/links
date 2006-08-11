@@ -342,13 +342,6 @@ let opt_sequence e =
   | None :: _      -> None
   in aux [] e
 
-let opt_sum e = 
-  let rec aux accum = function
-  | []             -> None
-  | Some x :: rest -> aux (x::accum) rest
-  | None :: _      -> None
-  in opt_map List.rev (aux [] e)
-
 (*** character encoding ***)
 
 (* Read a three-digit octal escape sequence and return the

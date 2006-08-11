@@ -213,7 +213,7 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
     let f s =
       let likes, origin_lists = split s in
         (`seq likes, List.concat origin_lists) 
-    in opt_map f (opt_sum l)
+    in opt_map f (opt_sequence l)
   in Syntax.reduce_expression visitor combiner e
 
 (** make_sql
