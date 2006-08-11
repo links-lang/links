@@ -487,7 +487,7 @@ let rec generate : 'a expression' -> code =
   | Let (v, e, b, _)                   -> 
       let e' = generate e in
       let b' = generate b in
-      let x = gensym ("__" ^ v) in
+      let x = gensym ~prefix:("__" ^ v) () in
         Fn(["__kappa"], 
            Call(e', [Fn([x], 
                         Bind(v, Var x,
@@ -531,8 +531,8 @@ let rec generate : 'a expression' -> code =
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
   | Xml_node (tag, attrs, children, _)   -> 
-      let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
-      let children_cps = map (fun e -> (gensym "__", generate e)) children in
+      let attrs_cps = map (fun (k,e) -> (k, gensym ~prefix:"__" (), generate e)) attrs in
+      let children_cps = map (fun e -> (gensym ~prefix:"__" (), generate e)) children in
         make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
@@ -553,10 +553,10 @@ let rec generate : 'a expression' -> code =
   | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
       let f_cps = generate f in
-      let f_name = gensym "__f" in
+      let f_name = gensym ~prefix:"__f" () in
       let arglist = [p] in
       let cps_args = map generate arglist in
-      let arg_names = map (fun e -> gensym "__f") arglist in
+      let arg_names = map (fun e -> gensym ~prefix:"__f" ()) arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
       in
@@ -616,7 +616,7 @@ let rec generate : 'a expression' -> code =
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
-      let name = gensym "__r" in
+      let name = gensym ~prefix:"__r" () in
         Fn(["__kappa"],
            Call(r_cps, [Fn (["__r"], 
                 (Bind (name, Var "__r", 
@@ -754,8 +754,8 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                             (end_thread(generate code))
                             vars) in
   let handlers = map make_code_for_handler handlers in
-  let attrs_cps = map (fun (k, e) -> (k, gensym "", generate e)) attrs in
-  let children_cps = map (fun e -> (gensym "", generate e)) children in
+  let attrs_cps = map (fun (k, e) -> (k, gensym (), generate e)) attrs in
+  let children_cps = map (fun e -> (gensym (), generate e)) children in
   let keyattr = 
     match handlers with
       | [] -> []
@@ -858,7 +858,7 @@ and generate_direct_style : 'a expression' -> code =
   | Record_selection_empty (v, b, _)  ->
       Call(Fn(["ignored"], gd b), [gd v])
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
-      let name = gensym "r" in
+      let name = gensym ~prefix:"_r" () in
 	Bind(name, gd r,
 	     Bind(lv, Call(Var "_project", [strlit l; Var name]),
 		  Bind(etcv, Var name, gd b)))
@@ -876,7 +876,7 @@ and generate_direct_style : 'a expression' -> code =
       Call(Var "_fail", [strlit "closed switch got value out of range"])
   | Variant_selection (src, case_label, case_var, case_body, 
                        else_var, else_body, _) ->
-      let src_var = gensym "s" in
+      let src_var = gensym ~prefix:"_s" () in
       Bind(src_var, gd src,
 	   Cond(Binop(Call(Var "_vrntLbl", [Var src_var]),
                       "==",
@@ -957,7 +957,7 @@ let rec replace' var replcmt fvs = function
 and replace var expr body = replace' var expr (freevars expr) body
 and uniquify_args = function
     (args, body) ->
-      let subst = map (fun x -> (x, gensym x)) args in
+      let subst = map (fun x -> (x, gensym ~prefix:x ())) args in
         (map snd subst,
          fold_right (fun (old, noo) body ->
                        replace' old (Var noo) (StringSet.singleton noo) body)

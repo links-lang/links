@@ -45,7 +45,6 @@ exception ASTSyntaxError of position * string
 
 val is_define : 'a expression' -> bool
 val is_value : 'a expression' -> bool
-val gensym : string -> string
 val string_of_expression : 'a expression' -> string
 val simple_visit : (('a expression' -> 'a expression') -> 'a expression' -> 'a expression') -> 'a expression' -> 'a expression'
 val freevars : 'a expression' -> string list

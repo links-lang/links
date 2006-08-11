@@ -136,7 +136,7 @@ let is_special_param (k, _) =
   List.mem k ["_cont"; "_k"]
 
 let string_dict_to_charlist_dict =
-  dict_map Result.string_as_charlist
+  alistmap Result.string_as_charlist
 
 let lookup_either a b env = 
   try List.assoc a env

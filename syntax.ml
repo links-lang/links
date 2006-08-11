@@ -114,14 +114,6 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-let gensym =
-  let counter = ref 0 in
-    function str ->
-      begin
-        incr counter;
-        str ^ "_g" ^ string_of_int !counter
-      end
-
 type label = string 
     deriving (Show, Pickle)
 

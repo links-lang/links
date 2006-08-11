@@ -265,7 +265,7 @@ let links_project name = function
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let delay_expr expr = `Function(gensym "", [], [], expr)
+let delay_expr expr = `Function(gensym (), [], [], expr)
 
 let pp_continuation = Show_continuation.show
   

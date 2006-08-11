@@ -27,14 +27,8 @@ type 'r a_pattern = [
 type simple_pattern = simple_pattern a_pattern * Syntax.position
 
 (* Various flavours of a sort of `gensym'*)
-let unique_name, db_unique_name = 
-  let base_value = ref 0 in
-  (fun () ->
-     incr base_value; 
-     "_g" ^ string_of_int !base_value ^ ""),
-  (fun () ->
-     incr base_value; 
-     "Table_" ^ string_of_int !base_value)
+let unique_name () = Utility.gensym ()
+let db_unique_name = Utility.gensym ~prefix:"Table"
 
 let list_head expr pos = 
   Apply(Variable ("hd", pos), expr, pos)
@@ -994,7 +988,7 @@ module Desugarer =
           let-bound beforehand.  *)
        let exprs = ref [] in
        let expr e = 
-         let v = gensym "_regex_" in
+         let v = gensym ~prefix:"_regex_" () in
            begin
              exprs := (v, e) :: !exprs;
              Var v, pos

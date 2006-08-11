@@ -10,6 +10,7 @@ open Utility
 open Sql
 open Query
 
+let col_unique_name = Utility.gensym ~prefix:"col"
 
 (** Restricts the columns to be selected from a table query by
       specifying all columns to keep. Fails if at least one
@@ -362,7 +363,7 @@ let rec select ((positives, negatives):(expression list * expression list)) (que
     `left` values are already distinct anyway.
 *)
 let append_uniquely left right : (column list * (column * string) list) =
-  let right = map ( fun x -> (x, {x with renamed = Utility.col_unique_name()}) ) right in
+  let right = map ( fun x -> (x, {x with renamed = col_unique_name ()}) ) right in
     (left @ map snd right, map (fun (x, y) -> (x, get_renaming y)) right)
   
 (** join

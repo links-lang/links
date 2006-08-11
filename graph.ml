@@ -129,10 +129,10 @@ let string_of_parent_tree =
 let flatten_forest nodes : 'a list list=
   let table = Hashtbl.create (List.length nodes) in
   let counter = ref 0 in
-  let bump_counter () = counter := !counter+1; !counter in
+  let bump_counter () = incr counter; !counter in
 
-    iter_over nodes
-      (function
+    ListLabels.iter nodes
+      ~f:(function
            (* if it's a root, just stick it in the table *)
          | node, None -> 
              Hashtbl.replace table node 
