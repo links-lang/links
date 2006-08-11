@@ -1,3 +1,5 @@
+#!/home/jeremy/code/links/svn/current/links
+
 fun remove(item, items) {
   switch items {
      case []    -> [];

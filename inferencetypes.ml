@@ -21,7 +21,7 @@ type quantifier = Type_basis.quantifier
 
 let string_type = `List (`Primitive `Char)
 
-type inference_expression = (Syntax.position * datatype * string option (* label *)) Syntax.expression'
+type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
 
 
 (* [TODO]

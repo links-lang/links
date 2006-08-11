@@ -26,6 +26,9 @@ type location = [`Client | `Server | `Native | `Unknown]
 
 let string_of_location = Show_location.show
 
+type label = int 
+    deriving (Show, Pickle)
+
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
   | Boolean of (bool * 'data)
@@ -72,7 +75,7 @@ type 'data expression' =
   | Wrong of 'data
   | HasType of ('data expression' * datatype * 'data)
   | Alien of (string * string * assumption * 'data)
-  | Placeholder of (string * 'data)
+  | Placeholder of (label * 'data)
       deriving (Show, Pickle)
 
 let is_define = 
@@ -113,9 +116,6 @@ let rec is_value : 'a expression' -> bool = function
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
-
-type label = string 
-    deriving (Show, Pickle)
 
 type expression = (position * datatype * label option) expression'
     deriving (Show, Pickle)
@@ -186,7 +186,7 @@ let rec show t : 'a expression' -> string = function
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")"
   | Wrong data -> "wrong" ^ t data
-  | Placeholder (s, data) -> "PLACEHOLDER : " ^ s ^ t data
+  | Placeholder (s, data) -> "PLACEHOLDER : " ^ Show_label.show s ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (string_of_assumption k) ^ t data
 
 let string_of_typed_expression (s : expression) : string = 
@@ -437,15 +437,16 @@ let strip_data : 'a expression' -> stripped_expression =
 let erase : expression -> untyped_expression = 
   redecorate (fun (pos, _, _) -> pos)
 
-let label_seq = ref 0
-let new_label () = label_seq := !label_seq +1; !label_seq
-let new_label_str () = "T" ^ string_of_int (new_label ())
 
-let labelize (expr:expression) : expression = 
-  redecorate 
-    (fun (a,b,_) ->
-       let label = new_label_str () in
-	 (a, b, Some label)) expr
+let labelize =
+  let label_seq = ref 0 in
+let new_label () = incr label_seq; !label_seq in
+let new_label_str () = (*"T" ^ string_of_int*) (new_label ()) in
+  fun (expr:expression) ->
+    redecorate 
+      (fun (a,b,_) ->
+         let label = new_label_str () in
+	   (a, b, Some label)) expr
 
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =

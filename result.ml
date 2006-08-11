@@ -286,7 +286,7 @@ and charlist_as_string chlist =
 and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `PFunction (name, _) -> name
-  | `Function (_, _, _, Placeholder (str, _)) -> "fun [" ^ str ^ "]"
+  | `Function (_, _, _, Placeholder (str, _)) -> "fun [" ^ Show_label.show str ^ "]"
   | `Function _ -> "fun"
   | `Record fields ->
       (try string_of_tuple fields
@@ -405,7 +405,7 @@ let resolve_label program label : 'a expression' =
   try
     assoc label (concat_map label_table program) 
   with
-      Not_found -> (prerr_endline("Placeholder not found: " ^ label);
+      Not_found -> (prerr_endline("Placeholder not found: " ^ Show_label.show label);
                     raise Not_found)
 
 let resolve_placeholder program = function

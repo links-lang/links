@@ -1,5 +1,6 @@
 type lexpos = Lexing.position
 type location = [ `Client | `Native | `Server | `Unknown ]
+type label
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
   | Boolean of (bool * 'a)
@@ -34,8 +35,7 @@ type 'a expression' =
   | Wrong of 'a
   | HasType of ('a expression' * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
-  | Placeholder of (string * 'a)
-type label = string
+  | Placeholder of (label * 'a)
 type position = lexpos * string * string
 type expression = (position * Types.datatype * label option) expression'
 type untyped_expression = position expression'
@@ -62,6 +62,7 @@ val dummy_position : position
 val no_expr_data : position * Types.datatype * label option
 
 module Show_expression : Show.Show with type a = expression
+module Show_label : Show.Show with type a = label
 module Show_stripped_expression : Show.Show with type a = stripped_expression
 
 module Pickle_label : Pickle.Pickle with type a = label
