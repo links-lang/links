@@ -1,7 +1,5 @@
 (* Tools for rewriting trees *)
 
-open Utility
-
 module type RewritePrimitives =
 sig
   type t
@@ -99,7 +97,7 @@ struct
   let both a b e =
     match a e with 
       | None   -> b e
-      | Some e -> Some (fromOption e (b e))
+      | Some e -> Some (Utility.fromOption e (b e))
   and either a b e = 
     match a e with
       | None -> b e
@@ -143,3 +141,15 @@ let passto f exprs next =
     match aux false [] exprs with
       | false, _ -> None
       | true,  es -> Some (next (List.rev es))
+
+module P (F : Functor.Functor) = 
+struct
+  let perhaps_process_node_list (f : 'a -> 'a option) (l : 'a F.f) : ('a F.f * bool)
+      = 
+    let changed = ref false in
+    let f x = match f x with
+      | Some x -> (changed := true; x)
+      | None   -> x
+    in 
+      (F.map f l, !changed )
+end

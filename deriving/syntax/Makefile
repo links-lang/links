@@ -6,7 +6,7 @@ OCAMLOPT = ocamlopt.opt
 OCAMLDEP = ocamldep
 LIBDIR = `ocamlc -where`
 
-DERIVERS=pickle_class show_class enum_class bounded_class
+DERIVERS=pickle_class show_class enum_class bounded_class functor_class
 DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
 DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
 OBJS=deriving.cmo $(DERIVER_OBJS)

@@ -48,7 +48,6 @@ val is_value : 'a expression' -> bool
 val string_of_expression : 'a expression' -> string
 val simple_visit : (('a expression' -> 'a expression') -> 'a expression' -> 'a expression') -> 'a expression' -> 'a expression'
 val freevars : 'a expression' -> string list
-val redecorate : ('a -> 'b) -> 'a expression' -> 'b expression'
 val strip_data : 'a expression' -> stripped_expression
 val erase : expression -> untyped_expression
 val labelize : expression -> expression
@@ -69,3 +68,5 @@ module Pickle_label : Pickle.Pickle with type a = label
 module Pickle_expression : Pickle.Pickle with type a = expression
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
+
+module Functor_expression' : Functor.Functor with type 'a f = 'a expression'

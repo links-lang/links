@@ -76,7 +76,7 @@ type 'data expression' =
   | HasType of ('data expression' * datatype * 'data)
   | Alien of (string * string * assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Show, Pickle)
+      deriving (Show, Pickle, Functor)
 
 let is_define = 
   function
@@ -392,50 +392,11 @@ let freevars : 'a expression' -> string list =
           | other -> default (other, vars)
     in Utility.unduplicate (=) (snd (visit_expressions' (@) (fun _ -> []) visit (expression, [])))
 
-let rec redecorate (f : 'a -> 'b) : 'a expression' -> 'b expression' = function
-  | Define (a, b, loc, data) -> Define (a, redecorate f b, loc, f data)
-  | Boolean (a, data) -> Boolean (a, f data)
-  | Integer (a, data) -> Integer (a, f data)
-  | Float (a, data) -> Float (a, f data)
-  | Char (a, data) -> Char (a, f data)
-  | String (a, data) -> String (a, f data)
-  | Variable (a, data) -> Variable (a, f data)
-  | Apply (a, b, data) -> Apply (redecorate f a, redecorate f b, f data)
-  | Condition (a, b, c, data) -> Condition (redecorate f a, redecorate f b, redecorate f c, f data)
-  | Comparison (a, b, c, data) -> Comparison (redecorate f a, b, redecorate f c, f data)
-  | Abstr (a, b, data) -> Abstr (a, redecorate f b, f data)
-  | Let (a, b, c, data) -> Let (a, redecorate f b, redecorate f c, f data)
-  | Rec (a, b, data) -> 
-      Rec (map (fun (s,e,t) -> s, redecorate f e,t) a, redecorate f b, f data)
-  | Xml_node (a, b, c, data) -> 
-      Xml_node (a, map (fun (s,e) -> s, redecorate f e) b, 
-                map (redecorate f) c, f data)
-  | Record_empty (data) -> Record_empty (f data)
-  | Record_extension (a, b, c, data) -> Record_extension (a, redecorate f b, redecorate f c, f data)
-  | Record_selection (a, b, c, d, e, data) -> Record_selection (a, b, c, redecorate f d, redecorate f e, f data)
-  | Record_selection_empty (a, b, data) -> Record_selection_empty (redecorate f a, redecorate f b, f data)
-  | Variant_injection (a, b, data) -> Variant_injection (a, redecorate f b, f data)
-  | Variant_selection (a, b, c, d, e, g, data) -> Variant_selection (redecorate f a, b, c, redecorate f d, e, redecorate f g, f data)
-  | Variant_selection_empty (value, data) -> Variant_selection_empty (redecorate f value, f data)
-  | Nil (data) -> Nil (f data)
-  | List_of (a, data) -> List_of (redecorate f a, f data)
-  | Concat (a, b, data) -> Concat (redecorate f a, redecorate f b, f data)
-  | For (a, b, c, data) -> For (redecorate f a, b, redecorate f c, f data)
-  | Database (a, data) -> Database (redecorate f a, f data)
-  | TableHandle (a, b, c, data) -> TableHandle (redecorate f a, redecorate f b, c, f data)
-  | TableQuery (a, b, data) -> TableQuery (redecorate f a, b, f data)
-  | SortBy (a, b, data) -> SortBy (redecorate f a, redecorate f b, f data)
-  | Escape (var, body, data) -> Escape (var, redecorate f body, f data)
-  | HasType (expr, typ, data) -> HasType (redecorate f expr, typ, f data)
-  | Wrong (data) -> Wrong (f data)
-  | Placeholder (s, data) -> Placeholder (s, f data) 
-  | Alien (s1, s2, k, data) -> Alien (s1, s2, k, f data)
-
 let strip_data : 'a expression' -> stripped_expression =
-  fun e -> redecorate (fun _ -> ()) e
+  fun e -> Functor_expression'.map (fun _ -> ()) e
 
 let erase : expression -> untyped_expression = 
-  redecorate (fun (pos, _, _) -> pos)
+  Functor_expression'.map (fun (pos, _, _) -> pos)
 
 
 let labelize =
@@ -443,7 +404,7 @@ let labelize =
 let new_label () = incr label_seq; !label_seq in
 let new_label_str () = (*"T" ^ string_of_int*) (new_label ()) in
   fun (expr:expression) ->
-    redecorate 
+    Functor_expression'.map
       (fun (a,b,_) ->
          let label = new_label_str () in
 	   (a, b, Some label)) expr

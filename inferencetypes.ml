@@ -482,9 +482,9 @@ let environment_of_inference_environment : environment -> Types.environment =
 
 (* conversions between expressions and inference expressions *)
 let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun var_map ->
-  Syntax.redecorate (fun (pos, t, label) -> (pos, inference_type_of_type var_map t, label))
+  Syntax.Functor_expression'.map (fun (pos, t, label) -> (pos, inference_type_of_type var_map t, label))
 let expression_of_inference_expression : inference_expression -> Syntax.expression =
-  Syntax.redecorate (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
+  Syntax.Functor_expression'.map (fun (pos, t, label) -> (pos, type_of_inference_type t, label))
 
 (* output as a string *)
 let string_of_datatype = Types.string_of_datatype -<- type_of_inference_type
