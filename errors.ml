@@ -105,6 +105,9 @@ let rec format_exception = function
   | ASTSyntaxError ((pos,_,expr), s) -> 
       Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
         pos.pos_fname pos.pos_lnum s expr
+  | Sugar.RedundantPatternMatch (pos,_,expr) -> 
+      Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n" 
+        pos.pos_fname pos.pos_lnum expr
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedToplevelNames duplicates ->
     let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->

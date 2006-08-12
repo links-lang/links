@@ -35,7 +35,8 @@ let list_head expr pos =
 
 let list_tail expr pos = 
   Apply(Variable ("tl", pos), expr, pos)
-                
+
+exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
   (*** pattern matching compiler ***)
   (*
@@ -48,11 +49,15 @@ module PatternCompiler =
     to adjust our intermediate language.
   *)
   (struct
+     let unit_hack = Settings.add_bool("pattern_unit_hack", true, true)
+
      type annotation = string list * Types.datatype list
      type annotated_pattern = annotation * simple_pattern
 
-     type raw_equation = simple_pattern list * untyped_expression
-     type equation = annotated_pattern list * untyped_expression
+     type ('a, 'b) equation_basis = 'a list * 'b
+
+     type raw_equation = (simple_pattern, untyped_expression) equation_basis
+     type equation = (annotated_pattern, (untyped_expression * bool ref)) equation_basis
      type annotated_equation = annotation * equation
 
      type bound_expression = string -> untyped_expression
@@ -141,7 +146,7 @@ module PatternCompiler =
 
      let reduce_equation : raw_equation -> equation =
        fun (ps, body) ->
-         (map reduce_pattern ps, body)
+         (map reduce_pattern ps, (body, ref false))
 
      (* partition equations sequentially according to the equality predicate *)
      let partition_equations : (equation * equation -> bool) -> equation list -> (equation list) list =
@@ -162,7 +167,10 @@ module PatternCompiler =
                in
                  List.rev(es :: ess)
 
-     (* push any variable patterns to the end of the top-most equation *)
+     (*
+       push any variable patterns to the end of the top-most equation
+       and reorder the variables and other equations accordingly
+     *)
      let reorder_patterns : (string list * equation list) -> (string list * equation list) =
        fun (vars,  (ps, body) :: equations) ->
          let ps, vs, indices, _ =
@@ -193,9 +201,6 @@ module PatternCompiler =
      (* partition list equations by constructor *)
      let partition_list_equations : equation list -> (annotated_equation list * annotated_equation list) =
        fun equations ->
-	 (* Why does a fold_right work here?
-            (A fold_left is used in all the other partition_.*_equations functions)
-         *)
          List.fold_left (fun (nil_equations, cons_equations) (ps, body) ->
                             match ps with
                               | (annotation, (`Nil,_))::ps ->
@@ -267,88 +272,125 @@ module PatternCompiler =
                    | _ -> assert false
               ) StringMap.empty equations)
 
-     (* apply an annotation to an expression
-        - rename variables
-        - move type annotations into the expression
+     (* 
+        create a let binding,
+        inlining it if the bound expression is a variable
      *)
-     (* [TODO]
-         OCaml-style 'as' patterns (which refine the type)
-           - change var to be an expression
-           - change subst to be a let if this is not a variable
+     let bind_or_subst (var, exp, body, pos) =
+       match exp with
+         | Variable (var', _) ->
+             subst body var var'
+         | _ -> Let (var, exp, body, pos)
+
+
+     (* 
+        apply an annotation to an expression
+         - rename variables
+         - move type annotations into the expression
      *)
-     let apply_annotation : Syntax.position -> string -> annotation * untyped_expression -> untyped_expression =
-       fun pos var ((names, datatypes), exp) ->
-         let exp = List.fold_right (fun name exp ->
-                                      subst exp name var) names exp in
-         let exp = List.fold_right (fun datatype exp ->
-                                      Let ("_", HasType (Variable (var, pos), datatype, pos), exp, pos)) datatypes exp
+     let apply_annotation : Syntax.position -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
+       fun pos exp ((names, datatypes), body) ->
+         let body = List.fold_right (fun name body ->
+                                      bind_or_subst (name, exp, body, pos)) names body in
+         let body = List.fold_right (fun datatype body ->
+                                      Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
          in
-           exp
+           body
 
      (* apply annotations in an annotated equation list *)
-     let apply_annotations : Syntax.position -> string -> annotated_equation list -> equation list =
-       fun pos var annotated_equations ->
-         map (fun (annotation, (ps, body)) ->
-                (ps, apply_annotation pos var (annotation, body))) annotated_equations
+     let apply_annotations : Syntax.position -> untyped_expression -> annotated_equation list -> equation list =
+       fun pos exp annotated_equations ->
+         map (fun (annotation, (ps, (body, used))) ->
+                (ps, (apply_annotation pos exp (annotation, body), used))) annotated_equations
 
      (*
        [TODO]
-         - fix redundancy checking
          - better error messages
      *)
      (*
-       This only checks redundancy arising from variable patterns.
-       e.g.
-         switch x { case(x,1) -> 1; case (0,1) -> 2;}
+       Redundant patterns
+       ------------------
+ 
+       We say that an equation or pattern matching clause is redundant
+       if its continuation can never be invoked. We only care about
+       redundancy of the raw equations passed as input to the
+       pattern matching compiler (i.e. the clauses of a switch
+       statement in the source code). We say that a switch statement is
+       redundant if at least one of its clauses is redundant.
+
+       Two kinds of redundancy can arise in pattern matching:
+        - control-flow:
+          when it can be proven that a continuation can never be
+          invoked, by a static analysis of the control flow
+        - type-oriented:
+          when it can be proven that a continuation can never be
+          invoked, using type information
+
+       The pattern-matching compiler is deliberately designed *not* to
+       take into account type information, in order that it can be used
+       effectively with static typing disabled. Therefore we do not
+       attempt to detect type-oriented redundancy here.
+
+       We do detect (and report as an error) control-flow redundancy.
+       Control-flow redundancy checking is implemented by attaching a
+       'used' flag to the body of each continuation. The used flag is
+       initialised to false, and set to true whenever a continuation
+       is used in the compiled program. After compiling the equations
+       a check is made to ensure that all continuations have been used.
+
+       Control-flow redundancy arises when two consecutive patterns
+       are equivalent under the assumption that variables in the first
+       pattern can be instantiated to any pattern.
+
+       Examples:
+        - switch x { case(x,1) -> 1; case (0,1) -> 2;}
        is redundant because 0 in the second pattern has already been
        matched by x in a context where all the other sub-patterns are
-       identical.
+       identical
+    
+        -  switch x { case(A(B(C(1,2,3)))) -> 0; case(A(B(C(1,2,3)))) -> 1;}
+       is redundant because the two patterns are identical
 
-       Redundancy arising from identical patterns should be
-       detected in match_cases.
-       e.g.
-         switch x { case(A(B(C(1,2,3)))) -> 0; case(A(B(C(1,2,3)))) -> 1;}
-       is redundant because the two patterns are identical.
-
-       Type-directed redundancy checking is not performed:
-       e.g.
-         switch x { case(true) -> 0; case(false) -> 1; case(x) -> 2 }
-       is accepted as a correct program.
+       An example of type-oriented redundancy:
+        - switch x { case(true) -> 0; case(false) -> 1; case(x) -> 2 }
+       The third clause is redundant as true and false cover the whole
+       of the type Bool.
      *)
-     let redundant_pattern_check =
-       ignore -<-
-         (List.fold_left
-            (fun last_was_var equations ->
-               match get_equations_pattern_type equations with
-                 | `Variable ->
-                     assert (not (last_was_var));
-                     if List.length equations > 1 then
-                       failwith "Redundant pattern"
-                     else
-                       true
-                 | _ ->
-                     if last_was_var then
-                       failwith "Redundant pattern"
-                     else
-                       false) false)
 
-(*          
-     let is_wrong : Syntax.untyped_expression -> bool = function
-       | Wrong _ -> true
-       | _ -> false
-*)
+     (*
+       Nonexhaustive matches
+       ---------------------
+       
+       We do not attempt to detect non-exhaustive matches as this
+       requires a type-directed analysis. However, the way we handle
+       variant matching ensures that non-exhaustive matches of
+       variants will be ill-typed.
+
+       Non-exhaustive matches can occur when matching constant or
+       list patterns.
+     *)
+
+     (*
+       [NOTE]
+         this abstraction is deliberate as we may want to change it - e.g.
+         if we want to share default continuations in the reulting term
+         rather than simply inlining them as we do now.
+     *)
+     let apply_default def var =
+       def var
+
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
          : Syntax.position -> string list -> equation list -> bound_expression -> untyped_expression =
        fun pos vars equations def ->
          match vars, equations with
-           | [], [] -> def "_"
-           | [], [([], body)] -> body
-           | [], ([], body)::_ -> failwith "Redundant pattern"
+           | [], [] -> apply_default def "_"
+           | [], ([], (body, used))::_ -> used := true; body
+(* identical patterns could be detected here if we wanted *)
+(*           | [], ([], _)::_ -> failwith "Redundant pattern"*)
            | vars, _ ->
                let (var::vars), equations = reorder_patterns (vars, equations) in
                let equationss = partition_equations eq_equation_patterns equations in
-(*                 redundant_pattern_check equationss;*)
                  List.fold_right
                    (fun equations exp ->
                       match get_equations_pattern_type equations with
@@ -367,21 +409,13 @@ module PatternCompiler =
      and match_var
          : Syntax.position -> string list -> equation list -> bound_expression -> bound_expression =
        fun pos vars equations def var ->
-         (*
-           let bind_or_subst (var, exp, body, pos) =
-           match exp with
-           | Variable (var', _) ->
-           subst body var var'
-           | _ -> Let (var, exp, body, pos)
-           in
-         *)
          match_cases pos vars
-           (List.map (fun ((annotation, pattern)::ps, body) ->
-                        let body = apply_annotation pos var (annotation, body)
+           (List.map (fun ((annotation, pattern)::ps, (body, used)) ->
+                        let body = apply_annotation pos (Variable (var, pos)) (annotation, body)
                         in
                           match pattern with
                             | (`Variable var',_) ->
-                                (ps, subst body var' var)
+                                (ps, (subst body var' var, used))
                             | _ -> assert false) equations) def
 
            
@@ -389,16 +423,16 @@ module PatternCompiler =
          : Syntax.position -> string list -> (annotated_equation list * annotated_equation list)
            -> bound_expression -> bound_expression =
        fun pos vars (nil_equations, cons_equations) def var ->
-         let nil_equations = apply_annotations pos var nil_equations in
-         let cons_equations = apply_annotations pos var cons_equations in
+         let nil_equations = apply_annotations pos (Variable (var, pos)) nil_equations in
+         let cons_equations = apply_annotations pos (Variable (var, pos)) cons_equations in
          let nil_branch =
            match nil_equations with
-             | [] -> def var
+             | [] -> apply_default def var
              | _ ->
                  match_cases pos vars nil_equations def in
          let cons_branch =
            match cons_equations with
-             | [] -> def var
+             | [] -> apply_default def var
              | _ ->
                  let x = unique_name () in
                  let xs = unique_name () in
@@ -417,19 +451,29 @@ module PatternCompiler =
        fun pos vars bs def var ->
          match bs with
            | [] ->
-               def var
+               apply_default def var
            | (name, ((case_variable, default_variable), annotated_equations))::bs ->
-               let equations = apply_annotations pos var annotated_equations in
+               let inject var = Variant_injection(name, Variable(var, pos), pos) in
+               let empty var = Variant_selection_empty(Variable (var, pos), pos) in
+
+               let equations = apply_annotations pos (inject var) annotated_equations in
                (*
                   close variant types when possible
+
+                  [NOTE]
+                    this has the side-effect of manifesting non-exhaustive matches
+                    on polymorphic variants as type errors.
                *)
                let massage_wrong var = function
                  | Wrong _ ->
-                     Variant_selection_empty(Variable (var, pos), pos)
+                     empty var
                  | e -> e in
 
                (*
                    Bind an appropriate variable to pass to def in the case of a match.
+
+                   This is needed for the case in which var matches A(z), but a subsequent
+                   pattern is not matched. For instance:
 
                      case e of
                       (A(z), 1) -> m
@@ -443,17 +487,24 @@ module PatternCompiler =
                         A(z) ->
                          if y=1 then m
                          else
-                          let r = A(z) in n[k := r]      (r fresh) 
-                        k -> n
+                          let r = A(z) in n[k := r]
+                        s -> n[k := s]
+                   where
+                     x,y,z,r,s are fresh
+                   
+                   Compare the two instances of n
+                    - when e is of the form (A(z), _) k is rebound to A(z)
+                    - when e is of the form (s, _), where s is not of the form A(z),
+                   k is rebound to s
                *)
                let bind_match def var =
                  let cons_var = unique_name () in
-                 let e = def cons_var in
+                 let e = apply_default def cons_var in
                    match e with
                      | Wrong _ -> e 
                      | e ->
                          Let(cons_var,
-                             Variant_injection(name, Variable(var, pos), pos),
+                             inject var,
                              e,
                              pos)
                in              
@@ -470,9 +521,9 @@ module PatternCompiler =
            bound_expression -> bound_expression =
        fun pos vars bs def var ->
          match bs with
-           | [] -> def var
+           | [] -> apply_default def var
            | (name, ((label_variable, extension_variable), annotated_equations))::bs ->
-               let equations = apply_annotations pos var annotated_equations in
+               let equations = apply_annotations pos (Variable (var, pos)) annotated_equations in
                  Record_selection (name,
                                    label_variable,
                                    extension_variable,
@@ -489,11 +540,42 @@ module PatternCompiler =
            -> bound_expression -> bound_expression =
        fun pos vars bs def var ->
          match bs with
-           | [] -> def var
+           | [] -> apply_default def var
            | (name, (exp, annotated_equations))::bs ->
-               let equations = apply_annotations pos var annotated_equations in
+               let equations = apply_annotations pos (Variable (var, pos)) annotated_equations in
 		 (match exp with
-		    | Record_empty _ ->
+		    | Record_empty _ when Settings.get_value unit_hack ->
+                        (*
+                          This is the only place in the pattern matching compiler that
+                          we do type-directed optimisation.
+
+                          We make the assumption that a comparison with unit will always
+                          succeed. This assumption is sound providing we're using static
+                          typing.
+
+                          This is necessary in order for refinement of variant types to
+                          be useful when the variant constructor being matched takes no
+                          arguments. All variant constructors are unary in Links, so
+                          nullary constructors are represented by unary constructors, 
+                          whose sole argument is unit.
+
+                          Consider:
+                            switch A {case A -> 0; case (x:B) -> 1;}
+
+                          Without the unit hack, this gets translated to
+                            let x = A in
+                             case x of
+                              A(y) -> if y = () then 0
+                                      else let _ = (A(y)):B in 1
+                              x -> let _ = x:B in 1
+                          which clearly doesn't type check as A(y) can't possibly have type B!
+
+                          Some alternative implementation strategies to consider include:
+                           - defer the unit optimisation until after pattern matching
+                           compilation
+                           - perform this and other type-directed optimisations during pattern
+                           matching compilation, providing that static typing is enabled
+                        *)
 			Let ("_", HasType (Variable (var, pos), Types.unit_type, pos),
 			     match_cases pos vars equations def, pos)
 		    | _ ->
@@ -502,10 +584,10 @@ module PatternCompiler =
 				   match_constant pos vars bs def var,
                                    pos)))
 
-     (* the entry point to the pattern-matching compiler *)
+     (* the interface to the pattern-matching compiler *)
      let match_cases
          : (Syntax.position * untyped_expression * raw_equation list) -> untyped_expression =
-       fun (pos, exp, equations) ->
+       fun (pos, exp, raw_equations) ->
 	 let var, wrap =
 	   match exp with
 	     | Variable (var, _) ->
@@ -513,10 +595,14 @@ module PatternCompiler =
 	     | _ ->
 		 let var = unique_name()
 		 in
-		   var, fun cont -> Let(var, exp, cont, pos)
-	 in
-	   wrap
-	     (match_cases pos [var] (map reduce_equation equations) (fun _ -> Wrong pos))
+		   var, fun body -> Let(var, exp, body, pos)
+         and equations = map reduce_equation raw_equations in
+         let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos))
+         in
+           if (List.for_all (fun (_, (_, used)) -> !used) equations) then
+             result
+           else
+             raise (RedundantPatternMatch(pos))
    end 
      : 
     sig
