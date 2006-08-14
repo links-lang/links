@@ -58,8 +58,8 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', env = None):
-    proc = Popen((links, '-e', code), stdout=PIPE, stderr=PIPE, env=env)
+def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None):
+    proc = Popen((links, flags, code), stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
     for i in xrange(0, TIMEOUT*100):

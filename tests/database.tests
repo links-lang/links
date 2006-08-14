@@ -2,3 +2,10 @@ Orderby clause (not a semantic test, just syntax)
 for (var x <- [1, 2, 3]) orderby (x) [x]
 stdout : [1, 2, 3] : [Int]
 exit : 0
+
+Join rewriting
+fun (db) { for (var x <- asList(table "x" with (x : Int) from db)) for (var y <- asList(table "y" with (x : Int) from db)) [1]}
+flags : -q
+stdout : fun (db) { var _t_g2=("x" from db[x:Int]); var _t_g4=("y" from db[x:Int]); for (x <- (_t_g2[SELECT Table__g1.x, Table__g3.x AS y FROM VARIABLE:_t_g2 AS Table__g1, VARIABLE:_t_g4 AS Table__g3])) [1] }
+exit : 0
+
