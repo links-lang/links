@@ -52,7 +52,7 @@ let hashtbl_invert table =
                     result *+> v ++= k) table;
     result
 
-let hashtbl_values table = Hashtbl.fold (fun k v rslt -> v :: rslt) table []
+let hashtbl_values table = Hashtbl.fold (fun _ v rslt -> v :: rslt) table []
 
 (** [hashtbl_regions table] is the list of equivalence classes of keys
     in [table], where equivalence is determined through lookup in [table].

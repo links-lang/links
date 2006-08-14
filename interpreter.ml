@@ -99,8 +99,8 @@ let rec equal l r =
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
                                      | [] -> false
-                                     | (label, result) :: alls when label = ref_label -> equal result ref_result
-                                     | all :: alls -> one_equal_all alls (ref_label, ref_result)) in
+                                     | (label, result) :: _ when label = ref_label -> equal result ref_result
+                                     | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
           for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> length l = length r &&
@@ -142,7 +142,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
                | `Bool value -> Query.Boolean value
                | `Int value -> Query.Integer value
                | `Float value -> Query.Float value
-               | `List (`Char _::elems) as c  
+               | `List (`Char _::_) as c  
                  -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ Sql.string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
@@ -319,21 +319,14 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 					else name ^ ":" ^ args)
 				     in
                                        `Database (db_connect driver params)) in
-(*                        let result = (let args = charlist_as_string value in *)
-(*                                                 let driver, params = parse_db_string args in *)
-(*                                                   `Database (db_connect driver params)) in *)
 	               apply_cont globals cont result
                    | QueryOp(query) ->
                        let result = 
                          match value with
-                           | `Table(db, tableName, row)->
+                           | `Table(db, _, row)->
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
                                  prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 let result = Database.execute_select (`List(`Record row)) query_string db in
-                                   (* debug("    result:" ^ string_of_result result); *)
-                                   result
-                                     (* disable actual queries *)
-                                     (*                                   `List(`List, []) *)
+		                 Database.execute_select (`List(`Record row)) query_string db
                            | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
@@ -456,7 +449,7 @@ fun globals locals expr cont ->
   | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
   | Syntax.Record_extension (label, value, record, _) ->
       eval record (BinopRight(locals, RecExtOp label, value) :: cont)
-  | Syntax.Record_selection (label, label_variable, variable, value, body, (pos, datatype, lbl)) ->
+  | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Record_selection_empty (value, body, _) ->
       eval value (Ignore(locals, body) :: cont)
@@ -473,7 +466,7 @@ fun globals locals expr cont ->
   | Syntax.Concat (l, r, _) ->
       eval l (BinopRight(locals, UnionOp, r) :: cont)
 
-  | Syntax.For (expr, var, value, _) as c ->
+  | Syntax.For (expr, var, value, _) ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
@@ -492,12 +485,12 @@ fun globals locals expr cont ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
   | Syntax.SortBy (list, byExpr, _) ->
-      eval list cont
+      eval list cont (* ! *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
-  | Syntax.HasType(expr, typ, _) ->
+  | Syntax.HasType(expr, _, _) ->
       eval expr cont
-  | Syntax.Placeholder (l, _) -> 
+  | Syntax.Placeholder (_, _) -> 
       failwith("Internal error: Placeholder at runtime")
 
 
@@ -511,7 +504,7 @@ and interpret_safe globals locals expr cont =
 
 let run_program (globals : environment) exprs : (environment * result)= 
   try (
-    interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs));
+    ignore (interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
     failwith "boom"
   ) with
     | TopLevel s -> s

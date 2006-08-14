@@ -74,11 +74,11 @@ type origin = [
 let rec variable_binding (name:string) (bindings:bindings) : [`Unbound | binding] =
   match bindings with
     | [] -> `Unbound
-    | (`Table_loop (variable, _) as binding) :: bindings when variable = name -> binding
-    | (`Selected s as binding) :: bindings when s.etc_var = name -> binding
-    | (`Selected s as binding) :: bindings when s.field_var = name -> binding
-    | (`Calculated (variable, _) as binding) :: bindings when variable = name -> binding
-    | (`Unavailable variable as binding) :: bindings when variable = name -> binding
+    | (`Table_loop (variable, _) as binding) :: _ when variable = name -> binding
+    | (`Selected s as binding) :: _ when s.etc_var = name -> binding
+    | (`Selected s as binding) :: _ when s.field_var = name -> binding
+    | (`Calculated (variable, _) as binding) :: _ when variable = name -> binding
+    | (`Unavailable variable as binding) :: _ when variable = name -> binding
     | _ :: bindings -> variable_binding name bindings
 
 exception ColumnNotInQuery of string
@@ -110,7 +110,7 @@ let rec trace_variable (name:string) (bindings:bindings) : origin =
     match trace_list with
       | `Selected s :: _ when s.field_var = name -> `Field s.field_name
       | `Selected _ :: trace_list -> field_from_trace trace_list
-      | `Table_row query :: trace_list -> `Row
+      | `Table_row _ :: _ -> `Row
       | _ -> `Unavailable
   ) in
   let rec selects_from_trace trace_list select_list = (
@@ -126,7 +126,7 @@ let rec trace_variable (name:string) (bindings:bindings) : origin =
           `Table_row query :: trace_list
       | `Selected s as frame ->
 	  trace_back s.source_var (frame :: trace_list)
-      | `Calculated (_, expr) -> `Unavailable :: trace_list
+      | `Calculated _ -> `Unavailable :: trace_list
       | `Unavailable _ -> `Unavailable :: trace_list
       | `Unbound -> `Unbound :: trace_list
   ) in
@@ -137,9 +137,9 @@ let rec trace_variable (name:string) (bindings:bindings) : origin =
 	     | `Unavailable -> `Table query (* BROKEN? could it truly be unavailable? *)
 	     | _ -> `Unavailable)
       | `Unbound :: trace_list -> `Earlier (selects_from_trace trace_list [])
-      | `Unavailable :: trace_list -> `Unavailable
+      | `Unavailable :: _ -> `Unavailable
       | [] -> `Earlier (name, [])
-      | `Selected _ :: trace_list -> failwith "TR105"
+      | `Selected _ :: _ -> failwith "TR105"
 
 (** sep_assgmts
     Given an expression that consists of several assignments (lets or
@@ -155,16 +155,16 @@ let rec trace_variable (name:string) (bindings:bindings) : origin =
 (*  TODO: Support calculated variables *)
 let rec sep_assgmts (bindings:bindings) (expr:Syntax.expression) : (bindings * Syntax.expression) =
   match expr with
-    | Syntax.Let (variable, Syntax.Variable (name, _), body, _) as expr ->
+    | Syntax.Let (_, Syntax.Variable _, _, _) ->
 	failwith "TR115 (renaming declarations should have been removed by earlier optimisations)"
     | Syntax.Let (variable, _, body, _) ->
 	(sep_assgmts (`Unavailable variable :: bindings) body)
-    | Syntax.Record_selection (label, label_variable, variable, Syntax.Variable (name, _), body, _) as expr ->
+    | Syntax.Record_selection (label, label_variable, variable, Syntax.Variable (name, _), body, _) ->
 	(sep_assgmts (`Selected {field_name = label; field_var = label_variable; etc_var = variable; source_var = name} :: bindings) body)
-    | Syntax.Record_selection (label, label_variable, variable, source, body, _) ->
+    | Syntax.Record_selection (_, _, _, _, body, _) ->
 	(sep_assgmts bindings body)
           (* FIXME: This next case is unused. Why is it here? *)
-    | Syntax.Record_selection (_, label_variable, variable, _, body, _) ->
+    | Syntax.Record_selection (_, _, variable, _, body, _) ->
 	(sep_assgmts (`Unavailable variable :: bindings) body)
     | expr -> (bindings, expr)
 
@@ -290,7 +290,7 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
                                  conjunction[negation csql; esql]]),
                     corigins @ torigins @ eorigins (* is this at all right?? *))
             else None
-      | Syntax.Variable (var, _) -> 
+      | Syntax.Variable _ -> 
           (match make_sql bindings expr with
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))

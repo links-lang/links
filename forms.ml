@@ -165,18 +165,10 @@ let plain_serialise_result = function
   | `Function _ (*as f -> Pickle_result.pickleS f*)
   | _ -> raise UnplainResult
 
-let plain_deserialise_result str = 
-  match str with
-      "t" -> `Bool true
-    | "f" -> `Bool false
-    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+$") str 0) -> `Int (int_of_string str)
-    | str when (Str.string_match (Str.regexp "^(\+|-)?[0-9]+.[0-9]*(E(+|-)?[0-9*])?$") str 0) -> `Float (float_of_string str)
-
-
 (* Serialise the continuation and environment, and adjust the form accordingly *)
 let xml_transform env lookup eval : expression -> expression = 
   function 
-    | Xml_node ("form", attrs, contents, data) as form ->
+    | Xml_node ("form", attrs, contents, data)  ->
         let new_field = 
           match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
             | [] -> []

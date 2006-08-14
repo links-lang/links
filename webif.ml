@@ -27,8 +27,7 @@ type web_request = ContInvoke of continuation * query_params
 (* output the headers and content to stdout *)
 let print_http_response headers body =
   let headers = headers @ !Library.http_headers in
-(*   let headers = ("Content-type: " ^ content_type) :: headers in  *)
-    List.map (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
+    List.iter (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
     print_endline "";
     print_string body
       
@@ -42,7 +41,7 @@ let is_client_program defs =
                         | Syntax.Define (n, _, _, _) -> [n]
                         | _ -> [])) defs
   and is_client_prim p = 
-    (* Sytnax.freevars is currently broken: it doesn't take l:name
+    (* Syntax.freevars is currently broken: it doesn't take l:name
        bindings into account.  It's tricky to fix, because the Syntax
        module doesn't know about l:name.  The problem that arises here
        is that anything bound by l:name ends up looking like a
@@ -108,17 +107,6 @@ let stubify_client_funcs env =
       | server_env ->
           fst (Interpreter.run_program [] server_env)
 
-(* let handle_client_call unevaled_env f args =  *)
-(*   let env = stubify_client_funcs unevaled_env in *)
-(*   let f, args = Utility.base64decode f, Utility.base64decode args in *)
-(*   let continuation = [Result.FuncApply (List.assoc f env, [])] in *)
-(*   let result = (Interpreter.apply_cont_safe env continuation *)
-(* 		  (untuple_single (parse_json args))) *)
-(*   in *)
-(*     print_http_response [("Content-type", "text/plain")] *)
-(*       (Utility.base64encode (Json.jsonize_result result)); *)
-(*     exit 0 *)
-
 let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
@@ -152,7 +140,6 @@ let contin_invoke_req program params =
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req program prim_lookup params =
   let expression, environment = unmarshal_exprenv program (List.assoc "_k" params) in
-(*  let expression = resolve_placeholders_expr program expression in*)
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
     ExprEval(expression, params @ environment)

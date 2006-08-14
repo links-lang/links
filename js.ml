@@ -298,7 +298,7 @@ let binop_name op =
               "<=", "<=";
               ">=", ">=";
 	     ]
-   with Not_found as e ->  failwith ("Notfound : " ^ op)
+   with Not_found ->  failwith ("Notfound : " ^ op)
       
 
   
@@ -347,7 +347,7 @@ let untuple_def =
        | e -> failwith ("Error unpacking arglist: " ^ Show_expression.show e)) in
     function
       | Abstr (var, (Record_selection _ as body), _) -> arglist var body
-      | Abstr (var, (Record_selection_empty _ as body), _) -> [], body
+      | Abstr (_, (Record_selection_empty _ as body), _) -> [], body
       | Abstr (var, body, _) -> [var], body
       | e -> failwith ("Error unpacking arglist " ^ Show_expression.show e)
 
@@ -426,16 +426,6 @@ let rec generate : 'a expression' -> code =
                    Call(r_cps, [Fn(["__r"],
                         Call(Var "__kappa", 
                              [Call (Var "_concat", [Var "__l"; Var "__r"])]))]))])) 
-      | Concat (List_of (l,_), r, _) -> 
-          failwith "unimpl"; 
-	  (match reduce_list r with
-	     | Lst items -> Lst (generate_noncps l :: items)
-	     | c         -> Call (Var "_concat", [Lst [generate_noncps l]; c]))
-      | Concat (l, List_of (r,_), _) -> 
-          failwith "unimpl"; 
-	  (match reduce_list l with
-	     | Lst items -> Lst (items @ [generate_noncps r])
-	     | c         -> Call (Var "_concat", [c; Lst [generate_noncps r]]))
       | e ->          
           (* failwith "unimpl"; *)
           generate e
@@ -527,7 +517,7 @@ let rec generate : 'a expression' -> code =
       let f_name = gensym ~prefix:"__f" () in
       let arglist = [p] in
       let cps_args = map generate arglist in
-      let arg_names = map (fun e -> gensym ~prefix:"__f" ()) arglist in
+      let arg_names = map (fun _ -> gensym ~prefix:"__f" ()) arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
       in
@@ -623,7 +613,7 @@ let rec generate : 'a expression' -> code =
                                  Call(Var "__kappa", 
                                       [Dict [("label", strlit l);
                                              ("value", Var "__content")]]))]))
-  | Variant_selection_empty (e, _) ->
+  | Variant_selection_empty (_, _) ->
       Fn(["__kappa"], Call(Var "_fail",
                          [strlit "closed switch got value out of range"]))
   | Variant_selection (src, case_label, case_var, case_body, 
@@ -789,7 +779,7 @@ and generate_direct_style : 'a expression' -> code =
   | List_of (e, _)        ->
       Lst [gd e]   
   | Concat (l, r, _)      -> Call (Var "_concat", [gd l; gd r])
-  | For (e, v, b, _)  ->
+  | For _ ->
       failwith "not implemented native comprehensions yet"
 (*      Call(Var "_directAccum", [Fn([v], gd e); gd b])*)
   | Xml_node _ -> failwith "not implemented handling of XML in native functions yet"
@@ -843,7 +833,7 @@ and generate_direct_style : 'a expression' -> code =
   (* Variants *)
   | Variant_injection (l, e, _) -> 
       Dict [("label", strlit l); ("value", gd e)]
-  | Variant_selection_empty (e, _) ->
+  | Variant_selection_empty _ ->
       Call(Var "_fail", [strlit "closed switch got value out of range"])
   | Variant_selection (src, case_label, case_var, case_body, 
                        else_var, else_body, _) ->
@@ -858,7 +848,7 @@ and generate_direct_style : 'a expression' -> code =
 		Bind(else_var,
                      Var "__src",
                 gd else_body)))
-  | Escape (v, e, _) ->
+  | Escape _ ->
       failwith "escape cannot be called from native code"
   | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
   | Alien _ -> Nothing
@@ -889,7 +879,7 @@ let rec freevars = function
   | Fn(args, body) -> StringSet.diff (freevars body) (set_from_list args)
   | Call(func, args) -> 
       (fold_left StringSet.union  (freevars func) (map freevars args))
-  | Binop (lhs, op, rhs) -> StringSet.union (freevars lhs) (freevars rhs)
+  | Binop (lhs, _, rhs) -> StringSet.union (freevars lhs) (freevars rhs)
   | Cond(a, b, c) -> StringSet.union (StringSet.union (freevars a) (freevars b)) (freevars c)
   | Dict(terms) -> fold_left StringSet.union StringSet.empty (map snd (alistmap freevars terms))
   | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars terms)
@@ -947,7 +937,6 @@ let rec simplify = function
   | Call(f, args) -> Call(simplify f, map (simplify) args )
   | Defs defs -> Defs(alistmap (simplify) defs)
   | Fn(args, body) -> Fn(args, simplify body)
-  | Call(func, args) -> Call(simplify func, map (simplify) args)
   | Binop(lhs, op, rhs) -> Binop(simplify lhs, op, simplify rhs)
   | Cond(test, yes, no) ->  Cond(simplify test, simplify yes, simplify no)
   | Dict(terms) -> Dict(alistmap (simplify) terms)
@@ -974,8 +963,6 @@ let gen =
   ->- optimise
   ->- show
 
-let rec but_last = function [x] -> [] | (x::y::xs) -> x :: but_last(y::xs)
-
  (* TODO: imports *)
 let generate_program environment expression =
   let environment = 
@@ -986,7 +973,7 @@ let generate_program environment expression =
   (boiler_1 ()
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2 ()
- ^ String.concat "\n" (map gen (but_last environment))
+ ^ String.concat "\n" (map gen (butlast environment))
  ^ boiler_3 ()
  ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
  ^ boiler_4 ())
@@ -1037,6 +1024,7 @@ let _ = add_qtest("1+1",
                    match rslt with
                        [Fn(["__kappa"], 
                            Call(Var "__kappa", [Binop(Lit "1", "+", Lit "1")]))] -> true
+                     | _ -> false
                  )
 
 let _ = add_qtest("fun f(x) { x+1 } f(1)",
@@ -1045,10 +1033,11 @@ let _ = add_qtest("fun f(x) { x+1 } f(1)",
                        Defs([_, Bind(fname, Fn(["__kappa"], Fn([xname], 
                                   Call(Var "__kappa",
                                        [Binop(Var xname2, "+", Lit "1")]))),
-                                     Var fname2)])::etc
+                                     Var fname2)])::_
                          when fname = fname2
                            && xname = xname2
                            -> true
+                     | _ -> false
                  )
 
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)

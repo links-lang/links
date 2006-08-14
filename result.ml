@@ -308,7 +308,7 @@ and string_of_primitive : primitive_value -> string = function
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
-  | `Table (db, table_name, row) -> "(table " ^ table_name ^")"
+  | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
 
 and string_of_tuple (fields : (string * result) list) : string = 
     let fields = map (function
@@ -347,7 +347,6 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
-  | other -> result_f(other)
 and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
   | FuncArg(arg, env) -> 
       contframe_f(FuncArg((map_expr result_f expr_f contframe_f) arg, (map_env result_f expr_f contframe_f) env))

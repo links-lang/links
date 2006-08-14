@@ -245,8 +245,8 @@ let flatten_row : row -> row =
                        -> assert false
                    | (field_env', (`RowVar None as r)) ->
                        field_env_union (field_env, field_env'), r
-                   | (_, `RigidRowVar var)
-                   | (_, `RowVar (Some var)) -> row
+                   | (_, `RigidRowVar _)
+                   | (_, `RowVar (Some _)) -> row
                    | (_, `RecRowVar (var, rec_row)) ->
                        if IntMap.mem var rec_env then
                          field_env, `MetaRowVar (IntMap.find var rec_env)
@@ -503,7 +503,6 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
   fun rec_vars var t ->
     let isp = is_positive rec_vars var in
     let isn = is_negative rec_vars var in
-    let ispr = is_positive_row rec_vars var in
     let isnr = is_negative_row rec_vars var in
       match t with
         | `Not_typed -> false
@@ -547,7 +546,6 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
     let isp = is_positive rec_vars var in
     let isn = is_negative rec_vars var in
     let ispr = is_positive_row rec_vars var in
-    let isnr = is_negative_row rec_vars var in
       match t with
         | `Not_typed -> false
         | `Primitive _ -> false

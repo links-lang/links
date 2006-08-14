@@ -33,6 +33,7 @@ let parse_bool = function
   | "non"
   | "nein"
   | "off" -> false
+  | _ -> raise (Invalid_argument "parse_bool")
 
 let is_user_setting = function
   | `Bool setting -> setting.user

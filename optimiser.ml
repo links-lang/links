@@ -316,16 +316,16 @@ let rec substitute_projections new_src renamings expr bindings =
     RewriteSyntax.all (List.map (fun r -> RewriteSyntax.bottomup (subst_projection r)) renamings) expr
 
 let read_proj = function
-    Record_selection(field, field_var, etc_var, record, 
-                     Variable(result_var, data1), data2) ->
+    Record_selection(field, _, _, record, 
+                     Variable _, _) ->
       Some(record, field)
   | _ -> None
 
 let rec sql_sort = function
   | SortBy(TableQuery(th, query, data1), 
-           Abstr(loopVar, sortByExpr, data2), data3) ->
+           Abstr(loopVar, sortByExpr, _), _) ->
       (match read_proj sortByExpr with
-           Some (Variable(sortByRecVar, data3), sortByFld)
+           Some (Variable(sortByRecVar, _), sortByFld)
              when sortByRecVar = loopVar
                -> Some(TableQuery(th, Query.add_sorting query 
                                (`Asc(Query.owning_table sortByFld query,
@@ -663,7 +663,7 @@ let contains_no_extrefs : Syntax.expression -> bool =
   (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
 
 let recursivep : Syntax.expression -> bool = function
-  | Rec ([(name, fn, t)], Variable (v, _), _) when v = name 
+  | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 
       -> List.mem name (freevars fn)
   | _ -> false
 
@@ -727,7 +727,7 @@ let inline program =
   in 
   let program'' = 
     List.fold_left 
-      (fun program (name, rhs, location)  ->
+      (fun program (_, rhs, location)  ->
          match rhs with
            | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
 	       perform_function_inlining location name v body program)

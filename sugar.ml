@@ -102,7 +102,7 @@ module PatternCompiler =
        match
          (RewriteUntypedExpression.bottomup
             (function
-               | Variable (var, data) ->
+               | Variable (var, _) ->
                    if var=x then Some v
                    else None
                | _ -> None) exp)
@@ -725,7 +725,7 @@ module Desugarer =
              | Iteration (pattern, from, body, filter, sort) ->
                  flatten [ptv pattern; etv from; etv body; opt_etv filter; opt_etv sort]
              | Escape (_, e) ->  etv e
-             | HandleWith (e1, name, e2) -> flatten [etv e1; etv e2]
+             | HandleWith (e1, _, e2) -> flatten [etv e1; etv e2]
              | Section _ -> empty
              | Conditional (e1, e2, e3) -> flatten [etv e1; etv e2; etv e3]
              | Binding b -> btv b
@@ -739,7 +739,7 @@ module Desugarer =
              | TupleLit fields -> etvs fields
              | RecordLit (fields, e) ->
                  flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
-             | Projection (e, name) -> etv e
+             | Projection (e, _) -> etv e
              | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
 
              | TypeAnnotation(e, k) -> flatten [etv e; tv k]
@@ -749,11 +749,11 @@ module Desugarer =
              | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
 
              | DatabaseLit e -> etv e
-             | TableLit (name, datatype, unique, db) -> flatten [tv datatype; etv db]
+             | TableLit (_, datatype, _, db) -> flatten [tv datatype; etv db]
              | DBDelete (table, rows)
-             | DBInsert (table, rows) as op -> flatten [etv table; etv rows]
+             | DBInsert (table, rows) -> flatten [etv table; etv rows]
 
-             | Xml (tag, attrs, subnodes) ->
+             | Xml (_, attrs, subnodes) ->
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
              | XmlForest es -> etvs es
              | TextNode _ -> empty
@@ -873,9 +873,9 @@ module Desugarer =
          | `Cons ((pattern,_), (pattern',_)) ->
              let env' = check env pattern in
                check env' pattern'
-         | `Variant (name, (pattern,_)) ->
+         | `Variant (_, (pattern,_)) ->
              check env pattern
-         | `Record (name, (pattern,_), (pattern',_)) ->
+         | `Record (_, (pattern,_), (pattern',_)) ->
              let env' = check env pattern in
                check env' pattern'
          | `Constant _ -> env
@@ -895,7 +895,7 @@ module Desugarer =
        let desugar = desugar' lookup_pos
        and patternize = simple_pattern_of_pattern varmap lookup_pos in
          match s with
-           | TypeAnnotation ((Definition ((`Variable name, _), (FunLit (Some _, patterns, body),_), loc), dpos), t)  -> 
+           | TypeAnnotation ((Definition ((`Variable name, _), (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
                Define (name,
                        Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype varmap t)],
                             Variable (name, pos),
@@ -1064,11 +1064,11 @@ module Desugarer =
            | XmlForest []  -> Nil  (pos)
            | XmlForest [x] -> desugar x
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
-     and desugar_repeat pos : Regex.repeat -> phrasenode = function
+     and desugar_repeat _ : Regex.repeat -> phrasenode = function
        | Regex.Star      -> ConstructorLit ("Star", None)
        | Regex.Plus      -> ConstructorLit ("Plus", None)
        | Regex.Question  -> ConstructorLit ("Question", None)
-     and desugar_regex desugar pos : regex -> phrasenode = 
+     and desugar_regex _ pos : regex -> phrasenode = 
        (* Desugar a regex, making sure that only variables are embedded
           within.  Any expressions that are spliced into the regex must be
           let-bound beforehand.  *)
@@ -1110,7 +1110,7 @@ module Desugarer =
                           | StringLit v -> String (v, pos)
                           | BoolLit v   -> Boolean (v, pos)
                           | CharLit v   -> Char (v,  pos)
-                          | other -> failwith "Invalid pattern" (* This message could be better *)),
+                          | _ -> assert false),
              pos
          | `Cons (l,r) -> `Cons (desugar l, desugar r), pos
          | `List ps ->

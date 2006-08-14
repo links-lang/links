@@ -465,7 +465,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                let cookies = map (fun str -> 
                                     let [nm; vl] = Str.split (Str.regexp "=") str in 
                                       nm, vl) cookies in
-               let the_cookie = snd (find (fun (nm, vl) -> nm = cookieName) 
+               let the_cookie = snd (find (fun (nm, _) -> nm = cookieName) 
                                        cookies) in
                  match string_as_charlist the_cookie with
                      `List _ as result -> result
@@ -491,7 +491,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   (** Database functions **)
   "asList",
-  (p1 (fun th -> failwith "Unoptimized table access!!!"),
+  (p1 (fun _ -> failwith "Unoptimized table access!!!"),
    datatype "TableHandle(r) -> [{r}]");
 
   "insertrow",

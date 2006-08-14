@@ -1190,7 +1190,7 @@ let group_and_order_bindings_by_callgraph
 (*   map (fun (Define (name, body, _, _) as e) -> name, e) *)
 
 let defs_to_bindings = 
-  map (fun (Define (name, body, _, _) as e) -> name, body)
+  map (fun (Define (name, body, _, _)) -> name, body)
 
 let rec defn_of symbol = function
   | Define(n, _, _, _) as expr :: _ when n = symbol -> expr
