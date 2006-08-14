@@ -65,25 +65,25 @@ module MonadUtils (M : Monad) =
 struct
   include M
   let liftM : ('a1 -> 'r) -> 'a1 m -> 'r m
-    = fun f m1 -> m1 >>= (fun x1 -> x1 >> return (f x1))
+    = fun f m1 -> m1 >>= (fun x1 -> return (f x1))
   let liftM2 :  ('a1 -> 'a2 -> 'r) -> 'a1 m -> 'a2 m -> 'r m
     = fun f m1 m2
       -> m1 >>= (fun x1
       -> m2 >>= (fun x2
-      -> x2 >> return (f x1 x2)))
+      -> return (f x1 x2)))
   let liftM3 :  ('a1 -> 'a2 -> 'a3 -> 'r) -> 'a1 m -> 'a2 m -> 'a3 m -> 'r m
     = fun f m1 m2 m3
       -> m1 >>= (fun x1
       -> m2 >>= (fun x2
       -> m3 >>= (fun x3
-      -> x3 >> return (f x1 x2 x3))))
+      -> return (f x1 x2 x3))))
   let liftM4 :  ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'r) -> 'a1 m -> 'a2 m -> 'a3 m -> 'a4 m -> 'r m
     = fun f m1 m2 m3 m4
       -> m1 >>= (fun x1
       -> m2 >>= (fun x2
       -> m3 >>= (fun x3
       -> m4 >>= (fun x4
-      -> x4 >> return (f x1 x2 x3 x4)))))
+      -> return (f x1 x2 x3 x4)))))
   let liftM5  :  ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'a5 -> 'r) -> 'a1 m -> 'a2 m -> 'a3 m -> 'a4 m -> 'a5 m -> 'r m
     = fun f m1 m2 m3 m4 m5 
       -> m1 >>= (fun x1
@@ -91,7 +91,7 @@ struct
       -> m3 >>= (fun x3
       -> m4 >>= (fun x4
       -> m5 >>= (fun x5
-      -> x5 >> return (f x1 x2 x3 x4 x5))))))
+      -> return (f x1 x2 x3 x4 x5))))))
   let ap : ('a -> 'b) m -> 'a m -> 'b m
     = fun f -> liftM2 (fun x -> x) f
 
@@ -162,13 +162,13 @@ struct
   include MonadUtils(M)
   let mzero = M.mzero
   let mplus = M.mplus
-  let guard : bool -> unit m
+  let guard : bool -> unit M.m
     = function
-      | true   -> return ()
-      | false  -> mzero
+      | true   -> M.return ()
+      | false  -> M.mzero
 
-  let msum : ('a m) list -> 'a m
-    = fun l -> List.fold_right mplus l mzero
+  let msum : ('a M.m) list -> 'a M.m
+    = fun l -> List.fold_right M.mplus l M.mzero
 end
 
 module MonadPlusUtils_option = MonadPlusUtils(Monad_option)
