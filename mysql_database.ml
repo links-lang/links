@@ -226,7 +226,7 @@ class mysql_result (result: result) db = object
   method ftype  n : db_field_type = 
     match (Utility.valOf (fetch_field_dir result n)).ty with
       | IntTy | Int64Ty -> IntField
-      | StringTy -> TextField
+      | StringTy | BlobTy -> TextField
       | other -> SpecialField (new otherfield other)
   method get_all_lst : string list list = 
     rows

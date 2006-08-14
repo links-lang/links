@@ -35,7 +35,12 @@ def arcname(file, version):
    return 'links-%s/%s' % (version, file)
 
 def make_release(version, manifest_file, compression, codename):
+   commands.getoutput("make docs")
    make_version_file(version, codename)
+   (status, output) = commands.getstatusoutput("./checkfiles")
+   if status != 0:
+      print output
+      raise SystemExit
    outfile = tarball_name(version, compression)
    tar = tarfile.open(outfile, 'w:%s' % compression)
    for file in files(manifest_file):

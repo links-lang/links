@@ -6,11 +6,11 @@ INSTALL
 README
 ACKNOWLEDGEMENTS
 COPYING
-MANIFEST
 VERSION # created by the release script
 KNOWN-ISSUES
+MANIFEST
 
-quick-help.pod
+quick-help.html
 
 test-harness
 run-tests
@@ -45,6 +45,7 @@ syntax.ml
 inferencetypes.mli
 inferencetypes.ml
 sugar.ml
+result.mli
 result.ml
 sql_transform.ml
 parser.mly
@@ -127,13 +128,16 @@ examples/lib
 examples/dictionary
 examples/dictionary/lib
 examples/dictionary/dict-suggest.links
-examples/dictionary/get_data.sh
+examples/dictionary/dict-suggest-mysql.links
 examples/dictionary/create-table.sql
+examples/dictionary/create-table-mysql.sql
 examples/dictionary/README
 examples/todo.links
 examples/factorial.links
+examples/factorial-mysql.links
 examples/progress.links
 examples/draggable.links
 examples/mandelbrot.links
 examples/mandelcolor.links
 examples/paginate.links
+examples/factorials.sql

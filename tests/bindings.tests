@@ -50,3 +50,7 @@ No value recursion
 fun f() { g() } var x = f(); fun g() { x }
 stderr : @.
 exit : 1
+
+as patterns
+{var x::xs as y = [1,2,3]; y}
+stdout : [1, 2, 3] : [Int]

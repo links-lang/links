@@ -36,8 +36,8 @@ and string_of_query (qry:query) : string =
 	  | orders -> " ORDER BY " ^ Utility.mapstrcat ", " sorting_to_sql orders)
      ^ (match qry.max_rows with
           | None   -> ""
-          | Some m -> " limit " ^ string_of_expression m)
-     ^ " offset " ^ string_of_expression qry.offset
+          | Some m -> " limit " ^ string_of_expression m
+	      ^ " offset " ^ string_of_expression qry.offset)
 
 and string_of_condition cond = match string_of_expression cond with
   | "true" -> ""
