@@ -300,29 +300,20 @@ let sql_selections : RewriteSyntax.rewriter = function
   | _ -> None
 
 let rec substitute_projections new_src renamings expr bindings =
-  let subst_projection (from, to') visit_children expr =
-    let expr = visit_children expr in
-      match expr with
-        | Record_selection(label, label_var, etc_var, Variable(src, d),
-			   body, data) 
-            when from.Query.renamed = label ->
-            (match (trace_variable src bindings) with
-	       | `Table query 
-		   when mem from.Query.table_renamed (map snd query.Query.tables) ->
-                   Record_selection (to', label_var, etc_var, Variable(new_src, d),
-                                     visit_children body, data)
-               | `Table_field (table_as, _)
-                   when from.Query.table_renamed = table_as ->
-                   (* NOTE: I think this case never occurs *)
-                   Record_selection(to', label_var, etc_var, Variable(new_src, d),
-                                    visit_children body, data)
-               | _ -> 
-                   Record_selection (label, label_var, etc_var, Variable(src, d), body, data))
-        | x -> x
+  let subst_projection (from, to') : RewriteSyntax.rewriter = function
+    | Record_selection (label, label_var, etc_var, Variable (src, d), body, data) 
+        when from.Query.renamed = label ->
+        (match trace_variable src bindings with
+	   | `Table query when mem from.Query.table_renamed (map snd query.Query.tables) ->
+               Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
+           | `Table_field (table_as, _) when from.Query.table_renamed = table_as ->
+               (* NOTE: I think this case never occurs *)
+               Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
+           | _ -> 
+               Some (Record_selection (label, label_var, etc_var, Variable (src, d), body, data)))
+    | _ -> None
   in
-    fold_right (fun ren expr ->
-                  simple_visit (subst_projection ren) expr
-               ) renamings expr
+    RewriteSyntax.all (List.map (fun r -> RewriteSyntax.bottomup (subst_projection r)) renamings) expr
 
 let read_proj = function
     Record_selection(field, field_var, etc_var, record, 
@@ -437,8 +428,8 @@ let rec sql_joins : RewriteSyntax.rewriter =
                (* Replace anything of the form inner_var.field with 
                   outer_var.renamed_field with renamings as given by 
                   the join operator *)
-               let body = substitute_projections outer_var renamings body
-                 [`Table_loop(inner_var, inner_query)] 
+               let body = fromOption body (substitute_projections outer_var renamings body
+                                             [`Table_loop(inner_var, inner_query)] )
                in
                let expr = For(body,
                               outer_var, 

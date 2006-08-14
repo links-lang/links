@@ -378,7 +378,7 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = f
   | Ignore(env, next) -> 
       contframe_f(Ignore((map_env result_f expr_f contframe_f) env, (map_expr result_f expr_f contframe_f) next))
 and map_expr _ expr_f _ expr =
-  expr_f(simple_visit (fun visit_children expr -> visit_children expr) expr)
+  expr_f expr
 and map_env result_f expr_f contframe_f env =
   alistmap (map_result result_f expr_f contframe_f) env
 and map_cont result_f expr_f contframe_f kappa =
