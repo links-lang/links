@@ -14,6 +14,14 @@ let web_mode = Settings.add_bool ("web_mode", false, false)
 (* Whether to print types *)
 let printing_types = Settings.add_bool ("printing_types", true, true)
 
+(* Whether to evaluate the expression, or just do typechecking, 
+   optimisation, etc. *)
+let really_evaluate = Settings.add_bool ("really_evaluate", true, true)
+
+(* Whether to evaluate the expression, or just do typechecking, 
+   optimisation, etc. *)
+let print_optimisation = Settings.add_bool ("print_optimisation", false, true)
+
 (* Prompt in interactive mode *)
 let ps1 = "links> "
 
@@ -82,6 +90,12 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
          (valenv, typeenv), result
     ) input
 
+(* Read Links source code, then type and optimize it. *)
+let just_optimise parse (valenv, typeenv) input = 
+       let exprs =          Performance.measure "parse" parse input in 
+       let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
+       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+         print_endline(mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
 let rec interact envs = 
@@ -129,6 +143,14 @@ let set setting value = Some (fun () -> Settings.set_value setting value)
 let evaluate_string v =
   (Settings.set_value interacting false;
    ignore(evaluate Parse.parse_string stdenvs v))
+
+let just_optimise_string str = 
+  (Settings.set_value interacting false;
+   ignore(just_optimise Parse.parse_string stdenvs str))
+
+let just_optimise_file filename = 
+  (Settings.set_value interacting false;
+   ignore(just_optimise Parse.parse_file stdenvs filename))
 
 let load_settings filename =
   let file = open_in filename in
@@ -181,8 +203,13 @@ let options : opt list =
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);
       ('e',     "evaluate",            None,                             Some evaluate_string);
-      (noshort, "config",              None,                             Some load_settings)
-(* [DEACTIVATED] *)
+      (noshort, "config",              None,                             Some load_settings);
+
+      (* Modes to just optimise a program and print the result. I'm
+         not crazy about these option letters*)
+      ('o',     "print-optimize",      None,                             Some just_optimise_file);
+      ('q',     "print-optimize-expr", None,                             Some just_optimise_string);
+        (* [DEACTIVATED] *)
 (*
       ('t',     "run-tests",           Some run_tests,                   None);
 *)    ]

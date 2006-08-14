@@ -71,7 +71,6 @@ let parse_and_set' : bool -> (string * string) -> unit = fun user_check (name, v
 let parse_and_set = parse_and_set' false     (* any setting can be set *)
 let parse_and_set_user = parse_and_set' true (* only allow user settings to be set *)
 
-
 let add : string -> universal -> unit = fun name universal_setting ->
   if SettingsMap.mem name (!settings) then
     failwith ("Setting: "^name^" already present")
