@@ -26,6 +26,12 @@ let datatype_of_db_type = function
   | FloatField -> `Primitive `Float
   | _ -> failwith "datatype_of_db_type: unsupported datatype"
 
+let execute_command  (datatype:Types.datatype) (query:string) (db: database) : result =
+  let result = (db#exec query) in
+    (match result#status with
+       | QueryOk -> `Record []
+       | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+
 let execute_select  (datatype:Types.datatype) (query:string) (db: database) : result =
   let fields = (match datatype with
 		  | `List (`Record (field_env, _)) ->

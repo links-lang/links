@@ -207,14 +207,12 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
     match fn source with 
       | None -> output 
       | Some value -> obtain (value :: output)
-  in List.rev (obtain [])
+  in
+    List.rev (obtain [])
 
 class mysql_result (result: result) db = object
   inherit dbresult
-  val rows = 
-    let toList row = 
-      List.map (Utility.fromOption "!!NULL!!") (Array.to_list row) in
-      List.map toList (slurp fetch result)
+  val rows = ref None
   method status : db_status = 
     match status db with 
       | StatusOK | StatusEmpty -> QueryOk
@@ -228,8 +226,16 @@ class mysql_result (result: result) db = object
       | IntTy | Int64Ty -> IntField
       | StringTy | BlobTy -> TextField
       | other -> SpecialField (new otherfield other)
-  method get_all_lst : string list list = 
-    rows
+  method get_all_lst : string list list =
+    match !rows with
+      | None ->
+          let toList row = 
+            List.map (Utility.fromOption "!!NULL!!") (Array.to_list row) in
+          let r = List.map toList (slurp fetch result)
+          in
+            rows := Some r;
+            r
+      | Some r -> r
   method error : string = 
     Utility.valOf (errmsg db)
 end
@@ -238,7 +244,11 @@ class mysql_database spec = object
   inherit database
   val connection = connect spec
   method exec query : dbresult = 
-    new mysql_result (exec connection query) connection
+    try
+      new mysql_result (exec connection query)connection
+    with
+        Mysql.Error msg ->
+          failwith("Mysql returned error: " ^ msg)
   method escape_string = Mysql.escape
 end
 

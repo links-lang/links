@@ -501,11 +501,15 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                 let table = assoc "1" fields
                 and row = assoc "2" fields in begin
                     match table with 
-                      | `Table (db, table_name, _) -> 
-                          (Database.execute_select 
-                             (`List unit_type)
-                             ("insert into " ^ table_name ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
-                             db :> primitive)
+                      | `Table (db, table_name, _) ->
+                          let query_string =
+                            "insert into " ^ table_name ^ "("^ row_columns row ^") values ("^ row_values db row ^")"
+                          in
+                            prerr_endline("RUNNING INSERT QUERY:\n" ^ query_string);
+                            (Database.execute_command 
+                               (`List unit_type)
+                               query_string
+                               db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
@@ -519,9 +523,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                 and rows = assoc "2" fields in begin
                     match table with 
                       | `Table (db, table_name, _)  ->
-                          (Database.execute_select
+                          let query_string =
+                            "delete from " ^ table_name ^ " where " ^ delete_condition db rows
+                          in
+                          prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
+                          (Database.execute_command
                              (`List unit_type)
-                             ("delete from " ^ table_name ^ " where " ^ delete_condition db rows)
+                             query_string
                              db :> primitive)
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
