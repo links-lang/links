@@ -52,7 +52,6 @@ val strip_data : 'a expression' -> stripped_expression
 val erase : expression -> untyped_expression
 val labelize : expression -> expression
 val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
-val perhaps_process_children : ('a expression' -> 'a expression' option) -> 'a expression' -> 'a expression' option
 val expression_data : 'a expression' -> 'a
 val node_datatype : expression -> Types.datatype
 val untyped_pos : untyped_expression -> position

@@ -106,30 +106,6 @@ struct
   and always e = Some e
 end
 
-
-(*
-module PassingRewrite
-  (T : (sig type t
-	    type data
-	    type rewriter = (data -> t -> t option) -> data -> t -> t option
-	    val process_children : rewriter -> rewriter
-	end)) : RewritePrimitives with type rewriter = T.rewriter =
-struct
-  include T
-  let both a b d e =
-    match a d e with 
-      | None   -> b d e
-      | Some e -> Some (fromOption e (b d e))
-  and either  a b d e =
-    match a d e with
-      | None -> b d e
-      | s    -> s
-  and never _ _  = None
-  and always _ e = Some e
-end
-
-*)
-
 (* utility for writing the process_children function in an unpleasant but concise style *)
 let passto f exprs next = 
   let rec aux passed es = function
@@ -141,15 +117,3 @@ let passto f exprs next =
     match aux false [] exprs with
       | false, _ -> None
       | true,  es -> Some (next (List.rev es))
-
-module P (F : Functor.Functor) = 
-struct
-  let perhaps_process_node_list (f : 'a -> 'a option) (l : 'a F.f) : ('a F.f * bool)
-      = 
-    let changed = ref false in
-    let f x = match f x with
-      | Some x -> (changed := true; x)
-      | None   -> x
-    in 
-      (F.map f l, !changed )
-end

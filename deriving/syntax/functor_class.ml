@@ -96,7 +96,7 @@ value gen_instance loc tname param ctype =
 >>;
 
 value gen_instances loc : instantiator =  fun [
-                                                [((loc, tname),[param], ctype,_(*constraints*))] -> gen_instance loc tname param ctype
+   [((loc, tname),[param], ctype,_(*constraints*))] -> gen_instance loc tname param ctype
  | l when List.length l > 1 -> error loc ("Cannot currently generate functor instances for mutually recursive types")
  | _ -> error loc ("Types with functor instances must have exactly one type parameter")
      (* Hmm. We could generate one instance for each parameter.  That

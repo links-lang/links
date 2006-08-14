@@ -76,7 +76,7 @@ type 'data expression' =
   | HasType of ('data expression' * datatype * 'data)
   | Alien of (string * string * assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Show, Pickle, Functor)
+      deriving (Show, Pickle, Functor, Rewriter)
 
 let is_define = 
   function
@@ -184,7 +184,7 @@ let rec show t : 'a expression' -> string = function
   | TableQuery (th, query, data) ->
       "("^ show t th ^"["^string_of_query query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
-      "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")"
+      "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ Show_label.show s ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (string_of_assumption k) ^ t data
@@ -453,62 +453,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
 
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
-
   in
     visitor visit_children
 
-(* Apply a function to each subnode.  Return Some c if any changes
-   were made, otherwise None. *)
-let perhaps_process_children (f : 'a expression' -> 'a expression' option) :  'a expression' -> 'a expression' option =
-  let passto = Rewrite.passto f in
-    function
-        (* No children *)
-      | Boolean _
-      | Integer _
-      | Char _
-      | String _
-      | Float _
-      | Variable _
-      | Nil _
-      | Wrong _
-      | Alien _
-      | Record_empty _ -> None
-          
-      (* fixed children *)
-      | HasType (e, k, b)                          -> passto [e] (fun [e] -> HasType (e, k, b))
-      | Abstr (a, e, b)                            -> passto [e] (fun [e] -> Abstr (a, e, b))
-
-      | Variant_injection (a, e, b)                -> passto [e] (fun [e] -> Variant_injection (a, e, b))
-      | Define (a, e, b, c)                        -> passto [e] (fun [e] -> Define (a, e, b, c))
-      | List_of (e, b)                             -> passto [e] (fun [e] -> List_of (e, b))
-      | Database (e, a)                            -> passto [e] (fun [e] -> Database (e, a))
-      | TableQuery (e, a, b)                       -> passto [e] (fun [e] -> TableQuery (e, a, b))
-      | Escape (a, e, b)                           -> passto [e] (fun [e] -> Escape (a, e, b))
-      | Variant_selection_empty (e, d)             -> passto [e] (fun [e] -> Variant_selection_empty (e, d))
-
-      | TableHandle (e1, e2, a, b)                 -> passto [e1; e2] (fun [e1; e2] -> TableHandle (e1, e2, a, b))
-      | Apply (e1, e2, a)                          -> passto [e1; e2] (fun [e1; e2] -> Apply (e1, e2, a))
-      | Comparison (e1, a, e2, b)                  -> passto [e1; e2] (fun [e1; e2] -> Comparison (e1, a, e2, b))
-      | Let (a, e1, e2, b)                         -> passto [e1; e2] (fun [e1; e2] -> Let (a, e1, e2, b))
-      | Record_extension (a, e1, e2, b)            -> passto [e1; e2] (fun [e1; e2] -> Record_extension (a, e1, e2, b))
-      | Record_selection (a, b, c, e1, e2, d)      -> passto [e1; e2] (fun [e1; e2] -> Record_selection (a, b, c, e1, e2, d))
-      | Record_selection_empty (e1, e2, a)         -> passto [e1; e2] (fun [e1; e2] -> Record_selection_empty (e1, e2, a))
-      | Concat (e1, e2, a)               -> passto [e1; e2] (fun [e1; e2] -> Concat (e1, e2, a))
-      | For (e1, a, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> For (e1, a, e2, b))
-      | SortBy (e1, e2, b)        -> passto [e1; e2] (fun [e1; e2] -> SortBy (e1, e2, b))
-      | Variant_selection (e1, a, b, e2, c, e3, d) -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Variant_selection (e1, a, b, e2, c, e3, d))
-      | Condition (e1, e2, e3, a)                  -> passto [e1; e2; e3] (fun [e1; e2; e3] -> Condition (e1, e2, e3, a))
-      (* varying children *)
-      | Rec (es, e2, a) -> (let names, vals, types = split3 es in 
-                              passto (e2::vals) (fun (e2::vals) -> Rec (combine3 (names, vals, types), e2, a)))
-      | Xml_node (a, es1, es2, b) -> 
-          (let anames, avals = split es1 in 
-             passto
-               (avals @ es2)
-               (fun children -> let alength = length avals in 
-                  Xml_node (a, combine anames (take alength children), 
-                            drop alength children, b)))
-            
 let expression_data : ('a expression' -> 'a) = function 
 	| Define (_, _, _, data) -> data
 	| HasType (_, _, data) -> data
@@ -545,32 +492,14 @@ let expression_data : ('a expression' -> 'a) = function
         | Alien (_,_,_,data) -> data
         | Placeholder (_,data) -> data
 
-let fst3 (a, _, _) = a
-and snd3 (_, b, _) = b
-and thd3 (_, _, c) = c
-
-let node_datatype : (expression -> datatype) = snd3 -<- expression_data
+let node_datatype : (expression -> datatype) = (fun (_, datatype, _) -> datatype) -<- expression_data
 and untyped_pos  : (untyped_expression -> position) = expression_data 
 
 let stringlit_value = function
   | String (name, _) -> name
-
-module RewriteUntypedExpression = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = untyped_expression
-          type rewriter = t -> t option
-          let process_children = perhaps_process_children
-        end))
-
-module RewriteSyntax = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = expression
-          type rewriter = t -> t option
-          let process_children = perhaps_process_children
-        end))
+  | _ -> assert false
 
 let no_expr_data = (dummy_position, `Not_typed, None)
+
+module RewriteSyntax = Rewrite_expression'(struct type a = (position * datatype * label option) end)
+module RewriteUntypedExpression = Rewrite_expression'(struct type a = position end)

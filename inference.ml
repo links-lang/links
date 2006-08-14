@@ -1338,23 +1338,8 @@ let unmailboxify_type_env =
 let retype_primitives = mailboxify_type_env
 let unretype_primitives = unmailboxify_type_env  
 
-module RewriteSyntaxU = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = Syntax.untyped_expression
-          type rewriter = t -> t option
-          let process_children = Syntax.perhaps_process_children
-        end))
-
-module RewriteSyntax = 
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-       (struct
-          type t = Syntax.expression
-          type rewriter = t -> t option
-          let process_children = Syntax.perhaps_process_children
-        end))
+module RewriteSyntaxU = Syntax.RewriteUntypedExpression
+module RewriteSyntax = Syntax.RewriteSyntax
 
 (* add / remove mailbox parameter to / from expressions *)
 let add_parameter : RewriteSyntaxU.rewriter = function

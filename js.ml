@@ -33,7 +33,8 @@ type code = | Var   of string
             | Seq   of (code * code)
             | Die   of (string)
             | Nothing
- deriving (Show)
+ deriving (Show, Rewriter)
+module RewriteCode = Rewrite_code
 
 let code_freevars : code -> string list = 
   let rec aux bound = function
@@ -75,36 +76,6 @@ let rec rename' renamer = function
 and rename renamer body = rename' renamer body
 
 let freein name expr = List.mem name (code_freevars expr)
-
-let perhaps_process_children (f : code -> code option) :  code -> code option =
-  let passto = Rewrite.passto f in
-    function
-      | Var _
-      | Nothing
-      | Die _
-      | Lit _ -> None
-      | Defs ds -> 
-          let names, vals = split ds in 
-            passto vals (fun vals -> Defs (combine names vals))
-      | Fn (vars, code) -> passto [code] (fun [code] -> Fn (vars, code))
-      | Call (fn, ps) -> passto (fn::ps) (fun (fn::ps) -> Call (fn,ps))
-      | Binop (l,s,r) -> passto [l;r] (fun [l;r] -> Binop (l,s,r))
-      | Cond (i,t,e) -> passto [i;t;e] (fun [i;t;e] -> Cond (i,t,e))
-      | Dict ds -> 
-          let names, vals = split ds in 
-            passto vals (fun vals -> Dict (combine names vals))
-      | Lst code -> passto code (fun code -> Lst code)
-      | Bind (n,e,b) -> passto [e;b] (fun [e;b] -> Bind (n,e,b))
-      | Seq (l,r) -> passto [l;r] (fun [l;r] -> Seq (l,r))
-
-module RewriteCode =
-  Rewrite.Rewrite
-    (Rewrite.SimpleRewrite
-      (struct
-         type t = code
-         type rewriter = t -> t option
-         let process_children = perhaps_process_children
-       end))
 
 let replace var repl : RewriteCode.rewriter =
   function
