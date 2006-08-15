@@ -607,30 +607,8 @@ let optimise env expr =
 			  "\nAfter optimization  : " ^ Show_stripped_expression.show (strip_data expr'));
 		     expr')
 
-(* Not really an optimisation.  This /must/ be run, or the program
-   semantics will be completely wrong.
-   FIXME: Should we separate *necessary* transformations from optimizations? 
-     SQL generation might count as a necessary transformation, too.
-*)
-let inline_tables expressions = 
-  let insert_tables map : RewriteSyntax.rewriter = function
-    | Variable (v, _) when mem_assoc v map -> Some (assoc v map)
-    | _ -> None in
-  let tabledefs, sanstables = 
-    either_partition
-      (function
-(*         | Define (name, (Table _ as t), _, _) -> Left (name, t)*)
-         | Define (name, (TableHandle _ as t), _, _) -> Left (name, t)
-         | e -> Right e)
-      expressions
-  in
-    map (valOf -<- (RewriteSyntax.either
-                      (RewriteSyntax.bottomup (insert_tables tabledefs))
-                      RewriteSyntax.always))
-      sanstables
-
 let optimise_program (env, exprs) = 
-  map (optimise env) (inline_tables exprs)
+  map (optimise env) (exprs)
 
 
 
