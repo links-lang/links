@@ -25,19 +25,15 @@ KNOWN ISSUES
 
  * A top-level variable cannot be redefined in the interactive shell:
 
-    links> x = 1;;
+    links> var x = 1;;
     1 : Int
-    links> x = 2;;
+    links> var x = 2;;
     Duplicate top-level bindings
     x:
       <stdin>:1
     links>
   
  * Queries against two different databases may be erroneously joined.
-
- * Function signatures are not yet implemented.
-
- * Type annotations on patterns are not yet implemented.
 
  * Type errors sometimes print the wrong expression, e.g.:
 
@@ -46,8 +42,7 @@ KNOWN ISSUES
      cannot be applied to `"a"', of type String
 
  * XML support is incomplete, e.g.:
-   - Ill-formed XML can sometimes be accepted; e.g. bare ampersands are
-     accepted.
+   - Ill-formed XML can sometimes be accepted
    - CDATA literals are not accepted.
    - XML namespaces are not handled.
    - Non-ASCII characters are not handled.
@@ -63,7 +58,4 @@ KNOWN ISSUES
 
  * table declarations don't work in the interactive shell
 
- * database names are not first class - they must be string
-   literals.
- 
  * database update is not yet implemented.
