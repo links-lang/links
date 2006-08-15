@@ -69,4 +69,10 @@ let rec disjunction = function
       | Boolean false -> t
       | rhs -> Binary_op("OR", t, rhs)
 
-let rec negation t = Unary_op("NOT", t)
+let rec negation = function
+    Boolean true -> Boolean false
+  | Boolean false -> Boolean true
+  | Unary_op("NOT", t) -> t
+  | t -> Unary_op("NOT", t)
+
+let rec simplify expr = expr

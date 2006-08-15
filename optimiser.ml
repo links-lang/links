@@ -80,8 +80,6 @@ let pure : expression -> bool =
   let pure default = function 
     | Apply _    -> false
     | TableQuery _ -> false
-    | TableHandle _ -> false
-    | Database _ -> false
     | Escape _   -> false
     | e       -> default e
   and combiner l = fold_right (&&) l true in
@@ -410,6 +408,15 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
                          origin, variable, expr))
       | _ -> None
 
+(*
+  To fix in sql_joins:
+
+    1. rename duplicate columns
+    2. rename deleted variable 
+    3. handle unprojected record variables
+    4. join even without condition?
+ *)
+
 (** sql_joins
     When a collection extension has a table as source, explore the
     body expression for other collection extensions on tables from the
@@ -442,80 +449,53 @@ let rec sql_joins : RewriteSyntax.rewriter =
                  
                  Some expr
 
-           | None -> 
-               (* check_join returned None, so perhaps we only have one loop. 
-                  still, try to push the conditions down into SQL. 
-                  HACK ALERT; this shouldn't be a special case. the 1-join
-                  should be handled the same as 2-join, 3-join, etc. *)
-               let (pos, neg, body, proj_srcs) = extract_tests bindings body in
-                 (* This positive/negatives business is retarded, I think *)
-                 if (pos <> [] || neg <> []) then
-                   let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in
-                     Some (For(body, outer_var, 
-                               TableQuery(th, query, tdata), data))
-                 else None
+           | None -> None
+
+(*            | None ->  *)
+(*                (\* check_join returned None, so perhaps we only have one loop.  *)
+(*                   still, try to push the conditions down into SQL.  *)
+(*                   HACK ALERT; this shouldn't be a special case. the 1-join *)
+(*                   should be handled the same as 2-join, 3-join, etc. *\) *)
+(*                let (pos, neg, body, proj_srcs) = extract_tests bindings body in *)
+(*                  (\* This positive/negatives business is retarded, I think *\) *)
+(*                  if (pos <> [] || neg <> []) then *)
+(*                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in *)
+(*                      Some (For(body, outer_var,  *)
+(*                                TableQuery(th, query, tdata), data)) *)
+(*                  else None *)
         ) (* match check_join .... with *)
     | _ -> None
 
-(*
-  RENAMING THE VARIABLE:
-  for x in
-    for y in
-       (x.a, y.b)
+let lift_lets : RewriteSyntax.rewriter = function
+  | For(loopbody, loopvar, Let(letvar, letval, letbody, letdata), data) 
+    -> Some(Let(letvar, letval,
+                For(loopbody, loopvar, letbody, data), letdata))
+  | For(Let(letvar, letval, letbody, letdata), loopvar, src, data)
+      when not (mem loopvar (freevars letval))
+        && pure letval
+        -> Some(Let(letvar, letval, For(letbody, loopvar, src, data), letdata))
+  | Condition(cond, Let(letvar, letval, letbody, letdata), e, data)
+      when pure letval
+        -> Some(Let(letvar, letval, Condition(cond, letbody, e, data), letdata))
+  | Condition(cond, t, Let(letvar, letval, letbody, letdata), data)
+      when pure letval
+        -> Some(Let(letvar, letval, Condition(cond, t, letbody, data), letdata))
+  | _ -> None
 
-
-  for x in 
-    (x.a, x.b)
-
-  RENAMING THE COLUMNS:
-
-  for x in
-    for y in
-       (x.a, y.a)
-
-
-  for x in [AS col_37]
-    (x.a, x.col_37)
-
-  for x in
-    for y in
-       if (x.a == y.a) in
-          (x.b, y)
-
-
-   y ~>  (a = x.col_37, b = y.col_38)
-
-  To fix in sql_joins:
-
-    1. rename duplicate columns
-    2. rename deleted variable 
-    3. handle unprojected record variables
-    4. join even without condition?
-
- *)
-	  
-
-
-(* take/drop optimization.  Push calls to take and drop that surround
-   queries into the query.
-
-   [N.B. these rewrite rules play fast and loose with the `data'
-    component of expression nodes.  Don't assume anything about the
-    data after these have run.]
+(** (1 take/drop optimization).
+    Push calls to take and drop that surround queries into the query.
+    [N.B. these rewrite rules play fast and loose with the `data'
+     component of expression nodes.  Don't assume anything about the
+     data after these have run.]
 *)
 
-(*
-  offset n limit m corresponds to take m (drop n ...) 
-  (but not to drop n (take ...))
-*)
-
-(*
-   take e1 (drop e2 e3) ~>  {x = e2; y = e1; take y (drop x e3)}
-      (Not performed if both e1 and e2 are variables or integer literals)
-
-   take e1 e2 ~> {x = e1; take x e2}
-   drop e1 e2 ~> {x = e1; drop x e2}
-      (Not performed if e1 is a variable or integer literal)
+(** [simplify_takedrop]
+    The rewritings are as follows:
+       take e1 (drop e2 e3) ~>  {x = e2; y = e1; take y (drop x e3)}
+    (Not performed if both e1 and e2 are variables or integer literals)
+       take e1 e2 ~> {x = e1; take x e2}
+       drop e1 e2 ~> {x = e1; drop x e2}
+    (Not performed if e1 is a variable or integer literal)
 *)
 let simplify_takedrop : RewriteSyntax.rewriter = function
   | Apply (Apply (Variable ("take", _), (Variable _|Integer _), _), 
@@ -538,37 +518,36 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
                                  Variable (var, d1), d2), e2, d3), d1))
   | _ -> None
 
-(*
-  take e1 (drop e2 (Table (... q ...))) ~> Table (... {q with offset = e2; limit = e1} ...)
-     where e1 and e2 are variables or integer literals
-
-  take e1 (Table (... q ...)) ~> Table (... {q with limit  = e1} ...)
-  drop e1 (Table (... q ...)) ~> Table (... {q with offset = e1} ...)
-     where e1 is a variable or integer literal
+(** [push_takedrop] actually pushes [take] and [drop] calls into a query.
+    Rewrites as follows: {[
+        take e1 (drop e2 (Table (... q ...))) ~> Table (... {q with offset = e2; limit = e1} ...)
+    }] where e1 and e2 are variables or integer literals
+    {[
+        take e1 (Table (... q ...)) ~> Table (... {q with limit  = e1} ...)
+        drop e1 (Table (... q ...)) ~> Table (... {q with offset = e1} ...)
+    }] where e1 is a variable or integer literal
 *)
-
 let push_takedrop : RewriteSyntax.rewriter = 
   let queryize = function
     | Variable (v, _) -> Query.Variable v
     | Integer  (n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
-    function
-      | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as e1), _), 
-               Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as e2), _), 
-                      TableQuery (e, q, d5), _), _) ->
-          Some (TableQuery (e, {q with
+  function
+    | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as e1), _), 
+             Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as e2), _), 
+                    TableQuery (e, q, d5), _), _) ->
+        Some (TableQuery (e, {q with
                                 Query.max_rows = Some (queryize e1);
                                 Query.offset   = queryize e2}, d5))
-      | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
-               TableQuery (e, q, d4), _) -> 
-	  Some (TableQuery (e, {q with Query.max_rows = Some (queryize n)}, d4))
-      | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
-               TableQuery (e, q, d4), _) -> 
-	  Some (TableQuery (e, {q with Query.offset = queryize n}, d4))
-      | _ -> None
+    | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
+             TableQuery (e, q, d4), _) -> 
+	Some (TableQuery (e, {q with Query.max_rows = Some (queryize n)}, d4))
+    | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
+             TableQuery (e, q, d4), _) -> 
+	Some (TableQuery (e, {q with Query.offset = queryize n}, d4))
+    | _ -> None
 
-
-let trivial_extensions : RewriteSyntax.rewriter = function
+let remove_trivial_extensions : RewriteSyntax.rewriter = function
   | For (List_of (Variable (v1, _), _), v2, e, _)
       when v1 = v2 -> Some e
   | _ -> None
@@ -596,19 +575,24 @@ let fold_constant : RewriteSyntax.rewriter =
     | Concat (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
     | _ -> None 
 
+let print_expression msg expr =
+  debug(msg ^ string_of_expression expr);
+  None
+
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.topdown simplify_regex;
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.topdown (sql_sort);
+  RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
   RewriteSyntax.bottomup sql_selections;
-  RewriteSyntax.bottomup unused_variables;
+(*   RewriteSyntax.bottomup unused_variables; *)
   RewriteSyntax.bottomup (sql_projections env);
 (*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
-  RewriteSyntax.topdown trivial_extensions;
+  RewriteSyntax.topdown remove_trivial_extensions;
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
 ]
 
@@ -709,7 +693,6 @@ let perform_function_inlining location name var rhs =
 	 RewriteSyntax.bottomup (replaceApplication name var rhs) exp
        else
 	 None))
-
 
 let inline program = 
   let valuedefp = function

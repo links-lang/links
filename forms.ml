@@ -96,7 +96,7 @@ let hidden_input name value =
 let attrname = fst
 let attrval = snd
 
-let serialize_exprenv expr env : string =
+let serialise_exprenv expr env : string =
   let env = retain (freevars expr) env in
 (*  let thunk = delay_expr expr in*)
     marshal_exprenv (expr, env)
@@ -170,10 +170,12 @@ let xml_transform env lookup eval : expression -> expression =
   function 
     | Xml_node ("form", attrs, contents, data)  ->
         let new_field = 
-          match List.find_all (fst ->- flip List.mem ["l:onsubmit"; "l:handler"]) attrs with 
+          match List.find_all (fst ->- is_special) attrs with 
             | [] -> []
+            | ("l:action", laction)::_ ->
+                [hidden_input "_k" (serialise_exprenv laction env)]
             | ("l:onsubmit", laction)::_ -> (* l:onsubmit holds a frozen expression *)
-                [hidden_input "_k" (serialize_exprenv laction env)]
+                [hidden_input "_k" (serialise_exprenv laction env)]
             | ("l:handler", lhandler)::_ -> 
                 (* an l:handler attribute holds an expression that
                    evaluates to a continuation. This continuation will
@@ -185,7 +187,7 @@ let xml_transform env lookup eval : expression -> expression =
                    | _ -> failwith "Internal error: l:handler was not a continuation")
         in
           Xml_node ("form",
-                    substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"]) ("action", string "#") attrs, 
+                    substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"; "l:action"]) ("action", string "#") attrs, 
                     new_field @ contents, 
                     data)
 
@@ -203,7 +205,7 @@ let xml_transform env lookup eval : expression -> expression =
             let arg_vals = map (value_of_simple_expr lookup) args in
               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
                 (*               ^ "?environment%=" ^ ser_env *)
-          else "?_k=" ^ serialize_exprenv href_expr env
+          else "?_k=" ^ serialise_exprenv href_expr env
         in
         let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
         in

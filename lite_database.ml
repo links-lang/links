@@ -51,6 +51,8 @@ class lite_result (vm: vm) = object
     Array.get (column_names vm) n
   method ftype  n : db_field_type =
     match Array.get (column_types vm) n with
+      | "" -> TextField (* SQLite was untyped prior to version 3. Need to 
+                           take type information from Links context *)
       | "TEXT"|"STRING"    -> TextField
       | "INT"|"INTEGER" -> IntField
       | other -> failwith( "unknown field type : " ^ other)

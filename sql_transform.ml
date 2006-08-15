@@ -158,7 +158,7 @@ let rec sep_assgmts (bindings:bindings) (expr:Syntax.expression) : (bindings * S
     | Syntax.Let (_, Syntax.Variable _, _, _) ->
 	failwith "TR115 (renaming declarations should have been removed by earlier optimisations)"
     | Syntax.Let (variable, _, body, _) ->
-	(sep_assgmts (`Unavailable variable :: bindings) body)
+        failwith "Internal error: Let in sep_assgmts" (* was queueing `Unavailable variable onto bindings & continuing *)
     | Syntax.Record_selection (label, label_variable, variable, Syntax.Variable (name, _), body, _) ->
 	(sep_assgmts (`Selected {field_name = label; field_var = label_variable; etc_var = variable; source_var = name} :: bindings) body)
     | Syntax.Record_selection (_, _, _, _, body, _) ->
@@ -381,13 +381,13 @@ let append_uniquely left right : (column list * (column * string) list) =
         conditions that where not selectable with 
     {! Sql_transform.selectable} might cause such exceptions. *)
 (* FIXME: This ought to uniquely rename the tables (as well as the columns) *)
-let rec join ((positives, negatives):(expression list * expression list))
+let join ((positives, negatives):(expression list * expression list))
     ((left, right) : query * query)
     : ((column * string) list * query) =
   if (left.distinct_only <> right.distinct_only) then failwith "TR167"
   else 
-    let where = conjunction([left.condition; right.condition]
-                            @ positives @ map negation negatives)
+    let where = simplify(conjunction([left.condition; right.condition]
+                                     @ positives @ map negation negatives))
     in
       let (columns, col_renamings) = append_uniquely left.result_cols right.result_cols in
       (col_renamings,
