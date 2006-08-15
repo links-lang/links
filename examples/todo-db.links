@@ -1,7 +1,5 @@
-var db = database (driver="postgresql", name="todo", args=":5432:www-data:");
-var items = table "items" with (
-    name : String 
- ) from db;
+var db = database (name="todo" | getDatabaseConfig());
+var items = table "items" with (name : String) from db;
 
 fun showList() {
 <html>
@@ -25,6 +23,7 @@ fun showList() {
 
 fun add(name) {
  insert into (items) values (name=name);
+ debug("inserted item");
  showList()
 }
 

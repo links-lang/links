@@ -20,19 +20,20 @@ fun format(words) client {
 }
 
 fun completions(p) server {
+ var db = database (name="dictionary" | getDatabaseConfig());
  var wordlist = table "wordlist" with (
    word : String, 
    type : String, 
    meaning : String
- ) from database (name="dictionary", driver="postgresql", args=":5432:www-data:");
+ ) from db;
 
-  if (p == "") []
-  else {
-    take(10)(for (var w <- asList(wordlist))
-             where (w.word ~ /{p}.*/)
-             orderby (w.word)
-              [w])
-  }
+ if (p == "") []
+ else {
+  take(10)(for (var w <- asList(wordlist))
+            where (w.word ~ /{p}.*/)
+            orderby (w.word)
+            [w])
+ }
 }
 
 <html>

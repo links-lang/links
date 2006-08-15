@@ -1,44 +1,45 @@
 var results_per_page = 10;
 
-var db = database (name="dictionary", driver="postgresql", args=":5432:www-data:");
-
 fun query(n,c) {
-  var wordlist = table "wordlist" with (
-     word: String,
-     meaning: String
-  ) from db;
+ var db = database (name="dictionary" | getDatabaseConfig());
+ var wordlist = table "wordlist" with (
+  word: String,
+  meaning: String
+ ) from db;
 
-  take(results_per_page) (
-       drop(results_per_page * (n-1)) (
-            for (var r <- asList(wordlist))
-             where (r.word ~ /{c}.*/)
-             orderby (r.word)
-                [r]))
+ take(results_per_page) (
+  drop(results_per_page * (n-1)) (
+   for (var r <- asList(wordlist))
+    where (r.word ~ /{c}.*/)
+    orderby (r.word)
+    [r]
+  )
+ )
 }
 
 fun page(n, c) {
-  var title = stringToXml("Results: page "++ intToString(n));
-  <html>
-    <head><title>{title}</title></head>
-    <body>
-       <h1>{title}</h1>
-       <dl>
-          {for (var result <- query(n, c))
-               <dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd>}
-       </dl>
-       {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
-       <a l:href="{page(n+1,c)}">next</a>
-    </body>
-  </html>
+ var title = stringToXml("Results: page "++ intToString(n));
+ <html>
+  <head><title>{title}</title></head>
+  <body>
+   <h1>{title}</h1>
+   <dl>
+    {for (var result <- query(n, c))
+    <dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd>}
+   </dl>
+   {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
+   <a l:href="{page(n+1,c)}">next</a>
+  </body>
+ </html>
 }
 
 <html>
-  <head><title>Dictionary browser</title></head>
-  <body>
-    <h1>Dictionary browser</h1>
-     <ul>
-      {for (var c <- "abcdefghijklmnopqrstuvwxyz")
-        <li><a l:href="{page(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
-     </ul>
-  </body>
+ <head><title>Dictionary browser</title></head>
+ <body>
+  <h1>Dictionary browser</h1>
+   <ul>
+    {for (var c <- "abcdefghijklmnopqrstuvwxyz")
+    <li><a l:href="{page(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
+   </ul>
+ </body>
 </html>
