@@ -14,14 +14,6 @@ let web_mode = Settings.add_bool ("web_mode", false, false)
 (* Whether to print types *)
 let printing_types = Settings.add_bool ("printing_types", true, true)
 
-(* Whether to evaluate the expression, or just do typechecking, 
-   optimisation, etc. *)
-let really_evaluate = Settings.add_bool ("really_evaluate", true, true)
-
-(* Whether to evaluate the expression, or just do typechecking, 
-   optimisation, etc. *)
-let print_optimisation = Settings.add_bool ("print_optimisation", false, true)
-
 (* Prompt in interactive mode *)
 let ps1 = "links> "
 
