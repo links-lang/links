@@ -154,30 +154,31 @@ let reader_of_string string =
     better error messages).
 **)
 
-(* Parse a string containing Links code.
-   Return a list of ASTs representing definitions and expressions.
+(** Parse a string containing Links code.
+    Return a list of ASTs representing definitions and expressions.
 *)
 let parse_string string = 
-  read Parser.parse_links 	(fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_string string) "<string>"
+  read Parser.parse_links
+    (fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_string string) "<string>"
     
-(* Read and parse Links code from an input channel.
-   Return a list of ASTs representing definitions and expressions.
+(** Read and parse Links code from an input channel.
+    Return a list of ASTs representing definitions and expressions.
 *)
 let parse_channel (channel, name) =
   read Parser.parse_links (fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_channel channel) name
 
-(* Open, read and parse a file containing Links code.
-   Return a list of ASTs representing definitions and expressions.
+(** Open, read and parse a file containing Links code.
+    Return a list of ASTs representing definitions and expressions.
 *)
 let parse_file filename = 
   parse_channel (open_in filename, filename)
 
 
-(* Parse a datatype *)
+(** Parse a datatype *)
 let parse_datatype string = 
   Sugar.desugar_datatype (Parser.just_datatype (Lexer.lexer ()) (from_string (string ^ ";")))
 
-(* Parse a sentence *)
+(** Parse a sentence *)
 let parse_sentence (channel, name) =
   read Parser.sentence (fun code -> function
                           | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
