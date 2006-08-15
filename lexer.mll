@@ -152,7 +152,6 @@ let keywords = [
  "table"    , TABLE; 
  "TableHandle", TABLEHANDLE; 
  "true"     , TRUE;
- "unique"   , UNIQUE; 
  "update"   , UPDATE; 
  "values"   , VALUES;
  "var"      , VAR; 

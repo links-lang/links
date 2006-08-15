@@ -24,7 +24,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW HANDLE WHERE 
 %token COMMA VBAR DOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE WITH UNIQUE ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE WITH ORDERBY
 %token UPDATE DELETE INSERT BY VALUES INTO
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -400,7 +400,7 @@ handlewith_expression:
 
 table_expression:
 | handlewith_expression                                        { $1 }
-| TABLE exp WITH datatype unique FROM exp                     { TableLit ($2, $4, $5, $7), pos()} 
+| TABLE exp WITH datatype FROM exp                             { TableLit ($2, $4, $6), pos()} 
 
 database_expression:
 | table_expression                                             { $1 }
@@ -432,10 +432,6 @@ perhaps_semi:
 
 exp:
 | database_expression                                          { $1 }
-
-unique:
-| UNIQUE                                                       { true }
-|                                                              { false }
 
 labeled_exps:
 | record_label EQ exp                                          { [$1, $3] }

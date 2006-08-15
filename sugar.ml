@@ -749,7 +749,7 @@ module Desugarer =
              | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
 
              | DatabaseLit e -> etv e
-             | TableLit (_, datatype, _, db) -> flatten [tv datatype; etv db]
+             | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
              | DBDelete (table, rows)
              | DBInsert (table, rows) -> flatten [etv table; etv rows]
 
@@ -864,7 +864,7 @@ module Desugarer =
    let check_for_duplicate_names ((pattern, pos) : simple_pattern) =
      let rec check_and_add name env =
        if StringSet.mem name env then
-         failwith ("Duplicate name '"^ name  ^"' in pattern "^string_of_pattern_pos pos)
+         raise (ASTSyntaxError(pos, "Duplicate name '"^ name  ^"' in pattern "^string_of_pattern_pos pos))
        else
          StringSet.add name env in
      let rec check env =
@@ -917,7 +917,7 @@ module Desugarer =
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
            | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> Apply (Apply (Variable ("~", pos), desugar e1, pos), 
                                                                  desugar (desugar_regex desugar pos' r, pos'), pos)
-           | InfixAppl (`RegexMatch, _, _) -> failwith "Internal error: unexpected rhs of regex operator"
+           | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(pos, "Internal error: unexpected rhs of regex operator"))
            | InfixAppl (`FloatMinus, e1, e2)  -> Apply (Apply (Variable ("-.", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`Minus, e1, e2)  -> Apply (Apply (Variable ("-", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
@@ -938,39 +938,16 @@ module Desugarer =
            | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | Projection (e, name) -> (let s = unique_name ()
                                       in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
-           | TableLit (name, datatype, unique, db) -> 
-               (let db_query (name:string) (pos:position) (datatype:Types.datatype) (unique:bool) : Query.query =
-                  (* FIXME: this is not the appropriate place to gensym the
-                     table name. The table will move around later. The right place
-                     to do it is when joining two queries: at that point,
-                     alpha-convert to ensure that the involved tables have
-                     different names. *)
-                  let table_name = (db_unique_name ()) in
-                  let selects = match datatype with
-                    | `Record (field_env, `RowVar row_var) ->
-                        let present_fields, absent_fields = Types.split_fields field_env in
-                          if row_var = None && absent_fields = [] then
-                            List.map (fun
-                                        (field_name, field_datatype) ->
-                                          {Query.table_renamed = table_name;
-                                           name=field_name; renamed=field_name; 
-                                           col_type = field_datatype})
-                              present_fields
-                          else raise (ASTSyntaxError (pos, "Table datatypes are records with only field present elements"))
-                    | _ -> raise (ASTSyntaxError (pos, "Table datatypes must be records " ^ Types.string_of_datatype datatype)) in
-                    {Query.distinct_only = unique;
-                     result_cols = selects;
-                     tables = [(`TableName name, table_name)];
-                     condition = Query.Boolean true;
-                     sortings = [];
-                     max_rows = None;
-                     offset = Query.Integer (Int 0)} in
-                  (* the null query against this table: db_query name pos (desugar_datatype varmap datatype) unique *)
-                let row = match datatype with
-                    RecordType row ->
+           | TableLit (name, datatype, db) -> 
+               let row = match datatype with
+                 | RecordType row ->
                       desugar_row varmap row
-                in
-                  TableHandle (desugar db, desugar name, row, pos))
+                 | UnitType ->
+                     raise (ASTSyntaxError(pos, "Tables must have at least one field"))
+                 | _ ->
+                     raise (ASTSyntaxError(pos, "Tables must take a non-empty record type"))
+               in
+                 TableHandle (desugar db, desugar name, row, pos)
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
            | ListLit  [] -> Nil (pos)
@@ -987,7 +964,7 @@ module Desugarer =
                                  ], pos')), pos')
            | DatabaseLit e -> Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
-           | Definition (_, _, _) -> failwith "top-level patterns not yet implemented"
+           | Definition (_, _, _) -> raise (ASTSyntaxError(pos, "top-level patterns not yet implemented"))
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
            | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
            | TupleLit [field] -> desugar field
@@ -1020,7 +997,7 @@ module Desugarer =
                (match patternize patt with
                   | `Variable var, _ -> 
                       SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
-                  | pattern -> failwith("orderby clause on non-simple pattern-matching for is not yet implemented."))
+                  | pattern -> raise (ASTSyntaxError(pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
            | Iteration (pattern, from, body, None, None) ->
                (match patternize pattern with
                   | `Variable var, _ -> For (desugar body, var, desugar from, pos)
@@ -1038,7 +1015,7 @@ module Desugarer =
                                                  (ListLit [], pos')), pos'), 
                                    None, sort_expr),
                         pos')
-           | Binding _ -> failwith "Unexpected binding outside a block"
+           | Binding _ -> raise (ASTSyntaxError(pos, "Unexpected binding outside a block"))
            | Switch (exp, patterns, _) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 
