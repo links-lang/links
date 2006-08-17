@@ -23,13 +23,13 @@ fun response(s) client {
   <html>
    <body>
     <h1>Factorials up to {intToXml(n)}</h1>
-    <table>{
+    <table><tbody>{
      for (var (i,f) <- factorialsUpto(n))
       <tr>
        <td>{intToXml(i)}</td>
        <td>{intToXml(f)}</td>
       </tr>
-    }</table>
+    }</tbody></table>
    </body>
   </html>
  )
