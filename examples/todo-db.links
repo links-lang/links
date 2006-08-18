@@ -22,7 +22,7 @@ fun showList() {
 }
 
 fun add(name) {
- insert into (items) values (name=name);
+ insert into (items) values [(name=name)];
  debug("inserted item");
  showList()
 }
