@@ -507,7 +507,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                           in
                             prerr_endline("RUNNING INSERT QUERY:\n" ^ query_string);
                             (Database.execute_command 
-                               (`List unit_type)
                                query_string
                                db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
@@ -528,7 +527,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                           in
                           prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
                           (Database.execute_command
-                             (`List unit_type)
                              query_string
                              db :> primitive)
                       | _ -> failwith "Internal error: delete row from non-database"
