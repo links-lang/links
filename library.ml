@@ -60,10 +60,14 @@ let single_match db =
     | _ -> failwith "Internal error: forming query from non-row"
 
 let row_columns = function
-  | `Record fields -> String.concat ", " (map fst fields)
+  | `List ((`Record fields)::_) -> String.concat ", " (map fst fields)
   | _ -> failwith "Internal error: forming query from non-row"
 and row_values db = function
-  | `Record fields -> String.concat ", " (map (value_as_string db -<- snd) fields)
+  | `List records ->
+      String.concat ", "
+        (List.map (function
+                     | `Record fields -> "("^(String.concat ", " (map (value_as_string db -<- snd) fields))^")"
+                     | _ -> failwith "Internal error: forming query from non-row") records)
   | _ -> failwith "Internal error: forming query from non-row"
 and delete_condition db = function
   | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")"
@@ -499,11 +503,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and row = assoc "2" fields in begin
+                and rows = assoc "2" fields in begin
                     match table with 
                       | `Table (db, table_name, _) ->
                           let query_string =
-                            "insert into " ^ table_name ^ "("^ row_columns row ^") values ("^ row_values db row ^")"
+                            "insert into " ^ table_name ^ "("^ row_columns rows ^") values "^ row_values db rows
                           in
                             prerr_endline("RUNNING INSERT QUERY:\n" ^ query_string);
                             (Database.execute_command 
@@ -512,7 +516,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
-   datatype "(TableHandle(r), {r}) -> ()");
+   datatype "(TableHandle(r), [{r}]) -> ()");
 
   "deleterows", 
   (`Server
