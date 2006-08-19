@@ -232,7 +232,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
          | `List [] -> failwith "Tail of empty list"
          | _ -> failwith "Internal error: tail of non-list"),
    datatype "[a] -> [a]");
-       
+  
   "length", 
   (p1 (function
          | `List (elems) -> `Int (num_of_int (length elems))
@@ -310,7 +310,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "not", 
   (p1 (unbox_bool ->- not ->- box_bool),
    datatype "Bool -> Bool");
- 
+  
   "negate", 
   (p1 (unbox_int ->- minus_num ->- box_int), datatype "Int -> Int");
 
@@ -322,17 +322,17 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   
 
   (* HACK *)
-(*   [DEACTIVATED] *)
-(*   "callForeign", *)
-(*    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b"); *)
+  (*   [DEACTIVATED] *)
+  (*   "callForeign", *)
+  (*    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b"); *)
 
   (* DOM API *)
 
-(* [DEACTIVATED] *)
-(*   "domOp", *)
-(*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
-(*          `Record []), *)
-(*    datatype "a -> ()"); *)
+  (* [DEACTIVATED] *)
+  (*   "domOp", *)
+  (*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
+  (*          `Record []), *)
+  (*    datatype "a -> ()"); *)
 
   "domInsertBefore",
   (`Client, datatype "(XML, DomRef) -> ()");
@@ -373,7 +373,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domIsNullRef",
   (`Client, datatype "DomRef -> Bool");
 
-(* Section: Accessors for XML *)
+  (* Section: Accessors for XML *)
   "getTagName",
   (`Client, datatype "XML -> String");
 
@@ -386,11 +386,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getAttribute",
   (`Client, datatype "(XML, String) -> String");
 
-(* Section: Navigation for XML *)
+  (* Section: Navigation for XML *)
   "getChildNodes",
   (`Client, datatype "XML -> [XML]");
 
-(* Section: Accessors for DomRefs *)
+  (* Section: Accessors for DomRefs *)
   "domGetTagNameFromRef",
   (`Client, datatype "DomRef -> String");
 
@@ -406,7 +406,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domSetStyleAttrFromRef",
   (`Client, datatype "(DomRef, String, String) -> String");
 
-(* Section:  Navigation for DomRefs *)
+  (* Section:  Navigation for DomRefs *)
   "domGetParentFromRef",
   (`Client, datatype "DomRef -> DomRef");
 
@@ -416,7 +416,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domGetNextSiblingFromRef",
   (`Client, datatype "DomRef -> DomRef");
 
-(* Section: DOM Event API *)
+  (* Section: DOM Event API *)
   "eventGetTarget",
   (`Client, datatype "Event -> DomRef");
 
@@ -426,30 +426,30 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetTargetElement",
   (`Client, datatype "Event -> DomRef");
 
-(* getPageX : Event -> Int *)
+  (* getPageX : Event -> Int *)
   "eventGetPageX",
   (`Client, datatype "Event -> Int");
 
-(* getPageY : Event -> Int *)
+  (* getPageY : Event -> Int *)
   "eventGetPageY",
   (`Client, datatype "Event -> Int");
 
-(* getRelatedTarget : Event -> DomRef *)
+  (* getRelatedTarget : Event -> DomRef *)
   "eventGetRelatedTarget",
   (`Client, datatype "Event -> DomRef");
 
-(* getTime : Event -> Int *)
+  (* getTime : Event -> Int *)
   "eventGetTime",
   (`Client, datatype "Event -> Int");
 
-(* # stopEvent : ??? *)
-(* # stopPropagation : ??? *)
-(* # preventDefault : ??? *)
-(* getCharCode : Event -> Char *)
+  (* # stopEvent : ??? *)
+  (* # stopPropagation : ??? *)
+  (* # preventDefault : ??? *)
+  (* getCharCode : Event -> Char *)
   "eventGetCharCode",
   (`Client, datatype "Event -> Char");
 
-(* Cookies *)
+  (* Cookies *)
   "setCookie",
   (p2 (fun cookieName cookieVal ->
          let cookieName = charlist_as_string cookieName in
@@ -464,28 +464,28 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun cookieName -> 
          try 
            let cookieName = charlist_as_string cookieName in
-             let cookie_header = getenv "HTTP_COOKIE" in
-               let cookies = Str.split (Str.regexp ",") cookie_header in
-               let cookies = map (fun str -> 
-                                    let [nm; vl] = Str.split (Str.regexp "=") str in 
-                                      nm, vl) cookies in
-               let the_cookie = snd (find (fun (nm, _) -> nm = cookieName) 
-                                       cookies) in
-                 match string_as_charlist the_cookie with
-                     `List _ as result -> result
-                   | _ -> failwith "Internal Error library l469"
+           let cookie_header = getenv "HTTP_COOKIE" in
+           let cookies = Str.split (Str.regexp ",") cookie_header in
+           let cookies = map (fun str -> 
+                                let [nm; vl] = Str.split (Str.regexp "=") str in 
+                                  nm, vl) cookies in
+           let the_cookie = snd (find (fun (nm, _) -> nm = cookieName) 
+                                   cookies) in
+             match string_as_charlist the_cookie with
+                 `List _ as result -> result
+               | _ -> failwith "Internal Error library l469"
          with Not_found ->
            `List []
       ),
    datatype "String -> String");
 
 
-(* [SL] Aarghhh... this is too dangerous *)
-(*
-  "getCommandOutput",
-  (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
-   datatype "String -> String");
-*)
+  (* [SL] Aarghhh... this is too dangerous *)
+  (*
+    "getCommandOutput",
+    (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
+    datatype "String -> String");
+  *)
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
@@ -498,7 +498,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
    datatype "TableHandle(r) -> [{r}]");
 
-  "insertrow",
+  "insertrows",
   (`Server 
      (p1 (function
             | `Record fields ->
@@ -510,13 +510,34 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                             "insert into " ^ table_name ^ "("^ row_columns rows ^") values "^ row_values db rows
                           in
                             prerr_endline("RUNNING INSERT QUERY:\n" ^ query_string);
-                            (Database.execute_command 
-                               query_string
-                               db :> primitive)
+                            (Database.execute_command query_string db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
    datatype "(TableHandle(r), [{r}]) -> ()");
+
+  "updaterows", 
+  (`Server
+     (p1 (function
+            | `Record fields ->
+                let table = assoc "1" fields
+                and rows = assoc "2" fields in begin
+                    match table, rows with
+                      | `Table (db, table_name, _), `List rows ->
+                          List.iter (fun row ->
+                                       let query_string =
+                                         "update " ^ unbox_string table
+                                         ^ " set " ^ updates db (links_snd row)
+                                         ^ " where " ^ single_match db (links_fst row)
+                                       in
+                                         prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
+                                         ignore (Database.execute_command query_string db))
+                            rows;
+                          `Record []
+                      | _ -> failwith "Internal error: bad value passed to `updaterows'"
+                  end
+            | _ -> failwith "Internal error unboxing args (updaterows)")),
+      datatype "(TableHandle(r), [({r},{r})]) -> ()");
 
   "deleterows", 
   (`Server
@@ -529,10 +550,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                           let query_string =
                             "delete from " ^ table_name ^ " where " ^ delete_condition db rows
                           in
-                          prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
-                          (Database.execute_command
-                             query_string
-                             db :> primitive)
+                            prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
+                            (Database.execute_command query_string db :> primitive)
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
@@ -551,33 +570,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	 )),
      datatype "() -> (driver:String, args:String)");
 	   
-(* [BROKEN] *)
-(*
-    "updaterows", 
-  (p1 (function
-         | `Record fields ->
-             let table = assoc "1" fields
-             and database = assoc "2" fields
-             and rows = assoc "3" fields in begin
-                 match database, rows with 
-                   |  `Database (db, _), `List rows ->
-                        List.iter (fun row -> 
-                                     ignore (Database.execute_select
-                                               (`List unit_type)
-                                               ("update " ^ unbox_string table
-                                                ^ " set " ^ updates db (links_snd row)
-                                                ^ " where " ^ single_match db (links_fst row))
-                                               db))
-                          rows;
-                        `Record []
-                   | _ -> failwith "Internal error: bad value passed to `updaterows'"
-               end
-         | _ -> failwith "Internal error unboxing args (updaterows)"),
-   let v', v = fresh_row () in
-   let u', u = fresh_row () in
-     [u'; v'],
-   tuplify [Types.string_type; `Primitive `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
-*)
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
   "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);

@@ -87,6 +87,7 @@ and phrasenode =
   | TableLit of (phrase * datatype * phrase)
   | DBDelete of (phrase * phrase)
   | DBInsert of (phrase * phrase)
+  | DBUpdate of (phrase * phrase)
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)

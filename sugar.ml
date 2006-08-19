@@ -750,8 +750,9 @@ module Desugarer =
 
              | DatabaseLit e -> etv e
              | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
-             | DBDelete (table, rows)
-             | DBInsert (table, rows) -> flatten [etv table; etv rows]
+             | DBDelete (e1, e2)
+             | DBInsert (e1, e2)
+             | DBUpdate (e1, e2) -> flatten [etv e1; etv e2]
 
              | Xml (_, attrs, subnodes) ->
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
@@ -957,10 +958,15 @@ module Desugarer =
                                 ([table;
                                   rows
                                  ], pos')), pos')
-           | DBInsert (table, row) -> 
-               desugar (FnAppl ((Var "insertrow", pos'),
+           | DBInsert (table, rows) -> 
+               desugar (FnAppl ((Var "insertrows", pos'),
                                 ([table;
-                                  row
+                                  rows
+                                 ], pos')), pos')
+           | DBUpdate (table, row_pairs) -> 
+               desugar (FnAppl ((Var "updaterows", pos'),
+                                ([table;
+                                  row_pairs
                                  ], pos')), pos')
            | DatabaseLit e -> Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
