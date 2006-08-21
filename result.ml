@@ -40,6 +40,7 @@ class virtual dbresult = object
 end
 
 class virtual database = object
+  method virtual equal_types : Types.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
 end
