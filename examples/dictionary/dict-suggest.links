@@ -19,7 +19,7 @@ fun format(words) client {
   </span>
 }
 
-fun completions(p) server {
+fun completions(prefix) server {
  var db = database (name="dictionary" | getDatabaseConfig());
  var wordlist = table "wordlist" with (
    word : String, 
@@ -27,10 +27,10 @@ fun completions(p) server {
    meaning : String
  ) from db;
 
- if (p == "") []
+ if (prefix == "") []
  else {
   take(10)(for (var w <- asList(wordlist))
-            where (w.word ~ /{p}.*/)
+            where (w.word ~ /{prefix}.*/)
             orderby (w.word)
             [w])
  }

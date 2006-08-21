@@ -1,19 +1,22 @@
 fun waiting(id) client {
  receive {
-  case MouseDown(target) -> dragging(id, target);
-  case MouseUp           -> waiting(id);
-  case MouseOut(relatedTarget) -> waiting(id);
+  case MouseDown(elem)       -> dragging(id, elem);
+  case MouseUp               -> waiting(id);
+  case MouseOut(relatedElem) -> waiting(id);
  }
+}
+
+fun isElementOfList(elem, id) {
+ not(domIsNullRef(elem)) && domGetAttributeFromRef(domGetParentFromRef(elem), "id") == id
 }
 
 fun dragging(id, elem) client {
   receive {
-     case MouseUp                 -> waiting(id);
-     case MouseDown(target)       -> dragging(id, target);
-     case MouseOut(relatedTarget) -> {
-         if (not(domIsNullRef(relatedTarget)) &&
-           domGetAttributeFromRef(domGetParentFromRef(relatedTarget), "id") == id) {
-           domSwapNodeRefs(relatedTarget, elem);
+     case MouseUp               -> waiting(id);
+     case MouseDown(elem)       -> dragging(id, elem);
+     case MouseOut(relatedElem) -> {
+         if(isElementOfList(relatedElem, id)) {
+           domSwapNodeRefs(relatedElem, elem);
            dragging(id, elem)          
          }
          else waiting(id)
@@ -30,9 +33,9 @@ fun draggableList(id, items)
   var x = id;
   var dragger = spawn { waiting(id) };
    <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
-      l:onmouseup   = "{dragger ! (MouseUp)}"
-      l:onmousedown = "{dragger ! (MouseDown (eventGetTarget(event)))}"
-      l:onmouseout  = "{dragger ! (MouseOut (eventGetRelatedTarget(event)))}"
+      l:onmouseup   = "{dragger ! MouseUp}"
+      l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
+      l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}"
    >
     {for (var item <- items)
          format(item)}
@@ -45,7 +48,7 @@ fun draggableList(id, items)
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
 {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
-{draggableList("beers",["Guinness", "Stella Artois", "McEwan"])}
+{draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
 <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
 {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
 </body>

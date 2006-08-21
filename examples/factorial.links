@@ -24,7 +24,7 @@ fun response(s) client {
    <body>
     <h1>Factorials up to {intToXml(n)}</h1>
     <table><tbody>{
-     for (var (i,f) <- factorialsUpto(n))
+     for (var (i,f) <- lookup(n))
       <tr>
        <td>{intToXml(i)}</td>
        <td>{intToXml(f)}</td>
@@ -35,7 +35,7 @@ fun response(s) client {
  )
 }
 
-fun factorialsUpto(n) server {
+fun lookup(n) server {
  var db = database (name="factorials" | getDatabaseConfig());
  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
