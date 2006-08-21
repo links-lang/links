@@ -249,6 +249,7 @@ class mysql_database spec = object
     with
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
+  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method escape_string = Mysql.escape
 end
 
