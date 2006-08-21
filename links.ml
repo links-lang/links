@@ -122,6 +122,7 @@ let testenv env_var =
   with Not_found -> false
 
 let run_file filename = 
+  Settings.set_value interacting false;
   if testenv "REQUEST_METHOD" then
     (Settings.set_value interacting false;
      Settings.set_value web_mode true;
