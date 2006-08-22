@@ -314,9 +314,9 @@ typed_expression:
 
 db_expression:
 | typed_expression                                             { $1 }
-| DELETE FROM LPAREN exp RPAREN VALUES exp                     { DBDelete ($4, $7), pos() }
-| INSERT INTO LPAREN exp RPAREN VALUES exp                     { DBInsert ($4, $7), pos() }
-| UPDATE LPAREN exp RPAREN VALUES exp                          { DBUpdate ($3, $6), pos() }
+| DELETE FROM exp VALUES exp                                   { DBDelete ($3, $5), pos() }
+| INSERT INTO exp VALUES exp                                   { DBInsert ($3, $5), pos() }
+| UPDATE exp VALUES exp                                        { DBUpdate ($2, $4), pos() }
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }

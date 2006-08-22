@@ -2,8 +2,8 @@ var db = database (name="factorials" | getDatabaseConfig());
 var factorials = table "factorials" with (i : Int, f : Int) from db;
 
 fun insertFactorials(i, f, n) {
- delete from (factorials) values [(i=i, f=f)];
- insert into (factorials) values [(i=i, f=f)];
+ delete from factorials values [(i=i, f=f)];
+ insert into factorials values [(i=i, f=f)];
  if(i < n) {
   insertFactorials(i+1, f*(i+1), n)
  } else {
