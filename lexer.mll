@@ -204,6 +204,7 @@ rule lex optable lexers = parse
   | '{'                                 { Stack.push (lex optable lexers) lexers; LBRACE }
   | '}'                                 { Stack.pop lexers (* fall back *); RBRACE }
   | "<-"                                { LARROW }
+  | "<--"                               { LLARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           Stack.push (starttag optable lexers) lexers; LXML id }
   | "[|"                                { LBRACKETBAR }
