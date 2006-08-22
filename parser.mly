@@ -22,7 +22,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW HANDLE WHERE 
+%token FOR LARROW LLARROW HANDLE WHERE 
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH ORDERBY
 %token UPDATE DELETE INSERT BY VALUES INTO
@@ -381,7 +381,11 @@ iteration_expression:
 | FOR LPAREN VAR pattern LARROW exp RPAREN
       perhaps_where
       perhaps_orderby
-      exp                                                      { Iteration ($4, $6, $10, $8, $9),    pos() }
+      exp                                                      { Iteration ($4, `List $6, $10, $8, $9),    pos() }
+| FOR LPAREN VAR pattern LLARROW exp RPAREN
+      perhaps_where
+      perhaps_orderby
+      exp                                                      { Iteration ($4, `Table $6, $10, $8, $9),    pos() }
 
 perhaps_where:
 |                                                              { None }

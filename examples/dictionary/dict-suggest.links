@@ -29,7 +29,7 @@ fun completions(prefix) server {
 
  if (prefix == "") []
  else {
-  take(10)(for (var w <- asList(wordlist))
+  take(10)(for (var w <-- wordlist)
             where (w.word ~ /{prefix}.*/)
             orderby (w.word)
             [w])
@@ -40,8 +40,8 @@ fun completions(prefix) server {
  <head>
   <title>Dictionary suggest</title>
   <style>
-    .input {{ width:500px }}
-    .suggestions {{ text-align:left; width:500px;
+    input {{ width:500px }}
+    #suggestions {{ text-align:left; width:500px;
                     background-color:#ccccff }}
   </style>
  </head>

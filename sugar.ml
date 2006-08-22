@@ -701,6 +701,9 @@ module Desugarer =
        fun (s, _) ->
          let tv datatype = [typevars datatype] in
          let etv = get_type_vars in
+         let etvl = function
+           | `List e
+           | `Table e -> etv e in
          let etvs = flatten -<- (List.map get_type_vars) in
          let opt_etv = function
            | None -> empty
@@ -723,7 +726,7 @@ module Desugarer =
              | ListLit es -> etvs es
              | Definition (_, e, _) -> etv e
              | Iteration (pattern, from, body, filter, sort) ->
-                 flatten [ptv pattern; etv from; etv body; opt_etv filter; opt_etv sort]
+                 flatten [ptv pattern; etvl from; etv body; opt_etv filter; opt_etv sort]
              | Escape (_, e) ->  etv e
              | HandleWith (e1, _, e2) -> flatten [etv e1; etv e2]
              | Section _ -> empty
@@ -889,6 +892,10 @@ module Desugarer =
      in
        ignore (check StringSet.empty pattern)
 
+   let as_list pos = function
+     | `List e -> e
+     | `Table e -> FnAppl ((Var ("asList"), pos), ([e], pos)), pos
+         
    let desugar lookup_pos (e : phrase) : untyped_expression =
      let _, varmap = (generate_var_mapping -<- get_type_vars) e in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
@@ -942,7 +949,7 @@ module Desugarer =
            | TableLit (name, datatype, db) -> 
                let row = match datatype with
                  | RecordType row ->
-                      desugar_row varmap row
+                     desugar_row varmap row
                  | UnitType ->
                      raise (ASTSyntaxError(pos, "Tables must have at least one field"))
                  | _ ->
@@ -996,7 +1003,7 @@ module Desugarer =
                                 lookup_pos fpos, true)
                            | expr, epos -> 
                                (`Variable "__", pos), desugar (expr, epos), lookup_pos epos, false) es in
-                                  polylets es (desugar exp)
+               polylets es (desugar exp)
            | Foreign (language, name, datatype) -> 
                Alien (language, name, desugar_assumption (generalize datatype), pos)
            | SortBy_Conc(patt, expr, sort_expr) ->
@@ -1005,22 +1012,26 @@ module Desugarer =
                       SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
                   | pattern -> raise (ASTSyntaxError(pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
            | Iteration (pattern, from, body, None, None) ->
-               (match patternize pattern with
-                  | `Variable var, _ -> For (desugar body, var, desugar from, pos)
-                  | pattern -> (let var = unique_name () in
-                                  For (polylet pattern pos (Variable (var, pos)) (desugar body),
-                                       var, desugar from, pos)))
+               let from = as_list pos' from
+               in
+                 (match patternize pattern with
+                    | `Variable var, _ -> For (desugar body, var, desugar from, pos)
+                    | pattern -> (let var = unique_name () in
+                                    For (polylet pattern pos (Variable (var, pos)) (desugar body),
+                                         var, desugar from, pos)))
            | Iteration (pattern, from, body, filter_cond, Some sort_expr) -> 
-               desugar (Iteration (pattern, (SortBy_Conc(pattern, from, sort_expr), pos'),
-                                   body, filter_cond, None),
-                        pos')
-           | Iteration (pattern, from, body, Some exp, sort_expr) -> 
+               let from = as_list pos' from
+               in
+                 desugar (Iteration (pattern, `List (SortBy_Conc(pattern, from, sort_expr), pos'),
+                                     body, filter_cond, None),
+                          pos')
+           | Iteration (pattern, from, body, Some exp, sort_expr) ->
                desugar (Iteration (pattern, from, 
                                    (Conditional (exp,
                                                  body,
                                                  (ListLit [], pos')), pos'), 
                                    None, sort_expr),
-                        pos')
+                          pos')
            | Binding _ -> raise (ASTSyntaxError(pos, "Unexpected binding outside a block"))
            | Switch (exp, patterns, _) ->
                PatternCompiler.match_cases
@@ -1122,10 +1133,10 @@ module Desugarer =
                (Utility.fromTo 1 (1 + List.length ps))
                ((`Constant (Record_empty pos)), pos)
        in let p = aux pat in
-            begin
-              check_for_duplicate_names p;
-              p
-            end
+         begin
+           check_for_duplicate_names p;
+           p
+         end
      in
        desugar' lookup_pos e
 

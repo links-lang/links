@@ -39,7 +39,7 @@ fun lookup(n) server {
  var db = database (name="factorials" | getDatabaseConfig());
  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
- for (var row <- asList(factorials))
+ for (var row <-- factorials)
   where (row.i <= n)
   orderby (row.i)
   [(row.i, row.f)]

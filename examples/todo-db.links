@@ -9,7 +9,7 @@ fun showList() {
     <button type="submit">Add item</button>
   </form>
   <table>
-   {for (var item <- asList(items))
+   {for (var item <-- items)
      <tr><td>{stringToXml(item.name)}</td>
          <td><form l:onsubmit="{remove(item.name)}" method="POST">
               <button type="submit">Done</button>
