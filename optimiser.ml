@@ -345,34 +345,38 @@ let rec sql_sort = function
 let sql_aslist : RewriteSyntax.rewriter =
   function 
     | Apply(Variable("asList", _), th, data) ->
+        let pos = fst3 data in
         let th_type = node_datatype th in
         let th_row = match th_type with
             `Table th_row -> th_row
           | _ -> failwith "Internal Error"
         in
-        let fresh_table_name = gensym ~prefix:"Table_" () in
+        let table_alias = gensym ~prefix:"Table_" () in
 	let rowFieldToTableCol colName = function
-	  | `Present fieldType -> {Query.table_renamed = fresh_table_name; Query.name = colName; 
-				   Query.renamed = colName; Query.col_type = fieldType}
+	  | `Present fieldType -> {Query.table_renamed = table_alias; 
+                                   Query.name = colName; 
+				   Query.renamed = colName; 
+                                   Query.col_type = fieldType}
 	  | _ -> failwith "Internal Error TF8736729**"
 	in
 	let fields, _ = th_row in
-	let columns = StringMap.fold (fun colName colData result -> 
-					rowFieldToTableCol colName colData :: result) fields [] in
+	let columns = zip_string_map_with rowFieldToTableCol fields in
         let th_var = match th with
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
 	let select_all = {Query.distinct_only = false;
 			  Query.result_cols = columns;
-			  Query.tables = [(`TableVariable th_var, fresh_table_name)];
+			  Query.tables = [(`TableVariable th_var,
+                                           table_alias)];
 			  Query.condition = Query.Boolean true;
 			  Query.sortings = [];
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
         let th_list_type = `List(`Record(th_row)) in
-        let table_query = TableQuery([Variable(th_var, (fst3 data, th_type, None))], 
+        let table_query = TableQuery([table_alias, 
+                                      Variable(th_var, (pos, th_type, None))],
                                      select_all,
-                                     (fst3 data, th_list_type, None))
+                                     (pos, th_list_type, None))
         in
           (match th with
              | Variable _ -> Some(table_query)
@@ -385,17 +389,17 @@ let sql_aslist : RewriteSyntax.rewriter =
     variable of the outer comprhsn indicated by the `loop_var' param.
 
     @param forbid Variables that if used in the body of an inner 
-      extension prevent the optimisation
+    extension prevent the optimisation
     @param db The name of the outter database. Only tables of the 
-      same database can be joined.
+           same database can be joined.
     @param bindings Bindings of variables to rows or fields from a table.
     @param expr The expression to inspect.
     @return Either None or Some of a tuple containing: 
-    * positive join conditions (conditions between fields of the inner 
-      and outer table);
-    * negative join conditions;
-    * the inner query to join;
-    * the new Links-AST expression without the joinable collection extensions. 
+      * positive join conditions (conditions between fields of the inner 
+        and outer table);
+      * negative join conditions;
+      * the inner query to join;
+      * the new Links-AST expression without the joinable collection extensions. 
 *)
 let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
     =
@@ -422,11 +426,6 @@ let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
                          origin, variable, expr))
       | _ -> None
 
-(* let rename_th_fields renamings = function *)
-(*   | TableHandle(db, table, rowtype, data) -> *)
-(*       TableHandle(db, table, rename_row_fields (filter (fun (old, neue) -> old.table_renamed) renamings) rowtype, data) *)
-(*   | x -> x *)
- 
 (** sql_joins
     When a collection extension has a table as source, explore the
     body expression for other collection extensions on tables from the
@@ -447,9 +446,6 @@ let rec sql_joins : RewriteSyntax.rewriter =
                   the join operator *)
                let body = (substitute_projections outer_var renamings 
                              [`Table_loop(inner_var, inner_query)] body) in
-                 (* FIXME: we need to rename the tables in the types
-                    for the tablehandles*)
-(*                let other_ths = rename_th_fields renamings outer_ths in *)
                let expr = For(body,
                               outer_var, 
                               TableQuery (inner_ths @ outer_ths, query, tdata), 
@@ -621,7 +617,6 @@ let optimise env expr =
 
 let optimise_program (env, exprs) = 
   map (optimise env) (exprs)
-
 
 
 (** Inlining **)

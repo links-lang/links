@@ -1081,7 +1081,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let datatype =  `List (`Record row) in
       let row' = ITO.make_empty_open_row () in
-      let ths = map (type_check env) ths
+      let ths = alistmap (type_check env) ths
       in
         Utility.iter_over ths 
           (fun th -> 

@@ -195,15 +195,19 @@ struct
     
   (** [[map2alist f list]]
       makes an alist that maps [[x]] to [[f x]] for each item in [[list]].
-      In category theory this is called the `graph' of f (restricted by list).
+      In category theory this is called the `graph' of f (restricted by [list]).
   *)
   let map2alist f list = List.map (fun x -> (x, f x)) list
+  let graph_func f list = map2alist f list
 
 end
 include AList
 
 let assoc_list_of_string_map env =
   List.rev (StringMap.fold (fun x y l -> (x, y) :: l) env [])
+
+let zip_string_map_with f env =
+  List.rev (StringMap.fold (fun x y l -> (f x y) :: l) env [])
 
 let string_map_of_assoc_list l =
   List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 

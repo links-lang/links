@@ -83,4 +83,3 @@ module Pickle_datatype : Pickle.Pickle with type a = datatype
 module Pickle_assumption : Pickle.Pickle with type a = assumption
 module Pickle_environment : Pickle.Pickle with type a = environment
 
-val row_to_field_specs : row -> (string * datatype) list

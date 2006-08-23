@@ -173,6 +173,36 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
         offset = normalise_expression qry.offset;
         max_rows = opt_map normalise_expression qry.max_rows}
 
+(** [get_row_field_type field row]: what type has [field] in [row]? 
+    TBD: Factor this out.
+*)
+exception NotFound of string
+
+let get_row_field_type field : Types.row -> Types.datatype = function
+  | (fields, _) ->
+      (match StringMap.find field fields with
+          `Present t -> t
+         | _ -> raise(NotFound field))
+  | _ -> assert false (* failwith("Internal error: non-record in get_row_field_type") *)
+
+let query_result_types (query : Query.query)
+    (table_defs : ((string * Types.row) list)) 
+    : (string * Types.datatype) list =
+  try (
+    let get_col_type table_alias col_name =
+      let row = assoc table_alias table_defs in
+        get_row_field_type col_name row
+    in
+      map (fun col ->
+             (col.renamed,
+              get_col_type col.table_renamed col.name))
+        query.Query.result_cols
+  ) with NotFound field -> failwith("Field " ^ field ^ " from " ^ 
+                                      Sql.string_of_query query ^
+                                      " was not found in tables " ^ 
+                                      mapstrcat "," fst table_defs ^ ".")
+  
+
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function
     | "==" -> EqEqOp
@@ -320,18 +350,20 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 				     in
                                        `Database (db_connect driver params)) in
 	               apply_cont globals cont result
-                   | QueryOp(query) ->
+                   | QueryOp(query, table_aliases) ->
                        let result = 
                          match value with
                            | `List(tbls) ->
-                               let (dbs, rows) = split(map (function `Table(db, _, row) -> (db, row)
+                               let (dbs, table_defs) = split(map (function `Table(db, tname, row) -> (db, row)
                                                               | _ -> failwith "THX1138") 
                                                          tbls) in
                                  assert (all_equiv (=) dbs);
+                                 let table_defs = combine table_aliases table_defs in
                                  let db = hd(dbs) in
+                                 let result_types = query_result_types query table_defs in
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
                                  prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 Database.execute_select rows query_string db
+		                 Database.execute_select result_types query_string db
                            | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
@@ -482,9 +514,16 @@ fun globals locals expr cont ->
   | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
       eval database (BinopRight(locals, MkTableHandle(row), table_name) :: cont)
 
-  | Syntax.TableQuery (ths, query, d) ->   (* getting type from inferred type *)
-      eval (Syntax.list_expr d ths) (UnopApply(locals, QueryOp(query)) :: cont)
-
+  | Syntax.TableQuery (ths, query, d) ->
+      (* [ths] is an alist mapping table aliases to expressions that
+         provide the corresponding TableHandles. We evaluate those
+         expressions and rely on them coming through to the continuation
+         in the same order. That way we can stash the aliases in the
+         continuation frame & match them up later. *)
+      let aliases, th_exprs = split ths in
+        eval (Syntax.list_expr d th_exprs)
+          (UnopApply(locals, QueryOp(query, aliases)) :: cont)
+          
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont

@@ -49,7 +49,7 @@ type unop = | MkColl
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
-            | QueryOp of (Query.query)
+            | QueryOp of (Query.query * (* the table aliases: *) string list)
 type binop =
     | EqEqOp
     | NotEqOp

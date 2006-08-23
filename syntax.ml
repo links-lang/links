@@ -55,7 +55,7 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | TableQuery of ((* the tables: *) 'data expression' list
+  | TableQuery of ((* the tables: *) (string * 'data expression') list
       * (* the query: *) Query.query 
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
@@ -171,7 +171,8 @@ let rec show t : 'a expression' -> string = function
   | TableHandle (db, name, row, data) ->
       "("^ show t name ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
   | TableQuery (ths, query, data) ->
-      "("^ mapstrcat "," (show t) ths ^"["^Sql.string_of_query query^"])" ^ t data
+      "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
+        "["^Sql.string_of_query query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
@@ -222,7 +223,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Escape (_, e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
 
-               | TableQuery (e, _, _) -> (map (visitor visit_children) e)
+               | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
 
                | TableHandle (e1, e2, _, _)
                | Apply (e1, e2, _)

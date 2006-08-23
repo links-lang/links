@@ -40,30 +40,33 @@ let execute_command  (query:string) (db: database) : result =
        | QueryOk -> `Record []
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
-let execute_select  (datatypes:Types.row list) (query:string) (db: database) : result =
-  let fields = concat_map Types.row_to_field_specs datatypes
-  in 
-    Debug.debug("fields is " ^ mapstrcat ", " (fst) fields);
+let execute_select (field_types:(string * Types.datatype) list) (query:string) (db: database)
+    : result =
   let result = (db#exec query) in
     (match result#status with
        | QueryOk -> 
            let row_fields =
 	     (let temp_fields = ref [] in
+                (* TBD: factor this out as 
+                   result_sig : dbresult -> (string * dbtype * datatype) list *)
                 for count = result#nfields - 1 downto 0 do 
-                  temp_fields := 
-                    (result#fname count, 
-                     result#ftype count, 
-                     try (assoc (result#fname count) fields) 
-                     with Not_found -> 
-                       failwith("Name " ^ (result#fname count) ^ 
-                         " at #" ^ string_of_int count ^ " was not found in fields.")
-                    )
-                  :: !temp_fields
+                  try 
+                    temp_fields := 
+                      (result#fname count, 
+                       result#ftype count, 
+                       (assoc (result#fname count) field_types))
+                    :: !temp_fields
+                  with Not_found -> (* Could probably remove this. *)
+                    failwith("Column " ^ (result#fname count) ^ 
+                               " had no type info in query's type spec: " ^
+                               mapstrcat ", " (fun (fld, typ) -> fld ^ ":" ^ 
+                                                 Types.string_of_datatype typ)
+                               field_types)
                 done;
                 !temp_fields) in
            let is_null = (fun (name, db_type, real_type) ->
                             if name = "null" then true
-                            else if mem_assoc name fields then
+                            else if mem_assoc name field_types then
                               if (db#equal_types real_type db_type) then
                                 false 
 			      else raise (Runtime_error ("Database did not provide results compatible with specified type (query was '" ^ query ^ "')"))
@@ -72,10 +75,10 @@ let execute_select  (datatypes:Types.row list) (query:string) (db: database) : r
              if null_query then
                `List (map (fun _ -> `Record []) result#get_all_lst)
              else
-               `List (map (fun row ->
-                             `Record (map2 (fun (name, db_type, real_type) value -> 
-			                      name, value_of_db_string value real_type)
-                                        row_fields row))
+               `List (map (fun rowvalue ->
+                             `Record (map2 (fun (name, db_type, real_type) fldvalue -> 
+			                      name, value_of_db_string fldvalue real_type)
+                                        row_fields rowvalue))
                         result#get_all_lst)
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
       

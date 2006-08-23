@@ -11,5 +11,5 @@ val execute_command : (string -> Result.database -> Result.result)
     on the database [db] and interprets the results according to the
     field types of the [row]i. This should really take an alist of
     fieldname -> fieldtype. *)
-val execute_select : (Types.row list -> string -> Result.database -> 
+val execute_select : ((string * Types.datatype) list -> string -> Result.database -> 
                         Result.result)

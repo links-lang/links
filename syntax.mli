@@ -28,7 +28,7 @@ type 'a expression' =
   | Concat of ('a expression' * 'a expression' * 'a)
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
-  | TableQuery of ('a expression' list * Query.query * 'a)
+  | TableQuery of ((string * 'a expression') list * Query.query * 'a)
   | TableHandle of ('a expression' * 'a expression' * Types.row * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
   | Escape of (string * 'a expression' * 'a)

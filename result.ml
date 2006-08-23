@@ -82,12 +82,9 @@ and reconstruct_db_string : (string * string) -> string =
 type unop = MkColl
             | MkVariant of string
             | MkDatabase
-(* 	    | MkTableHandle of (  *)
-(* 		(\* table name: *\) expression * *)
-(* 		(\* field spec: *\) row) *)
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
-            | QueryOp of (Query.query)
+            | QueryOp of (Query.query * (* table aliases: *) string list)
                 deriving (Show, Pickle)
 		
 let string_of_unop = Show_unop.show
