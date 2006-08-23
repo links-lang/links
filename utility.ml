@@ -160,7 +160,7 @@ struct
 	  if predicate first then replacement :: rest
 	  else first::(substitute predicate replacement rest)
 
-  let do_for_each l f = List.iter f l
+  let iter_over l f = List.iter f l
 end
 include ListUtils
   
