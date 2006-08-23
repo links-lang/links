@@ -6,4 +6,10 @@ class virtual db_args : string -> object
 end
 
 val execute_command : (string -> Result.database -> Result.result)
-val execute_select : (Types.datatype -> string -> Result.database -> Result.result)
+
+(** [execute_select \[row1; row2; ...\] sql db] runs the query [sql]
+    on the database [db] and interprets the results according to the
+    field types of the [row]i. This should really take an alist of
+    fieldname -> fieldtype. *)
+val execute_select : (Types.row list -> string -> Result.database -> 
+                        Result.result)

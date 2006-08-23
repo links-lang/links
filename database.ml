@@ -40,17 +40,10 @@ let execute_command  (query:string) (db: database) : result =
        | QueryOk -> `Record []
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
-let execute_select  (datatype:Types.datatype) (query:string) (db: database) : result =
-  let fields = (match datatype with
-		  | `List (`Record (field_env, _)) ->
-		      (StringMap.fold (* refactor this as stringmap_to_pairlist *)
-			 (fun label field_spec fields ->
-			    match field_spec with
-			      | `Present t -> (label, t) :: fields
-			      | `Absent -> raise (Runtime_error "SQ072"))
-			 field_env [])
-                  | _ -> failwith "internal error: unexpected type in select")
+let execute_select  (datatypes:Types.row list) (query:string) (db: database) : result =
+  let fields = concat_map Types.row_to_field_specs datatypes
   in 
+    Debug.debug("fields is " ^ mapstrcat ", " (fst) fields);
   let result = (db#exec query) in
     (match result#status with
        | QueryOk -> 
@@ -58,8 +51,14 @@ let execute_select  (datatype:Types.datatype) (query:string) (db: database) : re
 	     (let temp_fields = ref [] in
                 for count = result#nfields - 1 downto 0 do 
                   temp_fields := 
-                    (result#fname count, result#ftype count, assoc (result#fname count) fields)
-                  :: !temp_fields (*blech*)
+                    (result#fname count, 
+                     result#ftype count, 
+                     try (assoc (result#fname count) fields) 
+                     with Not_found -> 
+                       failwith("Name " ^ (result#fname count) ^ 
+                         " at #" ^ string_of_int count ^ " was not found in fields.")
+                    )
+                  :: !temp_fields
                 done;
                 !temp_fields) in
            let is_null = (fun (name, db_type, real_type) ->

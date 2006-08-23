@@ -323,10 +323,15 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | QueryOp(query) ->
                        let result = 
                          match value with
-                           | `Table(db, _, row)->
+                           | `List(tbls) ->
+                               let (dbs, rows) = split(map (function `Table(db, _, row) -> (db, row)
+                                                              | _ -> failwith "THX1138") 
+                                                         tbls) in
+                                 assert (all_equiv (=) dbs);
+                                 let db = hd(dbs) in
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
                                  prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 Database.execute_select (`List(`Record row)) query_string db
+		                 Database.execute_select rows query_string db
                            | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
@@ -476,10 +481,9 @@ fun globals locals expr cont ->
 
   | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
       eval database (BinopRight(locals, MkTableHandle(row), table_name) :: cont)
-(*      eval database (UnopApply(locals, MkTableHandle(table_name, row)) :: cont)*)
 
-  | Syntax.TableQuery (th, query, _) ->   (* getting type from inferred type *)
-      eval th (UnopApply(locals, QueryOp(query)) :: cont)
+  | Syntax.TableQuery (ths, query, d) ->   (* getting type from inferred type *)
+      eval (Syntax.list_expr d ths) (UnopApply(locals, QueryOp(query)) :: cont)
 
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in

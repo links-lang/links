@@ -28,7 +28,7 @@ type 'a expression' =
   | Concat of ('a expression' * 'a expression' * 'a)
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
-  | TableQuery of ('a expression' * Query.query * 'a)
+  | TableQuery of ('a expression' list * Query.query * 'a)
   | TableHandle of ('a expression' * 'a expression' * Types.row * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
   | Escape of (string * 'a expression' * 'a)
@@ -43,18 +43,27 @@ type stripped_expression = unit expression'
 
 exception ASTSyntaxError of position * string
 
+val list_expr : 'a -> 'a expression' list -> 'a expression'
+
 val is_define : 'a expression' -> bool
 val is_value : 'a expression' -> bool
+
 val string_of_expression : 'a expression' -> string
+
+val stringlit_value : 'a expression' -> string
+
 val freevars : 'a expression' -> string list
-val strip_data : 'a expression' -> stripped_expression
-val erase : expression -> untyped_expression
-val labelize : expression -> expression
+
 val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
+
 val expression_data : 'a expression' -> 'a
+val strip_data : 'a expression' -> stripped_expression
 val node_datatype : expression -> Types.datatype
 val untyped_pos : untyped_expression -> position
-val stringlit_value : 'a expression' -> string
+
+val erase : expression -> untyped_expression
+val labelize : expression -> expression
+
 val dummy_position : position
 val no_expr_data : position * Types.datatype * label option
 

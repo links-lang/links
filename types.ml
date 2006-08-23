@@ -479,3 +479,14 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
       | `Table row  -> (match rewrite_row row with 
                            | Some row -> Some (`Table row)
                            | None ->     None)
+
+
+let row_to_field_specs (field_env, _) = 
+  (* TBD: refactor this as row_to_fieldspecs *)
+  (StringMap.fold
+     (fun label field_spec fields ->
+	match field_spec with
+	  | `Present t -> (label, t)::fields
+	  | `Absent -> fields)
+     field_env [])
+    

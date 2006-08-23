@@ -117,3 +117,6 @@ let passto f exprs next =
     match aux false [] exprs with
       | false, _ -> None
       | true,  es -> Some (next (List.rev es))
+
+let do_rewrite f x = 
+  match f x with None -> x | Some y -> y

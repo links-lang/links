@@ -297,21 +297,32 @@ let sql_selections : RewriteSyntax.rewriter = function
         Some (select_by_origin origin (For (expr, variable, table, data)))
   | _ -> None
 
-let rec substitute_projections new_src renamings expr bindings =
+let substitute_projections' new_src renamings bindings expr =
   let subst_projection (from, to') : RewriteSyntax.rewriter = function
-    | Record_selection (label, label_var, etc_var, Variable (src, d), body, data) 
+    | Record_selection (label, label_var, etc_var, Variable (src, d), body, 
+                        data) as orig
         when from.Query.renamed = label ->
+        debug("Renaming " ^ from.Query.renamed ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
         (match trace_variable src bindings with
 	   | `Table query when mem from.Query.table_renamed (map snd query.Query.tables) ->
-               Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
+               Some(Record_selection(to', label_var, etc_var, 
+                                     Variable (new_src, d), body, data))
            | `Table_field (table_as, _) when from.Query.table_renamed = table_as ->
                (* NOTE: I think this case never occurs *)
                Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
+           | `Unavailable -> debug(src ^ " was unavailable."); None
+           | `Earlier(str, _) -> debug("Earlier: " ^ str); None
            | _ -> 
-               Some (Record_selection (label, label_var, etc_var, Variable (src, d), body, data)))
+               debug "NOT renaming after all!";
+               Some (Record_selection (label, label_var, etc_var, 
+                                       Variable (src, d), body,  (* not new_src? *)
+                                       data)))
     | _ -> None
   in
     RewriteSyntax.all (List.map (fun r -> RewriteSyntax.bottomup (subst_projection r)) renamings) expr
+
+let substitute_projections new_src renamings bindings expr = 
+ do_rewrite (substitute_projections' new_src renamings bindings) expr
 
 let read_proj = function
     Record_selection(field, _, _, record, 
@@ -330,7 +341,7 @@ let rec sql_sort = function
 				     sortByFld)), data1))
          | _ -> None)
   | _ -> None
-      
+
 let sql_aslist : RewriteSyntax.rewriter =
   function 
     | Apply(Variable("asList", _), th, data) ->
@@ -359,8 +370,9 @@ let sql_aslist : RewriteSyntax.rewriter =
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
         let th_list_type = `List(`Record(th_row)) in
-        let table_query = TableQuery(Variable(th_var, (Syntax.dummy_position, th_type, None)), select_all,
-                                                     (Syntax.dummy_position, th_list_type, None))
+        let table_query = TableQuery([Variable(th_var, (fst3 data, th_type, None))], 
+                                     select_all,
+                                     (fst3 data, th_list_type, None))
         in
           (match th with
              | Variable _ -> Some(table_query)
@@ -385,38 +397,36 @@ let sql_aslist : RewriteSyntax.rewriter =
     * the inner query to join;
     * the new Links-AST expression without the joinable collection extensions. 
 *)
-let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:expression)
+let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
     =
   let bindings, expr = sep_assgmts bindings expr in
     match expr with
       | Condition (condition, t, ((Nil _) as e), data)  ->
-          (match check_join loop_var ref_db bindings t with
-	     | Some (positive, negative, query, projs, var, t) ->
-                 Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
+          (match check_join loop_var bindings t with
+	     | Some (positive, negative, th, query, projs, var, t) ->
+                 Some (positive, negative, th, query, projs, var, 
+                       Condition (condition, t, e, data))
 	     | None -> None)
       | Condition (condition, ((Nil _) as t), e, data) ->
-          (match check_join loop_var ref_db bindings e with
-	     | Some (positive, negative, query, projs, var, e) ->
-                 Some (positive, negative, query, projs, var, Condition (condition, t, e, data))
+          (match check_join loop_var bindings e with
+	     | Some (positive, negative, th, query, projs, var, e) ->
+                 Some (positive, negative, th, query, projs, var,
+                       Condition (condition, t, e, data))
 	     | None -> None)
-      | For (expr, variable, TableQuery(_, query, _), _) ->
+      | For (expr, variable, TableQuery(th, query, _), _) ->
           (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
                (*  ([], [], _, _) -> None *)
 	     | (positives, negatives, expr, origin) ->
-                   Some (positives, negatives, query, 
+                   Some (positives, negatives, th, query, 
                          origin, variable, expr))
       | _ -> None
 
-(*
-  To fix in sql_joins:
-
-    1. rename duplicate columns
-    2. rename deleted variable 
-    3. handle unprojected record variables
-    4. join even without condition?
- *)
-
+(* let rename_th_fields renamings = function *)
+(*   | TableHandle(db, table, rowtype, data) -> *)
+(*       TableHandle(db, table, rename_row_fields (filter (fun (old, neue) -> old.table_renamed) renamings) rowtype, data) *)
+(*   | x -> x *)
+ 
 (** sql_joins
     When a collection extension has a table as source, explore the
     body expression for other collection extensions on tables from the
@@ -426,21 +436,23 @@ let rec check_join (loop_var:string) (ref_db:string) (bindings:bindings) (expr:e
 *)
 let rec sql_joins : RewriteSyntax.rewriter = 
   function
-    | For (body, outer_var, (TableQuery (th, query, tdata)), data) ->
+    | For (body, outer_var, (TableQuery (outer_ths, query, tdata)), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
-        (match check_join outer_var "dummy" bindings body with
-           | Some(positives, negatives, inner_query, origins, inner_var, body) ->
+        (match check_join outer_var bindings body with
+           | Some(positives, negatives, inner_ths, inner_query, origins, inner_var, body) ->
                let renamings, query = join (positives, negatives) (query, inner_query) in
                  
                (* Replace anything of the form inner_var.field with 
                   outer_var.renamed_field with renamings as given by 
                   the join operator *)
-               let body = fromOption body (substitute_projections outer_var renamings body
-                                             [`Table_loop(inner_var, inner_query)] )
-               in
+               let body = (substitute_projections outer_var renamings 
+                             [`Table_loop(inner_var, inner_query)] body) in
+                 (* FIXME: we need to rename the tables in the types
+                    for the tablehandles*)
+(*                let other_ths = rename_th_fields renamings outer_ths in *)
                let expr = For(body,
                               outer_var, 
-                              TableQuery (th, query, tdata), 
+                              TableQuery (inner_ths @ outer_ths, query, tdata), 
                               data) in
 (*                (\* finally, wrap the whole expression in the  *)
 (*                   projections returned from check_join; *)

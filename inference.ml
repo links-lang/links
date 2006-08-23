@@ -1072,7 +1072,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let params = type_check env params in
         unify (type_of_expression params, db_descriptor_type);
         Database (params, (pos, `Primitive `DB, None))
-  | TableQuery (th, query, pos) ->
+  | TableQuery (ths, query, pos) ->
       let row =
 	(List.fold_right
 	   (fun col env ->
@@ -1081,11 +1081,13 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let datatype =  `List (`Record row) in
       let row' = ITO.make_empty_open_row () in
-      let th = type_check env th
+      let ths = map (type_check env) ths
       in
-	unify (type_of_expression th, `Table row');
+        Utility.do_for_each ths 
+          (fun th -> 
+             unify (type_of_expression th, `Table row'));
 	unify_rows (row, row');
-        TableQuery (th, query, (pos, datatype, None))
+        TableQuery (ths, query, (pos, datatype, None))
   | TableHandle (db, tableName, row, pos) ->
       let datatype =  `Table (inference_row_of_row var_maps row) in
       let db = type_check env db in

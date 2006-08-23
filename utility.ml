@@ -1,5 +1,9 @@
 (**** Various utility functions ****)
 
+let fst3(x, _, _) = x
+let snd3(_, y, _) = y
+let thd3(_, _, z) = z
+
 (*** string environments ***)
 module OrderedString =
 struct
@@ -48,9 +52,17 @@ struct
     if f = t then []
     else f :: fromTo (f+1) t
 
+  (** [all_equiv rel list]: given an equiv. rel'n [rel], determine
+      whether all elements of [list] are equivalent. *)
+  let all_equiv (cmp : 'a -> 'a -> bool) : 'a list -> bool = function
+      [] -> true
+    | (one::others) ->
+        List.for_all (fun x -> cmp one x) others
+          
+  (** [span pred list]: partition [list] into an initial sublist
+      satisfying [pred] and the remainder.  *)
   let span (p : 'a -> bool) : 'a list -> ('a list * 'a list) =
     let rec span = function
-      | [] -> [], []
       | x::xs' when p x -> let ys, zs = span xs' in x::ys, zs
       | xs              -> [], xs in
       span
@@ -147,6 +159,8 @@ struct
       | (first::rest) -> 
 	  if predicate first then replacement :: rest
 	  else first::(substitute predicate replacement rest)
+
+  let do_for_each l f = List.iter f l
 end
 include ListUtils
   
@@ -190,7 +204,7 @@ include AList
 
 let assoc_list_of_string_map env =
   List.rev (StringMap.fold (fun x y l -> (x, y) :: l) env [])
-    
+
 let string_map_of_assoc_list l =
   List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 
 

@@ -55,7 +55,7 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | TableQuery of ((* the table: *) 'data expression'
+  | TableQuery of ((* the tables: *) 'data expression' list
       * (* the query: *) Query.query 
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
@@ -170,8 +170,8 @@ let rec show t : 'a expression' -> string = function
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | TableHandle (db, name, row, data) ->
       "("^ show t name ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
-  | TableQuery (th, query, data) ->
-      "("^ show t th ^"["^Sql.string_of_query query^"])" ^ t data
+  | TableQuery (ths, query, data) ->
+      "("^ mapstrcat "," (show t) ths ^"["^Sql.string_of_query query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
@@ -220,8 +220,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_injection (_, e, _)
                | List_of (e, _)
                | Escape (_, e, _)
-               | HasType (e, _, _)
-               | TableQuery (e, _, _) -> [visitor visit_children e]
+               | HasType (e, _, _) -> [visitor visit_children e]
+
+               | TableQuery (e, _, _) -> (map (visitor visit_children) e)
 
                | TableHandle (e1, e2, _, _)
                | Apply (e1, e2, _)
@@ -263,6 +264,10 @@ let freevars (expression : 'a expression') : string list =
     | other -> default other
   in 
     reduce_expression aux (combine -<- snd) expression
+
+let rec list_expr data = function
+    [] -> Nil(data)
+  | expr::etc -> Concat(List_of(expr, data), list_expr data etc, data)
 
 let expression_data : ('a expression' -> 'a) = function 
         | Define (_, _, _, data) -> data
