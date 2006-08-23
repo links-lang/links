@@ -1084,7 +1084,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let ths = alistmap (type_check env) ths
       in
         Utility.iter_over ths 
-          (fun th -> 
+          (fun _, th -> 
              unify (type_of_expression th, `Table row'));
 	unify_rows (row, row');
         TableQuery (ths, query, (pos, datatype, None))
