@@ -13,12 +13,120 @@ let optimising = Settings.add_bool("optimising", true, true)
 let show_optimisation = Settings.add_bool("show_optimisation", false, true)
 
 
-(* uniquify_expression
 
-   Give unique names to all local bindings.  Local names should be
-   distinct from each other and from toplevel names
+(** [pure]
 
-   After this, we can be much less careful about scope.
+    Checkes whether the evaluation of an expression is known to be free
+    from side effects
+*)
+let pure : expression -> bool = 
+  (* Everything is pure except the application of certain primitive
+     functions and of any functions which call those.  For now, we'll
+     just punt when we see a function application.  Eventually the
+     type system will help us out.
+
+     NB: continuation invocation is impure in the sense that we can't
+     replace `x = f(3); 4' with `4' if `f' is a continuation.
+  *)
+  let pure default = function 
+    | Apply _    -> false
+    | TableQuery _ -> false
+    | Escape _   -> false
+    | e       -> default e
+  and combiner l = fold_right (&&) l true in
+    reduce_expression pure (combiner -<- snd)
+
+
+(** Inlining **)
+
+(* Number of nodes in a syntax tree *)
+let countNodes e = 
+  let count = ref 0 in 
+    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
+    !count;;
+
+(* Inline small, non-recursive functions *)
+let contains_no_extrefs : Syntax.expression -> bool =
+  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
+
+let recursivep : Syntax.expression -> bool = function
+  | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 
+      -> List.mem name (freevars fn)
+  | _ -> false
+
+    
+let size_limit = 150
+
+let is_inline_candidate= function
+  | Define (_, (Rec _ as e), _, _) -> not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
+  | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
+  | _ -> false
+
+let find_inline_candidates es : (string * expression * location) list = 
+  let is_inline_candidate = function
+    | Define (name, rhs, location, _) as e when is_inline_candidate e -> [name, rhs, location]
+    | _ -> []
+  in Utility.concat_map is_inline_candidate es
+
+let location_matches location = function
+  | Define (_, _, location', _) -> location=location'
+  | _ -> false
+
+let replace name rhs : RewriteSyntax.rewriter = function
+  | Variable (n, _) when n = name -> Some rhs
+  | _ -> None
+
+let replace name rhs e = fromOption e (RewriteSyntax.bottomup (replace name rhs) e)
+
+let perform_value_inlining location name rhs =
+  List.map (fun exp ->
+    if location_matches location exp then
+      replace name rhs exp
+    else
+      exp)
+
+let replaceApplication name var body : RewriteSyntax.rewriter = function
+  | Apply (Variable (n, _), p, d) when n = name -> Some (Let (var, p, body, d))
+  | _ -> None
+
+let perform_function_inlining location name var rhs = 
+  List.map
+    (fun exp -> fromOption exp (
+       if location_matches location exp then
+	 RewriteSyntax.bottomup (replaceApplication name var rhs) exp
+       else
+	 None))
+
+let inline program = 
+  let valuedefp = function
+    | _, Rec _, _ -> false
+    | _        -> true
+  in
+  let candidates = find_inline_candidates program in
+  let value_candidates, fn_candidates = List.partition valuedefp candidates in
+  let program' = 
+    List.fold_right 
+      (fun (name, rhs, location) program ->
+	 perform_value_inlining location name rhs program)
+      value_candidates
+      program
+  in 
+  let program'' = 
+    List.fold_left 
+      (fun program (_, rhs, location)  ->
+         match rhs with
+           | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
+	       perform_function_inlining location name v body program)
+      program'
+      fn_candidates
+  in program''
+
+(** [uniquify_expression]
+
+    Give unique names to all local bindings.  Local names should be
+    distinct from each other and from toplevel names
+
+    After this, we can be much less careful about scope.
 *)
 let uniquify_expression : RewriteSyntax.rewriter = 
   (* Rename a variable, entirely ignoring any intervening bindings *)
@@ -63,37 +171,18 @@ let uniquify_expression : RewriteSyntax.rewriter =
      we need to replace bindings from the inside out *)
   in RewriteSyntax.bottomup rewrite_node
 
-(* pure
-
-   Checkes whether the evaluation of an expression is known to be free
-   from side effects
-*)
-let pure : expression -> bool = 
-  (* Everything is pure except the application of certain primitive
-     functions and of any functions which call those.  For now, we'll
-     just punt when we see a function application.  Eventually the
-     type system will help us out.
-
-     NB: continuation invocation is impure in the sense that we can't
-     replace `x = f(3); 4' with `4' if `f' is a continuation.
-  *)
-  let pure default = function 
-    | Apply _    -> false
-    | TableQuery _ -> false
-    | Escape _   -> false
-    | e       -> default e
-  and combiner l = fold_right (&&) l true in
-    reduce_expression pure (combiner -<- snd)
-
-(** inference_rw
+(*
+(** [inference_rw]
     The type-inference function, in the form of a rewriter
 *)
-(*
 let inference_rw env : RewriteSyntax.rewriter = fun input -> 
   let output = snd (Inference.type_expression env (erase input)) in
     if input = output then None
     else Some output
 *)
+
+(** {0 Renaming} *)
+
 let rename_var var repl : RewriteSyntax.rewriter = 
   (* Blindly replace occurrences of a variable with an expression,
      ignoring bindings *)
@@ -128,7 +217,8 @@ let renaming : RewriteSyntax.rewriter =
       -> Some (fromOption body (rename_var y x body))
   | _ -> None
 
-(** Remove all let bindings where the name is not used in the body.
+(** [unused_variables]: Remove all let bindings where the name is not used 
+    in the body.
 
     FIXME: also letrec ("transitively") and record selection
     operators.
@@ -144,16 +234,16 @@ let unused_variables : RewriteSyntax.rewriter = function
       (* FIXME: this ignores variables that are hidden inside queries *)
 
 
-(*
+
+(** [simplify_regex] rewrites an expression as follows:
+{
    s ~ let x in b
        let x in s ~ b
+}
 
  In the following, the order of eval is unspecified:
    f() ~ /{g()}/
-
- eekc: what if we rule out such fancy regex splicings?
 *)
-
 
 let simplify_regex : RewriteSyntax.rewriter = function
   | Apply (Apply (Variable ("~", _), lhs, _) as a, Let (v, e, rhs, d1), d2)  ->
@@ -618,87 +708,3 @@ let optimise env expr =
 let optimise_program (env, exprs) = 
   map (optimise env) (exprs)
 
-
-(** Inlining **)
-
-(* Number of nodes in a syntax tree *)
-let countNodes e = 
-  let count = ref 0 in 
-    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
-    !count;;
-
-(* Inline small, non-recursive functions *)
-let contains_no_extrefs : Syntax.expression -> bool =
-  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
-
-let recursivep : Syntax.expression -> bool = function
-  | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 
-      -> List.mem name (freevars fn)
-  | _ -> false
-
-    
-let size_limit = 150
-
-let is_inline_candidate= function
-  | Define (_, (Rec _ as e), _, _) -> not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
-  | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
-  | _ -> false
-
-let find_inline_candidates es : (string * expression * location) list = 
-  let is_inline_candidate = function
-    | Define (name, rhs, location, _) as e when is_inline_candidate e -> [name, rhs, location]
-    | _ -> []
-  in Utility.concat_map is_inline_candidate es
-
-let location_matches location = function
-  | Define (_, _, location', _) -> location=location'
-  | _ -> false
-
-let replace name rhs : RewriteSyntax.rewriter = function
-  | Variable (n, _) when n = name -> Some rhs
-  | _ -> None
-
-let replace name rhs e = fromOption e (RewriteSyntax.bottomup (replace name rhs) e)
-
-let perform_value_inlining location name rhs =
-  List.map (fun exp ->
-    if location_matches location exp then
-      replace name rhs exp
-    else
-      exp)
-
-let replaceApplication name var body : RewriteSyntax.rewriter = function
-  | Apply (Variable (n, _), p, d) when n = name -> Some (Let (var, p, body, d))
-  | _ -> None
-
-let perform_function_inlining location name var rhs = 
-  List.map
-    (fun exp -> fromOption exp (
-       if location_matches location exp then
-	 RewriteSyntax.bottomup (replaceApplication name var rhs) exp
-       else
-	 None))
-
-let inline program = 
-  let valuedefp = function
-    | _, Rec _, _ -> false
-    | _        -> true
-  in
-  let candidates = find_inline_candidates program in
-  let value_candidates, fn_candidates = List.partition valuedefp candidates in
-  let program' = 
-    List.fold_right 
-      (fun (name, rhs, location) program ->
-	 perform_value_inlining location name rhs program)
-      value_candidates
-      program
-  in 
-  let program'' = 
-    List.fold_left 
-      (fun program (_, rhs, location)  ->
-         match rhs with
-           | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
-	       perform_function_inlining location name v body program)
-      program'
-      fn_candidates
-  in program''
