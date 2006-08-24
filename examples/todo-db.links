@@ -22,13 +22,12 @@ fun showList() {
 }
 
 fun add(name) {
- insert into items values [(name=name)];
- debug("inserted item");
+ insert items values [(name=name)];
  showList()
 }
 
 fun remove(name) {
- delete from items values [(name=name)];
+ delete (var r <-- items) where (r.name == name);
  showList()
 }
 

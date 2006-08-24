@@ -57,26 +57,26 @@ let cond_from_field db (k, v) =
 let single_match db = 
   function
     | `Record fields -> "("^ (String.concat " AND " (map (cond_from_field db) fields)) ^")"
-    | _ -> failwith "Internal error: forming query from non-row"
+    | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_result r)
 
 let row_columns = function
   | `List ((`Record fields)::_) -> String.concat ", " (map fst fields)
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^string_of_result r)
 and row_values db = function
   | `List records ->
       String.concat ", "
         (List.map (function
                      | `Record fields -> "("^(String.concat ", " (map (value_as_string db -<- snd) fields))^")"
                      | _ -> failwith "Internal error: forming query from non-row") records)
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row (row_values): "^string_of_result r)
 and delete_condition db = function
   | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")"
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row (delete_condition): "^string_of_result r)
 and updates db : Result.result -> string = function
   | `Record fields -> 
       let field (k, v) = (k ^" = "^ value_as_string db v) in
         (String.concat ", " (map field fields))
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row: "^string_of_result r) 
 
 type primitive =  [
   Result.result
@@ -503,9 +503,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and rows = assoc "2" fields in begin
-                    match table with 
-                      | `Table (db, table_name, _) ->
+                and rows = assoc "2" fields in
+                  begin
+                    match table, rows with
+                      | `Table _, `List [] -> `Record []
+                      | `Table (db, table_name, _), _ ->
                           let query_string =
                             "insert into " ^ table_name ^ "("^ row_columns rows ^") values "^ row_values db rows
                           in
@@ -523,10 +525,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                 let table = assoc "1" fields
                 and rows = assoc "2" fields in begin
                     match table, rows with
+                      | _, `List [] -> `Record []
                       | `Table (db, table_name, _), `List rows ->
                           List.iter (fun row ->
                                        let query_string =
-                                         "update " ^ unbox_string table
+                                         "update " ^ table_name
                                          ^ " set " ^ updates db (links_snd row)
                                          ^ " where " ^ single_match db (links_fst row)
                                        in
@@ -544,11 +547,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and rows = assoc "2" fields in begin
-                    match table with 
-                      | `Table (db, table_name, _)  ->
-                          let query_string =
-                            "delete from " ^ table_name ^ " where " ^ delete_condition db rows
+                and rows = assoc "2" fields in
+                  begin
+                    match table, rows with
+                      | `Table _, `List [] ->
+                          `Record []
+                      | `Table (db, table_name, _), _  ->
+                          let condition = delete_condition db rows in
+                          let query_string = "delete from " ^ table_name ^ " where " ^ condition
                           in
                             prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
                             (Database.execute_command query_string db :> primitive)

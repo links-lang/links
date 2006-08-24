@@ -1,15 +1,68 @@
 var db = database (name="factorials" | getDatabaseConfig());
-var factorials = table "factorials" with (i : Int, f : Int) from db;
+var factorials = table "factorials" with (i : Int, f : Int) from db; #write db;
 
-fun insertFactorials(i, f, n) {
- delete from factorials values [(i=i, f=f)];
- insert into factorials values [(i=i, f=f)];
- if(i < n) {
-  insertFactorials(i+1, f*(i+1), n)
- } else {
-  
- }
+### library functions ###
+fun upto(i,j) {
+  if(j < i) {
+    []
+  } else {
+    i :: (upto(i+1, j))
+  }
 }
 
-insertFactorials(0,1,20)
+fun map(f, xs) {
+  switch xs {
+    case [] -> [];
+    case (x::xs) -> f(x) :: (map(f, xs));
+  }
+}
 
+fun foldr(f, xs, y) {
+  switch xs {
+    case [] -> y;
+    case (x::xs) -> foldr(f, xs, f(x)(y));
+  }
+}
+
+fun filter(xs, p) {
+  foldr(
+    fun(x)(ys) {
+     if(p(x)) {x :: ys}
+     else {ys}
+    }, xs, [])
+}
+
+fun mem(y, xs) {
+  not (filter (xs, fun (x) {x == y}) == [])
+}
+
+fun diff(xs)(ys) {
+  filter(xs, fun (x) {not(mem(x, ys))})
+}
+
+fun product(xs) {
+  foldr ((*), xs, 1)
+}
+### end of library functions ###
+
+fun factorial(i) {
+  product(upto(1,i))
+}
+
+fun insertFactorials(n) {
+#  atomic {
+    update (var r <-- factorials)
+      where (0 <= r.i && r.i <= n)
+      set (i = r.i, f = factorial(r.i));
+    delete (var r <-- factorials)
+      where (r.i < 0 || n < r.i);
+    var indexes = for (var r <-- factorials) [r.i];
+    insert factorials values
+      for (var i <- upto(0,n) `diff` indexes)
+        [(i=i, f=factorial(i))];
+#  }
+}
+
+# `diff` is list difference
+
+insertFactorials(20)

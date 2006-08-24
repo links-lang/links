@@ -25,7 +25,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token FOR LARROW LLARROW HANDLE WHERE 
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH ORDERBY
-%token UPDATE DELETE INSERT BY VALUES INTO
+%token UPDATE DELETE INSERT BY VALUES SET INTO
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -312,11 +312,22 @@ typed_expression:
 | logical_expression                                           { $1 }
 | logical_expression COLON datatype                            { TypeAnnotation ($1, $3), pos() }
 
+
+/*
+DELETE generator perhaps_where
+UPDATE generator perhaps_where SET
+       LPAREN labeled_exps RPAREN                              { DBUpdate($2, $3, $6), pos() }
+*/
 db_expression:
 | typed_expression                                             { $1 }
-| DELETE FROM exp VALUES exp                                   { DBDelete ($3, $5), pos() }
-| INSERT INTO exp VALUES exp                                   { DBInsert ($3, $5), pos() }
-| UPDATE exp VALUES exp                                        { DBUpdate ($2, $4), pos() }
+| INSERT exp VALUES exp                                        { DBInsert ($2, $4), pos() }
+| DELETE LPAREN table_generator RPAREN perhaps_where           { DBDelete ($3, $5), pos() }
+| UPDATE LPAREN table_generator RPAREN
+         perhaps_where
+         SET LPAREN labeled_exps RPAREN                        { DBUpdate($3, $5, $8), pos() }
+
+/*| DELETE FROM exp VALUES exp                                 { DBDelete ($3, $5), pos() }*/
+/*| UPDATE exp VALUES exp                                        { DBUpdate ($2, $4), pos() }*/
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }
@@ -373,19 +384,26 @@ case:
 // TBD: remove `None' from Switch constructor
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None),    pos() }
-| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None),    pos() }
+| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None), pos() }
+| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR LPAREN VAR pattern LARROW exp RPAREN
+| FOR LPAREN generator RPAREN
       perhaps_where
       perhaps_orderby
-      exp                                                      { Iteration ($4, `List $6, $10, $8, $9),    pos() }
-| FOR LPAREN VAR pattern LLARROW exp RPAREN
-      perhaps_where
-      perhaps_orderby
-      exp                                                      { Iteration ($4, `Table $6, $10, $8, $9),    pos() }
+      exp                                                      { Iteration (($3 : generatorphrase), $7, $5, $6), pos() }
+
+
+generator:
+| list_generator                                               { `List $1 }
+| table_generator                                              { `Table $1 }
+
+list_generator:
+| VAR pattern LARROW exp                                       { ($2, $4) }
+
+table_generator:
+| VAR pattern LLARROW exp                                      { ($2, $4) }
 
 perhaps_where:
 |                                                              { None }

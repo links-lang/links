@@ -146,6 +146,7 @@ let keywords = [
  "orderby"  , ORDERBY; 
  "receive"  , RECEIVE;
  "server"   , SERVER; 
+ "set"      , SET;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "switch"   , SWITCH; 

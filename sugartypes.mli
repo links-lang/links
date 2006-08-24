@@ -62,7 +62,7 @@ and phrasenode =
   | Spawn of phrase
   | ListLit of (phrase list)
   | Definition of (ppattern * phrase * location)
-  | Iteration of (ppattern * listphrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
+  | Iteration of (generatorphrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
   | Escape of (name * phrase)
   | HandleWith of (phrase * name * phrase)
   | Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
@@ -85,9 +85,9 @@ and phrasenode =
   | Receive of ((binder list) * (name * phrase) option)
   | DatabaseLit of (phrase)
   | TableLit of (phrase * datatype * phrase)
-  | DBDelete of (phrase * phrase)
+  | DBDelete of (rawgeneratorphrase * phrase option)
   | DBInsert of (phrase * phrase)
-  | DBUpdate of (phrase * phrase)
+  | DBUpdate of (rawgeneratorphrase * phrase option * (name * phrase) list)
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)
@@ -99,7 +99,8 @@ and regex = | Range of (char * char)
             | Seq of regex list
             | Repeat of (Regex.repeat * regex)
             | Splice of phrase
-and listphrase = [ `List of phrase | `Table of phrase ]
+and rawgeneratorphrase = ppattern * phrase
+and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]
 
 type directive = string * string list
 type sentence = (phrase list, directive) Utility.either

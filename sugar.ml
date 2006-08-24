@@ -701,9 +701,6 @@ module Desugarer =
        fun (s, _) ->
          let tv datatype = [typevars datatype] in
          let etv = get_type_vars in
-         let etvl = function
-           | `List e
-           | `Table e -> etv e in
          let etvs = flatten -<- (List.map get_type_vars) in
          let opt_etv = function
            | None -> empty
@@ -714,6 +711,12 @@ module Desugarer =
          let ptv = get_pattern_type_vars in
          let btv (p, e) = flatten [ptv p; etv e] in
          let btvs = flatten -<- (List.map btv) in
+         let gtv = function
+           | `List b
+           | `Table b -> btv b in
+         let ftv (_, e) = etv e in
+         let ftvs = flatten -<- (List.map ftv)
+         in
            match s with
              | FloatLit _
              | IntLit _
@@ -725,8 +728,8 @@ module Desugarer =
              | Spawn e -> etv e
              | ListLit es -> etvs es
              | Definition (_, e, _) -> etv e
-             | Iteration (pattern, from, body, filter, sort) ->
-                 flatten [ptv pattern; etvl from; etv body; opt_etv filter; opt_etv sort]
+             | Iteration (generator, body, filter, sort) ->
+                 flatten [gtv generator; etv body; opt_etv filter; opt_etv sort]
              | Escape (_, e) ->  etv e
              | HandleWith (e1, _, e2) -> flatten [etv e1; etv e2]
              | Section _ -> empty
@@ -753,9 +756,9 @@ module Desugarer =
 
              | DatabaseLit e -> etv e
              | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
-             | DBDelete (e1, e2)
-             | DBInsert (e1, e2)
-             | DBUpdate (e1, e2) -> flatten [etv e1; etv e2]
+             | DBInsert (e1, e2) -> flatten [etv e1; etv e2]
+             | DBDelete ((p, e1), e2) -> flatten [ptv p; etv e1; opt_etv e2]
+             | DBUpdate ((p, e1), e2, fs) -> flatten [ptv p; etv e1; opt_etv e2; ftvs fs]
 
              | Xml (_, attrs, subnodes) ->
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
@@ -893,8 +896,8 @@ module Desugarer =
        ignore (check StringSet.empty pattern)
 
    let as_list pos = function
-     | `List e -> e
-     | `Table e -> FnAppl ((Var ("asList"), pos), ([e], pos)), pos
+     | `List (p, e) -> p, e
+     | `Table (p, e) -> p, (FnAppl ((Var ("asList"), pos), ([e], pos)), pos)
          
    let desugar lookup_pos (e : phrase) : untyped_expression =
      let _, varmap = (generate_var_mapping -<- get_type_vars) e in
@@ -960,21 +963,63 @@ module Desugarer =
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
            | ListLit  [] -> Nil (pos)
            | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
-           | DBDelete (table, rows) ->
-               desugar (FnAppl ((Var "deleterows", pos'),
-                                ([table;
-                                  rows
-                                 ], pos')), pos')
+           | DBDelete ((pattern, table), condition) ->
+               let t = unique_name () in
+               let r = unique_name () in
+               let tv = ((Var t), pos') in
+               let rv = ((Var r), pos') in
+               let generator =
+                 `Table ((`As (r, pattern), pos'), tv) in
+               let rows = Iteration (generator, ((ListLit [rv]), pos'), condition, None), pos' in
+                 desugar (
+                   Block ([(Binding (((`Variable t), pos'), table)), pos'],
+                          (FnAppl ((Var "deleterows", pos'),
+                                  ([tv;
+                                    rows
+                                   ], pos')), pos')), pos')
+(*            | DBDelete (table, rows) -> *)
+(*                desugar (FnAppl ((Var "deleterows", pos'), *)
+(*                                 ([table; *)
+(*                                   rows *)
+(*                                  ], pos')), pos') *)
            | DBInsert (table, rows) -> 
                desugar (FnAppl ((Var "insertrows", pos'),
                                 ([table;
                                   rows
                                  ], pos')), pos')
-           | DBUpdate (table, row_pairs) -> 
-               desugar (FnAppl ((Var "updaterows", pos'),
-                                ([table;
-                                  row_pairs
-                                 ], pos')), pos')
+           | DBUpdate ((pattern, table), condition, row) ->
+               let t = unique_name () in
+               let r = unique_name () in
+               let s = unique_name () in
+               let tv = ((Var t), pos') in
+               let rv = ((Var r), pos') in
+               let sv = ((Var s), pos') in
+               let generator =
+                 `Table ((`As (r, pattern), pos'), tv) in
+               let ignorefields = 
+                 List.map (fun (name, value) -> name, ((`Variable (unique_name ())), pos')) row in
+               let row_pair = 
+                 (TupleLit
+                   [rv;
+                    (RecordLit (row, Some sv), pos')]), pos' in
+               let body =
+                 Block([Binding (
+                          ((`Record (ignorefields,
+                                    Some ((`Variable s), pos'))), pos'), rv), pos'],
+                       ((ListLit [row_pair]), pos')), pos' in
+               let row_pairs = Iteration (generator, body, condition, None), pos'
+               in      
+                 desugar (
+                   Block ([(Binding (((`Variable t), pos'), table)), pos'],
+                          (FnAppl ((Var "updaterows", pos'),
+                                   ([tv;
+                                     row_pairs
+                                    ], pos')), pos')), pos')
+(*            | DBUpdate (table, row_pairs) ->  *)
+(*                desugar (FnAppl ((Var "updaterows", pos'), *)
+(*                                 ([table; *)
+(*                                   row_pairs *)
+(*                                  ], pos')), pos') *)
            | DatabaseLit e -> Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
            | Definition (_, _, _) -> raise (ASTSyntaxError(pos, "top-level patterns not yet implemented"))
@@ -1011,22 +1056,22 @@ module Desugarer =
                   | `Variable var, _ -> 
                       SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
                   | pattern -> raise (ASTSyntaxError(pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
-           | Iteration (pattern, from, body, None, None) ->
-               let from = as_list pos' from
+           | Iteration (generator, body, None, None) ->
+               let pattern, from = as_list pos' generator
                in
                  (match patternize pattern with
                     | `Variable var, _ -> For (desugar body, var, desugar from, pos)
                     | pattern -> (let var = unique_name () in
                                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
                                          var, desugar from, pos)))
-           | Iteration (pattern, from, body, filter_cond, Some sort_expr) -> 
-               let from = as_list pos' from
+           | Iteration (generator, body, filter_cond, Some sort_expr) -> 
+               let pattern, from = as_list pos' generator
                in
-                 desugar (Iteration (pattern, `List (SortBy_Conc(pattern, from, sort_expr), pos'),
+                 desugar (Iteration (`List (pattern, (SortBy_Conc(pattern, from, sort_expr), pos')),
                                      body, filter_cond, None),
                           pos')
-           | Iteration (pattern, from, body, Some exp, sort_expr) ->
-               desugar (Iteration (pattern, from, 
+           | Iteration (generator, body, Some exp, sort_expr) ->
+               desugar (Iteration (generator, 
                                    (Conditional (exp,
                                                  body,
                                                  (ListLit [], pos')), pos'), 
