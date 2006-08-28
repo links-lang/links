@@ -1,10 +1,8 @@
-#!/home/s0567141/links-dbfix/links  -d
-
 var zero = 0;
 
-var db = database (driver="postgresql",
+var db = database (driver="mysql",
                    name="winestore",
-                   args="localhost:5432:s0567141:");
+                   args="localhost:5432:www-data:");
 
 var usersTable = table "users"
                   with (cust_id : Int, user_name : String, 
@@ -31,6 +29,19 @@ var wineTypeTable = table "wine_type"
                      with (wine_type_id : Int, wine_type : String)
                      from db;
 
+var regionTable = table "region"
+                  with (region_id : Int, region_name : String)
+                  from db;
+
+var inventoryTable = table "inventory" with
+                     (wine_id : Int, cost : Float)
+                     from db;
+
+var wineryTable = table "winery" with 
+                  (winery_id : Int, winery_name : String,
+                  region_id : Int)
+                  from db;
+
 fun snd(pair) {
   var (a, b) = pair;
   b
@@ -42,12 +53,6 @@ fun map(f, l) {
 }
 
 fun floatToXml(x) { stringToXml(floatToString(x)) } 
-
-fun count(l) {
-  if (l == [])
-    0
-  else (1 + count(tl(l)))
-}
 
 fun sum_float(l) {
   if (l == [])
@@ -82,30 +87,18 @@ fun wineTypeName(wine_type_id) {
        stringToXml(wineType.wine_type)
 }
 
-#fun cust_id_for_order(db, order_id) {
-#  hd(for (var row <- asList(table "items"
-#                      with (order_id : Int, cust_id : Int)
-#                      from db))
-#     where (row.order_id == order_id)
-#       [row.cust_id]
-#    );
-#}
-
-fun cust_id_next(db) {  # nasty
-  var ids = for (var u <- asList(table "users" with ( cust_id : Int )
-                                 from db))
-                             [u.cust_id];
+fun cust_id_next() {  # nasty
+  var ids = take(1)(for (var u <-- usersTable)
+                    orderby (u.cust_id)
+                    [u.cust_id]);
   max(0, ids) + 1
 }
 
 sig sign_up : (String, String) -> XML
 
 fun sign_up(username, password)  {
-  var db = database (driver="postgresql",
-                     name="winestore",
-                     args="localhost:5432:s0567141:");
 
-  var new_cust_id = cust_id_next(db);
+  var new_cust_id = cust_id_next();
 
   insert (usersTable) values
     [( cust_id = new_cust_id, user_name = username, password = password )];
@@ -134,15 +127,9 @@ fun sign_up_form() {
 }
 
 fun sign_in(username, password) {
-  var db = database (driver="postgresql",
-                     name="winestore",
-                     args="localhost:5432:s0567141:");
 
   var cust_id = 
-    for (var u <- asList(table "users" 
-                         with ( user_name : String, password : String,
-                                cust_id : Int )
-                         from db))
+    for (var u <-- usersTable)
     where (u.user_name == username &&
            u.password == password)
       [u.cust_id];    
@@ -242,29 +229,20 @@ fun purchase_confirmation(cust_id, order_id, total) {
   </html>
 }
 
-sig order_total : (Database, Int, Int) -> Float
-fun order_total(db, cust_id, order_id) {
+sig order_total : (Int, Int) -> Float
+fun order_total(cust_id, order_id) {
   sum_float(
-    for (var item <- asList(table "items"
-                            with (cust_id : Int, order_id : Int, price : Float)
-                            from db))
+    for (var item <-- cartItemsTable)
     where (item.cust_id == cust_id && item.order_id == order_id)
       [item.price]
   )
 }
 
 fun checkout(cust_id, order_id, card_no, expiry, instr) {
-  var db = database (driver="postgresql",
-                     name="winestore",
-                     args="localhost:5432:s0567141:xxx");
-  var total = order_total(db, cust_id, order_id);
+  var total = order_total(cust_id, order_id);
   if (valid_cc_details(card_no, expiry)) {
     var the_orders = 
-      for (var x <- asList(table "orders"
-                     with (cust_id : Int, order_id : Int, date : String,
-                           instructions : String, creditcard : String,
-                           expirydate : String)
-                     from db))
+      for (var x <-- orderTable )
       where (cust_id == x.cust_id && order_id == x.order_id)
         [x];
     var the_order = hd(the_orders);
@@ -277,13 +255,6 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
             creditcard = card_no,
             expirydate = expiry);
 
-#    update ("orders", db) by [(the_order,
-#                               (cust_id = the_order.cust_id,
-#                                order_id = the_order.order_id,
-#                                date = the_order.date,
-#                                instructions = instr,
-#                                creditcard = card_no,
-#                                expirydate = expiry))];
     debug("successfully updated the order with purchase details.");
     purchase_confirmation(cust_id, order_id, total)
  } else
@@ -322,7 +293,7 @@ fun begin_checkout(cust_id, order_id) {
   </html>
 }
 
-fun cart_itemlist(db, cust_id, order_id) {
+fun cart_itemlist(cust_id, order_id) {
 #  wine_costs = for cost_rec <- Table "inventory" with
 #                               {wine_id : Int, cost : Float} 
 #                                order [wine_id : asc] from db 
@@ -331,33 +302,24 @@ fun cart_itemlist(db, cust_id, order_id) {
   debug("starting cart_itemlist");
 
   var cart_items = 
-    for (var cart_item <- asList(table "items" with
-                                   (order_id : Int, cust_id : Int,
-                                    item_id : Int, wine_id : Int)
-                                 from db))
+    for (var cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
            cart_item.cust_id == cust_id)
     {
-        for (var wine <- asList(table "wine" with
-                                  (wine_id : Int, 
-                                   wine_name : String, wine_type : Int,
-                                   year : Int, winery_id : Int)
-                                from db))
+        for (var wine <-- wineTable)
         where (wine.wine_id == cart_item.wine_id)
         {
-            for (var cost_rec <- asList(table "inventory"
-                                 with (wine_id : Int, cost : Float)
-                                 from db))
+            for (var cost_rec <-- inventoryTable)
             where (cost_rec.wine_id == wine.wine_id)
               [(wine.wine_name, cost_rec.cost)]
         }
     };
     debug("got results in cart_items");
-    if (count(cart_items) == 0)
+    if (length(cart_items) == 0)
       <p>Your cart is empty.</p>
     else {
       var total_cost = floatToString(sum_float(map(snd, cart_items)));
-      var total_items = intToString(count(cart_items));
+      var total_items = intToString(length(cart_items));
       <table width="100%">
            <tr>
              <th> Quantity </th>
@@ -386,67 +348,50 @@ fun cart_itemlist(db, cust_id, order_id) {
     }
 }
 
-fun wine_name(db, wine_id) {
+fun wine_name(wine_id) {
   var matches = 
-      for (var wine <- asList(table "wine" 
-                              with (wine_id : Int, wine_name : String)
-                              from db))
+      for (var wine <-- wineTable)
       where (wine.wine_id == wine_id)
         [wine.wine_name];
     hd(matches)
 }
 
-fun get_region_name(db, region_id) {
-  for (var region <- asList(table "region"
-                            with ( region_id : Int, region_name : String )
-                            from db))
+fun get_region_name(region_id) {
+  for (var region <-- regionTable)
   where (region_id == region.region_id)
     region.region_name
 }
 
-fun get_wine_price(db, wine_id) {
-  hd(for (var cost_rec <- asList(table "inventory" with
-                                   (wine_id : Int, cost : Float)
-                                 from db))
+fun get_wine_price(wine_id) {
+  hd(for (var cost_rec <-- inventoryTable)
      where (wine_id == cost_rec.wine_id) 
        [cost_rec.cost])
 }
 
 fun show_cart(cust_id, order_id, msg) {
-  var db = database(driver="postgresql",
-                    name="winestore",
-                    args="localhost:5432:s0567141:xxx");
   <html>
     <h1>Your Shopping Cart</h1>
     <div>
       {stringToXml(msg)}
     </div>
     <div>
-      {cart_itemlist(db, cust_id, order_id)}
+      {cart_itemlist(cust_id, order_id)}
     </div>
     <a l:href="{search_results(cust_id, order_id, -1, -1)}">Continue shopping</a>
   </html>
 }
 
-sig cart_total : (Database, Int, Int) -> String
+sig cart_total : (Int, Int) -> String
 
-fun cart_total(db, cust_id, order_id) {
+fun cart_total(cust_id, order_id) {
   var cart_items = 
-    for (var cart_item <- asList(table "items" with
-                                 (order_id : Int, cust_id : Int,
-                                  item_id : Int, wine_id : Int)
-                                 from db))
+    for (var cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
            cart_item.cust_id == cust_id)
     {
-        for (var wine <- asList(table "wine" with
-                                (wine_id : Int, wine_name : String, wine_type : Int,
-                                 year : Int, winery_id : Int)
-                                from db))
+        for (var wine <-- wineTable)
         where (wine.wine_id == cart_item.wine_id)
-          for (var cost_rec <- asList(table "inventory"
-                                      with (wine_id : Int, cost : Float)
-                                      from db))
+          for (var cost_rec <-- inventoryTable)
           where (wine.wine_id == cost_rec.wine_id)
             [cost_rec.cost]
     };
@@ -455,17 +400,14 @@ fun cart_total(db, cust_id, order_id) {
 }
 
 fun add_to_cart(cust_id, order_id, wine_id) {
-    var db = database(driver="postgresql",
-                      name="winestore",
-                      args="localhost:5432:s0567141:xxx");
 
   var itemsTable = table "items"
                    with (order_id : Int, cust_id : Int, item_id : Int,
                          wine_id : Int, qty : Int, price : Float)
                    from db;
 
-    var price = get_wine_price(db, wine_id);
-        var max_item_id = max(0, for (var cart_item <- asList(itemsTable))
+    var price = get_wine_price(wine_id);
+        var max_item_id = max(0, for (var cart_item <-- itemsTable)
                           where (cart_item.order_id == order_id
                                  && cart_item.cust_id == cust_id)
                               [cart_item.item_id]
@@ -480,25 +422,24 @@ fun add_to_cart(cust_id, order_id, wine_id) {
              wine_id = wine_id, qty = 1, price = price )];
     debug("finished insert, issuing confirmation page");
     show_cart(cust_id, order_id,
-              "Added " ++ wine_name(db, wine_id) ++ " to your cart.")
+              "Added " ++ wine_name(wine_id) ++ " to your cart.")
 }
 
 # create_cart: make a new cart
 # quite a hack; doesn't handle multiple carts for one session
-fun create_cart(db, cust_id) {
+fun create_cart(cust_id) {
 
 #    max_cust_id = max(for cust <- (Table "customers" with
 #                                        {cust_id : Int} 
 #                                        order [cust_id : asc] from db) in
 #                            [cust.cust_id]);
 
-
   var ordersTable = table "orders"
                      with (cust_id : Int, order_id : Int)
                      from db;
-  var os = for (var cart <- asList(ordersTable))
-           where (cust_id == cart.cust_id)
-             [cart.order_id];
+  var os = for (var cart <-- ordersTable)
+                where (cart.cust_id == cust_id)
+                [cart.order_id]);
   var max_order_id = max(0, os);
   var order_id = max_order_id + 1;
   insert (ordersTable) values 
@@ -509,30 +450,19 @@ fun create_cart(db, cust_id) {
 }
 
 fun wine_listing(cust_id, order_id, region_id, wine_type) {
-  var db = database(args="localhost:5432:s0567141:xxx",
-                    name="winestore",
-                    driver="postgresql");
 
   var negone = -1;
   var result = 
-    for (var wine <- asList(table "wine" with
-             (wine_id : Int, wine_name : String, wine_type : Int,
-              year : Int, winery_id : Int)
-             from db))
+    for (var wine <-- wineTable )
     where (wine_type == negone || wine_type == 1
            || wine.wine_type == wine_type)
     {
-      for (var winery <- asList(table "winery" with 
-                           (winery_id : Int, winery_name : String,
-                            region_id : Int)
-                         from db))
+      for (var winery <-- wineryTable)
          where (winery.winery_id == wine.winery_id
                 && (region_id == 1 || region_id == negone
                     || winery.region_id == region_id))
          { 
-             for (var cost_rec <- asList(table "inventory" with
-                                          (wine_id : Int, cost : Float)
-                                         from db))
+             for (var cost_rec <-- inventoryTable)
              where (wine.wine_id == cost_rec.wine_id)
                [(wine.wine_id, wine.wine_name, cost_rec.cost,
                  wine.year, winery.winery_name)]
@@ -541,7 +471,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type) {
 
   var (order_id, cust_id) = 
     if (order_id <> -1) (order_id, cust_id)
-    else create_cart(db, cust_id);
+    else create_cart(cust_id);
 
   for (var (id, name, cost, year, winery) <- result)
   {
@@ -559,14 +489,12 @@ fun deadend() {
 sig search_results : (Int, Int, Int, Int) -> XML
 
 fun search_results(cust_id, order_id, region_id, wine_type) {
-  var db = database (driver="postgresql", name="winestore", 
-                     args="localhost:5432:s0567141:xxx"); 
   <html>
     {header(cust_id)}
     <div>
         <img src="cart_off.jpg"  align="middle" />
-      Total in cart: {stringToXml(cart_total(db, cust_id, order_id))} 
-        ({intToXml(count(for (var x <-- cartItemsTable) where (x.cust_id == cust_id && x.order_id == order_id) [x]))} items)
+      Total in cart: {stringToXml(cart_total(cust_id, order_id))} 
+        ({intToXml(length(for (var x <-- cartItemsTable) where (x.cust_id == cust_id && x.order_id == order_id) [x]))} items)
       View <a l:href="{show_cart(cust_id, order_id, "")}">cart</a>.
     </div>
     <form method="POST" l:action="{search_results(cust_id, order_id,
@@ -576,9 +504,7 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
       <table>
         <tr><td>Region:</td>
           <td><select l:name="search_region_id">
-                {for (var region <- asList(table "region"
-                                           with (region_id : Int, region_name : String)
-                                           from db))
+                {for (var region <-- regionTable)
                    # (boutrosed)
                    if (region_id == region.region_id)
                      <option selected="SELECTED" 
@@ -591,9 +517,7 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
           </td></tr>
         <tr><td>Wine type:</td>
            <td><select l:name="search_wine_type">
-                {for (var type <- (asList(table "wine_type"
-                                   with (wine_type_id : Int, wine_type : String)
-                                   from db)))
+                {for (var type <-- wineTypeTable)
                    # (boutrosed)
                    if (wine_type == type.wine_type_id)
                      <option selected="SELECTED" 
@@ -607,7 +531,7 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
        </table>
        <input type="submit" value="Show wines" />
     </form>
-    <h1>Wines for region {stringToXml(get_region_name(db, region_id))},
+    <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
     <ul>
       {wine_listing(cust_id, order_id, region_id, wine_type)}
