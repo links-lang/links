@@ -515,11 +515,10 @@ fun wine_listing(cust_id, order_id, region_id, wine_type) {
 
   var negone = -1;
   var result = 
-    for (var wine <- take(10)(asList(    
-table "wine" with
+    for (var wine <- asList(table "wine" with
              (wine_id : Int, wine_name : String, wine_type : Int,
               year : Int, winery_id : Int)
-             from db)))
+             from db))
     where (wine_type == negone || wine_type == 1
            || wine.wine_type == wine_type)
     {
