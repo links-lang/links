@@ -88,9 +88,8 @@ fun wineTypeName(wine_type_id) {
 }
 
 fun cust_id_next() {  # nasty
-  var ids = take(1)(for (var u <-- usersTable)
-                    orderby (u.cust_id)
-                    [u.cust_id]);
+  var ids = for (var u <-- usersTable)
+           [u.cust_id];
   max(0, ids) + 1
 }
 
@@ -439,7 +438,7 @@ fun create_cart(cust_id) {
                      from db;
   var os = for (var cart <-- ordersTable)
                 where (cart.cust_id == cust_id)
-                [cart.order_id]);
+                [cart.order_id];
   var max_order_id = max(0, os);
   var order_id = max_order_id + 1;
   insert (ordersTable) values 
