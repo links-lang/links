@@ -59,7 +59,6 @@ let is_client_program defs =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program filename : (Syntax.expression list) = 
-  Settings.set_value Performance.measuring false; (* temp *)
   (Performance.measure "optimise" Optimiser.optimise_program)
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
        ((Performance.measure "type" (Inference.type_program Library.type_env))
