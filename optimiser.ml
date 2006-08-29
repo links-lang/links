@@ -28,13 +28,15 @@ let pure : expression -> bool =
      NB: continuation invocation is impure in the sense that we can't
      replace `x = f(3); 4' with `4' if `f' is a continuation.
   *)
-  let pure default = function 
+  let rec pure default = function 
+    | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
+      -> pure default arg
     | Apply _    -> false
     | TableQuery _ -> false
     | Escape _   -> false
     | e       -> default e
-  and combiner l = fold_right (&&) l true in
-    reduce_expression pure (combiner -<- snd)
+  and all_true l = fold_right (&&) l true in
+    reduce_expression pure (all_true -<- snd)
 
 
 (** Inlining **)
@@ -578,6 +580,9 @@ let lift_lets : RewriteSyntax.rewriter = function
   | Condition(cond, t, Let(letvar, letval, letbody, letdata), data)
       when pure letval
         -> Some(Let(letvar, letval, Condition(cond, t, letbody, data), letdata))
+  | Apply(func, Let(letvar, letval, letbody, letdata), data)
+      when pure func
+        -> Some(Let(letvar, letval, Apply(func, letbody, data), letdata))
   | _ -> None
 
 (** (1 take/drop optimization).
@@ -640,6 +645,12 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
              TableQuery (e, q, d4), _) -> 
 	Some (TableQuery (e, {q with Query.max_rows = Some (queryize n)}, d4))
+    | Apply (Apply (Variable ("take", _) as tk, (Variable _|Integer _ as n), a1data),
+             For(List_of(expr, ldata) as body, var, src, fordata), a2data) 
+        when pure(expr)
+      -> 
+        Some (For(body, var, Apply (Apply (tk, n, a1data), src, a2data), 
+                  fordata))
     | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
              TableQuery (e, q, d4), _) -> 
 	Some (TableQuery (e, {q with Query.offset = queryize n}, d4))
