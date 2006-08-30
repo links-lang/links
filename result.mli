@@ -29,6 +29,7 @@ class virtual database :
     method virtual equal_types : Types.datatype -> db_field_type -> bool
     method virtual escape_string : string -> string
     method virtual exec : string -> dbresult
+    method make_insert_query : (string * string list * string list list) -> string
   end
 
 type db_construtor = string -> database * string

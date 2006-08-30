@@ -43,6 +43,11 @@ class virtual database = object
   method virtual equal_types : Types.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
+  method make_insert_query : (string * string list * string list list) -> string =
+    fun (table_name, field_names, vss) ->
+      "insert into " ^ table_name ^
+        "("^String.concat "," field_names ^") values "^
+        String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
 end
 
 module Show_database = Show_unprintable (struct type a = database end)

@@ -119,6 +119,10 @@ class pg_database host port dbname user password = object(self)
           failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
   method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method escape_string s = Postgresql.escape_string s
+  method make_insert_query (table_name, field_names, vss) =
+    "insert into " ^ table_name ^
+      "("^String.concat "," field_names ^") "^
+      String.concat " union all " (List.map (fun vs -> "select " ^ String.concat "," vs) vss)
 end
 let driver_name = "postgresql"
     

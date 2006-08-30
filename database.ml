@@ -40,6 +40,9 @@ let execute_command  (query:string) (db: database) : result =
        | QueryOk -> `Record []
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
+let execute_insert (table_name, field_names, vss) db =
+  execute_command (db#make_insert_query (table_name, field_names, vss)) db
+
 let execute_select (field_types:(string * Types.datatype) list) (query:string) (db: database)
     : result =
   let result = (db#exec query) in

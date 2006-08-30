@@ -60,13 +60,12 @@ let single_match db =
     | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_result r)
 
 let row_columns = function
-  | `List ((`Record fields)::_) -> String.concat ", " (map fst fields)
+  | `List ((`Record fields)::_) -> map fst fields
   | r -> failwith ("Internal error: forming query from non-row (row_columns): "^string_of_result r)
 and row_values db = function
   | `List records ->
-      String.concat ", "
         (List.map (function
-                     | `Record fields -> "("^(String.concat ", " (map (value_as_string db -<- snd) fields))^")"
+                     | `Record fields -> map (value_as_string db -<- snd) fields
                      | _ -> failwith "Internal error: forming query from non-row") records)
   | r -> failwith ("Internal error: forming query from non-row (row_values): "^string_of_result r)
 and delete_condition db = function
@@ -508,11 +507,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                     match table, rows with
                       | `Table _, `List [] -> `Record []
                       | `Table (db, table_name, _), _ ->
-                          let query_string =
-                            "insert into " ^ table_name ^ "("^ row_columns rows ^") values "^ row_values db rows
+                          let field_names = row_columns rows
+                          and vss = row_values db rows
                           in
-                            prerr_endline("RUNNING INSERT QUERY:\n" ^ query_string);
-                            (Database.execute_command query_string db :> primitive)
+                            prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
+                            (Database.execute_insert (table_name, field_names, vss) db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),

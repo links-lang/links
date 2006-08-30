@@ -13,3 +13,5 @@ val execute_command : (string -> Result.database -> Result.result)
     fieldname -> fieldtype. *)
 val execute_select : ((string * Types.datatype) list -> string -> Result.database -> 
                         Result.result)
+
+val execute_insert : (string * string list * string list list) ->  Result.database -> Result.result
