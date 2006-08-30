@@ -144,7 +144,6 @@ fun sign_in_form() {
         <tr><td>
         </td> <td> <input type="submit" value="Sign in" />
         </td></tr>
-
       </table>
     </form>
   </html>
@@ -298,38 +297,38 @@ fun cart_itemlist(cust_id, order_id) {
               [(wine.wine_name, cost_rec.cost)]
         }
     };
-    debug("got results in cart_items");
-    if (length(cart_items) == 0)
-      <p>Your cart is empty.</p>
-    else {
-      var total_cost = floatToString(sum_float(map(snd, cart_items)));
-      var total_items = intToString(length(cart_items));
-      <table width="100%">
-           <tr>
-             <th> Quantity </th>
-             <th> Wine </th>
-             <th align="right"> Unit Price </th>
-             <th align="right"> Total </th>
-           </tr>
-        {for (var item <- cart_items)
-           <tr>
-             <td> 1 </td>
-             <td> {stringToXml(item.1)} </td>
-             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-           </tr>
-        }
-        <tr>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td align="right"> ${stringToXml(total_cost)} </td>
-        </tr>
-      </table>
-      <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
-        <input type="submit" value="Check out" />
-      </form>
-    }
+  debug("got results in cart_items");
+  if (length(cart_items) == 0)
+    <p>Your cart is empty.</p>
+  else {
+    var total_cost = floatToString(sum_float(map(snd, cart_items)));
+    var total_items = intToString(length(cart_items));
+    <table width="100%">
+         <tr>
+           <th> Quantity </th>
+           <th> Wine </th>
+           <th align="right"> Unit Price </th>
+           <th align="right"> Total </th>
+         </tr>
+      {for (var item <- cart_items)
+         <tr>
+           <td> 1 </td>
+           <td> {stringToXml(item.1)} </td>
+          <td align="right"> ${stringToXml(floatToString(item.2))} </td>
+           <td align="right"> ${stringToXml(floatToString(item.2))} </td>
+         </tr>
+      }
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td align="right"> ${stringToXml(total_cost)} </td>
+      </tr>
+    </table>
+    <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
+      <input type="submit" value="Check out" />
+    </form>
+  }
 }
 
 fun wine_name(wine_id) {
@@ -337,7 +336,7 @@ fun wine_name(wine_id) {
       for (var wine <-- wineTable)
       where (wine.wine_id == wine_id)
         [wine.wine_name];
-    hd(matches)
+  hd(matches)
 }
 
 fun get_region_name(region_id) {
