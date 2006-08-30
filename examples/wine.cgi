@@ -1,5 +1,3 @@
-var zero = 0;
-
 var db = database (driver="mysql",
                    name="winestore",
                    args="localhost:5432:www-data:");
@@ -48,57 +46,51 @@ fun snd(pair) {
 }
 
 fun map(f, l) {
-    if (l == []) []
-    else [f(hd(l))] ++ map(f, tl(l))
+  for (var x <- l) [f(x)]
 }
 
 fun floatToXml(x) { stringToXml(floatToString(x)) } 
 
 fun sum_float(l) {
-  if (l == [])
-      0.
-  else
-      hd(l) +. sum_float(tl(l))
+  switch l {
+    case [] -> 0.;
+    case hd::tl -> hd +. sum_float(tl);
+  }
 }
 
-fun max(result, l) {
-  if (l == [])
-    result
-  else
-    if (result >= hd(l))  
-      max(result, tl(l))
-    else
-      max(hd(l), tl(l))
+fun maximum(result, l) {
+  switch l {
+    case [] -> result;
+    case hd::tl -> if (result >= hd)  
+                       maximum(result, tl)
+                   else
+                       maximum(hd, tl);
+  }
 }
 
 fun assoc(x, l, d) {
-    if (l == []) { d }
-    else {
-        var (k, v) = hd(l);
-        if (x == k)
-            v
-        else assoc(x, tl(l), d)
-    }
+  switch l {
+    case [] -> d;
+    case (k,v)::tl -> if (x == k) v
+                      else assoc(x, tl, d);
+  }
 }
 
 fun wineTypeName(wine_type_id) {
   for (var wineType <-- wineTypeTable)
-     where (wineType.wine_type_id == wine_type_id)
-       stringToXml(wineType.wine_type)
+  where (wineType.wine_type_id == wine_type_id)
+    stringToXml(wineType.wine_type)
 }
 
 fun cust_id_next() {  # nasty
   var ids = for (var u <-- usersTable)
            [u.cust_id];
-  max(0, ids) + 1
+  maximum(0, ids) + 1
 }
 
 sig sign_up : (String, String) -> XML
-
 fun sign_up(username, password)  {
-
   var new_cust_id = cust_id_next();
-
   insert (usersTable) values
     [( cust_id = new_cust_id, user_name = username, password = password )];
   <div>
@@ -126,7 +118,6 @@ fun sign_up_form() {
 }
 
 fun sign_in(username, password) {
-
   var cust_id = 
     for (var u <-- usersTable)
     where (u.user_name == username &&
@@ -164,7 +155,6 @@ fun logout() {
 }
 
 sig header : Int -> XML
-
 fun header(cust_id) {
   if (cust_id == -1)
     <div align="right">
@@ -293,11 +283,6 @@ fun begin_checkout(cust_id, order_id) {
 }
 
 fun cart_itemlist(cust_id, order_id) {
-#  wine_costs = for cost_rec <- Table "inventory" with
-#                               {wine_id : Int, cost : Float} 
-#                                order [wine_id : asc] from db 
-#            in [(cost_rec.wine_id, cost_rec.cost)];
-
   debug("starting cart_itemlist");
 
   var cart_items = 
@@ -381,7 +366,6 @@ fun show_cart(cust_id, order_id, msg) {
 }
 
 sig cart_total : (Int, Int) -> String
-
 fun cart_total(cust_id, order_id) {
   var cart_items = 
     for (var cart_item <-- cartItemsTable)
@@ -399,57 +383,47 @@ fun cart_total(cust_id, order_id) {
 }
 
 fun add_to_cart(cust_id, order_id, wine_id) {
-
   var itemsTable = table "items"
                    with (order_id : Int, cust_id : Int, item_id : Int,
                          wine_id : Int, qty : Int, price : Float)
                    from db;
-
-    var price = get_wine_price(wine_id);
-        var max_item_id = max(0, for (var cart_item <-- itemsTable)
-                          where (cart_item.order_id == order_id
-                                 && cart_item.cust_id == cust_id)
-                              [cart_item.item_id]
-                          );
-        var new_item_id = max_item_id + 1;
+  var price = get_wine_price(wine_id);
+  var max_item_id = maximum(0, for (var cart_item <-- itemsTable)
+                           where (cart_item.order_id == order_id
+                               && cart_item.cust_id == cust_id)
+                                 [cart_item.item_id]
+                        );
+  var new_item_id = max_item_id + 1;
         
-#        insert into ("items", db) values
-#          ( cust_id = cust_id, order_id = order_id, item_id = new_item_id, 
-#            wine_id = wine_id, qty = 1, price = price );
-      insert (itemsTable) values
-          [( cust_id = cust_id, order_id = order_id, item_id = new_item_id, 
-             wine_id = wine_id, qty = 1, price = price )];
-    debug("finished insert, issuing confirmation page");
-    show_cart(cust_id, order_id,
-              "Added " ++ wine_name(wine_id) ++ " to your cart.")
+  insert (itemsTable) values
+        [( cust_id = cust_id,
+           order_id = order_id,
+           item_id = new_item_id,
+           wine_id = wine_id,
+           qty = 1,
+           price = price )];
+ 
+  show_cart(cust_id, order_id,
+            "Added " ++ wine_name(wine_id) ++ " to your cart.")
 }
 
 # create_cart: make a new cart
 # quite a hack; doesn't handle multiple carts for one session
 fun create_cart(cust_id) {
-
-#    max_cust_id = max(for cust <- (Table "customers" with
-#                                        {cust_id : Int} 
-#                                        order [cust_id : asc] from db) in
-#                            [cust.cust_id]);
-
   var ordersTable = table "orders"
                      with (cust_id : Int, order_id : Int)
                      from db;
   var os = for (var cart <-- ordersTable)
                 where (cart.cust_id == cust_id)
                 [cart.order_id];
-  var max_order_id = max(0, os);
+  var max_order_id = maximum(0, os);
   var order_id = max_order_id + 1;
   insert (ordersTable) values 
-      [(cust_id = cust_id,
-        order_id = order_id)];
-#  set_cookie("foo")("bar");
+         [(cust_id = cust_id, order_id = order_id)];
   (order_id, cust_id)
 }
 
 fun wine_listing(cust_id, order_id, region_id, wine_type) {
-
   var negone = -1;
   var result = 
     for (var wine <-- wineTable )
@@ -486,7 +460,6 @@ fun deadend() {
 }
 
 sig search_results : (Int, Int, Int, Int) -> XML
-
 fun search_results(cust_id, order_id, region_id, wine_type) {
   <html>
     {header(cust_id)}
@@ -540,7 +513,6 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
 }
 
 sig main : () -> XML
-
 fun main() {
   search_results(-1, -1, -1, -1)
 }
