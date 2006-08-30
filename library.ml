@@ -129,6 +129,49 @@ let client_only_2 fn =
 
 let datatype = Parse.parse_datatype
 
+let rec equal l r =
+  match l, r with
+    | `Bool l  , `Bool r   -> l = r
+    | `Int l   , `Int r    -> eq_num l r
+    | `Float l , `Float r  -> l = r
+    | `Char l  , `Char r   -> l = r
+    | `Function _, `Function _ -> Pickle_result.pickleS l = Pickle_result.pickleS r
+    | `Record lfields, `Record rfields -> 
+        let rec one_equal_all = (fun alls (ref_label, ref_result) ->
+                                   match alls with
+                                     | [] -> false
+                                     | (label, result) :: _ when label = ref_label -> equal result ref_result
+                                     | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
+          for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
+    | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
+    | `List (l), `List (r) -> length l = length r &&
+            fold_left2 (fun result x y -> result && equal x y) true l r
+    | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
+
+let rec less l r =
+  match l, r with
+    | `Bool l, `Bool r   -> l < r
+    | `Int l, `Int r     -> lt_num l r
+    | `Float l, `Float r -> l < r
+    | `Char l, `Char r -> l < r
+    | `Function _ , `Function _                  -> Pickle_result.pickleS l < Pickle_result.pickleS r
+        (* Compare fields in lexicographic order of labels *)
+    | `Record lf, `Record rf -> 
+        let order = sort (fun x y -> compare (fst x) (fst y)) in
+        let lv, rv = map snd (order lf), map snd (order rf) in
+        let rec compare_list = function
+          | [] -> false
+          | (l,r)::_ when less l r -> true
+          | (l,r)::_ when less r l -> false
+          | _::rest                -> compare_list rest in
+          compare_list (combine lv rv)
+    | `List (l), `List (r) ->
+        (try for_all2 less l r
+         with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
+    | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
+
+let less_or_equal l r = less l r || equal l r
+
 let env : (string * (located_primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
@@ -251,6 +294,22 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
            | _ -> failwith "Internal error: non-list passed to drop"),
    datatype "Int -> [a] -> [a]");
+
+  "max",
+ (p1 (let max2 x y = if less x y then y else x in
+        function
+          | `List [] -> `Variant ("None", `Record [])
+          | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+            | _ -> failwith "Internal error: non-list passed to max"),
+  datatype "[a] -> [|Some:a | None:()|]");
+
+  "min",
+ (p1 (let min2 x y = if less x y then x else y in
+        function
+          | `List [] -> `Variant ("None", `Record [])
+          | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
+            | _ -> failwith "Internal error: non-list passed to min"),
+  datatype "[a] -> [|Some:a | None:()|]");
 
   (** XML **)
   "childNodes",

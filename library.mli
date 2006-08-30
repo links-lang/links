@@ -11,6 +11,10 @@ val debug_process_status : unit -> unit
 
 val http_headers : (string * string) list ref
 
+val equal : Result.result -> Result.result -> bool
+val less : Result.result -> Result.result -> bool
+val less_or_equal : Result.result -> Result.result -> bool
+
 (* Primitive functions and values *)
 type continuationized_val = [
   result
