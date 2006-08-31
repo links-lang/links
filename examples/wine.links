@@ -51,6 +51,11 @@ fun snd(pair) {
   b
 }
 
+fun fst(pair) {
+  var (a, b) = pair;
+  a
+}
+
 fun map(f, l) {
   for (var x <- l) [f(x)]
 }
@@ -66,6 +71,13 @@ fun sum_float(l) {
   switch l {
     case [] -> 0.;
     case hd::tl -> hd +. sum_float(tl);
+  }
+}
+
+fun sum_int(l) {
+  switch l {
+    case [] -> 0;
+    case hd::tl -> hd + sum_int(tl);
   }
 }
 
@@ -104,27 +116,39 @@ fun wineTypeName(wine_type_id) {
     stringToXml(wineType.wine_type)
 }
 
-fun cust_id_next() {  # nasty
+fun cust_id_next() {  # WARNING: race condition here
   var ids = for (var u <-- usersTable)
-           [u.cust_id];
+              [u.cust_id];
   maximum(0, ids) + 1
 }
 
-sig sign_up : (String, String) -> XML
+fun claimCart(order_id, cust_id) {
+  # Should we guard this to only claim carts with cust_id = -1?
+  update (var x <-- cartItemsTable)
+   where (x.order_id == order_id)
+     set (cust_id = cust_id);
+  update (var x <-- orderTable)
+   where (x.order_id == order_id)
+     set (cust_id = cust_id)
+}
 
-fun sign_up(username, password)  {
+sig sign_up : (Int, String, String) -> XML
+
+fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
   insert (usersTable) values
     [( cust_id = new_cust_id, user_name = username, password = password )];
+  if (order_id <> -1)
+    claimCart(order_id, new_cust_id) else ();
   <div>
     Welcome, {stringToXml(username)}!
-    <a l:href="{search_results(new_cust_id, -1, 1, 1, 0)}">Continue shopping</a>
+    <a l:href="{search_results(new_cust_id, order_id, 1, 1, 0)}">Continue shopping</a>
   </div>
 }
 
-fun sign_up_form() {
+fun sign_up_form(order_id) {
   <html>
-    <form l:action="{sign_up(username, password)}">
+    <form l:action="{sign_up(order_id, username, password)}">
       <table>
         <tr><td>
           Username:</td><td> <input type="text" l:name="username" />
@@ -140,7 +164,7 @@ fun sign_up_form() {
   </html>
 }
 
-fun sign_in(username, password) {
+fun sign_in(order_id, username, password) {
   var cust_id = 
     for (var u <-- usersTable)
     where (u.user_name == username &&
@@ -148,14 +172,19 @@ fun sign_in(username, password) {
       [u.cust_id];    
 
   if (cust_id == [])
-    stringToXml("Incorrect username/password combination")
-  else
-    search_results(hd(cust_id), -1, 1, 1, 0)
+    errorPage("Incorrect username/password combination")
+  else {
+    var cust_id = hd(cust_id);
+    if (order_id <> -1)
+      claimCart(order_id, cust_id)
+    else ();
+    search_results(cust_id, order_id, 1, 1, 0)
+  }
 }
 
-fun sign_in_form() {
+fun sign_in_form(order_id) {
   <html>
-    <form l:action="{sign_in(username, password)}">
+    <form l:action="{sign_in(order_id, username, password)}">
       Enter your username and password here:
       <table>
         <tr><td>
@@ -176,18 +205,27 @@ fun logout() {
    search_results(-1, -1, 1, 1, 0)
 }
 
-sig header : Int -> XML
+fun errorPage(msg) {
+  <h1>Sorry, an error occured</h1>
+  <p>{stringToXml(msg)}</p>
+}
 
-fun header(cust_id) {
+fun customerName(cust_id) {
+  for (var cust <-- usersTable)
+  where (cust.cust_id == cust_id)
+    stringToXml(cust.user_name)
+}
+
+sig header : (Int, Int) -> XML
+
+fun header(cust_id, order_id) {
   if (cust_id == -1)
     <div align="right">
-      <a l:href="{sign_in_form()}">Sign in</a> or
-      <a l:href="{sign_up_form()}">create an account</a>.
+      <a l:href="{sign_in_form(order_id)}">Sign in</a> or
+      <a l:href="{sign_up_form(order_id)}">create an account</a>.
     </div>
   else
-    <div align="right">Welcome, {for (var cust <-- usersTable)
-                                 where (cust.cust_id == cust_id)
-                                   stringToXml(cust.user_name)}.
+    <div align="right">Welcome, {customerName(cust_id)}.
          <a l:href="{logout()}">Logout</a></div>
 }
 
@@ -203,16 +241,17 @@ fun purchase_confirmation(cust_id, order_id, total) {
   debug("arrived at purchase confirmation with " ++ intToString(cust_id)
         ++ " " ++ intToString(order_id) ++ " " ++ floatToString(total));
   <html>
-    Your order (reference # {stringToXml(intToString(cust_id))} - {stringToXml(intToString(order_id))}) has been dispatched
-    Thank you Mr Claus, your order has been completed and dispatched. 
-    <p>Your order reference number is {stringToXml(intToString(cust_id))} - {stringToXml(intToString(order_id))}.
+    <h1>Success!</h1>
+    <p>Thanks, {if (cust_id <> -1) customerName(cust_id) else []},
+    your order has been dispatched. Your order reference number is
+    {intToXml(cust_id)} - {intToXml(order_id)}.
     Please quote this number in any correspondence.</p>
 
-    If it existed, the order would have been shipped to:
-    DETAILS
+    <p>If it existed, the order would have been shipped to:
+    <blockquote>(Insert shipping details)</blockquote></p>
 
     We have billed your fictional credit card.
-    <table>
+    <table width="100%">
       <tr>
         <td> Quantity </td>
         <td> Wine </td>
@@ -250,27 +289,42 @@ fun order_total(cust_id, order_id) {
   )
 }
 
-fun checkout(cust_id, order_id, card_no, expiry, instr) {
-  var total = order_total(cust_id, order_id);
-  if (valid_cc_details(card_no, expiry)) {
-    var the_orders = 
-      for (var x <-- orderTable )
-      where (cust_id == x.cust_id && order_id == x.order_id)
-        [x];
-    var the_order = hd(the_orders);
-    update (var x <-- orderTable)
-     where (x.order_id == order_id && cust_id == x.cust_id)
-       set (cust_id = the_order.cust_id,
-            order_id = the_order.order_id,
-            date = the_order.date,
-            instructions = instr,
-            creditcard = card_no,
-            expirydate = expiry);
+fun getOrder(cust_id, order_id) {
+  var the_orders = 
+    for (var x <-- orderTable )
+    where (cust_id == x.cust_id && order_id == x.order_id)
+      [x];
+  switch (the_orders) {
+    case [] -> None;
+    case (order::_) -> Some(order);
+  }
+}
 
-    debug("successfully updated the order with purchase details.");
-    purchase_confirmation(cust_id, order_id, total)
- } else
-   deadend()
+fun checkout(cust_id, order_id, card_no, expiry, instr) {
+  if (cust_id == -1) 
+    errorPage("You must have an account to make a purchase!")
+  else {
+    var total = order_total(cust_id, order_id);
+    if (valid_cc_details(card_no, expiry)) {
+      var the_order = getOrder(cust_id, order_id);
+      switch (the_order) {
+        case None -> errorPage("Internal error: You have no shopping cart");
+        case Some(order) -> {
+          update (var x <-- orderTable)
+           where (x.order_id == order_id && cust_id == x.cust_id)
+             set (cust_id = order.cust_id,
+                  order_id = order.order_id,
+                  date = order.date,
+                  instructions = instr,
+                  creditcard = card_no,
+                  expirydate = expiry);
+          debug("successfully updated the order with purchase details.");
+          purchase_confirmation(cust_id, order_id, total)
+        };
+      }
+    } else
+      errorPage("Bogus credit card details!")
+  }
 }
 
 fun begin_checkout(cust_id, order_id) {
@@ -348,10 +402,16 @@ fun cart_itemlist(cust_id, order_id) {
           <td></td>
           <td align="right"> ${stringToXml(total_cost)} </td>
         </tr>
-      </table>
-      <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
-        <input type="submit" value="Check out" />
-      </form>
+      </table> ++
+      {if (cust_id <> -1)
+        <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
+          <input type="submit" value="Check out" />
+        </form>
+       else {<div>To make a purchase, you must be a member. 
+               You may <a l:href="{sign_in_form(order_id)}">sign in</a> or
+                 <a l:href="{sign_up_form(order_id)}">create an account</a> 
+                  </div>}
+      }
     }
 }
 
@@ -388,8 +448,8 @@ fun show_cart(cust_id, order_id, msg) {
   </html>
 }
 
-sig cart_total : (Int, Int) -> String
-fun cart_total(cust_id, order_id) {
+sig cartStats : (Int, Int) -> (Float, Int)
+fun cartStats(cust_id, order_id) {
   var cart_items = 
     for (var cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
@@ -399,14 +459,14 @@ fun cart_total(cust_id, order_id) {
         where (wine.wine_id == cart_item.wine_id)
           for (var cost_rec <-- inventoryTable)
           where (wine.wine_id == cost_rec.wine_id)
-            [cost_rec.cost]
+            [(cart_item.qty, cost_rec.cost)]
     };
-  var total_cost = floatToString(sum_float(cart_items));
-  total_cost
+  var total_cost = sum_float(map(snd, cart_items));
+  var total_items = sum_int(map(fst, cart_items));
+  (total_cost, total_items)
 }
 
 fun add_to_cart(cust_id, order_id, wine_id) {
-
   var price = get_wine_price(wine_id);
   var max_item_id = maximum(0, for (var cart_item <-- cartItemsTable)
                            where (cart_item.order_id == order_id
@@ -427,16 +487,19 @@ fun add_to_cart(cust_id, order_id, wine_id) {
             "Added " ++ wine_name(wine_id) ++ " to your cart.")
 }
 
+fun sessionCart() {
+  (stringToInt(getCookie("cust_id")), stringToInt(getCookie("order_id")))
+}
+
 # create_cart: make a new cart
-# quite a hack; doesn't handle multiple carts for one session
 fun create_cart(cust_id) {
-  var os = for (var cart <-- shortOrderTable)
-                where (cart.cust_id == cust_id)
-                [cart.order_id];
-  var max_order_id = maximum(0, os);
-  var order_id = max_order_id + 1;
+  var orders = for (var cart <-- shortOrderTable)
+             [cart.order_id];
+  var order_id = 1 + maximum(0, orders);
   insert (shortOrderTable) values 
          [(cust_id = cust_id, order_id = order_id)];
+  setCookie("order_id")(intToString(order_id));
+  setCookie("cust_id")(intToString(cust_id));
   (order_id, cust_id)
 }
 
@@ -494,6 +557,17 @@ fun deadend() {
    <html>deadend</html>
 }
 
+fun cartSummary(cust_id, order_id) {
+  var (total, count) = cartStats(cust_id, order_id);
+  <div>
+    <a l:href="{show_cart(cust_id, order_id, "")}">
+    <img border="0" src="cart_off.jpg"  align="middle" /></a>
+    Total in cart: ${floatToXml(total)} 
+      ({intToXml(count)} items)
+     <a l:href="{show_cart(cust_id, order_id, "")}">View cart</a>.
+  </div>
+}
+
 sig search_results : (Int, Int, Int, Int, Int) -> XML
 
 fun search_results(cust_id, order_id, region_id, wine_type, page) {
@@ -501,13 +575,8 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
   var numPages = numWines/page_size;
   var winesOnThisPage = minimum(page_size, [numWines - (page) * page_size]);
   <html>
-    {header(cust_id)}
-    <div>
-        <img src="cart_off.jpg"  align="middle" />
-      Total in cart: {stringToXml(cart_total(cust_id, order_id))} 
-        ({intToXml(length(for (var x <-- cartItemsTable) where (x.cust_id == cust_id && x.order_id == order_id) [x]))} items)
-      View <a l:href="{show_cart(cust_id, order_id, "")}">cart</a>.
-    </div>
+    {header(cust_id, order_id)}
+    {cartSummary(cust_id, order_id)}
     <form method="POST" l:action="{search_results(cust_id, order_id,
                                                   stringToInt(search_region_id),
                                                   stringToInt(search_wine_type),
