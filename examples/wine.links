@@ -463,7 +463,7 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
   <html>
     {header(cust_id)}
     <div>
-        <img src="cart_off.jpg"  align="middle" />
+        <img src="http://www.webdatabasebook.com/2nd-edition/winestore/cart/images/cart_off.jpg"  align="middle" />
       Total in cart: {stringToXml(cart_total(cust_id, order_id))} 
         ({intToXml(length(for (var x <-- cartItemsTable) where (x.cust_id == cust_id && x.order_id == order_id) [x]))} items)
       View <a l:href="{show_cart(cust_id, order_id, "")}">cart</a>.
