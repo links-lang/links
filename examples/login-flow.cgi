@@ -25,7 +25,7 @@ fun get_user(msg) {
   else {                      # User is not logged in, show login page.
     var (username=name, userpass=pass) = 
       escape return in {
-        toplevel(login_widget(msg, return))
+        exit(login_widget(msg, return))
       };
     if (name == "ezra" && pass == "knock") {
       # User logged in successfully, set cookie and return creds.

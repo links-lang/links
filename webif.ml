@@ -26,8 +26,12 @@ type web_request = ContInvoke of continuation * query_params
 
 (* output the headers and content to stdout *)
 let print_http_response headers body =
-  let headers = headers @ !Library.http_headers in
-    List.iter (fun (name, value) -> print_endline(name ^ ": " ^ value)) headers;
+  let headers = headers @ !Library.http_response_headers @
+    if (!Library.http_response_code <> 200) then
+      [("Status", string_of_int !Library.http_response_code)] else []
+  in
+    iter_over headers
+      (fun (name, value) -> print_endline(name ^ ": " ^ value));
     print_endline "";
     print_string body
       

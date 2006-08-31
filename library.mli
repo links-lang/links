@@ -9,7 +9,8 @@ val messages : (pid, result Queue.t) Hashtbl.t
 val current_pid : pid ref
 val debug_process_status : unit -> unit
 
-val http_headers : (string * string) list ref
+val http_response_headers : (string * string) list ref
+val http_response_code : int ref
 
 val equal : Result.result -> Result.result -> bool
 val less : Result.result -> Result.result -> bool

@@ -1,6 +1,6 @@
-var db = database (driver="mysql",
+var db = database (driver="postgresql",
                    name="winestore",
-                   args="localhost:5432:www-data:");
+                   args="localhost:5432:s0567141:");
 
 var page_size = 12;
 
@@ -132,6 +132,18 @@ fun claimCart(order_id, cust_id) {
      set (cust_id = cust_id)
 }
 
+# [freshResource] is a bit of magic that makes the following code a new
+# resource.  That is, it redirects the user to a new URL for the
+# continuation. If you use this after doing destructive stuff
+# (e.g. database updates) then reloading and the back button are
+# "safe." Ideally this would be a library function, but lib functions
+# don't as yet have access to the current continuation. 
+fun freshResource() {
+  escape e in {
+    toplevel(redirect("?_cont=" ++ reifyK(e)))
+  };
+}
+
 sig sign_up : (Int, String, String) -> XML
 
 fun sign_up(order_id, username, password)  {
@@ -140,6 +152,7 @@ fun sign_up(order_id, username, password)  {
     [( cust_id = new_cust_id, user_name = username, password = password )];
   if (order_id <> -1)
     claimCart(order_id, new_cust_id) else ();
+  freshResource();
   <div>
     Welcome, {stringToXml(username)}!
     <a l:href="{search_results(new_cust_id, order_id, 1, 1, 0)}">Continue shopping</a>
@@ -319,6 +332,7 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
                   creditcard = card_no,
                   expirydate = expiry);
           debug("successfully updated the order with purchase details.");
+          freshResource();
           purchase_confirmation(cust_id, order_id, total)
         };
       }
@@ -482,6 +496,8 @@ fun add_to_cart(cust_id, order_id, wine_id) {
            wine_id = wine_id,
            qty = 1,
            price = price )];
+
+  freshResource();
  
   show_cart(cust_id, order_id,
             "Added " ++ wine_name(wine_id) ++ " to your cart.")
@@ -524,6 +540,8 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
   var (order_id, cust_id) = 
     if (order_id <> -1) (order_id, cust_id)
     else create_cart(cust_id);
+
+  # create_cart is idempotent, so we don't need freshResource here.
 
   for (var (id, name, cost, year, winery) <- result)
   {

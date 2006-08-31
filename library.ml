@@ -18,9 +18,11 @@ and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtb
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 
-(* http_headers: this is state for the webif interface. it's rubbish
-   having it here. *)
-let http_headers = ref []
+(** http_response_headers: this is state for the webif interface. I hope we can
+    find a better way for library functions to communicate with the web
+    interface. *)
+let http_response_headers = ref []
+let http_response_code = ref 200
 
 (* default database settings *)
 let database_driver = Settings.add_string("database_driver", "", true)
@@ -201,7 +203,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
    ([], (`Primitive `Int) --> xml));
   
-  "toplevel",   (* or `exit' *)
+  "toplevel",   (* deprecated, use exit() *)
+  (
+    prerr_endline("The 'toplevel' primitive is deprecated, use 'exit' instead");
+    `Continuation [],
+   (datatype "a -> b")
+  );
+
+  "exit",
   (`Continuation [],
    (datatype "a -> b")
   );
@@ -296,20 +305,20 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "Int -> [a] -> [a]");
 
   "max",
- (p1 (let max2 x y = if less x y then y else x in
-        function
-          | `List [] -> `Variant ("None", `Record [])
-          | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
-            | _ -> failwith "Internal error: non-list passed to max"),
-  datatype "[a] -> [|Some:a | None:()|]");
+  (p1 (let max2 x y = if less x y then y else x in
+         function
+           | `List [] -> `Variant ("None", `Record [])
+           | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+           | _ -> failwith "Internal error: non-list passed to max"),
+   datatype "[a] -> [|Some:a | None:()|]");
 
   "min",
- (p1 (let min2 x y = if less x y then x else y in
-        function
-          | `List [] -> `Variant ("None", `Record [])
-          | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
-            | _ -> failwith "Internal error: non-list passed to min"),
-  datatype "[a] -> [|Some:a | None:()|]");
+  (p1 (let min2 x y = if less x y then x else y in
+         function
+           | `List [] -> `Variant ("None", `Record [])
+           | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
+           | _ -> failwith "Internal error: non-list passed to min"),
+   datatype "[a] -> [|Some:a | None:()|]");
 
   (** XML **)
   "childNodes",
@@ -512,8 +521,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p2 (fun cookieName cookieVal ->
          let cookieName = charlist_as_string cookieName in
          let cookieVal = charlist_as_string cookieVal in
-           http_headers := 
-             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_headers;
+           http_response_headers := 
+             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
            `Record []
       ),
    datatype "String -> String -> unit");
@@ -538,12 +547,38 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "String -> String");
 
 
-  (* [SL] Aarghhh... this is too dangerous *)
+  (* getCommandOutput disabled for now; possible security risk. *)
   (*
     "getCommandOutput",
     (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
     datatype "String -> String");
   *)
+
+  "redirect",
+  (p1 (fun url ->
+         let url = charlist_as_string url in
+           (* This is all quite hackish, just testing an idea. --ez *)
+           http_response_headers := ("Location", url) :: !http_response_headers;
+           http_response_code := 302;
+           `Record []
+      ), datatype "String -> ()");   (* Should this function really return? 
+                                        I think not --ez*)
+
+  (** reifyK: I choose an obscure name, for an obscure function, until
+      a better one can be though up. It just turns a continuation into its
+      string representation *)
+  "reifyK",
+  (p1 (function
+           `Continuation k -> 
+             (match string_as_charlist(marshal_continuation k) with
+                  `List _ as result -> result
+                | _ -> failwith "")
+         | _ -> failwith "argument to reifyK was not a continuation"
+      ),
+   datatype "(a -> b) -> String"); (* arg type should actually be limited
+                                      to continuations, but we don't have
+                                      any way of specifying that in the 
+                                      type system. *)
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
@@ -598,7 +633,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                       | _ -> failwith "Internal error: bad value passed to `updaterows'"
                   end
             | _ -> failwith "Internal error unboxing args (updaterows)")),
-      datatype "(TableHandle(r), [({r},{r})]) -> ()");
+   datatype "(TableHandle(r), [({r},{r})]) -> ()");
 
   "deleterows", 
   (`Server
@@ -626,14 +661,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (p1 (fun _ ->
 	    let driver = Settings.get_value database_driver
 	    and args = Settings.get_value database_args in
-	    if driver = "" then
-	      failwith "Internal error: default database driver not defined"
-	    else
-	      `Record(["driver", string_as_charlist driver;
-		       "args", string_as_charlist args])
+	      if driver = "" then
+	        failwith "Internal error: default database driver not defined"
+	      else
+	        `Record(["driver", string_as_charlist driver;
+		         "args", string_as_charlist args])
 	 )),
-     datatype "() -> (driver:String, args:String)");
-	   
+   datatype "() -> (driver:String, args:String)");
+  
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
   "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
