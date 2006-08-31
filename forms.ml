@@ -200,12 +200,13 @@ let xml_transform env lookup eval : expression -> expression =
     | Xml_node ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in
         let href_val = 
-          if is_simple_apply href_expr then
-            let (Variable (func, _)::args) = list_of_appln href_expr in
-            let arg_vals = map (value_of_simple_expr lookup) args in
-              String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals)
-                (*               ^ "?environment%=" ^ ser_env *)
-          else "?_k=" ^ serialise_exprenv href_expr env
+(*           if is_simple_apply href_expr then *)
+(*             let (Variable (func, _)::args) = list_of_appln href_expr in *)
+(*             let arg_vals = map (value_of_simple_expr lookup) args in *)
+(*               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals) *)
+(*                 (\*               ^ "?environment%=" ^ ser_env *\) *)
+(*           else *)
+          "?_k=" ^ serialise_exprenv href_expr env
         in
         let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
         in
