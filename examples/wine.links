@@ -475,7 +475,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
 
 
 fun wine_count(region_id, wine_type) {
-  var db = database(args="localhost:5432:s0567141:xxx",
+  var db = database(args="localhost:5432:www-data:xxx",
                     name="winestore",
                     driver="postgresql");
 
@@ -512,7 +512,7 @@ sig search_results : (Int, Int, Int, Int, Int) -> XML
 
 fun search_results(cust_id, order_id, region_id, wine_type, page) {
   var db = database (driver="postgresql", name="winestore", 
-                     args="localhost:5432:s0567141:xxx");
+                     args="localhost:5432:www-data:xxx");
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
   var winesOnThisPage = minimum(page_size, [numWines - (page) * page_size]);
