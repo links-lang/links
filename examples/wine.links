@@ -1,6 +1,6 @@
-var db = database (driver="postgresql",
+var db = database (driver="mysql",
                    name="winestore",
-                   args="localhost:5432:s0567141:");
+                   args="localhost:5432:www-data:");
 
 var page_size = 12;
 
