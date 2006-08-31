@@ -140,7 +140,7 @@ module Base64 = struct
   let encode ?(pos=0) ?len ?(linelength=0) ?(crlf=false) s =
     let l = match len with None -> String.length s - pos | Some x -> x in
     let s,_ = 
-      encode_with_options rfc_pattern '=' s pos l linelength linelength crlf in
+      encode_with_options url_pattern '=' s pos l linelength linelength crlf in
     s
   ;;
 
