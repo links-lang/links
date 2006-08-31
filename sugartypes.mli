@@ -70,6 +70,7 @@ and phrasenode =
   | Binding of binder
   | Block of (phrase list * phrase)
   | Foreign of (name * name * datatype)
+  | InfixDecl
   | InfixAppl of (binop * phrase * phrase)
   | Regex of (regex)
   | UnaryAppl of (unary_op * phrase)

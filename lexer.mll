@@ -69,8 +69,22 @@ let infix9  x = INFIX9  x
 let infixl9 x = INFIXL9 x
 let infixr9 x = INFIXR9 x
 
+let precs = 
+  [
+    infix0, infixl0, infixr0;
+    infix1, infixl1, infixr1;
+    infix2, infixl2, infixr2;
+    infix3, infixl3, infixr3;
+    infix4, infixl4, infixr4;
+    infix5, infixl5, infixr5;
+    infix6, infixl6, infixr6;
+    infix7, infixl7, infixr7;
+    infix8, infixl8, infixr8;
+    infix9, infixl9, infixr9;
+  ]
+
+let optable = ref
 (* lifted from the definition of Haskell *)
-let optable = 
   [
     "!"  , infix9;
 
@@ -104,7 +118,15 @@ let optable =
     ">>" , infixl1;
   ]
 
-let precedence table x = 
+let setprec table assoc level name =
+  let value = match List.nth precs level, assoc with
+    | (a,_,_), `None -> a
+    | (_,a,_), `Left -> a
+    | (_,_,a), `Right -> a 
+  in
+    table := (name, value) :: !table
+
+let precedence table x =
   try
     List.assoc x table x
   with Not_found ->
@@ -139,6 +161,9 @@ let keywords = [
  "handle"   , HANDLE; 
  "if"       , IF; 
  "in"       , IN; 
+(*  "infix"    , INFIX; *)
+(*  "infixl"   , INFIXL; *)
+(*  "infixr"   , INFIXR; *)
  "insert"   , INSERT; 
  "into"     , INTO; 
  "mu"       , MU; 
@@ -220,10 +245,10 @@ rule lex optable lexers = parse
   | '.'                                 { DOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
-  | opchar + as op                      { optable op }
+  | opchar + as op                      { precedence !optable op }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || isupper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
-                                          else optable var }
+                                          else precedence !optable var }
   | "'\\\\'"                            { CHAR '\\' }
   | "'\\''"                             { CHAR '\'' }
   | "'" (_ as c) "'"                    { CHAR c }
@@ -232,6 +257,9 @@ rule lex optable lexers = parse
   | def_integer as var                  { UINTEGER (Num.num_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
+  | "infix"                             { INFIX (setprec optable) }
+  | "infixl"                            { INFIXL (setprec optable) }
+  | "infixr"                            { INFIXR (setprec optable) }
   | def_id as var                       { try List.assoc var keywords 
                                           with Not_found -> 
                                             if isupper var.[0] then CONSTRUCTOR var
@@ -297,7 +325,7 @@ and regex optable lexers = parse
 
 let lexer () = 
   let lexers = (Stack.create () : (Lexing.lexbuf -> Parser.token) Stack.t) in
-    Stack.push (lex (precedence optable) lexers) lexers;
+    Stack.push (lex optable lexers) lexers;
     (* This flag, which records when we should insert an extra
     SEMICOLON token before the END, is a workaround for an
     end-of-stream conflict in the parser.  I wish it'd go away. *)

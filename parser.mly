@@ -42,6 +42,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token QUESTION TILDE PLUS STAR SLASH
 %token <char*char> RANGE
 %token UNDERSCORE AS
+%token <[`Left|`Right|`None] -> int -> string -> unit> INFIX INFIXL INFIXR
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
 %token <string> INFIX2 INFIXL2 INFIXR2
@@ -98,6 +99,7 @@ toplevel_seq:
 toplevel:
 | exp SEMICOLON                                                { $1 }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
+| fixity UINTEGER op SEMICOLON                                 { let assoc, set = $1 in set assoc (Num.int_of_num $2) $3; (InfixDecl, pos()) }
 | VAR pattern perhaps_location EQ exp SEMICOLON                { Definition ($2, $5, $3), pos() }
 | SIG 
   VARIABLE COLON datatype 
@@ -111,6 +113,11 @@ toplevel:
                                                                                   $4),
                                                                  pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ((`Variable $2, pos()), (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+
+fixity:
+| INFIX                                                        { `None, $1 }
+| INFIXL                                                       { `Left, $1 }
+| INFIXR                                                       { `Right, $1 }
 
 perhaps_location:
 | SERVER                                                       { `Server }
@@ -186,13 +193,11 @@ op:
 | INFIXL9                                                      { $1 }
 | INFIXR9                                                      { $1 }
  
-
 postfix_expression:
 | primary_expression                                           { $1 }
 | block                                                        { $1 }
 | SPAWN block                                                  { Spawn $2, pos() }
 | postfix_expression arg_spec                                  { FnAppl ($1, $2), pos() }
-/*| postfix_expression LPAREN labeled_exps RPAREN              { FnAppl ($1, $3), pos() }*/
 | postfix_expression DOT record_label                          { Projection ($1, $3), pos() }
 
 arg_spec:
@@ -312,12 +317,6 @@ typed_expression:
 | logical_expression                                           { $1 }
 | logical_expression COLON datatype                            { TypeAnnotation ($1, $3), pos() }
 
-
-/*
-DELETE generator perhaps_where
-UPDATE generator perhaps_where SET
-       LPAREN labeled_exps RPAREN                              { DBUpdate($2, $3, $6), pos() }
-*/
 db_expression:
 | typed_expression                                             { $1 }
 | INSERT exp VALUES exp                                        { DBInsert ($2, $4), pos() }
@@ -325,9 +324,6 @@ db_expression:
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
          SET LPAREN labeled_exps RPAREN                        { DBUpdate($3, $5, $8), pos() }
-
-/*| DELETE FROM exp VALUES exp                                 { DBDelete ($3, $5), pos() }*/
-/*| UPDATE exp VALUES exp                                        { DBUpdate ($2, $4), pos() }*/
 
 xml:
 | xml_forest                                                   { XmlForest $1, pos() }

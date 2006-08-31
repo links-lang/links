@@ -723,6 +723,7 @@ module Desugarer =
              | StringLit _
              | BoolLit _
              | CharLit _
+             | InfixDecl
              | Var _ -> empty
              | FunLit (_, patterns, body) -> flatten ((List.map ptv patterns) @ [etv body])
              | Spawn e -> etv e
@@ -737,7 +738,6 @@ module Desugarer =
              | Binding b -> btv b
              | Block (es, exp) -> flatten [etvs es; etv exp]
              | Foreign (_, _, datatype) -> tv datatype
-
              | InfixAppl (_, e1, e2) -> flatten [etv e1; etv e2]
              | Regex _ -> empty
              | UnaryAppl (_, e) -> etv e
@@ -1051,6 +1051,7 @@ module Desugarer =
                polylets es (desugar exp)
            | Foreign (language, name, datatype) -> 
                Alien (language, name, desugar_assumption (generalize datatype), pos)
+           | InfixDecl -> Record_empty pos
            | SortBy_Conc(patt, expr, sort_expr) ->
                (match patternize patt with
                   | `Variable var, _ -> 
