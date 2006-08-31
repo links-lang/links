@@ -2,6 +2,8 @@ var db = database (driver="mysql",
                    name="winestore",
                    args="localhost:5432:www-data:");
 
+var page_size = 12;
+
 var usersTable = table "users"
                   with (cust_id : Int, user_name : String, 
                         password : String) from db;
@@ -49,6 +51,11 @@ fun map(f, l) {
   for (var x <- l) [f(x)]
 }
 
+fun range(n) {
+  if (n==0) [0] else
+  range(n-1) ++ [n]
+}
+
 fun floatToXml(x) { stringToXml(floatToString(x)) } 
 
 fun sum_float(l) {
@@ -66,6 +73,16 @@ fun maximum(result, l) {
                    else
                        maximum(hd, tl);
   }
+}
+
+fun min(result, l) {
+  if (l == [])
+    result
+  else
+    if (result <= hd(l))  
+      max(result, tl(l))
+    else
+      max(hd(l), tl(l))
 }
 
 fun assoc(x, l, d) {
@@ -95,7 +112,7 @@ fun sign_up(username, password)  {
     [( cust_id = new_cust_id, user_name = username, password = password )];
   <div>
     Welcome, {stringToXml(username)}!
-    <a l:href="{search_results(new_cust_id, -1, -1, -1)}">Continue shopping</a>
+    <a l:href="{search_results(new_cust_id, -1, 1, 1, 0)}">Continue shopping</a>
   </div>
 }
 
@@ -107,7 +124,7 @@ fun sign_up_form() {
           Username:</td><td> <input type="text" l:name="username" />
         </td></tr>
         <tr><td>
-          Password:</td><td> <input type="text" l:name="password" />
+          Password:</td><td> <input type="password" l:name="password" />
         </td></tr>
         <tr><td>
           </td><td> <input type="submit" value="Sign Up" />
@@ -127,7 +144,7 @@ fun sign_in(username, password) {
   if (cust_id == [])
     stringToXml("Incorrect username/password combination")
   else
-    search_results(hd(cust_id), -1, -1, -1)
+    search_results(hd(cust_id), -1, 1, 1, 0)
 }
 
 fun sign_in_form() {
@@ -139,7 +156,7 @@ fun sign_in_form() {
           Username:</td><td> <input type="text" l:name="username" />
         </td></tr>
         <tr><td>
-          Password:</td><td> <input type="text" l:name="password" />
+          Password:</td><td> <input type="password" l:name="password" />
         </td></tr>
         <tr><td>
         </td> <td> <input type="submit" value="Sign in" />
@@ -150,7 +167,7 @@ fun sign_in_form() {
 }
 
 fun logout() {
-   search_results(-1, -1, -1, -1)
+   search_results(-1, -1, 1, 1, 0)
 }
 
 sig header : Int -> XML
@@ -213,7 +230,7 @@ fun purchase_confirmation(cust_id, order_id, total) {
 
     <p>An email confirmation has NOT been sent to you. Thank you for shopping 
     with Linkswine.</p>
-    Return to <a l:href="{search_results(cust_id, -1, -1, -1)}">main page</a>.
+    Return to <a l:href="{search_results(cust_id, -1, 1, 1, 0)}">main page</a>.
   </html>
 }
 
@@ -360,7 +377,7 @@ fun show_cart(cust_id, order_id, msg) {
     <div>
       {cart_itemlist(cust_id, order_id)}
     </div>
-    <a l:href="{search_results(cust_id, order_id, -1, -1)}">Continue shopping</a>
+    <a l:href="{search_results(cust_id, order_id, 1, 1, 0)}">Continue shopping</a>
   </html>
 }
 
@@ -422,24 +439,23 @@ fun create_cart(cust_id) {
   (order_id, cust_id)
 }
 
-fun wine_listing(cust_id, order_id, region_id, wine_type) {
+fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
   var negone = -1;
   var result = 
+    take(page_size)(drop(page * page_size)(
     for (var wine <-- wineTable )
-    where (wine_type == negone || wine_type == 1
-           || wine.wine_type == wine_type)
+    where (wine_type == 1 || wine.wine_type == wine_type)
     {
       for (var winery <-- wineryTable)
          where (winery.winery_id == wine.winery_id
-                && (region_id == 1 || region_id == negone
-                    || winery.region_id == region_id))
+                && (region_id == 1 || winery.region_id == region_id))
          { 
              for (var cost_rec <-- inventoryTable)
              where (wine.wine_id == cost_rec.wine_id)
                [(wine.wine_id, wine.wine_name, cost_rec.cost,
                  wine.year, winery.winery_name)]
          }
-    };
+    }));
 
   var (order_id, cust_id) = 
     if (order_id <> -1) (order_id, cust_id)
@@ -454,12 +470,49 @@ fun wine_listing(cust_id, order_id, region_id, wine_type) {
   }
 }
 
+
+fun wine_count(region_id, wine_type) {
+  var db = database(args="localhost:5432:s0567141:xxx",
+                    name="winestore",
+                    driver="postgresql");
+
+  var result = 
+    for (var wine <- asList(table "wine" with
+                           (wine_id : Int, wine_name : String, wine_type : Int,
+                            year : Int, winery_id : Int)
+                           from db))
+    where (wine_type == 1 || wine.wine_type == wine_type)
+    {
+      for (var winery <- asList(table "winery" with 
+                           (winery_id : Int, winery_name : String,
+                            region_id : Int)
+                         from db))
+         where (winery.winery_id == wine.winery_id
+                && (region_id == 1 || winery.region_id == region_id))
+         { 
+             for (var cost_rec <- asList(table "inventory" with
+                                          (wine_id : Int, cost : Float)
+                                         from db))
+             where (wine.wine_id == cost_rec.wine_id)
+               [(wine.wine_id, wine.wine_name, cost_rec.cost,
+                 wine.year, winery.winery_name)]
+         }
+    };
+   length(result)
+}
+
 fun deadend() {
    <html>deadend</html>
 }
 
-sig search_results : (Int, Int, Int, Int) -> XML
-fun search_results(cust_id, order_id, region_id, wine_type) {
+sig search_results : (Int, Int, Int, Int, Int) -> XML
+
+fun search_results(cust_id, order_id, region_id, wine_type, page) {
+  var db = database (driver="postgresql", name="winestore", 
+                     args="localhost:5432:s0567141:xxx");
+  var numWines = wine_count(region_id, wine_type);
+  var numPages = numWines/page_size;
+  var winesOnThisPage = min(page_size, [numWines - (page) * page_size]);
   <html>
     {header(cust_id)}
     <div>
@@ -470,7 +523,8 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
     </div>
     <form method="POST" l:action="{search_results(cust_id, order_id,
                                                   stringToInt(search_region_id),
-                                                  stringToInt(search_wine_type))}">
+                                                  stringToInt(search_wine_type),
+                                                  page)}">
       <h2>Filter wines by </h2>
       <table>
         <tr><td>Region:</td>
@@ -504,16 +558,29 @@ fun search_results(cust_id, order_id, region_id, wine_type) {
     </form>
     <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
+    Page {intToXml(page)} of {intToXml(numPages)}
     <ul>
-      {wine_listing(cust_id, order_id, region_id, wine_type)}
+      {wine_listing(cust_id, order_id, region_id, wine_type, page)}
     </ul>
+    Showing wines {intToXml(page_size*page+1)} thru {intToXml(page_size*page+winesOnThisPage)}.<br />
+    {if (page <> 0)
+      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, page-1)}">Previous</a> else []}
+    {for (var i <- range(numPages)) {
+       (if (i == page) {intToXml(i+1)}
+       else 
+         <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
+       ++ <span> </span> 
+    }}
+    {if (page <> numPages)
+      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, page+1)}">Next</a> else []
+    }
     {footer(cust_id)}
   </html>
 }
 
 sig main : () -> XML
 fun main() {
-  search_results(-1, -1, -1, -1)
+  search_results(-1, -1, 1, 1, 0)
 }
 
 main()
