@@ -1,3 +1,7 @@
+# there shouldn't be a server annotation here
+# but our handling of strings on the client is
+# broken, so the example breaks without the
+# server annotation
 fun lowercase(s) server {
   for (var c <- s) [toLower(c)]
 }
@@ -9,7 +13,7 @@ fun suggest(prefix) client {
  )
 } 
 
-fun format(words) client {
+fun format(words) {
  for (var w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>
@@ -36,22 +40,33 @@ fun completions(prefix) server {
  }
 }
 
-<html>
- <head>
-  <title>Dictionary suggest</title>
-  <style>
-    input {{ width:500px }}
-    #suggestions {{ text-align:left; width:500px;
-                    background-color:#ccccff }}
-  </style>
- </head>
-<body>
- <h1>Dictionary suggest</h1>
- <form l:onkeyup="{suggest(prefix)}">
-  <input type="text" l:name="prefix"
-         class="input" autocomplete="off"/>
- </form>
- <div id="suggestions" class="suggestions"/>
- </body>
-</html>
+fun receiver() {
+ receive {
+  case Suggest(prefix) -> {suggest(prefix); receiver();};
+ }
+}
 
+fun main() {
+ var handler = spawn {receiver()};
+
+ <html>
+  <head>
+   <title>Dictionary suggest</title>
+   <style>
+     input {{ width:500px }}
+     #suggestions {{ text-align:left; width:500px;
+                     background-color:#ccccff }}
+   </style>
+  </head>
+ <body>
+  <h1>Dictionary suggest</h1>
+  <form l:onkeyup="{handler!Suggest(prefix)}">
+   <input type="text" l:name="prefix"
+          class="input" autocomplete="off"/>
+  </form>
+  <div id="suggestions" class="suggestions"/>
+  </body>
+ </html>
+}
+
+main()
