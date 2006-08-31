@@ -14,8 +14,12 @@ var orderTable = table "orders"
                         expirydate : String)
                    from db;
 
+var shortOrderTable = table "orders"
+                       with (cust_id : Int, order_id : Int)
+                   from db;
+
 var cartItemsTable = table "items"
-                      with (cust_id : Int, order_id : Int, 
+                      with (item_id : Int, cust_id : Int, order_id : Int, 
                             price : Float, qty : Int,
                             wine_id : Int)
                       from db;
@@ -404,14 +408,14 @@ fun cart_total(cust_id, order_id) {
 fun add_to_cart(cust_id, order_id, wine_id) {
 
   var price = get_wine_price(wine_id);
-  var max_item_id = maximum(0, for (var cart_item <-- itemsTable)
+  var max_item_id = maximum(0, for (var cart_item <-- cartItemsTable)
                            where (cart_item.order_id == order_id
                                && cart_item.cust_id == cust_id)
                                  [cart_item.item_id]
                         );
   var new_item_id = max_item_id + 1;
         
-  insert (itemsTable) values
+  insert (cartItemsTable) values
         [( cust_id = cust_id,
            order_id = order_id,
            item_id = new_item_id,
@@ -426,12 +430,12 @@ fun add_to_cart(cust_id, order_id, wine_id) {
 # create_cart: make a new cart
 # quite a hack; doesn't handle multiple carts for one session
 fun create_cart(cust_id) {
-  var os = for (var cart <-- ordersTable)
+  var os = for (var cart <-- shortOrderTable)
                 where (cart.cust_id == cust_id)
                 [cart.order_id];
   var max_order_id = maximum(0, os);
   var order_id = max_order_id + 1;
-  insert (ordersTable) values 
+  insert (shortOrderTable) values 
          [(cust_id = cust_id, order_id = order_id)];
   (order_id, cust_id)
 }
@@ -477,7 +481,7 @@ fun wine_count(region_id, wine_type) {
          where (winery.winery_id == wine.winery_id
                 && (region_id == 1 || winery.region_id == region_id))
          { 
-             for (var cost_rec <-- inventoryTable))
+             for (var cost_rec <-- inventoryTable)
              where (wine.wine_id == cost_rec.wine_id)
                [(wine.wine_id, wine.wine_name, cost_rec.cost,
                  wine.year, winery.winery_name)]
