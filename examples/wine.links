@@ -75,14 +75,15 @@ fun maximum(result, l) {
   }
 }
 
-fun min(result, l) {
-  if (l == [])
-    result
-  else
-    if (result <= hd(l))  
-      max(result, tl(l))
-    else
-      max(hd(l), tl(l))
+
+fun minimum(result, l) {
+  switch l {
+    case [] -> result;
+    case hd::tl -> if (result <= hd)  
+                       maximum(result, tl)
+                   else
+                       maximum(hd, tl);
+  }
 }
 
 fun assoc(x, l, d) {
@@ -106,6 +107,7 @@ fun cust_id_next() {  # nasty
 }
 
 sig sign_up : (String, String) -> XML
+
 fun sign_up(username, password)  {
   var new_cust_id = cust_id_next();
   insert (usersTable) values
@@ -171,6 +173,7 @@ fun logout() {
 }
 
 sig header : Int -> XML
+
 fun header(cust_id) {
   if (cust_id == -1)
     <div align="right">
@@ -314,38 +317,38 @@ fun cart_itemlist(cust_id, order_id) {
               [(wine.wine_name, cost_rec.cost)]
         }
     };
-  debug("got results in cart_items");
-  if (length(cart_items) == 0)
-    <p>Your cart is empty.</p>
-  else {
-    var total_cost = floatToString(sum_float(map(snd, cart_items)));
-    var total_items = intToString(length(cart_items));
-    <table width="100%">
-         <tr>
-           <th> Quantity </th>
-           <th> Wine </th>
-           <th align="right"> Unit Price </th>
-           <th align="right"> Total </th>
-         </tr>
-      {for (var item <- cart_items)
-         <tr>
-           <td> 1 </td>
-           <td> {stringToXml(item.1)} </td>
-          <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-           <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-         </tr>
-      }
-      <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td align="right"> ${stringToXml(total_cost)} </td>
-      </tr>
-    </table>
-    <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
-      <input type="submit" value="Check out" />
-    </form>
-  }
+    debug("got results in cart_items");
+    if (length(cart_items) == 0)
+      <p>Your cart is empty.</p>
+    else {
+      var total_cost = floatToString(sum_float(map(snd, cart_items)));
+      var total_items = intToString(length(cart_items));
+      <table width="100%">
+           <tr>
+             <th> Quantity </th>
+             <th> Wine </th>
+             <th align="right"> Unit Price </th>
+             <th align="right"> Total </th>
+           </tr>
+        {for (var item <- cart_items)
+           <tr>
+             <td> 1 </td>
+             <td> {stringToXml(item.1)} </td>
+             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
+             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
+           </tr>
+        }
+        <tr>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td align="right"> ${stringToXml(total_cost)} </td>
+        </tr>
+      </table>
+      <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
+        <input type="submit" value="Check out" />
+      </form>
+    }
 }
 
 fun wine_name(wine_id) {
@@ -512,11 +515,11 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
                      args="localhost:5432:s0567141:xxx");
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
-  var winesOnThisPage = min(page_size, [numWines - (page) * page_size]);
+  var winesOnThisPage = minimum(page_size, [numWines - (page) * page_size]);
   <html>
     {header(cust_id)}
     <div>
-        <img src="http://www.webdatabasebook.com/2nd-edition/winestore/cart/images/cart_off.jpg"  align="middle" />
+        <img src="cart_off.jpg"  align="middle" />
       Total in cart: {stringToXml(cart_total(cust_id, order_id))} 
         ({intToXml(length(for (var x <-- cartItemsTable) where (x.cust_id == cust_id && x.order_id == order_id) [x]))} items)
       View <a l:href="{show_cart(cust_id, order_id, "")}">cart</a>.
@@ -579,6 +582,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
 }
 
 sig main : () -> XML
+
 fun main() {
   search_results(-1, -1, 1, 1, 0)
 }
