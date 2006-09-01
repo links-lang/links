@@ -113,6 +113,7 @@ toplevel:
                                                                                   $4),
                                                                  pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ((`Variable $2, pos()), (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN pattern op pattern perhaps_location block perhaps_semi   { Definition ((`Variable $3, pos()), (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
 
 fixity:
 | INFIX                                                        { `None, $1 }
