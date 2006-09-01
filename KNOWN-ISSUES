@@ -1,14 +1,11 @@
 KNOWN ISSUES
 
- * Browsers other than Firefox are currently unsupported.
+ * Browsers other than Firefox are currently unsupported (limited support for IE).
 
- * Comparison of variants is always false in JS target.
-
- * Exceptions have not been implemented.
+ * Client-side equality is completely broken.
 
  * The following web features have not yet been implemented.
    - URLs
-   - Cookies
    - Arbitrary HTTP headers, response codes
    - Accessibility standards
 
@@ -19,6 +16,8 @@ KNOWN ISSUES
  * There is no way to get the value of a radio button element.
 
  * It is not possible to pass XML values across the client / server boundary.
+
+ * Passing strings from client to server sometimes breaks.
 
  * Returning a seq'ce of XML items at the toplevel gives "ASSERTION FAILED:
    Top-level expression was not XML"
@@ -33,9 +32,7 @@ KNOWN ISSUES
       <stdin>:1
     links>
   
- * Queries against two different databases may be erroneously joined.
-
- * Type errors sometimes print the wrong expression, e.g.:
+  * Type errors sometimes print the wrong expression, e.g.:
 
      links> 1 + "a"
      <string>:1: Type error: `1 + "a"', which has type (Int) -> Int, 
@@ -56,6 +53,4 @@ KNOWN ISSUES
         for y <- (...) in
           [(x, y)]
 
- * table declarations don't work in the interactive shell
 
- * database update is not yet implemented.
