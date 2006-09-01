@@ -90,7 +90,7 @@ let just_optimise parse (valenv, typeenv) input =
          print_endline(mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
-let rec interact envs = 
+let rec interact envs =
 let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
   handle_errors
     (fun input ->
@@ -207,7 +207,13 @@ let options : opt list =
       ('t',     "run-tests",           Some run_tests,                   None);
 *)    ]
 
+let welcome_note = Settings.add_string ("welcome_note", "Welcome to Links", false)
+
 (* main *)
 let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
-  if Settings.get_value(interacting) then interact stdenvs
+  if Settings.get_value(interacting) then
+    begin
+      print_endline (Settings.get_value(welcome_note));
+      interact stdenvs
+    end
