@@ -1,6 +1,11 @@
 open Utility
 open Result
 
+(*
+ Whether to cache programs after the optimization phase
+*)
+let cache_programs = Settings.add_bool ("cache_programs", false, true)
+
 type query_params = (string * result) list
 
 type web_request = ContInvoke of continuation * query_params
@@ -68,6 +73,37 @@ let read_and_optimise_program filename : (Syntax.expression list) =
        ((Performance.measure "type" (Inference.type_program Library.type_env))
           ((Performance.measure "parse" Parse.parse_file) filename)))
               
+let read_file_cache filename : (Syntax.expression list) = 
+  let cachename = filename ^ ".cache" in
+    try
+      if ((Unix.stat cachename).Unix.st_mtime > (Unix.stat filename).Unix.st_mtime) then
+        let infile = open_in cachename in
+        let program = Marshal.from_channel infile in
+          close_in infile;
+          program
+      else
+        raise (Sys_error "booyah")
+    with (Sys_error _| Unix.Unix_error _) ->
+      let program = 
+        (Performance.measure "optimise" Optimiser.optimise_program)
+          ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
+             ((Performance.measure "type" (Inference.type_program Library.type_env))
+                ((Performance.measure "parse" Parse.parse_file) filename)))
+      in 
+	(try 
+	   let outfile = open_out cachename in 
+           let (pos, dt, _) = Syntax.no_expr_data in
+             Marshal.to_channel outfile (List.map (Syntax.Functor_expression'.map (fun (_,_,l) -> pos, dt, l)) program) [Marshal.Closures] ;
+             close_out outfile
+	 with _ -> ());
+        program
+
+let read_and_optimise_program arg = 
+  if Settings.get_value cache_programs then
+    read_file_cache arg
+  else 
+    read_and_optimise_program arg
+
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
