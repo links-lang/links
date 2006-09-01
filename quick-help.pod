@@ -1174,18 +1174,18 @@ When run as a CGI script Links must be passed a filename as an argument.
 
   links filename
 
-
 From the command line Links can be invoked in a number of different ways:
 
-  links            load the interactive shell
-  links -e exp     evaluate exp
-  links filename   run filename
+  links                load the interactive shell
+  links -e exp         evaluate exp
+  links filename       run filename
 
 The following options are supported in all modes:
 
- -d       debug mode
- -O       enable optimisation
- -n       don't print types
+  -d                   debug mode
+  -O                   enable optimisation
+  -n                   don't print types
+  --config=<filename>  set a configuration file
 
 =head2 The interactive shell
 
@@ -1202,13 +1202,69 @@ The interpreter outputs the resulting value and its type.
 
 =head3 Directives
 
-The interpreter supports a number of directives.
+The interpreter supports a number of directives. Typing one of these
+at the interactive loop has an immediate effect.
 
- @directives           : list available directives
- @settings             : print available settings
- @set                  : change the value of a setting
- @builtins             : list builtin functions and values
- @quit                 : exit the interpreter  
+=over 4
+
+=item C<@directives>
+
+list available directives
+
+=item C<@settings>
+
+print available settings (see L<Configuration>)
+
+=item C<@set>
+
+change the value of a setting (see L<Configuration>)
+
+=item C<@builtins>
+
+list builtin functions and values
+
+=item C<@quit>
+
+exit the interpreter  
+
+=back
+
+
+=head2 Configuration
+
+Links offers a number of settings which can affect the behavior of the
+interactive loop or the web interface.
+
+The available settings can be discovered in the interactive loop using
+the C<@settings> directive:
+
+    links> @settings;;
+    
+    User settings
+     show_unification          false
+     show_typechecking         false
+    ...
+
+A setting can be modified during an interactive session using the
+C<@set> directive:
+
+    links> @set show_typechecking true;;
+
+Settings can also be configured using a configuration file. To select
+a configuration file, use the command-line option C<--config>:
+
+    $ links --config=E<lt>filenameE<gt>
+
+A configuration file is just a set of lines, each of which contains a
+setting formatted as 
+I<E<lt>setting-nameE<gt>>C<=>I<E<lt>setting-valueE<gt>>. 
+For example:
+
+    debug=on
+    database_driver=postgresql
+
+This is particularly useful for configuring settings for a web
+application, where directives cannot otherwise be given.
 
 =cut
 
