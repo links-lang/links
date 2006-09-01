@@ -929,13 +929,13 @@ it to a DOM node before working with it.
 
 =item C<domInsertBefore(xmlVal, beforeRef)>
 
-Creates a node using C<xmlVal> as the image, and adds it as the previous sibling 
-of the node C<beforeRef>.
+Creates a node using C<xmlVal> as the image, and adds it as the
+previous sibling of the node C<beforeRef>.
 
 =item C<domAppendChild(xmlVal, parentRef)>
 
-Creates a node using xmlVal as the image, and adds it as the last child of the
-node C<parentRef>.
+Creates a node using xmlVal as the image, and adds it as the last
+child of the node C<parentRef>.
 
 =item C<domReplaceNode(xmlVal, ref)>
 
@@ -947,16 +947,18 @@ Replaces the entire document with xmlVal.
 
 =item C<domInsertBeforeRef(moveRef, beforeRef)>
 
-Moves the node C<moveRef> to become the previous sibling of the node C<beforeRef>.
+Moves the node C<moveRef> to become the previous sibling of the node
+C<beforeRef>.
 
 =item C<domAppendChildRef(newChildRef, parentRef)>
 
-Moves the node C<newChildRef> to become the last child of the node C<parentRef>.
+Moves the node C<newChildRef> to become the last child of the node
+C<parentRef>.
 
 =item C<domRemoveRef(ref)>
 
-Removes C<ref> from its current position, leaving it with no parent. This makes 
-it an orphan.
+Removes C<ref> from its current position, leaving it with no
+parent. This makes it an orphan.
 
 =item C<domReplaceNode(xmlVal, ref)>
 
@@ -969,13 +971,13 @@ Swap ref1 with ref2.
 
 =item C<domGetDocumentRef()>
 
-Return a reference to the I<document element>, that is, the top-level of the 
-installed document.
+Return a reference to the I<document element>, that is, the top-level
+of the installed document.
 
 =item C<domGetRefById(id)>
 
-Given a string ID value, finds the DOM node with that ID and returns it. If 
-more than one node has that ID, the behavior is undefined.
+Given a string ID value, finds the DOM node with that ID and returns
+it. If more than one node has that ID, the behavior is undefined.
 
 =item C<domGetXml(ref)>
 
@@ -984,7 +986,6 @@ Translates the given DOM node into an XML value and returns that.
 =item C<domIsNullRef(ref)>
 
 Returns true if C<ref> is null.
-
 
 =back 
 
@@ -1070,6 +1071,23 @@ error to apply this to an element node.
 Returns a list of the child nodes of this xml node (NOT YET IMPLEMENTED).
 
 =back
+
+=head2 Cookies
+
+When in the context of an HTTP request, cookies can be manipulated
+using these library functions:
+
+    getCookie : String -> String
+    setCookie : String -> String -> unit
+
+Each takes the cookie name as its first parameter. C<getCookie>
+returns the current value of the cookie, as it was passed with the
+HTTP request. C<setCookie> takes,
+as its second parameter, the new value for that cookie. There is
+currently no way to control the path/domain restrictions of the cookie
+or the expiration date. All cookies set by these utilities are session
+cookies and expire when the browser is closed. More flexible support
+for cookies is planned for future work.
 
 =head1 Library functions
 
