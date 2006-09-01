@@ -203,13 +203,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
    ([], (`Primitive `Int) --> xml));
   
-  "toplevel",   (* deprecated, use exit() *)
-  (
-    prerr_endline("The 'toplevel' primitive is deprecated, use 'exit' instead");
-    `Continuation [],
-   (datatype "a -> b")
-  );
-
   "exit",
   (`Continuation [],
    (datatype "a -> b")
