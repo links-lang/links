@@ -50,13 +50,12 @@ BUGS
 
   It needs to be made less icky, though.
 
-* Returning a seq'ce of XML items at the toplevel gives "ASSERTION FAILED:
-  Top-level expression was not XML"
-
 * Event objects get their fields blanked out if you pass them to another 
   process or yield while handling the event. Need to clone the object?
 
-* Comparison of variants is always false in JS target.
+* Client-side equality is completely broken.
+
+* Strings are sometimes
 
 * There is no way to add an external stylesheet to the doc produced by
   a Links program.

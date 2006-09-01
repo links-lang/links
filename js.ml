@@ -13,7 +13,7 @@ open Utility
 (*open Type *)
 open Syntax
 
-let optimising = Settings.add_bool("optimise_javascript", false, true)
+let optimising = Settings.add_bool("optimise_javascript", true, true)
 
 let js_lib_url = Settings.add_string("jsliburl", "lib/", true)
 
