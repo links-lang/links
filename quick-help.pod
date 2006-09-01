@@ -481,7 +481,7 @@ L</"Tables">), describing models of an automobile make. Then the
 following will return a list of pairs describing the models, ordered
 by their year of release:
 
-    for (m <- models)
+    for (m <- asList(models))
     orderby (m.release_year)
       [(m.model_number, m.model_name)]
 
@@ -492,20 +492,65 @@ table. This feature will be expanded in a future release.
 
 =head2 Tables
 
-In order to access a database table it must be declared at the
-top-level. For instance:
+As of version 0.3 tables and databases are first-class. Databases must
+only be declared in server-side contexts; otherwise a run-time error
+will result. To declare a database called C<factorials> using the
+C<mysql> driver, connecting to the default port as the user C<web>
+write:
 
-  table wordlist (
-    word : String,
-    type : String,
-    meaning : String
-  ) database "postgresql:dictionary::5432:www-data:";
+  var db = database (name="factorials", driver="mysql", args=":3306:web:");
 
-declares a table wordlist with fields: word, type and meaning all of
-type String. The database descriptor contains a number of fields
-separated by colons:
+If database_driver and database_args are defined in the configuration
+file then you can write:
 
- driver:name:host:port:user:password
+  var db = database (name="factorials" | getDatabaseConfig());
+
+instead.
+
+Supported drivers are: C<postgres>, C<mysql> and C<sqlite>. The
+C<args> field is only used by the postgres and mysql drivers. It has
+the form:
+
+  name:host:port:user:password
+
+To declare the table C<factorials> with fields C<i> and C<f> both of type
+C<Int> associated with the database C<db> write:
+
+  var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+The variable C<factorials> has type C<TableHandle(i:Int, f:Int)>. A table
+can be coerced to a list using the C<asList> function:
+
+  asList : ((TableHandle(|a)) -> [(|a)]
+
+Inside the generator of a C<for> comprehension C<r <-- t> is syntactic
+sugar for C<r <- asList(t)>. So you can write:
+
+  for (r <-- factorials)
+   where (i <= 20)
+   [r]
+
+=head2 Databases modification
+
+Databases can be read from using tables and C<for>
+comprehensions. Insert, update and delete operations are also
+supported. These are similar to the corresponding SQL statements.
+
+  insert t values rs
+
+inserts the list of rows C<rs> into the table C<t>.
+
+  update (var r <-- t)
+   where condition
+   set (f1 = v1, ..., fn = vn)
+
+updates the rows of table C<t> that satisfy C<condition> by setting each
+field C<fi> to C<vi>.
+
+  delete (var r <-- t)
+   where condition
+
+deletes the rows of table C<t> that satisfy C<condition>.
 
 =head2 General pattern matching
 
@@ -884,13 +929,13 @@ it to a DOM node before working with it.
 
 =item C<domInsertBefore(xmlVal, beforeRef)>
 
-Creates a node using C<xmlVal> as the image, and adds it as the
-previous sibling of the node C<beforeRef>.
+Creates a node using C<xmlVal> as the image, and adds it as the previous sibling 
+of the node C<beforeRef>.
 
 =item C<domAppendChild(xmlVal, parentRef)>
 
-Creates a node using xmlVal as the image, and adds it as the last
-child of the node C<parentRef>.
+Creates a node using xmlVal as the image, and adds it as the last child of the
+node C<parentRef>.
 
 =item C<domReplaceNode(xmlVal, ref)>
 
@@ -902,18 +947,16 @@ Replaces the entire document with xmlVal.
 
 =item C<domInsertBeforeRef(moveRef, beforeRef)>
 
-Moves the node C<moveRef> to become the previous sibling of the node
-C<beforeRef>.
+Moves the node C<moveRef> to become the previous sibling of the node C<beforeRef>.
 
 =item C<domAppendChildRef(newChildRef, parentRef)>
 
-Moves the node C<newChildRef> to become the last child of the node
-C<parentRef>.
+Moves the node C<newChildRef> to become the last child of the node C<parentRef>.
 
 =item C<domRemoveRef(ref)>
 
-Removes C<ref> from its current position, leaving it with no
-parent. This makes it an orphan.
+Removes C<ref> from its current position, leaving it with no parent. This makes 
+it an orphan.
 
 =item C<domReplaceNode(xmlVal, ref)>
 
@@ -926,13 +969,13 @@ Swap ref1 with ref2.
 
 =item C<domGetDocumentRef()>
 
-Return a reference to the I<document element>, that is, the top-level
-of the installed document.
+Return a reference to the I<document element>, that is, the top-level of the 
+installed document.
 
 =item C<domGetRefById(id)>
 
-Given a string ID value, finds the DOM node with that ID and returns
-it. If more than one node has that ID, the behavior is undefined.
+Given a string ID value, finds the DOM node with that ID and returns it. If 
+more than one node has that ID, the behavior is undefined.
 
 =item C<domGetXml(ref)>
 
@@ -941,6 +984,7 @@ Translates the given DOM node into an XML value and returns that.
 =item C<domIsNullRef(ref)>
 
 Returns true if C<ref> is null.
+
 
 =back 
 
@@ -1026,23 +1070,6 @@ error to apply this to an element node.
 Returns a list of the child nodes of this xml node (NOT YET IMPLEMENTED).
 
 =back
-
-=head2 Cookies
-
-When in the context of an HTTP request, cookies can be manipulated
-using these library functions:
-
-    getCookie : String -> String
-    setCookie : String -> String -> unit
-
-Each takes the cookie name as its first parameter. C<getCookie>
-returns the current value of the cookie, as it was passed with the
-HTTP request. C<setCookie> takes,
-as its second parameter, the new value for that cookie. There is
-currently no way to control the path/domain restrictions of the cookie
-or the expiration date. All cookies set by these utilities are session
-cookies and expire when the browser is closed. More flexible support
-for cookies is planned for future work.
 
 =head1 Library functions
 
