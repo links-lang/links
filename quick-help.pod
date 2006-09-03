@@ -1213,11 +1213,11 @@ list available directives
 
 =item C<@settings>
 
-print available settings (see L<Configuration>)
-
+print available settings (see L<Configuration settings>)
+4
 =item C<@set>
 
-change the value of a setting (see L<Configuration>)
+change the value of a setting (see L<Configuration settings>)
 
 =item C<@builtins>
 
@@ -1230,7 +1230,7 @@ exit the interpreter
 =back
 
 
-=head2 Configuration
+=head2 Configuration settings
 
 Links offers a number of settings which can affect the behavior of the
 interactive loop or the web interface.
