@@ -1,23 +1,31 @@
 #!/bin/bash
 
+# display a message and read a variable if it isn't already defined
+function read_variable {
+  # if not already defined then
+  # ask the user for the specified variable
+  if [ ! $(eval "echo \$$1") ]; then
+    echo -e $2
+    read $1
+  fi
+}
+
+read_variable "cgidir" "Where do you want to install the cgi scripts?"
+read_variable "cgiurl" "What is the url for the cgi directory?"
+
+read_variable "libdir" "Where do you want to install the javascript libraries?"
+read_variable "liburl" "What is the url for the library directory?"
+
+read_variable "examplesdir" "Where do you want to install the examples page and source file?"
+read_variable "examplesurl" "What is the url for the examples directory?"
+
+read_variable "windowspaths" "Convert to windows path names [yes/no]?"
+
 path=$PWD/links
-echo -e Where do you want to install the cgi scripts? 
-read cgidir
-
-echo -e What is the url for the cgi directory?
-read cgiurl
-
-echo -e Where do you want to install the javascript libraries?
-read libdir
-
-echo -e What is the url for the library directory?
-read liburl
-
-echo -e Where do you want to install the examples page and source files?
-read examplesdir
-
-echo -e What is the url for the examples directory?
-read examplesurl
+if [ $windowspaths = "yes" ]; then
+  path=$(cygpath -w $path)
+  copysource=yes
+fi
 
 # remove trailing slash
 function remove_trailing_slash {
@@ -27,7 +35,7 @@ function remove_trailing_slash {
 # add trailing slash
 #   if string is non-empty and doesn't already end in a slash
 function add_trailing_slash {
- echo $1 | sed 's|\([^/]\)$|\1|g' 
+ echo $1 | sed 's|\([^/]\)$|\1/|g' 
 }
 
 # remove trailing slash from dirs
@@ -55,7 +63,7 @@ if [ ! -e $examplesdir ]; then
   mkdir -p $examplesdir
 fi
 
-echo "Copying demos..."
+echo "Copying examples..."
 for i in $(find examples -name "*.links"); do
   dest=$(echo $i | sed 's|^examples/||g');
   destcgi=$(echo $dest | sed "s|^\(.*\)\.links|$cgidir/\1\.cgi|g");
@@ -75,12 +83,18 @@ for i in $(find examples -name "*.links"); do
     mkdir -p $destdir
   fi
 
+
   # copy cgi and set as executable
   echo "#!$path --config=$configfile" | cat - $i > $destcgi;
   chmod +x $destcgi
 
-  # create soft-link for displaying cgi source
-  ln -s $destcgi $desttxt
+  if [ $copysource ]; then
+    # copy .cgi to .txt for displaying source
+    cp $destcgi $desttxt
+  else
+    # create .txt soft-link for displaying source
+    ln -s $destcgi $desttxt
+  fi
 done
 
 echo "Generating examples page..."
@@ -92,7 +106,9 @@ sed "s|href=\"\([^\.][^\.]*\)\.links|href=\"$cgiurl\1\.cgi|g" examples/index.htm
 
 echo "Copying libraries..."
 echo " $libdir/"
-mkdir $libdir/yahoo
+if [ ! -e $libdir/yahoo ]; then
+    mkdir -p $libdir/yahoo
+fi
 cp lib/js/yahoo/YAHOO.js $libdir/yahoo
 cp lib/js/yahoo/event.js $libdir/yahoo
 cp lib/js/jslib.js $libdir/
