@@ -1004,10 +1004,10 @@ tree, in a read-only fashion using the following operations:
 Returns the tag name of C<ref> as a string. For example, a C<div> node would 
 return the string C<"div">.
 
-=item domGetAttributeFromRef(ref, attrName)
+=item C<domGetAttributeFromRef(ref, attrName)>
 
-Returns the value of the attribute C<attrName> on the node C<ref>. For example, 
-on a node pointed to by C<ref> with the XML representation
+Returns the value of the attribute C<attrName> on the node C<ref>. For
+example, on a node pointed to by C<ref> with the XML representation
 
   <a href="more_info.html">More info</a>,
 
@@ -1092,7 +1092,7 @@ for cookies is planned for future work.
 =head1 Library functions
 
 Links has various built-in library functions. A full list of these,
-along with their types, can be obtained by typing "@builtins;" in the
+along with their types, can be obtained by typing C<@builtins;> in the
 interactive shell.
 
 =head2 Explicit type conversions
