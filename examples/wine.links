@@ -140,7 +140,7 @@ fun claimCart(order_id, cust_id) {
 # don't as yet have access to the current continuation. 
 fun freshResource() {
   escape e in {
-    toplevel(redirect("?_cont=" ++ reifyK(e)))
+    exit(redirect("?_cont=" ++ reifyK(e)))
   };
 }
 
