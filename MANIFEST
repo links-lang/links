@@ -3,6 +3,7 @@ Makefile.sample.config
 OCamlMakefile
 
 INSTALL
+CHANGES
 README
 ACKNOWLEDGEMENTS
 COPYING
@@ -14,7 +15,7 @@ quick-help.html
 
 test-harness
 run-tests
-install-demos
+install-examples
 
 cgi.ml
 netencoding.ml
@@ -39,11 +40,17 @@ type_basis.mli
 type_basis.ml
 types.mli
 types.ml
+query.mli
 query.ml
+sql.mli
 sql.ml
+sql_transform.mli
+syntax.mli
 syntax.ml
 inferencetypes.mli
 inferencetypes.ml
+sugartypes.mli
+sugar.mli
 sugar.ml
 result.mli
 result.ml
@@ -67,6 +74,7 @@ library.ml
 jsonlex.mll
 interpreter.mli
 interpreter.ml
+optimiser.mli
 optimiser.ml
 js.mli
 js.ml
@@ -81,10 +89,12 @@ deriving/lib/primitives.ml
 deriving/lib/util.ml
 deriving/lib/bounded.ml
 deriving/lib/show.ml
-deriving/lib/type.ml
 deriving/lib/enum.ml
 deriving/lib/Makefile
 deriving/lib/pickle.ml
+deriving/lib/functor.ml
+deriving/lib/monad.ml
+deriving/lib/rewriter.ml
 deriving/syntax
 deriving/syntax/enum_class.ml
 deriving/syntax/pickle_class.ml
@@ -92,6 +102,8 @@ deriving/syntax/bounded_class.ml
 deriving/syntax/show_class.ml
 deriving/syntax/Makefile
 deriving/syntax/deriving.ml
+deriving/syntax/functor_class.ml
+deriving/syntax/rewriter_class.ml
 deriving/Makefile
 
 lib/
@@ -104,6 +116,7 @@ lib/js/jslib.js
 lib/js/regex.js
 
 tests
+tests/annotations.tests
 tests/bindings.tests
 tests/booleans.tests
 tests/collections.tests
@@ -113,7 +126,6 @@ tests/database.tests
 tests/functions.tests
 tests/messages.tests
 tests/numbers.tests
-tests/optimization.tests
 tests/patterns.tests
 tests/polymorphism.tests
 tests/records.tests
@@ -129,16 +141,20 @@ examples/lib
 examples/dictionary
 examples/dictionary/lib
 examples/dictionary/dict-suggest.links
-examples/dictionary/dict-suggest-mysql.links
 examples/dictionary/create-table.sql
 examples/dictionary/create-table-mysql.sql
 examples/dictionary/README
-examples/todo.links
-examples/factorial.links
-examples/factorial-mysql.links
-examples/progress.links
+examples/crop.links
 examples/draggable.links
+examples/factorial.links
+examples/insert-factorials.links
 examples/mandelbrot.links
 examples/mandelcolor.links
 examples/paginate.links
+examples/progress.links
+examples/todo.links
+examples/todo-db.links
+examples/wine.links
 examples/factorials.sql
+examples/cart_off.jpg
+examples/cart_on.jpg

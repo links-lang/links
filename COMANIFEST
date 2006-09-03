@@ -2,9 +2,13 @@
 BUGS
 COMANIFEST
 
+examples/extras.js
 examples/document-replace.links
 examples/draw.links
 examples/index.html
+examples/login-flow.cgi
+examples/mandelopt.links
+examples/mandeltest.links
 examples/nbe.links
 examples/new-dom-api.links
 examples/regex.links
