@@ -32,11 +32,11 @@ BUILDING LINKS
 To build, move to the Links source directory (wherever this INSTALL
 file is) and run the following:
 
-  % make nc
+  $ make nc
 
 If this fails, try:
 
-  % make 
+  $ make 
 
 This builds the byte-code version of Links, which should work on more
 platforms than the other (native-code) version.
@@ -48,7 +48,7 @@ RUNNING LINKS
 
 Start up the interactive interpreter using:
 
-  % ./links
+  $ ./links
 
 You should see a Links prompt like this:
 
@@ -71,7 +71,7 @@ order to run (this includes Cygwin and MinGW on Windows).
 To check whether Links is working under your platform, try running the
 automated tests as follows:
 
-  % make test-raw
+  $ make test-raw
 
 This should give you a lot of output.
 
@@ -89,22 +89,25 @@ directory the cgi-bin directory, although it may not be called that on
 your system; this is fine: just use the name of that directory
 whenever we refer to `the cgi-bin directory'. 
 
-To install the Links demos in your web directory and configure them
+To install the Links examples in your web directory and configure them
 for your Links interpreter, just run
 
-  % ./install-demos
+  $ ./install-examples
 
-in the links directory. This will ask for the path to your web
-directory and install all of the programs from the examples directory
-there.
+in the links directory. This will ask a number of questions about
+where to install the examples. It installs:
+ - the examples in your cgi directory
+ - the javascript library in the specified directory
+ - the sources and an HTML file in the specified directory
+ - a configuration file in the cgi directory 
 
-Now point your web browser at one of these demos. The URL for the
+Now point your web browser at one of these examples. The URL for the
 program will depend on your web server configuration and the place
 where the demo was installed. Refer to your web server documentation
 to find out how URLs on your server are formed. It may be something
 such as
 
-    http://www.example.com/cgi-bin/paginate.cgi
+    http://localhost/cgi-bin/draggable.cgi
 
 You should see the example right away. Have fun playing with it!
 
@@ -112,23 +115,35 @@ When you write your own Links programs, to use them under your web
 server, you'll have to add a "shebang" line as the first line of your
 program. The shebang line looks like this:
 
-  #!/home/ezra/links/links
+  #!/home/ezra/links/links --config=config
 
-Where /home/ezra/links/links is the path to your Links interpreter.
+Where /home/ezra/links/links is the path to your Links interpreter,
+and config is a configuration file.
 
-You also need to make sure that the Links JavaScript libraries are
-accessible from the directory in which you put your Links program. The
-easiest way to do this on Unix systems is to create a softlink called
-'lib' in this directory, linking to /home/ezra/links/lib/js. Run:
+The configuration file can contain a number of name=value pairs. It
+is important that jsliburl is set to the base url for the javascript
+library. Each setting must appear on a separate line, and white space
+is significant.
 
-  % ln -s /home/ezra/links/lib/js lib
+DATABASE SUPPORT
 
-from the Links directory. Alternatively (e.g. on Windows, which
-doesn't support soft links) you can copy the contents of
-/home/ezra/links/lib/js into lib:
+In order to use the database you need to copy Makefile.config.sample
+to Makefile.config, and fill in the path to the appropriate OCaml
+database library. Then you need to rebuild links with
+
+ make nc
+
+Refer to the examples directory for instructions on priming the
+databases. The examples all use getDatabaseConfig() in order to read
+the database configuration from the configuration file. The settings
+'database_driver' and 'database_args' should be included in the
+configuration file.
+
+database_driver can take the values
+
+  postgres, mysql or sqlite
+
+database_args is only relevant for postgres and mysql. It takes the
+form
  
-  % cp -r /home/ezra/links/lib/js lib
-
-or on Windows:
-
-  c:\web\linksprograms> copy C:\links\lib\js lib
+  host:port:user:password
