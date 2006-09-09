@@ -5,7 +5,7 @@ type synerrspec = {filename : string; linespec : string;
                    marker : string}
 
 exception NoMainExpr
-exception ManyMainExprs
+exception ManyMainExprs of Syntax.expression list
 exception MultiplyDefinedToplevelNames of 
   ((Syntax.position list) Utility.stringmap)
 exception Type_error of (Syntax.position * string)

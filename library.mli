@@ -27,3 +27,4 @@ val apply_pfun : (continuation -> result -> result) -> continuation -> string ->
 val primitive_stub : string -> result
 
 val primitive_location : string -> Syntax.location
+val cgi_parameters : (string * string) list ref 

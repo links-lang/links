@@ -8,7 +8,7 @@ type synerrspec = {filename : string; linespec : string;
                    marker : string}
     
 exception NoMainExpr
-exception ManyMainExprs
+exception ManyMainExprs of Syntax.expression list
 exception Type_error of (Syntax.position * string)
 exception MultiplyDefinedToplevelNames of ((Syntax.position list) Utility.stringmap)
 exception RichSyntaxError of synerrspec
@@ -118,7 +118,7 @@ let rec format_exception = function
                                    message^" "^name^":\n  "^
 			             (String.concat "\n  " (List.map show_pos (List.rev positions)))) duplicates "")
   | NoMainExpr -> "Syntax Error: No \"main\" expression at end of file"
-  | ManyMainExprs -> "Syntax Error: More than one \"main\" expression at end of file"
+  | ManyMainExprs _ -> "Syntax Error: More than one \"main\" expression at end of file"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
 
@@ -165,7 +165,7 @@ let rec format_exception_html = function
         pos.pos_fname pos.pos_lnum s expr
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | NoMainExpr -> "<h1>Links Syntax Error</h1>\nNo \"main\" expression at end of file"
-  | ManyMainExprs -> "<h1>Links Syntax Error</h1>\nMoer than one \"main\" expression at end of file"
+  | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ String.concat "<br/>" (List.map Syntax.string_of_expression es)
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
 
 

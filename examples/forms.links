@@ -17,6 +17,19 @@ fun map(f,l) {
   for (var x <- l) [f(x)]
 }
 
+fun lookup(x,l) {
+  switch l {
+    case []    -> error("Not found " ++ x);
+    case (k,v)::xs -> if (k == x) v
+                      else lookup(x,xs);
+  }
+}
+
+fun repeat(n)(x) {
+   if (n == 0) []
+   else x :: repeat(n-1)(x)
+}
+
 # state monad
 fun runState(State (s)) { s : ((s) -> (a,s)) }
 
@@ -65,7 +78,7 @@ var input =
    put (i+1) >>
    (return $ (<input name="{name}"/>,
               get >>= fun (env) {
-              return $ queryParameter(env)(name)}))};
+              return $ lookup(name, env)}))};
 
 # The compose function takes two forms and a combiner, then
 #   * concatenates the renderers
@@ -88,7 +101,7 @@ fun transformOutput(f) {
 fun render(continuation)(form) {
    var ((xml, extractor),_) = runState(form)(0);
    var handler = transformCollector(continuation)(extractor);
-   <form l:onsubmit="{runState(handler)(environment())}">{xml}</form>
+   <form l:onsubmit="{runState(handler)(environment()).1}" method="POST">{xml}<input type="submit"/></form>
 }
 
 # The prefix and suffix functions add passive xml to the start and
@@ -158,4 +171,39 @@ var travelForm2 =
                            (ddatel ("departure date"))
                            (combinePair)))
                  (combinePair))
-                (fun (c1) (c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d) }})
+                (fun (c1) (c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d) }});
+
+fun showBookingInformation(person, age, Date (aday, amonth), Date (dday, dmonth)) {
+  <html>
+    <h1>Results</h1>
+    <p>
+      You are {stringToXml(person)},  {stringToXml(age)} years old.<br/>
+      You'll arrive on {intToXml(aday)}/ {intToXml(amonth)}
+      and leave on  {intToXml(dday)}/ {intToXml(dmonth)}.
+    </p>
+  </html>
+}
+
+fun sumNumbers(numbers) {
+  fun aux(numbers, total) {
+    switch numbers {
+       case [] -> total;
+       case n::nums -> aux(nums, n + total);
+    }
+  }
+  aux(numbers, 0)
+}
+
+fun enterNumbers(n) {
+  <html>
+    <h1>Enter {intToXml(n)} numbers:</h1>
+    {render(sumNumbers)(sequenceForms(repeat(n)(suffix(<br/>)(inputInt))))}
+  </html> 
+}
+
+<html>
+   <h1>Date:</h1>
+   {render(showBookingInformation)(travelForm2)}
+   <h1>Multiple</h1>
+   Enter numbers: {render(enterNumbers)(inputInt)}
+</html>

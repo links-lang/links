@@ -472,3 +472,10 @@ let unmarshal_exprenv program : string -> (expression * environment)
   Netencoding.Base64.decode
   ->- Pickle_ExprEnv.unpickleS
   ->- resolve
+
+(* Temporary: use this until the bug in pickling is sorted out *)
+let marshal_exprenv : (expression * environment) -> string
+  = fun s -> Netencoding.Base64.encode (Marshal.to_string s [Marshal.Closures])
+
+let unmarshal_exprenv program s =
+  Marshal.from_string (Netencoding.Base64.decode s) 0

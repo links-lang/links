@@ -18,6 +18,8 @@ and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtb
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 
+let cgi_parameters = ref []
+
 (** http_response_headers: this is state for the webif interface. I hope we can
     find a better way for library functions to communicate with the web
     interface. *)
@@ -706,8 +708,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
     datatype "Env -> String -> String"));
 
   ("environment",
-   (p1 (fun _ -> failwith "environment"),
-    datatype "() -> Env"));
+   (p1 (fun _ -> 
+          let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
+          let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
+            `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+    datatype "() -> [(String,String)]"));
 ]
 
 type continuationized_val = [

@@ -246,11 +246,13 @@ let serve_request filename =
     let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr
-    else if (List.length main > 1) then raise Errors.ManyMainExprs
+(*    else if (List.length main > 1) then raise (Errors.ManyMainExprs main)*)
     else
-    let [main] = main in
+(*    let [main] = main in*)
+    let main = last main in
     let global_env = stubify_client_funcs global_env in
     let cgi_args = Cgi.parse_args () in
+      Library.cgi_parameters := cgi_args;
     let request = 
       if is_remote_call cgi_args then 
         get_remote_call_args global_env cgi_args
