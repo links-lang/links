@@ -69,7 +69,7 @@ type 'data expression' =
   | HasType of ('data expression' * Types.datatype * 'data)
   | Alien of (string * string * Types.assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Show, Pickle, Functor, Rewriter)
+      deriving (Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
 let is_define = 
   function

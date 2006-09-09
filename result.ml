@@ -199,7 +199,7 @@ type contin_frame =
   | Recv of (environment)
 and result = [
   | `PFunction of (string * result list)
-  | `Function of  (string * environment (*locals*) * environment (*globals*) * rexpr)
+  | `Function of  (string * environment (*locals*) * unit (*globals*) * rexpr)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `List of (result list)
@@ -268,7 +268,7 @@ let links_project name = function
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let delay_expr expr = `Function(gensym (), [], [], expr)
+let delay_expr expr = `Function(gensym (), [], (), expr)
 
 let pp_continuation = Show_continuation.show
   
@@ -342,9 +342,11 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `PFunction (str, pargs) ->
       result_f(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs))
 
-  | `Function (str, globals, locals, body) ->
-      result_f(`Function(str, map_env result_f expr_f contframe_f globals,
+  | `Function (str, locals, globals, body) ->
+      result_f(`Function(str, 
                          map_env result_f expr_f contframe_f locals,
+(*                         map_env result_f expr_f contframe_f globals,*)
+                         (),
                          map_expr result_f expr_f contframe_f body))
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
@@ -472,10 +474,3 @@ let unmarshal_exprenv program : string -> (expression * environment)
   Netencoding.Base64.decode
   ->- Pickle_ExprEnv.unpickleS
   ->- resolve
-
-(* Temporary: use this until the bug in pickling is sorted out *)
-let marshal_exprenv : (expression * environment) -> string
-  = fun s -> Netencoding.Base64.encode (Marshal.to_string s [Marshal.Closures])
-
-let unmarshal_exprenv program s =
-  Marshal.from_string (Netencoding.Base64.decode s) 0

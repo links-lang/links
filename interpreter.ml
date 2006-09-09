@@ -25,29 +25,6 @@ let trim_env =
             if mem k names then trim names rest
             else (k, v) :: (trim (k :: names) rest) in
     trim []
-
-(** bind_rec globals locals [name1, value1; name2, value2; name3, value3; ...]
-    Extend `locals' with mutually-recursive bindings for namen to valuen,
-    with the values values mutually recursive with respect to one another's 
-    names.
-*)
-let bind_rec globals locals defs =
-  (* First, create bindings for these functions, with no local
-     variables for now *)
-  let make_placeholder env (variable, value) =
-    match value with
-      | Syntax.Abstr (var, body, _) ->
-          bind env variable (`Function (var, [], [], body))
-  in
-  let new_env = trim_env (fold_left make_placeholder locals defs) in
-    (* Then, fill in the local variables with values *)
-  let fill_placeholder (label, result) =
-    label, (match result with
-              | `Function (var, _, _, body) ->
-                  `Function (var, (retain (freevars body) new_env), globals, body)
-              | _ -> result)
-  in
-    trim_env (map fill_placeholder new_env) 
       
 (* Remove toplevel bindings from an environment *)
 let remove_toplevel_bindings toplevel env = 
@@ -68,14 +45,14 @@ let bind_rec globals locals defs =
   let make_placeholder = (fun env (variable, value) ->
                             (match value with
                                | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, [], [] (*globals*), body))
+                                   bind env variable (`Function (var, [], () (*globals*), body))
                                | _ -> raise (Runtime_error "TF146"))) in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
     (* fill in the local variables *)
   let fill_placeholder = (fun (label, result) ->
                             (match result with
                                | `Function (var, _, _, body) ->
-                                   label, `Function (var, (retain (freevars body) new_env), globals, body)
+                                   label, `Function (var, (retain (freevars body) new_env), (), body)
                                | _ -> (label, result)))
   in
     trim_env (map fill_placeholder new_env)
@@ -413,7 +390,7 @@ fun globals locals expr cont ->
       let varval = (lookup globals locals name) in
 	apply_cont globals cont varval
   | Syntax.Abstr (variable, body, _) ->
-      apply_cont globals cont (`Function (variable, retain (freevars body) locals, [] (*globals*), body))
+      apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
   | Syntax.Apply (Variable ("recv", _), Record_empty _, _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
   | Syntax.Apply (fn, param, _) ->
