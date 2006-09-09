@@ -1,0 +1,161 @@
+# Form a == State Names (Xml, Collector a)
+# Collector a == State Env a
+# Combiner a b c == Collector a -> Collector b -> Collector c
+
+infixr 0 $;
+fun f $ x { f(x) }
+
+fun fold_right(f, u, l) {
+  switch l {
+    case [] -> u;
+    case x::xs -> f(x, fold_right(f,u,xs));
+  }
+}
+fun cons(car)(cdr) { car :: cdr }
+
+fun map(f,l) {
+  for (var x <- l) [f(x)]
+}
+
+# state monad
+fun runState(State (s)) { s : ((s) -> (a,s)) }
+
+infixl 1 >>=;
+infixl 1 >>;
+
+fun (State (x)) >>= f {
+   State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
+}
+
+fun return(a) {
+  State (fun (s) { (a,s)  })
+}
+
+
+var get = State (fun (s) { (s,s) });
+fun put(s) {
+  State (fun (_) { ((), s) })
+}
+
+fun m >> k {
+   m >>= fun (_) { k }
+}
+
+fun fmap(f)(x) {
+  x >>= (fun (x) { return (f(x)) })
+} 
+
+fun liftM2 (f) (m1) (m2) {
+  m1 >>= fun (x1) {
+  m2 >>= fun (x2) {
+  return $ f(x1)(x2)}}
+}
+
+# A monadic implementation of Sam's forms proposal
+fun makeEmpty(a) {
+  return ([], return (a))
+}
+
+fun makeName(i : Int) { "input_" ++ intToString(i) }
+
+# A one element form can be constructed using the input function.
+var input = 
+   get >>= fun (i) {
+   var name = makeName(i);
+   put (i+1) >>
+   (return $ (<input name="{name}"/>,
+              get >>= fun (env) {
+              return $ queryParameter(env)(name)}))};
+
+# The compose function takes two forms and a combiner, then
+#   * concatenates the renderers
+#   * uses the combiner to compose the collectors
+fun compose(form1)(form2)(combiner) {
+  form1 >>= fun (x1,f1) {
+  form2 >>= fun (x2,f2) {
+  return (x1 ++ x2, combiner(f1)(f2))}}
+}
+
+# The value collected by a form's collector can be transformed,
+# producing a new value.
+var transformCollector = fmap;
+fun transformOutput(f) {
+  fun t(x,y) { (x, transformCollector(f)(y)) }
+  fmap(t)
+}
+
+# A form is rendered to Xml using the render function
+fun render(continuation)(form) {
+   var ((xml, extractor),_) = runState(form)(0);
+   var handler = transformCollector(continuation)(extractor);
+   <form l:onsubmit="{runState(handler)(environment())}">{xml}</form>
+}
+
+# The prefix and suffix functions add passive xml to the start and
+# end of a form's renderer.
+fun prefix((xml : XML)) {
+   transformXml(fun (x) { xml ++ x })
+} 
+
+fun suffix((xml : XML)) {
+   transformXml(fun (x) { x ++ xml })
+} 
+
+fun transformXml(transformer : ((XML) -> XML))(form) {
+  form >>= fun ((x:XML),f) {
+  return (transformer(x), f)}
+}
+
+
+# dates example
+var inputInt = transformOutput(stringToInt)(input);
+fun combinePair(x)(y) { liftM2(fun (x)(y) { (x,y) })(x)(y) }
+var date = compose(inputInt) (prefix (stringToXml("/"))(inputInt))(combinePair);
+fun plugDiv(x) { transformXml (fun (inner) { <div>{inner}</div>})(x) };
+
+fun applyLabel(label) {
+   transformXml (fun (x) {  <b>{stringToXml(label)}</b> ++ x })
+}
+
+fun datel(x) { x `applyLabel` date }
+fun makeInputl(x) { x `applyLabel` input }
+
+var travelForm1 =
+    compose (makeInputl ("person"))
+                (compose
+                 (makeInputl ("age"))
+                 (plugDiv (compose
+                           (datel ("arrival date"))
+                           (datel ("departure date"))
+                           (combinePair)))
+                 (combinePair))
+                (fun (c1)(c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d)}});
+
+# multiple elements example
+fun sequenceForms(forms) {
+   fun folder(form,outform) { compose (form) (outform) (liftM2 (cons))}
+   fold_right (folder, makeEmpty ([]), forms)
+}
+
+fun multiForm(labels) {
+  sequenceForms $ map(makeInputl, labels)
+}
+
+# another dates example, using a labeled pair
+fun combinePairDate(x)(y) {
+  liftM2(fun (x)(y) { Date (x,y) })(x)(y)
+}
+var ddate = compose(inputInt) (prefix (stringToXml ("/"))(inputInt))(combinePairDate);
+
+fun ddatel(x) {x `applyLabel` ddate}
+
+var travelForm2 =
+    compose (makeInputl ("person"))
+                (compose
+                 (makeInputl ("age"))
+                 (plugDiv (compose
+                           (ddatel ("arrival date"))
+                           (ddatel ("departure date"))
+                           (combinePair)))
+                 (combinePair))
+                (fun (c1) (c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d) }})

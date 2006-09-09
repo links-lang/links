@@ -700,6 +700,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             box_bool (Str.string_match regex string 0)),
     let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
       qs, (string_type --> (regex --> `Primitive `Bool))));
+
+  ("queryParameter",
+   (p2 (fun env name -> failwith "queryParameter"),
+    datatype "Env -> String -> String"));
+
+  ("environment",
+   (p1 (fun _ -> failwith "environment"),
+    datatype "() -> Env"));
 ]
 
 type continuationized_val = [
