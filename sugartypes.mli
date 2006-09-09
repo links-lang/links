@@ -32,7 +32,7 @@ type datatype =
   | VariantType of row
   | TableType of row
   | ListType of datatype
-  | MailboxType of datatype
+  | TypeApplication of (string * datatype)
   | PrimitiveType of Types.primitive
   | DBType
 and row = (string * [`Present of datatype | `Absent]) list * string option

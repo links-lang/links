@@ -634,7 +634,7 @@ module Desugarer =
        | VariantType r
        | TableType r -> rvars r
        | ListType k -> typevars k
-       | MailboxType k -> typevars k
+       | TypeApplication (_,k) -> typevars k
        | UnitType
        | PrimitiveType _
        | DBType -> []
@@ -674,8 +674,8 @@ module Desugarer =
            | RecordType row -> `Record (desugar_row varmap row)
            | VariantType row -> `Variant (desugar_row varmap row)
            | TableType row -> `Table (desugar_row varmap row)
-           | ListType k -> `List (desugar varmap k)
-           | MailboxType k -> `Mailbox (desugar varmap k)
+           | ListType k -> `Application ("List", desugar varmap k)
+           | TypeApplication (t, k) -> `Application (t, desugar varmap k)
            | PrimitiveType k -> `Primitive k
            | DBType -> `Primitive `DB
      and desugar_row varmap (fields, rv) =

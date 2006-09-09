@@ -17,8 +17,8 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Table of 'row
   | `Recursive of (int * 'typ)
-  | `List of ('typ)
-  | `Mailbox of ('typ) ]
+  | `Application of (string * 'typ)
+ ]
     deriving (Show, Pickle)
 
 type 'a stringmap = 'a Utility.StringMap.t

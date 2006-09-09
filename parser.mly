@@ -500,10 +500,8 @@ primary_datatype:
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
 
-| CONSTRUCTOR LPAREN primary_datatype RPAREN                   { match $1 with 
-                                                                   | "Mailbox"    -> MailboxType $3
-                                                                   | t -> failwith ("Unknown unary type constructor : " ^ t)
-                                                               }
+| CONSTRUCTOR LPAREN primary_datatype RPAREN                   { TypeApplication ($1, $3) }
+
 row:
 | fields                                                       { $1 }
 

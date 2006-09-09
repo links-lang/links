@@ -61,8 +61,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 	   eq_types (lfrom, rfrom) && eq_types (lto, rto)
        | `Record l, `Record r -> eq_rows (l, r)
        | `Variant l, `Variant r -> eq_rows (l, r)
-       | `List t, `List t' -> eq_types (t, t')
-       | `Mailbox t, `Mailbox t' -> eq_types (t, t')
+       | `Application (s, t), `Application (s', t') when s = s' -> eq_types (t, t')
        | _, _ -> false)
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
@@ -220,8 +219,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       | `Record l, `Record r -> unify_rows' rec_env (l, r)
       | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
       | `Table l, `Table r -> unify_rows' rec_env (l, r)
-      | `List t, `List t' -> unify' rec_env (t, t')
-      | `Mailbox t, `Mailbox t' -> unify' rec_env (t, t')
+      | `Application (s,t), `Application (s', t') when s = s' -> unify' rec_env (t, t')
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
        debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
@@ -645,10 +643,8 @@ let instantiate : environment -> string -> datatype = fun env var ->
 		| `Record row -> `Record (inst_row rec_env row)
 		| `Variant row ->  `Variant (inst_row rec_env row)
 		| `Table row -> `Table (inst_row rec_env row)
-		| `List (elem_type) ->
-		    `List (inst rec_env elem_type)
-		| `Mailbox (elem_type) ->
-		    `Mailbox (inst rec_env elem_type)
+		| `Application (n, elem_type) ->
+		    `Application (n, inst rec_env elem_type)
 		| `Recursive _
 		| `RigidTypeVar _
 		| `TypeVar _ -> assert false
@@ -740,10 +736,8 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
       | `Record row
       | `Variant row 
       | `Table row -> get_row_quantifiers bound_vars row
-      | `List (elem_type) ->
-	  get_quantifiers bound_vars elem_type
-      | `Mailbox (elem_type) ->
-	  get_quantifiers bound_vars elem_type
+      | `Application (_, elem_type) ->
+          get_quantifiers bound_vars elem_type
 
 and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
   fun bound_vars ->
@@ -814,7 +808,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
   | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
   | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))
-  | String (value, pos) -> String (value, (pos, `List (`Primitive `Char), None))
+  | String (value, pos) -> String (value, (pos, string_type, None))
   | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
   | Variable (name, pos) ->
       Variable (name, (pos, instantiate env name, None))
@@ -937,13 +931,13 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 (*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
       let attr_type = string_type in
         (* force contents to be XML, attrs to be strings *)
-      let _ = List.iter (fun node -> unify (type_of_expression node, `List (`Primitive `XMLitem))) contents in
+      let _ = List.iter (fun node -> unify (type_of_expression node, xml_type)) contents in
       let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
       let trimmed_node =
         Xml_node (tag, 
                   nonspecial_attrs,         (* +--> up here I mean *)
                   contents,                 (* | *)
-                  (pos, `List (`Primitive `XMLitem), None))
+                  (pos, xml_type, None))
       in                                    (* | *)
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
@@ -1029,27 +1023,27 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
         unify(new_row_type, type_of_expression value);
         Variant_selection_empty (value, (pos, ITO.fresh_type_variable (), None))
   | Nil (pos) ->
-      Nil (pos, `List (ITO.fresh_type_variable ()), None)
+      Nil (pos, `Application ("List", ITO.fresh_type_variable ()), None)
   | List_of (elem, pos) ->
       let elem = type_check env elem in
 	List_of (elem,
-		 (pos, `List (type_of_expression elem), None))
+		 (pos, `Application ("List", type_of_expression elem), None))
   | Concat (l, r, pos) ->
       let tvar = ITO.fresh_type_variable () in
       let l = type_check env l in
-	unify (type_of_expression l, `List (tvar));
+	unify (type_of_expression l, `Application ("List", tvar));
 	let r = type_check env r in
 	  unify (type_of_expression r, type_of_expression l);
-	  let type' = `List (tvar) in
+	  let type' = `Application ("List", tvar) in
 	    Concat (l, r, (pos, type', None))
   | For (expr, var, value, pos) ->
       let value_tvar = ITO.fresh_type_variable () in
       let expr_tvar = ITO.fresh_type_variable () in
       let value = type_check env value in
-	unify (type_of_expression value, `List (value_tvar));
+	unify (type_of_expression value, `Application ("List", value_tvar));
 	let expr_env = (var, ([], value_tvar)) :: env in
 	let expr = type_check expr_env expr in
-	  unify (type_of_expression expr, `List (expr_tvar));
+	  unify (type_of_expression expr, `Application ("List", expr_tvar));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, (pos, type', None))
   | Escape(var, body, pos) -> 
@@ -1079,7 +1073,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	      StringMap.add col.Query.name
 		(`Present (inference_type_of_type var_maps col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
-      let datatype =  `List (`Record row) in
+      let datatype =  `Application ("List", `Record row) in
       let row' = ITO.make_empty_open_row () in
       let ths = alistmap (type_check env) ths
       in
@@ -1093,7 +1087,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let db = type_check env db in
       let tableName = type_check env tableName in
 	unify (type_of_expression db, `Primitive `DB);
-	unify (type_of_expression tableName, `List (`Primitive `Char)); 
+	unify (type_of_expression tableName, string_type); 
         TableHandle (db, tableName, row, (pos, datatype, None))
   | SortBy(expr, byExpr, pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any

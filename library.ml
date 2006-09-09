@@ -699,7 +699,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
-      qs, (`List (`Primitive `Char) --> (regex --> `Primitive `Bool))));
+      qs, (string_type --> (regex --> `Primitive `Bool))));
 ]
 
 type continuationized_val = [

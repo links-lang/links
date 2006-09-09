@@ -19,6 +19,7 @@ type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
 val string_type : datatype
+val xml_type : datatype
 
 type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
 

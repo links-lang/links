@@ -91,7 +91,7 @@ let hidden_input name value =
   Xml_node ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (Syntax.dummy_position, `List (`Primitive `XMLitem), None))
+            (Syntax.dummy_position, `Application ("List", `Primitive `XMLitem), None))
 
 let attrname = fst
 let attrval = snd

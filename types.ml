@@ -83,8 +83,8 @@ let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string li
 let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
-let string_type = `List (`Primitive `Char)
-let xml = `List (`Primitive `XMLitem)
+let string_type : datatype = `Application ("List", `Primitive `Char)
+let xml : datatype = `Application ("List", `Primitive `XMLitem)
 
 (* Type printers *)
 let string_of_primitive : primitive -> string = function
@@ -139,7 +139,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
       | `Function (mailbox_type, t) when using_mailbox_typing () ->
 	  let arrow =
 	    match mailbox_type with
-	      | `Mailbox t ->
+	      | `Application ("Mailbox", t) ->
 		  string_of_mailbox_arrow (t)
 	      | _ ->
 		  "->"
@@ -178,10 +178,11 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
      | `Table row      -> "TableHandle(" ^ string_of_row' "," vars row ^ ")"
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
-     | `List (`Primitive `Char) -> "String"
-     | `List (`Primitive `XMLitem) -> "XML"
-     | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
-     | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
+     | `Application ("List", `Primitive `Char) -> "String"
+     | `Application ("List", `Primitive `XMLitem) -> "XML"
+     | `Application ("List", elems)              ->  "["^ string_of_datatype' vars elems ^"]"
+     | `Application (s, t)     ->  s ^ " ("^ string_of_datatype' vars t ^")"
+
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
@@ -234,8 +235,7 @@ let rec type_vars : datatype -> int list = fun datatype ->
     | `Variant row             -> row_type_vars row
     | `Table row               -> row_type_vars row
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
-    | `List (datatype)             -> aux datatype
-    | `Mailbox (datatype)          -> aux datatype
+    | `Application (_, datatype) -> aux datatype
   in unduplicate (=) (aux datatype)
 and row_type_vars (field_env, row_var) =
   let field_type_vars =
@@ -271,8 +271,7 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Variant row
   | `Table row               -> free_bound_row_type_vars row
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
-  | `List (datatype)         -> free_bound_type_vars datatype
-  | `Mailbox (datatype)      -> free_bound_type_vars datatype
+  | `Application (_, datatype) -> free_bound_type_vars datatype
 and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
@@ -321,8 +320,7 @@ let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun va
 	| `Variant row             -> `Variant (rftv row)
 	| `Table row               -> `Table (rftv row)
 	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
-	| `List (datatype)         -> `List (ftv datatype)
-	| `Mailbox (datatype)      -> `Mailbox (ftv datatype)
+	| `Application (s, datatype) -> `Application (s, datatype)
   and freshen_row bound_vars (field_env, row_var) =
     let field_env =
       StringMap.map (function
@@ -457,11 +455,8 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
       | `Recursive (v, k) -> (match f k with 
                                 | Some k -> Some (`Recursive (v, k))
                                 | None   -> None)
-      | `List k ->          (match f k with 
-                               | Some k -> Some (`List k)
-                               | None   -> None)
-      | `Mailbox k ->       (match f k with 
-                               | Some k -> Some (`Mailbox k)
+      | `Application (s, k) -> (match f k with 
+                               | Some k -> Some (`Application (s, k))
                                | None   -> None)
           (* two children *)
       | `Function (j, k) -> (match f j, f k with

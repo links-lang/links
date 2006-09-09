@@ -13,8 +13,8 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Table of 'row
   | `Recursive of (int * 'typ)
-  | `List of ('typ)
-  | `Mailbox of ('typ) ]
+  | `Application of (string * 'typ)
+ ]
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
 type 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t
