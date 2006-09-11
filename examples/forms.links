@@ -70,15 +70,18 @@ fun makeEmpty(a) {
 }
 
 fun makeName(i : Int) { "input_" ++ intToString(i) }
-
-# A one element form can be constructed using the input function.
-var input = 
+var nextName = 
    get >>= fun (i) {
    var name = makeName(i);
    put (i+1) >>
-   (return $ (<input name="{name}"/>,
-              get >>= fun (env) {
-              return $ lookup(name, env)}))};
+   return (name)};
+
+# A one element form can be constructed using the input function.
+var input = 
+   nextName >>= fun (name) {
+   (return (<input name="{name}"/>,
+            get >>= fun (env) {
+            return $ lookup(name, env)}))};
 
 # The compose function takes two forms and a combiner, then
 #   * concatenates the renderers
