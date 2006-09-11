@@ -9,6 +9,9 @@ BUGS
     * note that mailbox typing is on, and rewrite k
     * give a confusing error message.
 
+* Precedence and associativity for user-defined opeators aren't
+  preserved correctly by @load.
+
 * Unused mu-variables should be eliminated:
 
    links> fun(x){x(x)}(fun(x){x});;

@@ -20,38 +20,81 @@ let ps1 = "links> "
 (* Builtin environments *)
 let stdenvs = [], Library.type_env
 
+let c f x y = let _ = f y in x
+
 (* shell directives *)
-let rec directives = 
+let ignore_envs fn envs arg = let _ = fn arg in envs
+let rec directives = lazy (* lazy so we can have applications on the rhs *)
   [
     "directives", 
-    ((fun _ -> 
-        List.iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) directives),
+    (ignore_envs 
+       (fun _ -> 
+          List.iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) (Lazy.force directives)),
      "list available directives");
-     
+    
     "settings",
-    ((fun _ -> 
-        List.iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
+    (ignore_envs
+       (fun _ -> 
+          List.iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
      "print available settings");
     
     "set",
-    ((function (name::value::_) -> Settings.parse_and_set_user (name, value)
-        | _ -> prerr_endline "syntax : @set name value"),
+    (ignore_envs
+       (function (name::value::_) -> Settings.parse_and_set_user (name, value)
+          | _ -> prerr_endline "syntax : @set name value"),
      "change the value of a setting");
     
     "builtins",
-    ((fun _ ->
-        List.iter (fun (n, k) ->
-                     Printf.fprintf stderr " %-16s : %s\n" 
-                       n (Types.string_of_datatype (snd k)))
+    (ignore_envs 
+       (fun _ ->
+          List.iter (fun (n, k) ->
+                       Printf.fprintf stderr " %-16s : %s\n" 
+                         n (Types.string_of_datatype (snd k)))
           Library.type_env),
      "list builtin functions and values");
 
     "quit",
-    ((fun _ -> exit 0), "exit the interpreter");
-    ]
-let execute_directive name args = 
-  try fst (List.assoc name directives) args; flush stderr
-  with Not_found -> Printf.fprintf stderr "unknown directive : %s\n" name; flush stderr
+    (ignore_envs (fun _ -> exit 0), "exit the interpreter");
+
+    "typeenv",
+    ((fun ((_, typeenv) as envs) _ ->
+        List.iter (fun (v, k) ->
+                     Printf.fprintf stderr " %-16s : %s\n"
+                       v (Types.string_of_datatype (snd k)))
+          (List.filter (not -<- (flip List.mem_assoc Library.type_env) -<- fst) typeenv);
+        envs),
+    "display the current type environment");
+
+    "env",
+    ((fun ((valenv, _) as envs) _ ->
+        List.iter (fun (v, k) ->
+                     Printf.fprintf stderr " %-16s : %s\n"
+                       v (Result.string_of_result k))
+          (List.filter (not -<- (flip List.mem_assoc !Library.value_env) -<- fst)  valenv);
+     envs),
+     "display the current environment");
+
+    "load",
+    ((fun envs args ->
+        match args with
+          | [filename] ->
+              let typeenv, exprs =  Inference.type_program Library.type_env (Parse.parse_file filename) in
+              let exprs =           Optimiser.optimise_program (typeenv, exprs) in
+                (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typeenv)
+          | _ -> prerr_endline "syntax: @load \"filename\""; envs),
+     "load in a Links source file, replacing the current environment");
+  ]
+
+let execute_directive (name, args) valenv typeenv = 
+  let envs = 
+    (try fst (List.assoc name (Lazy.force directives)) (valenv, typeenv) args; 
+     with Not_found -> 
+       Printf.fprintf stderr "unknown directive : %s\n" name;
+       (valenv, typeenv))
+  in
+    flush stderr;
+    envs
+    
 
 (* Run unit tests *)
 let run_tests () = 
@@ -103,10 +146,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
                print_result (Syntax.node_datatype (last exprs)) result;
                (valenv, typeenv)
          | Right (directive : Sugartypes.directive) -> 
-             begin
-               (Utility.uncurry execute_directive) directive;
-               (valenv, typeenv)
-             end)
+             execute_directive directive valenv typeenv)
     input
 in
 let error_handler = Errors.display_errors stderr (fun _ -> envs) in

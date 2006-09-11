@@ -57,7 +57,7 @@ fun zip(l) {
   switch l {
     case [] -> ([], []);
     case (a,b)::xs -> { 
-     (c,d) = zip(xs);
+     var (c,d) = zip(xs);
      (a :: c, b :: d)
     };
   }
@@ -69,13 +69,9 @@ fun replicate(n, l) {
 }
 
 fun filter(p, l) {
-  for (x <- l) where (p(x)) [x]
+  for (var x <- l) where (p(x)) [x]
 }
 
-fun drop(n, l) {
-  if (n == 0 || l == []) l
-  else drop(n-1, tl(l))
-}
 
 fun flip(f) {
   fun(x,y) { f(y,x) }
@@ -96,7 +92,7 @@ fun compose(f, g) {
 fun id(x) { x }
 
 fun concatMap(f,l) {
-  for (x <- l) f(x)
+  for (var x <- l) f(x)
 }
 
 fun first(p)   { p.1 }
@@ -125,24 +121,6 @@ fun map(f, l) {
   }
 }
 
-fun max(l, r) {
-  if (l > r) l
-  else r
-}
-
-fun min(l, r) {
-  if (l < r) l
-  else r
-}
-
-fun maximum(ls) {
-  fold_left1(max, ls)
-}
-
-fun minimum(ls) {
-  fold_left1(min, ls)
-}
-
 fun reverse(l) {
   fun aux(l,o) {
     switch l {
@@ -161,7 +139,6 @@ fun reverse(l) {
 # notElemBy :: (a -> a -> Bool) -> a -> [a] -> Bool
 # span :: (a -> Bool) -> [a] -> ([a],[a])
 # splitAt :: Int -> [a] -> ([a],[a])
-# take :: Int -> [a] -> [a]
 # takeWhile :: (a -> Bool) -> [a] -> [a]
 # until :: (a -> Bool) -> (a -> a) -> a -> a
 # zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]

@@ -147,7 +147,6 @@ let isupper = function 'A'..'Z' -> true | _ -> false
 let keywords = [
  "alien"    , ALIEN;
  "as"       , AS;
- "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT; 
  "database" , DATABASE;
@@ -165,7 +164,6 @@ let keywords = [
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
  "insert"   , INSERT; 
- "into"     , INTO; 
  "mu"       , MU; 
  "native"   , NATIVE;
  "orderby"  , ORDERBY; 
