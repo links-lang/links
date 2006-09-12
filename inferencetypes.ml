@@ -178,6 +178,30 @@ let is_rigid_row : row -> bool =
   in
     is_rigid IntSet.empty
 
+(* is_rigid_row_with_var var row
+     returns true if row is rigid and has var as its row var
+ *)
+let is_rigid_row_with_var : int -> row -> bool =
+  fun var ->
+    let rec is_rigid var rec_vars =
+      function
+        | (_, `RowVar None) -> false
+        | (_, `MetaRowVar point) ->
+            begin
+              match Unionfind.find point with
+                | (_, `RowVar None)
+                | (_, `RowVar (Some _)) -> false
+                | (_, `RigidRowVar var') -> var=var'
+                | (_, `RecRowVar (var, row)) ->
+                    ((IntSet.mem var rec_vars) or (is_rigid var (IntSet.add var rec_vars) row))
+                | (_, `MetaRowVar _) as row ->
+                    is_rigid var rec_vars row
+            end
+        | _ -> assert false
+    in
+      is_rigid var IntSet.empty
+
+
 let is_flattened_row : row -> bool =
   let rec is_flattened = fun rec_vars -> function
     | (_, `MetaRowVar point) ->

@@ -301,50 +301,33 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	
 	However, row_var may already have been instantiated, in which case
 	it is unified with row.
-
-	unify_row_var_with_row rec_env (row_var, extension_row)
-          precondition:
-            extension_row = (_, extension_row_var) and             
-            extension_row_var is 'canonical', i.e. of the form
-                `RowVar None 
-              | `MetaRowVar (field_env, `RowVar (Some _))
-              | `MetaRowVar (field_env, `RigidRowVar _)
-            with
-              StringMap.is_empty field_env
       *)
       let unify_row_var_with_row : unify_env -> row_var * row -> unit =
 	fun rec_env (row_var, ((extension_field_env, extension_row_var) as extension_row)) ->
-          assert (is_canonical_row_var extension_row_var);
-
-          let unify_closed_row_var : row_var -> unit = function
+          (* unify row_var with `RowVar None *)
+          let close_empty_row_var : row_var -> unit = function
             | `RowVar None ->
                 ()
             | `MetaRowVar point ->
-                begin
-                  match Unionfind.find point with
-                    | (field_env, `RowVar (Some _)) ->
-                        Unionfind.change point (field_env, `RowVar None)
-                    | (_, `RigidRowVar _) ->
-                        raise (Unify_failure ("Closed row cannot be unified with rigid open row\n"))
-                    | _ -> assert false
-                end
+                let row = Unionfind.find point in
+                  if not (ITO.is_closed_row row) && is_rigid_row row then
+                    raise (Unify_failure ("Closed row var cannot be unified with rigid row var\n"))
+                  else
+                    Unionfind.change point (StringMap.empty, `RowVar None)
             | _ -> assert false in
 
-          let unify_rigid_row_var var : row_var -> unit = function
+          (* unify row_var with `RigidRowVar var *)
+          let rigidify_empty_row_var var : row_var -> unit = function
             | `RowVar None ->
-		raise (Unify_failure ("Rigid row cannot be extended with empty closed row\n"))
+		raise (Unify_failure ("Rigid row var cannot be unified with empty closed row\n"))
             | `MetaRowVar point ->
-                begin
-                  match Unionfind.find point with
-                    | (field_env, `RowVar (Some _)) ->
-                        Unionfind.change point (field_env, `RigidRowVar var)
-                    | (_, `RigidRowVar var') ->
-                        if var=var' then
-                          ()
-                        else
-                          raise (Unify_failure ("Incompatible rigid row variables cannot be unified\n"))
-                    | _ -> assert false
-                end
+                let row = Unionfind.find point in
+                  if ITO.is_closed_row row then
+		    raise (Unify_failure ("Rigid row var cannot be unified with empty closed row\n"))
+                  else if is_rigid_row row && not (is_rigid_row_with_var var row) then
+                    raise (Unify_failure ("Incompatible rigid row variables cannot be unified\n"))
+                  else
+                    Unionfind.change point (StringMap.empty, `RigidRowVar var)
             | _ -> assert false in
 
 	  let rec extend = function
@@ -355,14 +338,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		    begin
 		      match row_var with
 			| `RowVar None ->
-                            if StringMap.is_empty extension_field_env then
-                              unify_closed_row_var extension_row_var
+                            if is_empty_row extension_row then
+                              close_empty_row_var extension_row_var
                             else
 			      raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
 						    ^string_of_row extension_row))
 			| `RigidRowVar var ->
-                            if StringMap.is_empty extension_field_env then
-                              unify_rigid_row_var var extension_row_var
+                            if is_empty_row extension_row then
+                              rigidify_empty_row_var var extension_row_var
                             else
 			      raise (Unify_failure ("Rigid row variable cannot be unified with non-empty row\n"
 						    ^string_of_row extension_row))
@@ -371,15 +354,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			      rec_row_intro point (field_env, var, extension_row)
 			    else
 			      Unionfind.change point extension_row
-			| (`RecRowVar _) as row_var ->
+			| `RecRowVar _ ->
 			    unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
 			| `MetaRowVar _ -> assert false
 		    end
 		  else
 		    unify_rows' rec_env (row, extension_row)
 	    | `RowVar None ->
-                if StringMap.is_empty extension_field_env then
-                  unify_closed_row_var extension_row_var
+                if is_empty_row extension_row then
+                  close_empty_row_var extension_row_var
                 else
 		  raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
 					^string_of_row extension_row))
@@ -557,8 +540,10 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			 extend_field_env may change rrow_var' or lrow_var', as either
 			 could occur inside the body of lfield_env' or rfield_env'
 		      *)
+                      debug ("A");
 		      unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var));
 		      let lextension = extend_field_env rec_env rfield_env' lfield_env' in
+                        debug ("B");
 			unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
 		  end in
         

@@ -44,6 +44,8 @@ val contains_present_fields : field_spec_map -> bool
 val is_canonical_row_var : row_var -> bool
 val is_rigid_row : row -> bool
 
+val is_rigid_row_with_var : int -> row -> bool
+
 val is_flattened_row : row -> bool
 val is_empty_row : row -> bool
 
