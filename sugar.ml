@@ -560,14 +560,14 @@ module PatternCompiler =
                           whose sole argument is unit.
 
                           Consider:
-                            switch A {case A -> 0; case (x:B) -> 1;}
+                            switch A {case A -> 0; case (x:[|B|]) -> 1;}
 
                           Without the unit hack, this gets translated to
                             let x = A in
                              case x of
                               A(y) -> if y = () then 0
-                                      else let _ = (A(y)):B in 1
-                              x -> let _ = x:B in 1
+                                      else let _ = (A(y)):[|B|] in 1
+                              x -> let _ = x:[|B|] in 1
                           which clearly doesn't type check as A(y) can't possibly have type B!
 
                           Some alternative implementation strategies to consider include:
