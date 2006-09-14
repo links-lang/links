@@ -108,6 +108,10 @@ Case-patterns [12]
 switch [1] { case x::[] -> 2; case x -> 1; }
 stdout : 2 : Int
 
+Case-patterns (redundancy) [13]
+fun (x) { switch x { case ([], []) -> 1; case (x::xs, y::ys) -> 2; case ([], _) -> 3; case (_, []) -> 4; }}
+stdout : fun : ([a], [b]) -> Int
+
 Case-patterns (singleton list pattern)
 switch [1] { case [x] -> 2; case x -> 1; }
 stdout : 2 : Int
