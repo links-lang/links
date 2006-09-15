@@ -5,18 +5,13 @@ open Utility
 
 open Type_basis
 
-type type_var_set = Type_basis.type_var_set
-type primitive = Type_basis.primitive
-
-(* TM: Hack to be able to use "deriving" on a variant with a
-   constructor the parameter of which is Xml.Type.t, that is a
-   type declared in a foreign module. *)
-
+(* Hack for derivation across modules *)
 type xml_type_t = Xml.Type.t
+module Show_xml_type_t = Xml.Type.Show
+module Pickle_xml_type_t = Xml.Type.Pickle
 
-module Show_xml_type_t = Xml.Type.Show_t
-
-module Pickle_xml_type_t = Xml.Type.Pickle_t
+type type_var_set = Type_basis.type_var_set
+type primitive = xml_type_t Type_basis.primitive
 
 (* Types for datatypes *)
 type datatype = (datatype, row, xml_type_t) type_basis
@@ -41,6 +36,9 @@ let (-->) x y = `Function (x,y)
       unused mailbox parameters are never shown
  *)
 let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, true)
+
+(* pretty-print type vars as raw numbers rather than letters *)
+let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, true)
 
 (*
   [HACK]
@@ -72,7 +70,7 @@ let with_mailbox_typing b f =
 (* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
    so we need to reverse the result generated.
 *)
-let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
+let map_fold_increasing = ocaml_version_atleast "3.08.4"
 
 let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list =
   fun field_env ->
@@ -90,18 +88,13 @@ let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string li
 let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
-let string_type = `List (`Primitive `Char)
-
-(* TM: XML datas are not longer typed as lists of XML items, but mere as XML
-   values, with a type attached with them. *)
-(*let xml xml_type = `Primitive (`Xml xml_type))*)
+let string_type : datatype = `Application ("List", `Primitive `Char)
+let xml (xml_type : Xml.Type.t) : datatype = `Primitive (`XML xml_type)
 
 (* Type printers *)
-
-(* TM: XML types are now printed by the Xml module. *)
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `Abstract s -> s
+  | `XML xml_type -> Xml.Type.to_string xml_type | `DB -> "Database" | `Abstract s -> s
 
 exception Not_tuple
 
@@ -136,20 +129,22 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
       | `RowVar row_var ->
 	  let present_fields = get_present_fields field_env in
 	  let row_var_string = match row_var with
-	    | Some var -> [IntMap.find var vars]
-	    | None -> [] in
-	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) @ row_var_string in
-	    "(" ^ String.concat ", " strings ^ ")"
+	    | Some var -> Some (IntMap.find var vars)
+	    | None -> None in
+	  let strings = (List.map (fun (_, t) -> string_of_datatype' vars t) present_fields) in
+	    "(" ^ String.concat ", " strings ^
+	      (match row_var_string with
+		 | Some s -> " | "^s
+		 | None -> "") ^ ")"
   in
     match datatype with
       | `Not_typed       -> "not typed"
-      | `Xml xml_type -> Xml.Type.to_string xml_type 
       | `Primitive p     -> string_of_primitive p
       | `TypeVar var      -> IntMap.find var vars
       | `Function (mailbox_type, t) when using_mailbox_typing () ->
 	  let arrow =
 	    match mailbox_type with
-	      | `Mailbox t ->
+	      | `Application ("Mailbox", t) ->
 		  string_of_mailbox_arrow (t)
 	      | _ ->
 		  "->"
@@ -185,63 +180,66 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
 			    else
 			      "(" ^ string_of_row' "," vars row ^ ")")
      | `Variant row    -> "[|" ^ string_of_row' " | " vars row ^ "|]"
+     | `Table row      -> "TableHandle(" ^ string_of_row' "," vars row ^ ")"
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
-     | `DB             ->                   "Database"
-     | `List (`Primitive `Char) -> "String"
-         (* TM: XML values are used to be lists at the typer level, we don't
-            need this anymore. *)
-(*     | `List (`Primitive `XMLitem) -> "XML" *)
-     | `List (elems)           ->  "["^ string_of_datatype' vars elems ^"]"
-     | `Mailbox (msg)           ->  "Mailbox ("^ string_of_datatype' vars msg ^")"
+     | `Application ("List", `Primitive `Char) -> "String"
+     | `Application ("List", elems)              ->  "["^ string_of_datatype' vars elems ^"]"
+     | `Application (s, t)     ->  s ^ " ("^ string_of_datatype' vars t ^")"
+
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in
   let present_strings = List.map (fun (label, t) -> label ^ ":" ^ string_of_datatype' vars t) present_fields in
   let absent_strings = List.map (fun label -> label ^ " -") absent_fields in
   let row_var_string = string_of_row_var' sep vars row_var in
-    String.concat sep (present_strings @ absent_strings @ row_var_string)
+    (String.concat sep (present_strings @ absent_strings)) ^
+      (match row_var_string with
+	 | None -> ""
+	 | Some s -> "|"^s)
 and string_of_row_var' sep vars row_var =
    match row_var with
-      |	`RowVar (Some var) -> [IntMap.find var vars]
-      | `RowVar None -> []
+      | `RowVar None -> None
+      |	`RowVar (Some var) -> Some (IntMap.find var vars)
       | `RecRowVar (var, row) -> 
-	  ["(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")"]
+	  Some ("(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")")
 
 let make_names vars =
-  let first_letter = int_of_char 'a' in
-  let last_letter = int_of_char 'z' in
-  let num_letters = last_letter - first_letter + 1 in
-    
-  let string_of_ascii n = Char.escaped (char_of_int n) in
-
-  let rec num_to_letters n =
-    let letter = string_of_ascii (first_letter + (n mod num_letters)) in
-      letter ^
-	(if n >= num_letters then (num_to_letters (n / num_letters))
-	 else "")
-  in
-    
-  let (_, name_map) = 
-    IntSet.fold (fun var (n, name_map) -> (n+1, IntMap.add var (num_to_letters n) name_map)) vars (0, IntMap.empty)
-  in
-    name_map
-
+  if Settings.get_value show_raw_type_vars then
+    IntSet.fold (fun var (name_map) -> IntMap.add var (string_of_int var) name_map) vars IntMap.empty
+  else
+    begin
+      let first_letter = int_of_char 'a' in
+      let last_letter = int_of_char 'z' in
+      let num_letters = last_letter - first_letter + 1 in
+	
+      let string_of_ascii n = Char.escaped (char_of_int n) in
+	
+      let rec num_to_letters n =
+	let letter = string_of_ascii (first_letter + (n mod num_letters)) in
+	  letter ^
+	    (if n >= num_letters then (num_to_letters (n / num_letters))
+	     else "")
+      in
+	
+      let (_, name_map) = 
+	IntSet.fold (fun var (n, name_map) -> (n+1, IntMap.add var (num_to_letters n) name_map)) vars (0, IntMap.empty)
+      in
+	name_map
+    end
 (* [TODO]
       change the return type to be IntSet.t
 *)
 let rec type_vars : datatype -> int list = fun datatype ->
   let rec aux = function
-    | `Not_typed
-    | `Xml _
-    | `Primitive _
-    | `DB                      -> []
+    | `Not_typed               -> []
+    | `Primitive _             -> []
     | `TypeVar var             -> [var]
     | `Function (from, into)   -> aux from @ aux into
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
+    | `Table row               -> row_type_vars row
     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
-    | `List (datatype)             -> aux datatype
-    | `Mailbox (datatype)          -> aux datatype
+    | `Application (_, datatype) -> aux datatype
   in unduplicate (=) (aux datatype)
 and row_type_vars (field_env, row_var) =
   let field_type_vars =
@@ -256,10 +254,8 @@ and row_type_vars (field_env, row_var) =
     field_type_vars @ row_var
 
 let rec free_bound_type_vars : datatype -> IntSet.t = function
-  | `Not_typed
-  | `Xml _
-  | `Primitive _
-  | `DB                      -> IntSet.empty
+  | `Not_typed               -> IntSet.empty
+  | `Primitive _             -> IntSet.empty
   | `TypeVar var             -> IntSet.singleton var
 (*
   [HACK]
@@ -275,11 +271,11 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
 	IntSet.union mailbox_type_vars (IntSet.union (free_bound_type_vars from) (free_bound_type_vars into))
 *)
   | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
-  | `Record row              -> free_bound_row_type_vars row
-  | `Variant row             -> free_bound_row_type_vars row
+  | `Record row
+  | `Variant row
+  | `Table row               -> free_bound_row_type_vars row
   | `Recursive (var, body)   -> IntSet.add var (free_bound_type_vars body)
-  | `List (datatype)         -> free_bound_type_vars datatype
-  | `Mailbox (datatype)      -> free_bound_type_vars datatype
+  | `Application (_, datatype) -> free_bound_type_vars datatype
 and free_bound_row_type_vars (field_env, row_var) =
   let field_type_vars = 
     List.fold_right IntSet.union
@@ -292,6 +288,65 @@ and free_bound_row_var_vars row_var =
     | `RowVar (Some var) -> IntSet.singleton var
     | `RowVar None -> IntSet.empty
     | `RecRowVar (var, row) -> IntSet.add var (free_bound_row_type_vars row)
+
+(* [TODO]
+    - make sure TypeVars and RowVars with clashing names are
+    treated correctly
+    - perhaps this function should be in sugar.ml
+*)
+(*
+  freshen the free type variables in a type
+
+  freshen_free_type_vars var_map datatype
+     - var_map contains an initial mapping from free variables to new names
+     - on exit var_map contain mappings from any additional free variables
+     in datatype to their new names
+*)
+let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun var_map datatype ->
+  let rec freshen_datatype : IntSet.t -> datatype -> datatype = fun bound_vars t ->
+    let ftv = freshen_datatype bound_vars in
+    let rftv = freshen_row bound_vars in
+      match t with
+	| `Not_typed               
+	| `Primitive _ -> t
+	| `TypeVar var ->
+	    if IntSet.mem var bound_vars then
+	      t
+	    else if IntMap.mem var !var_map then
+	      `TypeVar (IntMap.find var !var_map)
+	    else
+	      let fresh_var = fresh_raw_variable () in
+		var_map := IntMap.add var fresh_var !var_map;
+		`TypeVar fresh_var
+	| `Function (from, into) ->
+	    `Function (ftv from, ftv into)
+	| `Record row              -> `Record (rftv row)
+	| `Variant row             -> `Variant (rftv row)
+	| `Table row               -> `Table (rftv row)
+	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
+	| `Application (s, datatype) -> `Application (s, datatype)
+  and freshen_row bound_vars (field_env, row_var) =
+    let field_env =
+      StringMap.map (function
+		       | `Absent -> `Absent
+		       | `Present t -> `Present (freshen_datatype bound_vars t)) field_env in
+    let row_var = freshen_row_var bound_vars row_var in
+      (field_env, row_var)
+  and freshen_row_var bound_vars row_var =
+    match row_var with
+      | `RowVar None -> row_var
+      | `RowVar (Some var) ->
+	  if IntSet.mem var bound_vars then
+	    row_var
+	  else if IntMap.mem var !var_map then
+	    `RowVar (Some (IntMap.find var !var_map))
+	  else
+	    let fresh_var = fresh_raw_variable () in
+	      var_map := IntMap.add var fresh_var !var_map;
+	      `RowVar (Some fresh_var)
+      | `RecRowVar (var, row) -> `RecRowVar (var, freshen_row (IntSet.add var bound_vars) row)
+  in
+    freshen_datatype IntSet.empty datatype
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
@@ -307,8 +362,8 @@ let string_of_row row =
 
 let string_of_row_var row_var =
   match string_of_row_var' "," (make_names (free_bound_row_var_vars row_var)) row_var with
-    | [] -> ""
-    | [s] -> s
+    | None -> ""
+    | Some s -> s
 
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
@@ -398,19 +453,14 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
     function
         (* no children *)
       | `Not_typed
-      | `Xml _
       | `Primitive _
-      | `DB
       | `TypeVar  _ -> None
           (* one child *)
       | `Recursive (v, k) -> (match f k with 
                                 | Some k -> Some (`Recursive (v, k))
                                 | None   -> None)
-      | `List k ->          (match f k with 
-                               | Some k -> Some (`List k)
-                               | None   -> None)
-      | `Mailbox k ->       (match f k with 
-                               | Some k -> Some (`Mailbox k)
+      | `Application (s, k) -> (match f k with 
+                               | Some k -> Some (`Application (s, k))
                                | None   -> None)
           (* two children *)
       | `Function (j, k) -> (match f j, f k with
@@ -425,3 +475,7 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
       | `Variant row -> (match rewrite_row row with 
                            | Some row -> Some (`Variant row)
                            | None ->     None)
+      | `Table row  -> (match rewrite_row row with 
+                           | Some row -> Some (`Table row)
+                           | None ->     None)
+

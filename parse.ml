@@ -175,7 +175,7 @@ let parse_file filename =
 
 
 (* Parse a datatype *)
-let parse_datatype string = 
+let parse_datatype string =
   Sugar.desugar_assumption (Sugar.generalize (Parser.just_datatype (Lexer.lexer ()) (from_string (string ^ ";"))))
 
 (* Parse a sentence *)

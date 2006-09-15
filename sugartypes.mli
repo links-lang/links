@@ -1,0 +1,127 @@
+(** The syntax tree created by the parser. *)
+
+type name = string
+
+(* The operators named here are the ones that it is difficult or
+   impossible to define as "user" infix operators:
+
+      - -.  are both infix and prefix
+     && ||  have special evaluation
+     ::     is also used in patterns
+     ~      triggers a lexer state switch
+*)
+type unary_op = [
+| `Minus
+| `FloatMinus
+]
+type logical_binop = [`And | `Or]
+type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name]
+
+type operator = [ unary_op | binop | `Project of name ]
+
+type pposition = Lexing.position * Lexing.position (* start * end *)
+
+type location = Syntax.location
+type datatype = 
+  | TypeVar of string
+  | FunctionType of datatype * datatype
+  | MuType of string * datatype
+  | UnitType
+  | TupleType of (datatype list)
+  | RecordType of row
+  | VariantType of row
+  | TableType of row
+  | ListType of datatype
+  | TypeApplication of (string * datatype)
+  | PrimitiveType of Types.primitive
+  | DBType
+(* Regular types *)
+  | Latin1Type
+  | UnionType of datatype * datatype
+  | ConcatType of datatype * datatype
+  | QuestionType of datatype
+  | StarType of datatype
+  | PlusType of datatype
+  | TextType of string
+  | ElementType of string * (string * bool) list * bool * datatype list
+and row = (string * [`Present of datatype | `Absent]) list * string option
+
+type pattern = [
+  | `Any
+  | `Nil
+  | `Cons of (ppattern * ppattern)
+  | `List of (ppattern list)
+  | `Variant of (string * ppattern option)
+  | `Record of ((string * ppattern) list * ppattern option)
+  | `Tuple of (ppattern list)
+  | `Constant of phrase
+  | `Variable of string
+  | `As of (string * ppattern)
+  | `HasType of ppattern * datatype
+  | `Element of string * (string * string) list * bool * pattern list
+  | `Text of string
+  | `Concat of ppattern * ppattern
+  | `Question of ppattern
+  | `Star of ppattern
+  | `Plus of ppattern
+]
+and ppattern = pattern * pposition
+and phrasenode =
+  | FloatLit of (float)
+  | IntLit of (Num.num)
+  | StringLit of (string)
+  | BoolLit of (bool)
+  | CharLit of (char)
+  | Var of (name)
+  | FunLit of (name option * ppattern list * phrase)
+  | Spawn of phrase
+  | ListLit of (phrase list)
+  | Definition of (ppattern * phrase * location)
+  | Iteration of (generatorphrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
+  | Escape of (name * phrase)
+  | HandleWith of (phrase * name * phrase)
+  | Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
+  | Conditional of (phrase * phrase * phrase)
+  | Binding of binder
+  | Block of (phrase list * phrase)
+  | Foreign of (name * name * datatype)
+  | InfixDecl
+  | InfixAppl of (binop * phrase * phrase)
+  | Regex of (regex)
+  | UnaryAppl of (unary_op * phrase)
+  | FnAppl of (phrase * (phrase list * pposition))
+  | TupleLit of (phrase list)
+  | RecordLit of ((name * phrase) list * phrase option)
+  | Projection of (phrase * name)
+  | SortBy_Conc of (ppattern * phrase * phrase)
+  | TypeAnnotation of (phrase * datatype)
+  | TypeSignature of (name * datatype)
+  | ConstructorLit of (name * phrase option)
+  | Switch of (phrase * (binder list) * (name * phrase) option)
+  | Receive of ((binder list) * (name * phrase) option)
+  | DatabaseLit of (phrase)
+  | TableLit of (phrase * datatype * phrase)
+  | DBDelete of (rawgeneratorphrase * phrase option)
+  | DBInsert of (phrase * phrase)
+  | DBUpdate of (rawgeneratorphrase * phrase option * (name * phrase) list)
+  | Xml of (name * (string * (phrase list)) list * phrase list)
+  | XmlForest of (phrase list)
+  | TextNode of (string)
+and phrase = phrasenode * pposition
+and binder = ppattern * phrase
+and regex = | Range of (char * char)
+            | Simply of string
+            | Any
+            | Seq of regex list
+            | Repeat of (Regex.repeat * regex)
+            | Splice of phrase
+and rawgeneratorphrase = ppattern * phrase
+and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]
+
+
+type directive = string * string list
+type type_decl = string * datatype
+type directive_or_type_decl = (directive, type_decl) Utility.either
+type sentence = (phrase list, directive_or_type_decl) Utility.either
+type sentence' =
+    (Syntax.untyped_expression list, directive_or_type_decl) Utility.either

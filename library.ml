@@ -18,6 +18,18 @@ and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtb
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 
+let cgi_parameters = ref []
+
+(** http_response_headers: this is state for the webif interface. I hope we can
+    find a better way for library functions to communicate with the web
+    interface. *)
+let http_response_headers = ref []
+let http_response_code = ref 200
+
+(* default database settings *)
+let database_driver = Settings.add_string("database_driver", "", true)
+let database_args = Settings.add_string("database_args", "", true)
+
 let debug_process_status () =
   prerr_endline("processes : " ^ 
                   string_of_int (Queue.length suspended_processes));
@@ -49,22 +61,25 @@ let cond_from_field db (k, v) =
 let single_match db = 
   function
     | `Record fields -> "("^ (String.concat " AND " (map (cond_from_field db) fields)) ^")"
-    | _ -> failwith "Internal error: forming query from non-row"
+    | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_result r)
 
 let row_columns = function
-  | `Record fields -> String.concat ", " (map fst fields)
-  | _ -> failwith "Internal error: forming query from non-row"
+  | `List ((`Record fields)::_) -> map fst fields
+  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^string_of_result r)
 and row_values db = function
-  | `Record fields -> String.concat ", " (map (value_as_string db -<- snd) fields)
-  | _ -> failwith "Internal error: forming query from non-row"
+  | `List records ->
+        (List.map (function
+                     | `Record fields -> map (value_as_string db -<- snd) fields
+                     | _ -> failwith "Internal error: forming query from non-row") records)
+  | r -> failwith ("Internal error: forming query from non-row (row_values): "^string_of_result r)
 and delete_condition db = function
   | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")"
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row (delete_condition): "^string_of_result r)
 and updates db : Result.result -> string = function
   | `Record fields -> 
       let field (k, v) = (k ^" = "^ value_as_string db v) in
         (String.concat ", " (map field fields))
-  | _ -> failwith "Internal error: forming query from non-row"
+  | r -> failwith ("Internal error: forming query from non-row: "^string_of_result r) 
 
 type primitive =  [
   Result.result
@@ -118,6 +133,49 @@ let client_only_2 fn =
 
 let datatype = Parse.parse_datatype
 
+let rec equal l r =
+  match l, r with
+    | `Bool l  , `Bool r   -> l = r
+    | `Int l   , `Int r    -> eq_num l r
+    | `Float l , `Float r  -> l = r
+    | `Char l  , `Char r   -> l = r
+    | `Function _, `Function _ -> Pickle_result.pickleS l = Pickle_result.pickleS r
+    | `Record lfields, `Record rfields -> 
+        let rec one_equal_all = (fun alls (ref_label, ref_result) ->
+                                   match alls with
+                                     | [] -> false
+                                     | (label, result) :: _ when label = ref_label -> equal result ref_result
+                                     | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
+          for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
+    | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
+    | `List (l), `List (r) -> length l = length r &&
+            fold_left2 (fun result x y -> result && equal x y) true l r
+    | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
+
+let rec less l r =
+  match l, r with
+    | `Bool l, `Bool r   -> l < r
+    | `Int l, `Int r     -> lt_num l r
+    | `Float l, `Float r -> l < r
+    | `Char l, `Char r -> l < r
+    | `Function _ , `Function _                  -> Pickle_result.pickleS l < Pickle_result.pickleS r
+        (* Compare fields in lexicographic order of labels *)
+    | `Record lf, `Record rf -> 
+        let order = sort (fun x y -> compare (fst x) (fst y)) in
+        let lv, rv = map snd (order lf), map snd (order rf) in
+        let rec compare_list = function
+          | [] -> false
+          | (l,r)::_ when less l r -> true
+          | (l,r)::_ when less r l -> false
+          | _::rest                -> compare_list rest in
+          compare_list (combine lv rv)
+    | `List (l), `List (r) ->
+        (try for_all2 less l r
+         with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
+    | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
+
+let less_or_equal l r = less l r || equal l r
+
 let env : (string * (located_primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
@@ -140,29 +198,37 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "stringToXml",
   ((p1 string_to_xml :> located_primitive),
-   ([], Types.string_type --> `Xml Xml.Type.latin1_string));
+   ([], Types.string_type --> (xml Xml.Type.string)));
   
   "intToXml",
   ((p1 (string_to_xml -<-
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
-   ([], (`Primitive `Int) --> `Xml Xml.Type.digit_string));
+   ([], (`Primitive `Int) --> (xml Xml.Type.string)));
   
+  "exit",
+  (`Continuation [],
+   (datatype "a -> b")
+  );
+
   "send",
   (p2 (fun pid msg -> 
          let pid = int_of_num (unbox_int pid) in
            (try 
               Queue.push msg (Hashtbl.find messages pid)
-            with Not_found -> failwith ("Internal error while sending message: no mailbox for " ^ string_of_int pid));
+            with Not_found -> 
+              (* Is this really an internal error? Maybe target has finished? *)
+              failwith ("Internal error while sending message: no mailbox for "
+                        ^ string_of_int pid));
            (try 
-              Queue.push (Hashtbl.find blocked_processes pid) suspended_processes;
+              Queue.push(Hashtbl.find blocked_processes pid) suspended_processes;
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   datatype "Mailbox a -> a -> ()");
+   datatype "Mailbox (a) -> a -> ()");
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "Mailbox a -> () -> Mailbox a");
+   datatype "Mailbox (a) -> () -> Mailbox (a)");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -173,7 +239,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (p1 (fun _ -> assert false),
-     datatype "Mailbox a -> () -> a");
+     datatype "Mailbox (a) -> () -> (a)");
  
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -188,7 +254,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "Mailbox a -> (Mailbox b -> c -> d) -> Mailbox a -> c -> Mailbox b");
+   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 
@@ -212,7 +278,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
          | `List [] -> failwith "Tail of empty list"
          | _ -> failwith "Internal error: tail of non-list"),
    datatype "[a] -> [a]");
-       
+  
   "length", 
   (p1 (function
          | `List (elems) -> `Int (num_of_int (length elems))
@@ -232,6 +298,22 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
            | _ -> failwith "Internal error: non-list passed to drop"),
    datatype "Int -> [a] -> [a]");
+
+  "max",
+  (p1 (let max2 x y = if less x y then y else x in
+         function
+           | `List [] -> `Variant ("None", `Record [])
+           | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+           | _ -> failwith "Internal error: non-list passed to max"),
+   datatype "[a] -> [|Some:a | None:()|]");
+
+  "min",
+  (p1 (let min2 x y = if less x y then x else y in
+         function
+           | `List [] -> `Variant ("None", `Record [])
+           | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
+           | _ -> failwith "Internal error: non-list passed to min"),
+   datatype "[a] -> [|Some:a | None:()|]");
 
   (** XML **)
   "childNodes",
@@ -264,6 +346,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | _ -> failwith "Internal error: bad arguments to attribute"),
    datatype "(XML,String) -> [|Some:String | None:()|]");
 
+  "alertDialog",
+  (client_only_1 "alertDialog",
+   datatype "String -> ()");
+
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
    datatype "String -> ()");
@@ -286,7 +372,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "not", 
   (p1 (unbox_bool ->- not ->- box_bool),
    datatype "Bool -> Bool");
- 
+  
   "negate", 
   (p1 (unbox_int ->- minus_num ->- box_int), datatype "Int -> Int");
 
@@ -298,17 +384,17 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   
 
   (* HACK *)
-(*   [DEACTIVATED] *)
-(*   "callForeign", *)
-(*    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b"); *)
+  (*   [DEACTIVATED] *)
+  (*   "callForeign", *)
+  (*    (client_only_1 "callForeign", datatype "(a -> b) -> a -> b"); *)
 
   (* DOM API *)
 
-(* [DEACTIVATED] *)
-(*   "domOp", *)
-(*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
-(*          `Record []), *)
-(*    datatype "a -> ()"); *)
+  (* [DEACTIVATED] *)
+  (*   "domOp", *)
+  (*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
+  (*          `Record []), *)
+  (*    datatype "a -> ()"); *)
 
   "domInsertBefore",
   (`Client, datatype "(XML, DomRef) -> ()");
@@ -331,7 +417,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domRemoveRef",
   (`Client, datatype "DomRef -> ()");
 
-
   "domReplaceChildren",
   (`Client, datatype "(XML, DomRef) -> ()");
 
@@ -350,7 +435,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domIsNullRef",
   (`Client, datatype "DomRef -> Bool");
 
-(* Section: Accessors for XML *)
+  (* Section: Accessors for XML *)
   "getTagName",
   (`Client, datatype "XML -> String");
 
@@ -363,18 +448,27 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getAttribute",
   (`Client, datatype "(XML, String) -> String");
 
-(* Section: Navigation for XML *)
+  (* Section: Navigation for XML *)
   "getChildNodes",
   (`Client, datatype "XML -> [XML]");
 
-(* Section: Accessors for DomRefs *)
+  (* Section: Accessors for DomRefs *)
   "domGetTagNameFromRef",
   (`Client, datatype "DomRef -> String");
 
   "domGetAttributeFromRef",
   (`Client, datatype "(DomRef, String) -> String");
 
-(* Section:  Navigation for DomRefs *)
+  "domSetAttributeFromRef",
+  (`Client, datatype "(DomRef, String, String) -> String");
+
+  "domGetStyleAttrFromRef",
+  (`Client, datatype "(DomRef, String) -> String");
+
+  "domSetStyleAttrFromRef",
+  (`Client, datatype "(DomRef, String, String) -> String");
+
+  (* Section:  Navigation for DomRefs *)
   "domGetParentFromRef",
   (`Client, datatype "DomRef -> DomRef");
 
@@ -384,7 +478,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "domGetNextSiblingFromRef",
   (`Client, datatype "DomRef -> DomRef");
 
-(* Section: DOM Event API *)
+  (* Section: DOM Event API *)
   "eventGetTarget",
   (`Client, datatype "Event -> DomRef");
 
@@ -394,35 +488,92 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetTargetElement",
   (`Client, datatype "Event -> DomRef");
 
-(* getPageX : Event -> Int *)
+  (* getPageX : Event -> Int *)
   "eventGetPageX",
   (`Client, datatype "Event -> Int");
 
-(* getPageY : Event -> Int *)
+  (* getPageY : Event -> Int *)
   "eventGetPageY",
   (`Client, datatype "Event -> Int");
 
-(* getRelatedTarget : Event -> DomRef *)
+  (* getRelatedTarget : Event -> DomRef *)
   "eventGetRelatedTarget",
   (`Client, datatype "Event -> DomRef");
 
-(* getTime : Event -> Int *)
+  (* getTime : Event -> Int *)
   "eventGetTime",
   (`Client, datatype "Event -> Int");
 
-(* # stopEvent : ??? *)
-(* # stopPropagation : ??? *)
-(* # preventDefault : ??? *)
-(* getCharCode : Event -> Char *)
+  (* # stopEvent : ??? *)
+  (* # stopPropagation : ??? *)
+  (* # preventDefault : ??? *)
+  (* getCharCode : Event -> Char *)
   "eventGetCharCode",
   (`Client, datatype "Event -> Char");
 
-(* [SL] Aarghhh... this is too dangerous *)
-(*
-  "getCommandOutput",
-  (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
+  (* Cookies *)
+  "setCookie",
+  (p2 (fun cookieName cookieVal ->
+         let cookieName = charlist_as_string cookieName in
+         let cookieVal = charlist_as_string cookieVal in
+           http_response_headers := 
+             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
+           `Record []
+      ),
+   datatype "String -> String -> unit");
+
+  "getCookie",
+  (p1 (fun cookieName -> 
+         try 
+           let cookieName = charlist_as_string cookieName in
+           let cookie_header = getenv "HTTP_COOKIE" in
+           let cookies = Str.split (Str.regexp ",") cookie_header in
+           let cookies = map (fun str -> 
+                                let [nm; vl] = Str.split (Str.regexp "=") str in 
+                                  nm, vl) cookies in
+           let the_cookie = snd (find (fun (nm, _) -> nm = cookieName) 
+                                   cookies) in
+             match string_as_charlist the_cookie with
+                 `List _ as result -> result
+               | _ -> failwith "Internal Error library l469"
+         with Not_found ->
+           `List []
+      ),
    datatype "String -> String");
-*)
+
+
+  (* getCommandOutput disabled for now; possible security risk. *)
+  (*
+    "getCommandOutput",
+    (p1 ((unbox_string ->- Utility.process_output ->- box_string) :> result -> primitive),
+    datatype "String -> String");
+  *)
+
+  "redirect",
+  (p1 (fun url ->
+         let url = charlist_as_string url in
+           (* This is all quite hackish, just testing an idea. --ez *)
+           http_response_headers := ("Location", url) :: !http_response_headers;
+           http_response_code := 302;
+           `Record []
+      ), datatype "String -> ()");   (* Should this function really return? 
+                                        I think not --ez*)
+
+  (** reifyK: I choose an obscure name, for an obscure function, until
+      a better one can be though up. It just turns a continuation into its
+      string representation *)
+  "reifyK",
+  (p1 (function
+           `Continuation k -> 
+             (match string_as_charlist(marshal_continuation k) with
+                  `List _ as result -> result
+                | _ -> failwith "")
+         | _ -> failwith "argument to reifyK was not a continuation"
+      ),
+   datatype "(a -> b) -> String"); (* arg type should actually be limited
+                                      to continuations, but we don't have
+                                      any way of specifying that in the 
+                                      type system. *)
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
@@ -431,73 +582,88 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "Int -> ()");
 
   (** Database functions **)
-(* [BROKEN] *)
-(*
-  "insertrow",
+  "asList",
+  (p1 (fun _ -> failwith "Unoptimized table access!!!"),
+   datatype "TableHandle(r) -> [{r}]");
+
+  "insertrows",
   (`Server 
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and database = assoc "2" fields
-                and row = assoc "3" fields in begin
-                    match database with 
-                      | `Database (db, _) -> 
-                          (Database.execute_select 
-                             (`List unit_type)
-                             ("insert into " ^ unbox_string table ^ "("^ row_columns row ^") values ("^ row_values db row ^")")
-                             db :> primitive)
+                and rows = assoc "2" fields in
+                  begin
+                    match table, rows with
+                      | `Table _, `List [] -> `Record []
+                      | `Table (db, table_name, _), _ ->
+                          let field_names = row_columns rows
+                          and vss = row_values db rows
+                          in
+                            prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
+                            (Database.execute_insert (table_name, field_names, vss) db :> primitive)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
-   let r', r = fresh_row () in
-     [r'],
-   tuplify [Types.string_type; `DB; `Record r] --> unit_type);
-  
+   datatype "(TableHandle(r), [{r}]) -> ()");
+
+  "updaterows", 
+  (`Server
+     (p1 (function
+            | `Record fields ->
+                let table = assoc "1" fields
+                and rows = assoc "2" fields in begin
+                    match table, rows with
+                      | _, `List [] -> `Record []
+                      | `Table (db, table_name, _), `List rows ->
+                          List.iter (fun row ->
+                                       let query_string =
+                                         "update " ^ table_name
+                                         ^ " set " ^ updates db (links_snd row)
+                                         ^ " where " ^ single_match db (links_fst row)
+                                       in
+                                         prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
+                                         ignore (Database.execute_command query_string db))
+                            rows;
+                          `Record []
+                      | _ -> failwith "Internal error: bad value passed to `updaterows'"
+                  end
+            | _ -> failwith "Internal error unboxing args (updaterows)")),
+   datatype "(TableHandle(r), [({r},{r})]) -> ()");
+
   "deleterows", 
   (`Server
      (p1 (function
             | `Record fields ->
                 let table = assoc "1" fields
-                and database = assoc "2" fields
-                and rows = assoc "3" fields in begin
-                    match database with 
-                      | `Database (db, _)  ->
-                          (Database.execute_select
-                             (`List unit_type)
-                             ("delete from " ^ unbox_string table ^ " where " ^ delete_condition db rows)
-                             db :> primitive)
+                and rows = assoc "2" fields in
+                  begin
+                    match table, rows with
+                      | `Table _, `List [] ->
+                          `Record []
+                      | `Table (db, table_name, _), _  ->
+                          let condition = delete_condition db rows in
+                          let query_string = "delete from " ^ table_name ^ " where " ^ condition
+                          in
+                            prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
+                            (Database.execute_command query_string db :> primitive)
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
-   let r', r = fresh_row () in
-     [r'],
-   tuplify [Types.string_type; `DB; `List (`Record r)] --> unit_type);
+   datatype "(TableHandle(r), [{r}]) -> ()");
 
-    "updaterows", 
-  (p1 (function
-         | `Record fields ->
-             let table = assoc "1" fields
-             and database = assoc "2" fields
-             and rows = assoc "3" fields in begin
-                 match database, rows with 
-                   |  `Database (db, _), `List rows ->
-                        List.iter (fun row -> 
-                                     ignore (Database.execute_select
-                                               (`List unit_type)
-                                               ("update " ^ unbox_string table
-                                                ^ " set " ^ updates db (links_snd row)
-                                                ^ " where " ^ single_match db (links_fst row))
-                                               db))
-                          rows;
-                        `Record []
-                   | _ -> failwith "Internal error: bad value passed to `updaterows'"
-               end
-         | _ -> failwith "Internal error unboxing args (updaterows)"),
-   let v', v = fresh_row () in
-   let u', u = fresh_row () in
-     [u'; v'],
-   tuplify [Types.string_type; `DB; `List (tuplify [`Record u; `Record v])] --> unit_type);
-*)
+  "getDatabaseConfig",
+  (`Server
+     (p1 (fun _ ->
+	    let driver = Settings.get_value database_driver
+	    and args = Settings.get_value database_args in
+	      if driver = "" then
+	        failwith "Internal error: default database driver not defined"
+	      else
+	        `Record(["driver", string_as_charlist driver;
+		         "args", string_as_charlist args])
+	 )),
+   datatype "() -> (driver:String, args:String)");
+  
   (** some char functions **)
   "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
   "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
@@ -535,7 +701,18 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
-      qs, (`List (`Primitive `Char) --> (regex --> `Primitive `Bool))));
+      qs, (string_type --> (regex --> `Primitive `Bool))));
+
+  ("queryParameter",
+   (p2 (fun env name -> failwith "queryParameter"),
+    datatype "Env -> String -> String"));
+
+  ("environment",
+   (p1 (fun _ -> 
+          let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
+          let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
+            `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+    datatype "() -> [(String,String)]"));
 ]
 
 type continuationized_val = [
@@ -551,7 +728,7 @@ let rec continuationize : primitive -> continuationized_val = function
                             | #result as r -> (applycont cont r :> continuationized_val)
                             | prim         -> continuationize prim)
     | (#result as a) -> a
-
+        
 let continuationize : located_primitive -> continuationized_val option = function
   | `Client -> None
   | `Server p
@@ -566,7 +743,8 @@ let continuationize_env = Utility.concat_map
       | Some v -> [n,v])
 
 let value_env = ref (continuationize_env env)
-and type_env : Types.environment = Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+and type_env : Types.environment = 
+  Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
 
 let impl : located_primitive -> primitive = function
   | `Client -> failwith "client function requested"

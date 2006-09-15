@@ -2,20 +2,20 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-ifdef BUILD_SQLITE
+ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
-   DB_AUXLIBS += $(SQLLITE_LIBDIR)
-   DB_CLIBS   += cclib lsqlite_stubs
+   DB_AUXLIBS += $(SQLITE_LIBDIR)
+   DB_CLIBS   += cclib lsqlite_stubs cclib lsqlite
    DB_LIBS    += sqlite
 endif
 
-ifdef BUILD_MYSQL
+ifdef MYSQL_LIBDIR
    DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
 
-ifdef BUILD_POSTGRESQL
+ifdef POSTGRESQL_LIBDIR
    DB_CODE    += pg_database.ml
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
@@ -23,13 +23,12 @@ endif
 
 DERIVING_DIR=deriving
 
-AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
+AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib cduce-0.4.0
 
-CLASSES=deriving.cmo show_class.cmo enum_class.cmo bounded_class.cmo pickle_class.cmo
-PP='camlp4o -I $(DERIVING_DIR)/syntax $(CLASSES)'
+PP=deriving/syntax/deriving
 
-OCAMLOPT := ocamlopt.opt -pp $(PP)
-OCAMLC := ocamlc.opt -pp $(PP)
+OCAMLOPT := ocamlfind ocamlopt -linkpkg -package pcre,num,pxp,curl,expat -pp $(PP)
+OCAMLC := ocamlfind ocamlc -linkpkg -package pcre,num,pxp,curl,expat -pp $(PP)
 OCAMLDEP := ocamldep -pp $(PP)
 
 VPATH=regex
@@ -37,7 +36,11 @@ VPATH=regex
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-w Aef
+OCAMLBFLAGS=-g -w a
+OCAMLBLDFLAGS=-g
+
+# additional files to clean
+TRASH=*.tmp *.output
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
@@ -49,22 +52,23 @@ SOURCES = $(OPC)                		\
           rewrite.ml            		\
           performance.ml        		\
           graph.ml              		\
-          xml.mli xml.ml	 		\
+          xml_lib.ml xml.ml			\
           type_basis.mli type_basis.ml 		\
           types.mli types.ml      		\
-          query.ml              		\
-          sql.ml                		\
-          syntax.ml             		\
+          query.ml query.mli          		\
+          sql.ml sql.mli               		\
+          syntax.ml syntax.mli        		\
           regex.ml                              \
           inferencetypes.mli inferencetypes.ml 	\
-          sugar.ml              		\
+          sugartypes.mli                        \
+          sugar.ml sugar.mli    		\
           result.ml result.mli         		\
-          sql_transform.ml      		\
+          errors.mli errors.ml                  \
+          sql_transform.ml sql_transform.mli	\
           parser.mly            		\
           $(DB_CODE)            		\
           jsonparse.mly         		\
           json.ml               		\
-          errors.mli errors.ml  		\
           forms.mli forms.ml    		\
           database.mli database.ml 		\
           lexer.mll             		\
@@ -74,12 +78,12 @@ SOURCES = $(OPC)                		\
           library.mli library.ml 		\
           jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
-          optimiser.ml          		\
+          optimiser.ml optimiser.mli   		\
           js.mli js.ml          		\
           webif.ml              		\
           links.ml              		\
 
-LIBS    = unix nums str $(DB_LIBS) deriving
+LIBS    = unix nums str $(DB_LIBS) deriving gramlib camlp4 cduce_lib
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
@@ -108,7 +112,7 @@ test: $(RESULT)
 	@perl -MTest::Harness -e 'Test::Harness::runtests("tests/web-tests.pl")'
 
 fixmes:
-	@grep FIXME *.ml*
+	@grep FIXME *.ml *.mli *.mly *.mll
 
 .PHONY: docs
 
@@ -116,5 +120,6 @@ docs: quick-help.html
 
 quick-help.html: quick-help.pod
 	pod2html quick-help.pod > quick-help.html
+	@rm pod2htm*.tmp
 
 clean : deriving-clean

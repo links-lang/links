@@ -4,24 +4,27 @@ open Utility
 
 type type_var_set = Utility.IntSet.t
 
-(* TM: The former `XMLitem constant constructor has been changed by the
-   `Xml constructor which takes in argument the XML type informations. *)
-
-type primitive = [ `Bool | `Int | `Char | `Float | `Abstract of string ]
+type 'xml primitive = [
+  | `Bool
+  | `Int
+  | `Char
+  | `Float
+  | `XML of 'xml
+  | `DB
+  | `Abstract of string ]
     deriving (Show, Pickle)
-    
+
 type ('typ, 'row, 'xml) type_basis = [
   | `Not_typed
-  | `Xml of 'xml
-  | `Primitive of primitive
+  | `Primitive of 'xml primitive
   | `TypeVar of int
   | `Function of ('typ * 'typ)
   | `Record of 'row
   | `Variant of 'row
+  | `Table of 'row
   | `Recursive of (int * 'typ)
-  | `List of ('typ)
-  | `Mailbox of ('typ)
-  | `DB ]
+  | `Application of (string * 'typ)
+ ]
     deriving (Show, Pickle)
 
 type 'a stringmap = 'a Utility.StringMap.t
@@ -30,9 +33,12 @@ module Show_stringmap (A : Show) = Show_unprintable (struct type a = A.a stringm
 module Pickle_stringmap (A : Pickle) = Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 
 
-type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]     deriving (Show, Pickle)
-type 'typ field_spec_map_basis = ('typ field_spec_basis) stringmap     deriving (Show, Pickle)
-type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var      deriving (Show, Pickle)
+type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
+     deriving (Show, Pickle)
+type 'typ field_spec_map_basis = ('typ field_spec_basis) stringmap
+     deriving (Show, Pickle)
+type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var
+      deriving (Show, Pickle)
 type 'row row_var_basis =
     [ `RowVar of int option 
     | `RecRowVar of int * 'row ]

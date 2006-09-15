@@ -25,54 +25,34 @@ let trim_env =
             if mem k names then trim names rest
             else (k, v) :: (trim (k :: names) rest) in
     trim []
-
-(** bind_rec globals locals [name1, value1; name2, value2; name3, value3; ...]
-    Extend `locals' with mutually-recursive bindings for namen to valuen,
-    with the values values mutually recursive with respect to one another's 
-    names.
-*)
-let bind_rec globals locals defs =
-  (* First, create bindings for these functions, with no local
-     variables for now *)
-  let make_placeholder env (variable, value) =
-    match value with
-      | Syntax.Abstr (var, body, _) ->
-          bind env variable (`Function (var, [], [], body))
-  in
-  let new_env = trim_env (fold_left make_placeholder locals defs) in
-    (* Then, fill in the local variables with values *)
-  let fill_placeholder (label, result) =
-    label, (match result with
-              | `Function (var, _, _, body) ->
-                  `Function (var, (retain (freevars body) new_env), globals, body)
-              | _ -> result)
-  in
-    trim_env (map fill_placeholder new_env) 
       
 (* Remove toplevel bindings from an environment *)
 let remove_toplevel_bindings toplevel env = 
   filter (fun pair -> mem pair toplevel) env
 
 let lookup toplevel locals name = 
-  match lookup name locals with
-    | Some v -> v
-    | None -> match lookup name toplevel with
-        | Some v -> v
-        | None -> Library.primitive_stub name
+  try 
+    (match lookup name locals with
+      | Some v -> v
+      | None -> match lookup name toplevel with
+          | Some v -> v
+          | None -> Library.primitive_stub name)
+  with Not_found -> 
+    failwith("Internal error: variable \"" ^ name ^ "\" not in environment")
 
 let bind_rec globals locals defs =
   (* create bindings for these functions, with no local variables for now *)
   let make_placeholder = (fun env (variable, value) ->
                             (match value with
                                | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, [], [] (*globals*), body))
+                                   bind env variable (`Function (var, [], () (*globals*), body))
                                | _ -> raise (Runtime_error "TF146"))) in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
     (* fill in the local variables *)
   let fill_placeholder = (fun (label, result) ->
                             (match result with
                                | `Function (var, _, _, body) ->
-                                   label, `Function (var, (retain (freevars body) new_env), globals, body)
+                                   label, `Function (var, (retain (freevars body) new_env), (), body)
                                | _ -> (label, result)))
   in
     trim_env (map fill_placeholder new_env)
@@ -85,48 +65,6 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
             let selected, remaining = crack_row ref_label fields in
               (selected, field :: remaining)
 
-let rec equal l r =
-  match l, r with
-    | `Bool l  , `Bool r   -> l = r
-    | `Int l   , `Int r    -> eq_num l r
-    | `Float l , `Float r  -> l = r
-    | `Char l  , `Char r   -> l = r
-    | `Function _, `Function _ -> Pickle_result.pickleS l = Pickle_result.pickleS r
-    | `Record lfields, `Record rfields -> 
-        let rec one_equal_all = (fun alls (ref_label, ref_result) ->
-                                   match alls with
-                                     | [] -> false
-                                     | (label, result) :: alls when label = ref_label -> equal result ref_result
-                                     | all :: alls -> one_equal_all alls (ref_label, ref_result)) in
-          for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
-    | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
-    | `List (l), `List (r) -> length l = length r &&
-            fold_left2 (fun result x y -> result && equal x y) true l r
-    | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
-
-let rec less l r =
-  match l, r with
-    | `Bool l, `Bool r   -> l < r
-    | `Int l, `Int r     -> lt_num l r
-    | `Float l, `Float r -> l < r
-    | `Char l, `Char r -> l < r
-    | `Function _ , `Function _                  -> Pickle_result.pickleS l < Pickle_result.pickleS r
-        (* Compare fields in lexicographic order of labels *)
-    | `Record lf, `Record rf -> 
-        let order = sort (fun x y -> compare (fst x) (fst y)) in
-        let lv, rv = map snd (order lf), map snd (order rf) in
-        let rec compare_list = function
-          | [] -> false
-          | (l,r)::_ when less l r -> true
-          | (l,r)::_ when less r l -> false
-          | _::rest                -> compare_list rest in
-          compare_list (combine lv rv)
-    | `List (l), `List (r) ->
-        (try for_all2 less l r
-         with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
-    | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
-
-let less_or_equal l r = equal l r || less l r
         
 let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
@@ -139,7 +77,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
                | `Bool value -> Query.Boolean value
                | `Int value -> Query.Integer value
                | `Float value -> Query.Float value
-               | `List (`Char _::elems) as c  
+               | `List (`Char _::_) as c  
                  -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
                | r -> failwith("Internal error: variable in query " ^ Sql.string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
@@ -156,10 +94,49 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
       | Query.Query qry ->
           Query {qry with condition = normalise_expression qry.condition}
       | expr -> expr
+  in
+  let normalise_tables  = map (function 
+                                 | `TableName t, alias -> `TableName t, alias
+                                 | `TableVariable var, alias ->
+                                     (match lookup toplevel env var with
+                                         `Table(_, tableName, _) -> `TableName tableName, alias
+                                       | _ -> failwith "Internal Error: table source was not a table!")
+                              ) 
   in {qry with
+        tables = normalise_tables qry.tables;
         condition = normalise_expression qry.condition;
         offset = normalise_expression qry.offset;
         max_rows = opt_map normalise_expression qry.max_rows}
+
+(** [get_row_field_type field row]: what type has [field] in [row]? 
+    TBD: Factor this out.
+*)
+exception NotFound of string
+
+let get_row_field_type field : Types.row -> Types.datatype = function
+  | (fields, _) ->
+      (match StringMap.find field fields with
+          `Present t -> t
+         | _ -> raise(NotFound field))
+  | _ -> assert false (* failwith("Internal error: non-record in get_row_field_type") *)
+
+let query_result_types (query : Query.query)
+    (table_defs : ((string * Types.row) list)) 
+    : (string * Types.datatype) list =
+  try (
+    let get_col_type table_alias col_name =
+      let row = assoc table_alias table_defs in
+        get_row_field_type col_name row
+    in
+      map (fun col ->
+             (col.renamed,
+              get_col_type col.table_renamed col.name))
+        query.Query.result_cols
+  ) with NotFound field -> failwith("Field " ^ field ^ " from " ^ 
+                                      Sql.string_of_query query ^
+                                      " was not found in tables " ^ 
+                                      mapstrcat "," fst table_defs ^ ".")
+  
 
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function
@@ -224,8 +201,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	           value which will later be applied *)
                 interpret globals locals param
 	          (FuncApply(value, locals) :: cont)
-            | (FuncApply(func, locals)) -> 
-                (match func with
+            | (FuncApply(func, locals)) ->  
+               (match func with
                    | `Function (var, fnlocals, fnglobals, body) ->
 		       (* Interpret the body in the following environments:
 		          locals are augmented with function locals and
@@ -260,10 +237,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
             | (BinopApply(locals, op, lhsVal)) ->
 	        let result = 
                   (match op with
-                     | EqEqOp -> bool (equal lhsVal value)
-                     | NotEqOp -> bool (not (equal lhsVal value))
-                     | LessEqOp -> bool (less_or_equal lhsVal value)
-                     | LessOp -> bool (less lhsVal value)
+                     | EqEqOp -> bool (Library.equal lhsVal value)
+                     | NotEqOp -> bool (not (Library.equal lhsVal value))
+                     | LessEqOp -> bool (Library.less_or_equal lhsVal value)
+                     | LessOp -> bool (Library.less lhsVal value)
 	             | UnionOp -> 
                          (match lhsVal, value with
 	                    | `List (l), `List (r)
@@ -277,6 +254,11 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		            | `Record fields -> 
 		                `Record ((label, value) :: fields)
 		            | _ -> raise (Runtime_error "TF077"))
+	             | MkTableHandle (row) ->
+			 (match lhsVal with
+			    | `Database (db, _) ->
+				apply_cont globals cont (`Table(db, charlist_as_string value, row))
+			    | _ -> failwith ("Internal Error #56143432"))
 	          )
 	        in
 	          apply_cont globals cont result
@@ -294,20 +276,29 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
-	               apply_cont globals cont (let args = charlist_as_string value in
-                                                let driver, params = parse_db_string args in
-                                                  `Database (db_connect driver params))
-                   | QueryOp(query, datatype) ->
+                       let result = (let driver = charlist_as_string (links_project "driver" value)
+				     and name = charlist_as_string (links_project "name" value)
+				     and args = charlist_as_string (links_project "args" value) in
+				     let params =
+				       (if args = "" then name
+					else name ^ ":" ^ args)
+				     in
+                                       `Database (db_connect driver params)) in
+	               apply_cont globals cont result
+                   | QueryOp(query, table_aliases) ->
                        let result = 
                          match value with
-                           | `Database (db, _) ->
+                           | `List(tbls) ->
+                               let (dbs, table_defs) = split(map (function `Table(db, tname, row) -> (db, row)
+                                                              | _ -> failwith "THX1138") 
+                                                         tbls) in
+                                 assert (all_equiv (=) dbs);
+                                 let table_defs = combine table_aliases table_defs in
+                                 let db = hd(dbs) in
+                                 let result_types = query_result_types query table_defs in
        	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
-		                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 let result = Database.execute_select datatype query_string db in
-                                   (* debug("    result:" ^ string_of_result result); *)
-                                   result
-                                     (* disable actual queries *)
-                                     (*                                   `List(`List, []) *)
+                                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
+		                 Database.execute_select result_types query_string db
                            | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
@@ -399,7 +390,7 @@ fun globals locals expr cont ->
       let varval = (lookup globals locals name) in
 	apply_cont globals cont varval
   | Syntax.Abstr (variable, body, _) ->
-      apply_cont globals cont (`Function (variable, retain (freevars body) locals, [] (*globals*), body))
+      apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
   | Syntax.Apply (Variable ("recv", _), Record_empty _, _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
   | Syntax.Apply (fn, param, _) ->
@@ -411,8 +402,9 @@ fun globals locals expr cont ->
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (variables, body, _) ->
-      let new_env = bind_rec globals locals variables in
+      let new_env = bind_rec globals locals (List.map (fun (n,v,_) -> (n,v)) variables) in
         interpret globals new_env body cont
+  | Syntax.Xml_text (value, _) -> apply_cont globals cont (string_as_charlist value)
   | Syntax.Xml_element _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
   | Syntax.Xml_element _ as xml when Forms.isinput xml -> 
@@ -426,13 +418,11 @@ fun globals locals expr cont ->
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_element (tag, [], (child::children), _) -> 
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
-  | Syntax.Xml_cdata (text, _) ->
-      apply_cont globals cont (`List [`XML (Result.Text text)])
 
   | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
   | Syntax.Record_extension (label, value, record, _) ->
       eval record (BinopRight(locals, RecExtOp label, value) :: cont)
-  | Syntax.Record_selection (label, label_variable, variable, value, body, (pos, datatype, lbl)) ->
+  | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Record_selection_empty (value, body, _) ->
       eval value (Ignore(locals, body) :: cont)
@@ -451,22 +441,37 @@ fun globals locals expr cont ->
   | Syntax.Xml_concat (l, r, _) ->
       eval l (BinopRight(locals, UnionOp, r) :: cont)
 
-  | Syntax.For (expr, var, value, _) as c ->
+  | Syntax.For (expr, var, value, _) ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-  | Syntax.Table (database, s, query, (_, datatype, _)) ->
-      eval database (UnopApply(locals, QueryOp(query, datatype)) :: cont)
+	(* FIXME: the datatype should be explicit in the type-erased TableHandle *)
+(*   | Syntax.Table (database, s, query, _) -> *)
+(*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
+
+  | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
+      eval database (BinopRight(locals, MkTableHandle(row), table_name) :: cont)
+
+  | Syntax.TableQuery (ths, query, d) ->
+      (* [ths] is an alist mapping table aliases to expressions that
+         provide the corresponding TableHandles. We evaluate those
+         expressions and rely on them coming through to the continuation
+         in the same order. That way we can stash the aliases in the
+         continuation frame & match them up later. *)
+      let aliases, th_exprs = split ths in
+        eval (Syntax.list_expr d th_exprs)
+          (UnopApply(locals, QueryOp(query, aliases)) :: cont)
+          
   | Syntax.Escape (var, body, _) ->
       let locals = (bind locals var (`Continuation cont)) in
         interpret globals locals body cont
   | Syntax.SortBy (list, byExpr, _) ->
-      eval list cont
+      eval list cont (* ! *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
-  | Syntax.HasType(expr, typ, _) ->
+  | Syntax.HasType(expr, _, _) ->
       eval expr cont
-  | Syntax.Placeholder (l, _) -> 
+  | Syntax.Placeholder (_, _) -> 
       failwith("Internal error: Placeholder at runtime")
 
 
@@ -480,7 +485,7 @@ and interpret_safe globals locals expr cont =
 
 let run_program (globals : environment) exprs : (environment * result)= 
   try (
-    interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs));
+    ignore (interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
     failwith "boom"
   ) with
     | TopLevel s -> s

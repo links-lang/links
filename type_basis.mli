@@ -1,27 +1,27 @@
-(* Basis for types *)
+(** Low-level representation of Links types. *)
 
-type type_var_set = Utility.IntSet.t
+(** {1 Representation of datatypes} *)
 
-(* Types for datatypes *)
-
-(* TM: The former `XMLitem constant constructor has been changed by the
-   `Xml constructor which takes in argument the XML type informations. *)
-
-type primitive =
-    [ `Bool | `Int | `Char | `Float | `Abstract of string ]
+type 'xml primitive = [
+  | `Bool
+  | `Int
+  | `Char
+  | `Float
+  | `XML of 'xml
+  | `DB
+  | `Abstract of string ]
 
 type ('typ, 'row, 'xml) type_basis = [
   | `Not_typed
-  | `Xml of 'xml
-  | `Primitive of primitive
+  | `Primitive of 'xml primitive
   | `TypeVar of int
   | `Function of ('typ * 'typ)
   | `Record of 'row
   | `Variant of 'row
+  | `Table of 'row
   | `Recursive of (int * 'typ)
-  | `List of ('typ)
-  | `Mailbox of ('typ)
-  | `DB ]
+  | `Application of (string * 'typ)
+ ]
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
 type 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t
@@ -33,13 +33,17 @@ type 'row row_var_basis =
 type type_variable = [`TypeVar of int | `RowVar of int]
 type quantifier = type_variable
 
+type type_var_set = Utility.IntSet.t
+
 type 'typ assumption_basis = ((quantifier list) * 'typ)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
 
 val environment_values : 'typ environment_basis -> 'typ assumption_basis list
 val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
+  (** [lookup var typing_env] returns the type of the variable [var] in
+      the environment [typing_env]*)
 
-(* Generation of fresh type variables *)
+(** Generate a fresh type variable *)
 val fresh_raw_variable : unit -> int
 
 module type TYPEOPS =
@@ -115,7 +119,7 @@ module Show_assumption_basis (A : Show.Show) : Show.Show with type a = (A.a) ass
 module Show_environment_basis (A : Show.Show) : Show.Show with type a = (A.a) environment_basis
 
 
-module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) (C : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a,C.a) type_basis
+module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) (C : Pickle.Pickle): Pickle.Pickle with type a = (A.a,B.a,C.a) type_basis
 module Pickle_field_spec_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_basis
 module Pickle_field_spec_map_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_map_basis
 module Pickle_row_var_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) row_var_basis
