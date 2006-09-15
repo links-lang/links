@@ -1,0 +1,34 @@
+var db = database (name="todo" | getDatabaseConfig());
+var items = table "items" with (name : String) from db;
+
+fun showList() {
+<html>
+ <body>
+  <form l:onsubmit="{add(item)}" method="POST">
+    <input l:name="item"/>
+    <button type="submit">Add item</button>
+  </form>
+  <table>
+   {for (var item <-- items)
+     <tr><td>{stringToXml(item.name)}</td>
+         <td><form l:onsubmit="{remove(item.name)}" method="POST">
+              <button type="submit">Done</button>
+             </form>
+         </td>
+     </tr>}
+   </table>
+  </body>
+</html>
+}
+
+fun add(name) {
+ insert items values [(name=name)];
+ showList()
+}
+
+fun remove(name) {
+ delete (var r <-- items) where (r.name == name);
+ showList()
+}
+
+showList()

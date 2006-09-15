@@ -1,0 +1,149 @@
+INSTALLATION OVERVIEW
+
+To install Links, you'll need:
+
+  * OCaml
+  * A webserver that can run CGI programs.
+
+If you want to use a database, you should have the database as well as
+the OCaml bindings for it. Database systems currently supported by
+Links are PostgreSQL, MySQL, and SQLite.
+
+SYSTEM REQUIREMENTS
+
+If you can run OCaml, you should be able to compile and run Links. It
+is known to build from source with OCaml versions 3.08.3 and greater
+on Linux, Cygwin, and MacOS X.
+
+Windows users are encouraged to use the Links binary once it becomes
+available. It is possible to use the MSVC version of OCaml to build
+from source, but this requires Cygwin or MinGW to be installed. Also,
+the MSVC binary version of OCaml 3.09.0 on Windows will not build
+Links from source. This is due to a bug in OCaml.
+
+INSTALLING OCAML
+
+Visit http://caml.inria.fr/ and look for a "Download" link. Download
+the latest stable OCaml package and follow the instructions provided
+with the OCaml for installing it on your platform.
+
+BUILDING LINKS
+
+To build, move to the Links source directory (wherever this INSTALL
+file is) and run the following:
+
+  $ make nc
+
+If this fails, try:
+
+  $ make 
+
+This builds the byte-code version of Links, which should work on more
+platforms than the other (native-code) version.
+
+Now you should have an executable in the current directory called
+`links'.
+
+RUNNING LINKS
+
+Start up the interactive interpreter using:
+
+  $ ./links
+
+You should see a Links prompt like this:
+
+  links> _
+
+Try evaluating some simple expressions. See the manual for more info
+on writing Links expressions. Use 
+
+  links> @quit; 
+
+to exit the interactive interpreter.
+
+To run Links web applications, see RUNNING WEB APPLICATIONS, below.
+
+RUNNING THE TESTS
+
+Note: make requires a unix-like environment in
+order to run (this includes Cygwin and MinGW on Windows).
+
+To check whether Links is working under your platform, try running the
+automated tests as follows:
+
+  $ make test-raw
+
+This should give you a lot of output.
+
+RUNNING WEB APPLICATIONS
+
+Note: the install-demos script requires a unix-like environment in
+order to run (this includes Cygwin and MinGW on Windows).
+
+Links works as an ordinary interpreter for CGI programs. To run a
+Links web program, first make sure you have a working web server
+that's configured to run CGI programs. Most web servers are configured
+to do so by default. Refer to the documentation for your web server to
+find out where to install CGI programs. Here, we'll call this
+directory the cgi-bin directory, although it may not be called that on
+your system; this is fine: just use the name of that directory
+whenever we refer to `the cgi-bin directory'. 
+
+To install the Links examples in your web directory and configure them
+for your Links interpreter, just run
+
+  $ ./install-examples
+
+in the links directory. This will ask a number of questions about
+where to install the examples. It installs:
+ - the examples in your cgi directory
+ - the javascript library in the specified directory
+ - the sources and an HTML file in the specified directory
+ - a configuration file in the cgi directory 
+
+Now point your web browser at one of these examples. The URL for the
+program will depend on your web server configuration and the place
+where the demo was installed. Refer to your web server documentation
+to find out how URLs on your server are formed. It may be something
+such as
+
+    http://localhost/cgi-bin/draggable.cgi
+
+You should see the example right away. Have fun playing with it!
+
+When you write your own Links programs, to use them under your web
+server, you'll have to add a "shebang" line as the first line of your
+program. The shebang line looks like this:
+
+  #!/home/ezra/links/links --config=config
+
+Where /home/ezra/links/links is the path to your Links interpreter,
+and config is a configuration file.
+
+The configuration file can contain a number of name=value pairs. It
+is important that jsliburl is set to the base url for the javascript
+library. Each setting must appear on a separate line, and white space
+is significant.
+
+DATABASE SUPPORT
+
+In order to use the database you need to copy Makefile.config.sample
+to Makefile.config, and fill in the path to the appropriate OCaml
+database library. Then you need to rebuild links with
+
+ make nc
+
+Refer to the examples directory for instructions on priming the
+databases. The examples all use getDatabaseConfig() in order to read
+the database configuration from the configuration file. The settings
+'database_driver' and 'database_args' should be included in the
+configuration file.
+
+database_driver can take the values
+
+  postgres, mysql or sqlite
+
+database_args is only relevant for postgres and mysql. It takes the
+form
+ 
+  host:port:user:password

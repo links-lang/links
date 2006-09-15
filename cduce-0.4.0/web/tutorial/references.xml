@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="tutorial_references">
+
+<title>References</title>
+<left>
+<boxes-toc/>
+<p>
+You can cut and paste the code on this page and 
+test it on the <a href="http://reglisse.ens.fr/cgi-bin/cduce">online interpreter</a>.
+</p>
+</left>
+<box title="Introduction" link="introduction">
+
+<b style="color:#FF0080">TO BE DONE (for the moment please consult the user manual)</b>
+
+</box>
+
+
+<box title="Advanced programming" link="adv">
+
+<p>
+The fact that reference types are encoded, rather than primitive, brings some
+advantages. Among these it is noteworthy that, thanks to the encoding, the default
+behavior of the <code>get</code> and <code>set</code> functions can be
+modified. So a programmer can define a reference that whenever is read, records
+the access in a log file, or it performs some sanity checks before performing a
+writing.
+</p>
+
+<p>
+For instance the following template program, shows a way to define an integer reference <code>x</code> that whenever it is read executes some extra code, while whenever it is written  performs some checks and possibly raises an exception:
+</p>
+<sample><![CDATA[
+let x : ref Int = 
+   let hidden = ref Int 0 in
+     { get = (%%some_extra_code%%; hidden . get) ;
+       set = fun (x :Int):[] =
+               if %%some_condition%% 
+                  then hidden . set(x)
+                  else raise "Invalid assignment"
+     }
+]]></sample>
+<p>
+Another advantage is that it is possible to define the types for read only and write only channels, which can be specialized respectively in a covariant and contravariant way.
+
+For instance if the body of a function performs on some integer reference passed as argument only read operations, then it can specify its input type as <code>fun ( x :{ get = []->%%T%% ; ..} )...</code>. In this case the function can accept as argument any reference of type <code>ref %%S%%</code>, with <code>%%S%%</code> subtype of <code>%%T%%</code>.
+</p>
+ 
+</box>
+
+<box title="'ref Empty' is not Empty?!" link="empty">
+
+<p>
+However the use of the encoding also causes some weirdness. For instance a
+consequence of the encoding is that the type <code>ref Empty</code> is inhabited
+(that is there exists some value of this type).  We invite the reader to stop reading the
+rest of this section and try as an exercise to define a value of type <code>ref
+Empty</code>.
+</p>
+
+<p>
+The key observation to define a value of  <code>ref Empty</code> is that for every type <code>%%T%%</code> the type
+<code>%%T%% -> Empty</code> is inhabited. Of course it is inhabited only by
+functions that loop forever (since if such a function returned a value this
+value would be of type <code>Empty</code>). But, for instance, <code> fun f(x :%%T%%):Empty = f x</code> is a value of type <code>%%T%% -> Empty</code>.
+</p>
+
+<p>
+By using the observation above it is then easy to explicitly define a reference <code>y</code> of type <code>ref Empty</code>, as follows:
+</p>
+<sample><![CDATA[
+let y : ref Empty = 
+  let fun f (x :[]):Empty = f x in
+    { get = f ;
+      set = fun (x :Empty):[] = []}
+]]></sample>
+<p>
+Of course such a reference is completely useless, but its existence 
+yields some unexpected behavior when matching reference types. Consider
+the following function:
+</p>
+<b style="color:#FF0080">TO BE DONE</b>
+
+
+<sample><![CDATA[
+
+]]></sample>
+<p>
+The matching expression is not exhaustive since it does not deal with the case where the argument is of type <code>ref (Int &amp; Bool)</code> that is <code>ref Empty</code>
+
+</p>
+</box>
+
+
+
+
+
+</page>

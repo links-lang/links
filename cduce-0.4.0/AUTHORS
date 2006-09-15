@@ -1,0 +1,12 @@
+Main developer:
+  Alain Frisch
+
+Research project leaders, documentation:
+  Alain Frisch
+  Giuseppe Castagna
+  Véronique Benzaken
+
+Code contribution:
+  Cédric Miachon (author and maintainer of the CQL subset)
+  Julien Demouth (original implementation of the OCaml/CDuce interface)
+  Stefano Zacchiroli (original implementation of the XML Schema support)

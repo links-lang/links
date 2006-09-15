@@ -1,0 +1,2 @@
+include "docbookx.cd"        (* Docbook 4.3 DTD *)
+include "docbook-categ.cd"   (* Categories (Inline, ...) from this DTD *)

@@ -1,0 +1,144 @@
+<page name="manual_schema_samples">
+
+<title>XML Schema sample documents</title>
+
+<box title="Sample XML documents" link="sample">
+  <p>
+    All the examples you will see in the manual section regarding CDuce's XML
+    Schema support are related to the XML Schema Document <code>mails.xsd</code>
+    and to the XML Schema Instance <code>mails.xml</code> reported below.
+  </p>
+</box>
+
+<box title="mails.xsd" link="mails_xsd">
+  <sample><![CDATA[
+<!-- mails.xsd -->
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+ <xsd:element name="mails" type="mailsType" />
+
+ <xsd:complexType name="mailsType">
+  <xsd:sequence minOccurs="0" maxOccurs="unbounded">
+   <xsd:element name="mail" type="mailType" />
+  </xsd:sequence>
+ </xsd:complexType>
+
+ <xsd:complexType name="mailType">
+  <xsd:sequence>
+   <xsd:element name="envelope" type="envelopeType" />
+   <xsd:element name="body" type="bodyType" />
+   <xsd:element name="attachment" type="attachmentType"
+		minOccurs="0" maxOccurs="unbounded" />
+  </xsd:sequence>
+  <xsd:attribute use="required" name="id" type="xsd:integer" />
+ </xsd:complexType>
+
+ <xsd:element name="header">
+  <xsd:complexType>
+   <xsd:simpleContent>
+    <xsd:extension base="xsd:string">
+     <xsd:attribute ref="name" use="required" />
+    </xsd:extension>
+   </xsd:simpleContent>
+  </xsd:complexType>
+ </xsd:element>
+
+ <xsd:element name="Date" type="xsd:dateTime" />
+
+ <xsd:complexType name="envelopeType">
+  <xsd:sequence>
+   <xsd:element name="From" type="xsd:string" />
+   <xsd:element name="To" type="xsd:string" />
+   <xsd:element ref="Date" />
+   <xsd:element name="Subject" type="xsd:string" />
+   <xsd:element ref="header" minOccurs="0" maxOccurs="unbounded" />
+  </xsd:sequence>
+  <xsd:attribute name="From" type="xsd:string" use="required" />
+ </xsd:complexType>
+
+ <xsd:simpleType name="bodyType">
+  <xsd:restriction base="xsd:string" />
+ </xsd:simpleType>
+
+ <xsd:complexType name="attachmentType">
+  <xsd:group ref="attachmentContent" />
+  <xsd:attribute ref="name" use="required" />
+ </xsd:complexType>
+
+ <xsd:group name="attachmentContent">
+  <xsd:sequence>
+   <xsd:element name="mimetype">
+    <xsd:complexType>
+     <xsd:attributeGroup ref="mimeTypeAttributes" />
+    </xsd:complexType>
+   </xsd:element>
+   <xsd:element name="content" type="xsd:string" minOccurs="0" />
+  </xsd:sequence>
+ </xsd:group>
+
+ <xsd:attribute name="name" type="xsd:string" />
+
+ <xsd:attributeGroup name="mimeTypeAttributes">
+  <xsd:attribute name="type" type="mimeTopLevelType" use="required" />
+  <xsd:attribute name="subtype" type="xsd:string" use="required" />
+ </xsd:attributeGroup>
+
+ <xsd:simpleType name="mimeTopLevelType">
+  <xsd:restriction base="xsd:string">
+   <xsd:enumeration value="text" />
+   <xsd:enumeration value="multipart" />
+   <xsd:enumeration value="application" />
+   <xsd:enumeration value="message" />
+   <xsd:enumeration value="image" />
+   <xsd:enumeration value="audio" />
+   <xsd:enumeration value="video" />
+  </xsd:restriction>
+ </xsd:simpleType>
+
+</xsd:schema>
+]]></sample>
+</box>
+
+<box title="mails.xml" link="mails_xml">
+  <sample><![CDATA[
+<!-- mails.xml -->
+
+<mails>
+  <mail id="0">
+    <envelope From="bill@microsoft.com">
+      <From>user@unknown.domain.org</From>
+      <To>user@cduce.org</To>
+      <Date>2003-10-15T15:44:01Z</Date>
+      <Subject>I desperately need XML Schema support in CDuce</Subject>
+      <header name="Reply-To">bill@microsoft.com</header>
+    </envelope>
+    <body>
+      As subject says, is it possible to implement it?
+    </body>
+    <attachment name="signature.doc">
+      <mimetype type="application" subtype="msword"/>
+      <content>
+	### removed by spamoracle ###
+      </content>
+    </attachment>
+  </mail>
+  <mail id="1">
+    <envelope From="zack@cs.unibo.it">
+      <From>zack@di.ens.fr</From>
+      <To>bill@microsoft.com</To>
+      <Date>2003-10-15T16:17:39Z</Date>
+      <Subject>Re: I desperately need XML Schema support in CDuce</Subject>
+    </envelope>
+    <body>
+      user@unknown.domain.org wrote:
+      > As subject says, is possible to implement it?
+
+      Sure, I'm working on it, in a few years^Wdays it will be finished
+    </body>
+  </mail>
+</mails>
+]]></sample>
+</box>
+
+</page>

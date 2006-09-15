@@ -1,0 +1,1885 @@
+<!doctype book PUBLIC "-//Davenport//DTD DocBook V3.0//EN" [
+  <!ENTITY dilbert-recycle SYSTEM "dilbert-recycle.eps" ndata eps>
+  <!ENTITY ui "&mu;ITRON">
+  <!ENTITY www "World Wide Web">
+  <!ENTITY cygnus "Cygnus">
+  <!ENTITY cygnus-full "Cygnus Solutions">
+  <!-- <!ENTITY cygnus-full "The company formerly known as Cygnus"> -->
+  <!ENTITY cygnus-street-address "
+<corpname>Cygnus Solutions</corpname>
+<address>
+<street>1325 Chesapeake Terrace</street>
+<city>Sunnyvale</city>
+<state>CA</state>
+<postcode> 94089</postcode>
+</address>
+">
+  <!ENTITY cygnus-copyright "<YEAR>1997, 1998</YEAR><HOLDER>Cygnus
+            Solutions</HOLDER>">
+  <!ENTITY cygnus-code-copyright "
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Copyright (C) 1997, 1998 Cygnus Solutions.
+
+This is copyrighted software that may only
+be reproduced, modified, or distributed
+under license from Cygnus Solutions.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+">
+  <!ENTITY cygnus-legal-notice SYSTEM "CYGNUS-TERMS">
+]>
+
+<book id="docbook-intro">
+  <!-- I am putting the title in the bookinfo, rather than here as a
+  standalone -->
+  <bookinfo>
+    <date>1998-10-19</date>
+    <title>Get Going With DocBook</title>
+    <abbrev>DocBook</abbrev>
+    <subtitle>Notes for Hackers</subtitle>
+    <releaseinfo>documentation in progress</releaseinfo>
+    <authorgroup>
+      <author>
+	<firstname>Mark</firstname>
+	<!-- <othername>&ldquo;dude&rdquo;</othername> -->
+	<surname>Galassi</surname>
+	<affiliation>
+	  <orgname>&cygnus-full;</orgname>
+	</affiliation>
+	<!-- <authorblurb>
+	  <title>Mark Galassi</title>
+	  <para>
+	    His home page is at <ulink
+	    URL="http://nis-www.lanl.gov/~rosalia/">this
+	    location</ulink>
+	    </para>
+	</authorblurb>
+        -->
+      </author>
+    </authorgroup>
+    <address>
+      <email>rosalia@galassi.org</email>
+    </address>
+    <copyright>
+      <year>1998</year>
+      <holder>Mark Galassi</holder>
+    </copyright>
+    <legalnotice><para>
+      This document can be freely redistributed according to the terms
+      of the GNU General Public License.</para>
+    </legalnotice>
+    <revhistory>
+      <revision>
+	<revnumber>0.0</revnumber>
+	<date>1997-10-11</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Initial revision; mostly just an
+	  outline</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.1</revnumber>
+	<date>1997-11-01</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Firmed up the outline, based on the evolution of
+	&cygnus;'s DocBook effort</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.2</revnumber>
+	<date>1997-11-09</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Have enough meat in there that I have announced
+	  it.</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.3</revnumber>
+	<date>1997-12-31</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Separated the tutorial (this document) from the
+	  style guide for my project at Cygnus.  This tutorial can now
+	  be distributed on its own.</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.4</revnumber>
+	<date>1998-02-14</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Added some blurbs on descriptions and made the
+	  first web release of this document.</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.5</revnumber>
+	<date>1998-06-12</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Added Sara Mitchell's brief essay on SGML marked
+	  sections as its own chapter.</revremark>
+      </revision>
+      <revision>
+	<revnumber>0.6</revnumber>
+	<date>1998-10-19</date>
+	<authorinitials>rosalia@galassi.org</authorinitials>
+	<revremark>Mentioned that this document is GPLed, did a bit of
+	  cleanup, and added mention of my FrameMaker+SGML
+	  EDD.</revremark>
+      </revision>
+    </revhistory>
+  </bookinfo>
+  <toc></toc>
+  <!-- <lot></lot> -->
+  <chapter id="What-is-this">
+    <title>What is this?</title>
+    <sect1 id="a-tutorial-for-hacker-writers">
+	<title>A tutorial for hacker&ndash;writers</title>
+      <para>
+	This booklet has two main goals:
+      </para>
+      <para>
+	The first is present a tutorial on writing documentation that
+	will be used in a particular project at Cygnus.
+      </para>
+      <para>
+	The second is for me to clarify my thoughts on how I think the
+	books we ship with should be structured.
+      </para>
+      <para>
+	A third goal, which is not as pressing, is that this booklet
+	should become a tutorial for <emphasis>all</emphasis> people
+	at Cygnus (and elsewhere; the GNOME project, for example is
+	using DocBook) who will be writing notes for future
+	incorporation into Cygnus documentation.
+      </para>
+      <para>
+	If you just want the tutorial with no further background
+	information, please jump right to <XRef Linkend="Get-going">.
+      </para>
+    </sect1>
+    <sect1 id="an-example-of-how-to-use-docbook-structure">
+      <title>An example of how to use DocBook structure</title>
+      <para>
+	This booklet is a valid demonstration of how to use DocBook
+	elements for writing Cygnus documentation.  As the &cygnus;
+	<emphasis>tag team</emphasis> refines the &cygnus; style and
+	typical tag usage, this document will be updated to reflect
+	that style and usage.</para>
+      <para>
+	Whenever I mention &cygnus;, please note that the &cygnus;
+	stylesheets and all the tools we use are being made available
+	to the world at large, so projects outside of &cygnus; can
+	also use these stylesheets, our tools, and this tutorial.
+      </para>
+      <para>
+	If you are a hacker working on a project and you need to write
+	an essay, or if you would like to document your portion of the
+	project, you can use this booklet as an example of how to
+	structure your document and what DocBook elements you should
+	use to mark up your text.
+      </para>
+    </sect1>
+    <sect1 id="not-an-example-for-all-situations">
+      <title><emphasis>Not</emphasis> an example for all
+	situations</title>
+      <para>
+	This booklet is a tutorial written in quasi&ndash;slapstick
+	style &mdash; I use the words <emphasis>I</emphasis> and
+	<emphasis>you</emphasis> liberally.  You should not treat it
+	as an example of how to write a reference manual, or as an
+	example of how to write a more stuffy tutorial.
+      </para>
+    </sect1>
+  </chapter>
+  <chapter id="Get-going">
+    <title>Get going</title>
+    <para>
+      Here is a brutal sequence of steps that will get you started
+      writing DocBook documents.
+    </para>
+    <para>
+      If you actually want to <emphasis>understand</emphasis> what is
+      going on, you might want to read <xref LinkEnd="Concepts"> first
+      and then come back to this chapter.
+    </para>
+    <para>
+      This chapter will not tell you how to get the tools installed
+      &mdash; it is assumed that your system administrator has done
+      that for you.  If she or he has not done so, there is an
+      appendix that gives instructions to get DocBook editing and
+      processing tools.  There are sections for <xref
+      LinkEnd="Obtaining-and-installing-UNIX"> (with free tools),
+      <xref LinkEnd="Obtaining-and-installing-Win32"> (with free
+      tools) and <xref
+      LinkEnd="Obtaining-and-installing-FrameMaker-SGML">.
+    </para>
+    <sect1 id="hello-world">
+	<title>Hello, world</title>
+      <para>
+	Here's a simple DocBook document to get going.  I will show
+	you how to write this document using explicit element tags,
+	but if you are using an authoring tool that provides a high
+	level interface, just choose the same tags using that
+	interface.
+      </para>
+      <example>
+	<title>Bare bones DocBook document &mdash; the source</title>
+      <programlisting role="sgml">
+&lt;!doctype book PUBLIC "-//Davenport//DTD DocBook V3.0//EN" [
+]>
+&lt;book>
+  &lt;bookinfo>
+    &lt;date>1997-10-11&lt;/date>
+    &lt;title>My first booklet&lt;/title>
+    &lt;subtitle>it even has a subtitle&lt;/subtitle>
+  &lt;/bookinfo>
+  &lt;toc>&lt;/toc>
+  &lt;!-- We are done with the preliminaries, now we can start with
+          the body of the document -->
+  &lt;chapter>
+    &lt;title>My first chapter&lt;/title>
+    &lt;para>Here's a paragraph of text because it is stylistically
+      poor to start a section right after the chapter title.&lt;/para>
+    &lt;sect1>
+      &lt;title>A section in that first chapter&lt;/title>
+      &lt;para>All I need is a single paragraph of text to make the
+        section valid.&lt;/para>
+    &lt;/sect1>
+  &lt;/chapter>
+  &lt;appendix>
+    &lt;title>Remaining details&lt;/title>
+    &lt;para>Although this booklet is quite complete, here I will
+      mention some details I never got to.&lt;/para>
+    &lt;sect1>
+      &lt;title>Use of the word dude&lt;/title>
+      &lt;para>Here's an example of how to say
+        &lt;emphasis>dude&lt;/emphasis>: DUDE.&lt;/para>
+    &lt;/sect1>
+  &lt;/appendix>
+&lt;/book>
+      </programlisting>
+      </example>
+      <bridgehead>Brief explanation</bridgehead>
+      <para>
+	This example, and the others in this chapter, are meant to get
+	you used to <acronym>SGML</acronym>/DocBook markup, but a
+	minimal explanation should be given here.
+      </para>
+      <para>
+	The first line, with the <literal>&lt;!doctype book</literal>
+	stuff, is boiler plate.  You can ignore it except to note that
+	it says <literal>book</literal>, and the document then begins
+	with the &lt;<sgmltag>book</sgmltag>&gt; tag.  These must
+	agree.
+      </para>
+      <para>
+	The special words wrapped with &lt; and &gt; symbols are
+	called <firstterm>tags</firstterm>, and they are used to
+	delimit <firstterm>elements</firstterm>.  Elements are
+	structural parts of the the document, like chapters, titles,
+	paragraphs and so forth.
+      </para>
+      <para>
+	Another feature of interest in this brief document is the fact
+	that the &lt;<sgmltag>chapter</sgmltag>&gt; and
+	&lt;<sgmltag>sect1</sgmltag>&gt; have to be followed by a
+	&lt;<sgmltag>title</sgmltag>&gt; element.
+      </para>
+      <bridgehead>Process and view it</bridgehead>
+      <para>
+	You might be curious to see how your <acronym>SGML</acronym>
+	document will be rendered in both a hardcopy&ndash;oriented
+	typesetting output, and in online hypertext output.
+      </para>
+      <procedure>
+	<para>
+	  I will outline the steps you should carry out on UNIX to
+	  generate postscript and <acronym>HTML</acronym> output using
+	  the program <application>jade</application> and the
+	  <acronym>DSSSL</acronym> stylesheets we use at &cygnus;.
+	  Assuming your file is called
+	  <filename>myfile.sgml</filename>, you can type the following
+	  steps:
+	</para>
+	<step>
+	  <para>Use <application>jade</application> with the
+	  transformation <acronym>DSSSL</acronym> to convert DocBook
+	    to <acronym>HTML</acronym>.</para>
+	  <literallayout><prompt>$ </prompt><userinput> jade -d /usr/lib/sgml/stylesheets/dbtohtml.dsl -t sgml myfile.sgml > myfile.html</userinput></literallayout>
+	  <para>
+	  The free tools also provide a utility shell script
+	  <command>db2html</command> which does the same.  So you can
+	  just run:</para>
+	  <literallayout><prompt>$ </prompt><userinput> db2html myfile.sgml</userinput></literallayout>
+	</step>
+	<step>
+	  <para>Use <command>jade</command> with the real
+	    <acronym>DSSSL</acronym> to convert DocBook to
+	    <application>TeX</application>.</para>
+	  <literallayout><prompt>$ </prompt><userinput> jade -d /usr/lib/sgml/stylesheets/docbook.dsl -t tex myfile.sgml > myfile.tex</userinput></literallayout>
+	</step>
+	<step>
+	  <para>Use <application>TeX</application> with the jadetex
+	  macros to process <filename>myfile.tex</filename>.</para>
+	  <literallayout><prompt>$ </prompt><userinput> jadetex myfile.tex</userinput></literallayout>
+	</step>
+	<step>
+	  <para>Use <command>dvips</command> to generate a
+	    postscript file from <filename>myfile.dvi</filename>.</para>
+	  <literallayout><prompt>$ </prompt><userinput> dvips myfile.dvi</userinput></literallayout>
+	  <note><para>The steps to create the postscript file can be
+	    replaced by:</para></note>
+	  <literallayout><prompt>$ </prompt><userinput> db2ps myfile.sgml</userinput></literallayout>
+	</step>
+	<step>
+	  <para>
+	    You can now view the <acronym>HTML</acronym> file with
+	    your favourite browser, and you can print the postscript
+	    file, or view it with
+	    <application>ghostscript</application>, or its front end
+	    <application>gv</application>.
+	  </para>
+	</step>
+      </procedure>
+    </sect1>
+    <sect1 id="a-slightly-more-complex-example">
+	<title>A slightly more complex example</title>
+      <para>
+	Let us add some body to the trivial example.  The
+	beefed&ndash;up example begins to demonstrate how
+	exaggeratedly strict you should be when you write your
+	documents.  If this makes you nervous, <xref
+	Linkend="Concepts"> will try to reassure you that it is a
+	<emphasis>good thing to do</emphasis><!-- &trade; -->(TM).
+      </para>
+
+      <example>
+	<title>Fleshier DocBook document &mdash; the source</title>
+      <programlisting role="sgml">
+&lt;!doctype book PUBLIC "-//Davenport//DTD DocBook V3.0//EN" [
+]>
+&lt;book>
+  &lt;bookinfo>
+    &lt;date>1997-10-11&lt;/date>
+    &lt;title>My first booklet&lt;/title>
+    &lt;subtitle>it even has a subtitle&lt;/subtitle>
+    &lt;authorgroup>
+      &lt;author>
+        &lt;firstname>Joe&lt;/firstname>
+        &lt;othername>&ldquo;dude&rdquo;&lt;/othername>
+        &lt;surname>Smith&lt;/surname>
+      &lt;/author>
+    &lt;/authorgroup>
+    &lt;copyright>&amp;cygnus-copyright;&lt;/copyright>
+    &lt;legalnotice> &amp;cygnus-legal-notice; &lt;/legalnotice>
+  &lt;/bookinfo>
+  &lt;toc>&lt;/toc>
+  &lt;chapter id="my-first-chapter">
+    &lt;title>My first chapter&lt;/title>
+    &lt;para>Here's a paragraph of text because it is stylistically
+        poor to start a section right after the chapter
+        title.&lt;/para>
+    &lt;sect1 id="my-first-chapter-a-section">
+      &lt;title>A section in that first chapter&lt;/title>
+      &lt;titleabbrev>A section&lt;/titleabbrev>
+      &lt;para>All I need is a single paragraph of text to make the
+        section valid.&lt;/para>
+    &lt;/sect1>
+  &lt;/chapter>
+  &lt;appendix id="Remaining-details">
+    &lt;title>Remaining details&lt;/title>
+    &lt;para>Although this booklet is quite complete, here I will
+        mention some details I never got to.&lt;/para>
+    &lt;sect1 id="Use-of-the-word-dude">
+      &lt;title>Use of the word dude&lt;/title>
+      &lt;para>Here's an example of how to say
+        &lt;emphasis>dude&lt;/emphasis>: DUDE.&lt;/para>
+      &lt;caution>Saying dude too often can make your brain
+        soft.&lt;/caution>
+    &lt;/sect1>
+  &lt;/appendix>
+&lt;/book>
+      </programlisting>
+      </example>
+      <bridgehead>Brief explanation</bridgehead>
+      <para>
+	You will noticed that I added several new elements in the
+	document preamble (the <sgmltag>bookinfo</sgmltag> element). A
+	lot of the information in <sgmltag>bookinfo</sgmltag> is
+	<firstterm>meta-information</firstterm>, mostly to be used for
+	classification and indexing, and which might or might not
+	appear when the document is rendered.
+      </para>
+      <para>
+	I introduced some <firstterm>entities</firstterm> (sort of
+	like C preprocessor macros) such as <literal
+	  role="entity">&amp;cygnus-copyright;</literal>.  These are
+	supplied by someone else, and you should use them to get up to
+	date boiler plate information in your document, such as the
+	copyright statement and the legal notice.
+      </para>
+      <para>
+	I also added <firstterm>attributes</firstterm> to some of the
+	elements, for example in the tag
+      </para>
+      <programlisting role="sgml">
+	&lt;chapter id="my-first-chapter"&gt;
+      </programlisting>
+      <para>
+	An element's attributes allow you to pigeonhole extra
+	information that may be useful when that element is processed.
+	In this case, the <literal role="attribute">id</literal>
+	attribute identifies the chapters or sections for possible
+	future cross&ndash;referencing.
+      </para>
+    </sect1>
+    <sect1 id="from-here-on">
+      <title>From here on</title>
+      <para>
+	Examples from now on will not give the entire book or article
+	structure: you are supposed to use your powers of analogy to
+	fit future fragments into one of the above top level
+	structures.  Lengthy examples will, however, contain an
+	initial <sgmltag>doctype</sgmltag> statement so that they will
+	constitute a valid <acronym>SGML</acronym> file.  Remember to
+	strip that away if you include the fragment in a larger
+	document.
+      </para>
+    </sect1>
+  </chapter>
+  <chapter id="a-tour-of-some-docbook-features">
+    <title>A tour of some DocBook features</title>
+    <titleabbrev>DocBook tour</titleabbrev>
+    <para>
+      This chapter gives a tour of the various DocBook features I
+      expect you will need to use, and tells you how to use them.  In
+      some cases DocBook allows you to do something in more than one
+      way.  In those cases, I will tell you how we have agreed to do
+      those things at &cygnus;.</para>
+    <sect1 id="global-markups">
+	<title>Global markups</title>
+      <para>
+	Your docbook document will always have a top level element. In
+	the examples above it was <sgmltag>book</sgmltag>, but it can
+	be <sgmltag>article</sgmltag>, <sgmltag>set</sgmltag>,
+	<sgmltag>part</sgmltag>, <sgmltag>chapter</sgmltag> and one of
+	many more. tags.</para>
+      <para>
+	I suspect that as a hacker, rather than a professional doc
+	writer, you will usually be in one of two situations: either you
+	are writing an article or essay yourself (in which case you
+	will probably use <sgmltag>article</sgmltag> as a top level
+	element) or you will be working within the structure of an
+	existing book or set of books (in which case you will probably
+	be using <sgmltag>book</sgmltag> or <sgmltag>chapter</sgmltag>
+	as your top level element.
+      </para>
+      <sect2>
+	<title>Books</title>
+	<para>
+	  A book will be structured in the following way:
+	  <literallayout>
+	    book
+	      meta information
+	      chapter
+	        sect1
+	        sect1
+	      chapter
+	        sect1
+	      appendix
+	        sect1
+	      appendix
+	        sect1
+	        &hellip;
+	      glossary
+	  </literallayout>
+	</para>
+      </sect2>
+      <sect2>
+	<title>Articles</title>
+	<para>
+	  An article will be structured in the following way:
+	  <literallayout>
+	    article
+	      meta information
+	      sect1
+	      sect1
+	        sect2
+	      sect1
+	      &hellip;
+	  </literallayout>
+	</para>
+      </sect2>
+    </sect1>
+    <sect1 id="examples-and-screen-snapshots">
+      <title>Examples and screen snapshots</title>
+      <para>
+	You will frequently want to report a typical session on the
+	command line (sort the way I do in <xref
+	Linkend="Obtaining-and-installing">), or describe how to
+	interact with a GUI.
+      </para>
+      <sect2>
+	<title>Examples involving plain text</title>
+	<para>
+	  Command line examples are rather straightforward, since they
+	  present a linear progression.  The main elements to keep in
+	  mind are <sgmltag>example</sgmltag>,
+	  <sgmltag>programlisting</sgmltag>,
+	  <sgmltag>screen</sgmltag>, <sgmltag>literal</sgmltag>,
+	  <sgmltag>prompt</sgmltag> and <sgmltag>userinput</sgmltag>.
+	  Program listings will be discussed in <xref
+	  Linkend="examples-and-screen-snaphots-code-samples">.
+	</para>
+	<para>
+	  As an example, here's how I wrote the beginning of the
+	  anonymous ftp session in <xref
+	  Linkend="Obtaining-and-installing-UNIX">:
+	</para>
+	<example>
+	  <title>Documenting a typical ftp session</title>
+	  <programlisting role="sgml">
+&lt;!doctype screen PUBLIC "-//Davenport//DTD DocBook V3.0//EN" [
+]>
+&lt;screen>
+  &lt;prompt>$&lt;/prompt> &lt;userinput>ncftp ftp://ftp.cygnus.com/pub/home/rosalia/&lt;/userinput>
+  &lt;prompt>ncftp>&lt;/prompt> &lt;userinput>cd docware/RPMS/i386/&lt;/userinput>
+  &lt;prompt>ncftp>&lt;/prompt> &lt;userinput>mget *.rpm&lt;/userinput>
+  &lt;prompt>ncftp>&lt;/prompt> &lt;userinput>quit&lt;/userinput>
+&lt;/screen>
+	  </programlisting>
+	</example>
+	<para>
+	  If you process and view this snippet, you will see that the
+	  HTML code has a nice gray shading for screenshots.  For now
+	  the TeX/postscript output does not have a similar
+	  <foreignphrase>cartouche</foreignphrase>, but it does use a
+	  typewriter font.
+	</para>
+      </sect2>
+
+      <sect2>
+	<title>Describing GUIs</title>
+	<para>
+	  I have never described a GUI using screen shots or anything
+	  like that, so I will skip this one for now.  All I know is
+	  that you use tags like <sgmltag>callout</sgmltag>.  I'll
+	  take a screen dump from <application>xv</application>
+	  running on a Dilbert strip and experiment.
+	</para>
+      </sect2>
+      <sect2 id="examples-and-screen-snaphots-code-samples">
+	<title>Code samples</title>
+	<para>
+	  In writing technical documentation you frequently need to
+	  show pieces of program source code.  You can do this with
+	  DocBook's <sgmltag>programlisting</sgmltag> tag:</para>
+	<example>
+	  <title>Program listings in DocBook</title>
+	  <programlisting role="docbook">
+&lt;example&gt;
+&lt;title&gt;A simple C program&lt;/title&gt;
+  &lt;programlisting role="C"&gt;
+  #include &lt;stdio.h&gt;
+  main()
+  {
+    printf("Hello, world!\n");
+  }
+  &lt;/programlisting&gt;
+&lt;/example&gt;
+	  </programlisting>
+	</example>
+	<para>Here's what it would look like:</para>
+	<example>
+	  <title>A simple C program</title>
+	  <programlisting role="C">
+#include &lt;stdio.h&gt;
+main()
+{
+  printf("Hello, world!\n");
+}
+	  </programlisting>
+	</example>
+      </sect2>
+    </sect1>
+    <sect1 id="describing-an-api">
+      <title>Describing an API</title>
+      <para>
+	DocBook has a rather detailed way of marking up descriptions
+	of function behaviour.  The tag that introduces it is
+	<sgmltag>funcsynopsis</sgmltag>.  Here is an example:</para>
+      <example>
+	<title>Describing a function in a C library API</title>
+	<programlisting role="docbook">
+&lt;funcsynopsis&gt;
+  &lt;funcsynopsisinfo&gt;#include &lt;stdlib.h&gt;&lt;/funcsynopsisinfo&gt;
+  &lt;funcdef&gt;double &lt;function&gt;atof&lt;/function&gt;&lt;/funcdef&gt;
+  &lt;paramdef&gt;const char *&lt;parameter&gt;nptr&lt;/parameter&gt;&lt;/paramdef&gt;
+&lt;/funcsynopsis&gt;
+	</programlisting>
+      </example>
+      <para>
+	Here is how it looks:</para>
+      <funcsynopsis>
+	<funcsynopsisinfo>#include &lt;stdlib.h></funcsynopsisinfo>
+	<funcdef>double <function>atof</function></funcdef>
+	<paramdef>const char *<parameter>nptr</parameter></paramdef>
+      </funcsynopsis>
+    </sect1>
+    <sect1 id="tables">
+      <title>Tables</title>
+      <para>
+	For now I am just going to play around with some examples of
+	tables (so look at the source to see how they are done), after
+	which I will present a few simple ways of doing tables.  These
+	tables work well, and they might cover most situations in
+	which you will need tables.
+      </para>
+      <example>
+	<title>A simple informal table (no title)</title>
+	<programlisting role="sgml">
+      &lt;!doctype informaltable PUBLIC "-//Davenport//DTD DocBook V3.0//EN" [
+       ]>
+      &lt;informaltable frame="all">
+        &lt;title>A fictitious description of compiler features&lt;/title>
+        &lt;tgroup cols="4">
+          &lt;thead>
+            &lt;row>
+              &lt;entry>Architecture&lt;/entry>
+              &lt;entry>Company&lt;/entry>
+              &lt;entry>Native code support&lt;/entry>
+              &lt;entry>Max optimization&lt;/entry>
+            &lt;/row>
+          &lt;/thead>
+          &lt;tbody>
+            &lt;row>
+              &lt;entry>i386&lt;/entry>
+              &lt;entry>Intel&lt;/entry>
+              &lt;entry>yes&lt;/entry>
+              &lt;entry>-O4&lt;/entry>
+            &lt;/row>
+            &lt;row>
+              &lt;entry>alpha&lt;/entry>
+              &lt;entry>DEC&lt;/entry>
+              &lt;entry>yes&lt;/entry>
+              &lt;entry>-O3&lt;/entry>
+            &lt;/row>
+            &lt;row>
+              &lt;entry>Z80&lt;/entry>
+              &lt;entry>Zilog&lt;/entry>
+              &lt;entry>no&lt;/entry>
+              &lt;entry>-O1&lt;/entry>
+            &lt;/row>
+          &lt;/tbody>
+        &lt;/tgroup>
+      &lt;/informaltable>
+	</programlisting>
+      </example>
+      <informaltable frame="all">
+	<tgroup cols="4">
+	  <thead>
+	    <row>
+	      <entry>Architecture</entry>
+	      <entry>Company</entry>
+	      <entry>Native code</entry>
+	      <entry>Max optimization</entry>
+	    </row>
+	  </thead>
+	  <tbody>
+	    <row>
+	      <entry>i386</entry>
+	      <entry>Intel</entry>
+	      <entry>yes</entry>
+	      <entry>-O4</entry>
+	    </row>
+	    <row>
+	      <entry>alpha</entry>
+	      <entry>DEC</entry>
+	      <entry>yes</entry>
+	      <entry>-O3</entry>
+	    </row>
+            <row>
+              <entry>Z80</entry>
+              <entry>Zilog</entry>
+              <entry>no</entry>
+              <entry>-O1</entry>
+            </row>
+	  </tbody>
+	</tgroup>
+      </informaltable>
+
+      <para>
+	The following table has a title, uses some mathematical
+	symbols (like the <literal role="entity">&amp;sum;</literal>
+	entity.  It also uses the <literal
+	  role="attribute">align</literal> attribute to specify
+	alignment based on the decimal point in the floating point
+	numbers.
+      </para>
+
+      <example>
+	<title>A more complex table</title>
+	<programlisting role="sgml">
+      &lt;table frame="all">
+	&lt;title>Convergence of dynamical equations and constraints for
+	  various choices of constrained edges&lt;/title>
+        &lt;tgroup cols=5 align="char" charoff="50" char=".">
+          &lt;thead>
+	    &lt;row>
+	      &lt;entry>Constrained edges&lt;/entry>
+	      &lt;entry>Model&lt;/entry>
+	      &lt;entry># of iter.&lt;/entry>
+	      &lt;entry>&amp;sum;E
+	        &lt;subscript>i&lt;/subscript>&lt;superscript>2&lt;/superscript>&lt;/entry>
+	      &lt;entry>&amp;sum;C
+	        &lt;subscript>i&lt;/subscript>&lt;superscript>2&lt;/superscript>&lt;/entry>
+	    &lt;/row>
+	    &lt;/thead>
+	    &lt;tbody>
+	    &lt;row>
+	      &lt;entry>AD, AF, AG, AA'&lt;/entry>
+	      &lt;entry>Flat space&lt;/entry>
+	      &lt;entry>5&lt;/entry>
+	      &lt;entry>1.15&times;10&lt;superscript>-24&lt;/superscript>&lt;/entry>
+	      &lt;entry>1.77&times;10&lt;superscript>-19&lt;/superscript>&lt;/entry>
+	    &lt;/row>
+	    &lt;row>
+	      &lt;entry>AD, AF, AG, AA'&lt;/entry>
+	      &lt;entry>Kasner universe&lt;/entry>
+	      &lt;entry>6&lt;/entry>
+	      &lt;entry>1.43&times;10&lt;superscript>-19&lt;/superscript>&lt;/entry>
+	      &lt;entry>1.77&times;10&lt;superscript>-8&lt;/superscript>&lt;/entry>
+	    &lt;/row>
+	    &lt;row>
+	      &lt;entry>AB, AC, AE, AA'&lt;/entry>
+	      &lt;entry>Flat space&lt;/entry>
+	      &lt;entry>4&lt;/entry>
+	      &lt;entry>1.15&times;10&lt;superscript>-24&lt;/superscript>&lt;/entry>
+	      &lt;entry>4.09&times;10&lt;superscript>-24&lt;/superscript>&lt;/entry>
+	    &lt;/row>
+	    &lt;row>
+	      &lt;entry>AB, AC, AE, AA'&lt;/entry>
+	      &lt;entry>Kasner universe&lt;/entry>
+	      &lt;entry>7&lt;/entry>
+	      &lt;entry>1.33&times;10&lt;superscript>-19&lt;/superscript>&lt;/entry>
+	      &lt;entry>8.07&times;10&lt;superscript>-7&lt;/superscript>&lt;/entry>
+	    &lt;/row>
+          &lt;/tbody>
+        &lt;/tgroup>
+      &lt;/table>
+	  </programlisting>
+	<para>
+	  This is how that table would be rendered in the output mode
+	  you are viewing now:
+	</para>
+      </example>
+      <table frame="all">
+	<title>Convergence of dynamical equations and constraints for
+	  various choices of constrained edges</title>
+        <tgroup cols=5 align="char" charoff="50" char=".">
+          <thead>
+            <row>
+	      <entry>Constrained edges</entry>
+	      <entry>Model</entry>
+	      <entry># of iter.</entry>
+	      <entry>&sum;E
+		<subscript>i</subscript><superscript>2</superscript></entry>
+	      <entry>&sum;C
+		<subscript>i</subscript><superscript>2</superscript></entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+	      <entry>AD, AF, AG, AA'</entry>
+	      <entry>Flat space</entry>
+	      <entry>5</entry>
+	      <entry>1.15&times;10<superscript>-24</superscript></entry>
+	      <entry>1.77&times;10<superscript>-19</superscript></entry>
+            </row>
+            <row>
+	      <entry>AD, AF, AG, AA'</entry>
+	      <entry>Kasner universe</entry>
+	      <entry>6</entry>
+	      <entry>1.43&times;10<superscript>-19</superscript></entry>
+	      <entry>1.77&times;10<superscript>-8</superscript></entry>
+            </row>
+            <row>
+	      <entry>AB, AC, AE, AA'</entry>
+	      <entry>Flat space</entry>
+	      <entry>4</entry>
+	      <entry>1.15&times;10<superscript>-24</superscript></entry>
+	      <entry>4.09&times;10<superscript>-24</superscript></entry>
+            </row>
+            <row>
+	      <entry>AB, AC, AE, AA'</entry>
+	      <entry>Kasner universe</entry>
+	      <entry>7</entry>
+	      <entry>1.33&times;10<superscript>-19</superscript></entry>
+	      <entry>8.07&times;10<superscript>-7</superscript></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </sect1>
+    <sect1 id="reference-things">
+	<title>Reference things</title>
+      <para>library function reference things, man page reference
+	things
+      </para>
+    </sect1>
+  </chapter>
+  <chapter id="Concepts">
+    <title>Concepts</title>
+    <para>
+      Now that you have written your first DocBook document, and you
+      have processed it, you might actually want to understand a
+      little of what goes on in this world.
+    </para>
+    <para>
+      You have probably heard an incoherent babble of terms like
+      <acronym>SGML</acronym>, <acronym>DTD</acronym>,
+      <acronym>DSSSL</acronym>, DocBook, <acronym>HTML</acronym>, and
+      so forth, and you might be wondering how they should all fit in
+      to <emphasis>your</emphasis> world view.
+    </para>
+    <para>
+      I will give you both a top&ndash;down explanation, illustrating
+      what your world view might be, and a bottom&ndash;up explanation
+      of what all the individual <acronym>SGML</acronym>&ndash;related
+      concepts mean.
+    </para>
+    <sect1 id="your-world-view">
+      <title>Your world view</title>
+      <para>
+	Most people who do word processing or typesetting use a
+	<acronym>WYSIWYG</acronym> word processor or a typesetting
+	system in which they type explicit markup instructions which
+	tell the typesetter how to position text on the page (such as
+	<application>TeX</application> and
+	<application>troff</application>).</para>
+      <para>
+	Both of these approaches suffer from a few serious problems.
+	The biggest one is longevity of the document: eternal
+	information (the profound things you type) is interspersed
+	with information that will be obsolete (the typesetting
+	information).
+      </para>
+      <para>
+	Another big problem with this old approach is lack of
+	<firstterm>structure</firstterm>: the markup did not express
+	content, but rather page layout.  Let's say you are interested
+	in indexing a bunch of papers written in
+	<application>TeX</application>.  It would be rather easy to
+	index all occurances of boldface text, but that's not
+	interesting at all!  Instead, it would be really useful to
+	index all function names in an API.  With old typesetting
+	approaches you would need artificially intelligent software
+	that could understand the text and say ``aha! this must be the
+	definition of a function in the API''.</para>
+      <para>
+	So your old world view of writing a document and having the
+	main challenge be how to mark it up to look good on paper is a
+	poor one.  Your challenge should be how to mark your document
+	up to emphasize <emphasis>semantic content.</emphasis></para>
+    </sect1>
+    <sect1 id="markup-based-on-content">
+      <title>Markup based on content</title>
+      <para>
+	So how do you mark your documents such that useful information
+	can be extracted and indexed?  The approach in DocBook is to
+	provide a very rich set of markup tags that all relate to the
+	structure and nature of the document's content.</para>
+      <para>
+	To give you a couple of examples of tags that could help with
+	generating automatic indices:
+	&lt;<sgmltag>attribution</sgmltag>&gt; and
+	&lt;<sgmltag>command</sgmltag>&gt;.  If you have a large body
+	of documentation (for example, all Sun software and hardware
+	is documented with DocBook) you can do a very easy search for
+	any document that discusses a command called
+	<command>mount</command>, or a quote attributed to Ken
+	Thompson.  On top of that, with such a structured search you
+	would only find occurances of <command>mount</command>
+	<emphasis>when it is a command name</emphasis>, and of
+	Thompson <emphasis>when he is the author of a
+	quote</emphasis>.
+      </para>
+      <para>
+	Now imagine for a moment what would happen if the entire World
+	Wide Web used a rich content&ndash;based markup language
+	instead of HTML: a search engine would give you the
+	information you need without all the extra references which
+	just happen to use those words casually.  A search for
+	<literal>mount</literal> on the web would almost certainly not
+	find you references on the UNIX <command>mount</command>
+	command.</para>
+      <para>
+	So a rich markup language like DocBook is a good idea from
+	many points of view, but it can also be difficult to use.
+	DocBook has hundreds of tags (as opposed to just a few in
+	HTML), so you might find the learning curve steep.  That is
+	true, and the only way around that is to write documentation
+	on how to use DocBook!</para>
+      <para>
+	On the other hand, once you are quite familiar with DocBook it
+	will not slow you down too much to type in markup all the
+	time.  Keep in mind that most of the time a person is not
+	writing, but rather worrying about meta&ndash;level problems
+	with their document.  If you use DocBook well you will spend a
+	bit more time writing and a lot less time worrying about other
+	issues like the layout on paper.  (There is nothing you can do
+	about it anyway!)
+      </para>
+    </sect1>
+    <sect1 id="explanation-of-sgml-related-terms">
+      <title>Explanation of <acronym>SGML</acronym>&ndash;related
+	terms</title>
+      <para>
+	You have probably already heard many
+	<acronym>SGML</acronym>&ndash;related terms, but they are
+	seldom used carefully, so people end up with misconceptions
+	which can be annoying.</para>
+      <sect2>
+	<title>SGML &mdash; a framework for defining markup
+	  languages</title>
+	<titleabbrev>SGML &mdash; a framework</titleabbrev>
+	<para>
+	  First of all: <acronym>SGML</acronym> (which stands for
+	  Standard Genralized Markup Language) <emphasis>is not a
+	    markup language in itself!</emphasis>  It is a
+	  <emphasis>framework</emphasis> for describing individual
+	  markup languages (such as DocBook or HTML), so it is really
+	  a very different beast.  Kind of like the difference between
+	  a suitcase factory and a suitcase.</para>
+	<para>
+	  DocBook and HTML are a specific instantiation of
+	  <acronym>SGML</acronym>, sometimes called <firstterm>SGML
+	    applications</firstterm>.</para>
+	<para>
+	  So when people say that they are writing documents in
+	  <acronym>SGML</acronym> they are being quite imprecise.  To
+	  be precise they could say (for example) ``We are writing our
+	  documentation in DocBook, which is an
+	  <acronym>SGML</acronym>&ndash;base markup language'', or
+	  something on those lines.</para>
+	<para>
+	  The way you define a particular markup language in the
+	  <acronym>SGML</acronym> formalism is by writing up a
+	  <firstterm>Document Type Definition</firstterm> (usually
+	  referred to as a
+	  <firstterm><acronym>DTD</acronym></firstterm>.  The DTD
+	  specifies what tags can be used in the markup language, and
+	  in some cases it also specifies the hierarchy of those
+	  tags.  For example, you have probably noticed that in
+	  DocBook you can only put a <sgmltag>title</sgmltag> tag
+	  immediately after certain tags (such as
+	  <sgmltag>chapter</sgmltag> <sgmltag>sect1</sgmltag> and some
+	  others).
+	</para>
+      </sect2>
+      <sect2>
+	<title>What about the appearnace on output media?</title>
+	<titleabbrev>What about output?</titleabbrev>
+	<para></para>
+      </sect2>
+    </sect1>
+  </chapter>
+  <chapter id="How-you-should-structure">
+    <title>How you should structure your documents</title>
+    <para>
+      I will just leave fillers for most of this chapter for now, but
+      my scope in this chapter is to describe a few writing style
+      issues that are specific to computer manuals.  English writing
+      style is described well in many books.
+    </para>
+    <sect1 id="structure-of-a-book">
+      <title>Structure of a book</title>
+      <para>
+	dude
+      </para>
+    </sect1>
+    <sect1 id="structure-of-a-chapter">
+      <title>Structure of a chapter</title>
+      <para>
+	dude
+      </para>
+    </sect1>
+    <sect1 id="structure-of-sections">
+      <title>Structure of sections</title>
+      <para>
+	dude
+      </para>
+    </sect1>
+  </chapter>
+
+  <chapter id="docbook-resources">
+    <title>DocBook Resources</title>
+    <itemizedlist>
+      <listitem>
+	<para><ulink
+	    url="http://nwalsh.com/docbook/nutshell/">
+	    Norman Walsh's quick reference card on DocBook</ulink>
+	</para>
+      </listitem>
+      <listitem>
+	<para><ulink
+	    url="http://nis-www.lanl.gov/~rosalia/mydocs/docbook-intro.sgml">
+	    Mark Galassi's DocBook tutorial</ulink>
+	</para>
+      </listitem>
+      <listitem>
+	<para><ulink
+	    url="http://www.snee.com/bob/sgmlfree/emcspsgm.html">
+	    Bob DuCharme's tips on PSGML mode for emacs</ulink>
+	</para>
+      </listitem>
+      <listitem>
+	<para><ulink
+	    url="http://www.oasis-open.org/docbook/">
+	    The official DocBook home page, now hosted by OASIS</ulink>
+	</para>
+      </listitem>
+      <listitem>
+	<para><ulink
+	    url="http://www.sgmltools.org/">
+	    Home pare for the SGMLtools project</ulink>
+	</para>
+      </listitem>
+    </itemizedlist>
+  </chapter>
+
+  <chapter id="smgl-entities">
+    <title>SGML entities</title>
+    <para>
+      This introduction is provided to help explain some basic
+      concepts of using SGML to writers who are not yet very familiar
+      with SGML and illustrate some of the strategies from SGML that
+      you may use to handle common writing issues. It assumes that you
+      already understand the basic concept of marking up documents in
+      an SGML language that indicates what the content is and not what
+      it should look like and that you know a few acronyms, like DTD
+      (for document type definition) or ISO (International Standards
+      Organization).
+    </para>
+
+    <sect1 id="basic-structure-of-an-sgml-document">
+      <title>BASIC STRUCTURE OF AN SGML DOCUMENT</title>
+
+      <para>
+So what does an SGML document look like? Well, there are at least three
+different pieces: a main document file, the DTD for that type of document,
+and the SGML Declaration for that type of document. The main document file
+can also use any number of other files containing text marked up in SGML or
+other types of information like graphics or multimedia files.
+      </para>
+      <para>
+	The SGML declaration contains a lot of esoteric information, but basically
+describes SGML conventions that are followed in documents of that type. The
+DTD describes the structure for documents of that type and the set of tags
+(the language) that mark up the document to define the content and
+structure. SGML systems need all of this information to read the SGML
+document correctly.
+      </para>
+      <para>
+	When SGML systems work with SGML documents, they start with the main
+document:
+      </para>
+      <orderedlist>
+	<listitem>
+	  <para>
+	    The main document defines the start and end of your
+	    document and identifies the DTD and SGML declaration to
+	    use with the document. It also identifies any other files
+	    with content that are included in your document.
+	  </para>
+	  <para>
+	    The main document starts with a line identifying the DTD
+	    for this document that looks something like this:
+	  </para>
+	  <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN"></programlisting>
+	  <para>
+	    Tags are enclosed in start/end tag characters. The most
+	    common characters for this are &lt; (start) and > (end).
+	  </para>
+	  <para>
+	    The !DOCTYPE tells SGML systems that this tag identifies
+	    the document type for this document.
+	  </para>
+	  <para>
+	    MyDocuments is the name of the document type and is always
+	    the name of the beginning and ending tags for documents
+	    that use this DTD. All of the content for the document
+	    comes between these tags.
+	  </para>
+	  <para>
+	    PUBLIC  and the long strange name in quotes identifies the
+	    file for the DTD and for the SGML declaration. This is
+	    called a formal public ID, or FPI. An explanation of FPIs
+	    comes later.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>Inside the document type declaration, a document can
+	    also have other declarations of information that can be
+	    used in the document. This is known as the internal subset
+	    and is contained inside brackets [ and ] after the DTD
+	    identifier and before the end tag character. It would then
+	    look like this:
+	  </para>
+	  <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...some other declarations here...
+]></programlisting>
+	</listitem>
+	<listitem>
+	  <para>
+	    After the document type declaration comes the document.
+	    All of the content for your document must be enclosed in a
+	    beginning and ending tag that matches the document type.
+	    In our example, this looks like:
+	  </para>
+	  <programlisting>
+&lt;MyDocuments> ... the content of your document ... &lt;/MyDocuments></programlisting>
+
+	  <para>
+	    Tags that enclose contents have a start tag like
+	    &lt;MyDocuments> and an end tag &lt;/MyDocuments> that use
+	    the same name but the slash identifies the end tag. Tag
+	    names are also known as elements or generic identifiers
+	    (gi's).
+	  </para>
+	</listitem>
+      </orderedlist>
+    </sect1>
+    <sect1 id="using-entities-to-connect-other-files">
+      <title>USING ENTITIES TO CONNECT OTHER FILES</title>
+
+      <para>
+	SGML uses something called a general entity to include other
+	files inside a document. There are other types of entities in
+	SGML, but this is the most common. A general entity is
+	identified by an entity declaration in the internal subset of
+	your main document. It looks like this:
+      </para>
+      <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...
+&lt;!ENTITY Chapter1 SYSTEM "chp1.sgm">
+... ]></programlisting>
+
+      <para>
+	The &lt;!ENTITY indicates this is an entity declaration. Chapter1 is the name
+you give to the entity. SYSTEM is a keyword that tells an SGML system that
+the identifier for the file for this entity is specific to your computer
+system - most commonly this means that you supply the file name to include
+directly in the declaration. In this example chp1.sgm is the file name that
+should be included and this is all the path information that the system
+needs to find the file.
+      </para>
+      <para>
+	With entities, the declaration simply identifies the file or content to use
+- you decide where that should actually be included by inserting the entity
+in your document. To include the entity, you insert an ampersand, the
+entity name, and a semi-colon. For example:
+      </para>
+      <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...
+&lt;!ENTITY Chapter1 SYSTEM "chp1.sgm">
+... ]>
+&lt;MyDocuments>
+&lt;Title>My First Novel&lt;/Title>
+&lt;Author>Joan Duvall&lt;/Author>
+&amp;Chapter1;
+&lt;/MyDocuments></programlisting>
+
+      <para>This document has only one chapter, which is included where &amp;Chapter1;
+appears. Any file that is included that contains text and SGML tags must
+also fit properly within the structure of the document, as that is defined
+in the DTD. They also must be balanced - any tag that starts in a separate
+file must end in that file. In this example, the file chp1.sgm contains
+text marked up in SGML and the contents are all enclosed within &lt;Chapter>
+... &lt;/Chapter> tags as the Chapter element is valid content at this point
+within the document.
+      </para>
+    </sect1>
+    <sect1 id="identifying-files-with-formal-public-ids">
+	<title>IDENTIFYING FILES WITH FORMAL PUBLIC IDS</title>
+
+      <para>
+	You can always identify files to include by their name and path information
+(a system identifier). But there are several reasons why you may want to
+use public IDs, or FPIs, instead. The biggest reason is to make it easier
+to move files without having to change your documents. Another reason is to
+make it easier to exchange your files with other people or groups where the
+directories on their system may be different. FPIs also allow you or your
+company to claim ownership of important information, such as your DTD.
+      </para>
+      <para>
+	With FPIs, you identify a file by an abstract name in your document and
+then supply the location of that file in a catalog, sometimes called a
+mapping file or entity manager. The catalog is another, separate file from
+your document.
+      </para>
+      <para>
+	If a file that is used in your document moves, you simply change its
+location in the catalog rather than changing the location in your document
+or any other document that uses it. If you exchange files with some one
+else, or simply move the files to a new computer with different
+directories, you only have to change the location information once in the
+catalog.
+      </para>
+      <para>
+	FPIs must have a specific structure. Two slashes are used to mark the
+separation between each part of the structure, such as:
+      </para>
+      <programlisting>
+"Registration//Owner//Keyword  Description//Language"</programlisting>
+
+      <variablelist>
+	<varlistentry>
+	  <term>Registration</term>
+	  <listitem>
+	    <para>
+	      The first character indicates whether the FPI is
+	      formally registered (+) or not (-) with an ISO approved
+	      registration service. If you define your own FPIs and
+	      don't register them, use the hyphen.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>Owner</term>
+	  <listitem>
+	    <para>The owner of the file is the second part of the FPI.
+	      This can be a company, an organization, or a person.
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>Keyword</term>
+	  <listitem>
+	    <para>There are several keywords that indicate the type of
+	      information in the file. Some of the most common
+	      keywords are DTD, ELEMENT, and TEXT. DTD is used only
+	      for DTD files, ELEMENT is usually used for DTD fragments
+	      that contain only entity or element declarations. TEXT
+	      is used for SGML content (text and tags).
+	    </para>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term>Description</term>
+	  <listitem>
+	    <para>Any description you want to supply for the contents
+	      of this file. This may include version numbers or any
+	      short text that is meaningful to you and unique for the
+	      SGML system.</para>
+	  </listitem>
+
+	</varlistentry>
+	<varlistentry>
+	  <term>Language</term>
+	  <listitem>
+	    <para>
+	      This is an ISO two-character code that identifies the native
+language for the file. EN is
+          used for English.</para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+    </sect1>
+    <sect1 id="using-entities-for-shared-text">
+      <title>USING ENTITIES FOR SHARED TEXT</title>
+      <para>
+	Entities can be used for other purposes. Another common usage is to define
+text that is repeated in lots of places that you don't want to type every
+time, or that you want to be able to easily change everywhere it is used.
+These are general entities that you define in the internal subset of your
+document and then use within your document.
+      </para>
+      <para>
+	For example, you are writing a document that frequently refers to the ANSI
+X.12 ASC 835 standard. This phrase must appear exactly as it is shown.
+Rather than type it out every single time, you define this entity:
+      </para>
+      <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...
+&lt;!ENTITY ansi835 "ANSI X.12 ASC 835">
+... ]></programlisting>
+
+      <para>
+	Within the document, you use this entity every time you need
+	to refer to the standard name. For example:</para>
+
+      <programlisting>
+&lt;paragraph>This interface follows the exchange protocols for &amp;ansi835;
+version 3070 for remittance information. &lt;/paragraph></programlisting>
+
+      <para>
+When the document is printed or processed by an SGML system for any type of
+output, the &amp;ansi835; characters are replaced with ANSI X.12 ASC 835
+instead.
+      </para>
+    </sect1>
+    <sect1 id="using-marked-sections">
+      <title>USING MARKED SECTIONS TO HANDLE CONDITIONAL CONTENT</title>
+      <para>
+	Sometimes you need to have different versions of the content
+	for different purposes. There are several ways to do this
+	using SGML, one of which is called marked sections. A simple
+	example of conditional content might be the description of
+	keys used in a software program where they appear in boxes in
+	the printed manual but are blue inside brackets on the web
+	site or CD. Rather than have two separate versions of the
+	conventions for each output of the manual, you can use marked
+	sections to keep both variations in the same document.
+      </para>
+      <para>
+	There are different types of marked sections, but the types
+	that allow you to control conditional content are
+	ignore/include sections.  These markers act like on/off
+	switches to allow content to be included or ignored in
+	different situations.
+      </para>
+      <para>
+	The marker for an include marked section looks like this:
+      </para>
+      <programlisting>
+&lt;![INCLUDE [ keys are boxed, such as &lt;key>F1&lt;/key> ]]&gt;</programlisting>
+
+      <para>
+	while an ignore marked section looks like this:</para>
+      <programlisting>
+&lt;![IGNORE [ keys are blue inside brackets, such as &lt;key>F1&lt;/key> ]]&gt;</programlisting>
+
+      <para>
+	INCLUDE and IGNORE are the keywords that tell the SGML system what to
+include or skip. As this example shows, marked sections can contain both
+text and tags as long as the tags within the markers are balanced (if a tag
+starts inside a marker, then it ends inside the same marker).
+      </para>
+      <para>
+	In this example, you leave the markers for the print version as INCLUDE and
+the markers for the electronic version as IGNORE when you print a master
+copy. When you create the electronic book or HTML for the web site, you
+change the markers for the print version to IGNORE and the markers for the
+electronic version to INCLUDE. This works just fine, unless you have
+several different sections you need to include or ignore together - it's
+cumbersome to change each one manually and you can easily make a mistake.
+      </para>
+      <para>
+	So instead, you can define parameter entities under any names you want and
+then change the entities to turn the include/ignore switches. To do this,
+you add parameter entity declarations in the internal subset at the top of
+your master SGML document. For example:
+      </para>
+      <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...
+&lt;!ENTITY % hardcopy "INCLUDE">
+&lt;!ENTITY % softcopy "IGNORE">
+...]></programlisting>
+
+      <para>
+	You then use the names for each marked section, like this:</para>
+
+      <programlisting>
+&lt;![%hardcopy; [ keys are boxed, such as &lt;key>F1&lt;/key> ]]&gt;
+&lt;![%softcopy; [ keys are blue inside brackets, such as &lt;key>F1&lt;/key> ]]&gt;</programlisting>
+
+      <para>
+	To print the master copy, you leave the entity declarations as
+	they are shown above. The SGML system interprets each
+	%hardcopy; it finds as INCLUDE and includes those marked
+	sections. The %softcopy; is interpreted as IGNORE and those
+	sections are skipped. When you're ready to produce the
+	electronic version, you only have to change the entity
+	declarations at the top of the file, like this:</para>
+
+      <programlisting>
+&lt;!DOCTYPE  MyDocuments PUBLIC "-//Joan Duvall//DTD Joan's Documents//EN" [
+...
+&lt;!ENTITY % hardcopy "IGNORE">
+&lt;!ENTITY % softcopy "INCLUDE">
+...]></programlisting>
+
+      <para>
+	With this single change, the electronic versions are included and the
+printed versions are skipped.
+      </para>
+      <para>
+	Marked sections can be simple, but they are not always the
+	best choice to manage conditional text. They are best if you
+	use them sparingly and in very clear situations - it's easy to
+	figure out when to use them and when to change the
+	INCLUDE/IGNORE switches. Some of the problems that they can
+	create include:
+      </para>
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    - Marked sections can be nested (a marked section inside
+	    another marked section), but this can confuse your SGML
+	    system and may not produce the effect you want. For
+	    example, SGML systems can't properly handle an included
+	    marked section inside an ignored marked section.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    - If you use lots of differently named sections, it's easy
+	    to lose track of the content and can make your SGML
+	    document invalid if some required structures are set to
+	    IGNORE.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    - Finally, they are not supported in XML, the new standard
+	    subset of SGML that will be viewable directly on the World
+	    Wide Web. Moving to XML could be difficult if you use
+	    marked sections a lot.
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </sect1>
+  </chapter>
+
+  <chapter id="emacs-psgml-mode-tips">
+    <title>Emacs PSGML mode tips</title>
+    <programlisting>
+From: Mark Galassi &lt;rosalia@galassi.org>
+Sender: owner-sgml-tools@via.ecp.fr
+To: sgml-tools@via.ecp.fr
+Subject: Re: dtd parser!
+Date: Fri, 23 Oct 1998 09:19:01 -0600 (MDT)
+
+    Jose> My question is: Is there any available tool (parser) to
+    Jose> analyse a dtd and return the same informations that is
+    Jose> contained in the reference manual?
+
+There are a few.  The one I use is emacs with PSGML mode.  It has
+emacs-style completion *on tags*!!  It's really cool.
+
+If you type "C-c C-e" it will prompt you for an element, and offer as
+completions only the valid elements at that point.
+
+Once it inserts the element, it inserts it with any required following 
+elements along with a comment saying which ones you could put later
+on.
+
+As an example, I just went to a DocBook buffer and typed
+
+C-c C-e variab&lt;SPACE BAR>&lt;RETURN>
+
+and it inserted this text in the buffer:
+
+    &lt;variablelist>
+      &lt;varlistentry>
+	&lt;term>&lt;/term>
+	&lt;listitem>
+	  &lt;!-- one of (epigraph authorblurb abstract highlights comment bridgehead anchor sidebar procedure msgset table figure example equation informaltable informalexample informalequation graphicco graphic blockquote address simpara para formalpara funcsynopsis cmdsynopsis synopsis screenshot screenco screen programlistingco programlisting literallayout warning tip note important caution variablelist simplelist segmentedlist orderedlist itemizedlist glosslist calloutlist) -->
+	&lt;/listitem>
+      &lt;/varlistentry>
+    &lt;/variablelist>
+
+Another example:
+
+C-c C-e i&lt;SPACE BAR>
+
+and it showsme the following completions:
+
+----
+
+Click mouse-2 on a completion to select it.
+In this buffer, type RET to select the completion near point.
+
+Possible completions are:
+important			   indexterm
+informalequation		   informalexample
+informaltable			   itemizedlist
+
+----
+    </programlisting>
+  </chapter>
+  <appendix id="Obtaining-and-installing">
+    <title>Obtaining and installing DocBook tools</title>
+    <titleabbrev>Obtaining and installing</titleabbrev>
+    <para>
+      Follow these instructions for your favourite platform, either
+      UNIX (free tools), Win32 (free tools) or FrameMaker+SGML.
+    </para>
+    <sect1 id="Obtaining-and-installing-UNIX">
+      <title>UNIX</title>
+      <para>
+	On UNIX we are distributing these tools as RPM packages,
+	providing a binary distribution for intel-baesd GNU/Linux
+	systems, and a source distribution for others [FIXME: must
+	clear this up a bit].
+      </para>
+      <para>
+	Here is an example of a UNIX session to get and install the
+	free DocBook tool set on a GNU/Linux system.  The tools can be
+	found at <ulink
+	  URL="ftp://ftp.cygnus.com/pub/home/rosalia/docware/"> this
+	  location </ulink> [FIXME: the DSSSL for printed output does
+	the wrong thing with <sgmltag>ulink</sgmltag>.]
+      </para>
+      <screen>
+	<prompt>$</prompt> <userinput>ncftp ftp://ftp.cygnus.com/pub/home/rosalia/</userinput>
+	<prompt>ncftp></prompt> <userinput>cd docware/RPMS/i386/</userinput>
+	<prompt>ncftp></prompt> <userinput>mget *.rpm</userinput>
+	<prompt>ncftp></prompt> <userinput>quit</userinput>
+	<prompt>$</prompt> <userinput>su</userinput>
+	<prompt>Password:</prompt> <userinput>ultra-sucure</userinput>
+	<prompt>#</prompt> <userinput>rpm --install sgml-common*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install docbook*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install stylesheets*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install psgml*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install jade*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install jadetex*.rpm</userinput>
+	<prompt>#</prompt> <userinput>rpm --install sgml-demo*.rpm</userinput>
+      </screen>
+      <note>
+	<para>The order of installing packages is important.</para>
+      </note>
+      <note>
+	<para>
+	  When you are upgrading, rather than installing for the first
+	  time, the
+	  <literal><userinput>rpm --install</userinput></literal>
+	  steps should be replaced with
+	  <literal><userinput>rpm --upgrade</userinput></literal>.
+	</para>
+      </note>
+      <para>
+ 	You are now ready to edit <acronym>SGML</acronym>/DocBook
+	documents.
+      </para>
+    </sect1>
+    <sect1 id="Obtaining-and-installing-Win32">
+      <title>Win32</title>
+      <para>
+	For Win32 we are distributing these tools as a standard
+	Windows InstallShield self-extracting package.
+      </para>
+    </sect1>
+    <sect1 id="Obtaining-and-installing-FrameMaker-SGML">
+      <title>FrameMaker+SGML</title>
+      <para>
+	<productname>FrameMaker+SGML</productname> is a powerful
+	<acronym>WYSIWYG</acronym><footnote><para>WYSIWYG stands for
+	    &ldquo;what you see is what you
+	    get&rdquo;.</para></footnote> which allows you to edit
+	SGML documents with all the rendering and other features of
+	FrameMaker.  In <productname>FrameMaker+SGML</productname> the
+	correspondence between SGML tags and printed output is
+	implemented with a document called the
+	EDD<footnote><para>Element Definition Document</para>
+	</footnote> which maps SGML elements to FrameMaker formatting
+	instructions.
+      </para>
+      <para>
+	<productname>FrameMaker+SGML</productname> ships with an
+	outdated DocBook implementation, based on the DocBook 2.2.1
+	DTD (the current version is 3.0) provided by Lynne Price.
+	Lynne Price then upgraded the DTD to 3.0 under contract by
+	Cygnus Solutions but left most of the elements undefined in
+	the EDD.</para>
+      <para>
+	In March of 1998 I started filling in the gaps by defining the
+	output format for many tags in the EDD.  Later that year Alyce
+	Gershenson and Frederick Geers modified the EDD and the
+	FrameMaker template file to match the Cygnus publication
+	styles.  In September of 1998 I defined many more tags in the
+	EDD, to the point where I now think that Cygnus's EDD is a
+	useful tool for FrameMaker+SGML users.
+      </para>
+      <para>
+	I have finally made Cygnus's FrameMaker+SGML EDD available by
+	anonymous ftp at the address <ulink
+	url="ftp://ftp.cygnus.com/pub/home/rosalia/docware/framemaker/">ftp://ftp.cygnus.com/pub/home/rosalia/docware/framemaker/</ulink>
+	Please keep in mind that there are still some serious
+	unresolved problems in the read/write rules and the FrameMaker
+	API client, which I have not yet sat down to study.
+      </para>
+      <para>
+	To use the <productname>FrameMaker+SGML</productname> support
+	you should do the following:</para>
+      <procedure>
+	<step id="step-download"><para>Grab all the
+	    <productname>FrameMaker+SGML</productname> files from the
+	    anonymous ftp site listed above.  Put them in a directory
+	    (or folder on Windows) of their own.</para>
+	</step>
+	<step><para>
+	    Start up <productname>FrameMaker+SGML</productname> and
+	    load the file <filename>Sgmlapps.fm</filename>.
+	  </para>
+	</step>
+	<step><para>Double-click on a line that says [FIXME: must
+	    look it up] and change the variable to match the location
+	    of the folder you created in <xref
+	    linkend="step-download">.
+	    </para>
+	</step>
+	<step><para>
+	    Go to the <guimenu>File</guimenu> menu and select
+	    <guisubmenu>Developer's tools</guisubmenu>, and in there
+	    select <guimenuitem>Reread SGML
+	    application</guimenuitem>.  It will ask you to select a
+	    file to &ldquo;read in&rdquo;, and you should pick
+	    <filename>Sgmlapps.fm</filename>.
+	  </para>
+	</step>
+	<step><para>
+	    Go to the <guimenu>File</guimenu> menu and select
+	    <guimenuitem>Set SGML application</guimenuitem>.  You will
+	    get a couple of choices.  You should choose
+	    DocBook-3.0-cygnus (or whatever it was). Do
+	    <emphasis>not</emphasis> choose DocBook: this is the
+	    obsolete version that Adobe ships.
+	  </para>
+	</step>
+	<step><para>
+	    Create a new document.  When
+	    <productname>FrameMaker+SGML</productname> asks you for a
+	    template, you should select the
+	    <filename>Template.fm</filename> file that you downloaded.
+	  </para>
+	</step>
+      </procedure>
+      <para>
+	If all went well you should now have a DocBook document open.
+	You can bring up the &ldquo;structure view&rdquo; and
+	&ldquo;element catalog&rdquo; windows to help you edit your
+	DocBook document.</para>
+
+      <note><para>
+	  I would love it if some
+	  <productname>FrameMaker+SGML</productname> were to
+	  collaborate with me on the DocBook EDD.  If you are
+	  interested in doing so, please send email to
+	  <email>rosalia@galassi.org</email>
+	</para>
+      </note>
+    </sect1>
+  </appendix>
+
+  <glossary>
+    <title>Glossary</title>
+    <glossentry><glossterm>ASCII</glossterm>
+      <glossdef>
+	<para>(American Standard Code for Information Interchange)
+	  This standard character encoding scheme is used extensively
+	  in data transmission.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>ANSI</glossterm>
+      <glossdef>
+	<para>(American National Standards Institute) This group is
+	  the U.S. member organization that belongs to the ISO, the
+	  International Organization for Standardization.
+	</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>attribute</glossterm>
+      <glossdef>
+	<para>An attribute provides more information about an element
+	  such as classification level, unique reference identifiers,
+	  or formatting information.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>CCITT Group 4</glossterm>
+      <glossdef>
+	<para>(International Consultative Committee on Telegraphy and
+	  Telephony) This CALS standard for raster graphics
+	  incorporates tiling, which divides a large image into
+	  smaller tiles. You can exchange graphic files in CCITT/4
+	  format in a compressed state so they take up much less file
+	  space.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>CITIS</glossterm>
+      <glossdef>
+	<para>(Contractor Integrated Technical Information Service) As
+	  part of CALS Phase II, CITIS is a draft functional
+	  specification for services. DoD acquisition managers
+	  designed CITIS as a plan to gain access to product-related
+	  digital technical information.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>CGM</glossterm>
+      <glossdef>
+	<para>(Computer Graphics Metafile) CGM is one of the CALS
+	  standard formats for representing 2&ndash;D technical
+	  illustrations. CGM is an object-oriented graphic
+	  format.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm><acronym>DSSSL</acronym></glossterm>
+      <glossdef>
+	<para>(Document Style Semantics and Specification Language)
+	  This draft international standard (DIS 10179) applies to the
+	  specification of processing information for
+	  <acronym>SGML</acronym> documents. <acronym>DSSSL</acronym>
+	  is expected to became an international standard. 
+	</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>DTD</glossterm>
+      <glossdef>
+	<para>(Document Type Definition) A DTD is the formal
+	  definition of the elements, structures, and rules for
+	  marking up a given type of <acronym>SGML</acronym> document.
+	  You can store a DTD at the beginning of a document or
+	  externally in a separate file.
+	</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>EDI</glossterm>
+      <glossdef>
+	<para>(Electronic Data Interchange) This is a set of computer
+	  interchange standards for business documents such as
+	  invoices, bills, and purchase orders.
+	</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>element</glossterm>
+      <glossdef>
+	<para>An element is a piece of data within a document that may
+	  contain either text or other subelements such as a
+	  paragraph, a chapter, and so on.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>element declaration</glossterm>
+      <glossdef>
+	<para>A statement in the DTD defining an element and declaring
+	  the order in which it may appear in the document and what
+	  other elements it may include.
+	</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>entity</glossterm>
+      <glossdef>
+	<para>An entity is a self-contained piece of data that can be
+	  referenced as a unit. You can refer to an entity by a
+	  symbolic name in the DTD or the document. An entity can be a
+	  string of characters, a symbol character (unavailable on a
+	  standard keyboard), a separate text file, or a separate
+	  graphic file.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>entity declaration</glossterm>
+      <glossdef>
+	<para>A statement in the DTD or document that assigns an
+	  <acronym>SGML</acronym> name to an entity so you can
+	  reference it.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>FOSI</glossterm>
+      <glossdef>
+	<para>(Formatting Output Specification Instance) A FOSI is
+	  used for formatting <acronym>SGML</acronym> documents for
+	  printing and other outputs. It is a separate file that
+	  contains formatting information for each element in a
+	  document.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>HTML</glossterm>
+      <glossdef>
+	<para>(HyperText Markup Language) This is the format of files
+	  published on the &www;. HTML is an application of
+	  <acronym>SGML</acronym>; to author in HTML using
+	  <acronym>SGML</acronym>-based authoring software, you simply
+	  need the HTML DTD.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>IGES</glossterm>
+      <glossdef>
+	<para>(Initial Graphics Exchange Specification) The IGES
+	  standard for engineering, product design, and manufacturing
+	  drawings is one of the CALS standard graphics
+	  formats.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>Internet</glossterm>
+      <glossdef>
+	<para>The Internet is a worldwide communications network
+	  originally developed by the U.S. Department of Defense as a
+	  distributed system with no single point of failure. The
+	  Internet has seen an explosion in commercial use since the
+	  development of easy-to-use software for accessing the
+	  Internet.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>ISO</glossterm>
+      <glossdef>
+	<para>(International Organization for Standardization) The ISO
+	  is an industry-supported organization that establishes
+	  worldwide standards for everything from data interchange
+	  formats to film speed specifications.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>markup</glossterm>
+      <glossdef>
+	<para>Markup is anything added to the content of the document
+	  that describes the text.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>parser</glossterm>
+      <glossdef>
+	<para>A parser is a specialized software program that
+	  recognizes <acronym>SGML</acronym> markup in a document. A
+	  parser that reads a DTD and checks and reports on markup
+	  errors is a validating <acronym>SGML</acronym> parser. A
+	  parser can be built into an <acronym>SGML</acronym> editor
+	  to prevent incorrect tagging and to check whether a document
+	  contains all the required elements.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>PDES/STEP</glossterm>
+      <glossdef>
+	<para>(Product Data Exchange Standard/Standard for the
+	  Exchange of Product Model Data). PDES/STEP are standards
+	  under development for communicating a complete product model
+	  with sufficient information content that advanced CAD/CAM
+	  applications can interpret. PDES is under development as a
+	  national standard and STEP is under development as its
+	  international counterpart.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>tag</glossterm>
+      <glossdef>
+	<para>In the world of <acronym>SGML</acronym>, a tag is a
+	  marker embedded in a document that indicates the purpose or
+	  function of the element. Each element has a beginning tag
+	  and an end tag.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry><glossterm>&www;</glossterm>
+      <glossdef>
+	<para>Often referred to as WWW or the Web, this usually refers
+	  to information available on the Internet that can be easily
+	  accessed with software usually called a
+	  <quote>browser.</quote> Organizations publish their
+	  information on the Web in a format known as HTML; this
+	  information is usually referred to as their <quote>home
+	    page</quote> or <quote>web site</quote>.</para>
+      </glossdef>
+    </glossentry>
+  </glossary>
+</book>
+<!-- Keep this comment at the end of the file
+Local variables:
+mode: sgml
+sgml-omittag:t
+sgml-shorttag:t
+sgml-minimize-attributes:nil
+sgml-always-quote-attributes:t
+sgml-indent-step:2
+sgml-indent-data:t
+sgml-parent-document:nil
+sgml-default-dtd-file:nil
+sgml-exposed-tags:nil
+sgml-local-catalogs:nil
+sgml-local-ecat-files:nil
+End:
+-->

@@ -1,0 +1,56 @@
+fun waiting(id) client {
+ receive {
+  case MouseDown(elem)       -> dragging(id, elem);
+  case MouseUp               -> waiting(id);
+  case MouseOut(relatedElem) -> waiting(id);
+ }
+}
+
+fun isElementOfList(elem, id) {
+ not(domIsNullRef(elem)) && domGetAttributeFromRef(domGetParentFromRef(elem), "id") == id
+}
+
+fun dragging(id, elem) client {
+  receive {
+     case MouseUp               -> waiting(id);
+     case MouseDown(elem)       -> dragging(id, elem);
+     case MouseOut(relatedElem) -> {
+         if(isElementOfList(relatedElem, id)) {
+           domSwapNodeRefs(relatedElem, elem);
+           dragging(id, elem)          
+         }
+         else waiting(id)
+    };
+  }
+}
+
+fun format(item) {
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li><span/>
+}
+
+fun draggableList(id, items)
+{
+  var x = id;
+  var dragger = spawn { waiting(id) };
+   <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+      l:onmouseup   = "{dragger ! MouseUp}"
+      l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
+      l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}"
+   >
+    {for (var item <- items)
+         format(item)}
+  </ul>
+
+}
+
+<html>
+<body>
+<h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+{draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+<h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+{draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+<h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+{draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
+</body>
+</html>
+

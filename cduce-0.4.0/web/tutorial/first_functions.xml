@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="tutorial_first_functions">
+
+<title>First functions</title>
+<banner>First functions</banner>
+
+<left>
+<boxes-toc/>
+<p>
+You can cut and paste the code on this page and 
+test it on the <a href="http://reglisse.ens.fr/cgi-bin/cduce">online interpreter</a>.
+</p>
+</left>
+
+<box title="First functions" link="t2">
+
+<p>
+A first example of transformation is <code>names</code>, which extracts the 
+sequences of all names of parents in a <code>ParentBook</code> element:
+</p>
+
+<sample><![CDATA[
+let names (ParentBook -> [Name*])
+    <parentbook>x -> (map x with <person ..>[ n  _*] -> n)
+]]></sample>
+
+<p>
+The name of the transformation is followed by an <i>interface</i> that
+states that <code>names</code> is a function from
+<code>ParentBook</code> elements to (possibly empty) sequences of
+<code>Name</code> elements. This is obtained by matching the argument of the
+function against the pattern
+</p>
+<sample><![CDATA[
+<parentbook>x ]]></sample>
+<p>which binds <code>x</code> to
+the sequence of person elements forming the parentbook. The operator
+<code>map</code> applies to each element of a sequence (in this case <code>x</code>) the
+transformation defined by the subsequent pattern matching. Here <code>map</code>
+returns the sequence obtained by replacing each person in <code>x</code> by its
+<code>Name</code> element. Note that we use the pattern 
+</p>
+<sample><![CDATA[<person ..>[ n _*], 
+]]></sample> 
+<p>to match the person elements: <code>n</code> matches (and captures) the
+<code>Name</code> element-that is, the first element of the sequence-,
+<code>_*</code> matches (and discards) the sequence of elements that follow, and
+<code>person</code> matches the tag of the person. Since elements of type
+<code>Person</code> contain attributes (actually, just the attribute gender)
+then we use <code>..</code> to match (and discard) them. This is not necessary
+for the parentbook elements, but we could have specified it as well as
+<code>&lt;parentbook ..>x</code> since <code>..</code> matches any sequence of
+attibutes, the empty one as well.
+</p><p>
+ The interface and the type definitions
+ensure that the tags will be the expected ones, so we could optimize the
+code by defining a body that skips the check of the tags:
+</p>
+
+<sample><![CDATA[
+<_> x -> (map x with <_ ..>[ n _*] -> n)
+]]></sample>
+
+<p>
+However this optimization would be useless since it is already done by the
+implementation (for technical details see <a href="http://www.cduce.org/papers/reg.pdf">this paper</a>) and, of course, it
+would make the code less readable.  If instead of extracting the list of
+<i>all</i> parents we wanted to extract the sublist containing only
+parents with exactly two children, then we had to replace <code>transform</code> for <code>map</code>:
+</p>
+<sample><![CDATA[
+let names2 (ParentBook -> [Name*])
+   <parentbook> x -> 
+      transform x with <person ..>[ n <children>[Person Person] _*] -> [n]
+]]></sample>
+<p>
+While <code>map</code> must be applicable to all the elements of a sequence,
+<code>transform</code> filters only those that make its pattern succeed. The
+right-hand sides return sequences which are concatenated in the final result.
+In this case <code>transform</code> returns the names only of those persons
+that match the pattern <code>&lt;person ..>[ n &lt;children>[Person Person] _*]</code>.
+Here again, the implementation compiles this pattern exactly as
+<code>&lt;_ ..>[ n &lt;_>[_ _] _*]</code>, and in particular avoids checking
+that sub-elements of <code>&lt;children></code> are of type <code>Person</code>
+when static-typing enforces this property.
+</p>
+
+<p>
+These first examples already show the essence of CDuce's patterns: all a pattern
+can do is to decompose values into subcomponents that are either captured
+by a variable or checked against a type.
+</p>
+
+<p>
+The previous functions return only the names of the outer persons of  a
+<code>ParentBook</code> element. If we want to capture all the <code>name</code> elements in
+it we have to recursively apply <code>names</code> to the sequence of children:
+</p>
+<sample><![CDATA[
+let names (ParentBook -> [Name*])
+   <parentbook> x -> transform x with 
+         <person ..> [ n  <children>c  _*] -> [n]@(names <parentbook>c)
+]]></sample>
+<p>
+where <code>@</code> denotes the concatenation of sequences. Note that in order to
+recursively call the function on the sequence of children we have to
+include it in a <code>ParentBook</code> element.  A more elegant way to obtain the same
+behavior is to specify that names can be applied both to <code>ParentBook</code>
+elements and to <code>Children</code> elements, that is, to the union of the two
+types denoted by <code>(ParentBook|Children)</code>:
+</p>
+<sample><![CDATA[
+let names ( ParentBook|Children -> [Name*] )
+   <_>x -> transform x with <person ..>[ n  c  _*] -> [n]@(names c)
+]]></sample>
+<p>
+Note here the use of the pattern <code>&lt;_></code> at the beginning of the body which
+makes it possible for the function to work both on <code>ParentBook</code> and on
+<code>Children</code> elements.
+</p>
+</box>
+
+
+<box title="Regular Expressions" link="re">
+
+<p>
+In all these functions we have used the pattern <code>_*</code> to match, and
+thus discard, the rest of a sequence. This is nothing but a particular regular expression over types. Type regexps can be used in patterns to match subsequences of a value. For instance the pattern 
+ <code>&lt;person ..>[  _  _   Tel+]</code> matches all person elements that specify no <code>Email</code> element and at least one <code>Tel</code> element. It may be useful
+to bind the sequence captured by a (pattern) regular expression to a variable. But since a regexp is not a type, we cannot write, say, <code>x&amp;Tel+</code>. So we introduce a special notation <code>x::%%R%%</code> to bind <code>x</code> to the sequence matched by the type regular expression <code>%%R%%</code>. For instance:
+</p>
+<sample><![CDATA[
+let domain (Email ->String) <_>[ _*?  d::(Echar+ '.' Echar+) ] -> d
+]]></sample>
+<p>
+returns the last two parts of the domain of an e-mail (the <code>*?</code>
+is an ungreedy version of <code>*</code>, see <a href="tutorial_patterns.html#pre">regular expressions patterns</a>).
+If these ::-captures are used <i>inside</i> the scope of the regular expression
+operators <code>*</code> or <code>+</code>, or if the same variable
+appears several times in a regular expression,
+then the variable is bound to
+the concatenation of all the corresponding matches. This is one of the
+distinctive and powerful characteristics of CDuce, since it allows to
+define patterns that in a single match capture subsequences of
+non-consecutive elements. For instance:
+</p>
+<sample><![CDATA[
+type PhoneItem = {name = String; phones = [String*] }
+let agendaitem (Person -> PhoneItem)
+    <person ..>[<name>n  _  (t::Tel | _)*] ->
+        { name = n ; phones = map t with <tel ..> s ->s }
+]]></sample>
+<p>
+transforms a <code>person</code> element into a record value with two fields containing
+the element's name and the list of all the phone numbers. This is
+obtained thanks to the pattern <code>(t::Tel | _)*</code> that binds to <code>t</code> the
+sequence of all <code>Tel</code> elements appearing in the person. By the same rationale the pattern
+</p>
+<sample><![CDATA[
+( w::<tel kind="work">_ | t::<tel kind=?"home">_ | e::<email>_ )*
+]]></sample>
+<p>
+partitions the <code>(Tel | Email)*</code>
+sequence into three subsequences, binding  the list of work phone numbers to
+<code>w</code>, the list of other numbers to <code>t</code>, and  the list of e-mails to <code>e</code>. Alternative patterns
+<code>|</code> follow a first match policy (the second pattern is matched
+only if the first fails). Thus we can write a shorter pattern that (applied to <code>(Tel|Email)*</code> sequences) is equivalent:
+</p>
+<sample><![CDATA[
+( w::<tel kind="work">_ | t::Tel | e::_ )*
+]]></sample>
+<p>
+Both patterns are compiled into  </p>
+<sample><![CDATA[
+( w::<tel kind="work">_ | t::<tel ..>_ | e::_)*
+]]></sample>
+<p>
+since checking the tag suffices to determine if the element is of type <code>Tel</code>.
+</p>
+
+<p>
+Storing phone numbers in integers rather than in strings requires minimal
+modifications. It suffices to use a pattern regular expression to strip off
+the possible occurrence of a dash:
+</p>
+<sample><![CDATA[
+let agendaitem2 (Person -> {name=String; phones=[Int*]})
+  <person ..>[ <name>n  _  (t::Tel|_)* ] ->
+      { name = n; phones = map t with <tel ..>[(s::'0'--'9'|_)*] -> int_of s }
+]]></sample>
+<p>
+In this case <code>s</code> extracts the subsequence formed only by numerical
+characters, therefore <code>int_of s</code> cannot fail because <code>s</code>
+has type <code>[ '0'--'9'+ ]</code> (otherwise, the system would have issued a
+warning) (Actually the type system deduces for <code>s</code> the following type
+<code>[ '0'--'9'+ '0'--'9'+]</code> (subtype of the former) since there always
+are at least two digits).
+</p>
+
+
+<section title="First use of overloading">
+<p>
+Consider the type declaration
+</p>
+<sample><![CDATA[
+type PhoneBook = <phonebook>[PhoneItem*]
+]]></sample>
+<p>If we
+add a new pattern matching branch in the definition of the function
+<code>names</code>, we make it work both with <code>ParentBook</code> and <code>
+PhoneBook</code> elements. This yields the following <i>overloaded</i> function:
+</p><a name="names3"/>
+<sample><![CDATA[
+let names3 (ParentBook -> [Name*] ; PhoneBook -> [String*])    
+      | <parentbook> x -> (map x with <person ..>[ n  _* ] -> n)
+      | <phonebook> x -> (map x with { name=n } -> n) 
+]]></sample>
+<p>
+The overloaded nature of <code>names3</code> is expressed by its interface, which
+states that when the function is applied to a <code>ParentBook</code> element it returns
+a list of names, while if applied to a <code>PhoneBook</code> element it
+returns a list of strings. We can factorize the two branches in a unique
+alternative pattern:
+</p>
+<sample><![CDATA[
+let names4 (ParentBook -> [Name*] ; PhoneBook -> [String*])    
+     <_> x -> map x with ( <person ..>[ n  _* ] | { name=n } ) -> n
+]]></sample>
+<p>The interface ensures that the two representations will never mix.</p>
+</section>
+
+</box>
+</page>
+
+

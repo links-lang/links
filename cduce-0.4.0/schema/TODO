@@ -1,0 +1,17 @@
+- substitution groups
+- don't name schema, use namespaces
+- detect ill-formed recursion (e.g. between attribute groups)
+- redefine
+
+
+
+Compilation  Schema->CDuce.
+
+
+type t ===> fun parse_t (Any -> [t])
+
+
+
+All (A,B,C) ==>
+
+  (A|B|C,A|B|C,A|B|C)

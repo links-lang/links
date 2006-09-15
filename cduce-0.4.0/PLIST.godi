@@ -1,0 +1,9 @@
+@comment $GODI$
+bin/cduce
+bin/cduce_mktop
+@glob bin/dtd2cduce
+man/man1/cduce.1
+man/man1/cduce_mktop.1
+man/man1/dtd2cduce.1
+@deepdir doc/apps-cduce
+@findlib cduce

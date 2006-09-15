@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="tutorial_overloading">
+
+<title>Overloading</title>
+<left>
+<boxes-toc/>
+<p>
+You can cut and paste the code on this page and 
+test it on the <a href="http://reglisse.ens.fr/cgi-bin/cduce">online interpreter</a>.
+</p>
+</left>
+
+<box title="Overloaded functions" link="val">
+
+<p>
+The simplest form for a toplevel function declaration is
+</p>
+<sample><![CDATA[
+let %%f%% (%%t%%->%%s%%) %%x%% -> %%e%%
+]]></sample>
+<p>
+in which the body of a function is formed by a single branch
+<code>%%x%% -> %%e%%</code> of pattern matching. As we have seen in the previous sections, the body of a function may be formed by several branches with complex patterns.
+<br/> 
+The interface <code>%%t%%->%%s%%</code> specifies
+a constraint on the behavior of the function to be checked by the type 
+system: when applied to an argument
+of type <code>%%t%%</code>, the function returns a result of type  <code>%%s%%</code>.
+</p>
+
+<section title="Simple Overloading">
+<p>
+In general the interface of a function may specify several such constraints, 
+as the <a href="tutorial_first_functions.html#names3">names3</a> example
+The general form of a toplevel function declaration is indeed:
+</p>
+<sample><![CDATA[
+let %%f%% (%%t1%%->%%s1%%;...;%%tn%%->%%sn%%) %%p1%% -> %%e1%% | ... | %%pm%% -> %%em%%
+]]></sample>
+<p>
+Such a function accepts arguments of type 
+(<code>%%t1%%|...|%%tn%%</code>); it has all the types <code>%%ti%%->%%si%%</code>, and,
+thus, it also has their intersection <code>%%t1%%->%%s1%%&amp;...&amp;%%tn%%->%%sn%%</code>
+</p>
+
+<p>
+The use of several arrow types in an interface serves to give the function a
+more precise type. We can roughly distinguish two different uses of multiple
+arrow types in an interface:
+</p>
+<ul>
+  <li>when each arrow type specifies the behavior of a different piece
+  of code forming the body of the function, the compound interface
+  serves to specify the <i>overloaded</i> behavior of the
+  function. This is the case for the 
+  function below
+
+<sample><![CDATA[
+  let add ( (Int,Int)->Int ; (String,String)->String )
+      | (x & Int, y & Int) -> x+y
+      | (x & String, y & String) -> x@y
+]]></sample>
+<p>
+where each arrow type in the interface refers to a different branch of the body.
+</p></li>
+
+
+  <li>when the arrow types specify different behavior for the same code,
+  then the compound interface serves to give a more precise
+  description of the behavior of the function. An example is
+  the function <a href="tutorial_first_functions.html#names3">names4</a> from Section "<local href="tutorial_first_functions"/>".
+  </li>
+</ul>
+<p>
+There is no clear separation between these two situations since, in general, an
+overloaded function has body branches that specify behaviors of
+different arrow types of the interface but share some common portions of the
+code.
+</p>
+
+</section>
+
+
+<section title="A more complex example">
+<a name="canonical"/>
+<p>
+Let us examine a more complex example. Recall the types used to represent persons 
+that we defined in  Section "<a href="tutorial_getting_started#type_decl">Getting started</a>" that for the purpose of the example we can simplify as follows:
+</p>
+<sample><![CDATA[
+type Person   = FPerson | MPerson 
+type FPerson  = <person gender = "{{F}}">[ Name Children ] 
+type MPerson  = <person gender = "{{M}}">[ Name Children ] 
+type Children = <children>[ Person* ] 
+type Name     = <name>[ PCDATA ]
+]]></sample>
+<p>
+We want to transform this representation of persons into a different representation that uses different tags 
+<code>&lt;man></code> and <code>&lt;woman></code>
+instead of the gender attribute and, conversely, that uses an attribute
+instead of an element for the name.
+We also want to distinguish the children of a person into two different
+sequences, one of sons, composed of men (i.e. elements tagged by <code>&lt;man></code>), and the other of daughters, composed of
+women.  Of course we also want to apply this transformation recursively to the
+children of a person. In practice, we want to define a function  <code>&lt;split></code> of
+type <code>Person ->(Man | Woman)</code> where <code>Man</code> and <code>Woman</code> are the types:
+</p>
+<sample><![CDATA[
+type Man = <man name=String>[ Sons Daughters ]
+type Woman = <woman name=String>[ Sons Daughters ]
+type Sons = <sons>[ Man* ]
+type Daughters = <daughters>[ Woman* ]
+]]></sample>
+<p>
+Here is a possible way to implement such a transformation:
+</p>
+<sample><![CDATA[
+let fun split ({{MPerson -> Man ; FPerson -> Woman}})
+  <person gender=g>[ <name>n <children>[(mc::MPerson | fc::FPerson)*] ] ->
+  (* the above pattern collects all the MPerson in mc, and all the FPerson in fc *)
+     let tag = match g with "F" -> `woman | "M" -> `man in
+     let s = map mc with x -> split x in
+     let d = map fc with x -> split x in	
+     <(tag) name=n>[ <sons>s  <daughters>d ] ;; 
+]]></sample>
+<p>
+The function <code>split</code> is declared to be an overloaded function that, when
+applied to a <code>MPerson</code>, returns an element of type <code>Man</code> and
+that, when applied
+to a <code>FPerson</code>, returns an element of type <code>Woman</code>. The body
+is composed of a single pattern matching 
+</p>
+<sample><![CDATA[
+  <person gender={{g}}>[ <name>{{n}} <children>[({{mc}}::MPerson | {{fc}}::FPerson)*] ] ->
+]]></sample>
+<p>
+whose pattern binds four variables: <code>g</code> is
+bound to the gender of the argument of the function, <code>n</code> is bound to
+its  name, <code>mc</code> is bound to the sequence of all children that are of
+type <code>MPerson</code>, and <code>fc</code> is bound to the sequence of all children
+that are of type <code>FPerson</code>.  
+</p>
+
+<p>
+On the next line we define <code>tag</code> to be
+<code>`man</code> or <code>`woman</code> according to the value of <code>g</code>.  
+</p>
+<sample><![CDATA[
+     let tag = match g with "F" -> `woman | "M" -> `man 
+]]></sample>
+<p>
+Then we
+apply <code>split</code> recursively to the elements of <code>mc</code> and <code>fc</code>. 
+</p>
+<sample><![CDATA[
+     let {{s}} = map {{mc}} with x -> {{split}} x in
+     let d = map fc with x -> split x in	
+     <(tag) name=n>[ <sons>{{s}}  <daughters>d ] ;; 
+]]></sample>
+<p>
+Here is
+the use of overloading: since <code>mc</code> is of type <code>[MPerson*]</code>, then
+by the overloaded type of <code>split</code> we can deduce that <code>s</code> is of type
+<code>[Man*]</code>; similarly we deduce for <code>d</code> the type <code>[Woman*]</code>. From this
+the type checker deduces that the expressions <code>&lt;sons>s</code> and
+<code>&lt;daughters></code> are of type <code>Sons</code> and <code>Daughters</code>, and therefore it
+returns for the <code>split</code> function the type <code>(MPerson -> Man) &amp; (FPerson
+-> Woman)</code>.  Note that the use of overloading here is critical: although
+<code>split</code> has <i>also</i>  type <code>Person ->(Man | Woman)</code> (since <code>split</code> is of type
+<code>MPerson->Man &amp; FPerson->Woman</code>, which is a subtype), had we
+declared <code>split</code> of that type, the function would not have type-checked: in
+the recursive calls we would have been able to deduce for <code>s</code> and for
+<code>d</code> the type <code>[ (Man | Woman)* ]</code>, which is not enough to type-check the
+result. 
+If, for example, we wanted to define the same transformation in XDuce we would
+need first to apply a filter (that is our transform) to the children so as to
+separate male from females (while in CDuce we obtain it simply by a pattern) and then
+resort to two auxiliary functions that have nearly the same definition and
+differ only on their type, one being of type <code>MPerson -> Man</code>, the other of
+type <code>FPerson -> Woman</code>. The same transformation can be elegantly defined
+in XSLT with a moderate nloc increase, but only at the
+expense of loosing static type safety and type-based optimizations.
+</p>
+</section>
+</box>
+
+
+
+
+
+</page>

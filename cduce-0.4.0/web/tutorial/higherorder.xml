@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="tutorial_higherorder">
+
+<title>Higher-order functions</title>
+<left>
+<boxes-toc/>
+<p>
+You can cut and paste the code on this page and 
+test it on the <a href="http://reglisse.ens.fr/cgi-bin/cduce">online interpreter</a>.
+</p>
+</left>
+
+<box title="Introduction" link="intro">
+
+<p><b style="color:#FF0080">TO BE DONE</b></p>
+
+</box>
+
+<box title="A complex example" link="comp">
+<p>  <b style="color:#FF0080">Rewrite in order not to introduce new type declarations</b>
+</p>
+<sample><![CDATA[
+type Program = <program>[ Day* ]
+type Day = <date day=String>[ Invited? Talk+ ]
+type Invited = <invited>[ Title Author+ ]
+type Talk = <talk>[ Title Author+ ]
+type Author = <author> String
+type Title = <title> String
+
+let patch_program 
+  (p :[Program], f :{{(Invited -> Invited) & (Talk -> Talk)}}):[Program] =
+  xtransform p with (Invited | Talk) & x -> [ (f x) ]
+
+let first_author ({{[Program] -> [Program];
+                  Invited -> Invited;
+                  Talk -> Talk}})
+| [ Program ] & p -> patch_program (p,first_author)
+| <(k)>[ t a _* ] -> <(k)>[ t a ] 
+]]></sample>
+
+</box>
+
+
+
+
+
+</page>
+
+
+
+

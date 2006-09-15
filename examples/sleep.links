@@ -1,0 +1,25 @@
+fun date() server {
+  getCommandOutput("date")
+}
+
+fun showDate() client {
+  domReplaceNode(
+     <div id="date">{stringToXml(date())}</div>,
+     domGetRefById("date"))
+      
+}
+
+fun ticker(f, n) {
+  f();
+  sleep(n);
+  ticker(f, n);
+}
+
+{
+  spawn { ticker(showDate, 5) };
+  <html>
+    <body>
+      <div id="date"/>
+    </body>
+  </html>
+}

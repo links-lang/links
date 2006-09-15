@@ -1,0 +1,107 @@
+                 Installation Notes for Windows NT/2000/XP
+                 =========================================
+
+
+CDuce can be executed on Microsoft Windows by using the
+RedHat/Cygnus environment Cygwin freely available at
+
+http://www.cygwin.com/
+
+The executable needs the cygwin1.dll that is distributed 
+under GPL license. This is not compatible with the CDuce license.
+For this reason we do not provide binaries but give here detailed 
+instructions about how to compile CDuce sources under Cygwin/Windows.
+
+
+------------------------------------------------------------------------------
+Prerequisites
+------------------------------------------------------------------------------
+
+Before compiling CDuce on Windows, you need to install recent 
+releases of the following packages:
+
+
+cygwin
+  http://www.cygwin.com
+ocaml      
+  http://caml.inria.fr/ocaml/distrib.html
+findlib    
+  http://www.ocaml-programming.de/packages
+wlex       
+  http://www.eleves.ens.fr/home/frisch/soft.html#wlex
+pcre-ocaml 
+  http://www.ai.univie.ac.at/~markus/home/ocaml_sources.html
+ocamlnet   
+  http://sourceforge.net/projects/ocamlnet
+pxp
+  http://www.ocaml-programming.de/packages/documentation/pxp/index_dev.html
+
+
+Installation notes (you are advised to follow this order):
+
+1) Download and execute cygwin setup.exe.
+   - Choose Internet installation
+   - Choose a root directory whose path has no blanks in it
+   - Choose as Local Package Directory <your root>/usr/src (optional)
+   - Choose the mirror closest to you
+   - When asked to select the packages to install add to the default
+     choices the following packages:
+       Devel/
+         autoconf*
+         automake*
+         binutils
+         gcc*
+         make
+         patchutils
+       Lib/
+	 libpcre
+         pcre **both binaries and sources**
+     you may also find useful to install the following packages
+       Editors/
+         emacs or vim (no trolls)
+       Net/
+         openssh
+         ncftp
+       Devel/
+         cvs
+       Utils/
+         diff
+         patch
+     then proceed with installation
+
+
+2) Download (we suggest in /usr/src) and install Ocaml
+   [For the impatients: ./configure && make world.opt && make install]
+
+
+3) Download (guess where) and install findlib
+   a plain ./configure && make all && make opt && make install
+   should work 
+
+
+4) Download and install ulex 
+
+
+5) Download and install pcre-ocaml. 
+
+   
+6) Download and install ocamlnet
+
+
+7) PXP:
+   CDuce requires a development version >= 1.1.93.
+
+
+Now you can compile CDuce sources as indicated in the INSTALL file 
+namely 
+
+  
+------------------------------------------------------------------------------
+Compilation, installation
+------------------------------------------------------------------------------
+
+See the INSTALL file.
+
+
+
+

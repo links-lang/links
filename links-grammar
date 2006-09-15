@@ -1,0 +1,250 @@
+   0  $accept : %entry% $end
+
+   1  parse_links : toplevel_seq END
+
+   2  toplevel_seq : toplevel_seq toplevel
+   3               | toplevel
+
+   4  toplevel : exp SEMICOLON
+   5           | namespace_decl
+   6           | VARIABLE perhaps_location BE exp SEMICOLON
+   7           | FUN VARIABLE LPAREN patts RPAREN perhaps_location local_var_expression
+   8           | FUN VARIABLE LPAREN patts RPAREN perhaps_location local_var_expression SEMICOLON
+   9           | FUN VARIABLE LPAREN RPAREN perhaps_location local_var_expression
+  10           | FUN VARIABLE LPAREN RPAREN perhaps_location local_var_expression SEMICOLON
+
+  11  perhaps_semicolon : SEMICOLON
+  12                    |
+
+  13  namespace_decl : NAMESPACE VARIABLE BE STRING SEMICOLON
+
+  14  perhaps_location : SERVER
+  15                   | CLIENT
+  16                   |
+
+  17  const : MINUS UINTEGER
+  18        | MINUS UFLOAT
+  19        | UINTEGER
+  20        | UFLOAT
+  21        | STRING
+  22        | TRUE
+  23        | FALSE
+  24        | CHAR
+
+  25  primary_expression : VARIABLE
+  26                     | const
+  27                     | LSET RBRACKET
+  28                     | LSET exps RBRACKET
+  29                     | LBAG RBRACKET
+  30                     | LBAG exps RBRACKET
+  31                     | LBRACKET RBRACKET
+  32                     | LBRACKET exps RBRACKET
+  33                     | parenthesized_thing
+
+  34  parenthesized_thing : LPAREN binop RPAREN
+  35                      | LPAREN DOT VARIABLE RPAREN
+  36                      | LPAREN DOT UINTEGER RPAREN
+  37                      | LPAREN RPAREN
+  38                      | LPAREN labeled_exps VBAR exp RPAREN
+  39                      | LPAREN labeled_exps RPAREN
+  40                      | LPAREN exps RPAREN
+
+  41  binop : STAR
+  42        | SLASH
+  43        | STARSTAR
+  44        | SLASHSLASH
+  45        | HATHAT
+  46        | PLUS
+  47        | MINUS
+  48        | PLUSPLUS
+  49        | MINUSMINUS
+  50        | AT
+
+  51  postfix_expression : primary_expression
+  52                     | postfix_expression LPAREN RPAREN
+  53                     | postfix_expression LPAREN exps RPAREN
+  54                     | postfix_expression DOT VARIABLE
+  55                     | postfix_expression DOT UINTEGER
+
+  56  exps : exp COMMA exps
+  57       | exp
+
+  58  unary_expression : postfix_expression
+
+  59  exponentiation_expression : unary_expression
+  60                            | exponentiation_expression HATHAT postfix_expression
+
+  61  multiplicative_expression : exponentiation_expression
+  62                            | multiplicative_expression STAR exponentiation_expression
+  63                            | multiplicative_expression SLASH exponentiation_expression
+  64                            | multiplicative_expression STARSTAR exponentiation_expression
+  65                            | multiplicative_expression SLASHSLASH exponentiation_expression
+
+  66  addition_expression : multiplicative_expression
+  67                      | addition_expression PLUS multiplicative_expression
+  68                      | addition_expression MINUS multiplicative_expression
+  69                      | addition_expression PLUSPLUS multiplicative_expression
+  70                      | addition_expression MINUSMINUS multiplicative_expression
+
+  71  comparison_expression : addition_expression
+  72                        | comparison_expression EQUAL addition_expression
+  73                        | comparison_expression LESS addition_expression
+  74                        | comparison_expression LESSEQUAL addition_expression
+  75                        | comparison_expression MORE addition_expression
+  76                        | comparison_expression MOREEQUAL addition_expression
+  77                        | comparison_expression DIFFERENT addition_expression
+
+  78  logical_expression : comparison_expression
+  79                     | logical_expression BARBAR comparison_expression
+  80                     | logical_expression AMPAMP comparison_expression
+
+  81  union_expression : logical_expression
+  82                   | union_expression SETUNI logical_expression
+  83                   | union_expression BAGUNI logical_expression
+  84                   | union_expression COLCOL logical_expression
+  85                   | union_expression XMLUNI logical_expression
+
+  86  angle_bracket_enclosed_expression : union_expression
+  87                                    | LANG VARIABLE BE exp RANG
+
+  88  db_expression : angle_bracket_enclosed_expression
+  89                | UPDATE LPAREN STRING COMMA exp RPAREN BY exp
+  90                | DELETE FROM LPAREN STRING COMMA exp RPAREN VALUES exp
+  91                | INSERT INTO LPAREN STRING COMMA exp RPAREN VALUES exp
+  92                | DATABASE exp
+
+  93  xml_expression : db_expression
+  94                 | xml_forest
+
+  95  xml_forest : xml_tree
+  96             | xml_tree xml_forest
+
+  97  xml_closing_tag : LXML SLASH xmlid RXML
+
+  98  xmlid : VARIABLE
+
+  99  xml_attribute_list : xml_attribute
+ 100                     | xml_attribute_list xml_attribute
+
+ 101  xml_attribute : xmlid BE LQUOTE xml_attribute_val RQUOTE
+ 102                | xmlid BE LQUOTE RQUOTE
+
+ 103  xml_attribute_val : LBRACE exp RBRACE
+ 104                    | STRING
+ 105                    | xml_attribute_val LBRACE exp RBRACE
+ 106                    | xml_attribute_val STRING
+
+ 107  xml_tree : LXML xmlid RXML xml_contents_list xml_closing_tag
+ 108           | LXML xmlid SLASH RXML
+ 109           | LXML xmlid xml_attribute_list RXML xml_contents_list xml_closing_tag
+ 110           | LXML xmlid xml_attribute_list SLASH RXML
+
+ 111  xml_contents_list : xml_contents
+ 112                    | xml_contents_list xml_contents
+
+ 113  xml_contents : LBRACE exp RBRACE
+ 114               | xml_tree
+ 115               | STRING
+
+ 116  sort_expression : xml_expression
+ 117                  | SORT_UP LPAREN exp RPAREN
+ 118                  | SORT_DOWN LPAREN exp RPAREN
+
+ 119  conditional_expression : sort_expression
+ 120                         | IF exp THEN exp ELSE exp
+
+ 121  case_expression : conditional_expression
+ 122                  | CASE exp OF vari_lets
+ 123                  | CASE exp OF vari_lets VBAR VARIABLE IN exp
+ 124                  | CASE exp OF vari_lets VBAR ANYTHING IN exp
+
+ 125  table_expression : case_expression
+ 126                   | TABLE STRING WITH kind unique order FROM exp
+
+ 127  iteration_expression : table_expression
+ 128                       | FOR provider IN exp
+ 129                       | FOR provider XIN exp
+
+ 130  lambda_expression : iteration_expression
+ 131                    | FUN LPAREN patts RPAREN local_var_expression
+
+ 132  perhaps_arg_list : arg_list
+ 133                   | LPAREN RPAREN
+
+ 134  arg_list : parenthesized_pattern
+ 135           | parenthesized_pattern arg_list
+
+ 136  parenthesized_pattern : parenthesized_thing
+
+ 137  let_binding : patt BE exp SEMICOLON
+ 138              | exp SEMICOLON
+ 139              | FUN VARIABLE LPAREN patts RPAREN local_var_expression
+
+ 140  let_bindings : let_binding
+ 141               | let_bindings let_binding
+
+ 142  amper_expression : lambda_expression
+ 143                   | LPAREN exp AMPER VARIABLE RPAREN
+
+ 144  local_var_expression : LBRACE let_bindings exp perhaps_semi RBRACE
+ 145                       | LBRACE exp perhaps_semi RBRACE
+
+ 146  perhaps_semi : SEMICOLON
+ 147               |
+
+ 148  exp : amper_expression
+ 149      | local_var_expression
+
+ 150  unique : UNIQUE
+ 151         |
+
+ 152  order : ORDER LBRACKET orders RBRACKET
+ 153        | ORDER LBRACKET RBRACKET
+ 154        |
+
+ 155  orders : VARIABLE COLON ASC COMMA orders
+ 156         | VARIABLE COLON DESC COMMA orders
+ 157         | VARIABLE COLON ASC
+ 158         | VARIABLE COLON DESC
+
+ 159  vari_let : LANG VARIABLE BE patt RANG IN exp
+
+ 160  vari_lets : vari_let OR vari_lets
+ 161            | vari_let
+
+ 162  labeled_exps : record_label BE exp COMMA labeled_exps
+ 163               | record_label BE exp
+
+ 164  record_label : VARIABLE
+ 165               | UINTEGER
+
+ 166  provider : patt SETABST LPAREN exp RPAREN
+ 167           | patt BAGABST LPAREN exp RPAREN
+ 168           | patt LARROW exp
+
+ 169  patts : patt
+ 170        | patt COMMA patts
+
+ 171  patt : exp
+
+ 172  kind : LPAREN kind RPAREN
+ 173       | TBOOL
+ 174       | TINT
+ 175       | TFLOAT
+ 176       | TSTRING
+ 177       | TVARIABLE
+ 178       | kind TO kind
+ 179       | LBRACE labeled_kinds RBRACE
+ 180       | LANG labeled_kinds RANG
+ 181       | LSET kind RBRACKET
+ 182       | LBAG kind RBRACKET
+ 183       | LBRACKET kind RBRACKET
+
+ 184  field : VARIABLE COLON kind
+ 185        | VARIABLE COLON MINUS
+ 186        | TVARIABLE
+
+ 187  labeled_kinds : field COMMA labeled_kinds
+ 188                | field
+
+ 189  %entry% : '\001' parse_links

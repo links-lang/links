@@ -1,0 +1,885 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<page name="manual_expressions">
+
+<title>Expressions</title>
+
+<box title="Value constructors expressions" link="val">
+
+<p>
+The page <local href="manual_types_patterns"/> presents
+the different kind of values: scalar constant (integers, characters, atoms),
+structured values (pairs, records, sequences, XML elements),
+and functional values (abstractions). Value themselves are
+expressions, and the value constructors for structured values
+operate also on expressions.
+</p>
+
+<p>
+This page presents the other kinds of expressions in the language.
+</p>
+
+</box>
+
+<box title="Pattern matching" link="match">
+
+<p>
+A fundamental operation in CDuce is pattern matching:
+</p>
+
+<sample><![CDATA[
+match %%e%% with
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+
+<p>
+The first vertical bar <code>|</code> can be omitted.
+The semantics is to try to match the result of the evaluation
+of <code>%%e%%</code> successively with each pattern
+<code>%%pi%%</code>. The first matching pattern triggers
+the corresponding expression in the right hand side,
+which can use the variables bound by the pattern.
+Note that a first match policy, as for the disjunction patterns.
+</p>
+
+<p>
+The static type system ensures that the pattern matching is exhaustive:
+the type computed for <code>%%e%%</code> must be
+a subtype of the union of the types accepted by all the patterns.
+</p>
+
+<p>
+Local definition is a lighter notation for a pattern matching with
+a single branch:
+</p>
+
+<sample><![CDATA[
+let %%p%% = %%e1%% in %%e2%%
+]]></sample>
+
+<p>
+is equivalent to:
+</p>
+
+<sample><![CDATA[
+match %%e1%% with %%p%% -> %%e2%%
+]]></sample>
+
+<p>
+Note that the pattern <code>%%p%%</code> need not be a simple
+capture variable.
+</p>
+
+</box>
+
+<box title="Functions" link="fun_exp">
+
+<section title="Abstraction">
+
+<p>
+The general form for a function expression is:
+</p>
+
+<sample><![CDATA[
+fun %%f%% (%%t1%% -> %%s1%%; %%...%%; %%tn%% -> %%sn%%)
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+
+<p>
+The first line is the <em>interface</em> of the function,
+and the remaining is the <em>body</em>, which is
+a form of pattern matching (the first vertical bar <code>|</code> can
+thus be omitted).
+</p>
+
+<p>
+The identifier <code>%%f%%</code> is optional; it is useful
+to define a recursive function (the body of the function can
+use this identifier to refer to the function itself).
+</p>
+
+<p>
+The interface of the function specifies some constraints on the
+behavior of the function. Namely, when the function
+receive an argument of type, say <code>%%ti%%</code>, the result
+(if any) must be of type <code>%%si%%</code>. The type system
+ensures this property by type-checking the body once for each constraint.
+</p>
+
+<p>
+The function operate by pattern-matching the argument (which is a
+value) exactly as for standard pattern matching. Actually, it
+is always possible to add a line <code> x -> match x with </code>
+between the interface and the body without changing the semantics.
+</p>
+
+<p>
+When there is a single constraint in the interface, there is
+an alternative notation, which is lighter for several arguments
+(that is, when the argument is a tuple):
+
+</p>
+<sample><![CDATA[
+fun %%f%% (%%p1%% : %%t1%%, %%...%%, %%pn : tn%%) : %%s%% = %%e%%
+]]></sample>
+<p>
+(note the blank spaces around the colons which are mandatory when the
+pattern is a variable 
+<footnote>
+The reason why the blank spaces are mandatory with variables is that the XML
+recommendation allows colons to occur in variables ("names" in XML terminology:
+see section on <local href="namespaces"/>), so the blanks disambiguate
+the variables. Actually only the blank on the right hand side is necessary:
+CDuce accepts <code>fun %%f%% (%%x1%% :%%t1%%, %%...%%, %%xn :tn%%):%%s%% =
+%%e%%</code>, as well (see also <a
+href="tutorial_getting_started.html#bnote1">this paragraph</a> on
+<code>let</code> declarations in the tutorial).</footnote>) which is strictly
+equivalent to:
+</p>
+<sample><![CDATA[
+fun %%f%% ((%%t1%%,%%...%%,%%tn%%) -> %%s%%) (%%p1%%,%%...%%,%%pn%%) -> %%e%%
+]]></sample>
+
+<p>
+It is also possible to define currified functions with this syntax:
+</p>
+<sample><![CDATA[
+fun %%f%% (%%p1%% : %%t1%%, %%...%%, %%pn : tn%%) (%%q1%% : %%s1%%, %%...%%, %%qm : sm%%) %%...%% : %%s%% = %%e%%
+]]></sample>
+<p>
+which is strictly
+equivalent to:
+</p>
+<sample><![CDATA[
+fun %%f%% ((%%t1%%,%%...%%,%%tn%%) -> (%%s1%%,%%...%%,%%sm%%) -> %%...%% -> %%s%%) 
+ (%%p1%%,%%...%%,%%pn%%) -> 
+  fun ((%%s1%%,%%...%%,%%sm%%) -> %%...%% -> %%s%%)
+   (%%q1%%,%%...%%,%%qm%%) -> 
+     %%...%%
+     %%e%%
+]]></sample>
+
+<p>
+The standard notation for local binding a function is:
+</p>
+<sample><![CDATA[
+let %%f%% = fun %%g%% (...) ... in ...
+]]></sample>
+<p>
+Here, <code>%%f%%</code> is the "external" name for the function,
+and <code>%%g%%</code> is the "internal" name (used when the function
+needs to call itself recursively, for instance). When the two names coincide
+(or when you don't need an internal name), there are lighter
+notations:
+</p>
+<sample><![CDATA[
+let fun %%f%% (...) ... in ...
+let %%f%% (...) ... in ...
+]]></sample>
+
+</section>
+
+<section title="Application">
+
+<p>
+The only way
+to use a function is ultimately to apply it to an argument. The notation
+is simply a juxtaposition of the function and its argument.
+E.g.:
+
+</p>
+<sample><![CDATA[
+(fun f (x : Int) : Int = x + 1) 10
+]]></sample>
+
+<p>evaluates to 11. The static type system ensures that
+applications cannot fail.</p>
+
+<p>
+Note that even if there is no functional "pattern" in CDuce,
+it is possible to use in a pattern a type constraint
+with a functional type, as in:
+</p>
+
+<sample><![CDATA[
+fun (Any -> Int)
+ | f & (Int -> Int) -> f 5 
+ | x & Int -> x
+ | _ -> 0
+]]></sample>
+
+
+</section>
+
+</box>
+
+<box title="Exceptions" link="exn">
+
+<p>
+The following construction raises an exception:
+</p>
+<sample><![CDATA[
+raise %%e%%
+]]></sample>
+<p>
+The result of the evaluation of <code>%%e%%</code> is the
+<em>argument</em> of the exception. 
+</p>
+
+<p>
+It is possible to catch an exception with an exception handler:
+</p>
+<sample><![CDATA[
+try %%e%% with
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+<p>
+Whenever the evaluation of <code>%%e%%</code> raises an exception,
+the handler tries to match the argument of the exception with
+the patterns (following a first-match policy). If no pattern matches,
+the exception is propagated.
+</p>
+
+<p> Note that contrary to ML, there is no exception name: the only
+information carried by the exception is its argument. Consequently,
+it is the responsibility of the programmer to put enough information
+in the argument to recognize the correct exceptions. Note also
+that a branch <code>(`A,x) -> %%e%%</code> in an exception
+handler gives no static information about the capture variable
+<code>x</code> (its type is <code>Any</code>). 
+<b>Note:</b> 
+it is possible that the support for exceptions will change in the future
+to match ML-like named exceptions.
+</p>
+
+</box>
+
+<box title="Record operators" link="record_exp">
+
+<p>
+There are three kinds of operators on records:
+</p>
+<ul>
+ <li>
+   Field projection: 
+   <sample>%%e%%.%%l%%</sample> 
+   where
+   <code>%%l%%</code> is the name of a label which must be
+   present in the result of the evaluation of <code>%%e%%</code>.
+   This construction is equivalent to: <code>match %%e%% with
+   { %%l%% = x } -> x</code>. It is necessary to put
+   whitespace between the expression and the dot
+   when the expression is an identifier.
+ </li>
+ <li>
+   Record concatenation:  
+   <sample>%%e1%% + %%e2%%</sample>
+   The two expressions must evaluate to records, which
+   are merged together. If both have a field with the same
+   name, the one on the right have precedence. Note
+   that the operator <code>+</code> is overloaded: it also operates
+   on integers.
+ </li>
+ <li>
+   Field suppression:  
+   <sample>%%e%% \ %%l%%</sample>
+   deletes the field <code>%%l%%</code> in the record resulting from 
+   the evaluation of <code>%%e%%</code> whenever it is present.
+ </li>
+</ul>
+
+</box>
+
+<box title="Arithmetic operators" link="arith">
+
+<p>
+Binary arithmetic operators on integers:
+<code>+,-,*,div,mod</code>. Note that <code>/</code> is used
+for projection and <em>not</em> for division.
+</p>
+
+<p>
+The operator <code>+,-</code> and <code>*</code> are typed
+using simple interval arithmetic. The operators <code>div</code>
+and <code>mod</code> produce a warning at compile type if
+the type of there second argument include the integer <code>0</code>.
+</p>
+
+<p>
+The type <code>Float</code> represents floating point numbers.
+An operator <code>float_of: String -> Float</code> is provided
+to create values of this type. Currently, no other operator
+are provided for this type (but you can use OCaml functions
+to work on floats).
+</p>
+
+</box>
+
+<box title="Generic comparisons, if-then-else" link="comp">
+
+<p>
+Binary comparison operators (returns booleans):
+<code><![CDATA[=,<<,<=,>>,>=]]></code>. Note that <code>&lt;</code>
+is used for XML elements and is this not available for comparison.
+</p>
+
+<p>
+The semantics of the comparison is not specified when
+the values contain functions. Otherwise, the comparison
+gives a total ordering on CDuce values. The result type
+for all the comparison operators is <code>Bool</code>, except
+for equality when the arguments are known statically to be different
+(their types are disjoint); in this case, the result type
+is the singleton <code>`false</code>.
+</p>
+
+<p>
+The if-then-else construction is standard:
+</p>
+<sample><![CDATA[
+if %%e1%% then %%e2%% else %%e3%%
+]]></sample>
+<p>
+and is equivalent to:
+</p>
+<sample><![CDATA[
+match %%e1%% with `true -> %%e2%% | `false -> %%e3%%
+]]></sample>
+<p>
+Note that the else-clause is mandatory.
+</p>
+
+<p>
+The infix operators <code>||</code> and <code>&amp;&amp;</code>
+denote respectively the logical or and the logical and. The prefix
+operator <code>not</code> denotes the logical negation.
+</p>
+
+
+</box>
+
+<box title="Upward coercions" link="upward">
+
+<p>
+It is possible to "forget" that an expression has a precise type,
+and give it a super-type:
+</p>
+<sample><![CDATA[
+(%%e%% : %%t%%)
+]]></sample>
+<p>
+The type of this expression if <code>%%t%%</code>, and
+<code>%%e%%</code> must provably have this type (it can have a
+subtype). This "upward coercion" can be combined with the local let
+binding:
+</p>
+<sample><![CDATA[
+let %%p%% : %%t%% = %%e%% in %%...%%
+]]></sample>
+<p>which is equivalent to:</p>
+<sample><![CDATA[
+let %%p%% = (%%e%% : %%t%%) in %%...%%
+]]></sample>
+<p>
+Note that the upward coercion allows earlier detection of type errors,
+better localization in the program, and more informative messages.
+</p>
+<p>
+CDuce also have a dynamic type-check construction:
+</p>
+<sample><![CDATA[
+(%%e%% :? %%t%%)
+let %%p%% :? %%t%% = %%e%% in %%...%%
+]]></sample>
+<p>
+If the value resulting from the evaluation of <code>%%e%%</code>
+does not have type <code>%%t%%</code>, an exception
+whose argument (of type <code>Latin1</code>) explains the reason
+of the mismatch is raised.
+</p>
+</box>
+
+
+
+<box title="Sequences" link="seq_exp">
+
+<p>
+The concatenation operator is written <code>@</code>. There
+is also a <code>flatten</code> operator which takes a sequence of 
+sequences and returns their concatenation.
+</p>
+
+<p>
+There are two built-in constructions to iterate over a sequence.
+Both have a very precise typing which takes into account
+the position of elements in the input sequence as given by
+its static type. The <code>map</code> construction is:
+</p>
+<sample><![CDATA[
+map %%e%% with
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+<p>
+Note the syntactic similarity with pattern matching. Actually,
+<code>map</code> is a pattern matching form,
+where the branches are applied in turn to each element of the
+input sequence (the result of the evaluation of <code>%%e%%</code>).
+The semantics is to return a sequence of the same length, where
+each element in the input sequence is replaced by the result of
+the matching branch.
+</p>
+
+<p>
+Contrary to <code>map</code>, the <code>transform</code> construction
+can return a sequence of a different length. This is achieved
+by letting each branch return a sequence instead of a single
+element. The syntax is:
+</p>
+<sample><![CDATA[
+transform %%e%% with
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+<p>
+There is always an implicit default branch <code>_ -> []</code>
+at then end of <code>transform</code>, which means that
+unmatched elements of the input sequence are simply discarded.
+</p>
+
+<p>
+Note that <code>map</code> can be simulated by <code>transform</code>
+by replacing each expression <code>%%ei%%</code> with
+<code>[ %%ei%% ]</code>.
+</p>
+
+<p>
+Conversely, <code>transform</code> can be simulated by
+<code>map</code> by using the <code>flatten</code> operator.
+Indeed, we can rewrite <code>transform %%e%% with %%...%%</code>
+as <code>flatten (map %%e%% with %%...%% | _ -> [])</code>.
+</p>
+</box>
+
+<box title="XML-specific constructions" link="xml_exp">
+
+<section title="Loading XML documents">
+<p>
+The <code>load_xml: Latin1 -> AnyXml</code> built-in function parses 
+an XML document on the local
+file system. The argument is the filename.
+The result type <code>AnyXml</code> is defined as:
+</p>
+<sample><![CDATA[
+type AnyXml = <(Atom) (Record)>[ (AnyXml|Char)* ]
+]]></sample>
+
+<p>
+If the support for netclient or curl is available, it is also
+possible to fetch an XML file from an URL, e.g.:
+<code>load_xml "http://..."</code>. A special scheme <code>string:</code>
+is always supported: the string following the scheme is parsed as it is.
+</p>
+
+<p>
+There is also a <code>load_html: Latin1 -> [Any*]</code> built-in
+function to parse in a
+permissive way HTML documents.
+</p>
+
+</section>
+
+<section title="Pretty-printing XML documents">
+<p>
+Two built-in functions can be used to produce a string from an XML document:
+</p>
+<sample><![CDATA[
+print_xml: Any -> Latin1
+print_xml_utf8: Any -> String
+]]></sample>
+<p>
+They fail if the argument is not an XML document (this isn't checked
+statically). The first operator
+ <code>print_xml</code> prepares the document to be dumped to
+a ISO-8859-1 encoded XML file: Unicode characters outside Latin1
+are escaped accordingly, and the operator fails if the document
+contains tag or attribute names which cannot be represented 
+in ISO-8859-1.   The second operator <code>print_xml_utf8</code>
+always succeed but produces a string suitable for being dumped
+in an UTF-8 encoded file. See the variants of the
+<code>dump_to_file</code> operator
+in the section on <a href="#io">Input/output</a>.
+</p>
+<p>
+In both cases, the resulting string does <em>not</em> contain
+the XML prefix "&lt;?xml ...>".
+</p>
+</section>
+
+<section title="Projection">
+
+<p>
+The projection takes a sequence of XML elements and returns
+the concatenation of all their children with a given type.
+The syntax is:
+</p>
+<sample><![CDATA[
+%%e%%/%%t%%
+]]></sample>
+<p>
+which is equivalent to:
+</p>
+<sample><![CDATA[
+transform %%e%% with <_>[ (x::%%t%% | _)* ] -> x
+]]></sample>
+<p>
+For instance, the expression
+<code><![CDATA[
+[ <a>[ <x>"A" <y>"B" ] <b>[ <y>"C" <x>"D"] ] / <x>_
+]]></code>
+evaluates to
+<code><![CDATA[
+ [ <x>"A" <x>"D" ]
+]]></code>.
+</p>
+
+<p>
+There is another form of projection to extract attributes:
+</p>
+<sample><![CDATA[
+%%e%%/@%%l%%
+]]></sample>
+<p>
+which is equivalent to:
+</p>
+<sample><![CDATA[
+transform %%e%% with <_ l=l>_ -> l
+]]></sample>
+<p>
+The dot notation can also be used to extract the value of the
+attribute for one XML element:
+</p>
+<sample><![CDATA[
+# <a x=3>[].x;;
+- : 3 = 3
+]]></sample>
+
+</section>
+
+<section title="Iteration over XML trees">
+
+<p>
+Another XML-specific construction is <code>xtransform</code>
+which is a generalization of <code>transform</code> to XML trees:
+</p>
+<sample><![CDATA[
+xtransform %%e%% with
+ | %%p1%% -> %%e1%%
+%%...%%
+ | %%pn%% -> %%en%%
+]]></sample>
+<p>
+Here, when an XML elements in the input sequence is not matched
+by a pattern, the element is copied except that the transformation
+is applied recursively to its content. Elements in the input sequence
+which are not matched and are not XML elements are copied verbatim.
+</p>
+
+</section>
+
+</box>
+
+
+<box title="Unicode Strings" link="ustr">
+<p>
+Strings are nothing but sequences of characters, but in view of their
+importance when dealing with XML we introduced the standard double
+quote notation.  So <code>[ 'F' 'r' 'a' 'n' 'ç' 'e' ]</code> can be
+written as <code>"Françe"</code>. In double quote all the
+<i>values</i> of type <code>Char</code> can be used: so besides Unicode chars we
+can also double-quote codepoint-defined characters (<code>\x%%h%%;
+\%%d%%; </code> where <code>%%h%%</code> and <code>%%d%%</code> are
+hexadecimal and decimal integers respectively), and backslash-escaped
+characters (<code>\t</code> tab, <code>\n</code> newline,
+<code>\r</code> return, <code>\\</code> backslash). Instead we
+cannot use character expressions that are not values. For instance, for
+characters there is the built-in function <code>char_of_int : Int
+-> Char</code> which returns the character corresponding to the given
+Unicode codepoint (or raises an exception for a non-existent
+codepoint), and this can only be used with the regular sequence
+notation, thus <code>"Françe"</code>, <code>"Fran"@[(char_of_int
+231)]@"e"</code>, and <code>"Fran\231;e"</code> are equivalent expressions.
+</p>
+</box>
+
+
+<box title="Converting to and from string" link="str">
+
+<section title="Pretty-printing a value">
+
+<p>
+The built-in function <code>string_of: Any -> Latin1</code> 
+converts any value to a string,
+using the same pretty-printing function as the CDuce interpreter itself.
+</p>
+
+</section>
+
+<section title="Creating and decomposing atoms from strings">
+
+<p>
+ The built-in functions  <code>split_atom: Atom ->
+ (String,String)</code> and <code>make_atom: (String,String) ->
+ Atom</code> converts between atoms and pair of strings
+ (namespace,local name).
+</p>
+
+</section>
+
+<section title="Creating integers from strings">
+
+<p>
+The operator <code>int_of</code> converts a string to an integer.  The string
+is read in decimal (by default) or in hexadecimal (if it begins with
+<code>0x</code> or <code>0X</code>), octal (if it begins with <code>0o</code>
+or <code>0O</code>), or binary (if it begins with <code>0b</code> or
+<code>0B</code>). It fails if the string is not a decimal representation of an
+integer or if in the case of hexadecimal, octal, and binary representation the integer cannot be contained in 64 bits. There is a type-checking warning when the argument cannot be proved
+to be of type <code>[ '-'? '0'--'9'+ ] | ['-'? 'O'('b'|'B') '0'--'1'+ ] |
+['-'?  'O'('o'|'O') '0'--'7'+ ] | ['-'? 'O'('x'|'X')
+('0'--'9'|'a'--'f'|'A'--'F')+] </code>.
+</p>
+</section>
+
+<section title="Creating strings from integers">
+<p>
+Besides the built-in function <code>string_of: Any -> Latin1</code>, it is
+also possible to create characters, hence strings, from their codepoints:
+either by enclosing their code within a backslash (<code>\x</code> for
+hexadecimal code) and a semicolon, or by applying the built-in function
+<code>char_of_int : Int -> Char</code>.
+</p>
+</section>
+
+</box>
+
+<box title="Input-output" link="io">
+
+<section title="Displaying a string">
+
+<p>
+To print a string to standard output, you can use one of the built-in
+function <code>print: Latin1 -> []</code> or
+<code>print_utf8: String -> []</code>.
+</p>
+
+</section>
+
+<section title="Loading files">
+
+<p>
+There are two built-in functions available to load a file into a CDuce string:
+</p>
+<sample><![CDATA[
+load_file: Latin1 -> Latin1
+load_file_utf8: Latin1 -> String
+]]></sample>
+<p>
+The first one loads an ISO-8859-1 encoded file,
+whereas the second
+one loads a UTF-8 encoded file.
+</p>
+<p>
+If the support for netclient or curl is available, it is also
+possible to fetch a file from an URL, e.g.:
+<code>load_file "http://..."</code>.
+</p>
+
+</section>
+
+<section title="Dumping to files">
+
+<p>
+There are two operators available to dump a CDuce string to a file:
+</p>
+<sample><![CDATA[
+dump_to_file %%e1%% %%e2%%
+dump_to_file_utf8 %%e1%% %%e2%%
+]]></sample>
+<p>
+The first one creates an ISO-8859-1 encoded file (it fails
+when the CDuce string contains non Latin1 characters), whereas the second
+one creates a UTF-8 encoded file.  In both cases, the first
+argument is the filename and the second one is the string to dump.
+</p>
+
+</section>
+
+</box>
+
+<box title="System" link="sys">
+
+<section title="Running external commands">
+<p>
+The predefined function <code>system</code> executes
+an external command (passed to <code>/bin/sh</code>)
+and returns its standard output and standard error
+channels and its exit code. The type for <code>system</code>
+is:
+</p>
+<sample><![CDATA[
+Latin1 -> { stdout = Latin1; stderr = Latin1; 
+             status = (`exited,Int) | (`stopped,Int) | (`signaled,Int) |}
+]]></sample>
+
+</section>
+
+<section title="Terminating the program">
+<p>
+The predefined function <code>exit: 0--255 -> Empty</code> terminates
+the current process.  The argument is the exit code.
+</p>
+</section>
+
+<section title="Accessing the environment">
+<p>
+The built-in function <code>getenv: Latin1 -> Latin1</code>
+queries the system environment for an environment variable.
+If the argument does not refer to an existing variable,
+the function raises the exception <code>`Not_found</code>.
+</p>
+</section>
+
+<section title="Command line arguments">
+<p>
+The built-in function <code>argv: [] -> [ String* ]</code> returns
+the sequence of command line arguments given to the current program.
+</p>
+</section>
+</box>
+
+<box title="Namespaces" link="ns">
+
+<p>
+It is possible in expression position to define a local
+prefix-namespace binding or to set a local default namespace.
+</p>
+
+<sample><![CDATA[
+namespace %%p%% = "%%...%%" in %%e%%
+namespace "%%...%%" in %%e%%
+]]></sample>
+
+<p>
+See <local href="namespaces"/> for more details.
+</p>
+
+</box>
+
+<box title="Imperative features" link="imp">
+
+<p>
+The construction <code>ref %%T%% %%e%%</code> is used to build a
+<em>reference</em> initialized with the result of the expression
+<code>%%e%%</code>; later, the reference can receive any value
+of type <code>%%T%%</code>.  The reference is actually a value of type
+<code>{ get = [] -> T ; set = T -> [] }</code>. 
+</p>
+
+<p>
+Two syntactic sugar constructions are provided to facilitate
+the use of references:
+</p>
+
+<sample>
+!%%e%%        ===  %%e%%.get []           {{ Dereferencing }}
+%%e1%% := %%e2%%  ===  %%e1%%.set %%e2%%          {{ Assignment }}
+</sample>
+
+<p>
+An expression of type <code>[]</code> is often considered
+as a command and followed by another expression. The sequencing
+operator gives a syntax for that:
+</p>
+
+<sample>
+%%e1%% ; %%e2%%   ===  let [] = %%e1%% in %%e2%%   {{Sequencing}}
+</sample>
+
+
+
+</box>
+
+
+
+<box title="Queries" link="sel">
+
+<p>
+CDuce is endowed with a <code>select_from_where</code> syntax to perform some SQL-like queries. The general form of select expressions is
+</p>
+<sample><![CDATA[
+select %%e%% from
+   %%p1%% in %%e1%%,
+   %%p2%% in %%e2%%,
+       :
+   %%pn%% in %%en%%
+where %%c%%
+]]></sample>
+<p>
+where <code>%%e%%</code> is an expression, <code>%%c%%</code>
+a boolean expression, the <code>%%pi%%</code>'s are patterns, and the
+<code>%%ei%%</code>'s are sequence expressions.
+</p>
+<p>
+It works exactly as a standard SQL select expression, with the difference that
+relations (that is sequences of tuples) after the <code>in</code> keyword can
+here be generic sequences, and before the <code>in</code> generic patterns
+instead of just capture variables can be used. So the result is the sequence of
+all values obtained by calculating <code>%%e%%</code> in the sequence of
+environments in which the free variables of <code>%%e%%</code> are bounded by
+iteratively matching each pattern <code>%%pi%%</code> with every element of the
+sequence <code>%%ei%%</code>, provided that the condition <code>%%c%%</code> is
+satisfied.  In other words, the first element of the result is obtained by
+calculating <code>%%e%%</code> in the environment obtained by matching
+<code>%%p1%%</code> against the first element of <code>%%e1%%</code>,
+<code>%%p2%%</code> against the first element of <code>%%e2%%</code>, ... , and
+<code>%%pn%%</code> against the first element of <code>%%en%%</code>; the
+second element of the result is obtained by calculating <code>%%e%%</code> in
+the environment obtained by matching <code>%%p1%%</code> against the first
+element of <code>%%e1%%</code>, <code>%%p2%%</code> against the first element of
+<code>%%e2%%</code>, ..., and <code>%%pn%%</code> against the <i>second</i>
+element of <code>%%en%%</code>, ... ; and so on.
+</p>
+<p>
+Formally, the semantics of the select expression above is defined as:
+</p>
+<sample><![CDATA[
+transform %%e1%% with %%p1%% ->
+   transform %%e2%% with %%p2%% ->
+         ...
+       transform %%en%% with %%pn%% ->
+          if %%c%% then  [%%e%%] else []
+]]>
+</sample>
+<p>
+A <code>select</code> expression works like a set of nested
+<code>transform</code> expressions. The advantage of using select rather than
+transform is that queries are automatically optimized by applying classical
+logic SQL optimization techniques (this automatic optimization can be
+disabled).
+</p>
+<p>
+The built-in optimizer is free to move boolean conditions around to
+ evaluate them as soon as possible. A warning is issued if a
+ condition does not depend on any of the variables captured by the
+ patterns.
+</p>
+</box>
+</page>

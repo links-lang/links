@@ -1,0 +1,81 @@
+(* This type has been automatically generated from DTD_XSLFO.dtd by dtd2cduce *)
+namespace fo = "http://www.w3.org/1999/XSL/Format"
+
+type declarations = <fo:declarations fo:color-profile=?String>[ Any* ];;
+type block =
+       <fo:block 
+	space-after=?String
+	space-before=?String
+	id=?String
+	font-weight=?String
+	text-align=?String
+	text-align-last=?String
+	font-size=?String
+	font-family=?("Helvetica" | "TimesNewRoman" | "Courier")
+	font-style=?String  
+	color=?String
+	background-color=?String
+	border-style=?String
+ 	break-before=?("auto" | "column" | "page" | "even-page" | "odd-page" | "inherit")
+	linefeed-treatment=?("preserve"|"ignore");	
+	margin-bottom=?String
+	margin-left=?String
+	margin-right=?String
+	padding-after=?String
+	padding-before=?String
+	padding-start=?String
+	padding-end=?String
+	white-space-collapse=?("false"|"true"|"inherit")
+	white-space-treatment=?("preserve"|"ignore")>[
+          Any* ];;
+type inline = <fo:inline 
+	text-decoration=?String 
+	baseline-shift=?String
+	color=?String 
+	font-family=?String 
+	font-size=?String 
+	font-weight=?String 
+	font-style=?String>[Any*];;
+type basic-link =<fo:basic-link 
+	color=?String
+	text-decoration=?String
+	font-style=?String
+	internal-destination=?String
+	external-destination=?String>[Any*];;
+type table = <fo:table ..>[Any*]
+
+type list-block =
+       <fo:list-block 
+		provisional-label-separation=?String 
+		space-after\.optimum=?String  
+		provisional-distance-between-starts=?String>[
+          list-item* ];;
+type list-item = 
+       <fo:list-item space-after=?String>[
+          <fo:list-item-label
+              text-align=?("start" | "center" | "end" | "justify" | "inside" | "outside" | "left" | "right" | "inherit")
+              end-indent=?String>[block*]
+          <fo:list-item-body start-indent=?String>[block*]];;
+type flow = <fo:flow flow-name=String font-size=String text-align=?String>[ block* ];;
+type static-content = <fo:static-content  flow-name=?String >[ block* ];;
+type footnote = <fo:footnote  text-indent=?String>[inline footnote-body];;
+type footnote-body = <fo:footnote-body >[(list-block | block | footnote)*];;
+type page-sequence =
+       <fo:page-sequence  initial-page-number=?String master-reference=String>[ ( static-content? flow?) ];;
+type repeatable-page-master-alternatives =
+       <fo:repeatable-page-master-alternatives conditional-page-master-reference=?String>[
+          Any* ];;
+type page-sequence-master =
+       <fo:page-sequence-master repeatable-page-master-reference=?String single-page-master-reference=?String>[
+          repeatable-page-master-alternatives ];;
+type region-body=
+<fo:region-body margin-top=?String margin-bottom=?String margin-left=?String margin-right=?String>[Any*];; 
+type simple-page-master =
+       <fo:simple-page-master master-name=String page-height=String page-width=String region-end=?String region-after=?String region-start=?String region-body=?String fo:region-before=?String>[
+         (region-body Any*) ];;
+type layout-master-set =
+       <fo:layout-master-set >[
+          (simple-page-master page-sequence-master?) ];;
+type root =
+       <fo:root font-size=?String>[
+          (layout-master-set declarations? page-sequence) ];;

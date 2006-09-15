@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="manual_interpreter">
+
+<title>Compiler/interpreter/toplevel</title>
+
+<box title="Command-line" link="cmdline">
+
+<p>
+According to the command line arguments, 
+the <code>cduce</code> command behaves
+either as an interactive toplevel, an interpreter, a compiler, or
+a loader.
+</p>
+
+<ul>
+<li>
+<sample>
+cduce [OPTIONS ...]  [--arg ARGUMENT ...]
+</sample>
+<p>
+The command operates as an interactive
+toplevel. See the <a href="#toplevl">Toplevel</a> section below.
+</p>
+</li>
+
+<li>
+<sample>
+cduce [OPTIONS ...] [ {{script}}.cd | --stdin ] [--arg ARGUMENT ...]
+</sample>
+<sample>
+cduce [OPTIONS ...] --script {{script}}.cd [ ARGUMENT ...]
+</sample>
+<p>
+The command runs the script <code>{{script}}.cd</code>.
+</p>
+</li>
+
+<li>
+<sample>
+cduce [OPTIONS ...] --compile {{script}}.cd
+</sample>
+<p>
+The command compiles the script <code>{{script}}.cd</code> and
+produces <code>{{script}}.cdo</code>. If the OCaml/CDuce interface
+is available and enabled, the compilers looks for a corresponding OCaml interface
+<code>{{script}}.cmi</code>. See the <local
+href="manual_interfacewithocaml"/> page for more information.
+</p>
+</li>
+
+<li>
+<sample>
+cduce [OPTIONS ...] --run [ {{script}}.cd ... ] [--arg ARGUMENT ...]
+</sample>
+<p>
+The command runs one or several pre-compiled scripts.
+</p>
+</li>
+</ul>
+
+<p>
+The arguments that follow the <code>--arg</code> option 
+are the scripts' command line. They can be accessed within
+CDuce using the <code>argv</code> operator 
+(of type <code>[] -> [ String* ]</code>).
+</p>
+
+<p>
+The options and arguments are:
+</p>
+
+<ul>
+
+<li> <code>--verbose</code> (for <code>--compile</code> mode only).
+ Display the type of values in the compiled unit.</li>
+
+<li> <code>--obj-dir %%directory%%</code> (for <code>--compile</code>
+mode only).
+Specify where to put the <code>.cdo</code> file (default: same directory as the
+source file).</li>
+
+<li> <code>--I %%directory%%</code>
+Add a directory to the search path for <code>.cdo</code>
+and <code>.cmi</code> files. </li>
+
+<li> <code>--stdin</code>. Read CDuce script from standard input. </li>
+
+<li> <code>--no %%feature%%</code>. 
+Disable one of the built-in optional features. The list of feature and
+their symbolic name can be obtained with the <code>-v</code>
+option. Can be used for instance to turn the Expat parser off, in
+order to use PXP, if both have been included at compile time.
+</li>
+
+<li> <code>-v</code>, <code>--version</code>. Show version information
+and built-in optional features, and exit.
+</li>
+
+<li> <code>--mlstub</code>. See <local href="manual_interfacewithocaml"/>.
+</li>
+
+<li> <code>--help</code>. Show usage information about the command line.
+</li>
+
+</ul>
+
+</box>
+
+<box title="Scripting" link="scripting">
+
+<p>
+CDuce can be used for writing scripts. As usual it suffices to start
+the script file by <code> #!%%install_dir%%/cduce</code> to call in a
+batch way the CDuce interpreter. The <code>--script</code> option can
+be used to avoid <code>--arg</code> when calling the script. Here is
+an example of a script file that prints all the titles of the filters
+of an Evolution mail client.
+
+</p>
+<sample><![CDATA[
+#!/bin/env cduce --script
+
+type Filter = <filteroptions>[<ruleset> [(<rule>[<title>String _*])+]];;
+
+let src : Latin1 =
+  match argv [] with
+    | [ f ] -> f
+    | _ -> raise "Invalid command line"
+in
+let filter : Filter = 
+      match load_xml src with
+       | x&Filter -> x
+       | _ -> raise "Not a filter document"
+in 
+print_xml(<filters>([filter]/<ruleset>_/<rule>_/<title>_)) ;;
+
+
+]]></sample>
+
+</box>
+
+<box title="Phrases" link="phrases">
+
+<p>
+CDuce programs are sequences of phrases, which can
+be juxtaposed or separated by <code>;;</code>. There are several kinds of
+phrases:
+</p>
+
+<ul>
+
+<li>Types declarations <code>type %%T%% = %%t%%</code>. Adjacent types declarations are mutually
+recursive, e.g.:
+<sample><![CDATA[
+type T = <a>[ S* ]
+type S = <b>[ T ]
+]]></sample>
+</li>
+
+<li>Function declarations <code>let %%f%% %%...%%</code>. 
+Adjacent function declarations are mutually recursive, e.g.:
+<sample><![CDATA[
+let f (x : Int) : Int = g x
+let g (x : Int) : Int  = x + 1
+]]></sample>
+</li>
+
+<li>Global bindings <code>let  %%p%% = %%e%%</code>
+(bind the result of the expression <code>%%e%%</code> using the
+pattern <code>%%p%%</code>),
+<code>let %%p%% : %%t%% = %%e%%</code>
+(gives a less precise type to the expression),
+<code>let %%p%% :? %%t%% = %%e$$</code>
+(dynamically checks that the expression has some type).</li>
+
+<li>Evaluation statements: an expression to evaluate.</li>
+
+<li>Textual inclusion <code>include "%%other_cduce_script.cd%%"</code>;
+note that cycle of inclusion are detected and automatically broken.
+Filename are relative to the directory of the current file
+(or the current directory in the toplevel).
+</li>
+
+<li>Global namespace binding: see <local href="namespaces"/>.</li>
+
+<li>Schema declaration: see <local href="manual_schema"/>.</li>
+
+<li>Alias for an external unit <code>using %%alias%% =
+"%%unit%%"</code> or <code>using %%alias%% = %%unit%%</code>: gives an
+alternative name for a pre-compiled unit. Values, types, namespace
+prefixes, schema from <code>%%unit%%.cdo</code> can be referred to
+either as <code>%%alias%%.%%ident%%</code> or as
+<code>%%unit%%.%%ident%%</code>.  </li>
+
+<li>Open an external unit <code>open %%u%%</code>: the effect of this
+statement is to import all the idenfiers exported by the compilation
+unit <code>%%u%%</code> into the current scope. These identifiers
+are also re-exported by the current unit.</li>
+</ul>
+
+</box>
+
+<box title="Toplevel" link="toplevl">
+
+<p>
+If no CDuce file is given on the command line, the interpreter 
+behaves as an interactive toplevel.
+</p>
+
+<p>
+Toplevel phrases are processed after each <code>;;</code>.
+Mutually recursive declarations of types or functions
+must be contained in a single adjacent sequence of phrases
+(without <code>;;</code> inbetween).
+</p>
+
+<p>
+You can quit the toplevel with the toplevel directive
+<code>#quit</code> but also with either  <code>Ctrl-C</code> or
+<code>Ctrl-D</code>. Another option is to use the built-in
+<code>exit</code>.
+</p>
+
+<p>
+  The toplevel directive <code>#help</code> prints an help message about
+  the available toplevel directives.
+</p>
+
+<p>
+The toplevel directive <code>#env</code> prints the current
+environment: the set of defined global types and values, and also 
+the current sets of prefix-to-<local href="namespaces">namespace</local> bindings used
+for parsing (as defined by the user) and
+for pretty-printing (as computed by CDuce itself).
+</p>
+
+<p>
+The two toplevel directives <code>#silent</code> and
+<code>#verbose</code> can be used to turn down and up toplevel
+outputs (results of typing and evaluation).
+</p>
+
+<p>
+The toplevel directive <code>#reinit_ns</code> reinit the
+table of prefix-to-namespace bindings used for pretty-printing
+values and types with namespaces (see <local href="namespaces"/>).
+</p>
+
+<p>
+  The toplevel directive <code>#print_type</code> shows a representationo of a
+  CDuce type (including types imported from <local href="manual_schema">XML
+    Schema</local> documents).
+</p>
+
+<p>
+The toplevel directive <code>#builtins</code> prints the name
+of embedded OCaml values (see <local href="manual_interfacewithocaml"/>).
+</p>
+
+<p>
+The toplevel has no line editing facilities. 
+You can use an external wrapper such as
+<a href="http://pauillac.inria.fr/~ddr/">ledit</a>.
+</p>
+
+</box>
+
+<box title="Lexical entities" link="lex">
+
+<p>
+The <b>identifiers</b> (for variables, types, recursive patterns, ...)
+are qualified names, in the sense of
+<a
+href="http://www.w3.org/TR/REC-xml-names/">XML Namespaces</a>.
+The chapter <local href="namespaces"/> explains how to declare
+namespace prefixes in CDuce. Identifiers are resolved as XML
+attributes (which means that the default namespace does not apply).
+All the identifiers are in the same scope. For instance, there cannot be
+simultaneously a type and variable (or a schema, a namespace prefix, an alias
+for an external unit) with the same name.
+</p>
+
+<p>
+The dot must be protected by a backslash in identifiers, to avoid
+ambiguity with the dot notation.
+</p>
+
+<p>
+The dot notation serves several purposes:
+</p>
+<ul>
+<li>
+to refer to values and types declared in a separate CDuce compilation unit;
+</li>
+<li>
+to refer to values from OCaml compilation unit
+(see <local href="manual_interfacewithocaml"/>);
+</li>
+<li>
+to refer to schema components
+(see <local href="manual_schema"/>);
+</li>
+<li>
+to select a field from a record expression.
+</li>
+</ul>
+<p>
+CDuce supports two style of <b>comments</b>: <code>(* ... *)</code>
+and <code>/* ... */</code>. The first style allows the programmer
+to put a piece a code apart. Nesting is allowed, and strings
+within simple or double quotes are not searched for the end-marker
+<code>*)</code>. In particular, simple quotes (and apostrophes)
+have to be balanced inside a <code>(* ... *)</code> comment.
+The other style <code>/* ... */</code> is more adapted to textual
+comments. They cannot be nested and quotes are not treated
+specially inside the comment.
+</p>
+
+</box>
+
+</page>

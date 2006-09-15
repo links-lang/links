@@ -1,0 +1,45 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V3.1//EN">
+
+<refentry id="cduce">
+
+<refmeta>
+<refentrytitle>cduce_mktop</refentrytitle>
+<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+<refname>cduce_mktop</refname>
+<refpurpose>Produce a customized CDuce toplevel/compiler.</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+
+
+<cmdsynopsis>
+<command>cduce_mktop</command>
+<arg><option><filename>target</filename></option></arg>
+<arg><option><filename>primitive file</filename></option></arg>
+</cmdsynopsis>
+
+</refsynopsisdiv>
+
+<refsect1>
+<title>Description</title>
+<para>
+See the CDuce users' manual:
+
+<filename>http://www.cduce.org/manual_interfacewithocaml.html#link</filename>.
+</para>
+</refsect1>
+
+<refsect1>
+<title>Author</title>
+<para>
+Alain Frisch <email>&lt;Alain.Frisch@ens.fr&gt;</email>.
+</para>
+</refsect1>
+
+
+
+
+</refentry>

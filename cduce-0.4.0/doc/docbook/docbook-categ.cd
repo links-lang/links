@@ -1,0 +1,17 @@
+type Special = Xbr | Xspan | Xbdo | Xmap | Xobject | Ximg;;
+type Fontstyle = Xtt | Xi | Xb | Xbig | Xsmall;;
+type Phrase = Xem | Xstrong | Xdfn | Xcode | Xq |
+                   Xsamp | Xkbd | Xvar | Xcite | Xabbr | Xacronym | Xsub | Xsup;;
+type InlineForms = Xinput | Xselect | Xtextarea | Xlabel | Xbutton;;
+type MiscInline = Xins | Xdel | Xscript;;
+type Misc = Xnoscript | MiscInline;;
+type Inline = Xa | Special | Fontstyle | Phrase | InlineForms;;
+type Inlines = [ (Char | Inline | MiscInline)* ];;
+
+type Heading = Xh1 | Xh2 | Xh3 | Xh4 | Xh5 | Xh6;;
+type Lists = Xul | Xol | Xdl;;
+type Blocktext = Xpre | Xhr | Xblockquote | Xaddress;;
+type Block =  Xp | Heading | Xdiv | Lists | Blocktext | Xfieldset | Xtable;;
+type Blocks = [ (Block | Xform | Misc)* ];;
+
+type Flow = [ (Char | Block | Xform | Inline | Misc)* ];;

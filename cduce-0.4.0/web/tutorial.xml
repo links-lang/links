@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="tutorial">
+
+<title>Tutorial</title>
+
+
+<include file="tutorial/getting_started.xml"/>
+<include file="tutorial/first_functions.xml"/>
+<include file="tutorial/overloading.xml"/>
+<include file="tutorial/patterns.xml"/>
+<include file="tutorial/errors.xml"/>
+<include file="tutorial/references.xml"/>
+<include file="tutorial/queries.xml"/>
+<include file="tutorial/higherorder.xml"/>
+<include file="tutorial/exercises.xml"/>
+<left>
+<p>
+This tutorial is a step-by-step introduction to CDuce.
+</p>
+<pages-toc/>
+<p>See also:</p>
+<local-links href="index,memento,manual"/>
+</left>
+
+
+<box title="Tutorial Index" link="tut">
+<p><b>This tutorial is under construction!</b></p>
+<p>Sections:</p>
+<pages-toc sections=""/>
+</box>
+
+</page>
+
+

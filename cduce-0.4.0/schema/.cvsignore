@@ -1,0 +1,6 @@
+dump_stream
+*.cma
+*.cmi
+*.cmo
+*.cmx
+*.cmxa

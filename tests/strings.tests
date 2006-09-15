@@ -1,0 +1,19 @@
+head and tail
+(hd("string"), tl("string")) == ('s', "tring")
+stdout : true : Bool
+
+list syntax
+['a', 'b', 'c']
+stdout : "abc" : String
+
+octal literals
+"L\151nks"
+stdout : "Links" : String
+
+hex literals
+"L\x69nks"
+stdout : "Links" : String
+
+concatenation
+"abc" ++ "def"
+stdout : "abcdef" : String

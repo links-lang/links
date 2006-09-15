@@ -1,0 +1,406 @@
+driver/config.cmo: driver/config.cmi 
+driver/config.cmx: driver/config.cmi 
+misc/stats.cmo: misc/stats.cmi 
+misc/stats.cmx: misc/stats.cmi 
+misc/encodings.cmo: misc/custom.cmo misc/encodings.cmi 
+misc/encodings.cmx: misc/custom.cmx misc/encodings.cmi 
+misc/upool.cmo: misc/custom.cmo misc/upool.cmi 
+misc/upool.cmx: misc/custom.cmx misc/upool.cmi 
+misc/pretty.cmo: misc/pretty.cmi 
+misc/pretty.cmx: misc/pretty.cmi 
+misc/ns.cmo: misc/upool.cmi misc/encodings.cmi misc/custom.cmo misc/ns.cmi 
+misc/ns.cmx: misc/upool.cmx misc/encodings.cmx misc/custom.cmx misc/ns.cmi 
+misc/imap.cmo: misc/imap.cmi 
+misc/imap.cmx: misc/imap.cmi 
+misc/html.cmo: misc/html.cmi 
+misc/html.cmx: misc/html.cmi 
+types/compunit.cmo: types/compunit.cmi 
+types/compunit.cmx: types/compunit.cmi 
+types/sortedList.cmo: misc/custom.cmo types/sortedList.cmi 
+types/sortedList.cmx: misc/custom.cmx types/sortedList.cmi 
+misc/bool.cmo: misc/custom.cmo misc/bool.cmi 
+misc/bool.cmx: misc/custom.cmx misc/bool.cmi 
+types/ident.cmo: types/sortedList.cmi misc/ns.cmi misc/encodings.cmi 
+types/ident.cmx: types/sortedList.cmx misc/ns.cmx misc/encodings.cmx 
+types/intervals.cmo: types/intervals.cmi 
+types/intervals.cmx: types/intervals.cmi 
+types/chars.cmo: misc/custom.cmo types/chars.cmi 
+types/chars.cmx: misc/custom.cmx types/chars.cmi 
+types/atoms.cmo: misc/upool.cmi types/sortedList.cmi misc/ns.cmi \
+    misc/imap.cmi misc/encodings.cmi types/atoms.cmi 
+types/atoms.cmx: misc/upool.cmx types/sortedList.cmx misc/ns.cmx \
+    misc/imap.cmx misc/encodings.cmx types/atoms.cmi 
+types/normal.cmo: types/normal.cmi 
+types/normal.cmx: types/normal.cmi 
+types/types.cmo: misc/stats.cmi types/sortedList.cmi misc/pretty.cmi \
+    misc/ns.cmi types/normal.cmi types/intervals.cmi types/ident.cmo \
+    misc/encodings.cmi misc/custom.cmo types/compunit.cmi types/chars.cmi \
+    misc/bool.cmi types/atoms.cmi types/types.cmi 
+types/types.cmx: misc/stats.cmx types/sortedList.cmx misc/pretty.cmx \
+    misc/ns.cmx types/normal.cmx types/intervals.cmx types/ident.cmx \
+    misc/encodings.cmx misc/custom.cmx types/compunit.cmx types/chars.cmx \
+    misc/bool.cmx types/atoms.cmx types/types.cmi 
+compile/auto_pat.cmo: types/types.cmi types/ident.cmo types/chars.cmi \
+    types/atoms.cmi compile/auto_pat.cmi 
+compile/auto_pat.cmx: types/types.cmx types/ident.cmx types/chars.cmx \
+    types/atoms.cmx compile/auto_pat.cmi 
+types/sequence.cmo: types/types.cmi types/chars.cmi types/atoms.cmi \
+    types/sequence.cmi 
+types/sequence.cmx: types/types.cmx types/chars.cmx types/atoms.cmx \
+    types/sequence.cmi 
+types/builtin_defs.cmo: types/types.cmi types/sequence.cmi \
+    types/intervals.cmi types/ident.cmo misc/encodings.cmi types/chars.cmi \
+    types/atoms.cmi types/builtin_defs.cmi 
+types/builtin_defs.cmx: types/types.cmx types/sequence.cmx \
+    types/intervals.cmx types/ident.cmx misc/encodings.cmx types/chars.cmx \
+    types/atoms.cmx types/builtin_defs.cmi 
+runtime/value.cmo: misc/upool.cmi types/types.cmi types/sequence.cmi \
+    misc/ns.cmi types/intervals.cmi misc/imap.cmi types/ident.cmo \
+    misc/encodings.cmi types/chars.cmi types/atoms.cmi runtime/value.cmi 
+runtime/value.cmx: misc/upool.cmx types/types.cmx types/sequence.cmx \
+    misc/ns.cmx types/intervals.cmx misc/imap.cmx types/ident.cmx \
+    misc/encodings.cmx types/chars.cmx types/atoms.cmx runtime/value.cmi 
+schema/schema_pcre.cmo: misc/encodings.cmi schema/schema_pcre.cmi 
+schema/schema_pcre.cmx: misc/encodings.cmx schema/schema_pcre.cmi 
+schema/schema_types.cmo: runtime/value.cmi misc/ns.cmi misc/encodings.cmi \
+    types/atoms.cmi schema/schema_types.cmi 
+schema/schema_types.cmx: runtime/value.cmx misc/ns.cmx misc/encodings.cmx \
+    types/atoms.cmx schema/schema_types.cmi 
+schema/schema_xml.cmo: schema/schema_pcre.cmi misc/ns.cmi misc/encodings.cmi \
+    schema/schema_xml.cmi 
+schema/schema_xml.cmx: schema/schema_pcre.cmx misc/ns.cmx misc/encodings.cmx \
+    schema/schema_xml.cmi 
+schema/schema_common.cmo: runtime/value.cmi types/types.cmi \
+    schema/schema_xml.cmi schema/schema_types.cmi schema/schema_pcre.cmi \
+    misc/ns.cmi misc/encodings.cmi types/atoms.cmi schema/schema_common.cmi 
+schema/schema_common.cmx: runtime/value.cmx types/types.cmx \
+    schema/schema_xml.cmx schema/schema_types.cmx schema/schema_pcre.cmx \
+    misc/ns.cmx misc/encodings.cmx types/atoms.cmx schema/schema_common.cmi 
+schema/schema_builtin.cmo: runtime/value.cmi types/types.cmi \
+    types/sequence.cmi schema/schema_xml.cmi schema/schema_types.cmi \
+    schema/schema_pcre.cmi schema/schema_common.cmi misc/ns.cmi \
+    types/intervals.cmi misc/encodings.cmi types/builtin_defs.cmi \
+    types/atoms.cmi schema/schema_builtin.cmi 
+schema/schema_builtin.cmx: runtime/value.cmx types/types.cmx \
+    types/sequence.cmx schema/schema_xml.cmx schema/schema_types.cmx \
+    schema/schema_pcre.cmx schema/schema_common.cmx misc/ns.cmx \
+    types/intervals.cmx misc/encodings.cmx types/builtin_defs.cmx \
+    types/atoms.cmx schema/schema_builtin.cmi 
+schema/schema_validator.cmo: runtime/value.cmi schema/schema_types.cmi \
+    schema/schema_pcre.cmi schema/schema_common.cmi schema/schema_builtin.cmi \
+    misc/ns.cmi misc/encodings.cmi types/atoms.cmi \
+    schema/schema_validator.cmi 
+schema/schema_validator.cmx: runtime/value.cmx schema/schema_types.cmx \
+    schema/schema_pcre.cmx schema/schema_common.cmx schema/schema_builtin.cmx \
+    misc/ns.cmx misc/encodings.cmx types/atoms.cmx \
+    schema/schema_validator.cmi 
+types/patterns.cmo: types/types.cmi types/sortedList.cmi types/sequence.cmi \
+    types/ident.cmo misc/custom.cmo types/chars.cmi compile/auto_pat.cmi \
+    types/atoms.cmi types/patterns.cmi 
+types/patterns.cmx: types/types.cmx types/sortedList.cmx types/sequence.cmx \
+    types/ident.cmx misc/custom.cmx types/chars.cmx compile/auto_pat.cmx \
+    types/atoms.cmx types/patterns.cmi 
+compile/lambda.cmo: runtime/value.cmi types/types.cmi \
+    schema/schema_validator.cmi misc/ns.cmi misc/imap.cmi types/ident.cmo \
+    types/compunit.cmi compile/auto_pat.cmi compile/lambda.cmi 
+compile/lambda.cmx: runtime/value.cmx types/types.cmx \
+    schema/schema_validator.cmx misc/ns.cmx misc/imap.cmx types/ident.cmx \
+    types/compunit.cmx compile/auto_pat.cmx compile/lambda.cmi 
+runtime/run_dispatch.cmo: runtime/value.cmi misc/upool.cmi types/types.cmi \
+    misc/imap.cmi types/ident.cmo misc/encodings.cmi types/chars.cmi \
+    compile/auto_pat.cmi types/atoms.cmi runtime/run_dispatch.cmi 
+runtime/run_dispatch.cmx: runtime/value.cmx misc/upool.cmx types/types.cmx \
+    misc/imap.cmx types/ident.cmx misc/encodings.cmx types/chars.cmx \
+    compile/auto_pat.cmx types/atoms.cmx runtime/run_dispatch.cmi 
+runtime/explain.cmo: runtime/value.cmi misc/upool.cmi types/types.cmi \
+    runtime/run_dispatch.cmi misc/imap.cmi types/ident.cmo misc/encodings.cmi \
+    types/chars.cmi compile/auto_pat.cmi types/atoms.cmi runtime/explain.cmi 
+runtime/explain.cmx: runtime/value.cmx misc/upool.cmx types/types.cmx \
+    runtime/run_dispatch.cmx misc/imap.cmx types/ident.cmx misc/encodings.cmx \
+    types/chars.cmx compile/auto_pat.cmx types/atoms.cmx runtime/explain.cmi 
+runtime/eval.cmo: runtime/value.cmi misc/upool.cmi types/types.cmi \
+    schema/schema_validator.cmi schema/schema_common.cmi \
+    runtime/run_dispatch.cmi misc/ns.cmi compile/lambda.cmi misc/imap.cmi \
+    types/ident.cmo runtime/explain.cmi compile/auto_pat.cmi runtime/eval.cmi 
+runtime/eval.cmx: runtime/value.cmx misc/upool.cmx types/types.cmx \
+    schema/schema_validator.cmx schema/schema_common.cmx \
+    runtime/run_dispatch.cmx misc/ns.cmx compile/lambda.cmx misc/imap.cmx \
+    types/ident.cmx runtime/explain.cmx compile/auto_pat.cmx runtime/eval.cmi 
+parser/location.cmo: misc/html.cmi parser/location.cmi 
+parser/location.cmx: misc/html.cmx parser/location.cmi 
+parser/url.cmo: runtime/value.cmi parser/location.cmi parser/url.cmi 
+parser/url.cmx: runtime/value.cmx parser/location.cmx parser/url.cmi 
+parser/ulexer.cmo: parser/ulexer.cmi 
+parser/ulexer.cmx: parser/ulexer.cmi 
+parser/ast.cmo: types/types.cmi types/sequence.cmi misc/ns.cmi \
+    parser/location.cmi types/intervals.cmi types/ident.cmo types/chars.cmi \
+    types/builtin_defs.cmi 
+parser/ast.cmx: types/types.cmx types/sequence.cmx misc/ns.cmx \
+    parser/location.cmx types/intervals.cmx types/ident.cmx types/chars.cmx \
+    types/builtin_defs.cmx 
+parser/parser.cmo: parser/ulexer.cmi types/types.cmi types/sequence.cmi \
+    misc/ns.cmi parser/location.cmi types/intervals.cmi types/ident.cmo \
+    misc/encodings.cmi types/chars.cmi types/atoms.cmi parser/ast.cmo \
+    parser/parser.cmi 
+parser/parser.cmx: parser/ulexer.cmx types/types.cmx types/sequence.cmx \
+    misc/ns.cmx parser/location.cmx types/intervals.cmx types/ident.cmx \
+    misc/encodings.cmx types/chars.cmx types/atoms.cmx parser/ast.cmx \
+    parser/parser.cmi 
+typing/typed.cmo: types/types.cmi schema/schema_validator.cmi \
+    types/patterns.cmi misc/ns.cmi parser/location.cmi types/ident.cmo \
+    types/compunit.cmi 
+typing/typed.cmx: types/types.cmx schema/schema_validator.cmx \
+    types/patterns.cmx misc/ns.cmx parser/location.cmx types/ident.cmx \
+    types/compunit.cmx 
+typing/typepat.cmo: types/types.cmi types/sequence.cmi types/patterns.cmi \
+    types/ident.cmo types/chars.cmi typing/typepat.cmi 
+typing/typepat.cmx: types/types.cmx types/sequence.cmx types/patterns.cmx \
+    types/ident.cmx types/chars.cmx typing/typepat.cmi 
+types/externals.cmo: parser/location.cmi types/externals.cmi 
+types/externals.cmx: parser/location.cmx types/externals.cmi 
+typing/typer.cmo: types/types.cmi typing/typepat.cmi typing/typed.cmo \
+    types/sequence.cmi types/patterns.cmi misc/ns.cmi parser/location.cmi \
+    types/ident.cmo misc/html.cmi types/externals.cmi types/compunit.cmi \
+    types/chars.cmi types/builtin_defs.cmi types/atoms.cmi parser/ast.cmo \
+    typing/typer.cmi 
+typing/typer.cmx: types/types.cmx typing/typepat.cmx typing/typed.cmx \
+    types/sequence.cmx types/patterns.cmx misc/ns.cmx parser/location.cmx \
+    types/ident.cmx misc/html.cmx types/externals.cmx types/compunit.cmx \
+    types/chars.cmx types/builtin_defs.cmx types/atoms.cmx parser/ast.cmx \
+    typing/typer.cmi 
+compile/compile.cmo: runtime/value.cmi misc/upool.cmi types/types.cmi \
+    typing/typer.cmi typing/typed.cmo types/patterns.cmi parser/location.cmi \
+    compile/lambda.cmi misc/imap.cmi types/ident.cmo runtime/eval.cmi \
+    types/compunit.cmi compile/auto_pat.cmi parser/ast.cmo \
+    compile/compile.cmi 
+compile/compile.cmx: runtime/value.cmx misc/upool.cmx types/types.cmx \
+    typing/typer.cmx typing/typed.cmx types/patterns.cmx parser/location.cmx \
+    compile/lambda.cmx misc/imap.cmx types/ident.cmx runtime/eval.cmx \
+    types/compunit.cmx compile/auto_pat.cmx parser/ast.cmx \
+    compile/compile.cmi 
+schema/schema_parser.cmo: parser/url.cmi schema/schema_xml.cmi \
+    schema/schema_validator.cmi schema/schema_types.cmi \
+    schema/schema_pcre.cmi schema/schema_common.cmi schema/schema_builtin.cmi \
+    misc/ns.cmi misc/encodings.cmi types/atoms.cmi schema/schema_parser.cmi 
+schema/schema_parser.cmx: parser/url.cmx schema/schema_xml.cmx \
+    schema/schema_validator.cmx schema/schema_types.cmx \
+    schema/schema_pcre.cmx schema/schema_common.cmx schema/schema_builtin.cmx \
+    misc/ns.cmx misc/encodings.cmx types/atoms.cmx schema/schema_parser.cmi 
+schema/schema_converter.cmo: runtime/value.cmi types/types.cmi \
+    typing/typer.cmi typing/typepat.cmi types/sequence.cmi \
+    schema/schema_xml.cmi schema/schema_validator.cmi schema/schema_types.cmi \
+    schema/schema_parser.cmi schema/schema_common.cmi \
+    schema/schema_builtin.cmi misc/ns.cmi types/ident.cmo misc/encodings.cmi \
+    types/builtin_defs.cmi types/atoms.cmi 
+schema/schema_converter.cmx: runtime/value.cmx types/types.cmx \
+    typing/typer.cmx typing/typepat.cmx types/sequence.cmx \
+    schema/schema_xml.cmx schema/schema_validator.cmx schema/schema_types.cmx \
+    schema/schema_parser.cmx schema/schema_common.cmx \
+    schema/schema_builtin.cmx misc/ns.cmx types/ident.cmx misc/encodings.cmx \
+    types/builtin_defs.cmx types/atoms.cmx 
+runtime/load_xml.cmo: runtime/value.cmi parser/url.cmi misc/upool.cmi \
+    misc/ns.cmi parser/location.cmi misc/imap.cmi types/ident.cmo \
+    misc/encodings.cmi types/atoms.cmi runtime/load_xml.cmi 
+runtime/load_xml.cmx: runtime/value.cmx parser/url.cmx misc/upool.cmx \
+    misc/ns.cmx parser/location.cmx misc/imap.cmx types/ident.cmx \
+    misc/encodings.cmx types/atoms.cmx runtime/load_xml.cmi 
+runtime/print_xml.cmo: runtime/value.cmi types/sequence.cmi \
+    schema/schema_builtin.cmi misc/ns.cmi types/intervals.cmi misc/imap.cmi \
+    types/ident.cmo misc/encodings.cmi types/atoms.cmi runtime/print_xml.cmi 
+runtime/print_xml.cmx: runtime/value.cmx types/sequence.cmx \
+    schema/schema_builtin.cmx misc/ns.cmx types/intervals.cmx misc/imap.cmx \
+    types/ident.cmx misc/encodings.cmx types/atoms.cmx runtime/print_xml.cmi 
+compile/operators.cmo: runtime/value.cmi types/types.cmi typing/typer.cmi \
+    parser/location.cmi runtime/eval.cmi compile/operators.cmi 
+compile/operators.cmx: runtime/value.cmx types/types.cmx typing/typer.cmx \
+    parser/location.cmx runtime/eval.cmx compile/operators.cmi 
+types/builtin.cmo: runtime/value.cmi parser/url.cmi types/types.cmi \
+    typing/typer.cmi types/sequence.cmi runtime/print_xml.cmi \
+    compile/operators.cmi misc/ns.cmi parser/location.cmi \
+    runtime/load_xml.cmi types/intervals.cmi types/ident.cmo runtime/eval.cmi \
+    types/chars.cmi types/builtin_defs.cmi types/atoms.cmi types/builtin.cmi 
+types/builtin.cmx: runtime/value.cmx parser/url.cmx types/types.cmx \
+    typing/typer.cmx types/sequence.cmx runtime/print_xml.cmx \
+    compile/operators.cmx misc/ns.cmx parser/location.cmx \
+    runtime/load_xml.cmx types/intervals.cmx types/ident.cmx runtime/eval.cmx \
+    types/chars.cmx types/builtin_defs.cmx types/atoms.cmx types/builtin.cmi 
+driver/librarian.cmo: runtime/value.cmi types/types.cmi typing/typer.cmi \
+    parser/parser.cmi misc/ns.cmi parser/location.cmi compile/lambda.cmi \
+    types/ident.cmo types/externals.cmi runtime/eval.cmi types/compunit.cmi \
+    compile/compile.cmi types/builtin.cmi driver/librarian.cmi 
+driver/librarian.cmx: runtime/value.cmx types/types.cmx typing/typer.cmx \
+    parser/parser.cmx misc/ns.cmx parser/location.cmx compile/lambda.cmx \
+    types/ident.cmx types/externals.cmx runtime/eval.cmx types/compunit.cmx \
+    compile/compile.cmx types/builtin.cmx driver/librarian.cmi 
+types/sample.cmo: types/types.cmi types/intervals.cmi types/ident.cmo \
+    types/chars.cmi types/atoms.cmi types/sample.cmi 
+types/sample.cmx: types/types.cmx types/intervals.cmx types/ident.cmx \
+    types/chars.cmx types/atoms.cmx types/sample.cmi 
+compile/print_auto.cmo: types/types.cmi types/ident.cmo compile/auto_pat.cmi \
+    compile/print_auto.cmi 
+compile/print_auto.cmx: types/types.cmx types/ident.cmx compile/auto_pat.cmx \
+    compile/print_auto.cmi 
+driver/cduce.cmo: runtime/value.cmi parser/ulexer.cmi types/types.cmi \
+    typing/typer.cmi misc/stats.cmi types/sample.cmi compile/print_auto.cmi \
+    types/patterns.cmi parser/parser.cmi compile/operators.cmi misc/ns.cmi \
+    parser/location.cmi driver/librarian.cmi types/ident.cmo runtime/eval.cmi \
+    compile/compile.cmi types/builtin_defs.cmi types/builtin.cmi \
+    compile/auto_pat.cmi types/atoms.cmi parser/ast.cmo driver/cduce.cmi 
+driver/cduce.cmx: runtime/value.cmx parser/ulexer.cmx types/types.cmx \
+    typing/typer.cmx misc/stats.cmx types/sample.cmx compile/print_auto.cmx \
+    types/patterns.cmx parser/parser.cmx compile/operators.cmx misc/ns.cmx \
+    parser/location.cmx driver/librarian.cmx types/ident.cmx runtime/eval.cmx \
+    compile/compile.cmx types/builtin_defs.cmx types/builtin.cmx \
+    compile/auto_pat.cmx types/atoms.cmx parser/ast.cmx driver/cduce.cmi 
+runtime/system.cmo: runtime/value.cmi types/types.cmi types/sequence.cmi \
+    compile/operators.cmi parser/location.cmi types/ident.cmo \
+    types/builtin_defs.cmi types/builtin.cmi types/atoms.cmi 
+runtime/system.cmx: runtime/value.cmx types/types.cmx types/sequence.cmx \
+    compile/operators.cmx parser/location.cmx types/ident.cmx \
+    types/builtin_defs.cmx types/builtin.cmx types/atoms.cmx 
+query/query_aggregates.cmo: runtime/value.cmi types/sequence.cmi \
+    compile/operators.cmi types/intervals.cmi types/builtin_defs.cmi 
+query/query_aggregates.cmx: runtime/value.cmx types/sequence.cmx \
+    compile/operators.cmx types/intervals.cmx types/builtin_defs.cmx 
+ocamliface/mltypes.cmo: types/types.cmi parser/location.cmi \
+    driver/librarian.cmi types/ident.cmo driver/config.cmi \
+    ocamliface/mltypes.cmi 
+ocamliface/mltypes.cmx: types/types.cmx parser/location.cmx \
+    driver/librarian.cmx types/ident.cmx driver/config.cmx \
+    ocamliface/mltypes.cmi 
+ocamliface/mlstub.cmo: types/types.cmi typing/typer.cmi types/sequence.cmi \
+    misc/ns.cmi ocamliface/mltypes.cmi parser/location.cmi \
+    driver/librarian.cmi types/ident.cmo types/externals.cmi \
+    driver/config.cmi compile/compile.cmi types/builtin_defs.cmi \
+    types/atoms.cmi ocamliface/mlstub.cmi 
+ocamliface/mlstub.cmx: types/types.cmx typing/typer.cmx types/sequence.cmx \
+    misc/ns.cmx ocamliface/mltypes.cmx parser/location.cmx \
+    driver/librarian.cmx types/ident.cmx types/externals.cmx \
+    driver/config.cmx compile/compile.cmx types/builtin_defs.cmx \
+    types/atoms.cmx ocamliface/mlstub.cmi 
+parser/cduce_curl.cmo: runtime/value.cmi parser/url.cmi driver/config.cmi 
+parser/cduce_curl.cmx: runtime/value.cmx parser/url.cmx driver/config.cmx 
+runtime/cduce_pxp.cmo: runtime/value.cmi parser/url.cmi schema/schema_xml.cmi \
+    runtime/load_xml.cmi driver/config.cmi runtime/cduce_pxp.cmi 
+runtime/cduce_pxp.cmx: runtime/value.cmx parser/url.cmx schema/schema_xml.cmx \
+    runtime/load_xml.cmx driver/config.cmx runtime/cduce_pxp.cmi 
+runtime/cduce_expat.cmo: runtime/value.cmi parser/url.cmi \
+    schema/schema_xml.cmi parser/location.cmi runtime/load_xml.cmi \
+    driver/config.cmi runtime/cduce_expat.cmi 
+runtime/cduce_expat.cmx: runtime/value.cmx parser/url.cmx \
+    schema/schema_xml.cmx parser/location.cmx runtime/load_xml.cmx \
+    driver/config.cmx runtime/cduce_expat.cmi 
+driver/run.cmo: runtime/value.cmi parser/ulexer.cmi misc/stats.cmi \
+    parser/location.cmi driver/librarian.cmi types/ident.cmo misc/html.cmi \
+    driver/config.cmi driver/cduce.cmi types/builtin.cmi 
+driver/run.cmx: runtime/value.cmx parser/ulexer.cmx misc/stats.cmx \
+    parser/location.cmx driver/librarian.cmx types/ident.cmx misc/html.cmx \
+    driver/config.cmx driver/cduce.cmx types/builtin.cmx 
+driver/start.cmo: driver/run.cmo 
+driver/start.cmx: driver/run.cmx 
+driver/webiface.cmo: parser/location.cmi misc/html.cmi driver/examples.cmo \
+    driver/cduce.cmi 
+driver/webiface.cmx: parser/location.cmx misc/html.cmx driver/examples.cmx \
+    driver/cduce.cmx 
+driver/evaluator.cmo: parser/location.cmi misc/html.cmi driver/config.cmi \
+    driver/cduce.cmi 
+driver/evaluator.cmx: parser/location.cmx misc/html.cmx driver/config.cmx \
+    driver/cduce.cmx 
+tools/validate.cmo: schema/schema_types.cmi schema/schema_parser.cmi \
+    schema/schema_common.cmi 
+tools/validate.cmx: schema/schema_types.cmx schema/schema_parser.cmx \
+    schema/schema_common.cmx 
+ocamliface/mltypes.cmo: types/types.cmi parser/location.cmi \
+    driver/librarian.cmi types/ident.cmo driver/config.cmi \
+    ocamliface/mltypes.cmi 
+ocamliface/mltypes.cmx: types/types.cmx parser/location.cmx \
+    driver/librarian.cmx types/ident.cmx driver/config.cmx \
+    ocamliface/mltypes.cmi 
+ocamliface/mlstub.cmo: types/types.cmi typing/typer.cmi types/sequence.cmi \
+    misc/ns.cmi ocamliface/mltypes.cmi parser/location.cmi \
+    driver/librarian.cmi types/ident.cmo types/externals.cmi \
+    driver/config.cmi compile/compile.cmi types/builtin_defs.cmi \
+    types/atoms.cmi ocamliface/mlstub.cmi 
+ocamliface/mlstub.cmx: types/types.cmx typing/typer.cmx types/sequence.cmx \
+    misc/ns.cmx ocamliface/mltypes.cmx parser/location.cmx \
+    driver/librarian.cmx types/ident.cmx types/externals.cmx \
+    driver/config.cmx compile/compile.cmx types/builtin_defs.cmx \
+    types/atoms.cmx ocamliface/mlstub.cmi 
+parser/cduce_curl.cmo: runtime/value.cmi parser/url.cmi driver/config.cmi 
+parser/cduce_curl.cmx: runtime/value.cmx parser/url.cmx driver/config.cmx 
+parser/cduce_netclient.cmo: runtime/value.cmi parser/url.cmi \
+    driver/config.cmi 
+parser/cduce_netclient.cmx: runtime/value.cmx parser/url.cmx \
+    driver/config.cmx 
+runtime/cduce_expat.cmo: runtime/value.cmi parser/url.cmi \
+    schema/schema_xml.cmi parser/location.cmi runtime/load_xml.cmi \
+    driver/config.cmi runtime/cduce_expat.cmi 
+runtime/cduce_expat.cmx: runtime/value.cmx parser/url.cmx \
+    schema/schema_xml.cmx parser/location.cmx runtime/load_xml.cmx \
+    driver/config.cmx runtime/cduce_expat.cmi 
+runtime/cduce_pxp.cmo: runtime/value.cmi parser/url.cmi schema/schema_xml.cmi \
+    runtime/load_xml.cmi driver/config.cmi runtime/cduce_pxp.cmi 
+runtime/cduce_pxp.cmx: runtime/value.cmx parser/url.cmx schema/schema_xml.cmx \
+    runtime/load_xml.cmx driver/config.cmx runtime/cduce_pxp.cmi 
+misc/encodings.cmi: misc/custom.cmo 
+misc/upool.cmi: misc/custom.cmo 
+misc/ns.cmi: misc/upool.cmi misc/encodings.cmi misc/custom.cmo 
+types/sortedList.cmi: misc/custom.cmo 
+misc/bool.cmi: misc/custom.cmo 
+types/intervals.cmi: misc/custom.cmo 
+types/chars.cmi: misc/custom.cmo 
+types/atoms.cmi: misc/ns.cmi misc/encodings.cmi misc/custom.cmo 
+types/types.cmi: misc/ns.cmi types/intervals.cmi types/ident.cmo \
+    misc/custom.cmo types/chars.cmi types/atoms.cmi 
+compile/auto_pat.cmi: types/types.cmi types/ident.cmo types/chars.cmi \
+    types/atoms.cmi 
+types/sequence.cmi: types/types.cmi types/atoms.cmi 
+types/builtin_defs.cmi: types/types.cmi types/ident.cmo types/atoms.cmi 
+runtime/value.cmi: types/types.cmi misc/ns.cmi types/intervals.cmi \
+    misc/imap.cmi types/ident.cmo misc/encodings.cmi types/chars.cmi \
+    types/atoms.cmi 
+schema/schema_pcre.cmi: misc/encodings.cmi 
+schema/schema_types.cmi: runtime/value.cmi misc/ns.cmi misc/encodings.cmi \
+    types/atoms.cmi 
+schema/schema_xml.cmi: misc/ns.cmi misc/encodings.cmi 
+schema/schema_common.cmi: runtime/value.cmi types/types.cmi \
+    schema/schema_types.cmi misc/ns.cmi types/ident.cmo misc/encodings.cmi \
+    types/atoms.cmi 
+schema/schema_builtin.cmi: runtime/value.cmi types/types.cmi \
+    schema/schema_types.cmi misc/ns.cmi misc/encodings.cmi 
+schema/schema_validator.cmi: runtime/value.cmi schema/schema_types.cmi \
+    misc/encodings.cmi 
+types/patterns.cmi: types/types.cmi types/ident.cmo misc/custom.cmo \
+    compile/auto_pat.cmi 
+compile/lambda.cmi: runtime/value.cmi types/types.cmi \
+    schema/schema_validator.cmi misc/ns.cmi misc/imap.cmi types/ident.cmo \
+    types/compunit.cmi compile/auto_pat.cmi 
+runtime/run_dispatch.cmi: runtime/value.cmi compile/auto_pat.cmi 
+runtime/explain.cmi: runtime/value.cmi types/types.cmi compile/auto_pat.cmi 
+runtime/eval.cmi: runtime/value.cmi misc/ns.cmi compile/lambda.cmi \
+    types/ident.cmo types/compunit.cmi 
+parser/location.cmi: misc/html.cmi 
+parser/parser.cmi: parser/ast.cmo 
+typing/typepat.cmi: types/types.cmi types/patterns.cmi types/ident.cmo 
+types/externals.cmi: types/types.cmi 
+typing/typer.cmi: types/types.cmi typing/typed.cmo \
+    schema/schema_validator.cmi types/patterns.cmi misc/ns.cmi \
+    parser/location.cmi types/ident.cmo types/compunit.cmi parser/ast.cmo 
+compile/compile.cmi: runtime/value.cmi types/types.cmi typing/typer.cmi \
+    typing/typed.cmo compile/lambda.cmi types/ident.cmo types/compunit.cmi \
+    parser/ast.cmo 
+schema/schema_parser.cmi: schema/schema_types.cmi 
+runtime/load_xml.cmi: runtime/value.cmi 
+runtime/print_xml.cmi: runtime/value.cmi misc/ns.cmi 
+compile/operators.cmi: runtime/value.cmi types/types.cmi parser/location.cmi 
+types/builtin.cmi: runtime/value.cmi typing/typer.cmi 
+driver/librarian.cmi: runtime/value.cmi types/types.cmi typing/typer.cmi \
+    types/ident.cmo types/externals.cmi types/compunit.cmi \
+    compile/compile.cmi 
+types/sample.cmi: types/types.cmi 
+compile/print_auto.cmi: compile/auto_pat.cmi 
+driver/cduce.cmi: runtime/value.cmi types/atoms.cmi 
+ocamliface/mltypes.cmi: types/types.cmi 
+ocamliface/mltypes.cmi: types/types.cmi 
+schema/schema_types.cmi: runtime/value.cmi misc/ns.cmi misc/encodings.cmi \
+    types/atoms.cmi 

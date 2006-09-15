@@ -1,0 +1,518 @@
+(* This CDuce script produces CDuce web site. *)
+
+(* The types *)
+
+include "siteTypes.cd";;
+
+(** Command line **)
+
+let (input,outdir) =
+  match argv [] with
+  | [ s ("-o" o | /(o := "www")) ] -> (s,o)
+  | _ -> raise "Please use --arg to specify an input file on the command line"
+
+(** Generic purpose functions **)
+
+(* Recursive inclusion of XML files and verbatim text files *)
+
+let load_include (Latin1 -> [Any*])
+ name ->
+(*   let _ = print [ 'Loading ' !name '... \n' ] in  *)
+   xtransform [ (load_xml name) ] with 
+   | <include file=(s & Latin1)>[] -> load_include s
+   | <include-verbatim file=(s & Latin1)>[] -> load_file s 
+   | <include-forest file=(s & Latin1)>[] -> 
+         match load_xml ("string:<fake>"@(load_file s)@"</fake>") with
+            <fake> x -> x | _ -> raise "Uhh?"
+
+
+(* Loading *)
+
+let [<site>[ <title>site 
+             (<header>header | /(header:=[])) 
+             (<footer>footer | /(footer:=[])) 
+             main_page ] ] = 
+ try (load_include input :? [ Site ])
+ with err & Latin1 -> 
+   print ['Invalid input document:\n' !err '\n']; 
+   exit 2 
+
+(* Highlighting text between {{...}} *)
+
+let highlight (String -> [ (Char | H.strong | H.i)* ] )
+ | [ '{{ON}}'; rest ] -> xhighlight rest
+ | [ '{{%%' h ::(Char *?) '%%}}' ; rest ] -> 
+          [ <strong class="highlight">[<i>h]; highlight rest ]
+ | [ '{{' h ::(Char *?) '}}' ; rest ] -> 
+          [ <strong class="highlight">h; highlight rest ]
+ | [ '$$%%' h ::(Char *?) '%%$$' ; rest ] -> 
+          [ <strong class="ocaml">[<i>h]; highlight rest ]
+ | [ '$$' h ::(Char *?) '$$' ; rest ] -> 
+          [ <strong class="ocaml">h; highlight rest ]
+ | [ '%%' h ::(Char *?) '%%' ; rest ] ->
+          [ <i>h; highlight rest ] 
+ | [ c; rest ] -> [ c; highlight rest ]
+ | [] -> []
+
+let xhighlight (String -> [ (Char | H.strong | H.i)* ] )
+ | [ x::('}}' | ':}' | '{{' | '{:') h::Char*? 
+     y::('}}' | ':}' | '{:' | '{{'); rest ] -> 
+          [ !x <strong class="highlight">h !y; xhighlight rest ]
+ | [ c; rest ] -> [ c; xhighlight rest ]
+ | [] -> []
+
+(* Split a comma-separated string *)
+
+let split_comma (String -> [String*])
+ | [ x::(Char*?) ',' ; rest ] -> (x, split_comma rest)
+ | s -> [ s ]
+
+type wschar = ' ' | '\n' | '\t' | '\r'
+
+let split_thumbnails (String -> [(String,String)*])
+ | [ wschar* x::(Char\wschar\':')+ ':' y::_*? '.'; rest ] -> 
+        ((x,y), split_thumbnails rest)
+ | [ wschar* x::(Char\wschar)+; rest ] -> 
+        ((x,""), split_thumbnails rest)
+ | [ wschar* ] -> []
+
+(** Internal types **)
+
+type Path = [ { url=String title=String }* ]
+type Tree = { name=String url=String title=String
+              children=[Tree*] boxes=[H.ul?] } 
+
+let url_of_page (Page -> String)
+ | <page url=u ..>_ -> u
+ | <page name=n ..>_ -> n @ ".html"
+
+let render(a : String)(p : {presenter=?"yes"|"no" ..}) : H.Flow =
+ match p with
+ | {presenter="yes" ..} -> [<strong class="ocaml">a] 
+ | _ -> a
+
+let authors ([Author+] -> H.Flow)
+ | [ <author (p)>a ] -> render a p
+ | [ <author (p1)>a1 <author (p2)>a2 ] -> (render a1 p1) @ ", and " @ (render a2 p2)
+ | [ <author (p)>a; rem ] -> (render a p)@ ", " @ authors rem
+
+let find_local_link (sitemap : [Tree*], l : String) : Tree =
+match sitemap with
+ | (h,t) ->
+   if (h . name = l) then h
+   else 
+    (try find_local_link (t,l) with `Not_found -> 
+         find_local_link (h . children,l))
+ | [] -> raise `Not_found
+
+let local_link (sitemap : Tree, l : String, txt : String) : [H.Inline?] =
+ try 
+  let h = find_local_link ([sitemap],l)  in
+  let txt = if txt = "" then h . title else txt in
+  [ <a href=(h . url)>txt ]
+ with `Not_found -> 
+  print [ 'Warning. Local link not found: ' !(string_of l) '\n' ];
+  []
+ 
+let compute_sitemap ((Page|External) -> Tree)
+ | <page name=name ..>[ <title>title (c::(Page|External) | _)* ] & p ->
+   let children = map c with p -> compute_sitemap p in
+   { name url=(url_of_page p) title children boxes=(boxes_of p) }
+ | <external name=name href=h title>[] ->
+   { name url=h title children=[] boxes=[] }
+
+let ul([H.li*] -> [H.ul?]) [] -> [] | l -> [ <ul>l ]
+
+let ol(([H.li*],{style=?String}) -> [H.ol?]) 
+ | ([],_) -> [] 
+ | (l,s) -> [ <ol (s)>l ] 
+
+let display_sitemap (h : Tree) :  H.li =
+  let ch = map h . children with x -> display_sitemap x in
+  <li>[ <a href=(h . url)>[ '[' !(h . title) ']' ] !(h . boxes); (ul ch) ]
+
+
+let boxes_of (Page -> [H.ul?])
+<page ..>[ (items::Item | _)*] & p ->
+ let toc = transform items with 
+ | <box title=t link=l ..>_ -> [ <li>[ <a href=[ !(url_of_page p) '#' !l ]>t ] ] 
+ in
+ ul toc
+
+let link_to (<page (r)>[<title>t _* ] & p : Page) : H.a =
+ let t = match r with
+ | {new="" ..} -> t @ [ <img src="img/new.gif" alt="(new)" style="border:0">[]]
+ | _ -> t in
+ <a href=(url_of_page p)>t
+
+let small_box (x : H.Flow) : H.Block =
+ <table cellpadding="2" 
+    style="font-size:11px ; font-family:arial,sans-serif;
+           border: solid 2px black; background: #ffffff" width="100%">
+   [ <tr> [<td>x] ]
+
+let meta (x : H.Flow) : H.Block =
+ <table cellpadding="2" 
+    style="border: solid 1px #b0b0b0; background: #e0e0e0; font-size: 80%"  
+    width="100%">
+   [ <tr> [<td>x] ]
+
+let box_title (x : H.Flow, a : String, t : String) : H.Block =
+ <table cellpadding="5" 
+    style="border: solid 2px black; background: #ffffff" width="100%">
+   [ <tr>[ 
+       <td style="background: #fff0f0; color: #0000ff; font: bold 100%
+                  helvetica">[<a name=a>t] ] 
+     <tr> [<td>x] ]
+
+let box (x : H.Flow) : H.Block =
+ <table cellpadding="5" 
+    style="border: solid 2px black; background: #ffffff" width="100%">
+   [ <tr> [<td>x] ]
+
+let style = "
+a:link:hover, a:visited:hover {
+  text-decoration: none;
+  background: #FFFFD0;
+  color: #FF0000;
+}
+a.old, a.old:hover, a.old:visited:hover { text-decoration: line-through; }
+p { text-align: justify; margin: 1ex 1em 0 1em; }
+pre { margin: 1ex 1em 0 1em; }
+strong.ocaml{ color: #333b8e; }
+strong.highlight { color: #FF0000; }
+img.icon { border: 0; }
+div.code { background: #E0E0E0; margin: 0.5ex 0.5em 0 0.5em; padding: 0.2ex; }
+div.xmlcode { background:#ebefa2; margin: 0.5ex 0.5em 0 0.5em; padding: 0.2ex;}
+
+div.abstract { 
+  margin: 1ex 1em 1ex 1em;
+  padding: 1ex 1em 1ex 1em;
+  background: #F0F0F0;
+}
+
+div.note { 
+  text-align: justify;
+  margin: 1ex 3em 1ex 3em;
+  padding: 1ex 1em 1ex 1em;
+  background: #D0E2D2;
+}
+
+div.session
+ { 
+  font: bold 80% helvetica;
+  margin: 1ex 1em 1ex 1em;
+  padding: 1ex 1em 1ex 1em;
+  border: solid .5px gray;
+}
+
+div.abstract p { font-family: sans-serif; font-size:12px; }
+"
+
+type PageO = Page | []
+
+
+let button(title : String)(onclick : String) : H.Inline =
+  <input type="submit" style="font-size:8px;" value=title onclick=onclick>[] 
+let button_id(id : String)(title : String)(onclick : String)(style : String) 
+: H.Inline =
+  <input type="submit" id=id 
+   style=("font-size:8px;"@style) value=title 
+   onclick=onclick>[] 
+
+let demo(no : Int)(name : String)(prefix : String)(txt : String) : H.Flow = 
+ let n = [ 'a' !name '_' ] in
+ let prefix = if prefix = "" then "" else [ 'a' !prefix '_' ] in
+ [ !(if (no = 1) then [<script src="demo.js" type="text/javascript">" "]
+     else [])
+  <table style="width:100%">[
+   <tr>[ 
+    <td style="width:50%">[
+     (button_id (n@"btn") "Edit" ("editable('"@n@"','');") "")
+     (button "Evaluate" ("submit('"@n@"');"))
+     (button "Default" ("defreq('"@n@"');"))
+     (button_id (n@"btnclear") "Clear" ("clearreq('"@n@"');") "visibility:hidden;")
+    ]
+    <td style="width:50%">[
+     <input id=(n@"def") type="hidden" value=txt>[]
+     <input id=(n@"prefix") type="hidden" value=prefix>[]
+     (button "Clear" ("clearres('"@n@"');"))
+    ] ]
+   <tr>[
+    <td valign="top">[ 
+     <div id=(n@"container")>[
+      <pre id=(n@"req")>txt
+      <textarea id=(n@"edit") cols="50" rows="25" style="display:none;border:1px solid #CCCCCC; background-color:#F0F0F0;">txt 
+     ]
+    ]
+    <td valign="top">[ <div id=(n@"res")>[] ] ] ] 
+  ]
+
+(* Main transformation function *)
+
+(* returns the last page of the descendance *)
+
+let thumbnail(w : String, h : String)
+ (url : String)(title : String) : H.Inlines =
+ [ <a href=url>[ 
+   <img src=url width=w height=h alt="Click to enlarge" title=title>[] ] ]
+
+let thumbwh({ width=?IntStr height=?IntStr ..} -> 
+   (String -> String ->H.Inlines))
+  | { width = w; height = h } ->
+      let w = int_of w in let h = int_of h in
+      (match h with
+       | 0 -> raise "Thumbnail height = 0"
+       | h -> let w = string_of ((w * 200) div h) in thumbnail (w,"200"))
+  | _ -> thumbnail ("266","200")
+
+let gen_page (site : String,
+              prev : PageO, page : Page, next : PageO, 
+              path : Path, sitemap : Tree) : PageO = 
+match page with 
+<page name=name leftbar="false"&(leftbar:=`false) else (leftbar:=`true) ..>[ 
+ (<title>title <banner>banner | <title>(title & banner)) 
+ items::_* ] ->
+ let items = header @ items @ footer in
+
+ let footnote_counter = ref Int 0 in 
+ let footnotes = ref H.Flow [] in
+ let demo_no = ref Int 0 in
+ let last_demo = ref String "" in
+
+ let text (t : [InlineText*]) : H.Inlines =
+  transform t with
+   | <code>x -> [ <b>[ <tt>(highlight x) ] ]
+   | <local href=l>txt -> local_link (sitemap,l,txt)
+   | <(tag & (`b|`i|`tt|`em)) (attr)>x -> [ <(tag) (attr)>(text x) ]
+   | <footnote nocount="true">_ -> 
+      let n = string_of !footnote_counter in
+      [ <a name=[ 'bnote' !n ]>[]
+        <a href=[ '#note' !n ]>[ '[' !n ']' ] ]
+
+   | <footnote>c -> 
+      footnote_counter := !footnote_counter + 1;
+      let n = string_of !footnote_counter in
+      let fn = !footnotes in
+      footnotes := [];
+      let c = <p>[ <a name=[ 'note' !n ]>[] 
+                   <a href=[ '#bnote' !n ]>[ '[' !n ']' ]
+		   ' ' ; text c ] in
+      footnotes := fn @ [ c ] @ !footnotes;
+      [ <a name=[ 'bnote' !n ]>[]
+        <a href=[ '#note' !n ]>[ '[' !n ']' ] ]
+   | <thumbnail ({href=url ..} & r)>[] ->
+      thumbwh r url ""
+   | <thumbnails ({href=url ..} & r)>l ->
+      let l = split_thumbnails l in
+      let f = thumbwh r in
+      let c = ref Int 0 in
+      (transform l with (x,y) -> 
+          let t = f (url @ x) y in
+          if (!c = 4) then (c := 1; [ <br>[] ] @ t)
+          else (c := !c + 1; t))
+   | z -> [ z ] 
+ in
+
+ let content (t : Content) : H.Flow =
+  transform t with
+   | <section title=title>c -> 
+         [ <p>[ <b style="color: #008000">title ] !(content c) ]
+   | <paper (r)>[ <title>tit aut::Author* <comment>com <abstract>ab  ] ->
+         [ (match r with
+           | { file = f; old = "" } -> <a class="old" href=f>tit
+           | { file = f } -> <a href=f>tit
+           | _ -> <b>tit) '. '
+           !(authors aut) '. '
+	   !(text com)
+           <div class="abstract">[ 'Abstract:' !(content ab) ]
+         ]
+   | <slides file=f>[ <title>tit aut::Author* <comment>com ]  ->
+        [ <a href=f>tit '. ' !(authors aut) '. ' !(text com) ]
+   | <sample highlight="false">s ->
+        [ <div class="code">[ <pre>s ] ]
+   | <sample ..>s ->
+        [ <div class="code">[ <pre>(highlight s) ] ]
+   | <xmlsample highlight="false">s ->
+        [ <div class="xmlcode">[ <pre>s ] ]
+   | <xmlsample ..>s ->
+        [ <div class="xmlcode">[ <pre>(highlight s) ] ]
+   | <sessionsample highlight="false">s ->
+        [ <div class="session">[ <pre>s ] ]
+   | <sessionsample ..>s ->
+        [ <div class="session">[ <pre>(highlight s) ] ]
+   | <link url=url title=title>com -> 
+        [ <ul>[ <li>[ <a href=url>title '. ' !(text com) ] ] ]
+   | <ul>lis -> 
+        ul (map lis with <li>x -> <li>(content x))
+   | <ol (attr) >lis -> 
+        ol ((map lis with <li>x -> <li>(content x) ),(attr))
+   | H.table & x -> 
+       [ <table width="100%">[<tr>[<td align="center">[x]]] ]
+   | <p (attr)>x -> [ <p (attr)>(text x) ]
+   | <pages-toc (a)>[] ->
+      let toc = transform items with 
+      | Page & p -> 
+        let sects = match a with {sections=_ ..} -> boxes_of p | _ -> [] in
+        [ <li>[ (link_to p) ; sects ] ]
+      | <external href title=t ..>[] -> [ <li>[ <a href>t ] ] in
+      ul toc
+   | <boxes-toc (a)>[] ->
+      let sections = match a with { sections=_ ..} -> `true | _ -> `false in
+      let short = match a with { short=_ ..} -> `true | _ -> `false in
+      let toc = transform items with 
+      | <box ({title=t link=l ..} & ({short=s ..} | {title=s ..}))>b ->
+        let t = if short then s else t in
+        let sects = 
+         if sections then
+          (transform b with <section title=t>_ -> [<br>[] '-' !t])
+         else [] in
+        [ <li>[ <a href=('#',l)>t !sects ]] in
+      ul toc
+   | <site-toc>[] ->
+        [ <ul>[ (display_sitemap sitemap) ] ]
+   | <local-links href=s>[] ->
+        ul (transform (split_comma s) with x -> 
+             match local_link(sitemap,x,"") with [] -> [] | x -> [<li>x])
+   | <two-columns>[ <left>x <right>y ] ->
+	[ <table width="100%">[ 
+            <tr>[ 
+              <td valign="top">(content x) 
+              <td valign="top">(content y) ] ] ]
+   | <note title=t>c ->  [ <div class="note">[ <b>[!t ':  '] !(content c) ]]
+   | <note>c ->  [ <div class="note">[ <b>"Note:  " !(content c) ]]
+   | <footnotes>[] -> 
+       (match !footnotes with 
+        | [] -> [] 
+        | n -> footnotes := []; [ <br>[] (meta n) ] )
+   | <xhtml>i -> i
+   | <demo (r)>s -> 
+       demo_no := !demo_no + 1; 
+       let name = match r with { label .. } -> label | _ -> string_of !demo_no in
+       let prefix = 
+           match r with { prefix = "last" .. } -> !last_demo 
+                      | { prefix .. } -> prefix
+                      | _ -> "" in
+       last_demo := name;
+       demo !demo_no name prefix s
+   | t -> text [ t ]
+ in
+
+(* Preparing left panel *)
+
+ let left =
+  if leftbar then
+  let navig = transform items with <left>c -> [ c ] in
+  let left = match navig with [] -> [ [<boxes-toc>[]] ] | n -> n in
+  [
+  
+   <td valign="top" align="left">[
+     <span style="position:fixed;background:#ffffff;border: solid 2px black; cursor:e-resize;" onclick="javascript:var s=document.getElementById('leftbar').style; var d=s.display=='none'?'block':'none'; s.display=d; document.cookie='leftbar='+d;">"*"
+     <table cellpadding="0" cellspacing="15" id="leftbar"
+            width="200"
+            style="font-size:80%; border: 1px dashed black;
+                   background: #ffcd72">	(* altbg 9aa8ba *)
+     (map left with x -> <tr>[ <td>[ (small_box (content x)) ] ]) ] ]
+ else [] in
+
+ let dpath : H.Inlines = transform path with 
+  | { url = f title = t } -> [ <a href=f>t ': '] 
+ in
+ let npath = path @ [ { url = (url_of_page page); title = title } ] in
+ let subpages = transform items with p & Page -> [ p ] in
+ let (next,last) = gen_page_seq (site,page, subpages, next, npath, sitemap) in
+ let next = match next with [] -> [] 
+   | <page ..>[ <title>t; _ ] & p -> 
+      [ <a href=(url_of_page p)>[ 
+          <img width="16" height="16" class="icon" alt="Next page:"
+               src="img/right.gif">[]
+          ' ' !t
+        ] ] in
+ let prev = match prev with [] -> [] 
+   | <page ..>[ <title>t; _ ] & p -> 
+      [ <a href=(url_of_page p)>[ 
+          <img width="16" height="16" class="icon"
+               alt="Previous page:" src="img/left.gif">[]
+          ' ' !t
+        ] ] in
+ let navig = 
+   if prev = [] then [] else
+   [ (small_box [
+     <p>[ !dpath !title ]
+     <p>[ !prev ' ' !next ] ]) ] in
+
+(* Preparing main panel *)
+ let main = transform items with
+   | <box title=t link=l ..>c -> [ (box_title (content c, l, t)) ]
+   | <box>c -> [ (box (content c)) ]
+   | <footnotes>[] -> 
+       (match !footnotes with 
+        | [] -> [] 
+        | n -> footnotes := []; [ (meta n) ] )
+   | <meta>c -> [ (meta (content c)) ]
+ in
+ let notes = match !footnotes with
+   | [] -> []
+   | n -> [ (meta n) ] in
+ let main = match (navig @ main @ notes @ navig) with
+   | [] -> raise "Empty page !"
+   | x -> x in
+
+ let right : H.td =
+  <td valign="top" align="left" style="width:100%">[
+   <table width="100%">[
+    <tr>[ <td valign="top" align="left"
+              style="border: 2px solid black; background: #ffffff;
+text-align:center; color: #aa0000; font: bold 200% helvetica" >
+          (text banner)
+        ]
+ 
+    <tr>[
+      <td valign="top" align="left"
+          style="border: 1px solid black; background: #fccead">[ (* altbg c8ccd1 *)
+       <table width="100%" cellpadding="0" cellspacing="17">
+         (map main with x -> <tr>[ <td>[x] ])
+      ] ]
+  ] ] in
+
+ let html : H.html =
+ <html>[
+  <head>[ 
+   <title>[ !site ': ' !title ]
+   <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">[]
+   <style type="text/css">style
+  ]
+  <body style="margin: 0; padding : 0; background: #fcb333"
+        onload="javascript:if (document.cookie.indexOf('leftbar=none')>=0) document.getElementById('leftbar').style.display='none';">[  (* altbg  4e6e99 *)
+   <table cellspacing="10" cellpadding="0" width="100%" border="0">[
+    <tr>[ !left right ]
+   ]
+  ]
+ ]
+ in
+ let txt : Latin1 = 
+   [ '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"'
+     '  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
+     !(print_xml html) ] in
+ let fn = outdir @ "/" @ name @ ".html" in
+ dump_to_file fn txt;
+ last
+	
+
+let gen_page_seq 
+ (site : String,
+  prev : PageO, pages : [Page*], next : PageO, 
+  path : Path, sitemap : Tree) : (PageO, PageO) =
+ match pages with
+ | [ p1 p2 ; _ ] & [ _; rest ] -> 
+     let last = gen_page (site,prev,p1,p2, path, sitemap) in
+     let (_,last)  = gen_page_seq (site,last, rest, next, path, sitemap) in 
+     (p1,last)
+ | [ p ] ->
+     let last = gen_page (site,prev,p,next, path, sitemap) in (p,last)
+ | [] -> (next,prev)
+
+
+;;
+
+gen_page (site,[],main_page,[], [], compute_sitemap main_page)

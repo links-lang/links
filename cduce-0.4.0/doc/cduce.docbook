@@ -1,0 +1,95 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V3.1//EN">
+
+<refentry id="cduce">
+
+<refmeta>
+<refentrytitle>cduce</refentrytitle>
+<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+<refname>cduce</refname>
+<refpurpose>The CDuce compiler/interpreter/toplevel</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+
+
+<cmdsynopsis>
+<command>cduce</command>
+<arg choice="opt" rep="repeat">
+  <option>OPTIONS</option>
+</arg>
+<arg choice="opt" rep="repeat"><option>--arg <filename>argument</filename></option></arg>
+</cmdsynopsis>
+
+<cmdsynopsis>
+<command>cduce</command>
+<arg choice="opt" rep="repeat">
+  <option>OPTIONS</option>
+</arg>
+<arg choice="opt"><option> <filename>file.cd</filename> | --stdin </option></arg>
+<arg choice="opt" rep="repeat"><option>--arg <filename>argument</filename></option></arg>
+</cmdsynopsis>
+
+<cmdsynopsis>
+<command>cduce --compile</command>
+<arg choice="opt" rep="repeat">
+  <option>OPTIONS</option>
+</arg>
+<arg choice="opt"> <option><filename>file.cd</filename></option> </arg>
+</cmdsynopsis>
+
+<cmdsynopsis>
+<command>cduce --run</command>
+<arg choice="opt" rep="repeat">
+  <option>OPTIONS</option>
+</arg>
+<arg choice="opt" rep="repeat">
+  <option><filename>file.cdo</filename></option>
+</arg>
+<arg choice="opt" rep="repeat"><option>--arg <filename>argument</filename></option></arg>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1>
+<title>Description</title>
+<para>
+See the CDuce users' manual:
+
+<filename>http://www.cduce.org/manual_interpreter.html</filename>.
+</para>
+</refsect1>
+	
+<refsect1>
+<title>Reporting bugs</title>
+<para>
+Report bugs to <email>devel@cduce.org</email>.
+</para>
+
+</refsect1>
+	
+<refsect1>
+<title>See also</title>
+<para>
+A complete documentation, reference manual, tutorial, technical articles on
+implementation and theoretical issues, benchmarks, source code, mailing lists
+and forums can be found on the <emphasis>CDuce</emphasis> website:
+<filename>http://www.cduce.org/</filename>.
+</para>
+
+</refsect1>
+
+<refsect1>
+<title>Authors</title>
+<para>
+Alain Frisch <email>&lt;Alain.Frisch@ens.fr&gt;</email>. Small contributions by
+Giuseppe Castagna <email>&lt;Giuseppe.Castagna@ens.fr&gt;</email>, Julien Demouth <email>&lt;Julien.Demouth@ens.fr&gt;</email>, and Stefano Zacchiroli <email>&lt;zack@di.ens.fr&gt;</email>.
+</para>
+
+</refsect1>
+
+
+
+
+</refentry>

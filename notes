@@ -1,0 +1,7 @@
+
+handle <form action="{handler}">
+	<input name="search_term" />
+	<input type="submit" 
+	</form>
+ with
+{search_term=term} -> do_search(term);

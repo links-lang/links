@@ -1,0 +1,56 @@
+## CDuce compilation options
+##
+## You can either modify this file, or run the configure script
+
+# build CDuce using OCaml native code compiler
+NATIVE = true
+
+# profiling support
+PROFILE = false
+
+# .mli/.cmi file support to interface CDuce with OCaml.
+# possible values: false, flat, tree
+# - if ML_INTERFACE=flat, set ML_MODULES to a directory that
+#   contains all the compiled modules from the directory
+#   utils, parsing, typing of the OCaml compilers
+# - if ML_INTERFACE=tree, set ML_MODULES to a directory
+#   with three subdirectories utils/ parsing/ typing/
+#   that contain the compiled modules
+# (see cdo2cmo/Makefile for more details)
+ML_INTERFACE = false
+
+
+# use wlex lexers for parsing XML files with PXP
+PXP_WLEX = false
+
+# include support for expat
+EXPAT = false
+
+# use curl library to load remote xml files and schemas
+CURL = false
+
+# use netclient library to load remote xml files and schemas
+NETCLIENT = true
+
+# Installation directories
+PREFIX = /usr/local
+BINDIR = $(PREFIX)/bin
+MANDIR = $(PREFIX)/man
+
+# Customize the following variables to match the settings
+# of your local web server
+
+# Root directory of your local web-server
+WEB_PREFIX = /var/www
+
+# directory for installing the cgi-bin of the cduce interpreter
+CGI_DIR = $(WEB_PREFIX)/cgi-bin
+
+# installation directory for the website and man-pages
+HTML_DIR = $(WEB_PREFIX)/html
+
+# where temporary files of local interactive interpreter are put
+SESSION_DIR = /tmp/cduce_sessions
+
+# extension for programs (.exe under Cygwin)
+EXE =

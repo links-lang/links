@@ -1,0 +1,625 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<page name="manual_types_patterns">
+
+<title>Types and patterns</title>
+
+<box title="Types and patterns" link="gen">
+
+<p>
+In CDuce, a type denotes a set of values, and a pattern
+extracts sub-values from a value. Syntactically, types and patterns
+are very close. Indeed, any type can be seen as a pattern
+(which accepts any value and extracts nothing), and a pattern
+without any capture variable is nothing but a type.
+</p>
+
+<p>
+Moreover, values
+also share a common syntax with types and patterns. This is motivated
+by the fact that basic and constructed values (that is, any values without
+functional values inside) are themselves singleton types.
+For instance <code>(1,2)</code> is both a value, a type and a pattern.
+As a type, it can be interpreted as a singleton type, 
+or as a pair type made of two singleton types.
+As a pattern, it can be interpreted as a type constraint,
+or as a pair pattern of two type constraints.
+</p>
+
+<p>
+In this page, we present all the types and patterns that CDuce recognizes.
+It is also the occasion to present the CDuce values themselves, the
+corresponding expression constructions, and fundamental operations on them.
+</p>
+
+</box>
+
+<box title="Capture variables and default patterns" link="capture">
+
+<p>
+A value identifier inside a pattern behaves as a capture variable:
+it accepts and bind any value.
+</p>
+
+<p>
+Another form of capture variable is the default value pattern
+<code>( %%x%% := %%c%% )</code> where <code>%%x%%</code>
+is a capture variable (that is, an identifier),
+and <code>%%c%%</code> is a scalar constant.
+The semantics of this pattern is to bind the capture variable
+to the constant, disregarding the matched value (and accepting
+any value).
+</p>
+
+<p>
+Such a pattern is useful in conjunction with the first match policy
+(see below) to define "default cases". For instance, the pattern
+<code>((x &amp; Int) | (x := 0), (y &amp; Int) | (y := 0))</code>
+accepts any pair and bind <code>x</code> to the left component
+if it is an integer (and <code>0</code> otherwise), and similarly
+for <code>y</code> with the right component of the pair.
+</p>
+
+</box>
+
+<box title="Boolean connectives" link="bool">
+<p>
+CDuce recognize the full set of boolean connectives, whose
+interpretation is purely set-theoretic.
+</p>
+<ul>
+ <li><code>Empty</code> denotes the empty type (no value).</li>
+ <li><code>Any</code> and <code>_</code> denote the universal type (all the values); the preferred notation is <code>Any</code> for types
+and <code>_</code> for patterns, but they are strictly equivalent.
+ </li>
+ <li><code>&amp;</code> is the conjunction boolean connective.
+The type <code>%%t1%% &amp; %%t2%%</code> has all the values
+that belongs to <code>%%t1%%</code> and to <code>%%t2%%</code>.
+Similarly, the pattern <code>%%p1%% &amp; %%p2%%</code> accepts
+all the values accepted by both sub-patterns; a capture variable
+cannot appear on both side of this pattern. 
+</li>
+ <li><code>|</code> is the disjunction boolean connective.
+The type <code>%%t1%% | %%t2%%</code> has all the values
+that belongs either to <code>%%t1%%</code> or to <code>%%t2%%</code>.
+Similarly, the pattern <code>%%p1%% | %%p2%%</code> accepts
+all the values accepted by any of the two sub-patterns;
+if both match, the first match policy applies, and <code>%%p1%%</code>
+dictates how to capture sub-values. The two sub-patterns
+must have the same set of capture variables.</li>
+ <li><code>\</code> is the difference boolean connective.
+The left hand-side can be a type or a pattern, but the right-hand side
+is necessarily a type (no capture variable).</li>
+</ul>
+</box>
+
+<box title="Recursive types and patterns" link="recurs">
+<p>
+A set of mutually recursive types can be defined
+by toplevel type declarations, as in:
+</p>
+
+<sample><![CDATA[
+type T1 = <a>[ T2* ]
+type T2 = <b>[ T1 T1 ]
+]]></sample>
+
+<p>
+It is also possible to use the syntax
+<code>%%T%% where %%T1%% = %%t1%% and ... and %%Tn%% = %%tn%%</code>
+where <code>%%T%%</code> and the <code>%%Ti%%</code> are type identifiers
+and the <code>%%ti%%</code> are type expressions. The same notation
+works for recursive patterns (for which there is no toplevel declarations).
+</p>
+
+<p>
+There is an important restriction concerning recursive types:
+any cycle must cross a <em>type constructor</em> (pairs, records, XML
+elements, arrows). Boolean connectives do <em>not</em> count as type
+constructors!  The code sample above is a correct definition.
+The one below is invalid, because there is an unguarded cycle
+between <code>T</code> and <code>S</code>.
+</p>
+
+<sample><![CDATA[
+type T = S | (S,S)  (* INVALID! *)
+type S = T          (* INVALID! *)
+]]></sample>
+
+</box>
+
+
+<box title="Scalar types" link="basic">
+
+<p>
+CDuce has three kind of atomic (scalar) values: 
+integers, characters, and atoms. To each kind corresponds a family of types.
+</p>
+
+<ul>
+<li><b>Integers</b>. 
+ <br/>CDuce integers are arbitrarily large. An integer
+  literal is a sequence of decimal digits, plus an optional leading unary
+  minus (<code>-</code>) character.
+   <ul>
+    <li><code>Int</code>: all the integers.</li>
+    <li><code>%%i%%--%%j%%</code> (where <code>%%i%%</code> and
+     <code>%%j%%</code> are integer literals, or <code>*</code>
+     for infinity): integer interval. E.g.: <code>100--*</code>,
+     <code>*--0</code>
+     <footnote>
+       You should be careful when putting parenthesis around
+       a type of the form <code>*--%%i%%</code>. Indeed,
+       <code>(*--%%i%%)</code> would be parsed as a comment.
+       You have to put a whitespace after the left parenthesis.
+     </footnote>
+ (note that <code>*</code> stands both
+     for plus and minus infinity). </li>
+    <li><code>%%i%%</code> (where <code>%%i%%</code> is an integer
+     literal): integer singleton type.</li>
+   </ul>
+</li>
+
+<li><b>Floats</b>.
+<br/>CDuce provider minimal features for floats. The only way to
+  construct a value of type <code>Float</code> is by the function
+  <code>float_of : String -> Float</code>
+</li>
+
+<li><b>Characters</b>. 
+ <br/>CDuce manipulates Unicode characters. A character
+  literal is enclosed in single quotes, e.g. <code>'a', 'b', 'c'</code>.
+  The single quote and the backslash character must be escaped
+  by a backslash: <code>'\''</code>, <code>'\\'</code>. The double
+  quote can also be escaped, but this is not mandatory.
+  The usual <code>'\n', '\t', '\r'</code> are recognized.
+  Arbitrary Unicode codepoints can be written in decimal
+  <code>'\%%i%%;'</code> (<code>%%i%%</code> is an decimal integer; note that the code is ended by a semicolon) or
+  in hexadecimal <code>'\x%%i%%;'</code>. Any other occurrence of 
+  a backslash character is prohibited.
+
+   <ul>
+    <li><code>Char</code>: all the Unicode character set.</li>
+    <li><code>%%c%%--%%d%%</code> (where <code>%%d%%</code> and
+     <code>%%d%%</code> are character literals): 
+	interval of Unicode character set. E.g.: <code>'a'--'z'</code>. </li>
+    <li><code>%%c%%</code> (where <code>%%c%%</code> is an integer
+     literal): character singleton type.</li>
+    <li><code>Byte</code>: all the Latin1 character set 
+(equivalent to <code>'\0;'--'\255;'</code>).</li>
+   </ul>
+</li>
+
+<li><b>Atoms</b>. 
+ <br/>Atoms are symbolic elements. They are used in particular
+  to denote XML tag names, and also to simulate ML sum type
+  constructors and exceptions names.
+  An atomic is written <code>`%%xxx%%</code> where
+  <code>%%xxx%%</code> follows the rules for CDuce identifiers.
+  E.g.: <code>`yes, `No, `my-name</code>. The atom <code>`nil</code>
+  is used to denote empty sequences.
+   <ul>
+    <li><code>Atom</code>: all the atoms.</li>
+    <li><code>%%a%%</code> (where <code>%%a%%</code> is an atom
+     literal): atom singleton type.</li>
+    <li><code>Bool</code>: the two atoms <code>`true</code> and
+    <code>`false</code>.</li>
+    <li>See also: <local href="namespaces"/>.</li>
+   </ul>
+</li>
+</ul>
+</box>
+
+<box title="Pairs" link="pairs">
+<p>
+Pairs is a fundamental notion in CDuce, as they constitute a building
+block for sequence. Even if syntactic sugar somewhat hides
+pairs when you use sequences, it is good to know the existence of pairs.
+</p>
+
+<p>
+A pair expression is written <code>(%%e1%%,%%e2%%)</code>
+where <code>%%e1%%</code> and <code>%%e2%%</code> are expressions.
+</p>
+
+<p>
+Similarly, pair types and patterns are written
+<code>(%%t1%%,%%t2%%)</code> where <code>%%t1%%</code> and 
+<code>%%t2%%</code> are types or patterns. E.g.: <code>(Int,Char)</code>.
+</p>
+
+<p>
+When a capture variable <code>%%x%%</code> appears on both
+side of a pair pattern <code>%%p%% = (%%p1%%,%%p2%%)</code>, the semantics
+is the following one: when a value match <code>%%p%%</code>,
+if  <code>%%x%%</code> is bound to  <code>%%v1%%</code> by
+<code>%%p1%%</code> and to  <code>%%v2%%</code> by
+<code>%%p2%%</code>, 
+then  <code>%%x%%</code> is bound to the pair <code>%%(v1,v2)%%</code> by
+<code>%%p%%</code>.
+</p>
+
+<p>
+Tuples are syntactic sugar for pairs. For instance,
+<code>(1,2,3,4)</code> denotes <code>(1,(2,(3,4)))</code>.
+</p>
+</box>
+
+<box title="Sequences" link="seq">
+
+<section title="Values and expressions">
+
+<p>
+Sequences are fundamental in CDuce. They represents
+the content of XML elements, and also character strings.
+Actually, they are only syntactic sugar over pairs.
+</p>
+
+<p>
+Sequences expressions are written inside square brackets; element
+are simply separated by whitespaces:
+<code>[ %%e1%% %%e2%% %%...%% %%en%% ]</code>.
+Such an expression is syntactic sugar for:
+<code>(%%e1%%,(%%e2%%, %%...%% (%%en%%,`nil) %%...%%))</code>.
+E.g.: <code>[ 1 2 3 4 ]</code>.
+</p>
+
+<p>
+The binary operator <code>@</code> denotes sequence concatenation.
+E.g.: <code>[ 1 2 3 ] @ [ 4 5 6 ]</code> evaluates to
+<code>[ 1 2 3 4 5 6 ]</code>.
+</p>
+
+<p>
+It is possible to specify a terminator different from <code>`nil</code>;
+for instance 
+<code>[ 1 2 3 4 ; %%q%% ]</code> denotes <code>(1,(2,(3,(4,%%q%%))))</code>, 
+and is equivalent to 
+<code>[ 1 2 3 4 ] @ %%q%%</code>.
+</p>
+
+<p>
+Inside the square brackets of a sequence expression, it is possible
+to have elements of the form <code>! %%e%%</code> (which is not
+an expression by itself), where <code>%%e%%</code> is an expression
+which should evaluate to a sequence. The semantics is
+to "open" <code>%%e%%</code>. For instance:
+<code>[ 1 2 ![ 3 4 ] 5 ]</code>
+evaluates to
+<code>[ 1 2 3 4 5 ]</code>.
+Consequently, the concatenation of two sequences <code>%%e1%% @ %%e2%%</code>
+can also be written <code>[ !%%e1%% !%%e2%% ]</code>
+or  <code>[ !%%e1%% ; %%e2%% ]</code>.
+</p>
+
+</section>
+
+<section title="Types and patterns">
+
+<p>
+In CDuce, a sequence can be heterogeneous: the element can all have
+different types. Types and patterns for sequences are specified
+by regular expressions over types or patterns. The syntax is
+<code>[ %%R%% ]</code> where <code>%%R%%</code> is a regular expression, which 
+can be:
+</p>
+<ul>
+ <li>A type or a pattern, which correspond to a single element in the 
+sequence (in particular, <code>[ _ ]</code> represents
+sequences of length 1, <em>not</em> arbitrary sequences).</li>
+ <li>A juxtaposition of regular expression <code>%%R1%% %%R2%%</code>
+which represents concatenation.
+ </li>
+ <li>A postfix repetition operator; the greedy operators are
+<code>%%R%%?</code>,
+<code>%%R%%+</code>,
+<code>%%R%%*</code>, and the ungreedy operators are:
+<code>%%R%%??</code>,
+<code>%%R%%+?</code>,
+<code>%%R%%*?</code>. For types, there is no distinction in semantics between
+greedy and ungreedy. </li>
+ <li>A sequence capture variable <code>%%x%%::%%R%%</code>
+(only for patterns, of course).
+The semantics is to capture in <code>%%x%%</code>  the subsequence
+matched by <code>%%R%%</code>. The same sequence capture variable
+can appear several times inside a regular expression, including
+under repetition operators; in that case, all the corresponding
+subsequences are concatenated together. Two instances of the
+same sequence capture variable cannot be nested, as in
+<code>[x :: (1 x :: Int)]</code>.
+<br/>
+Note the difference between <code>[ x::Int ]</code> and
+<code>[ (x &amp; Int) ]</code>. Both accept sequences made of a single
+integer, but the first one binds <code>x</code> to a sequence
+(of a single integer), whereas the second one binds it to
+the integer itself.</li>
+<li>
+Grouping <code>(%%R%%)</code>. E.g.: <code>[ x::(Int Int) y ]</code>.
+</li>
+<li>
+Tail predicate <code>/%%p%%</code>. The type/pattern <code>%%p%%</code> 
+applies to the current tail of the sequence (the subsequence
+starting at the current position). E.g.: 
+<code>[ (Int /(x:=1) | /(x:=2)) _* ]</code> will bind
+<code>x</code> to <code>1</code> if the sequence starts
+with an integer and <code>2</code> otherwise.
+</li>
+<li>
+Repetition <code>%%R%% ** %%n%%</code> where <code>%%n%%</code>
+is a positive integer constant, which is just a shorthand
+for the concatenation of <code>%%n%%</code> copies of <code>%%R%%</code>.
+</li>
+</ul>
+
+<p>
+Sequence types and patterns also accepts the <code>[ %%...%%; %%...%% ]</code>
+notation. This is a convenient way to discard the tail of a sequence
+in a pattern, e.g.: <code>[ x::Int* ; _ ]</code>, which
+is equivalent to <code>[ x::Int* _* ]</code>.
+</p>
+
+<p>
+It is possible to use the <code>@</code>
+operator (sequence concatenation) on types, including in recursive 
+definitions. E.g.:
+</p>
+
+<sample><![CDATA[
+type t = [ <a>(t @ t) ? ]    (* [s?] where s=<a>[ s? s? ] *)
+
+type x = [ Int* ]
+type y = x @ [ Char* ]       (* [ Int* Char* ] *)
+
+type t = [Int] @ t | []      (* [ Int* ] *)
+]]></sample>
+<p>
+however when used in recursive definitions <code>@</code> but must be right linear so for instance the following definition are not allowed:
+</p>
+
+<sample><![CDATA[
+type t = t @ [Int] | []      (* ERROR: Ill-formed concatenation loop *)
+type t = t @ t               (* ERROR: Ill-formed concatenation loop *)
+]]></sample>
+
+
+</section>
+
+</box>
+
+<box title="Strings" link="string">
+
+<p>
+In CDuce, character strings are nothing but sequences of characters.
+The type <code>String</code> is pre-defined as <code>[ Char* ]</code>.
+This allows to use the full power of regular expression
+pattern matching with strings.
+</p>
+
+<p>
+Inside a regular expression type or pattern, it is possible
+to use <code>PCDATA</code> instead of <code>Char*</code>
+(note that both are not types on their own, they only make sense
+inside square brackets, contrary to <code>String</code>).
+</p>
+
+<p>
+The type <code>Latin1</code> is the subtype of <code>String</code>
+defined as <code>[ Byte* ]</code>; it denotes strings that can
+be represented in the ISO-8859-1 encoding, that is, strings made only
+of characters from the Latin1 character set.
+</p>
+
+<p>
+Several consecutive characters literal in a sequence can be
+merged together between two single quotes:
+<code>[ 'abc' ]</code> instead of <code>[ 'a' 'b' 'c' ]</code>.
+Also it is possible to avoid square brackets by using
+double quotes: <code>"abc"</code>. The same escaping rules applies
+inside double quotes, except that single quotes may be escaped (but
+must not), and double quotes must be.
+</p>
+
+</box>
+
+<box title="Records" link="record">
+
+<p>
+Records are set of finite (name,value) bindings. They are used
+in particular to represent XML attribute sets. Names are
+actually Qualified Names (see <local href="namespaces"/>).
+</p>
+
+<p>
+The syntax of a record expression is
+<code>{ %%l1%%=%%e1%%; %%...%%;  %%ln%%=%%en%% }</code>
+where the <code>%%li%%</code> are label names (same lexical
+conventions as for identifiers), and the <code>%%vi%%</code>
+are expressions. When an expression <code>%%ei%%</code>
+is simply a variable whose name match the field label
+<code>%%li%%</code>, it is possible to omit it.
+E.g.: <code>{ x; y = 10; z }</code>
+is equivalent to <code>{ x = x; y = 10; z = z }</code>.
+The semi-colons between fields are optional.
+</p>
+
+
+
+<p>
+They are two kinds of record types. Open record types
+are written <code>{ %%l1%%=%%t1%%; %%...%%;  %%ln%%=%%tn%%; ..
+}</code>, and closed record types are written
+<code>{ %%l1%% = %%t1%%; %%...%%;  %%ln%% = %%tn%% }</code>.
+Both denote all the record values where
+the labels <code>%%li%%</code> are present and the associated values
+are in the corresponding type. The distinction is that that open
+type allow extra fields, whereas the closed type gives a strict
+enumeration of the possible fields. The semi-colon between fields is optional.
+</p>
+
+<p>
+Additionally, both for open and close record types,
+it is possible to specify optional fields by using <code>=?</code>
+instead of <code>=</code> between a label and a type.
+For instance, <code>{ x =? Int; y = Bool }</code>
+represents records with a <code>y</code> field of type
+<code>Bool</code>, and an optional field <code>y</code> (that when it is
+present,  has type <code>Int</code>), and no other field.
+</p>
+
+<p>
+The syntax is the same for patterns. Note that capture variables
+cannot appear in an optional field. A common idiom is to bind
+default values to replace missing optinal fields: <code>
+({ x = a } | (a := 1)) &amp; { y = b }</code>. A special syntax
+makes this idiom more convenient:
+<code>{ x = a else (a:=1); y = b }</code>.
+</p>
+
+<p>
+As for record expressions, when the pattern
+is simply a capture variable whose name match the field label,
+it is possible to omit it. E.g.: <code>{ x; y = b; z }</code>
+is equivalent to <code>{ x = x; y = b; z = z }</code>.
+</p>
+
+<p>
+The <code>+</code> operator (record concatenation, with priority given
+to the right argument in case of overlapping) is available on record
+types and patterns. This operator can be used to make a close
+record type/pattern open, or to add fields:
+</p>
+
+<sample>
+type t = { a=Int b=Char }
+type s = t + {..}               (* { a=Int b=Char .. }
+type u = s + { c=Float }        (* { a=Int b=Char c=Float .. } *)
+type v = t + { c=Float }        (* { a=Int b=Char c=Float } *)
+</sample>
+
+</box>
+
+<box title="XML elements" link="xml">
+
+<p>
+In CDuce, the general of an XML element is
+<code>&lt;(%%tag%%) (%%attr%%)>%%content%%</code> where
+<code>%%tag%%</code>, 
+<code>%%attr%%</code> and
+<code>%%content%%</code> are three expressions.
+Usually, <code>%%tag%%</code> is a tag literal <code>`%%xxx%%</code>, and
+in this case, instead of writing <code>&lt;(`%%tag%%)></code>,
+you can write: <code>&lt;%%tag%%></code>.
+Similarly, when <code>%%attr%%</code> is a record literal, you can
+omit the surrounding <code>({...})</code>, and also the semicolon
+between attributes,
+E.g: <code>&lt;a href="http://..." dir="ltr">[]</code>.
+</p>
+
+<p>
+The syntax for XML elements types and patterns follows closely
+the syntax for expressions:
+<code>&lt;(%%tag%%) (%%attr%%)>%%content%%</code>
+where
+<code>%%tag%%</code>, 
+<code>%%attr%%</code> and
+<code>%%content%%</code> are three types or patterns.
+As for expressions, it is possible to simplify the notations
+for tags and attributes. For instance,
+<code>&lt;(`a) ({ href=String })>[]</code>
+can be written:
+<code>&lt;a href=String>[]</code>.
+</p>
+
+<p>
+The following sample shows several way to write XML types.
+</p>
+
+<sample><![CDATA[
+type A = <a x=String y=String ..>[ A* ]
+type B = <(`x | `y) ..>[ ]
+type C = <c x = String; y = String>[ ]
+type U = { x = String y =? String ..}
+type V = [ W* ]
+type W = <v (U)>V
+]]></sample>
+
+</box>
+
+
+<box title="Functions" link="fun">
+
+<p>
+CDuce is an higher-order functional languages: functions are
+first-class citizen values, and can be passed as argument or returned
+as result, stored in data structure, etc...
+</p>
+
+<p>
+A functional type has the form <code>%%t%% -> %%s%%</code>
+where <code>%%t%%</code> and <code>%%s%%</code> are types.
+Intuitively, this type corresponds to functions that accept
+(at least) any argument of type <code>%%t%%</code>, and for
+such an argument, returns a value of type <code>%%s%%</code>.
+For instance, the type <code>(Int,Int) -> Int &amp; (Char,Char) -> Char</code>
+denotes functions that maps any pair of integer to an integer,
+and any pair of characters to a character.
+</p>
+
+<p>
+The explanation above gives the intuition behind the interpretation
+of functional types. It is sufficient to understand which
+subtyping relations and equivalences hold between (boolean
+combination) of functional types. For instance,
+<code>Int -> Int &amp; Char -> Char</code> is a subtype
+of <code>(Int|Char) -> (Int|Char)</code> because
+with the intuition above, a function of the first type,
+when given a value of type <code>Int|Char</code> returns
+a value of type <code>Int</code> or of type <code>Char</code>
+(depending on the argument).
+</p>
+
+<p>
+Formally, the type <code>%%t%% -> %%s%%</code> denotes
+CDuce abstractions 
+<code>fun (%%t1%% -> %%s1%%; %%...%%; %%tn%% -> %%sn%%)...</code>
+such that <code>%%t1%% -> %%s1%% &amp; %%...%% &amp; %%tn%% ->
+%%sn%%</code> is a subtype of <code>%%t%% -> %%s%%</code>.
+</p>
+
+<p>
+Functional types have no counterpart in patterns.
+</p>
+
+</box>
+
+<box title="References" link="ref">
+
+<p>
+References are mutable memory cells. CDuce has no built-in 
+reference type. Instead, references are implemented
+in an object-oriented way. The type <code>ref %%T%%</code>
+denotes references of values of type  <code>%%T%%</code>. It
+is only syntactic sugar for the type
+<code>{ get = [] -> T ; set = T -> [] }</code>.
+</p>
+
+</box>
+
+<box title="OCaml abstract types" link="abstr">
+<p>
+The notation <code>!t</code> is used by the
+<local href="manual_interfacewithocaml">CDuce/OCaml interface</local>
+to denote the OCaml abstract type <code>t</code>.
+</p>
+</box>
+
+<box title="Complete syntax" link="syntax">
+
+<p>
+Below we give the complete syntax of type and pattern, the former
+being patterns without capture variables
+</p>
+<p>
+<b style="color:#FF0080">TO BE DONE</b>
+</p>
+</box>
+</page>

@@ -1,0 +1,493 @@
+(* Input Types *)
+include "../../web/siteTypes.cd";;
+
+(* Output Types *)
+include "fo_dtd.cd";;
+
+(* Heading numbering *)
+type heading = <heading>[Int heading?]
+
+let heading2string
+  (heading -> [PCDATA])
+	       | <heading>[x] -> string_of x
+	       | <heading>[x h] ->
+		   [!(string_of x) '.' ;(heading2string h)]
+
+let incHeading
+  (heading -> heading)
+	       | <heading>[x] -> <heading>[(x + 1)]
+	       | <heading>[x h] -> <heading>[x (incHeading h)]
+
+let newHLevel
+  (heading -> heading)
+	       | <heading>[x] -> <heading>[x <heading>[0]]
+	       | <heading>[x h] -> <heading>[x (newHLevel h)]
+
+(* Table of contents *)
+type Entry =
+    <entry toc_id=String toc_title=String toc_head=heading>[Entry*]
+  | <entry_page toc_id=String toc_title=String toc_head=heading>[Entry*]
+
+let local_toc = ref [Entry?] []
+
+let new_entry_toc (nid : String , ntitle : String , nhead : heading) : Entry =
+  <entry toc_id=nid toc_title=ntitle toc_head=nhead>[]
+
+let new_entry_page_toc (nid : String , ntitle : String , nhead : heading) : Entry =
+  <entry_page toc_id=nid toc_title=ntitle toc_head=nhead>[]
+
+let add_entry_toc (toc : [Entry?] , new : [Entry?]) : [Entry?] =
+  match toc with
+    | [] -> new
+    | [<entry (attr)>l] -> [<entry (attr)>[!l !new]]
+    | [<entry_page (attr)>l] -> [<entry_page (attr)>[!l !new]]
+
+let toc_entry2fo ([Entry*] -> [block*]) x ->
+  transform x with
+    | <entry toc_id=tid toc_title=tt toc_head=thead>le ->
+      [<fo:block font-size="12pt" space-before="10pt" space-after="7pt" font-weight="bold">[
+	  !(heading2string thead) ' ' <fo:basic-link internal-destination=tid>tt ' '
+	  <fo:page-number-citation ref-id=tid>[]
+	]
+	!(toc_entry2fo le)
+      ]
+    |  <entry_page toc_id=tid toc_title=tt toc_head=thead>le ->
+      [<fo:block font-size="18pt" font-weight="bold" space-after="7pt" space-before="10pt">[
+	  !(heading2string thead) ' ' <fo:basic-link internal-destination=tid>tt ' '
+	  <fo:page-number-citation ref-id=tid>[]
+	]
+	!(toc_entry2fo le)
+      ]
+
+let toc_entry2fo_table ([Entry+] -> [table-row+] ; [] -> []) x ->
+  transform x with
+    | <entry toc_id=tid toc_title=tt toc_head=thead>le ->[
+	<fo:table-row>[
+	  <fo:table-cell>[
+	    <fo:block font-size="12pt" space-before="10pt" space-after="7pt" font-weight="bold" text-align="end">[
+	      !(heading2string thead) ' '
+	    ]
+	  ]
+	  <fo:table-cell>[
+	    <fo:block font-size="12pt" space-before="10pt" space-after="7pt" font-weight="bold">[
+              <fo:basic-link color="blue" internal-destination=tid>tt
+	    ]
+	  ]
+	  <fo:table-cell>[
+	    <fo:block  font-size="12pt" space-before="10pt" space-after="7pt" font-weight="bold" text-align="end">[
+	      <fo:page-number-citation ref-id=tid>[]
+	    ]
+	  ]
+	]
+	!(toc_entry2fo_table le)
+      ]
+    |  <entry_page toc_id=tid toc_title=tt toc_head=thead>le ->[
+	<fo:table-row>[
+	  <fo:table-cell>[
+	    <fo:block font-size="18pt" space-before="10pt" space-after="7pt" font-weight="bold" text-align="end">[
+	      !(heading2string thead) ' '
+	    ]
+	  ]
+	  <fo:table-cell>[
+	    <fo:block font-size="18pt" font-weight="bold" space-after="7pt" space-before="10pt">[
+              <fo:basic-link color="blue" internal-destination=tid>tt
+	    ]
+	  ]
+	  <fo:table-cell>[
+	    <fo:block  font-size="18pt" space-before="10pt" space-after="7pt" font-weight="bold" text-align="end">[
+	      <fo:page-number-citation ref-id=tid>[]
+	    ]
+	  ]
+	]
+	!(toc_entry2fo_table le)
+      ]
+
+
+let toc_entry2pdfoutline ([Entry*] -> [fox:outline*]) x ->
+  transform x with
+    | <(`entry|`entry_page) toc_id=tid toc_title=tt toc_head=thead>le ->
+      [<fox:outline internal-destination=tid>[
+	  <fox:label>[!(heading2string thead) ' ' !tt ' ']
+	  !(toc_entry2pdfoutline le)
+	]
+      ]
+
+
+let out_global_toc (toc : [Entry?]) : [block*] = [
+  <fo:block id="toc-main" break-before="page">[]
+  <fo:block font-size="22pt" font-weight="bold" space-before="18pt">"Table of Contents"
+  !(toc_entry2fo toc)
+]
+
+let out_global_toc_table ([Entry] -> [block] ; [] -> [])
+|  [] -> []
+| toc & [Entry] -> [
+    <fo:block>[
+      <fo:block id="toc-main" break-before="page">[]
+      <fo:block font-size="22pt" font-weight="bold" space-before="18pt">"Table of Contents :"
+      <fo:table table-layout="fixed">[
+	<fo:table-column column-width="2cm">[]
+	<fo:table-column column-width="12cm">[]
+	<fo:table-column column-width="2cm">[]
+	<fo:table-body>[!(toc_entry2fo_table toc)]
+      ]
+    ]
+  ]
+
+(** Command line **)
+
+(* Highlighting text between {{...}} *)
+
+let highlight (String -> [ (Char| inline)* ] )
+ | [ '{{%%' h ::(Char *?) '%%}}' ; rest ] -> 
+          [<fo:inline color="red" font-weight="bold" font-style="italic"> h;  highlight rest] 
+ | [ '{{' h ::(Char *?) '}}' ; rest ] -> 
+          [<fo:inline color="red" font-weight="bold"> h;  highlight rest] 
+ | [ '$$%%' h ::(Char *?) '%%$$' ; rest ] -> 
+          [<fo:inline color="darkblue" font-weight="bold" font-style="italic"> h;  highlight rest] 
+ | [ '$$' h ::(Char *?) '$$' ; rest ] -> 
+          [<fo:inline color="darkblue" font-weight="bold"> h;  highlight rest] 
+ | [ '%%' h ::(Char *?) '%%' ; rest ] ->
+          [<fo:inline font-style="italic"> h;  highlight rest] 
+ | [ c ; rest ] ->  [c ; highlight rest] 
+ | [] -> []
+
+ let text (t : [InlineText*]) : [(block|basic-link|Char|inline|list-block|footnote|table)*] =
+  transform t with
+   |<b>s2 ->[<fo:inline font-weight="bold">[!(text s2)]] 
+   |<i>s2 -> [<fo:inline font-style="italic">[!(text s2)]]
+   |<tt>s2 -> [<fo:inline font-family="Courier" color="green">[!(text s2)]]
+   |<em>s2 -> [<fo:inline  font-style="italic">[!(text s2)]]
+   | z & Char  -> [z]
+   | <code>x -> [<fo:inline color="darkgreen" font-weight="bold" font-family="Courier">[ !(highlight x)] ]
+   | <local href=x>(s2&[InlineText*]) 
+                ->[ <fo:basic-link color="blue" text-decoration="underline" 
+                      internal-destination=x>[!(text s2)]] 
+   | <a href=['#' ;x]>(s2&[InlineText*])	(* if it starts by # is an internal reference *)
+		->[ <fo:basic-link color="blue"
+			text-decoration="underline" 
+                        internal-destination=x>[!(text s2)]] 
+   | <a href=x ..>(s2&[InlineText*])  		(* otherwise it is an external reference *)
+		->[ <fo:basic-link color="red"
+			text-decoration="underline"
+			font-style="italic"
+                        external-destination=x>[!(text s2)]] 
+   |<footnote ..>t -> [
+	<fo:footnote text-indent="0pt">[
+            <fo:inline baseline-shift="super" font-size="8pt">"(*)"
+    	    <fo:footnote-body>[
+                <fo:list-block
+		     provisional-label-separation="0pt"
+                     provisional-distance-between-starts="18pt"
+                     space-after\.optimum="6pt">[
+                        <fo:list-item>[
+                          <fo:list-item-label end-indent="label-end()">[
+                               <fo:block font-size="8pt">"(*)"]
+                          <fo:list-item-body start-indent="body-start()">[
+                              <fo:block font-size="8pt">[!(text t)]]]]]]]
+
+ let content (t : Content) : [(block|basic-link|Char|inline|list-block|footnote|table)*] =
+    transform t with
+   | <section title=title1>c 
+            -> [<fo:block space-before="5pt">[
+                   <fo:block space-after="4pt" font-size="14pt" font-weight="bold">[!title1] !(content c) ]]
+   |((<sessionsample >s) | <sessionsample highlight="false">s)
+            -> [<fo:block font-family="Courier"
+		font-size="10pt"
+		linefeed-treatment="preserve"
+		white-space-collapse="false"
+		white-space-treatment="preserve" 
+		background-color="white"
+		border-style="dashed"
+		padding-start="34pt"
+		padding-end="34pt"
+		padding-before="14pt"
+		padding-after="14pt"
+		margin-bottom="3pt"
+		margin-left="15pt"
+		margin-right="15pt"
+		text-align="left"
+		space-after="10pt">[!(highlight s)]]
+  |((<xmlsample >s) | <xmlsample highlight="false">s)
+           -> [<fo:block font-family="Courier"
+		font-size="10pt"
+		linefeed-treatment="preserve"
+		white-space-collapse="false"
+		white-space-treatment="preserve" 
+		background-color="lightyellow"
+		border-style="dashed"
+		padding-start="4pt"
+		padding-after="4pt"
+		margin-bottom="3pt"
+		text-align="left"
+		space-after="10pt">[!(highlight s)]]
+   | ((<sample >s) | <sample highlight="false">s) 
+           -> [<fo:block font-family="Courier"
+		font-size="10pt"
+		linefeed-treatment="preserve"
+		white-space-collapse="false"
+		white-space-treatment="preserve" 
+		background-color="lightgray"
+		border-style="dashed"
+		padding-start="4pt"
+		padding-after="4pt"
+		margin-bottom="3pt"
+		text-align="left"
+		space-after="10pt">[!(highlight s)]]
+   | <p>x -> [<fo:block space-after="15pt">[!(text x)]]
+   | <table ..> [ (col:: H.col)* (rows::H.tr)+] 
+           -> [<fo:table space-after="15pt" table-layout="fixed" inline-progression-dimension\.maximum="95%">[
+         	   !(map col with <col ..>[] -> <fo:table-column width="proportional-column-width(1)">[])
+		   <fo:table-body>( transform rows with
+			<tr ..> y -> [<fo:table-row>( transform y with
+                           | <th ..> (z&Content) 
+				-> [<fo:table-cell 
+                                        padding="6pt" 
+                                        background-color="silver" 
+                                        border="0.5pt solid black">[ 
+                                        <fo:block font-weight="bold">[!(content z) ]]]
+			   | <td style=['background:' ;c] ..> (z&Content) 
+                                -> [<fo:table-cell 
+                                        padding="3pt" 
+                                        background-color=c 
+                                        border="0.5pt solid black" 
+                                        text-align="left">[ <fo:block>[!(content z) ]]]
+			   | <td ..> (z&Content) 
+                                -> [<fo:table-cell 
+                                        padding="3pt" 
+                                        border="0.5pt solid black" 
+                                        text-align="left">[ <fo:block>[!(content z) ]]]
+                                  (* fake entry to assure that it will have type table-cell+*)
+                           | _ -> [<fo:table-cell>[<fo:block>[]]]
+			)])
+		]]
+   | <ul ..>u ->[ <fo:list-block provisional-distance-between-starts="18pt"
+               provisional-label-separation="3pt">( transform u with  
+		 <li ..>c -> [<fo:list-item>[    
+				<fo:list-item-label text-align="center" end-indent="label-end()">[
+			           <fo:block font-size="18pt">"\x2022;"]
+			        <fo:list-item-body start-indent="body-start()">[
+				<fo:block>[ !(content c) ]]]])]
+   | <ol ..>o -> [ <fo:list-block provisional-distance-between-starts="18pt"
+               provisional-label-separation="3pt">( 
+		let i = ref Int 0 in
+                 transform o with  
+		 <li ..>c -> [<fo:list-item>[    
+				<fo:list-item-label  text-align="right" end-indent="label-end()">[
+			           <fo:block>(string_of(i:=!i+1 ; !i)@".")]
+			        <fo:list-item-body start-indent="body-start()">[
+				<fo:block>[ !(content c) ]]]])]
+   | p & Paper -> (paper p)
+   | l & Link -> (link l)
+   | s & Slides -> (slides s)
+   | i & InlineText -> (text [i])
+   | <note>s -> [<fo:block
+ 		background-color="lightgreen"
+		border-style="dashed"
+		padding-before="15pt"
+		padding-end="25pt"
+		padding-start="25pt"
+		padding-after="15pt"
+		margin-left="35pt"
+		margin-right="35pt"
+		space-after="10pt">[(<fo:inline font-weight="bold">"Note: ") !(content s)]]
+   | <two-columns>[ <left>x <right>y ] -> 
+            [<fo:table 
+	      space-after="15pt" 
+	      table-layout="fixed" 
+	      inline-progression-dimension\.maximum="125%">[
+		<fo:table-column>[]
+		<fo:table-column>[]
+		<fo:table-body>[
+		   <fo:table-row>[
+			<fo:table-cell padding="3pt">[<fo:block>[!(content x)]]
+			<fo:table-cell padding="3pt">[<fo:block>[!(content y)]]]]]] 
+   | <pages-toc ..>_ ->[<fo:block>['TODO PAGES TABLE OF CONTENTS']]
+   | <site-toc ..>_ -> [<fo:block>['TODO SITE TABLE OF CONTENTS']]
+   | <local-links ..>_ -> [<fo:block>['A FAIRE LOCAL LINKS']]
+   | <footnotes>_ -> [<fo:block>['A FAIRE FOOTNOTE']]
+   | <demo ..>_ -> [<fo:block>['A FAIRE DEMO LABEL']]
+   | <boxes-toc ..>_ -> []
+
+
+ let paper (p : Paper) : [block*] =
+   match p with
+       _ -> [<fo:block>['A FAIRE PAPER']]
+	 
+ let link (l : Link) : [block*] =
+   match l with
+      _ -> [<fo:block>['A FAIRE LINK']] 
+	
+ let slides (s : Slides) : [block*] =
+   match s with
+       _ -> [<fo:block>['A FAIRE SLIDE']]
+
+ 
+
+let readItem (it : [Item+]): [block*] =
+   transform it with
+     | <box title=t link=x>c -> 
+	[<fo:block id=x>[
+		<fo:block font-size="22pt"  
+                          space-before="15pt">[<fo:block space-after="7pt" font-weight="bold">[!t]] !(content c)]]
+     | <box>c -> [<fo:block>[!(content c)]]
+     | <meta>c -> (* non utilise pour manuel et tutoriel*)
+	    [<fo:block>[!(content c)]]
+     | <left>_ -> [<fo:block>[]]
+     | <footnotes>[] -> [<fo:block>[ ]]
+     | <page .. > [(<title>_) (<banner>_)? ] -> [<fo:block>['box vide!!!!!!!!!!!!!']]
+     | <page name=x >[(<title>title1 (<banner>_)? litem::Item+)] -> 
+		[<fo:block id=x	break-before="page" text-align-last="justify">[
+			<fo:block text-align="left">[
+				<fo:block font-size="32pt" 
+                                    font-weight="bold" 
+                                    space-after="40pt" 
+                                    space-before="85pt" 
+                                    color="black" >[!title1]
+			] !(readItem litem)
+		]]
+     | _ -> raise "ERROR"
+
+(* adding heading numbering ... *)
+let readItemHead (([Item+],heading) -> [block*]) (it,head) ->
+  let href = ref heading head in
+   transform it with
+     | <box title=t link=x>c ->
+	 let _ = href := incHeading !href in
+	 let box_entry = new_entry_toc (x,t,!href) in
+	 let saved_toc = !local_toc in let _ = local_toc := [box_entry] in
+	 let result = [<fo:block id=x>[
+			  <fo:block font-size="22pt" space-before="15pt">[
+			    <fo:block space-after="7pt" font-weight="bold">[!(heading2string !href) ' ' !t]] !(content c)
+			]
+		      ] in
+	 let new_toc = add_entry_toc (saved_toc,!local_toc) in
+	   local_toc := new_toc ;
+	   result
+     | <box>c -> [<fo:block>[!(content c)]]
+     | <meta>c -> (* non utilise pour manuel et tutoriel*)
+	    [<fo:block>[!(content c)]]
+     | <left>_ -> [<fo:block>[]]
+     | <footnotes>[] -> [<fo:block>[ ]]
+     | <page .. > [(<title>_) (<banner>_)? ] -> [<fo:block>['box vide!!!!!!!!!!!!!']]
+     | <page name=x >[(<title>title1 (<banner>_)? litem::Item+)] -> 
+	 let _ = href := incHeading !href in
+	 let box_entry = new_entry_page_toc (x,title1,!href) in
+	 let saved_toc = !local_toc in let _ = local_toc := [box_entry] in
+	 let result = [<fo:block id=x break-before="page" text-align-last="justify">[
+			  <fo:block text-align="left">[
+			    <fo:block font-size="32pt" 
+				font-weight="bold" 
+				space-after="40pt" 
+				space-before="85pt" 
+				color="black" >[
+				  !(heading2string !href) ' ' !title1
+				]
+			  ] !(readItemHead (litem,newHLevel !href))
+			]
+		      ] in
+	 let new_toc = add_entry_toc (saved_toc,!local_toc) in
+	   local_toc := new_toc ;
+	   result
+     | _ -> raise "ERROR"
+
+
+let gen_page (page : Page, cduce_version : Latin1) : [block+] = 
+  match page with 
+     (* le cas sans item*)
+     <page ..>[(<title>_) (<banner>_)?] ->  [<fo:block text-align="center" font-size="35pt" color="green" space-after="30pt">
+		(raise "error") ]
+ 
+    (* la cas de base *)
+    |<page ..>[(<title>title1 (<banner>_)? litem::Item+)] ->(
+	let sortie : [block+]=
+	[
+	      <fo:block text-align="center" space-before="130pt">[
+                   <fo:block font-size="35pt" font-weight="bold">"CDuce Programming Language" 
+                   <fo:block font-size="35pt" font-weight="bold" space-after="20pt">[!title1]
+                   <fo:block font-size="18pt" font-weight="bold">("Language Version "@cduce_version)
+	      ]
+	      !(readItem litem)]				          
+	in sortie)
+	
+(* adding heading numbering *)
+let gen_pageHead (page : Page, cduce_version : Latin1) : [block+] = 
+  match page with 
+     (* le cas sans item*)
+     <page ..>[(<title>_) (<banner>_)?] ->  [<fo:block text-align="center" font-size="35pt" color="green" space-after="30pt">
+		(raise "error") ]
+ 
+    (* la cas de base *)
+    |<page ..>[(<title>title1 (<banner>_)? litem::Item+)] -> (
+	let head = <heading>[0] in
+	let rIH = (readItemHead (litem, head)) in
+	let sortie : [ block+ ]= [
+	  <fo:block text-align="center" space-before="80pt">[
+            <fo:block font-size="35pt" font-weight="bold" space-before="30pt">"CDuce Programming Language" 
+	    <fo:block font-size="35pt" font-weight="bold" space-after="20pt">[!title1]
+            <fo:block font-size="18pt" font-weight="bold">("Language Version "@cduce_version)
+	    <fo:external-graphic src="url(../../web/img/cduce_logo.jpg)">[]
+	  ]
+	  !(out_global_toc_table !local_toc)
+(*          !(out_global_toc !local_toc) *)
+	  !rIH
+	]
+	in sortie)
+	  
+	  
+let load_include (Latin1 -> [Any*])
+ name ->
+   xtransform [ (load_xml name) ] with 
+   | <include file=(s & Latin1)>[] -> load_include s
+   | <include-verbatim file=(s & Latin1)>[] -> load_file s
+in
+match argv [] with 
+  | [ (inp_file & Latin1) (out_file & Latin1)  (cduce_version & Latin1) ] 
+      -> (try let ([ main_page ]) =  (load_include inp_file :? [ Page ]) in 
+	  let content = (gen_pageHead(main_page,cduce_version)) in
+          let DebutFo : root = 
+            <fo:root >[
+	      <fox:outline internal-destination="toc-main">[<fox:label>("Table of Contents")]
+	      !(toc_entry2pdfoutline !local_toc)
+              <fo:layout-master-set>[
+	      <fo:simple-page-master 
+			master-name="essai" 
+                        page-height="29.7cm" 
+                        page-width="21cm">[
+                          <fo:region-body margin-top="3cm" 
+                                   margin-bottom="3.5cm"  
+                                   margin-left="2.5cm" 
+                                   margin-right="2.5cm">[]
+                          <fo:region-after region-name="footer" extent="15mm">[]
+                       	]
+	      ] 
+	      <fo:page-sequence initial-page-number="auto" master-reference="essai" >[ 
+                <fo:static-content flow-name="xsl-footnote-separator">[
+ 		  <fo:block>[
+		    <fo:leader leader-pattern="rule"
+                 	       leader-length="100%"
+                 	       rule-style="solid"
+                 	       rule-thickness="0.5pt">[]
+		  ]
+		]
+		<fo:static-content flow-name="footer">[
+		  <fo:block text-align="center">[
+		    <fo:page-number>[]
+		  ]
+		]
+		<fo:flow flow-name="xsl-region-body" 
+		         font-size="12pt" 
+		         text-align="justify"> [!content]
+	      ]
+	    ] in
+	    dump_to_file ("../doc/fomanual/"@out_file)   
+(*	      dump_to_file (out_file)                      *)
+              ['<?xml version="1.0" encoding="ISO-8859-1"?>' !(print_xml DebutFo)] 
+				    (*print(print_xml(main_page));*)
+				    (* print (gen_page main_page)*)
+	  with err & Latin1 ->
+	    print ['Invalid input document\n' !err '\n']; 
+            exit 2 
+	 )
+  | _ -> raise "Wrong argument number or type: please correct the  --arg option";;
+

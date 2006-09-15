@@ -1,0 +1,50 @@
+Function typing bug (see jdy's blog, 2005-10-24)
+(fun (x,y) { [x] ++ [y] }) ([1],"a")
+stderr : @..*
+exit : 1
+
+Type annotations on functions
+fun (x) { x } : String -> String
+stdout : fun : (String) -> String
+
+Incorrect type annotations rejected
+fun (x) { x + 1 } : Float -> String
+stderr : @..*
+exit : 1
+
+Loose type annotations on functions
+fun (x) { x } : b -> b
+stdout : fun : (a) -> a
+
+Trailing semicolon means "ignore the final value" [1]
+{ 2 }
+stdout : 2 : Int
+
+Trailing semicolon means "ignore the final value" [2]
+{ 2; }
+stdout : () : ()
+
+Trailing semicolon means "ignore the final value" [3]
+fun () { 2 }
+stdout : fun : () -> Int
+
+Trailing semicolon means "ignore the final value" [4]
+fun () { 2; }
+stdout : fun : () -> ()
+
+Type annotations
+fun (x:Int) {x:Int}
+stdout : fun : (Int) -> Int
+
+Identity annotation
+fun (x:a) {x:a}
+stdout : @fun : \(([a-z]+)\) -> \1
+
+Type annotation scope
+fun (x:a, y:a) {(x, y)}
+stdout : @fun : \(([a-z]+), \1\) -> \(\1, \1\)
+
+Negative recursive type
+fun (x) {x:a} : a
+stderr : @.*
+exit : 1

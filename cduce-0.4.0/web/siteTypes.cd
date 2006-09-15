@@ -1,0 +1,65 @@
+(** Input types **)
+using H = "xhtml"
+
+
+type Site = <site>[ <title>String Header? Footer? Page ]
+type Header = <header>[ Item* ]
+type Footer = <footer>[ Item* ]
+type Page =  <page name=Latin1 url=?String new=?"" leftbar=?("true"|"false")>[ <title>String <banner>[InlineText*]? Item* ]
+type External = <external href=String title=String name=String>[]
+
+type Item = 
+   <box ({title=String; link=String; short=?String} | {})>Content
+ | <meta>Content
+ | <left>Content
+ | <footnotes>[]
+ | Page
+ | External
+
+type Author = <author presenter=?("yes"|"no")>String
+type Paper = 
+  <paper file=?String old=?"">[ 
+     <title>String Author+ <comment>[InlineText*] <abstract>Content ]
+
+type Slides = 
+  <slides file=String>[ <title>String Author+ <comment>[InlineText*] ]
+
+type Link =
+  <link url=String title=String>[ InlineText* ]
+
+type Content =      
+   [ ( <p style=?String>[InlineText*]
+     | <ul>[<li>Content +]
+     | <ol style=?String>[<li>Content +]
+     | <section title=String>Content
+     | <sample highlight=?"true"|"false">String
+     | <xmlsample highlight=?"true"|"false">String
+     | <sessionsample highlight=?"true"|"false">String
+     | H.table
+     | Paper | Slides | Link
+     | <boxes-toc short=?"" sections=?"">[]
+     | <pages-toc sections=?"">[]
+     | <site-toc>[]
+     | <local-links href=String>[]
+     | <two-columns>[ <left>Content <right>Content ]
+     | <note title=?String> Content
+     | <footnotes>[]
+     | <xhtml>H.Flow
+     | <demo label=?String prefix=?String>String 
+     | InlineText
+     )* ]
+
+type InlineText =
+     Char
+   | <(`b|`i|`tt|`em) style=?String>[InlineText*]
+   | <code>String
+   | <local href=String>String
+   | <footnote nocount=?"true">[InlineText*]
+   | H.a | H.img | H.br |H.script
+   | <thumbnail href=String width=?IntStr height=?IntStr>[]
+   | <thumbnails href=String width=?IntStr height=?IntStr>[ PCDATA ]
+
+type IntStr = ['0'--'9'+]
+
+
+

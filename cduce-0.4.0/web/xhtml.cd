@@ -1,0 +1,2 @@
+include "xhtml-strict.cd"  (* XHTML 1 Strict DTD *)
+include "xhtml-categ.cd"   (* Categories (Inline, ...) from this DTD *)

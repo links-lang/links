@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<site>
+<title>CDuce</title>
+<footer>
+<meta>
+<p>
+<local href="sitemap">Site map</local>
+</p>
+</meta>
+</footer>
+
+<page name="index">
+<title>CDuce: documentation</title>
+
+<include file="tutorial.xml"/>
+<include file="manual.xml"/>
+<include file="memento.xml"/>
+<left>
+<p>
+This is the main entry point to CDuce documentation.
+</p>
+<pages-toc/>
+</left>
+
+<box title="Available documents" link="src">
+<p>
+We mantain three kinds of on-line documentation: a <a
+href="manual.html">User's guide</a> where all CDuce constructions are
+grouped by categories and explained; a <a href="tutorial.html">Tutorial</a>
+where we give a gentle introduction to programming in CDuce; and a
+<a href="memento.html">Quick reference card</a> where we group and briefly explain in a single page  CDuce syntax.
+</p>
+</box>
+
+<page name="sitemap">
+
+<title>Sitemap</title>
+
+<left>
+<p>This page lists all the pages from the CDuce documentation.</p>
+</left>
+
+<box title="Sitemap" link="sitemap">
+<site-toc/>
+</box>
+
+</page>
+</page>
+
+</site>

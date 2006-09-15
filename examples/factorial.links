@@ -1,0 +1,48 @@
+fun request(s) client {
+ domReplaceDocument(
+  <html>
+   <body>
+    <h1>Please type a number</h1>
+     <form l:onsubmit="{response(t)}" l:onkeyup="{request(t)}">
+      <input type="text" value="{s}" l:name="t"/>
+      {
+      if (s ~ /[0-9]+/)
+       <input type="submit"/>
+      else
+       <input type="submit" disabled="disabled"/>
+      }
+     </form>
+    </body>
+  </html>
+ )
+}
+
+fun response(s) client {
+ var n = stringToInt(s);
+ domReplaceDocument(
+  <html>
+   <body>
+    <h1>Factorials up to {intToXml(n)}</h1>
+    <table><tbody>{
+     for (var (i,f) <- lookup(n))
+      <tr>
+       <td>{intToXml(i)}</td>
+       <td>{intToXml(f)}</td>
+      </tr>
+    }</tbody></table>
+   </body>
+  </html>
+ )
+}
+
+fun lookup(n) server {
+ var db = database (name="factorials" | getDatabaseConfig());
+ var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+ for (var row <-- factorials)
+  where (row.i <= n)
+  orderby (row.i)
+  [(row.i, row.f)]
+}
+
+request("")
