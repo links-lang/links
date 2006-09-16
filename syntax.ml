@@ -24,6 +24,7 @@ type label = int
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
+  | TypeDecl of (string * int list * Types.datatype * 'data)
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -74,6 +75,7 @@ type 'data expression' =
 let is_define = 
   function
     | Define _
+    | TypeDecl _
     | Alien _ -> true
     | _ -> false
 
@@ -212,6 +214,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Alien _
                | Placeholder _ 
                | Wrong _
+               | TypeDecl _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)

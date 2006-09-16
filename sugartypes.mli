@@ -32,7 +32,7 @@ type datatype =
   | VariantType of row
   | TableType of row
   | ListType of datatype
-  | TypeApplication of (string * datatype)
+  | TypeApplication of (string * datatype list)
   | PrimitiveType of Types.primitive
   | DBType
 and row = (string * [`Present of datatype | `Absent]) list * string option
@@ -80,7 +80,7 @@ and phrasenode =
   | Projection of (phrase * name)
   | SortBy_Conc of (ppattern * phrase * phrase)
   | TypeAnnotation of (phrase * datatype)
-  | TypeSignature of (name * datatype)
+  | TypeDeclaration of (name * name list * datatype)
   | ConstructorLit of (name * phrase option)
   | Switch of (phrase * (binder list) * (name * phrase) option)
   | Receive of ((binder list) * (name * phrase) option)
@@ -102,6 +102,7 @@ and regex = | Range of (char * char)
             | Splice of phrase
 and rawgeneratorphrase = ppattern * phrase
 and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]
+
 
 type directive = string * string list
 type sentence = (phrase list, directive) Utility.either

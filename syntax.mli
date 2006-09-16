@@ -3,6 +3,7 @@ type location = [ `Client | `Native | `Server | `Unknown ]
 type label
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
+  | TypeDecl of (string * int list * Types.datatype * 'a)
   | Boolean of (bool * 'a)
   | Integer of (Num.num * 'a)
   | Char of (char * 'a)

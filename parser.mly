@@ -43,6 +43,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <char*char> RANGE
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None] -> int -> string -> unit> INFIX INFIXL INFIXR
+%token TYPENAME
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
 %token <string> INFIX2 INFIXL2 INFIXR2
@@ -114,6 +115,19 @@ toplevel:
                                                                  pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ((`Variable $2, pos()), (FunLit (Some $2, $3, $5), pos()), $4), pos() }
 | FUN pattern op pattern perhaps_location block perhaps_semi   { Definition ((`Variable $3, pos()), (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
+| typedecl SEMICOLON                                           { $1 }
+
+
+typedecl:
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { TypeDeclaration ($2, $3, $5), pos()  }
+
+typeargs_opt:
+| /* empty */                                                  { [] }
+| LPAREN varlist RPAREN                                        { $2 }
+
+varlist:
+| VARIABLE                                                     { [$1] }
+| VARIABLE COMMA varlist                                       { $1 :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -500,7 +514,11 @@ primary_datatype:
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
 
-| CONSTRUCTOR LPAREN primary_datatype RPAREN                   { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }
+
+primary_datatype_list:
+| primary_datatype                                             { [$1] }
+| primary_datatype COMMA primary_datatype_list                 { $1 :: $3 }
 
 row:
 | fields                                                       { $1 }

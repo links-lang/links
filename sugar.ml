@@ -634,7 +634,7 @@ module Desugarer =
        | VariantType r
        | TableType r -> rvars r
        | ListType k -> typevars k
-       | TypeApplication (_,k) -> typevars k
+       | TypeApplication (_,ks) -> Utility.concat_map typevars ks
        | UnitType
        | PrimitiveType _
        | DBType -> []
@@ -674,8 +674,8 @@ module Desugarer =
            | RecordType row -> `Record (desugar_row varmap row)
            | VariantType row -> `Variant (desugar_row varmap row)
            | TableType row -> `Table (desugar_row varmap row)
-           | ListType k -> `Application ("List", desugar varmap k)
-           | TypeApplication (t, k) -> `Application (t, desugar varmap k)
+           | ListType k -> `Application ("List", [desugar varmap k])
+           | TypeApplication (t, k) -> `Application (t, List.map (desugar varmap) k)
            | PrimitiveType k -> `Primitive k
            | DBType -> `Primitive `DB
      and desugar_row varmap (fields, rv) =
@@ -749,6 +749,7 @@ module Desugarer =
              | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
 
              | TypeAnnotation(e, k) -> flatten [etv e; tv k]
+             | TypeDeclaration (_, args, datatype) -> [List.map (fun k -> `TypeVar k) args] @ tv datatype
 
              | ConstructorLit (_, e) -> opt_etv e
              | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
@@ -1023,6 +1024,8 @@ module Desugarer =
            | DatabaseLit e -> Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
            | Definition (_, _, _) -> raise (ASTSyntaxError(pos, "top-level patterns not yet implemented"))
+           | TypeDeclaration (name, args, rhs) ->
+               TypeDecl (name, List.map (flip Utility.StringMap.find varmap) args, desugar_datatype varmap rhs, pos)
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
            | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
            | TupleLit [field] -> desugar field

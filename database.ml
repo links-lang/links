@@ -21,7 +21,7 @@ end
 
 let value_of_db_string (value:string) = function
   | `Primitive `Bool -> Result.bool (value = "true")
-  | `Application ("List", `Primitive `Char) -> Result.string_as_charlist value
+  | `Application ("List", [`Primitive `Char]) -> Result.string_as_charlist value
   | `Primitive `Int  -> Result.int (num_of_string value)
   | `Primitive `Float -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))

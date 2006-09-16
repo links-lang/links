@@ -19,8 +19,8 @@ and row = (datatype, row_var) Type_basis.row_basis
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
-let string_type = `Application ("List", `Primitive `Char)
-let xml_type = `Application ("List", `Primitive `XMLitem)
+let string_type = `Application ("List", [`Primitive `Char])
+let xml_type = `Application ("List", [`Primitive `XMLitem])
 
 type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
 
@@ -49,7 +49,7 @@ let
             []
           else
             free_type_vars' (IntSet.add var rec_vars) body
-      | `Application (_, datatype) -> free_type_vars' rec_vars datatype
+      | `Application (_, datatypes) -> Utility.concat_map (free_type_vars' rec_vars) datatypes
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> row -> int list = 
     fun rec_vars (field_env, row_var) ->
@@ -378,7 +378,7 @@ let rec inference_type_of_type : inference_type_map -> Types.datatype -> datatyp
           let t' = `Recursive (var, itoft t) in
             Unionfind.change point t';
             `MetaTypeVar point
-  | `Application (s, t) -> `Application (s, itoft t)
+  | `Application (s, ts) -> `Application (s, List.map itoft ts)
 and inference_field_spec_of_field_spec var_maps  = function
   | `Present t -> `Present (inference_type_of_type var_maps t)
   | `Absent -> `Absent
@@ -432,7 +432,7 @@ let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fu
     | `Record row -> `Record (row_of_inference_row rec_vars row)
     | `Variant row -> `Variant (row_of_inference_row rec_vars row)
     | `Table row -> `Table (row_of_inference_row rec_vars row)
-    | `Application (s, t) -> `Application (s, type_of_inference_type rec_vars t)
+    | `Application (s, ts) -> `Application (s, List.map (type_of_inference_type rec_vars) ts)
     | `MetaTypeVar point ->
         (match Unionfind.find point with
            | `RigidTypeVar var
@@ -538,7 +538,7 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
         | `Record row -> isnr row
         | `Variant row -> isnr row
         | `Table row -> isnr row
-        | `Application (_, t) -> isn t
+        | `Application (_, ts) -> List.exists isn ts (* is this right? -jdy *)
         | `Recursive (var', t) ->
             not (IntSet.mem var' rec_vars) &&
               is_negative (IntSet.add var' rec_vars) var t
@@ -579,7 +579,7 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
         | `Record row -> ispr row
         | `Variant row -> ispr row
         | `Table row -> ispr row
-        | `Application (_,t) -> isp t
+        | `Application (_,ts) -> List.exists isp ts (* is this right? -jdy *)
         | `Recursive (var', t) ->
             not (IntSet.mem var' rec_vars) &&
               is_positive (IntSet.add var' rec_vars) var t

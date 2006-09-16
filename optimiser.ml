@@ -464,7 +464,7 @@ let sql_aslist : RewriteSyntax.rewriter =
 			  Query.sortings = [];
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
-        let th_list_type = `Application ("List",`Record(th_row)) in
+        let th_list_type = `Application ("List", [`Record(th_row)]) in
         let table_query = TableQuery([table_alias, 
                                       Variable(th_var, (pos, th_type, None))],
                                      select_all,

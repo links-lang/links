@@ -176,6 +176,7 @@ let keywords = [
  "table"    , TABLE; 
  "TableHandle", TABLEHANDLE; 
  "true"     , TRUE;
+ "typename" , TYPENAME;
  "update"   , UPDATE; 
  "values"   , VALUES;
  "var"      , VAR; 

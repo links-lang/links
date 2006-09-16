@@ -17,7 +17,7 @@ type ('typ, 'row) type_basis = [
   | `Variant of 'row
   | `Table of 'row
   | `Recursive of (int * 'typ)
-  | `Application of (string * 'typ)
+  | `Application of (string * 'typ list)
  ]
     deriving (Show, Pickle)
 

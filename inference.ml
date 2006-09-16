@@ -61,7 +61,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 	   eq_types (lfrom, rfrom) && eq_types (lto, rto)
        | `Record l, `Record r -> eq_rows (l, r)
        | `Variant l, `Variant r -> eq_rows (l, r)
-       | `Application (s, t), `Application (s', t') when s = s' -> eq_types (t, t')
+       | `Application (s, ts), `Application (s', ts') when s = s' -> List.for_all2 (Utility.curry eq_types) ts ts'
        | _, _ -> false)
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
@@ -219,7 +219,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       | `Record l, `Record r -> unify_rows' rec_env (l, r)
       | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
       | `Table l, `Table r -> unify_rows' rec_env (l, r)
-      | `Application (s,t), `Application (s', t') when s = s' -> unify' rec_env (t, t')
+      | `Application (s,ts), `Application (s', ts') when s = s' -> List.iter2 (fun t t' -> unify' rec_env (t, t')) ts ts'
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
        debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
@@ -629,7 +629,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 		| `Variant row ->  `Variant (inst_row rec_env row)
 		| `Table row -> `Table (inst_row rec_env row)
 		| `Application (n, elem_type) ->
-		    `Application (n, inst rec_env elem_type)
+		    `Application (n, List.map (inst rec_env) elem_type)
 		| `Recursive _
 		| `RigidTypeVar _
 		| `TypeVar _ -> assert false
@@ -721,8 +721,8 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
       | `Record row
       | `Variant row 
       | `Table row -> get_row_quantifiers bound_vars row
-      | `Application (_, elem_type) ->
-          get_quantifiers bound_vars elem_type
+      | `Application (_, args) ->
+          unduplicate (=) (Utility.concat_map (get_quantifiers bound_vars) args)
 
 and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
   fun bound_vars ->
@@ -1008,27 +1008,27 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
         unify(new_row_type, type_of_expression value);
         Variant_selection_empty (value, (pos, ITO.fresh_type_variable (), None))
   | Nil (pos) ->
-      Nil (pos, `Application ("List", ITO.fresh_type_variable ()), None)
+      Nil (pos, `Application ("List", [ITO.fresh_type_variable ()]), None)
   | List_of (elem, pos) ->
       let elem = type_check env elem in
 	List_of (elem,
-		 (pos, `Application ("List", type_of_expression elem), None))
+		 (pos, `Application ("List", [type_of_expression elem]), None))
   | Concat (l, r, pos) ->
       let tvar = ITO.fresh_type_variable () in
       let l = type_check env l in
-	unify (type_of_expression l, `Application ("List", tvar));
+	unify (type_of_expression l, `Application ("List", [tvar]));
 	let r = type_check env r in
 	  unify (type_of_expression r, type_of_expression l);
-	  let type' = `Application ("List", tvar) in
+	  let type' = `Application ("List", [tvar]) in
 	    Concat (l, r, (pos, type', None))
   | For (expr, var, value, pos) ->
       let value_tvar = ITO.fresh_type_variable () in
       let expr_tvar = ITO.fresh_type_variable () in
       let value = type_check env value in
-	unify (type_of_expression value, `Application ("List", value_tvar));
+	unify (type_of_expression value, `Application ("List", [value_tvar]));
 	let expr_env = (var, ([], value_tvar)) :: env in
 	let expr = type_check expr_env expr in
-	  unify (type_of_expression expr, `Application ("List", expr_tvar));
+	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, (pos, type', None))
   | Escape(var, body, pos) -> 
@@ -1058,7 +1058,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	      StringMap.add col.Query.name
 		(`Present (inference_type_of_type var_maps col.Query.col_type)) env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
-      let datatype =  `Application ("List", `Record row) in
+      let datatype =  `Application ("List", [`Record row]) in
       let row' = ITO.make_empty_open_row () in
       let ths = alistmap (type_check env) ths
       in
