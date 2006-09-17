@@ -88,13 +88,13 @@ let rec format_exception = function
        ^ "   " ^ s.marker)
   | Getopt.Error s -> s
   | Type_error ((pos,_,expr), s) -> 
-      Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s\n" 
+      Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "`" ^ pexpr ^
-        "' has type " ^ string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
-        " and cannot be passed to function `"^ fexpr ^
-        "', which has type "^ string_of_datatype fntype
+        "' has type \n    " ^ string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
+        "\nand cannot be passed to function `"^ fexpr ^
+        "', which has type \n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "`"^ fexpr ^"', which has type "^ string_of_datatype fntype ^
