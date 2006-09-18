@@ -1,6 +1,6 @@
-var db = database (driver="postgresql",
+var db = database (driver="mysql",
                    name="winestore",
-                   args="localhost:5432:s0567141:");
+                   args="localhost:5432:www-data:");
 
 var page_size = 12;
 
@@ -347,8 +347,7 @@ fun begin_checkout(cust_id, order_id) {
 
       <div>Please enter your SurchargeCard details (Try: 8000000000001001 )
         and delivery instructions. Fields shown in red are mandatory.</div>
-      <form method="POST" 
-         l:action="{checkout(cust_id, order_id, card_no, expiry, instr)}">
+      <form method="POST" l:action="{checkout(cust_id, order_id, card_no, expiry, instr)}">
       <table>
         <tr><td align="right">
           SurchargeCard: 	
@@ -374,14 +373,9 @@ fun begin_checkout(cust_id, order_id) {
   </html>
 }
 
-fun updateQuantities() {
-  <body>
-  <h1>Update quantities</h1>
-  stub page
-  </body>
-}
-
 fun cart_itemlist(cust_id, order_id) {
+  debug("starting cart_itemlist");
+
   var cart_items = 
     for (var cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
@@ -392,17 +386,16 @@ fun cart_itemlist(cust_id, order_id) {
         {
             for (var cost_rec <-- inventoryTable)
             where (cost_rec.wine_id == wine.wine_id)
-              [(qty = cart_item.qty, wine = wine.wine_name, 
-                price = cost_rec.cost)]
+              [(wine.wine_name, cost_rec.cost)]
         }
     };
+    debug("got results in cart_items");
     if (length(cart_items) == 0)
       <p>Your cart is empty.</p>
     else {
-      var total_cost = floatToString(sum_float(map(fun (x){x.price}, cart_items)));
+      var total_cost = floatToString(sum_float(map(snd, cart_items)));
       var total_items = intToString(length(cart_items));
-      <form l:action="{updateQuantities()}">
-        <table width="100%">
+      <table width="100%">
            <tr>
              <th> Quantity </th>
              <th> Wine </th>
@@ -411,10 +404,10 @@ fun cart_itemlist(cust_id, order_id) {
            </tr>
         {for (var item <- cart_items)
            <tr>
-             <td> {intToXml(item.qty)} </td>
-             <td> {stringToXml(item.wine)} </td>
-             <td align="right"> ${floatToXml(item.price)} </td>
-             <td align="right"> ${floatToXml(item.price)} </td>
+             <td> 1 </td>
+             <td> {stringToXml(item.1)} </td>
+             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
+             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
            </tr>
         }
         <tr>
@@ -423,10 +416,7 @@ fun cart_itemlist(cust_id, order_id) {
           <td></td>
           <td align="right"> ${stringToXml(total_cost)} </td>
         </tr>
-      </table>
-      <input type="submit" value="Update quantities" />
-      </form>
-       ++
+      </table> ++
       {if (cust_id <> -1)
         <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
           <input type="submit" value="Check out" />
