@@ -117,7 +117,31 @@ BUGS
 * The following planned DOM ops are unimplemented as yet:
   domGetFirstChildRef, domGetNextSiblingRef, domGetPrevSiblingRef
 
+* Ben Kavanagh reports: "Links fails to compile on x86-64 platform. 
+  Things seem to work fine on i686 2.6.17 linux with latest caml, 
+  mysql etc." He offers this log:
+
+    [ben@linuxbox links-0.3.1]$ make
+    cd deriving && make
+    make[1]: Entering directory `/usr/src/langtools/links-0.3.1/deriving'
+    cd syntax && make
+    make[2]: Entering directory `/usr/src/langtools/links-0.3.1/deriving/syntax'
+    ocamlc.opt -pp "camlp4r -loc loc " -I +camlp4 -c deriving.ml
+    File "deriving.ml", line 29, characters 6-14:
+    Warning Y: unused variable nidchars.
+    File "deriving.ml", line 7, characters 4-9:
+    Warning S: this expression should have type unit.
+    File "deriving.ml", line 18, characters 32-41:
+    This expression has type [> `8{* ] but is here used with type exn
+    make[2]: *** [deriving.cmo] Error 2
+    make[2]: Leaving directory `/usr/src/langtools/links-0.3.1/deriving/syntax'
+    make[1]: *** [built] Error 2
+    make[1]: Leaving directory `/usr/src/langtools/links-0.3.1/deriving'
+    make: *** [deriving/built] Error 2
+
 TODO
+
+* There's no way to make use of <input type="button" /> buttons?
 
 * It'd be more symmetric to allow arbitrary let-patterns (rather than
   just variable and function bindings) at top level.  For example,

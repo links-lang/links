@@ -504,12 +504,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetTime",
   (`Client, datatype "Event -> Int");
 
-  (* # stopEvent : ??? *)
-  (* # stopPropagation : ??? *)
-  (* # preventDefault : ??? *)
   (* getCharCode : Event -> Char *)
   "eventGetCharCode",
   (`Client, datatype "Event -> Char");
+
+  (* Yahoo UI library functions we don't implement: *)
+  (* # stopEvent : ??? *)
+  (* # stopPropagation : ??? *)
+  (* # preventDefault : ??? *)
 
   (* Cookies *)
   "setCookie",
@@ -521,6 +523,20 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            `Record []
       ),
    datatype "String -> String -> unit");
+
+  (* this one should probably the only setCookie. *)
+  "setCookieUncurried",
+  (p1 (fun pair ->
+         (match pair with
+             `Record elems ->
+               let cookieName = charlist_as_string (assoc "1" elems) in
+               let cookieVal = charlist_as_string (assoc "2" elems) in
+                 http_response_headers := 
+                   ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
+                 `Record []
+           | _ -> failwith "Impossible error.")
+      ),
+   datatype "(String, String) -> unit");
 
   "getCookie",
   (p1 (fun cookieName -> 

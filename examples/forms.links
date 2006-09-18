@@ -100,11 +100,13 @@ fun transformOutput(f) {
   fmap(t)
 }
 
-# A form is rendered to Xml using the render function
+# A form is rendered to Xml, and a handler applied, using the render function
 fun render(continuation)(form) {
    var ((xml, extractor),_) = runState(form)(0);
    var handler = transformCollector(continuation)(extractor);
-   <form l:onsubmit="{runState(handler)(environment()).1}" method="POST">{xml}<input type="submit"/></form>
+   <form l:onsubmit="{runState(handler)(environment()).1}" method="POST">{xml}
+    <input type="submit"/>
+   </form>
 }
 
 # The prefix and suffix functions add passive xml to the start and
@@ -126,11 +128,13 @@ fun transformXml(transformer : ((XML) -> XML))(form) {
 # dates example
 var inputInt = transformOutput(stringToInt)(input);
 fun combinePair(x)(y) { liftM2(fun (x)(y) { (x,y) })(x)(y) }
-var date = compose(inputInt) (prefix (stringToXml("/"))(inputInt))(combinePair);
+var date = compose(inputInt) 
+                  (prefix (stringToXml("/"))(inputInt))
+                  (combinePair);
 fun plugDiv(x) { transformXml (fun (inner) { <div>{inner}</div>})(x) };
 
 fun applyLabel(label) {
-   transformXml (fun (x) {  <b>{stringToXml(label)}</b> ++ x })
+   transformXml (fun (x) {  <b>{stringToXml(label)++x}</b> })
 }
 
 fun datel(x) { x `applyLabel` date }

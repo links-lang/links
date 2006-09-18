@@ -15,7 +15,7 @@ fun ticker(f, n) {
   ticker(f, n);
 }
 
-{
+fun (){
   spawn { ticker(showDate, 5) };
   <html>
     <body>
