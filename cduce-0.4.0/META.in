@@ -1,5 +1,0 @@
-version="%VER%"
-requires="%REQ% camlp4.gramlib"
-description="Runtime support for CDuce"
-archive(byte)="+camlp4/camlp4.cma +camlp4/pr_o.cmo cduce_lib.cma"
-archive(native)="+camlp4/camlp4.cmxa +camlp4/pr_o.cmx cduce_lib.cmxa"

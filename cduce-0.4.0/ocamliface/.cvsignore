@@ -1,7 +1,0 @@
-*.cmi
-*.cmo
-*.cmx
-*.cma
-*.cmxa
-cmi2ml
-asttypes.ml

@@ -27,13 +27,14 @@ AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib cduce-0.4.0
 
 PP=deriving/syntax/deriving
 
-OCAMLOPT := ocamlfind ocamlopt -linkpkg -package pcre,num,pxp,curl,expat -pp $(PP)
-OCAMLC := ocamlfind ocamlc -linkpkg -package pcre,num,pxp,curl,expat -pp $(PP)
+OCAMLOPT := ocamlfind ocamlopt -linkpkg -package pcre,num,pxp,expat -pp $(PP)
+OCAMLC := ocamlfind ocamlc -linkpkg -package pcre,num,pxp,expat -pp $(PP)
 OCAMLDEP := ocamldep -pp $(PP)
 
 VPATH=regex
 
-#OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
+#OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 \
+#                    --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
 OCAMLBFLAGS=-g -w a
