@@ -40,7 +40,7 @@ let lookup toplevel locals name =
   with Not_found -> 
     failwith("Internal error: variable \"" ^ name ^ "\" not in environment")
 
-let bind_rec globals locals defs =
+let bind_rec locals defs =
   (* create bindings for these functions, with no local variables for now *)
   let make_placeholder = (fun env (variable, value) ->
                             (match value with
@@ -49,11 +49,23 @@ let bind_rec globals locals defs =
                                | _ -> raise (Runtime_error "TF146"))) in
   let new_env = trim_env (fold_left make_placeholder locals defs) in
     (* fill in the local variables *)
-  let fill_placeholder = (fun (label, result) ->
-                            (match result with
-                               | `Function (var, _, _, body) ->
-                                   label, `Function (var, (retain (freevars body) new_env), (), body)
-                               | _ -> (label, result)))
+  let fill_placeholder (label, result) =
+    match result with
+        (* I don't think this distinguishes sufficiently between
+           function values from the local environment (`locals') and
+           function values being bound in the rec binding (`defs').
+           We should treat them differently, not adding anything from
+           new_env into the `locals' environment of values in the
+           `locals' environment. 
+
+           In practice, I think this will succeed, since only values in
+           the local environment have local environments, and fnlocals
+           takes precedence over new_env.  It's still conceptually
+           questionable, though.
+        *)
+      | `Function (var, fnlocals, _, body) ->
+          label, `Function (var, (fnlocals @ retain (freevars body) new_env), (), body)
+      | _ -> (label, result)
   in
     trim_env (map fill_placeholder new_env)
 
@@ -402,7 +414,7 @@ fun globals locals expr cont ->
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (variables, body, _) ->
-      let new_env = bind_rec globals locals (List.map (fun (n,v,_) -> (n,v)) variables) in
+      let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) variables) in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont

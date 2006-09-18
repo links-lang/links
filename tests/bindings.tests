@@ -69,3 +69,7 @@ Reject multiple occurrences of a name in a pattern [3]
 fun () { var (a=x,b=x) = (a=1,b=2); x }
 stderr : @.
 exit : 1
+
+Check that recursive bindings don't destroy the local environments of values in the local environment (see bug report from Thierry, 2006-09-17 on links-users)
+fun (z) { fun s() {} z() }(fun (aa)() { aa() }((fun (x){x})))
+stdout : () : ()
