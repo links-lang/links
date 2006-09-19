@@ -9,7 +9,8 @@ module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
 module Pickle_lexpos = Pickle_unpicklable (LexposType)
 
-type position = lexpos * (* source line : *) string * (* expression source: *) string
+type position = lexpos *  (* source line: *) string 
+                  * (* expression source: *) string
     deriving (Show, Pickle)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"

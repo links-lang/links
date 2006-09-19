@@ -45,29 +45,17 @@ let bind_rec locals defs =
   let make_placeholder = (fun env (variable, value) ->
                             (match value with
                                | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, [], () (*globals*), body))
+                                   bind env variable (`Function (var, locals, () (*globals*), body))
                                | _ -> raise (Runtime_error "TF146"))) in
-  let new_env = trim_env (fold_left make_placeholder locals defs) in
+  let rec_env = trim_env (fold_left make_placeholder [] defs) in
     (* fill in the local variables *)
-  let fill_placeholder (label, result) =
-    match result with
-        (* I don't think this distinguishes sufficiently between
-           function values from the local environment (`locals') and
-           function values being bound in the rec binding (`defs').
-           We should treat them differently, not adding anything from
-           new_env into the `locals' environment of values in the
-           `locals' environment. 
-
-           In practice, I think this will succeed, since only values in
-           the local environment have local environments, and fnlocals
-           takes precedence over new_env.  It's still conceptually
-           questionable, though.
-        *)
+  let fill_placeholder value =
+    match value with
       | `Function (var, fnlocals, _, body) ->
-          label, `Function (var, (fnlocals @ retain (freevars body) new_env), (), body)
-      | _ -> (label, result)
+          `Function (var, fnlocals @ (retain (freevars body) rec_env), (), body)
+      | _ -> value
   in
-    trim_env (map fill_placeholder new_env)
+    trim_env ((alistmap fill_placeholder rec_env) @ locals)
 
 let rec crack_row : (string -> ((string * result) list) -> (result * (string * result) list)) = fun ref_label -> function
         | [] -> raise (Runtime_error("Internal error: no field '" ^ ref_label ^ "' in record"))
@@ -77,7 +65,8 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
             let selected, remaining = crack_row ref_label fields in
               (selected, field :: remaining)
 
-        
+(** [normalise_query] substitutes values for the variables in a query,
+    and performs interpolation in LIKE expressions.  *)
 let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
       Text (Sql_transform.like_as_string (env @ toplevel) l)
@@ -92,12 +81,12 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
                | `List (`Char _::_) as c  
                  -> Query.Text (db # escape_string (charlist_as_string c))
                | `List ([]) -> Query.Text ""
-               | r -> failwith("Internal error: variable in query " ^ Sql.string_of_query qry ^ " had inappropriate type at runtime; it was " ^ string_of_result r)
-           with Not_found -> failwith ("Internal error: undefined query variable '" ^ name ^ "'"))
-            (* UGLY HACK BELOW *)
-      | Query.Binary_op ("concat", left, right) ->
-          (match normalise_expression left, normalise_expression right with
-              Query.Text lstr, Query.Text rstr -> Query.Text (lstr ^ rstr))
+               | r -> failwith("Internal error: variable " ^ name ^ 
+                                 " in query "^ Sql.string_of_query qry ^ 
+                                 " had unexpected type at runtime: " ^ 
+                                 string_of_result r)
+           with Not_found-> failwith("Internal error: undefined query variable '"
+                                     ^ name ^ "'"))
       | Query.Binary_op (symbol, left, right) ->
           Binary_op (symbol, normalise_expression left, normalise_expression right)
       | Query.Unary_op (symbol, expr) ->
@@ -148,7 +137,6 @@ let query_result_types (query : Query.query)
                                       Sql.string_of_query query ^
                                       " was not found in tables " ^ 
                                       mapstrcat "," fst table_defs ^ ".")
-  
 
 (* should we just use BinOp values in the first place?*)
 let binopFromOpString = function
@@ -255,22 +243,23 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | LessOp -> bool (Library.less lhsVal value)
 	             | UnionOp -> 
                          (match lhsVal, value with
-	                    | `List (l), `List (r)
-                                -> `List (l @ r)
-	                    | _ -> raise (Runtime_error ("Concatenation of non-list types: "
-							   ^ string_of_result lhsVal ^ " and "
-							   ^ string_of_result value))
+	                    | `List (l), `List (r) -> `List (l @ r)
+	                    | _ -> raise(Runtime_error
+                                           ("Type error: Concatenation of non-list values: "
+					    ^ string_of_result lhsVal ^ " and "
+					    ^ string_of_result value))
 			 )
 	             | RecExtOp(label) -> 
 		         (match lhsVal with
 		            | `Record fields -> 
 		                `Record ((label, value) :: fields)
-		            | _ -> raise (Runtime_error "TF077"))
+		            | _ -> assert false)
 	             | MkTableHandle (row) ->
 			 (match lhsVal with
 			    | `Database (db, _) ->
-				apply_cont globals cont (`Table(db, charlist_as_string value, row))
-			    | _ -> failwith ("Internal Error #56143432"))
+				apply_cont globals cont 
+                                  (`Table(db, charlist_as_string value, row))
+			    | _ -> failwith("Runtime type error: argument to table was not a database."))
 	          )
 	        in
 	          apply_cont globals cont result
@@ -307,10 +296,12 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                                  assert (all_equiv (=) dbs);
                                  let table_defs = combine table_aliases table_defs in
                                  let db = hd(dbs) in
+                                   (* TBD: factor this stuff out into
+                                      a module that processes queries *)
                                  let result_types = query_result_types query table_defs in
-       	                       let query_string = Sql.string_of_query (normalise_query globals locals db query) in
-                                 prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                 Database.execute_select result_types query_string db
+       	                         let query_string = Sql.string_of_query (normalise_query globals locals db query) in
+                                   prerr_endline("RUNNING QUERY:\n" ^ query_string);
+		                   Database.execute_select result_types query_string db
                            | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
                        in
                          apply_cont globals cont result
@@ -413,8 +404,8 @@ fun globals locals expr cont ->
       eval l (BinopRight(locals, binopFromOpString oper, r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
-  | Syntax.Rec (variables, body, _) ->
-      let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) variables) in
+  | Syntax.Rec (defs, body, _) ->
+      let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont

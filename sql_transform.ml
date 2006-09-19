@@ -250,14 +250,14 @@ let make_binop_sql oper left_value right_value =
         Binary_op ("like", left_value, right_value)
     | _ -> failwith "Internal error: unknown boolean operator in make_binop_sql"
 
-(* Convert a like expression to a string. *)
+(** Convert a LIKE expression to a string. *)
 let rec like_as_string env : like_expr -> string =
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     function
       | `percent -> "%"
       | `string s -> quote s
       | `variable v -> quote (Result.unbox_string (assoc v env))
-      | `seq rs -> String.concat "" (List.map (like_as_string env) rs)
+      | `seq rs -> mapstrcat "" (like_as_string env) rs
 
 (** condition_to_sql
     Converts a Links condition into an SQL condition; should only be

@@ -188,6 +188,10 @@ struct
   (** alistmap maps f on the contents-parts of the entries, producing a
       new alist *)
   let alistmap f = List.map (cross identity f)
+
+  let alistmapstrcat glue f = 
+    (List.map (fun (k, v) -> k ^ " => " ^ f v))
+    ->- (String.concat glue) 
     
   (** alistmap' produces an alist by applying f to each element of the
       alist--f should produce a new contents-part for the entry. *)

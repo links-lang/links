@@ -28,8 +28,13 @@ and string_of_query (qry:query) : string =
      "SELECT "^ (if distinct then "DISTINCT " else "")
      ^ (match selects with
 	  | [] -> "NULL as null"
-	  | _ -> (String.concat ", " (map (fun col -> col.table_renamed ^"."^ col.name ^" AS "^ col.renamed) qry.result_cols)))
-     ^ " FROM " ^ (String.concat ", " (map (fun (table, rename) -> string_of_table_spec table ^ " AS " ^ rename) tables)) ^
+	  | _ -> (Utility.mapstrcat ", " 
+                    (fun col -> 
+                       col.table_renamed ^"."^ col.name ^" AS "^ col.renamed)
+                    qry.result_cols))
+     ^ " FROM " ^ (Utility.mapstrcat ", " 
+                     (fun (table, rename) ->
+                        string_of_table_spec table ^ " AS " ^ rename) tables) ^
        string_of_condition where
      ^ (match order with
 	  | [] -> "" 

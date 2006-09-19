@@ -11,7 +11,7 @@ let rec like_as_string : like_expr -> string =
       | `percent -> "%"
       | `string s -> quote s
       | `variable v -> "VARIABLE : " ^ v
-      | `seq rs -> String.concat "" (List.map like_as_string rs)
+      | `seq rs -> mapstrcat "" like_as_string rs
 
 type table_spec = [ `TableName of string | `TableVariable of string ]
     deriving (Show, Pickle)
