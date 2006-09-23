@@ -1,6 +1,6 @@
-#load "pa_extend.cmo";
-#load "q_MLast.cmo";
-open Deriving;
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
+open Deriving
 
 (* The code currently generated is somewhat imperative, and not as
    efficient as a hand-written functional version (since it doesn't
@@ -19,39 +19,36 @@ open Deriving;
    polymorphic variants, records, etc.
 *)
 
-value rec contains_type (ltype, lmod) = fun [
-  c when ltype_of_ctyp c = Some ltype  -> True
+let rec contains_type (ltype, lmod) = function
+| c when ltype_of_ctyp c = Some ltype  -> true
 | <:ctyp< [ $list:ctors$ ] >>  -> List.exists (fun (_,_,cs) -> (List.exists (contains_type (ltype, lmod)) cs)) ctors
 | <:ctyp< $t1$ $t2$ >>         -> (contains_type (ltype,lmod)) t1 || (contains_type (ltype,lmod)) t2
-| <:ctyp< $lid:id$ >>          -> False
-| <:ctyp< $uid:m$ . $t2$ >>    -> False
+| <:ctyp< $lid:id$ >>          -> false
+| <:ctyp< $uid:m$ . $t2$ >>    -> false
 | <:ctyp< { $list:fields$ } >> -> List.exists (fun (_, _, _, c) -> (contains_type (ltype,lmod)) c) fields
 | <:ctyp< ( $list:params$ ) >> -> List.exists (contains_type (ltype,lmod)) params
-| <:ctyp< [= $list:row$ ] >>   -> List.exists (fun [ MLast.RfTag _ _ targs -> List.exists (contains_type (ltype,lmod)) targs
-                                                   | MLast.RfInh _ -> False
-                                                   ]) row
-| <:ctyp< '$a$ >>              -> False
+| <:ctyp< [= $list:row$ ] >>   -> List.exists (function
+                                                   | MLast.RfTag (_, _, targs) -> List.exists (contains_type (ltype,lmod)) targs
+                                                   | MLast.RfInh _ -> false)
+                                      row
+| <:ctyp< '$a$ >>              -> false
 | _                            -> failwith "Failed to generate rewriter instance [1]"
-                                            ];
 
-value rec gen_expr_rewriter_function loc (ltype, lmod) = fun [
-                                                               c when not (contains_type (ltype,lmod) c) -> None
+let rec gen_expr_rewriter_function loc (ltype, lmod) = function
+                                                             | c when not (contains_type (ltype,lmod) c) -> None
 | c when ltype_of_ctyp c = Some ltype -> Some <:expr< adapted >>
 | <:ctyp< $lid:tc$ $t$ >>       -> 
-  match gen_expr_rewriter_function loc (ltype,lmod) t with [
-    None   -> None
-  | Some x -> Some <:expr< $uid:"Functor_" ^ tc$ . map ( $x$ ) >> ]
-
+  (match gen_expr_rewriter_function loc (ltype,lmod) t with
+  | None   -> None
+  | Some x -> Some <:expr< $uid:"Functor_" ^ tc$ . map ( $x$ ) >>)
 | <:ctyp< ( $list:types$ ) >> -> 
   let (patts, exprs) = List.split (gen_n loc (ltype,lmod) types) in
     Some (<:expr< fun [ ($list:patts$) -> ($list:exprs$) ] >>)
 | _                             -> failwith "Failed to generate functor instance [0]"
-]
 and gen_code (loc:MLast.loc) (vname:string) (ltype, lmod) ctype = 
-    match gen_expr_rewriter_function loc (ltype,lmod) ctype with [
-      None   -> <:expr< $lid:vname$ >>
-    | Some x -> <:expr<  $x$ ( $lid:vname$) >>
-   ]
+    match gen_expr_rewriter_function loc (ltype,lmod) ctype with
+      | None   -> <:expr< $lid:vname$ >>
+      | Some x -> <:expr<  $x$ ( $lid:vname$) >>
 
 (* given n types, return n patterns and expressions *) 
 and gen_n loc (ltype, lmod) types = 
@@ -59,38 +56,36 @@ and gen_n loc (ltype, lmod) types =
       List.map2 
         (fun vname ctype -> (<:patt< $lid:vname$ >>, gen_code loc vname (ltype,lmod) ctype))
         vnames
-        types;
+        types
 
-value gen_case (ltype,lmod) (loc, name, params) = 
-  match params with [
-     [] -> (<:patt< ($uid:name$ as x) >>, None, <:expr< x >>)
-  | [x] -> 
-      if contains_type (ltype, lmod) x then
-        (<:patt< ($uid:name$ x)  >>, None, <:expr< $uid:name$ ($gen_code loc "x" (ltype,lmod) x$) >>)
-      else
-        (<:patt< ($uid:name$ _ as p) >>, None, <:expr< p >>)
-  | _  -> let (patts, exprs) = List.split (gen_n loc (ltype,lmod) params) in
-             (<:patt< $uid:name$ ( $list:patts$ ) >>,
-               None,
-              <:expr< $uid:name$ ( $list:exprs$ ) >>)];
+let gen_case (ltype,lmod) (loc, name, params) = 
+  match params with
+    | [] -> (<:patt< ($uid:name$ as x) >>, None, <:expr< x >>)
+    | [x] -> 
+        if contains_type (ltype, lmod) x then
+          (<:patt< ($uid:name$ x)  >>, None, <:expr< $uid:name$ ($gen_code loc "x" (ltype,lmod) x$) >>)
+        else
+          (<:patt< ($uid:name$ _ as p) >>, None, <:expr< p >>)
+    | _  -> let (patts, exprs) = List.split (gen_n loc (ltype,lmod) params) in
+              (<:patt< $uid:name$ ( $list:patts$ ) >>,
+              None,
+              <:expr< $uid:name$ ( $list:exprs$ ) >>)
 
-value gen_process_children loc (ltype,lmod) tname = fun [
-   <:ctyp< [ $list:ctors$ ]  >> ->  <:str_item< value process_children' rewriter v = 
+let gen_process_children loc (ltype,lmod) tname = function
+  | <:ctyp< [ $list:ctors$ ]  >> ->  <:str_item< value process_children' rewriter v = 
                                                    let changed = ref False in
                                                    let adapted x = 
                                                      match rewriter x with 
                                                        [ Some x -> do { changed.contents := True; x }
                                                        | None   -> x ]
                                                    in let rv = match v with [ $list:List.map (gen_case (ltype,lmod)) ctors$ ] in (rv, changed.contents) >>
-| _ -> error loc ("Cannot (yet?) generate instance for " ^ tname)
-];
+  | _ -> error loc ("Cannot (yet?) generate instance for " ^ tname)
 
-value gen_type_a loc = 
+let gen_type_a loc = 
     List.fold_left
-      (fun t (_,(_,mname)) -> <:ctyp< $t$ $uid:mname$ . a >>);
+      (fun t (_,(_,mname)) -> <:ctyp< $t$ $uid:mname$ . a >>)
 
-    
-value gen_instance loc tname params ctype =
+let gen_instance loc tname params ctype =
   let params = param_names params in
   let atype = gen_type_a  loc  <:ctyp< $lid:tname$ >> params in 
   let ltype = gen_type_l tname params 
@@ -112,11 +107,11 @@ declare
   open Functor;
   module $uid:"Rewrite_" ^ tname$ = $fnctor_2$;
   end
->>;
+>>
 
-value gen_instances loc : instantiator = fun [
-   [((loc, tname),params, ctype,_(*constraints*))] -> gen_instance loc tname params ctype
-| _ -> error loc ("Cannot currently generate rewriter instances for mutually recursive types")
-];
+let gen_instances loc : instantiator = function
+ | [((loc, tname),params, ctype,_(*constraints*))] -> gen_instance loc tname params ctype
+ | _ -> error loc ("Cannot currently generate rewriter instances for mutually recursive types")
 
-instantiators.val :=   [("Rewriter"    , gen_instances):: instantiators.val];
+let _ = 
+  instantiators := ("Rewriter", gen_instances):: !instantiators

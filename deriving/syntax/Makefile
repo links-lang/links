@@ -1,7 +1,7 @@
 # $Id: Makefile,v 1.12 2002/02/04 10:21:44 ddr Exp $
 
 OCAMLC   = ocamlc.opt
-CAMLP4   = "camlp4r -loc loc "
+CAMLP4   = "camlp4o -loc loc "
 OCAMLOPT = ocamlopt.opt
 OCAMLDEP = ocamldep
 LIBDIR = `ocamlc -where`
@@ -21,7 +21,7 @@ opt: $(OBJS)
 #
 # This is less flexible than loading the bytecode files into the
 # standard camlp4, but (consequently) runs much faster.
-deriving:
+deriving: $(OBJS)
 	$(OCAMLOPT) -linkall -o $@ -I `camlp4 -where` odyl.cmxa camlp4.cmxa pa_o.cmx pa_op.cmx pr_dump.cmx $(NOBJS) camlp4/odyl.cmx 
 
 clean:
