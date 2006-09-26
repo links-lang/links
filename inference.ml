@@ -353,7 +353,17 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			    if mem var (free_row_type_vars extension_row) then
 			      rec_row_intro point (field_env, var, extension_row)
 			    else
-			      Unionfind.change point extension_row
+			      begin
+				if StringMap.is_empty extension_field_env then
+				  match extension_row_var with
+				    | `MetaRowVar point' ->
+					Unionfind.change point (Unionfind.find point')
+				    | `RowVar None ->
+					Unionfind.change point extension_row
+				    | _ -> assert false
+				else
+				  Unionfind.change point extension_row
+			      end
 			| `RecRowVar _ ->
 			    unify_rows' rec_env ((StringMap.empty, row_var), extension_row)
 			| `MetaRowVar _ -> assert false
@@ -540,10 +550,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			 extend_field_env may change rrow_var' or lrow_var', as either
 			 could occur inside the body of lfield_env' or rfield_env'
 		      *)
-                      debug ("A");
 		      unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var));
 		      let lextension = extend_field_env rec_env rfield_env' lfield_env' in
-                        debug ("B");
 			unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
 		  end in
         
