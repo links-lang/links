@@ -357,7 +357,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 				if StringMap.is_empty extension_field_env then
 				  match extension_row_var with
 				    | `MetaRowVar point' ->
-					Unionfind.change point (Unionfind.find point')
+					Unionfind.union point point'
 				    | `RowVar None ->
 					Unionfind.change point extension_row
 				    | _ -> assert false
