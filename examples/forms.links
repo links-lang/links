@@ -1,21 +1,10 @@
+# State a ===  [|State:(d) -> (a,d)|]
 # Form a == State Names (Xml, Collector a)
-# Collector a == State Env a
+# Collector a == Env -> a
 # Combiner a b c == Collector a -> Collector b -> Collector c
 
 infixr 0 $;
 fun f $ x { f(x) }
-
-fun fold_right(f, u, l) {
-  switch l {
-    case [] -> u;
-    case x::xs -> f(x, fold_right(f,u,xs));
-  }
-}
-fun cons(car)(cdr) { car :: cdr }
-
-fun map(f,l) {
-  for (var x <- l) [f(x)]
-}
 
 fun lookup(x,l) {
   switch l {
@@ -40,12 +29,14 @@ fun (State (x)) >>= f {
    State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
 }
 
+sig return : (a) -> [|State:(d) -> (a, d)|]
 fun return(a) {
   State (fun (s) { (a,s)  })
 }
 
-
 var get = State (fun (s) { (s,s) });
+
+sig put :  (a) -> [|State:(a) -> ((), a)|] # ?
 fun put(s) {
   State (fun (_) { ((), s) })
 }
@@ -58,15 +49,28 @@ fun fmap(f)(x) {
   x >>= (fun (x) { return (f(x)) })
 } 
 
-fun liftM2 (f) (m1) (m2) {
-  m1 >>= fun (x1) {
-  m2 >>= fun (x2) {
-  return $ f(x1)(x2)}}
+# pure : a -> Form(a)
+fun pure(v) {
+  return([], fun (_) { v })
 }
 
-# A monadic implementation of Sam's forms proposal
-fun makeEmpty(a) {
-  return ([], return (a))
+# (@@@) : Form(a) -> Form(a->b) -> Form(b)
+infixr 1 @@@;
+fun m @@@ k {
+  m >>= fun((x,c)){
+  k >>= fun((y,f)){
+  return((x++y, fun(e){ f(e)(c(e)) }))}}
+}
+
+# xml : Xml -> Form(())
+fun xml(x) { return ( (x, fun (e) { () })) }
+
+# text : String -> Form(())
+fun text(s) { xml(stringToXml(s)) }
+
+# plug : (Xml -> Xml) -> Form(a) -> Form(a)
+fun f `plug` m {
+  m >>= fun((x,v)){ return((f(x),v)) }
 }
 
 fun makeName(i : Int) { "input_" ++ intToString(i) }
@@ -80,115 +84,67 @@ var nextName =
 var input = 
    nextName >>= fun (name) {
    (return (<input name="{name}"/>,
-            get >>= fun (env) {
-            return $ lookup(name, env)}))};
+            fun (env) { lookup(name, env)}))};
 
-# The compose function takes two forms and a combiner, then
-#   * concatenates the renderers
-#   * uses the combiner to compose the collectors
-fun compose(form1)(form2)(combiner) {
-  form1 >>= fun (x1,f1) {
-  form2 >>= fun (x2,f2) {
-  return (x1 ++ x2, combiner(f1)(f2))}}
-}
-
-# The value collected by a form's collector can be transformed,
-# producing a new value.
-var transformCollector = fmap;
-fun transformOutput(f) {
-  fun t(x,y) { (x, transformCollector(f)(y)) }
-  fmap(t)
-}
 
 # A form is rendered to Xml, and a handler applied, using the render function
 fun render(continuation)(form) {
    var ((xml, extractor),_) = runState(form)(0);
-   var handler = transformCollector(continuation)(extractor);
-   <form l:onsubmit="{runState(handler)(environment()).1}" method="POST">{xml}
+   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
     <input type="submit"/>
    </form>
+
 }
-
-# The prefix and suffix functions add passive xml to the start and
-# end of a form's renderer.
-fun prefix((xml : XML)) {
-   transformXml(fun (x) { xml ++ x })
-} 
-
-fun suffix((xml : XML)) {
-   transformXml(fun (x) { x ++ xml })
-} 
-
-fun transformXml(transformer : ((XML) -> XML))(form) {
-  form >>= fun ((x:XML),f) {
-  return (transformer(x), f)}
-}
-
 
 # dates example
-var inputInt = transformOutput(stringToInt)(input);
-fun combinePair(x)(y) { liftM2(fun (x)(y) { (x,y) })(x)(y) }
-var date = compose(inputInt) 
-                  (prefix (stringToXml("/"))(inputInt))
-                  (combinePair);
-fun plugDiv(x) { transformXml (fun (inner) { <div>{inner}</div>})(x) };
+# inputInt : Form(Int)
+var inputInt = input @@@ pure(stringToInt);
 
-fun applyLabel(label) {
-   transformXml (fun (x) {  <b>{stringToXml(label)++x}</b> })
+# date : Form(Date)
+var date =
+  inputInt @@@
+  text("/") @@@
+  inputInt @@@
+  pure( fun(m)(_)(d){ Date(d,m) } );
+
+
+fun showDate((Date(d,m))) { intToString(d) ++ "/" ++ intToString(m) }
+fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
+
+# label : String -> Form(a) -> Form(a)
+fun s `label` m {
+  text(s) @@@
+  m @@@
+  pure( fun(v)(_){ v } )
 }
 
-fun datel(x) { x `applyLabel` date }
-fun makeInputl(x) { x `applyLabel` input }
+# travelForm : Form((person:String, age:Int, arrival:Date, departure:Date))
+var travelForm =
+  ("person" `label` input) @@@
+  ("age" `label` inputInt) @@@
+  (fun(x){ <div>{x}</div> } `plug`
+    (("arrival date" `label` date) @@@
+     ("departure date" `label` date) @@@
+     pure( fun(dep)(arr){ (arr,dep) } ))) @@@
+  (pure(fun(arr,dep)(a)(p){ (person=p, age=a, arrive=arr, depart=dep) }));
 
-var travelForm1 =
-    compose (makeInputl ("person"))
-                (compose
-                 (makeInputl ("age"))
-                 (plugDiv (compose
-                           (datel ("arrival date"))
-                           (datel ("departure date"))
-                           (combinePair)))
-                 (combinePair))
-                (fun (c1)(c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d)}});
-
-# multiple elements example
-fun sequenceForms(forms) {
-   fun folder(form,outform) { compose (form) (outform) (liftM2 (cons))}
-   fold_right (folder, makeEmpty ([]), forms)
+fun showBookingInformation((person=p, age=a, arrive=arr, depart=dep)) {
+   <html>
+     <h1>Results</h1>
+     <p>
+       You are {stringToXml(p)},  {intToXml(a)} years old.<br/>
+       You'll arrive on {dateToXml(arr)}
+       and leave on {dateToXml(dep)}.
+     </p>
+   </html>
 }
 
-fun multiForm(labels) {
-  sequenceForms $ map(makeInputl, labels)
-}
-
-# another dates example, using a labeled pair
-fun combinePairDate(x)(y) {
-  liftM2(fun (x)(y) { Date (x,y) })(x)(y)
-}
-var ddate = compose(inputInt) (prefix (stringToXml ("/"))(inputInt))(combinePairDate);
-
-fun ddatel(x) {x `applyLabel` ddate}
-
-var travelForm2 =
-    compose (makeInputl ("person"))
-                (compose
-                 (makeInputl ("age"))
-                 (plugDiv (compose
-                           (ddatel ("arrival date"))
-                           (ddatel ("departure date"))
-                           (combinePair)))
-                 (combinePair))
-                (fun (c1) (c2) { combinePair (c1) (c2) >>= fun (a,(b,(c,d))) { return (a,b,c,d) }});
-
-fun showBookingInformation(person, age, Date (aday, amonth), Date (dday, dmonth)) {
-  <html>
-    <h1>Results</h1>
-    <p>
-      You are {stringToXml(person)},  {stringToXml(age)} years old.<br/>
-      You'll arrive on {intToXml(aday)}/ {intToXml(amonth)}
-      and leave on  {intToXml(dday)}/ {intToXml(dmonth)}.
-    </p>
-  </html>
+# sequenceForms : [Form a] -> Form [a]
+fun sequenceForms(forms) { 
+  switch forms {
+    case [] -> pure ([]);
+    case (x::xs) -> x @@@ (sequenceForms(xs) @@@ pure (fun(ls)(l) { l::ls}));
+  }
 }
 
 fun sumNumbers(numbers) {
@@ -204,13 +160,13 @@ fun sumNumbers(numbers) {
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(sumNumbers)(sequenceForms(repeat(n)(suffix(<br/>)(inputInt))))}
+    {render(sumNumbers)(sequenceForms(repeat(n)((inputInt))))}
   </html> 
 }
 
 <html>
    <h1>Date:</h1>
-   {render(showBookingInformation)(travelForm2)}
+   {render(showBookingInformation)(travelForm)}
    <h1>Multiple</h1>
    Enter numbers: {render(enterNumbers)(inputInt)}
 </html>
