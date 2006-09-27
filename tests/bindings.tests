@@ -73,3 +73,7 @@ exit : 1
 Check that recursive bindings don't destroy the local environments of values in the local environment (see bug report from Thierry, 2006-09-17 on links-users)
 fun (z) { fun s() {} z() }(fun (aa)() { aa() }(fun (x){x}))
 stdout : () : ()
+
+Bug in interaction between pattern-matching and anonymous functions
+(fun (l) { switch l { case x::xs -> fun (x) { x }; } })([1])(2)
+stdout : 2
