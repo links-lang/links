@@ -1,0 +1,39 @@
+# From "Extensible Programming with First-Class Cases"
+# Matthias Blume et al
+# ICFP 2006 
+
+
+fun add_A(f) (e) {
+  switch e {
+    case A -> "A";
+    case x -> f(x);
+  }
+}
+
+
+
+fun add_B(f) (e) {
+  switch e {
+    case B -> "B";
+    case x -> f(x);
+  }
+}
+
+
+fun add_C(f) (e) {
+  switch e {
+    case C -> "C";
+    case x -> f(x);
+  }
+}
+
+fun nocases(e:[||]) {
+  error("wrong")      # unreachable
+}
+
+
+
+var f = add_A(add_B(add_C(nocases)));
+
+(f(A), f(B), f(C))
+

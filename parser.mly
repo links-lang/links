@@ -528,6 +528,7 @@ zrow:
 
 vrow:
 | vfields                                                      { $1 }
+| /* empty */ { [], None }
 
 datatypes:
 | datatype                                                     { [$1] }
