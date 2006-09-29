@@ -290,6 +290,10 @@ let lookup_in alist x = List.assoc x alist
    exceptions to signal absence *)
 let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
 
+let mem_assoc3 key alist : bool = 
+  List.exists (fun x -> x = key)
+    (List.map fst3 alist)
+
 (*** option types ***)
 let opt_map f = function
     None -> None

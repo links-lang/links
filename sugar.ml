@@ -82,11 +82,7 @@ module PatternCompiler =
      let eq_equation_patterns : equation * equation -> bool =
        fun (((_, pattern)::_, _), ((_, pattern')::_, _)) -> eq_patterns (pattern, pattern')
 
-     (*
-       subst e u v
-       substitutes the variable v for the free variable u in the expression e
-     *)
-     let subst : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
+     let subst_naive : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
        match
          (RewriteUntypedExpression.bottomup
             (function
@@ -98,7 +94,10 @@ module PatternCompiler =
            None -> exp
          | Some exp -> exp
 
-     let subst_exp : untyped_expression -> string -> untyped_expression -> untyped_expression = fun exp x v ->
+      (* [match e with None -> e | Some e -> e] should be a combinator.
+         Coq calls it "try" *)
+               
+     let subst_exp_naive : untyped_expression -> string -> untyped_expression -> untyped_expression = fun exp x v ->
        match
          (RewriteUntypedExpression.bottomup
             (function
@@ -279,7 +278,7 @@ module PatternCompiler =
      let bind_or_subst (var, exp, body, pos) =
        match exp with
          | Variable (var', _) ->
-             subst body var var'
+             Syntax.subst body var var'
          | _ -> Let (var, exp, body, pos)
 
 
@@ -291,9 +290,10 @@ module PatternCompiler =
      let apply_annotation : Syntax.position -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
        fun pos exp ((names, datatypes), body) ->
          let body = List.fold_right (fun name body ->
-                                      bind_or_subst (name, exp, body, pos)) names body in
-         let body = List.fold_right (fun datatype body ->
-                                      Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
+                                       bind_or_subst (name, exp, body, pos)) names body in
+         let body = List.fold_right
+                      (fun datatype body ->
+                         Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
          in
            body
 
@@ -415,7 +415,7 @@ module PatternCompiler =
                         in
                           match pattern with
                             | (`Variable var',_) ->
-                                (ps, (subst body var' var, used))
+                                (ps, (Syntax.subst body var' var, used))
                             | _ -> assert false) equations) def
 
            

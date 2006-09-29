@@ -74,11 +74,15 @@ let location_matches location = function
   | Define (_, _, location', _) -> location=location'
   | _ -> false
 
-let replace name rhs : RewriteSyntax.rewriter = function
+(**
+    See also [rename_var], below.
+ *)
+let replace' name rhs : RewriteSyntax.rewriter = function
   | Variable (n, _) when n = name -> Some rhs
   | _ -> None
 
-let replace name rhs e = fromOption e (RewriteSyntax.bottomup (replace name rhs) e)
+let replace name rhs e = 
+  fromOption e (RewriteSyntax.bottomup (replace' name rhs) e)
 
 let perform_value_inlining location name rhs =
   List.map (fun exp ->
@@ -134,8 +138,9 @@ let uniquify_expression : RewriteSyntax.rewriter =
   (* Rename a variable, entirely ignoring any intervening bindings *)
   let rename_var orig repl e = 
     let rename_one = function
-      | Variable (v, data) when v = orig -> Some (Variable (repl, data))
-      | _ -> None in
+      | Variable (v, d) when v = orig -> Some (Variable (repl, d))
+      | _ -> None 
+    in
       fromOption e (RewriteSyntax.topdown rename_one e) in
   let rewrite_node = function
     | Abstr (v, b, data) -> 

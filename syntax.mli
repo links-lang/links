@@ -22,7 +22,8 @@ type 'a expression' =
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
   | Record_selection_empty of ('a expression' * 'a expression' * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
-  | Variant_selection of ('a expression' * string * string * 'a expression' * string * 'a expression' * 'a)
+  | Variant_selection of ('a expression' * string * string * 'a expression' * 
+                            string * 'a expression' * 'a)
   | Variant_selection_empty of ('a expression' * 'a)
   | Nil of 'a
   | List_of of ('a expression' * 'a)
@@ -54,6 +55,7 @@ val string_of_expression : 'a expression' -> string
 val stringlit_value : 'a expression' -> string
 
 val freevars : 'a expression' -> string list
+val subst : untyped_expression -> string -> string -> untyped_expression
 
 val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
 

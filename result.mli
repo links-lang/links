@@ -120,6 +120,7 @@ val escape : string -> string
 val delay_expr : 'a -> [> `Function of string * 'b list * unit * 'a ]
 val charlist_as_string : result -> string
 val string_of_result : result -> string
+val string_of_environment : binding list -> string
 val string_of_primitive : primitive_value -> string
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : result -> bool

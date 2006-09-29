@@ -270,6 +270,99 @@ let freevars (expression : 'a expression') : string list =
   in 
     reduce_expression aux (combine -<- snd) expression
 
+
+     (**
+       [subst e u v]
+       Substitutes the variable v for free occurrences of u in the expression e.
+       Note: this is *not* presently capture-avoiding (but perhaps it should be).
+     *)
+     let rec subst : untyped_expression -> string -> string -> untyped_expression = 
+       fun exp u v ->
+         match exp with
+           | Variable(x, d) when x = u -> Variable(v, d)
+           | Abstr(x, body, d) when x <> u -> Abstr(x, subst body u v, d)
+           | Let(letvar, letval, body, d) ->
+               Let(letvar, subst letval u v, 
+                   (if u <> letvar then subst body u v else body), d)
+           | Rec(defs, body, d) when (not (mem_assoc3 u defs)) ->
+               Rec(map (fun (n, defn, t) -> (n, subst defn u v, t)) defs, 
+                   subst body u v, d)
+           | Record_selection(label, label_var, etc_var, src, body, d) ->
+               Record_selection(label, label_var, etc_var, subst src u v, 
+                                (if (u <> label_var && u <> etc_var) then
+                                   subst body u v else body), d)
+           | Variant_selection(value, case_label, case_variable, case_body, 
+                               etc_var, etc_body, d) ->
+               Variant_selection(subst value u v, case_label, case_variable, 
+                                 (if u <> case_variable then
+                                    subst case_body u v
+                                  else case_body),
+                                 etc_var,
+                                 (if u <> etc_var then 
+                                    subst etc_body u v
+                                  else etc_body), 
+                                 d)
+           | For(body, loop_var, src, d) ->
+               For((if (u <> loop_var) then subst body u v else body),
+                   loop_var, subst src u v, d)
+           | Escape(esc_var, body, d) when u <> esc_var ->
+               Escape(esc_var, subst body u v, d)
+
+               (* Simple recursive cases: *)
+           (* One sub-expression *)
+           | Define(name, expr, loc_annotation, d) -> 
+               Define(name, subst expr u v, loc_annotation, d)
+           | Record_extension(label, labelval, record, d) -> 
+               Record_extension(label, subst labelval u v, subst record u v, d)
+           | Variant_injection(label, value_expr, d) -> 
+               Variant_injection(label, subst value_expr u v, d)
+           | Variant_selection_empty(src_expr, d) -> 
+               Variant_selection_empty(subst src_expr u v, d)
+           | List_of(single_member, d) -> 
+               List_of(subst single_member u v, d)
+           | Database(db_args_expr, d) -> 
+               Database(subst db_args_expr u v, d)
+           | HasType(e,t,d) -> HasType(subst e u v, t, d)
+               
+           (* Two sub-expressions *)
+           | Apply(func, arg, d) ->
+               Apply(subst func u v, subst arg u v, d)
+           | Comparison(lhs, op, rhs, d) -> 
+               Comparison(subst lhs u v, op, subst rhs u v, d)
+           | Record_selection(label, labelvar, etcvar, src, body, d) ->
+               Record_selection(label, labelvar, etcvar, src, body, d)
+           | Record_selection_empty(record, body, d) ->
+               Record_selection_empty(subst record u v, subst body u v, d)
+           | Concat(lhs, rhs, d) ->
+               Concat(subst lhs u v, subst rhs u v, d)
+           | SortBy(list_target, sort_func, d) ->
+               SortBy(subst list_target u v, subst sort_func u v, d)
+           | TableHandle(db_expr, tablename_expr, row_type, d) ->
+               TableHandle(subst db_expr u v, subst tablename_expr u v, 
+                           row_type, d)
+               
+           (* Three sub-expressions *)
+           | Condition(condn, ifcase, elsecase, d) ->
+               Condition(subst condn u v, 
+                         subst ifcase u v, subst elsecase u v, d)
+           | Variant_selection(src_expr, case_label, case_variable, case_body, 
+                               etc_var, etc_body, d) ->
+               Variant_selection(subst src_expr u v, 
+                                 case_label, case_variable, subst case_body u v, 
+                                 etc_var, subst etc_body u v, d)
+               
+           (* n-ary expressions *)
+           | Xml_node(tagname, attrs, contents, d) -> 
+               Xml_node(tagname, alistmap (fun e -> subst e u v) attrs, 
+                        map (fun e->subst e u v) contents, d)
+           | TableQuery(thandle_alist, query, d) -> 
+               TableQuery(alistmap (fun e -> subst e u v) thandle_alist, 
+                          Query.query_replace_var u (Query.Variable v) query, d)
+           (* I don't understand this one *)
+           | Alien(a, b, c, d) -> failwith("Confusion")
+
+           | e -> e
+
 let rec list_expr data = function
     [] -> Nil(data)
   | expr::etc -> Concat(List_of(expr, data), list_expr data etc, data)
@@ -321,3 +414,58 @@ let no_expr_data = (dummy_position, `Not_typed, None)
 
 module RewriteSyntax = Rewrite_expression'(struct type a = (position * Types.datatype * label option) end)
 module RewriteUntypedExpression = Rewrite_expression'(struct type a = position end)
+
+
+(** [skeleton] has a case for each of the [Syntax] constructors, and
+    gives an approrpiate name to each component. Use this to get 
+    started on a function that takes Syntax trees by case. *)
+let skeleton = function
+    (* Zero sub-expressions *)
+  | Nil d -> ()
+  | Wrong d -> ()
+  | Record_empty d -> ()
+  | Boolean(value, d) -> ()
+  | Integer(value, d) -> ()
+  | Char(value, d) -> ()
+  | String(value, d) -> ()
+  | Float(value, d) -> ()
+  | Variable(x, d) -> ()
+  | Apply(f, a, d) -> ()
+  | TypeDecl(typename, quantifiers, datatype, d) -> ()
+  | Placeholder(label, d) -> ()
+
+  (* One sub-expression *)
+  | Define(name, expr, loc_annotation, d) -> ()
+  | Abstr(var, body, d) -> ()
+  | Record_extension(label, labelval, record, d) -> ()
+  | Variant_injection(label, value_expr, d) -> ()
+  | Variant_selection_empty(src_expr, d) -> ()
+  | List_of(single_member, d) -> ()
+  | Database(db_args_expr, d) -> ()
+  | HasType(expr, datatype, d) -> ()
+      
+  (* Two sub-expressions *)
+  | Comparison(lhs, op, rhs, d) -> ()
+  | Let(letvar, letsrc, letbody, d) -> ()
+  | Record_selection(label, labelvar, etcvar, src, body, d) -> ()
+  | Record_selection_empty(record, body, d) -> ()
+  | Concat(lhs, rhs, d) -> ()
+  | For(body, loop_var, src, d) -> ()
+  | SortBy(list_target, sort_func, d) -> ()
+  | TableHandle(db_expr, tablename_expr, row_type, d) -> ()
+  | Escape(esc_var, body, d) -> ()
+      
+  (* Three sub-expressions *)
+  | Condition(condn, ifcase, elsecase, d) -> ()
+  | Variant_selection(src_expr, case_label, case_variable, case_body, 
+                      etc_var, etc_body, d) -> ()
+
+  (* n-ary expressions *)
+  | Rec(defs, body, d) -> ()
+  | Xml_node(tagname, attrs, contents, d) -> ()
+  | TableQuery(thandle_alist, query, d) -> () (* note: besides the alist, [query]
+                                                 can also contain expressions, in
+                                                 the [query.ml] sublanguage *)
+
+  (* I don't understand this one *)
+  | Alien(a, b, c, d) -> ()
