@@ -329,10 +329,8 @@ let freevars (expression : 'a expression') : string list =
                Apply(subst func u v, subst arg u v, d)
            | Comparison(lhs, op, rhs, d) -> 
                Comparison(subst lhs u v, op, subst rhs u v, d)
-           | Record_selection(label, labelvar, etcvar, src, body, d) ->
-               Record_selection(label, labelvar, etcvar, src, body, d)
            | Record_selection_empty(record, body, d) ->
-               Record_selection_empty(subst record u v, subst body u v, d)
+               Record_selection_empty(subst record u v, subst body u v, d)  
            | Concat(lhs, rhs, d) ->
                Concat(subst lhs u v, subst rhs u v, d)
            | SortBy(list_target, sort_func, d) ->
@@ -345,11 +343,6 @@ let freevars (expression : 'a expression') : string list =
            | Condition(condn, ifcase, elsecase, d) ->
                Condition(subst condn u v, 
                          subst ifcase u v, subst elsecase u v, d)
-           | Variant_selection(src_expr, case_label, case_variable, case_body, 
-                               etc_var, etc_body, d) ->
-               Variant_selection(subst src_expr u v, 
-                                 case_label, case_variable, subst case_body u v, 
-                                 etc_var, subst etc_body u v, d)
                
            (* n-ary expressions *)
            | Xml_node(tagname, attrs, contents, d) -> 
@@ -421,51 +414,63 @@ module RewriteUntypedExpression = Rewrite_expression'(struct type a = position e
     started on a function that takes Syntax trees by case. *)
 let skeleton = function
     (* Zero sub-expressions *)
-  | Nil d -> ()
-  | Wrong d -> ()
-  | Record_empty d -> ()
-  | Boolean(value, d) -> ()
-  | Integer(value, d) -> ()
-  | Char(value, d) -> ()
-  | String(value, d) -> ()
-  | Float(value, d) -> ()
-  | Variable(x, d) -> ()
-  | Apply(f, a, d) -> ()
-  | TypeDecl(typename, quantifiers, datatype, d) -> ()
-  | Placeholder(label, d) -> ()
+  | Nil d -> Nil d
+  | Wrong d -> Wrong d
+  | Record_empty d -> Record_empty d
+  | Boolean(value, d) -> Boolean(value, d)
+  | Integer(value, d) -> Integer(value, d)
+  | Char(value, d) -> Char(value, d)
+  | String(value, d) -> String(value, d)
+  | Float(value, d) -> Float(value, d)
+  | Variable(x, d) -> Variable(x, d)
+  | Apply(f, a, d) -> Apply(f, a, d)
+  | TypeDecl(typename, quantifiers, datatype, d) ->
+      TypeDecl(typename, quantifiers, datatype, d)
+  | Placeholder(label, d) -> Placeholder(label, d)
 
   (* One sub-expression *)
-  | Define(name, expr, loc_annotation, d) -> ()
-  | Abstr(var, body, d) -> ()
-  | Record_extension(label, labelval, record, d) -> ()
-  | Variant_injection(label, value_expr, d) -> ()
-  | Variant_selection_empty(src_expr, d) -> ()
-  | List_of(single_member, d) -> ()
-  | Database(db_args_expr, d) -> ()
-  | HasType(expr, datatype, d) -> ()
+  | Define(name, expr, loc_annotation, d) ->
+      Define(name, expr, loc_annotation, d)
+  | Abstr(var, body, d) -> Abstr(var, body, d)
+  | Record_extension(label, labelval, record, d) ->
+      Record_extension(label, labelval, record, d)
+  | Variant_injection(label, value_expr, d) -> 
+      Variant_injection(label, value_expr, d)
+  | Variant_selection_empty(src_expr, d) -> 
+      Variant_selection_empty(src_expr, d)
+  | List_of(single_member, d) -> List_of(single_member, d)
+  | Database(db_args_expr, d) -> Database(db_args_expr, d)
+  | HasType(expr, datatype, d) -> HasType(expr, datatype, d)
       
   (* Two sub-expressions *)
-  | Comparison(lhs, op, rhs, d) -> ()
-  | Let(letvar, letsrc, letbody, d) -> ()
-  | Record_selection(label, labelvar, etcvar, src, body, d) -> ()
-  | Record_selection_empty(record, body, d) -> ()
-  | Concat(lhs, rhs, d) -> ()
-  | For(body, loop_var, src, d) -> ()
-  | SortBy(list_target, sort_func, d) -> ()
-  | TableHandle(db_expr, tablename_expr, row_type, d) -> ()
-  | Escape(esc_var, body, d) -> ()
+  | Comparison(lhs, op, rhs, d) -> Comparison(lhs, op, rhs, d)
+  | Let(letvar, letsrc, letbody, d) -> Let(letvar, letsrc, letbody, d)
+  | Record_selection(label, labelvar, etcvar, src, body, d) ->
+      Record_selection(label, labelvar, etcvar, src, body, d)
+  | Record_selection_empty(record, body, d) -> 
+      Record_selection_empty(record, body, d)
+  | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
+  | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
+  | SortBy(list_target, sort_func, d) -> SortBy(list_target, sort_func, d)
+  | TableHandle(db_expr, tablename_expr, row_type, d) -> 
+      TableHandle(db_expr, tablename_expr, row_type, d)
+  | Escape(esc_var, body, d) -> Escape(esc_var, body, d)
       
   (* Three sub-expressions *)
-  | Condition(condn, ifcase, elsecase, d) -> ()
+  | Condition(condn, ifcase, elsecase, d) -> 
+      Condition(condn, ifcase, elsecase, d)
   | Variant_selection(src_expr, case_label, case_variable, case_body, 
-                      etc_var, etc_body, d) -> ()
+                      etc_var, etc_body, d) -> 
+      Variant_selection(src_expr, case_label, case_variable, case_body, 
+                      etc_var, etc_body, d)
 
   (* n-ary expressions *)
-  | Rec(defs, body, d) -> ()
-  | Xml_node(tagname, attrs, contents, d) -> ()
-  | TableQuery(thandle_alist, query, d) -> () (* note: besides the alist, [query]
-                                                 can also contain expressions, in
-                                                 the [query.ml] sublanguage *)
-
+  | Rec(defs, body, d) -> Rec(defs, body, d)
+  | Xml_node(tagname, attrs, contents, d) -> 
+      Xml_node(tagname, attrs, contents, d)
+  | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
+      (* note: besides the alist, [query] can also contain
+         expressions, in the [query.ml] sublanguage *)
+      
   (* I don't understand this one *)
-  | Alien(a, b, c, d) -> ()
+  | Alien(a, b, c, d) -> Alien(a, b, c, d)
