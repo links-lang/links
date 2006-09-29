@@ -53,7 +53,7 @@ stdout : 1 : Int
 
 Absence typing in variant patterns
 fun f(x) {switch x {case A(B) -> B; case A(y) -> A(f(y));}}
-stdout : @fun : \(\[|A:\[|B:()|\(mu ([a-z]+) . A:\[|B:\(\)|\1|\]\)|\]|\]\) -> mu ([a-z]+) . \[|A:\2 | B:()|[a-z]+|\]
+stdout : @fun : \(\[\|A:\[|B:()\|\(mu ([a-z]+) . A:\[\|B:\(\)\|\1\|\]\)\|\]\|\]\) -> mu ([a-z]+) . \[\|A:\2 \| B:()\|[a-z]+\|\]
 
 Redundant pattern [1]
 fun (x) { switch x { case x -> x; case A -> A; }}
@@ -78,3 +78,7 @@ exit : 1
 Type-based redundant pattern
 fun (x) {switch x { case(true) -> 0; case(false) -> 1; case(y) -> 2;}}
 stdout : fun : (Bool) -> Int
+
+Pattern matching twice against the same expression
+fun (x) {(switch x {case A -> 0; case _ -> 1;}) + (switch x {case A -> 2; case B -> 3;})}
+stdout : @fun : \(\[\|A:\(\)\|B:\(\)|[a-z]+\|\]\) -> Int

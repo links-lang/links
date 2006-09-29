@@ -50,6 +50,7 @@ module PatternCompiler =
   *)
   (struct
      let unit_hack = Settings.add_bool("pattern_unit_hack", true, true)
+     let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", true, true)
 
      type annotation = string list * Types.datatype list
      type annotated_pattern = annotation * simple_pattern
@@ -60,29 +61,36 @@ module PatternCompiler =
      type equation = (annotated_pattern, (untyped_expression * bool ref)) equation_basis
      type annotated_equation = annotation * equation
 
-     type bound_expression = string -> untyped_expression
+     let string_of_equation = string_of_expression -<- fst -<- snd
 
-     let eq_patterns : simple_pattern * simple_pattern -> bool =
-       let rec eq = function
-         | `Nil, `Nil 
-         | `Nil, `Cons _
-         | `Cons _, `Nil
-         | `Cons _, `Cons _
-         | `Variant _,  `Variant _
-         | `Record _,   `Record _
-         | `Constant _, `Constant _
-         | `Variable _, `Variable _ -> true
-         | `As (_, (pattern,_)), pattern'
-         | pattern, `As (_, (pattern',_)) -> eq (pattern, pattern')
-         | `HasType (((pattern,_):simple_pattern), _), pattern' 
-         |  pattern, `HasType (((pattern',_):simple_pattern), _) -> eq (pattern, pattern')
-         | _, _ -> false
-       in fun ((p, _), (q, _)) -> eq (p, q)
+     type pattern_env = untyped_expression StringMap.t
 
-     let eq_equation_patterns : equation * equation -> bool =
-       fun (((_, pattern)::_, _), ((_, pattern')::_, _)) -> eq_patterns (pattern, pattern')
+     type bound_expression = pattern_env -> untyped_expression
 
-     let subst_naive : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
+     type pattern_type = [ | `List | `Variant | `Record | `Constant | `Variable ]
+
+     let rec get_pattern_type : simple_pattern -> pattern_type = 
+       fun (p,_) -> match p with
+         | `Nil | `Cons _ -> `List
+         | `Variant _ -> `Variant
+         | `Record _ -> `Record
+         | `Constant _ -> `Constant
+         | `Variable _ -> `Variable
+         | `As (_, pattern) -> get_pattern_type pattern
+         | `HasType (pattern, _) -> get_pattern_type pattern
+
+     let get_equation_pattern_type : equation -> pattern_type =
+       fun ((_, pattern)::_, _) -> get_pattern_type pattern
+
+     let get_equations_pattern_type : equation list -> pattern_type =
+       fun (((_, pattern)::_, _)::_) -> get_pattern_type pattern
+
+     (*
+       subst e u v
+       substitutes the variable v for the free variable u in the expression e
+       (not capture avoiding)
+     *)
+     let subst : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
        match
          (RewriteUntypedExpression.bottomup
             (function
@@ -96,8 +104,8 @@ module PatternCompiler =
 
       (* [match e with None -> e | Some e -> e] should be a combinator.
          Coq calls it "try" *)
-               
-     let subst_exp_naive : untyped_expression -> string -> untyped_expression -> untyped_expression = fun exp x v ->
+
+     let subst_exp : untyped_expression -> string -> untyped_expression -> untyped_expression = fun exp x v ->
        match
          (RewriteUntypedExpression.bottomup
             (function
@@ -117,22 +125,6 @@ module PatternCompiler =
        | Syntax.Float (v, _) -> string_of_float v
        | Syntax.Record_empty _ -> "()"
 
-     type pattern_type = [ | `List | `Variant | `Record | `Constant | `Variable ]
-
-     let rec get_pattern_type : simple_pattern -> pattern_type = 
-       fun (p,_) -> match p with
-         | `Nil | `Cons _ -> `List
-         | `Variant _ -> `Variant
-         | `Record _ -> `Record
-         | `Constant _ -> `Constant
-         | `Variable _ -> `Variable
-         | `As (_, pattern) -> get_pattern_type pattern
-         | `HasType (pattern, _) -> get_pattern_type pattern
-
-     let get_equations_pattern_type : equation list -> pattern_type =
-       fun (((_, pattern)::_, _)::_) -> get_pattern_type pattern
-
-
      (* compile away top-level As and HasType patterns *)
      let rec reduce_pattern : simple_pattern -> annotated_pattern = function
        | `As (name, pattern), _ ->
@@ -147,76 +139,46 @@ module PatternCompiler =
        fun (ps, body) ->
          (map reduce_pattern ps, (body, ref false))
 
-     (* partition equations sequentially according to the equality predicate *)
-     let partition_equations : (equation * equation -> bool) -> equation list -> (equation list) list =
-       fun equality_predicate ->
-         function
-           | [] -> []
-           | equation::equations ->
-               let (es, ess) =
-                 List.fold_left
-                   (fun (es, ess) equation ->
-                      let es, ess =
-                        if equality_predicate (List.hd es, equation) then
-                          equation::es, ess
-                        else
-                          [equation], (List.rev es)::ess
-                      in
-                        (es, ess)) ([equation], []) equations
-               in
-                 List.rev(es :: ess)
-
-     (*
-       push any variable patterns to the end of the top-most equation
-       and reorder the variables and other equations accordingly
-     *)
-     let reorder_patterns : (string list * equation list) -> (string list * equation list) =
-       fun (vars,  (ps, body) :: equations) ->
-         let ps, vs, indices, _ =
-           List.fold_right
-             (fun p (ps, vs, var_indices, index) ->
-                match p with
-                  | (_, ((`Variable _), _)) ->
-                      ps, p::vs, IntSet.add index var_indices, index+1
-                  | _ ->
-                      p::ps, vs, var_indices, index+1)
-             ps ([], [], IntSet.empty, 0) in
-
-         let reorder_list indices xs =
-           let xs, ys, _ =
-             List.fold_right
-               (fun x (xs, ys, index) ->
-                  if IntSet.mem index indices then
-                    xs, x::ys, index+1
-                  else
-                    x::xs, ys, index+1) xs ([], [], 0)
-           in
-             xs @ ys in
-         let reorder_equation indices (ps, body) = (reorder_list indices ps, body)
-         in
-           (reorder_list indices vars,
-            (ps @ vs, body) :: map (reorder_equation indices) equations)
+     (* partition equations sequentially by pattern type *)
+     let partition_equations : equation list -> (equation list) list =
+       function
+         | [] -> []
+         | equations ->
+             let (_, es, ess) =
+               List.fold_right
+                 (fun equation (t, es, ess) ->
+                    let t' = get_equation_pattern_type equation in
+                    let es', ess' =
+                      (* group non-variable patterns of the same type *)
+                      if es = [] || ((t' = t) && (t' <> `Variable)) then
+                        equation::es, ess
+                      else
+                        [equation], es::ess
+                    in
+                      (t', es', ess')) equations (`Variable, [], [])
+             in
+               es::ess
 
      (* partition list equations by constructor *)
      let partition_list_equations : equation list -> (annotated_equation list * annotated_equation list) =
        fun equations ->
-         List.fold_left (fun (nil_equations, cons_equations) (ps, body) ->
-                            match ps with
-                              | (annotation, (`Nil,_))::ps ->
-                                  (annotation, (ps, body))::nil_equations, cons_equations
-                              | (annotation, (`Cons (px, pxs),_))::ps ->
-                                  let px = reduce_pattern px in 
-                                  let pxs = reduce_pattern pxs in
-                                    nil_equations, (annotation, (px::pxs::ps, body))::cons_equations
-                              | _ -> assert false) ([], []) equations
+        List.fold_right (fun (ps, body) (nil_equations, cons_equations) ->
+                           match ps with
+                             | (annotation, (`Nil,_))::ps ->
+                                 (annotation, (ps, body))::nil_equations, cons_equations
+                             | (annotation, (`Cons (px, pxs),_))::ps ->
+                                 let px = reduce_pattern px in 
+                                 let pxs = reduce_pattern pxs in
+                                   nil_equations, (annotation, (px::pxs::ps, body))::cons_equations
+                             | _ -> assert false) equations ([], [])
 
      (* partition variant equations by constructor *)
      let partition_variant_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_left
-              (fun env (ps, body) ->
+           (List.fold_right
+              (fun (ps, body) env ->
                  match ps with
                    | (annotation, (`Variant (name, pattern),_))::ps ->
                        let vars, annotated_equations = 
@@ -228,15 +190,15 @@ module PatternCompiler =
                        in
                          StringMap.add name (vars, (annotation, (pattern::ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) StringMap.empty equations)
+              ) equations StringMap.empty)
 
      (* partition record equations by label *)
      let partition_record_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_left
-              (fun env (ps, body) ->
+           (List.fold_right
+              (fun (ps, body) env ->
                  match ps with
                    | (annotation, (`Record (name, pattern, ext_pattern),_))::ps ->
                        let vars, annotated_equations =
@@ -249,15 +211,26 @@ module PatternCompiler =
                        in
                          StringMap.add name (vars, (annotation, (pattern::ext_pattern::ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) StringMap.empty equations)
+              ) equations StringMap.empty)
+
+(*
+ [TODO]
+ 
+ use fold_left and fold_right consistently...
+
+ It seems that fold_right is correct here, because cons is used to build up
+ the equations.
+
+ Apparently this doesn't work for the other partition_ functions though
+*)
 
      (* partition constant equations by constant value *)
      let partition_constant_equations
          : equation list -> (string * (untyped_expression * annotated_equation list)) list =
        fun equations ->
          assoc_list_of_string_map
-           (List.fold_left
-              (fun env (ps, body) ->
+          (List.fold_right
+              (fun (ps, body) env ->
                  match ps with
                    | (annotation, (`Constant exp,_))::ps ->
                        let name = string_of_constant exp in
@@ -269,7 +242,7 @@ module PatternCompiler =
                        in
                          StringMap.add name (exp, (annotation, (ps, body))::annotated_equations) env
                    | _ -> assert false
-              ) StringMap.empty equations)
+             ) equations StringMap.empty)
 
      (* 
         create a let binding,
@@ -278,9 +251,8 @@ module PatternCompiler =
      let bind_or_subst (var, exp, body, pos) =
        match exp with
          | Variable (var', _) ->
-             Syntax.subst body var var'
+             subst body var var'
          | _ -> Let (var, exp, body, pos)
-
 
      (* 
         apply an annotation to an expression
@@ -290,10 +262,9 @@ module PatternCompiler =
      let apply_annotation : Syntax.position -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
        fun pos exp ((names, datatypes), body) ->
          let body = List.fold_right (fun name body ->
-                                       bind_or_subst (name, exp, body, pos)) names body in
-         let body = List.fold_right
-                      (fun datatype body ->
-                         Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
+                                      bind_or_subst (name, exp, body, pos)) names body in
+         let body = List.fold_right (fun datatype body ->
+                                      Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
          in
            body
 
@@ -373,178 +344,233 @@ module PatternCompiler =
      (*
        [NOTE]
          this abstraction is deliberate as we may want to change it - e.g.
-         if we want to share default continuations in the reulting term
+         if we want to share default continuations in the resulting term
          rather than simply inlining them as we do now.
      *)
-     let apply_default def var =
-       def var
+     let apply_default def env =
+       def env
 
+     let lookup var (env : pattern_env) =
+       try
+         StringMap.find var env
+       with
+           Not_found -> failwith ("Variable: "^var^" not in environment (lookup)")
+
+     let is_trivial var (env : pattern_env) =
+       match lookup var env with
+         | Variable (var', _) when var=var' -> true
+         | _ -> false
+
+     (* add a binding to the environment
+        first applying it to all the other expressions in the environment
+     *)
+     let extend var exp (env : pattern_env) =
+       let env = StringMap.fold
+         (fun var' exp' env ->
+            StringMap.add var' (subst_exp exp' var exp) env) env StringMap.empty 
+       in
+         StringMap.add var exp env
+
+     (* extend the environment with a list of trival bindings
+        i.e binding each var_i to Variable(var_i, pos)
+
+        (we assume the bindings do not occur in the existing environment,
+        so do not have to traverse the existing environment)
+     *)
+     let extend_trivial pos vars : pattern_env -> pattern_env =
+       List.fold_right (fun var env ->
+                          extend var (Variable (var, pos)) env) vars
+         
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
-         : Syntax.position -> string list -> equation list -> bound_expression -> untyped_expression =
-       fun pos vars equations def ->
-         match vars, equations with
-           | [], [] -> apply_default def "_"
+         : Syntax.position -> string list -> equation list ->
+       bound_expression -> bound_expression          
+         =
+       fun pos vars equations def (env : pattern_env) ->
+         match vars, equations with 
+           | [], [] -> apply_default def (env : pattern_env)
            | [], ([], (body, used))::_ -> used := true; body
 (* identical patterns could be detected here if we wanted *)
 (*           | [], ([], _)::_ -> failwith "Redundant pattern"*)
-           | vars, _ ->
-               let (var::vars), equations = reorder_patterns (vars, equations) in
-               let equationss = partition_equations eq_equation_patterns equations in
+           | var::vars, _ ->
+               let equationss = partition_equations equations in
                  List.fold_right
                    (fun equations exp ->
-                      match get_equations_pattern_type equations with
-                        | `List ->
-                            match_list pos vars (partition_list_equations equations) exp
-                        | `Variant ->
-                            match_variant pos vars (partition_variant_equations equations) exp
-                        | `Variable ->
-                            match_var pos vars equations exp
-                        | `Record ->
-                            match_record pos vars (partition_record_equations equations) exp
-                        | `Constant ->
-                            match_constant pos vars (partition_constant_equations equations) exp
-                   ) equationss def var
+                      (match get_equations_pattern_type equations with
+                         | `List ->
+                             match_list pos vars (partition_list_equations equations) exp var
+                         | `Variant ->
+                             match_variant pos vars (partition_variant_equations equations) exp var
+                         | `Variable ->
+                             match_var pos vars equations exp var
+                         | `Record ->
+                             match_record pos vars (partition_record_equations equations) exp var
+                         | `Constant ->
+                             match_constant pos vars (partition_constant_equations equations) exp var)
+                   ) equationss def env
 
      and match_var
-         : Syntax.position -> string list -> equation list -> bound_expression -> bound_expression =
-       fun pos vars equations def var ->
+         : Syntax.position -> string list -> equation list ->
+       bound_expression -> string -> bound_expression
+         =
+       fun pos vars equations def var (env : pattern_env) ->
          match_cases pos vars
            (List.map (fun ((annotation, pattern)::ps, (body, used)) ->
-                        let body = apply_annotation pos (Variable (var, pos)) (annotation, body)
+                        let var_exp = lookup var env in
+                        let body = apply_annotation pos var_exp (annotation, body)
                         in
                           match pattern with
                             | (`Variable var',_) ->
-                                (ps, (Syntax.subst body var' var, used))
-                            | _ -> assert false) equations) def
+                                (ps,
+                                 (bind_or_subst (var', var_exp, body, pos), used))
+                            | _ -> assert false) equations) def env
 
-           
      and match_list
          : Syntax.position -> string list -> (annotated_equation list * annotated_equation list)
-           -> bound_expression -> bound_expression =
-       fun pos vars (nil_equations, cons_equations) def var ->
-         let nil_equations = apply_annotations pos (Variable (var, pos)) nil_equations in
-         let cons_equations = apply_annotations pos (Variable (var, pos)) cons_equations in
+           -> bound_expression -> string -> bound_expression =
+       fun pos vars (nil_equations, cons_equations) def var env ->
+         let var_exp = lookup var env in
+
+         let nil_equations = apply_annotations pos var_exp nil_equations in
+         let cons_equations = apply_annotations pos var_exp cons_equations in
          let nil_branch =
            match nil_equations with
-             | [] -> apply_default def var
+             | [] -> apply_default def env
              | _ ->
-                 match_cases pos vars nil_equations def in
+                 match_cases pos vars nil_equations def env in
          let cons_branch =
            match cons_equations with
-             | [] -> apply_default def var
+             | [] -> apply_default def env
              | _ ->
                  let x = unique_name () in
                  let xs = unique_name () in
-                   Let(x, list_head (Variable (var, pos)) pos,
-                       Let(xs, list_tail (Variable (var, pos)) pos,
-                           match_cases pos (x::xs::vars) cons_equations def,
+                 let env = extend_trivial pos [x; xs] env
+                 in
+                   Let(x, list_head var_exp pos,
+                       Let(xs, list_tail var_exp pos,
+                           match_cases pos (x::xs::vars) cons_equations def env,
                            pos), pos)
          in
-           (Condition(Comparison(Variable (var, pos), "==", Syntax.Nil pos, pos),
+           (Condition(Comparison(var_exp, "==", Syntax.Nil pos, pos),
                       nil_branch,
                       cons_branch, pos))
 
      and match_variant
          : Syntax.position -> string list -> ((string * ((string * string) * annotated_equation list)) list) ->
-           bound_expression -> bound_expression =
-       fun pos vars bs def var ->
+           bound_expression -> string -> bound_expression =
+       fun pos vars bs def var env ->
          match bs with
            | [] ->
-               apply_default def var
+               apply_default def env
            | (name, ((case_variable, default_variable), annotated_equations))::bs ->
-               let inject var = Variant_injection(name, Variable(var, pos), pos) in
-               let empty var = Variant_selection_empty(Variable (var, pos), pos) in
+               let var_exp = lookup var env in
 
-               let equations = apply_annotations pos (inject var) annotated_equations in
-               (*
-                  close variant types when possible
-
-                  [NOTE]
-                    this has the side-effect of manifesting non-exhaustive matches
-                    on polymorphic variants as type errors.
-               *)
+               let var_as_exp var = Variable (var, pos) in
+               let inject var = Variant_injection(name, var_as_exp var, pos) in
+               let empty var = Variant_selection_empty(var_as_exp var, pos) in
+                   
+               let equations = apply_annotations pos (inject case_variable) annotated_equations in
+                 (*
+                     close variant types when possible
+                     
+                   [NOTE]
+                   this has the side-effect of manifesting non-exhaustive matches
+                   on polymorphic variants as type errors.
+                 *)
                let massage_wrong var = function
                  | Wrong _ ->
                      empty var
                  | e -> e in
 
-               (*
-                   Bind an appropriate variable to pass to def in the case of a match.
 
-                   This is needed for the case in which var matches A(z), but a subsequent
-                   pattern is not matched. For instance:
+               let match_branch case_variable =
+                 let match_env =
+                   extend_trivial pos [case_variable]
+                     (extend var (inject case_variable) env)
+                 in
+                   match_cases pos (case_variable::vars) equations def match_env in
+               let default_branch default_variable =
+                 let default_env = 
+                   extend_trivial pos [default_variable]
+                     (extend var (var_as_exp default_variable) env)
+                 in
+                   massage_wrong default_variable
+                     (match_variant pos vars bs def default_variable default_env) (*in*)
 
-                     case e of
-                      (A(z), 1) -> m
-                      k -> n
-
-                   is compiled to
-
-                     case e of
-                      (x, y) ->
-                       case x of
-                        A(z) ->
-                         if y=1 then m
-                         else
-                          let r = A(z) in n[k := r]
-                        s -> n[k := s]
-                   where
-                     x,y,z,r,s are fresh
-                   
-                   Compare the two instances of n
-                    - when e is of the form (A(z), _) k is rebound to A(z)
-                    - when e is of the form (s, _), where s is not of the form A(z),
-                   k is rebound to s
-               *)
-               let bind_match def var =
-                 let cons_var = unique_name () in
-                 let e = apply_default def cons_var in
-                   match e with
-                     | Wrong _ -> e 
-                     | e ->
-                         Let(cons_var,
-                             inject var,
-                             e,
-                             pos)
-               in              
-                 Variant_selection(Variable (var, pos), name,
-                                   case_variable,
-                                   match_cases pos (case_variable::vars) equations (bind_match def),
-                                   default_variable,
-                                   massage_wrong default_variable
-                                     (match_variant pos vars bs def default_variable),
-                                   pos)
+               in
+(* is this worth doing here / does it ever happen? *)
+(*
+                 match lookup var env with
+                   | Variant_injection(name', Variable(case_variable, _), _) ->
+                       if name=name' then
+                          match_branch case_variable
+                       else
+                         default_branch default_variable
+                   | _ ->
+*)
+                         Variant_selection(var_exp, name,
+                                           case_variable,
+                                           match_branch case_variable,
+                                           default_variable,
+                                           default_branch default_variable,
+                                           pos)       
      and match_record
          : Syntax.position -> string list ->
            ((string * ((string * string) * annotated_equation list)) list) ->
-           bound_expression -> bound_expression =
-       fun pos vars bs def var ->
+           bound_expression -> string -> bound_expression =
+       fun pos vars bs def var env ->
          match bs with
-           | [] -> apply_default def var
+           | [] -> apply_default def env
            | (name, ((label_variable, extension_variable), annotated_equations))::bs ->
-               let equations = apply_annotations pos (Variable (var, pos)) annotated_equations in
-                 Record_selection (name,
-                                   label_variable,
-                                   extension_variable,
-                                   Variable (var, pos),
-                                   match_cases
-                                     pos
-                                     (label_variable::extension_variable::vars)
-                                     equations
-                                     (match_record pos vars bs def),
-                                   pos)
+               let var_exp = lookup var env in
+               let equations = apply_annotations pos var_exp annotated_equations in
+(* is this worth doing here / does it ever happen? *)
+(*
+                 match var_exp with
+                   | Record_extension(name',
+                                      Variable (label_variable, _),
+                                      Variable (extension_variable, _), _) when name=name' ->
+                       match_cases
+                         pos
+                         (label_variable::extension_variable::vars)
+                         equations
+                         (match_record pos vars bs def var)
+                         env
+                   | _ ->
+*)
+                     let env =
+                         extend_trivial pos [label_variable; extension_variable]
+                           (extend var (Record_extension(
+                                          name,
+                                          Variable (label_variable, pos),
+                                          Variable (extension_variable, pos),
+                                          pos))
+                              env)
+                       in                        
+                         Record_selection
+                           (name,
+                            label_variable,
+                            extension_variable,
+                            var_exp,
+                            match_cases
+                              pos
+                              (label_variable::extension_variable::vars)
+                              equations
+                              (match_record pos vars bs def var)
+                              env,
+                            pos)
 
      and match_constant
          : Syntax.position -> string list -> (string * (untyped_expression * annotated_equation list)) list
-           -> bound_expression -> bound_expression =
-       fun pos vars bs def var ->
+           -> bound_expression -> string -> bound_expression =
+       fun pos vars bs def var env ->
          match bs with
-           | [] -> apply_default def var
+           | [] -> apply_default def env
            | (name, (exp, annotated_equations))::bs ->
-               let equations = apply_annotations pos (Variable (var, pos)) annotated_equations in
-		 (match exp with
-		    | Record_empty _ when Settings.get_value unit_hack ->
+               let var_exp = lookup var env in
+               let equations = apply_annotations pos var_exp annotated_equations in
+                 (match exp with
+                    | Record_empty _ when Settings.get_value unit_hack ->
                         (*
                           This is the only place in the pattern matching compiler that
                           we do type-directed optimisation.
@@ -576,29 +602,34 @@ module PatternCompiler =
                            - perform this and other type-directed optimisations during pattern
                            matching compilation, providing that static typing is enabled
                         *)
-			Let ("_", HasType (Variable (var, pos), Types.unit_type, pos),
-			     match_cases pos vars equations def, pos)
-		    | _ ->
-			(Condition(Comparison(Variable (var, pos), "==", exp, pos),
-				   match_cases pos vars equations def,
-				   match_constant pos vars bs def var,
+                        Let ("_", HasType (var_exp, Types.unit_type, pos),
+                             match_cases pos vars equations def env, pos)
+                    | _ ->
+                        (Condition(Comparison(var_exp, "==", exp, pos),
+                                   match_cases pos vars equations def env,
+                                   match_constant pos vars bs def var env,
                                    pos)))
-
+   
      (* the interface to the pattern-matching compiler *)
      let match_cases
          : (Syntax.position * untyped_expression * raw_equation list) -> untyped_expression =
        fun (pos, exp, raw_equations) ->
-	 let var, wrap =
-	   match exp with
-	     | Variable (var, _) ->
-		 var, Utility.identity
-	     | _ ->
-		 let var = unique_name()
-		 in
-		   var, fun body -> Let(var, exp, body, pos)
+         Debug.debug_if_set (show_pattern_compilation)
+           (fun () -> "Compiling pattern match: "^(fst3 pos).Lexing.pos_fname);
+         let var, wrap =
+           match exp with
+             | Variable (var, _) ->
+                 var, Utility.identity
+             | _ ->
+                 let var = unique_name()
+                 in
+                   var, fun body -> Let(var, exp, body, pos)
          and equations = map reduce_equation raw_equations in
-         let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos))
+         let initial_env = StringMap.add var (Variable (var, pos)) StringMap.empty in
+         let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos) (initial_env : pattern_env))
          in
+           Debug.debug_if_set (show_pattern_compilation)
+             (fun () -> "Compiled pattern: "^(string_of_expression result));
            if (List.for_all (fun (_, (_, used)) -> !used) equations) then
              result
            else
@@ -804,11 +835,11 @@ module Desugarer =
                           body,
                           Syntax.Wrong pos, pos))
            | `Cons (head, tail) ->
-	       let name = unique_name () in
-	       let var = Variable (name, pos) in
-		 Let(name, value,
-		     pl head pos (list_head var pos)
-		       (pl tail pos (list_tail var pos) body), pos)
+               let name = unique_name () in
+               let var = Variable (name, pos) in
+                 Let(name, value,
+                     pl head pos (list_head var pos)
+                       (pl tail pos (list_tail var pos) body), pos)
            | `Variant (name, patt) ->
                let case_variable = unique_name () in
                let variable = unique_name () in
@@ -841,7 +872,7 @@ module Desugarer =
            | `HasType (pat, t) ->
                pl pat pos (HasType (value, t, pos)) body
        in
-	 pl pat pos value body
+         pl pat pos value body
 
    let rec polylets (bindings : (simple_pattern * untyped_expression * position * bool) list) expression =  
      let folder (patt, value, pos, recp) expr = 
@@ -1160,7 +1191,7 @@ module Desugarer =
              List.fold_right
                (fun pattern list ->
                   `Cons (desugar pattern, list), pos)
-	       ps
+               ps
                (`Nil, pos)
          | `As (name, p) -> `As (name, desugar p), pos
          | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype varmap datatype), pos
