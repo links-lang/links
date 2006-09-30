@@ -60,6 +60,19 @@ struct
   let mplus = (@)
 end
 
+module IO =
+        (struct
+          type 'a m = unit -> 'a
+          let return a = fun () -> a
+          let (>>=) m k = 
+            fun () ->
+              let v = m () in
+                k v ()
+          let fail = failwith
+          let putStr s = fun () -> print_string s
+          let runIO f = f ()
+        end)
+
 (* Control.Monad *)
 module MonadUtils (M : Monad) = 
 struct
@@ -173,3 +186,4 @@ end
 
 module MonadPlusUtils_option = MonadPlusUtils(Monad_option)
 module MonadPlusUtils_list = MonadPlusUtils(Monad_list)
+module Monad_IO = MonadUtils(MonadDefault (IO))

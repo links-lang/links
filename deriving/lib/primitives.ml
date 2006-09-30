@@ -52,8 +52,8 @@ module Int = struct
   type a = int
   let eq = (=)
   let le = (<=)
-  let minBound = 1 lsl (Sys.word_size - 2) (* is this a safe assumption? (why is there no INT_MAX?) *)
-  and maxBound = (1 lsl (Sys.word_size - 2)) - 1
+  let minBound = min_int
+  and maxBound = max_int
   let fromEnum i = i
   let toEnum i = i
   let format formatter item = Format.pp_print_string formatter (string_of_int item)
