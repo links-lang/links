@@ -392,11 +392,15 @@ cases:
 case:
 | CASE pattern RARROW exp SEMICOLON                            { $2, $4 }
 
+perhaps_cases:
+| /* empty */                                                  { [] }
+| cases                                                        { $1 }
+
 // TBD: remove `None' from Switch constructor
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH exp LBRACE cases RBRACE                               { Switch ($2, $4, None), pos() }
-| RECEIVE LBRACE cases RBRACE                                  { Receive ($3, None), pos() }
+| SWITCH exp LBRACE perhaps_cases RBRACE                       { Switch ($2, $4, None), pos() }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { Receive ($3, None), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
