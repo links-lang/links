@@ -79,6 +79,104 @@ and eq_row_vars = function
   | `MetaRowVar lpoint, `MetaRowVar rpoint -> Unionfind.equivalent lpoint rpoint
   | _, _ -> false
 
+
+(*
+  instantiation environment:
+    for stopping cycles during instantiation
+*)
+type inst_type_env = (datatype Unionfind.point) IntMap.t
+type inst_row_env = (row Unionfind.point) IntMap.t
+type inst_env = inst_type_env * inst_row_env
+
+let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype -> datatype =
+  fun (tenv, renv) ->
+    let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
+      let rec_type_env, rec_row_env = rec_env in
+	match datatype with
+	  | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+	  | `Primitive _  -> datatype
+	  | `MetaTypeVar point ->
+	      let t = Unionfind.find point in
+		(match t with
+		   | `RigidTypeVar var
+		   | `TypeVar var ->
+		       if IntMap.mem var tenv then
+			 IntMap.find var tenv
+		       else
+			 datatype
+		   | `Recursive (var, t) ->
+		       debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
+
+		       if IntMap.mem var rec_type_env then
+			 (`MetaTypeVar (IntMap.find var rec_type_env))
+		       else
+			 (
+			   let var' = Type_basis.fresh_raw_variable () in
+			   let point' = Unionfind.fresh (`TypeVar var') in
+			   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+			   let _ = Unionfind.change point' (`Recursive (var', t')) in
+			     `MetaTypeVar point'
+			 )
+		   | _ -> inst rec_env t)
+	  | `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
+	  | `Record row -> `Record (inst_row rec_env row)
+	  | `Variant row ->  `Variant (inst_row rec_env row)
+	  | `Table row -> `Table (inst_row rec_env row)
+	  | `Application (n, elem_type) ->
+	      `Application (n, List.map (inst rec_env) elem_type)
+	  | `Recursive _
+	  | `RigidTypeVar _
+	  | `TypeVar _ -> assert false
+    and inst_row : inst_env -> row -> row = fun rec_env row ->
+      let field_env, row_var = flatten_row row in
+	
+      let is_closed = (row_var = `RowVar None) in
+	
+      let field_env' = StringMap.fold
+	(fun label field_spec field_env' ->
+	   match field_spec with
+	     | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
+	     | `Absent ->
+		 if is_closed then field_env'
+		 else StringMap.add label `Absent field_env'
+	) field_env StringMap.empty in
+      let row_var' = inst_row_var rec_env row_var
+      in
+	field_env', row_var'
+          (* precondition: row_var has been flattened *)
+    and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
+      match row_var with
+	| `MetaRowVar point ->
+	    (match Unionfind.find point with
+	       | (_, `RowVar None)
+	       | (_, `MetaRowVar _) -> assert(false)
+               | (field_env, `RigidRowVar var)
+	       | (field_env, `RowVar (Some var)) ->
+		   assert(StringMap.is_empty field_env);
+		   if IntMap.mem var renv then
+		     IntMap.find var renv
+		   else
+		     row_var
+	       | (field_env, `RecRowVar (var, rec_row)) ->
+		   assert(StringMap.is_empty field_env);
+		   if IntMap.mem var rec_row_env then
+		     (`MetaRowVar (IntMap.find var rec_row_env))
+		   else
+		     (
+		       let var' = Type_basis.fresh_raw_variable () in
+		       let point' = Unionfind.fresh (field_env, `RowVar (Some var')) in
+		       let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
+		       let _ = Unionfind.change point' (field_env, `RecRowVar (var', rec_row')) in
+			 `MetaRowVar point'
+		     ))
+	| `RowVar None ->
+	    `RowVar None
+	| `RigidRowVar _
+	| `RowVar (Some _)
+	| `RecRowVar (_, _) -> assert false
+    in
+      inst (IntMap.empty, IntMap.empty)
+
 (*
   unification environment:
     for stopping cycles during unification
@@ -129,10 +227,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
        non-well-founded type inference is switched off
   *)
   let rec_intro point (var, t) =
-    if Settings.get_value infer_negative_types || not (is_negative var t) then
-       Unionfind.change point (`Recursive (var, t))
+    if Settings.get_value infer_negative_types || not (is_negative var (`MetaTypeVar point)) then
+      (* 
+         Using instantiate_datatype here is overkill
+         but at least it's correct!
+
+         The only tricky case is where t is `Recursive (var', t'). In this case
+         we need to make sure var' is given a new point inside t', but we don't
+         actually have to give new points to any of the other recursive types inside t'
+         (which is one of the side-effects of instantiation).
+      *)
+      Unionfind.change point (`Recursive (var, instantiate_datatype (IntMap.empty, IntMap.empty) (`MetaTypeVar point)))
     else
-       failwith "non-well-founded type inferred!" in
+      failwith "non-well-founded type inferred!" in
     
     fun (t1, t2) ->
       (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -152,22 +259,25 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	       | `TypeVar _, `TypeVar _ ->
 		   Unionfind.union lpoint rpoint
 	       | `TypeVar var, t ->
-		   (if var_is_free_in_type var t then
+		   (if var_is_free_in_type var (`MetaTypeVar rpoint) then
 		      (debug_if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
 		       rec_intro rpoint (var, t))
 		    else
 		      ());
 		   Unionfind.union lpoint rpoint
 	       | t, `TypeVar var ->
-		   (if var_is_free_in_type var t then
+		   (if var_is_free_in_type var (`MetaTypeVar lpoint) then
 		      (debug_if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
 		       rec_intro lpoint (var, t))
 		    else
 		      ());
 		   Unionfind.union rpoint lpoint
-               | `RigidTypeVar l, t
-               | t, `RigidTypeVar l -> 
-                     raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
+               | `RigidTypeVar l, _ ->
+                   raise (Unify_failure ("Couldn't unify the rigid type variable "^
+                                           string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint)))
+               | _, `RigidTypeVar r ->
+                   raise (Unify_failure ("Couldn't unify the rigid type variable "^
+                                           string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint)))
 	       | `Recursive (lvar, t), `Recursive (rvar, t') ->
 		   assert(lvar <> rvar);
 		   debug_if_set (show_recursion)
@@ -184,7 +294,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		   Unionfind.union lpoint rpoint
 	       | t, t' -> unify' rec_env (t, t'); Unionfind.union lpoint rpoint)
       | `MetaTypeVar point, t | t, `MetaTypeVar point ->
-	  (match (Unionfind.find point) with
+          (match (Unionfind.find point) with
              | `RigidTypeVar l -> 
                  raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
 	     | `TypeVar var ->
@@ -222,7 +332,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       | `Application (s,ts), `Application (s', ts') when s = s' -> List.iter2 (fun t t' -> unify' rec_env (t, t')) ts ts'
       | _, _ ->
           raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
-       debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1)
+       debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
       )
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
@@ -575,122 +685,26 @@ let unify (t1, t2) =
 and unify_rows (row1, row2) =
   unify_rows' (IntMap.empty, IntMap.empty) (row1, row2)
 
-(*
-  instantiation environment:
-    for stopping cycles during instantiation
-*)
-type inst_type_env = (datatype Unionfind.point) IntMap.t
-type inst_row_env = (row Unionfind.point) IntMap.t
-type inst_env = inst_type_env * inst_row_env
-
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
   try
-    let generics, t = Type_basis.lookup var env in
-      if generics = [] then
+    let quantifiers, t = Type_basis.lookup var env in
+      if quantifiers = [] then
 	t
       else
 	(
 	  let _ = debug_if_set (show_instantiation)
-	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (generics, t))) in
+	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (quantifiers, t))) in
 
 	  let tenv, renv = List.fold_left
 	    (fun (tenv, renv) -> function
 	       | `TypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv
 	       | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
-	    ) (IntMap.empty, IntMap.empty) generics in
-	    
-	  let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
-	    let rec_type_env, rec_row_env = rec_env in
-	      match datatype with
-		| `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-		| `Primitive _  -> datatype
-		| `MetaTypeVar point ->
-		    let t = Unionfind.find point in
-		      (match t with
-			 | `RigidTypeVar var
-			 | `TypeVar var ->
-			     if IntMap.mem var tenv then
-			       IntMap.find var tenv
-			     else
-			       datatype
-				 (*			`MetaTypeVar (Unionfind.fresh (inst rec_vars t)) *)
-			 | `Recursive (var, t) ->
-			     debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
-
-			     if IntMap.mem var rec_type_env then
-			       (`MetaTypeVar (IntMap.find var rec_type_env))
-			     else
-			       (
-				 let var' = Type_basis.fresh_raw_variable () in
-				 let point' = Unionfind.fresh (`TypeVar var') in
-				 let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-				 let _ = Unionfind.change point' (`Recursive (var', t')) in
-				   `MetaTypeVar point'
-			       )
-
-			 | _ -> inst rec_env t)
-		| `Function (var, body) -> `Function (inst rec_env var, inst rec_env body)
-		| `Record row -> `Record (inst_row rec_env row)
-		| `Variant row ->  `Variant (inst_row rec_env row)
-		| `Table row -> `Table (inst_row rec_env row)
-		| `Application (n, elem_type) ->
-		    `Application (n, List.map (inst rec_env) elem_type)
-		| `Recursive _
-		| `RigidTypeVar _
-		| `TypeVar _ -> assert false
-	  and inst_row : inst_env -> row -> row = fun rec_env row ->
-	    let field_env, row_var = flatten_row row in
-	      
-	    let is_closed = (row_var = `RowVar None) in
-	      
-	    let field_env' = StringMap.fold
-	      (fun label field_spec field_env' ->
-		 match field_spec with
-		   | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-		   | `Absent ->
-		       if is_closed then field_env'
-		       else StringMap.add label `Absent field_env'
-	      ) field_env StringMap.empty in
-	    let row_var' = inst_row_var rec_env row_var
-	    in
-	      field_env', row_var'
-          (* precondition: row_var has been flattened *)
-	  and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
-(*	    debug ("Instantiating row var: "^string_of_row_var row_var);*)
-	    match row_var with
-	      | `MetaRowVar point ->
-		  (match Unionfind.find point with
-		     | (_, `RowVar None)
-		     | (_, `MetaRowVar _) -> assert(false)
-                     | (field_env, `RigidRowVar var)
-		     | (field_env, `RowVar (Some var)) ->
-			 assert(StringMap.is_empty field_env);
-			 if IntMap.mem var renv then
-			   IntMap.find var renv
-			 else
-			   row_var
-		     | (field_env, `RecRowVar (var, rec_row)) ->
-			 assert(StringMap.is_empty field_env);
-			 if IntMap.mem var rec_row_env then
-			   (`MetaRowVar (IntMap.find var rec_row_env))
-			 else
-			   (
-			     let var' = Type_basis.fresh_raw_variable () in
-			     let point' = Unionfind.fresh (field_env, `RowVar (Some var')) in
-			     let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
-			     let _ = Unionfind.change point' (field_env, `RecRowVar (var', rec_row')) in
-			       `MetaRowVar point'
-			   ))
-	      | `RowVar None ->
-		  `RowVar None
-	      | `RigidRowVar _
-	      | `RowVar (Some _)
-	      | `RecRowVar (_, _) -> assert false
+	    ) (IntMap.empty, IntMap.empty) quantifiers
 	  in
-	    inst (IntMap.empty, IntMap.empty) t)
+	    instantiate_datatype (tenv, renv) t)
   with Not_found ->
     raise (UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
@@ -749,7 +763,7 @@ and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
 		 | `RigidRowVar var
 		 | `RowVar (Some var) -> [`RowVar var]
 		 | `RecRowVar (var, rec_row) ->
-		     debug_if_set (show_recursion) (fun () -> "rec (row_generics): " ^(string_of_int var));
+		     debug_if_set (show_recursion) (fun () -> "rec (get_row_var_quantifiers): " ^(string_of_int var));
 		     (if IntSet.mem var bound_vars then
 			[]
 		      else
