@@ -251,7 +251,7 @@ module PatternCompiler =
      let bind_or_subst (var, exp, body, pos) =
        match exp with
          | Variable (var', _) ->
-             subst body var var'
+             Syntax.subst body var var'
          | _ -> Let (var, exp, body, pos)
 
      (* 
