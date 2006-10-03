@@ -85,16 +85,17 @@ regex.ml
 
 deriving/
 deriving/lib
-deriving/lib/primitives.ml
-deriving/lib/util.ml
 deriving/lib/bounded.ml
-deriving/lib/show.ml
 deriving/lib/enum.ml
-deriving/lib/Makefile
-deriving/lib/pickle.ml
 deriving/lib/functor.ml
 deriving/lib/monad.ml
+deriving/lib/pickle.ml
+deriving/lib/primitives.ml
 deriving/lib/rewriter.ml
+deriving/lib/quickcheck.ml
+deriving/lib/show.ml
+deriving/lib/util.ml
+deriving/lib/Makefile
 deriving/syntax
 deriving/syntax/enum_class.ml
 deriving/syntax/pickle_class.ml
