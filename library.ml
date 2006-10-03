@@ -48,15 +48,18 @@ let fresh_pid =
 
 (* let xml = `List (`Primitive `XMLitem) *)
 
+(*
+  assumption:
+    the only kind of lists that are allowed to be inserted into databases
+    are strings
+*)
 let value_as_string db = function
   | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
-  | `List ([])  -> "NULL"
+  | `List ([])  -> "\'\'"
   | a -> string_of_result a
 
 let cond_from_field db (k, v) =
-  match (k, v) with
-      (_, `List([])) -> k ^ " is null" (* Is [] really always null? *)
-    | _ -> "("^ k ^" = "^ value_as_string db v ^")"
+  "("^ k ^" = "^ value_as_string db v ^")"
 
 let single_match db = 
   function
