@@ -80,5 +80,5 @@ fun (x) {switch x { case(true) -> 0; case(false) -> 1; case(y) -> 2;}}
 stdout : fun : (Bool) -> Int
 
 Pattern matching twice against the same expression
-fun (x) {(switch x {case A -> 0; case _ -> 1;}) + (switch x {case A -> 2; case B -> 3;})}
-stdout : @fun : \(\[\|A:\(\)\|B:\(\)|[a-z]+\|\]\) -> Int
+fun (x) {(switch x {case A -> 0; case _ -> 1;}) + (switch x {case A -> 0; case _ -> 1;})}
+stdout : @fun : \(\[\|A:\(\)\|[a-z]+\|\]\) -> Int
