@@ -151,36 +151,28 @@ let reader_of_string string =
 	current_pos := !current_pos + nchars;
 	nchars
 
-open Sugartypes
+type ('result, 'intermediate) grammar = {
+    desugar : ('intermediate, 'result) desugarer;
+    parse : 'intermediate parser_
+  }
 
-(* type 'a parser_ = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a *)
-(* type ('a,'b) desugarer = (source_code -> 'a -> 'b) *)
+let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = { 
+    desugar = 
+    (fun code s -> match s with 
+      | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
+      | Right directive -> Right directive);
+    parse =  Parser.sentence
+  }
+  
+let program : (Syntax.untyped_expression list, Sugartypes.phrase list) grammar = {
+    desugar = (fun code -> List.map (Sugar.desugar (lookup code)));
+    parse = Parser.parse_links
+  }
 
-type ('result, 'intermediate) grammar =
-    {
-      desugar : ('intermediate, 'result) desugarer;
-      parse : 'intermediate parser_
-    }
-
-
-let interactive : (sentence', sentence) grammar
-    = { desugar = 
-        ((fun code s -> match s with 
-          | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
-          | Right directive -> Right directive));
-        parse =  Parser.sentence}
-
-let program : (Syntax.untyped_expression list, phrase list) grammar
-    = {
-        desugar = (fun code -> List.map (Sugar.desugar (lookup code)));
-        parse = Parser.parse_links
-      }
-let datatype : (Types.assumption, datatype) grammar
-    = {
-(* Need to do that awful semicolon thing *)
-        desugar =  (fun _ -> Sugar.desugar_datatype);
-        parse = Parser.just_datatype
-      }
+let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
+    desugar =  (fun _ -> Sugar.desugar_datatype);
+    parse = Parser.just_datatype
+  }
 
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs. 
@@ -192,7 +184,9 @@ let datatype : (Types.assumption, datatype) grammar
 **)
 let parse_string grammar string =
   read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>"
+
 let parse_channel grammar (channel, name) =
   read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name
+
 let parse_file grammar filename =
   parse_channel grammar (open_in filename, filename)
