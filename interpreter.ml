@@ -176,7 +176,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
   fun cont value ->
     let stepf() = 
       match cont with
-        | [] -> (if !Library.current_pid == 0 then
+        | [] -> (if !Library.current_pid == Library.main_process_pid then
                    raise (TopLevel(globals, value))
 	         else switch_context globals)
         | (frame::cont) -> match frame with

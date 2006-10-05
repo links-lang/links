@@ -30,7 +30,7 @@ module ITO = InferenceTypeOps
 let db_descriptor_type =
   inference_type_of_type
     (Inferencetypes.empty_var_maps ())
-    (snd (Parse.parse_datatype "(driver:String, name:String, args:String)"))
+    (snd (Parse.parse_string Parse.datatype "(driver:String, name:String, args:String)"))
 
 (* extract data from inference_expressions *)
 let type_of_expression : inference_expression -> datatype =

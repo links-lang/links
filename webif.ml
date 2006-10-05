@@ -71,7 +71,7 @@ let read_and_optimise_program filename : (Syntax.expression list) =
   (Performance.measure "optimise" Optimiser.optimise_program)
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
        ((Performance.measure "type" (Inference.type_program Library.type_env))
-          ((Performance.measure "parse" Parse.parse_file) filename)))
+          ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
               
 let read_file_cache filename : (Syntax.expression list) = 
   let cachename = filename ^ ".cache" in
@@ -88,7 +88,7 @@ let read_file_cache filename : (Syntax.expression list) =
         (Performance.measure "optimise" Optimiser.optimise_program)
           ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
              ((Performance.measure "type" (Inference.type_program Library.type_env))
-                ((Performance.measure "parse" Parse.parse_file) filename)))
+                ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
       in 
 	(try 
 	   let outfile = open_out cachename in 

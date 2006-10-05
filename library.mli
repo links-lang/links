@@ -1,8 +1,9 @@
 open Result
 
 (* Process management *)
-type pid = int
+type pid
 type proc_state = continuation * result
+val main_process_pid : pid
 val suspended_processes : (proc_state * pid) Queue.t
 val blocked_processes : (pid, proc_state * pid) Hashtbl.t
 val messages : (pid, result Queue.t) Hashtbl.t

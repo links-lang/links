@@ -82,10 +82,18 @@ let lookup code =
      extract_line code start.pos_lnum,
      extract_substring code start finish)
 
+type 'a parser_ = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a
+type ('a,'b) desugarer = (source_code -> 'a -> 'b)
+
 (* Read and parse Links source code from the source named `name' via
    the function `infun'.
 *)
-let read parse desugarer (infun : string -> int -> int) (name : string)  =
+let read : parse:('intermediate parser_)
+        -> desugarer:('intermediate, 'result) desugarer
+        -> infun:(string -> int -> int)
+        -> name:string
+        -> 'result =
+fun ~parse ~desugarer ~infun ~name ->
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
  		with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
@@ -143,7 +151,36 @@ let reader_of_string string =
 	current_pos := !current_pos + nchars;
 	nchars
 
+open Sugartypes
 
+(* type 'a parser_ = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a *)
+(* type ('a,'b) desugarer = (source_code -> 'a -> 'b) *)
+
+type ('result, 'intermediate) grammar =
+    {
+      desugar : ('intermediate, 'result) desugarer;
+      parse : 'intermediate parser_
+    }
+
+
+let interactive : (sentence', sentence) grammar
+    = { desugar = 
+        ((fun code s -> match s with 
+          | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
+          | Right directive -> Right directive));
+        parse =  Parser.sentence}
+
+let program : (Syntax.untyped_expression list, phrase list) grammar
+    = {
+        desugar = (fun code -> List.map (Sugar.desugar (lookup code)));
+        parse = Parser.parse_links
+      }
+let datatype : (Types.assumption, datatype) grammar
+    = {
+(* Need to do that awful semicolon thing *)
+        desugar =  (fun _ -> Sugar.desugar_datatype);
+        parse = Parser.just_datatype
+      }
 
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs. 
@@ -153,34 +190,9 @@ let reader_of_string string =
     intercept and retain the code that has been read (in order to give
     better error messages).
 **)
-
-(** Parse a string containing Links code.
-    Return a list of ASTs representing definitions and expressions.
-*)
-let parse_string string = 
-  read Parser.parse_links
-    (fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_string string) "<string>"
-    
-(** Read and parse Links code from an input channel.
-    Return a list of ASTs representing definitions and expressions.
-*)
-let parse_channel (channel, name) =
-  read Parser.parse_links (fun code s -> List.map (Sugar.desugar (lookup code)) s) (reader_of_channel channel) name
-
-(** Open, read and parse a file containing Links code.
-    Return a list of ASTs representing definitions and expressions.
-*)
-let parse_file filename = 
-  parse_channel (open_in filename, filename)
-
-
-(** Parse a datatype *)
-let parse_datatype string = 
-  Sugar.desugar_datatype (Parser.just_datatype (Lexer.lexer ()) (from_string (string ^ ";")))
-
-(** Parse a sentence *)
-let parse_sentence (channel, name) =
-  read Parser.sentence (fun code -> function
-                          | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
-                          | Right directive -> Right directive)
-    (reader_of_channel channel) name
+let parse_string grammar string =
+  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>"
+let parse_channel grammar (channel, name) =
+  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name
+let parse_file grammar filename =
+  parse_channel grammar (open_in filename, filename)

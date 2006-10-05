@@ -1,4 +1,3 @@
-type lexpos = Lexing.position
 type location = [ `Client | `Native | `Server | `Unknown ]
 type label
 type 'a expression' =
@@ -38,7 +37,7 @@ type 'a expression' =
   | HasType of ('a expression' * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
   | Placeholder of (label * 'a)
-type position = lexpos * string * string
+type position = Lexing.position * string * string
 type expression = (position * Types.datatype * label option) expression'
 type untyped_expression = position expression'
 type stripped_expression = unit expression'

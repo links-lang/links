@@ -1,11 +1,16 @@
-(* source -> untyped_expression list 
-   where source <- {filename, string, stream}
-*)
+(** Interface to the parser.*)
 
-val parse_string  : string -> Syntax.untyped_expression list
-val parse_file    : string -> Syntax.untyped_expression list
-val parse_channel : (in_channel * string) -> Syntax.untyped_expression list
+type ('result, 'intermediate) grammar
 
-val parse_datatype : string -> Types.assumption
-val parse_sentence : (in_channel * string) -> Sugartypes.sentence'
+(* Grammar for types *)
+val datatype    :  (Types.assumption, Sugartypes.datatype) grammar
+(* Grammar for interactive shell *)
+val interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar
+(* Grammar for programs stored in files etc. *)
+val program       : (Syntax.untyped_expression list, Sugartypes.phrase list) grammar
 
+val parse_string  : ('a,'b) grammar -> string -> 'a
+val parse_file    : ('a,'b) grammar -> string -> 'a
+val parse_channel : ('a,'b) grammar -> (in_channel * string) -> 'a
+
+            

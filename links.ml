@@ -78,7 +78,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     ((fun envs args ->
         match args with
           | [filename] ->
-              let typeenv, exprs =  Inference.type_program Library.type_env (Parse.parse_file filename) in
+              let typeenv, exprs =  Inference.type_program Library.type_env (Parse.parse_file Parse.program filename) in
               let exprs =           Optimiser.optimise_program (typeenv, exprs) in
                 (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typeenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
@@ -127,10 +127,12 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
 
 (* Read Links source code, then type and optimize it. *)
 let just_optimise parse (valenv, typeenv) input = 
-       let exprs =          Performance.measure "parse" parse input in 
-       let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
-       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
-         print_endline(mapstrcat "\n" Syntax.string_of_expression exprs)
+  Settings.set_value interacting false;
+  let parse = parse Parse.program in
+  let exprs =          Performance.measure "parse" parse input in 
+  let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
+  let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+    print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
 let rec interact envs =
@@ -151,7 +153,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
 in
 let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
-    interact (evaluate ~handle_errors:error_handler Parse.parse_sentence envs (stdin, "<stdin>"))
+    interact (evaluate ~handle_errors:error_handler (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
 
 (** testenv
     Test whether an environment variable is set.
@@ -168,22 +170,14 @@ let run_file filename =
      Settings.set_value web_mode true;
      Webif.serve_request filename)
   else
-    (ignore(evaluate Parse.parse_file stdenvs filename);
+    (ignore(evaluate (Parse.parse_file Parse.program) stdenvs filename);
     ())
 
 let set setting value = Some (fun () -> Settings.set_value setting value)
 
 let evaluate_string v =
   (Settings.set_value interacting false;
-   ignore(evaluate Parse.parse_string stdenvs v))
-
-let just_optimise_string str = 
-  (Settings.set_value interacting false;
-   ignore(just_optimise Parse.parse_string stdenvs str))
-
-let just_optimise_file filename = 
-  (Settings.set_value interacting false;
-   ignore(just_optimise Parse.parse_file stdenvs filename))
+   ignore(evaluate (Parse.parse_string Parse.program) stdenvs v))
 
 let load_settings filename =
   let file = open_in filename in
@@ -240,8 +234,8 @@ let options : opt list =
 
       (* Modes to just optimise a program and print the result. I'm
          not crazy about these option letters*)
-      ('o',     "print-optimize",      None,                             Some just_optimise_file);
-      ('q',     "print-optimize-expr", None,                             Some just_optimise_string);
+      ('o',     "print-optimize",      None,                             Some (just_optimise Parse.parse_file stdenvs));
+      ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string stdenvs));
         (* [DEACTIVATED] *)
 (*
       ('t',     "run-tests",           Some run_tests,                   None);

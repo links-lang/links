@@ -17,6 +17,7 @@ let suspended_processes = (Queue.create () : (proc_state * pid) Queue.t)
 and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtbl.t)
 and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
+and main_process_pid = 0
 
 let cgi_parameters = ref []
 
@@ -134,7 +135,7 @@ let client_only_1 fn =
 let client_only_2 fn = 
   p2 (fun _ _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
 
-let datatype = Parse.parse_datatype
+let datatype = Parse.parse_string Parse.datatype
 
 let rec equal l r =
   match l, r with
@@ -719,7 +720,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
-    let qs, regex = Parse.parse_datatype Linksregex.Regex.datatype in
+    let qs, regex = datatype Linksregex.Regex.datatype in
       qs, (string_type --> (regex --> `Primitive `Bool))));
 
   ("queryParameter",
