@@ -24,7 +24,7 @@ fun draw(id) client {
                            left: {intToString(x)}px;
                            top: {intToString(y)}px"> </div>,
                domGetRefById(id))
-    };
+    }
   };
   draw(id)
 }

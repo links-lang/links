@@ -19,8 +19,8 @@
 # foldr on lists
 fun foldr(f) {fun (a) {fun (xs) {
    switch xs {
-    case x::xs ->  f(x)(foldr(f)(a)(xs));
-    case [] -> a;
+    case x::xs ->  f(x)(foldr(f)(a)(xs))
+    case [] -> a
    }
 }}}
 
@@ -37,8 +37,8 @@ var nameSupply = spawn {
     var count = count+1;
     pid ! (prefix ++ (intToString(count)));
      gen(count)
-   };
-   case Reset -> {gen(0)};
+   }
+   case Reset -> {gen(0)}
   }
  }
  gen(0)
@@ -150,17 +150,17 @@ fun expToString(exp) {
  }
  fun ets(i) {fun (exp) {
    switch exp {
-    case Var(s) -> s;
+    case Var(s) -> s
     case Lam(x, m) -> {"fun (" ++ x ++ ") {" ++ nl() ++
-	indent(i+1) ++ ets(i+1)(m) ++ nl() ++ indent(i) ++ "}"};
-    case App(m, n) -> {ets(i)(m) ++ "(" ++ ets(i)(n) ++ ")"};
-    case Unit -> "()";
+	indent(i+1) ++ ets(i+1)(m) ++ nl() ++ indent(i) ++ "}"}
+    case App(m, n) -> {ets(i)(m) ++ "(" ++ ets(i)(n) ++ ")"}
+    case Unit -> "()"
     case Extend((name, m), n) -> {"(" ++ (name ++ "=" ++ ets(i)(m)) ++
-	("," ++ ets(i)(n) ++ ")")};
-    case Proj(name, m) -> {ets(i)(m) ++ "." ++ name};
-    case Pair(m, n) -> {"(" ++ ets(i)(m) ++ "," ++ ets(i)(n) ++ ")"};
-    case ProjLeft(m) -> {ets(i)(m) ++ ".1"};
-    case ProjRight(m) -> {ets(i)(m) ++ ".2"};
+	("," ++ ets(i)(n) ++ ")")}
+    case Proj(name, m) -> {ets(i)(m) ++ "." ++ name}
+    case Pair(m, n) -> {"(" ++ ets(i)(m) ++ "," ++ ets(i)(n) ++ ")"}
+    case ProjLeft(m) -> {ets(i)(m) ++ ".1"}
+    case ProjRight(m) -> {ets(i)(m) ++ ".2"}
    }
  }}
  ets(0)(exp)

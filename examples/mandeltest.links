@@ -57,7 +57,7 @@ fun draw(context) client {
   receive {
     case Point(x,y) -> {
       plot(context, x, y);
-    };
+    }
   };
   draw(context);
 }

@@ -14,7 +14,7 @@ fun f(pid) client {
     case Message(n) -> {
         append(stringToXml(". "));
         pid ! Message(n+1)
-    };
+    }
   }
 }
 
@@ -31,7 +31,7 @@ fun run(input) client {
     case Message(n) -> {
         append(stringToXml(" Done. Output is: "++intToString(n)));
 	append(<br />)
-    };
+    }
   }
 }
 

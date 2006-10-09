@@ -106,8 +106,8 @@ a list; and all but the first n elements of a list.
 Cons and nil can also be used in patterns, to deconstruct lists:
 
   switch s {
-    case []    -> Empty;
-    case x::xs -> NonEmpty;
+    case []    -> Empty
+    case x::xs -> NonEmpty
   }
 
 =head2 Pairs, Tuples, and Records
@@ -189,8 +189,8 @@ and a case for each variant label. The following expression determines
 the effective number of humps of a transport (autos have no humps):
 
   switch target {
-    case Automobile(fuelType) -> 0;
-    case Camel(humpCount) -> humpCount;
+    case Automobile(fuelType) -> 0
+    case Camel(humpCount) -> humpCount
   }
 
 The expression C<expr> is evaluated to produce a value of variant
@@ -199,17 +199,18 @@ lowercase word following the variant label in a case is bound to the
 content of the target value (provided that case actually matches the
 target). This allows us to use the variable C<humpCount> within the
 body of the C<Camel> case. The body of a case (everything between the
-C<-E<gt>> and the C<;>) produces the result of the whole switch
-expression, and all case bodies of a switch must have the same type.
+C<-E<gt>> and the next case (if any) or the end of the switch) produces
+the result of the whole switch expression, and all case bodies of a
+switch must have the same type.
 
 Type-checking will also ensure that all possible cases are matched by
 the C<switch> expression. To handle arbitrary variant values, you can
 add an open case to the end of the switch:
 
   switch target {
-    case Automobile(fuelType) -> 0;
-    case Camel(humpCount) -> humpCount;
-    case other -> 0;
+    case Automobile(fuelType) -> 0
+    case Camel(humpCount) -> humpCount
+    case other -> 0
   }
 
 Since C<other> begins with a lowercase letter, it is a variable, which
@@ -558,10 +559,10 @@ As well as lists and variants, pattern matching can also be performed
 on constants.
 
   switch name {
-    case "Ezra" -> "Cooper";
-    case "Jeremy" -> "Yallop";
-    case "Phil" -> "Wadler";
-    case "Sam" -> "Lindley";
+    case "Ezra" -> "Cooper"
+    case "Jeremy" -> "Yallop"
+    case "Phil" -> "Wadler"
+    case "Sam" -> "Lindley"
   }
 
 In common with other strongly-typed functional programming languages
@@ -569,9 +570,9 @@ such as ML and Haskell, Links supports deep pattern matching.
 
   fun firstChildId(tree) {
     switch (tree:mu a.[|Node:(a, b, a) | Leaf|]) {
-      case Node(Node(_, id, _), _, _) -> Some(id);
-      case Node(Leaf, _, Node(_, id, _)) -> Some(id);
-      case _ -> None;
+      case Node(Node(_, id, _), _, _) -> Some(id)
+      case Node(Leaf, _, Node(_, id, _)) -> Some(id)
+      case _ -> None
     }
   }
 
@@ -743,8 +744,8 @@ message's variant tag immediately. The C<receive> construct makes this
 easy to do.
 
   receive {
-    case CelebritySighting(celebName, atVenue) -> e1;
-    case PassingComet(cometID, zenith, azimuth) -> e2;
+    case CelebritySighting(celebName, atVenue) -> e1
+    case PassingComet(cometID, zenith, azimuth) -> e2
   }
 
 This removes the next message from the mailbox and does a C<switch> on

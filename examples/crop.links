@@ -1,5 +1,3 @@
-#!/home/s0567141/links/links -d
-
 fun dragging(offsetLeft, offsetTop, left, top, width, height, 
              mdownX, mdownY) client {
   receive {
@@ -24,14 +22,13 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
                              intToString(-(x - mdownX + left - offsetLeft)));
 
       dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
-    };
+    }
     case MouseUp(x, y) ->
       frameMgr(offsetLeft, offsetTop,
                left + x - mdownX, top + y - mdownY,
-               width, height);
+               width, height)
     case _ -> 
       dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
-    ;
   }
 }
 
@@ -47,10 +44,10 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
       var frameSizer = domGetRefById("white-border");
       var (l, t, w, h) = 
         switch (corner) {
-          case NW -> (x, y, width - (x - left), height - y + top);
-          case NE -> (left, y, x - left, height - y + top);
-          case SW -> (x, top, width - (x - left), y-top);
-          case SE -> (left, top, x-left, y-top);
+          case NW -> (x, y, width - (x - left), height - y + top)
+          case NE -> (left, y, x - left, height - y + top)
+          case SW -> (x, top, width - (x - left), y-top)
+          case SE -> (left, top, x-left, y-top)
         };
       domSetStyleAttrFromRef(frame, "left", intToString(l-offsetLeft));
       domSetStyleAttrFromRef(frame, "top", intToString(t));
@@ -69,24 +66,24 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
                              intToString(-l+offsetLeft));
 
       resizing(offsetLeft, offsetTop, l, t, w, h, corner)
-    };
+    }
     case MouseUp(x, y) -> {
       frameMgr(offsetLeft, offsetTop, left, top, width, height);
-    };
+    }
     case _ -> {
       resizing(offsetLeft, offsetTop, left, top, width, height, corner)
-    };
+    }
   }
 }
 
 fun frameMgr(offsetLeft, offsetTop, left, top, width, height) client {
   receive {
     case MouseDown(x, y) ->
-      dragging(offsetLeft, offsetTop, left, top, width, height, x, y);
+      dragging(offsetLeft, offsetTop, left, top, width, height, x, y)
     case StartResize(corner) ->
-      resizing(offsetLeft, offsetTop, left, top, width, height, corner);
+      resizing(offsetLeft, offsetTop, left, top, width, height, corner)
     case _ ->
-      frameMgr(offsetLeft, offsetTop, left, top, width, height);
+      frameMgr(offsetLeft, offsetTop, left, top, width, height)
   }
 }
 

@@ -8,20 +8,20 @@ stderr : @.*Type error.*
 exit : 1
 
 Receive types must unify (correct, closed rows)
-fun f() { receive { case Bar -> (); }} fun g() { receive { case Bar -> (); }} fun () { f(); g() }
+fun f() { receive { case Bar -> () }} fun g() { receive { case Bar -> () }} fun () { f(); g() }
 stdout : @fun : .*
 
 Receive types must unify (incorrect, closed rows)
-fun f() { receive { case Bar -> (); }} fun g() { receive { case Foo -> (); }} fun () { f(); g() }
+fun f() { receive { case Bar -> () }} fun g() { receive { case Foo -> () }} fun () { f(); g() }
 stderr : @.*Type error.*
 exit : 1
 
 Receive types must unify (correct, open rows)
-fun f() { receive { case Bar -> (); case x -> (); }} fun g() { receive { case Foo -> (); case x -> (); }} fun () { f(); g() }
+fun f() { receive { case Bar -> () case x -> () }} fun g() { receive { case Foo -> () case x -> () }} fun () { f(); g() }
 stdout : @fun : .*
 
 Receive types must unify (incorrect, open rows)
-fun f() { receive { case Bar (x) -> x+1; case x -> 0; }} fun g() { receive { case Bar (s) -> s+.1.; case x -> 0.0; }} fun () { f(); g() }
+fun f() { receive { case Bar (x) -> x+1 case x -> 0 }} fun g() { receive { case Bar (s) -> s+.1. case x -> 0.0 }} fun () { f(); g() }
 stderr : @.*Type error.*
 exit : 1
 

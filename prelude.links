@@ -1,28 +1,28 @@
 fun all(p, l) { 
    switch l {
-     case []    -> true;
-     case x::xs -> p(x) && all(p, xs);
+     case []    -> true
+     case x::xs -> p(x) && all(p, xs)
    }
 }
 
 fun and(l) { 
    switch l {
-     case [] -> true;
-     case x::xs -> x && and(xs);
+     case [] -> true
+     case x::xs -> x && and(xs)
    }
 }
 
 fun or(l) { 
    switch l {
-     case [] -> false;
-     case x::xs -> x || or(xs);
+     case [] -> false
+     case x::xs -> x || or(xs)
    }
 }
 
 fun any(p, l) {
    switch l {
-     case [] -> false;
-     case x::xs -> p(x) || any(p, xs);
+     case [] -> false
+     case x::xs -> p(x) || any(p, xs)
    }
 }
 
@@ -33,8 +33,8 @@ fun null(l) { l == [] }
 
 fun fold_left(p, u, l) {
   switch l {
-    case [] -> u;
-    case x::xs -> fold_left(p, p(u, x), xs);
+    case [] -> u
+    case x::xs -> fold_left(p, p(u, x), xs)
   }
 }
 
@@ -44,8 +44,8 @@ fun fold_left1(p, l) {
 
 fun fold_right(f, u, l) {
   switch l {
-    case [] -> u;
-    case x::xs -> f(x, fold_right(f,u,xs));
+    case [] -> u
+    case x::xs -> f(x, fold_right(f,u,xs))
   }
 }
 
@@ -55,11 +55,11 @@ fun fold_right1(f, l) {
 
 fun zip(l) {
   switch l {
-    case [] -> ([], []);
+    case [] -> ([], [])
     case (a,b)::xs -> { 
      var (c,d) = zip(xs);
      (a :: c, b :: d)
-    };
+    }
   }
 }
 
@@ -116,16 +116,16 @@ fun product(ns) {
 
 fun map(f, l) {
   switch l {
-    case []     -> [];
-    case hd::tl -> f(hd) :: map(f,tl);
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
   }
 }
 
 fun reverse(l) {
   fun aux(l,o) {
     switch l {
-      case [] -> o;
-      case x::xs -> aux(xs, x::o);
+      case [] -> o
+      case x::xs -> aux(xs, x::o)
     }
   }
   aux(l, [])

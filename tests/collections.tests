@@ -60,64 +60,64 @@ stderr : @..*
 exit : 1
 
 Case-patterns [1]
-switch [] { case [] -> 1; }
+switch [] { case [] -> 1 }
 stdout : 1 : Int
 
 Case-patterns [2]
-switch [] { case x::xs -> 1; }
+switch [] { case x::xs -> 1 }
 stderr : @..*
 exit : 1
 
 Case-patterns [3]
-switch [] { case [] -> 2; case x -> 1; }
+switch [] { case [] -> 2 case x -> 1 }
 stdout : 2 : Int
 
 Case-patterns [4]
-switch [] { case x::xs -> 1; case x -> 2; }
+switch [] { case x::xs -> 1 case x -> 2 }
 stdout : 2 : Int
 
 Case-patterns [5]
-switch [1] { case x::xs -> 1;  case x -> 2; }
+switch [1] { case x::xs -> 1  case x -> 2 }
 stdout : 1 : Int
 
 Case-patterns [6]
-switch [1,3] { case x::y::z -> 3; case x::y -> 2; case x -> 1; }
+switch [1,3] { case x::y::z -> 3 case x::y -> 2 case x -> 1 }
 stdout : 3 : Int
 
 Case-patterns [7]
-switch [1] { case x::y::z -> 3; case x::y -> 2; case x -> 1; }
+switch [1] { case x::y::z -> 3 case x::y -> 2 case x -> 1 }
 stdout : 2 : Int
 
 Case-patterns [8]
-switch [1,3] { case x::y::[] -> 3; case x::y -> 2; case x -> 1; }
+switch [1,3] { case x::y::[] -> 3 case x::y -> 2 case x -> 1 }
 stdout : 3 : Int
 
 Case-patterns [9]
-switch [1] { case x::[] -> 2; case x -> 1; }
+switch [1] { case x::[] -> 2 case x -> 1 }
 stdout : 2 : Int
 
 Case-patterns (redundancy) [10]
-fun (x) { switch x { case ([], []) -> 1; case (x::xs, y::ys) -> 2; case ([], _) -> 3; case (_, []) -> 4; }}
+fun (x) { switch x { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}
 stdout : fun : ([a], [b]) -> Int
 
 Case-patterns (singleton list pattern)
-switch [1] { case [x] -> 2; case x -> 1; }
+switch [1] { case [x] -> 2 case x -> 1 }
 stdout : 2 : Int
 
 Case patterns (with redefined hd)
-{ fun hd(_) { 1 } switch "a" { case [y] -> y; }}
+{ fun hd(_) { 1 } switch "a" { case [y] -> y }}
 stdout : 'a' : Char
 
 With parentheses:
-switch [1] { case (x::xs) -> 1;  case x -> 2; }
+switch [1] { case (x::xs) -> 1  case x -> 2 }
 stdout : 1 : Int
 
 Length function
-fun len (l) { switch l { case [] -> 0; case x::xs -> 1 + len(xs); } } len ([1,2,3])
+fun len (l) { switch l { case [] -> 0 case x::xs -> 1 + len(xs) } } len ([1,2,3])
 stdout : 3 : Int
 
 Map function
-fun map (f,l) { switch l { case [] -> []; case x::xs -> f(x) :: map(f,xs); } } map((+)(1), [1,2,3])
+fun map (f,l) { switch l { case [] -> [] case x::xs -> f(x) :: map(f,xs) } } map((+)(1), [1,2,3])
 stdout : [2, 3, 4] : [Int]
 
 Sorting:

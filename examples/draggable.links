@@ -1,8 +1,8 @@
 fun waiting(id) client {
  receive {
-  case MouseDown(elem)       -> dragging(id, elem);
-  case MouseUp               -> waiting(id);
-  case MouseOut(relatedElem) -> waiting(id);
+  case MouseDown(elem)       -> dragging(id, elem)
+  case MouseUp               -> waiting(id)
+  case MouseOut(relatedElem) -> waiting(id)
  }
 }
 
@@ -12,15 +12,15 @@ fun isElementOfList(elem, id) {
 
 fun dragging(id, elem) client {
   receive {
-     case MouseUp               -> waiting(id);
-     case MouseDown(elem)       -> dragging(id, elem);
+     case MouseUp               -> waiting(id)
+     case MouseDown(elem)       -> dragging(id, elem)
      case MouseOut(relatedElem) -> {
          if(isElementOfList(relatedElem, id)) {
            domSwapNodeRefs(relatedElem, elem);
            dragging(id, elem)          
          }
          else waiting(id)
-    };
+    }
   }
 }
 

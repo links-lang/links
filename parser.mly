@@ -390,7 +390,7 @@ cases:
 | case cases                                                   { $1 :: $2 }
 
 case:
-| CASE pattern RARROW exp SEMICOLON                            { $2, $4 }
+| CASE pattern RARROW exp                                      { $2, $4 }
 
 perhaps_cases:
 | /* empty */                                                  { [] }

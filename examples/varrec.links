@@ -14,15 +14,15 @@ fun unit(e : [| |]) {
 
 fun add_a(r)(e) {
   switch e {
-   case A(f) -> f(1);
-   case z -> r(z);
+   case A(f) -> f(1)
+   case z -> r(z)
   }
 }
 
 fun add_b(r)(e) {
   switch e {
-   case B(f) -> f("b");
-   case z -> r(z);
+   case B(f) -> f("b")
+   case z -> r(z)
   }
 }
 
