@@ -7,7 +7,7 @@ fun compute(count, total) server {
 
 fun showProgress(count, total) client {
  var percent = floatToString(100.0 *. intToFloat(count) /. intToFloat(total));
- domReplaceNode(
+ replaceNode(
 	<div id="bar"
              style="width:{percent}%; background-color: black">|</div>,
         domGetRefById("bar")
@@ -15,7 +15,7 @@ fun showProgress(count, total) client {
 }
 
 fun showAnswer(answer) client {
- domReplaceNode(
+ replaceNode(
 	<div id="bar">{stringToXml(answer)}</div>,
         domGetRefById("bar")       
 	)

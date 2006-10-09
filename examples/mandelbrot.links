@@ -7,16 +7,15 @@ var max_iterations = 200;
 # them on the screen using 2x2 div elements.
 fun draw(colour, id) client {
   receive {
-    case Point(x,y) -> {
-     domAppendChild(
+    case Point(x,y) ->
+     appendChildren(
                  <div style="position: absolute;
                              background-color: {colour}; 
                              width: 2px;
                              height: 2px;
                              left: {intToString(2*x)}px;
                              top: {intToString(2*y)}px"> </div>,
-                 domGetRefById(id));
-    }
+                 domGetRefById(id))
   };
   draw(colour, id)
 }
@@ -24,7 +23,7 @@ fun draw(colour, id) client {
 # Create a canvas and return its process id to the calling process.
 # The canvas can receive messages of the form Point (x,y)
 fun canvas (x, y, colour, id) {
-  domAppendChild(
+  appendChildren(
               <div id="{id}"
                    style="position: relative;
                           float: left; width: {intToString(2*x)}px;
@@ -60,7 +59,7 @@ fun mandelbrot(x, y) {
 
 fun makefreshname(colour, n) client {
   var name = colour++intToString(n);
-  if(domIsNullRef(domGetRefById(name)))
+  if(isNull(domGetRefById(name)))
     name
   else
     makefreshname(colour, n+1)

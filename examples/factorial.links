@@ -1,5 +1,5 @@
 fun request(s) client {
- domReplaceDocument(
+ replaceDocument(
   <html>
    <body>
     <h1>Please type a number</h1>
@@ -19,7 +19,7 @@ fun request(s) client {
 
 fun response(s) client {
  var n = stringToInt(s);
- domReplaceDocument(
+ replaceDocument(
   <html>
    <body>
     <h1>Factorials up to {intToXml(n)}</h1>
@@ -36,7 +36,7 @@ fun response(s) client {
 }
 
 fun lookup(n) server {
- var db = database (name="factorials" | getDatabaseConfig());
+ var db = database "factorials";
  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
  for (var row <-- factorials)

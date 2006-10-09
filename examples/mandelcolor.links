@@ -147,8 +147,8 @@ fun mandelMadness(x, y, r, i, pixSize,
                     minx, miny, maxx, maxy, 
                     mini, minr, maxi, maxr)
     } else {
-      var docElt = domGetDocumentRef();
-      domAppendChild(mandelBlock(pixSize, x, y,
+      var docElt = getDocumentNode();
+      appendChildren(mandelBlock(pixSize, x, y,
                                      regionSize, r, i), docElt);
       mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,
                     minx, miny, maxx, maxy,
@@ -170,7 +170,7 @@ fun needless(n) {
 }
 
 fun main() client {
-  domReplaceDocument(<body>
+  replaceDocument(<body>
     <div id="p0x0" />
   </body>);
   needless(1000);   # gives the DOM process time to draw the initial div

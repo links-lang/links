@@ -1,27 +1,29 @@
 fun waiting(id) client {
  receive {
-  case MouseDown(elem)       -> dragging(id, elem)
-  case MouseUp               -> waiting(id)
-  case MouseOut(relatedElem) -> waiting(id)
+  case MouseDown(elem)  -> dragging(id, elem)
+  case MouseUp          -> waiting(id)
+  case MouseOut(toElem) -> waiting(id)
+ }
+}
+
+fun dragging(id, elem) client {
+ receive {
+  case MouseUp          -> waiting(id)
+  case MouseDown(elem)  -> dragging(id, elem)
+  case MouseOut(toElem) ->
+   if(isElementOfList(toElem, id)) {
+    swapNodes(elem, toElem);
+    dragging(id, elem)
+   } else waiting(id)
  }
 }
 
 fun isElementOfList(elem, id) {
- not(domIsNullRef(elem)) && domGetAttributeFromRef(domGetParentFromRef(elem), "id") == id
-}
-
-fun dragging(id, elem) client {
-  receive {
-     case MouseUp               -> waiting(id)
-     case MouseDown(elem)       -> dragging(id, elem)
-     case MouseOut(relatedElem) -> {
-         if(isElementOfList(relatedElem, id)) {
-           domSwapNodeRefs(relatedElem, elem);
-           dragging(id, elem)          
-         }
-         else waiting(id)
-    }
-  }
+ if (not(isNull(elem)) && not(isNull(parentNode(elem)))) {
+  var x = getValue(parentNode(elem)); 
+  hasAttribute(x, "id") && (getAttribute(x, "id") == id)
+ }
+ else false
 }
 
 fun format(item) {

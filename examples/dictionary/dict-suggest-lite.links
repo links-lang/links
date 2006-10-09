@@ -51,19 +51,14 @@ fun main() {
  <html>
   <head>
    <title>Dictionary suggest</title>
-   <style>
-     input {{ width:500px }}
-     #suggestions {{ text-align:left; width:500px;
-                     background-color:#ccccff }}
-   </style>
   </head>
  <body>
   <h1>Dictionary suggest</h1>
   <form l:onkeyup="{handler!Suggest(prefix)}">
    <input type="text" l:name="prefix"
-          class="input" autocomplete="off"/>
+          autocomplete="off"/>
   </form>
-  <div id="suggestions" class="suggestions"/>
+  <div id="suggestions"/>
   </body>
  </html>
 }

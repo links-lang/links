@@ -1,6 +1,4 @@
-var db = database (driver="mysql",
-                   name="winestore",
-                   args="localhost:5432:www-data:");
+var db = database "winestore";
 
 var page_size = 12;
 
@@ -144,7 +142,7 @@ fun freshResource() {
   };
 }
 
-sig sign_up : (Int, String, String) -> XML
+sig sign_up : (Int, String, String) -> [XmlValue]
 
 fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
@@ -229,7 +227,7 @@ fun customerName(cust_id) {
     stringToXml(cust.user_name)
 }
 
-sig header : (Int, Int) -> XML
+sig header : (Int, Int) -> [XmlValue]
 
 fun header(cust_id, order_id) {
   if (cust_id == -1)
@@ -586,7 +584,7 @@ fun cartSummary(cust_id, order_id) {
   </div>
 }
 
-sig search_results : (Int, Int, Int, Int, Int) -> XML
+sig search_results : (Int, Int, Int, Int, Int) -> [XmlValue]
 
 fun search_results(cust_id, order_id, region_id, wine_type, page) {
   var numWines = wine_count(region_id, wine_type);
@@ -652,7 +650,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
   </html>
 }
 
-sig main : () -> XML
+sig main : () -> [XmlValue]
 
 fun main() {
   search_results(-1, -1, 1, 1, 0)
