@@ -90,7 +90,7 @@ let read_file_cache filename : (Syntax.expression list) =
              ((Performance.measure "type" (Inference.type_program Library.type_env))
                 ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
       in 
-	(try 
+	(try (* try to write to the cache *)
 	   let outfile = open_out cachename in 
            let (pos, dt, _) = Syntax.no_expr_data in
              Marshal.to_channel outfile (List.map (Syntax.Functor_expression'.map (fun (_,_,l) -> pos, dt, l)) program) [Marshal.Closures] ;
@@ -246,9 +246,7 @@ let serve_request filename =
     let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr
-(*    else if (List.length main > 1) then raise (Errors.ManyMainExprs main)*)
     else
-(*    let [main] = main in*)
     let main = last main in
     let global_env = stubify_client_funcs global_env in
     let cgi_args = Cgi.parse_args () in
@@ -267,7 +265,12 @@ let serve_request filename =
     in
       perform_request program global_env main request
   with
-      exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
+      (* FIXME: errors need to be handled differently
+         btwn. user-facing and remote-call modes. *)
+      Failure msg -> prerr_endline msg;
+        print_http_response [("Content-type", "text/html; charset=utf-8")] 
+        (error_page (Errors.format_exception_html (Failure msg)))
+    | exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
 let serve_request filename =
