@@ -2,20 +2,20 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
              mdownX, mdownY) client {
   receive {
     case MouseMove(x, y) -> {
-      var frame = domGetRefById("cropping-frame");
+      var frame = getNodeById("cropping-frame");
       domSetStyleAttrFromRef(frame, "left",
                              intToString(x - mdownX + left));
       domSetStyleAttrFromRef(frame, "top",
                              intToString(y - mdownY + top));
 
-      var pictureFrame = domGetRefById("picture-frame");
+      var pictureFrame = getNodeById("picture-frame");
 
       # FIXME: should actually be a method that sums up the offsetXxxxs 
       # of all ancestor nodes.
       var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
       var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
 
-      var preview = domGetRefById("crop-preview");
+      var preview = getNodeById("crop-preview");
       domSetStyleAttrFromRef(preview, "marginTop",
                              intToString(-(y - mdownY + top - offsetTop)));
       domSetStyleAttrFromRef(preview, "marginLeft",
@@ -36,12 +36,12 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
   receive {
     case MouseMove(x, y) -> {
 
-      var pictureFrame = domGetRefById("picture-frame");
+      var pictureFrame = getNodeById("picture-frame");
       var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
       var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
 
-      var frame = domGetRefById("cropping-frame");
-      var frameSizer = domGetRefById("white-border");
+      var frame = getNodeById("cropping-frame");
+      var frameSizer = getNodeById("white-border");
       var (l, t, w, h) = 
         switch (corner) {
           case NW -> (x, y, width - (x - left), height - y + top)
@@ -54,12 +54,12 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
       domSetStyleAttrFromRef(frameSizer, "width", intToString(w));
       domSetStyleAttrFromRef(frameSizer, "height", intToString(h));
 
-      var previewFrame = domGetRefById("crop-preview-frame");
+      var previewFrame = getNodeById("crop-preview-frame");
       domSetStyleAttrFromRef(previewFrame, "width",
                              intToString(w));
       domSetStyleAttrFromRef(previewFrame, "height",
                              intToString(h));
-      var preview = domGetRefById("crop-preview");
+      var preview = getNodeById("crop-preview");
       domSetStyleAttrFromRef(preview, "marginTop",
                              intToString(-t+offsetTop));
       domSetStyleAttrFromRef(preview, "marginLeft",

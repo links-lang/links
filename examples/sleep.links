@@ -3,9 +3,9 @@ fun date() server {
 }
 
 fun showDate() client {
-  domReplaceNode(
+  replaceNode(
      <div id="date">{stringToXml(date())}</div>,
-     domGetRefById("date"))
+     getNodeById("date"))
       
 }
 

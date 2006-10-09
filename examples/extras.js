@@ -20,7 +20,7 @@ function _mandelbrot(x, y) {
 var jsmandelbrot =_continuationize(_mandelbrot, 2);
 
 function _getCanvasById(id) {
-  var node =_domGetRefById(id);
+  var node =_getNodeById(id);
   return node.getContext('2d'); 
 }
 function _canvasSetFillStyle(context, colour) {
@@ -47,14 +47,14 @@ function _fullyNativeMandelbrot() {
   var id;
   var i = 0;
   while(true) {
-    var node = _domGetRefById(base+i)
+    var node = _getNodeById(base+i)
     if(node == null) {
       id = base+i;
       break;
     }
   }
 
-  var body = _domGetRefById("body"); 
+  var body = _getNodeById("body"); 
   var div = document.createElement("div");
   div.innerHTML =
    "<canvas id=\""+id+
@@ -82,7 +82,7 @@ function _fullyNativeMandelbrot() {
   div.innerHTML = totalTime+"ms";
   _domInsertBeforeRef(div.firstChild, canvas)
 
-  //domInsertBefore(enxml(string_of_int(totalTime)++"ms"), domGetRefById(id));
+  //domInsertBefore(enxml(string_of_int(totalTime)++"ms"), getNodeById(id));
   //debug("Time to draw "++id++": "++string_of_int(totalTime)++"ms") 
 }
 var fullyNativeMandelbrot = _continuationize(_fullyNativeMandelbrot, 0);

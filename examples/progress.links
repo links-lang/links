@@ -10,14 +10,14 @@ fun showProgress(count, total) client {
  replaceNode(
 	<div id="bar"
              style="width:{percent}%; background-color: black">|</div>,
-        domGetRefById("bar")
+        getNodeById("bar")
  )
 }
 
 fun showAnswer(answer) client {
  replaceNode(
 	<div id="bar">{stringToXml(answer)}</div>,
-        domGetRefById("bar")       
+        getNodeById("bar")       
 	)
 }
 

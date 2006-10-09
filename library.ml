@@ -428,7 +428,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getDocumentNode",
   (`Client, datatype "() -> DomNode");
 
-  "domGetRefById",
+  "getNodeById",
   (`Client, datatype "String -> DomNode");
 
   "getValue",

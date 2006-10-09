@@ -15,7 +15,7 @@ fun draw(colour, id) client {
                              height: 2px;
                              left: {intToString(2*x)}px;
                              top: {intToString(2*y)}px"> </div>,
-                 domGetRefById(id))
+                 getNodeById(id))
   };
   draw(colour, id)
 }
@@ -28,7 +28,7 @@ fun canvas (x, y, colour, id) {
                    style="position: relative;
                           float: left; width: {intToString(2*x)}px;
                           height: {intToString(2*y)}px"> </div>,
-              domGetRefById("body"));
+              getNodeById("body"));
   spawn{ draw(colour, id) }
 }
 
@@ -59,7 +59,7 @@ fun mandelbrot(x, y) {
 
 fun makefreshname(colour, n) client {
   var name = colour++intToString(n);
-  if(isNull(domGetRefById(name)))
+  if(isNull(getNodeById(name)))
     name
   else
     makefreshname(colour, n+1)

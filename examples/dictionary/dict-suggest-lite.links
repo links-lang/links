@@ -9,7 +9,7 @@ fun lowercase(s) server {
 fun suggest(prefix) client {
  replaceChildren(
   format(completions(lowercase(prefix))),
-  domGetRefById("suggestions") 
+  getNodeById("suggestions") 
  )
 } 
 
