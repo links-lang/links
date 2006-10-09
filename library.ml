@@ -47,8 +47,6 @@ let fresh_pid =
 	!current_pid
       end
 
-(* let xml = `List (`Primitive `XMLitem) *)
-
 (*
   assumption:
     the only kind of lists that are allowed to be inserted into databases
@@ -202,12 +200,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "stringToXml",
   ((p1 string_to_xml :> located_primitive),
-   ([], Types.string_type --> xml));
+   datatype "String -> [XmlValue]");
   
   "intToXml",
   ((p1 (string_to_xml -<-
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
-   ([], (`Primitive `Int) --> xml));
+   datatype "Int -> [XmlValue]");
   
   "exit",
   (`Continuation [],
@@ -326,7 +324,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   datatype "XML -> XML");
+   datatype "[XmlValue] -> [XmlValue]");
 
   "objectType",
   (`Client, datatype "a -> String");
@@ -348,7 +346,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                            with Not_found -> none)
                     | _ -> none)
            | _ -> failwith "Internal error: bad arguments to attribute"),
-   datatype "(XML,String) -> [|Some:String | None:()|]");
+   datatype "([XmlValue],String) -> [|Some:String | None:()|]");
 
   "alertDialog",
   (client_only_1 "alertDialog",
@@ -400,97 +398,100 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (*          `Record []), *)
   (*    datatype "a -> ()"); *)
 
-  "domInsertBefore",
-  (`Client, datatype "(XML, DomRef) -> ()");
+  "insertBefore",
+  (`Client, datatype "([XmlValue], DomNode) -> ()");
 
-  "domAppendChild",
-  (`Client, datatype "(XML, DomRef) -> ()");
+  "appendChildren",
+  (`Client, datatype "([XmlValue], DomNode) -> ()");
 
-  "domReplaceNode",
-  (`Client, datatype "(XML, DomRef) -> ()"); 
+  "replaceNode",
+  (`Client, datatype "([XmlValue], DomNode) -> ()"); 
 
-  "domReplaceDocument",
-  (`Client, datatype "XML -> ()"); 
+  "replaceDocument",
+  (`Client, datatype "[XmlValue] -> ()"); 
 
   "domInsertBeforeRef",
-  (`Client, datatype "(DomRef, DomRef) -> ()");
+  (`Client, datatype "(DomNode, DomNode) -> ()");
 
   "domAppendChildRef",
-  (`Client, datatype "(DomRef, DomRef) -> ()");
+  (`Client, datatype "(DomNode, DomNode) -> ()");
 
-  "domRemoveRef",
-  (`Client, datatype "DomRef -> ()");
+  "removeNode",
+  (`Client, datatype "DomNode -> ()");
 
-  "domReplaceChildren",
-  (`Client, datatype "(XML, DomRef) -> ()");
+  "replaceChildren",
+  (`Client, datatype "([XmlValue], DomNode) -> ()");
 
-  "domSwapNodeRefs",
-  (`Client, datatype "(DomRef, DomRef) -> ()");
+  "swapNodes",
+  (`Client, datatype "(DomNode, DomNode) -> ()");
 
-  "domGetDocumentRef",
-  (`Client, datatype "() -> DomRef");
+  "getDocumentNode",
+  (`Client, datatype "() -> DomNode");
 
   "domGetRefById",
-  (`Client, datatype "String -> DomRef");
+  (`Client, datatype "String -> DomNode");
 
-  "domGetXml",
-  (`Client, datatype "DomRef -> XML");
+  "getValue",
+  (`Client, datatype "DomNode -> [XmlValue]");
 
-  "domIsNullRef",
-  (`Client, datatype "DomRef -> Bool");
+  "isNull",
+  (`Client, datatype "DomNode -> Bool");
 
   (* Section: Accessors for XML *)
   "getTagName",
-  (`Client, datatype "XML -> String");
-
-  "getAttributes",   (* FIXME: undocumented; nonsensical type? *)
-  (`Client, datatype "XML -> a");
+  (`Client, datatype "[XmlValue] -> String");
 
   "getTextContent",
-  (`Client, datatype "XML -> String");
+  (`Client, datatype "[XmlValue] -> String");
+
+  "getAttributes",
+  (`Client, datatype "[XmlValue] -> [(String,String)]");
+
+  "hasAttribute",
+  (`Client, datatype "([XmlValue], String) -> Bool");
 
   "getAttribute",
-  (`Client, datatype "(XML, String) -> String");
+  (`Client, datatype "([XmlValue], String) -> String");
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "XML -> [XML]");
+  (`Client, datatype "[XmlValue] -> [XmlValue]");
 
-  (* Section: Accessors for DomRefs *)
+  (* Section: Accessors for DomNodes *)
   "domGetTagNameFromRef",
-  (`Client, datatype "DomRef -> String");
+  (`Client, datatype "DomNode -> String");
 
   "domGetAttributeFromRef",
-  (`Client, datatype "(DomRef, String) -> String");
+  (`Client, datatype "(DomNode, String) -> String");
 
   "domSetAttributeFromRef",
-  (`Client, datatype "(DomRef, String, String) -> String");
+  (`Client, datatype "(DomNode, String, String) -> String");
 
   "domGetStyleAttrFromRef",
-  (`Client, datatype "(DomRef, String) -> String");
+  (`Client, datatype "(DomNode, String) -> String");
 
   "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomRef, String, String) -> String");
+  (`Client, datatype "(DomNode, String, String) -> String");
 
-  (* Section:  Navigation for DomRefs *)
-  "domGetParentFromRef",
-  (`Client, datatype "DomRef -> DomRef");
+  (* Section:  Navigation for DomNodes *)
+  "parentNode",
+  (`Client, datatype "DomNode -> DomNode");
 
-  "domGetFirstChildFromRef",
-  (`Client, datatype "DomRef -> DomRef");
+  "firstChild",
+  (`Client, datatype "DomNode -> DomNode");
 
-  "domGetNextSiblingFromRef",
-  (`Client, datatype "DomRef -> DomRef");
+  "nextSibling",
+  (`Client, datatype "DomNode -> DomNode");
 
   (* Section: DOM Event API *)
   "eventGetTarget",
-  (`Client, datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomNode");
 
   "eventGetTargetValue",
   (`Client, datatype "Event -> String");
 
   "eventGetTargetElement",
-  (`Client, datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomNode");
 
   (* getPageX : Event -> Int *)
   "eventGetPageX",
@@ -500,9 +501,9 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "eventGetPageY",
   (`Client, datatype "Event -> Int");
 
-  (* getRelatedTarget : Event -> DomRef *)
+  (* getRelatedTarget : Event -> DomNode *)
   "eventGetRelatedTarget",
-  (`Client, datatype "Event -> DomRef");
+  (`Client, datatype "Event -> DomNode");
 
   (* getTime : Event -> Int *)
   "eventGetTime",

@@ -341,6 +341,7 @@ db_expression:
          SET LPAREN labeled_exps RPAREN                        { DBUpdate($3, $5, $8), pos() }
 
 xml:
+/*| xml_tree                                                     { $1 }*/
 | xml_forest                                                   { XmlForest $1, pos() }
 
 /* XML */
@@ -440,9 +441,18 @@ table_expression:
 | handlewith_expression                                        { $1 }
 | TABLE exp WITH datatype FROM exp                             { TableLit ($2, $4, $6), pos()} 
 
+perhaps_db_args:
+| primary_expression                                           { Some $1 }
+|                                                              { None }
+
+perhaps_db_driver:
+| primary_expression perhaps_db_args                           { Some $1, $2 }
+|                                                              { None, None }
+
 database_expression:
 | table_expression                                             { $1 }
-| DATABASE exp                                                 { DatabaseLit $2, pos() }
+| DATABASE primary_expression perhaps_db_driver                { DatabaseLit ($2, $3), pos() }
+/* | DATABASE exp                                                { DatabaseLit $2, pos() } */
 
 arg_list:
 | parenthesized_pattern                                        { [$1] }
@@ -511,10 +521,9 @@ primary_datatype:
                                                                    | "Int"     -> PrimitiveType `Int
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
-                                                                   | "XMLitem" -> PrimitiveType `XMLitem
+                                                                   | "XmlValue" -> PrimitiveType `XmlValue
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
-                                                                   | "XML"     -> ListType (PrimitiveType `XMLitem)
                                                                    | t         -> PrimitiveType (`Abstract t)
                                                                }
 

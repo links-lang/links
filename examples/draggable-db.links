@@ -1,0 +1,104 @@
+fun waiting(id, items) client {
+ receive {
+  case MouseDown(elem)  -> dragging(id, elem, items)
+  case MouseUp          -> waiting(id, items)
+  case MouseOut(toElem) -> waiting(id, items)
+  case GetList(pid)     -> {pid ! Items(items); waiting(id, items)}
+ }
+}
+
+fun dragging(id, elem, items) client {
+ receive {
+  case MouseUp          -> waiting(id, items)
+  case MouseDown(elem)  -> dragging(id, elem, items)
+  case MouseOut(toElem) ->
+   if(isElementOfList(toElem, id)) {
+    var items = swap(elem, toElem, items);
+    swapNodes(elem, toElem);
+    dragging(id, elem, items)
+   } else waiting(id, items)
+  case GetList(pid)     -> {pid ! Items(items); dragging(id, elem, items)}
+ }
+}
+
+fun isElementOfList(elem, id) {
+ if (not(isNull(elem)) && not(isNull(parentNode(elem)))) {
+  var x = getValue(parentNode(elem)); 
+  hasAttribute(x, "id") && (getAttribute(x, "id") == id)
+ }
+ else false
+}
+
+fun swap(elem1, elem2, items) {
+ var name1 = getTextContent(getValue(firstChild(elem1)));
+ var name2 = getTextContent(getValue(firstChild(elem2)));
+
+ for (var item <- items) {
+  if (item == name1) {[name2]} 
+  else if (item == name2) {[name1]}
+  else {[item]}
+ }
+}
+
+
+fun draggableList(id, items)
+{
+  var x = id;
+  var dragger = spawn { waiting(id, items) };
+
+  (<ul id="{id}"
+       l:onmouseup   = "{dragger ! MouseUp}"
+       l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
+       l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}">
+    {for (var item <- items)
+      <li>{stringToXml(item)}</li><span/>}
+   </ul>,
+   fun () {dragger ! GetList(self());
+           receive {
+             case Items(items) -> items
+           }})
+}
+
+
+### library functions ###
+fun select(xs, i) {
+  hd(drop(i)(xs))
+}
+### end of library functions ###
+
+
+fun getItemsTable() server {
+  table "items" with (i : Int, name : String)
+    from (database "draggable")
+}
+
+
+fun loadItems() server {
+  var itemsTable = getItemsTable();
+  for (var item <-- itemsTable)
+    orderby (item.i)
+    [item.name]
+}
+
+fun saveItems(itemsList) server {
+  update (var itemEntry <-- getItemsTable())
+    set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
+}
+
+fun main() {
+  var (bears, getBears) = draggableList("bears", loadItems());
+  
+  replaceDocument(
+    <html><body>
+      <h2>Great Bears</h2>{bears}
+      <form l:onsubmit="{main()}">
+        <input type="submit" value="load items"/>
+      </form>
+      <form l:onsubmit="{spawn {saveItems(getBears())}}">
+        <input type="submit" value="save items"/>
+      </form>
+    </body></html>
+  )
+}
+
+main()

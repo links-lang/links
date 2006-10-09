@@ -786,7 +786,7 @@ module Desugarer =
              | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
              | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
 
-             | DatabaseLit e -> etv e
+             | DatabaseLit (name, (opt_driver, opt_args)) -> flatten [etv name; opt_etv opt_driver; opt_etv opt_args]
              | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
              | DBInsert (e1, e2) -> flatten [etv e1; etv e2]
              | DBDelete ((p, e1), e2) -> flatten [ptv p; etv e1; opt_etv e2]
@@ -1052,7 +1052,21 @@ module Desugarer =
 (*                                 ([table; *)
 (*                                   row_pairs *)
 (*                                  ], pos')), pos') *)
-           | DatabaseLit e -> Database (desugar e, pos)
+           | DatabaseLit (name, (opt_driver, opt_args)) ->
+               let e =
+                 match opt_driver with
+                   | None ->
+                       RecordLit ([("name", name)],
+                                  Some (FnAppl((Var "getDatabaseConfig", pos'), ([RecordLit ([], None), pos'], pos')), pos')), pos'
+                   | Some driver ->
+                       let args =
+                         match opt_args with
+                           | None -> StringLit (""), pos'
+                           | Some args -> args
+                       in
+                         RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos'
+               in
+                 Database (desugar e, pos)
            | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
            | Definition (_, _, _) -> raise (ASTSyntaxError(pos, "top-level patterns not yet implemented"))
            | TypeDeclaration (name, args, rhs) ->

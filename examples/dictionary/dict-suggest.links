@@ -7,7 +7,7 @@ fun lowercase(s) server {
 }
 
 fun suggest(prefix) client {
- domReplaceChildren(
+ replaceChildren(
   format(completions(lowercase(prefix))),
   domGetRefById("suggestions") 
  )
@@ -24,7 +24,7 @@ fun format(words) {
 }
 
 fun completions(prefix) server {
- var db = database (name="dictionary" | getDatabaseConfig());
+ var db = database "dictionary";
  var wordlist = table "wordlist" with (
    word : String, 
    type : String, 
@@ -52,19 +52,14 @@ fun main() {
  <html>
   <head>
    <title>Dictionary suggest</title>
-   <style>
-     input {{ width:500px }}
-     #suggestions {{ text-align:left; width:500px;
-                     background-color:#ccccff }}
-   </style>
   </head>
  <body>
   <h1>Dictionary suggest</h1>
   <form l:onkeyup="{handler!Suggest(prefix)}">
    <input type="text" l:name="prefix"
-          class="input" autocomplete="off"/>
+          autocomplete="off"/>
   </form>
-  <div id="suggestions" class="suggestions"/>
+  <div id="suggestions"/>
   </body>
  </html>
 }

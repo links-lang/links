@@ -300,3 +300,7 @@ TODO
 
 * Find a way to import tables' types from the DDL, or export DDL from 
   table-type declarations
+
+* onsubmit handlers can return any type:
+  - if they return XML then the entire page is overwritten
+  - otherwise the return value is ignored
