@@ -8,7 +8,7 @@ stdout : fun : ((a) -> a) -> (a) -> a
 
 Too-general type annotation
 fun (x) {x+1} : a -> a
-stderr : @.*
+stderr : @.+
 exit : 1
 
 Annotations inside functions [1]
@@ -17,9 +17,9 @@ stdout : fun : (a) -> a
 
 Annotations inside functions [2]
 fun (x:a) { x:a } : b -> b
-stderr : @.*
+stderr : @.+
 exit : 1
 
 Annotations inside functions [3]
 fun (x:a) { error("boo") } : a -> b
-stdout : @.*
+stdout : @.+
