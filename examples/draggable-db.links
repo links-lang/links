@@ -51,7 +51,7 @@ fun draggableList(id, items)
        l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}">
     {for (var item <- items)
-      <li>{stringToXml(item)}</li><span/>}
+      <li>{stringToXml(item)}</li>}
    </ul>,
    fun () {dragger ! GetList(self());
            receive {
