@@ -585,9 +585,13 @@ let lift_lets : RewriteSyntax.rewriter = function
   | Condition(cond, t, Let(letvar, letval, letbody, letdata), data)
       when pure letval
         -> Some(Let(letvar, letval, Condition(cond, t, letbody, data), letdata))
-  | Apply(func, Let(letvar, letval, letbody, letdata), data)
-      when pure func
-        -> Some(Let(letvar, letval, Apply(func, letbody, data), letdata))
+  | Apply(Let(letvar, letval, letbody, letdata), ap_arg, data)
+        -> Some(Let(letvar, letval, Apply(letbody, ap_arg, data), letdata))
+  | Apply(ap_func, Let(letvar, letval, letbody, letdata), data)
+      when pure ap_func
+        -> Some(Let(letvar, letval, Apply(ap_func, letbody, data), letdata))
+  | SortBy(Let(letvar, letval, letbody, letdata), byExpr, data) ->
+      Some (Let(letvar, letval, SortBy(letbody, byExpr, data), letdata))
   | _ -> None
 
 (** (1 take/drop optimization).
@@ -693,13 +697,21 @@ let print_expression msg expr =
   debug(msg ^ string_of_expression expr);
   None
 
+let print_definition of_name ?msg:msg expr = 
+ (match expr with
+    | Define (name, value, locn, _) when name = of_name 
+        -> debug(fromOption "" msg ^ string_of_expression expr)
+    | _ -> ());
+  None
+
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.topdown simplify_regex;
-  RewriteSyntax.topdown sql_aslist;
-  RewriteSyntax.topdown (sql_sort);
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
+  RewriteSyntax.topdown sql_aslist;
+  RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
+  RewriteSyntax.topdown (sql_sort);
   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
   RewriteSyntax.bottomup sql_selections;
 (*   RewriteSyntax.bottomup unused_variables; *)
