@@ -32,9 +32,9 @@ class virtual database :
     method make_insert_query : (string * string list * string list list) -> string
   end
 
-type db_construtor = string -> database * string
+type db_constructor = string -> database * string
 
-val register_driver : string * db_construtor -> unit
+val register_driver : string * db_constructor -> unit
 val db_connect : string -> string -> database * string
 val parse_db_string : string -> string * string
 val reconstruct_db_string : string * string -> string

@@ -56,7 +56,6 @@ let recursivep : Syntax.expression -> bool = function
       -> List.mem name (freevars fn)
   | _ -> false
 
-    
 let size_limit = 150
 
 let is_inline_candidate= function
@@ -74,20 +73,10 @@ let location_matches location = function
   | Define (_, _, location', _) -> location=location'
   | _ -> false
 
-(**
-    See also [rename_var], below.
- *)
-let replace' name rhs : RewriteSyntax.rewriter = function
-  | Variable (n, _) when n = name -> Some rhs
-  | _ -> None
-
-let replace name rhs e = 
-  fromOption e (RewriteSyntax.bottomup (replace' name rhs) e)
-
 let perform_value_inlining location name rhs =
   List.map (fun exp ->
     if location_matches location exp then
-      replace name rhs exp
+      Syntax.subst_fast name rhs exp
     else
       exp)
 
@@ -135,44 +124,37 @@ let inline program =
     After this, we can be much less careful about scope.
 *)
 let uniquify_expression : RewriteSyntax.rewriter = 
-  (* Rename a variable, entirely ignoring any intervening bindings *)
-  let rename_var orig repl e = 
-    let rename_one = function
-      | Variable (v, d) when v = orig -> Some (Variable (repl, d))
-      | _ -> None 
-    in
-      fromOption e (RewriteSyntax.topdown rename_one e) in
   let rewrite_node = function
     | Abstr (v, b, data) -> 
         let name = gensym ~prefix:v () in
-          Some (Abstr (name, rename_var v name b, data))
+          Some (Abstr (name, Syntax.rename_fast v name b, data))
     | Let (v, e, b, data) -> 
         let name = gensym ~prefix:v () in
-          Some (Let (name, e, rename_var v name b, data))
+          Some (Let (name, e, Syntax.rename_fast v name b, data))
     | Rec (vs, b, data) -> 
         let bindings = List.map (fun (name, _, _) -> (name, gensym ~prefix:name ())) vs in
-        let rename = List.fold_right (uncurry rename_var) bindings in
+        let rename = List.fold_right (fun (x, r) expr -> Syntax.rename_fast x r expr) bindings in
           Some(Rec(List.map (fun (n, v, t) -> (List.assoc n bindings, rename v, t)) vs,
                    rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym ~prefix:lvar ()
         and var'  = gensym ~prefix:var () in
           Some(Record_selection(lab, lvar', var', value, 
-                                rename_var var var' (rename_var lvar lvar' body),
+                                Syntax.rename_fast var var' (Syntax.rename_fast lvar lvar' body),
                                 data))
     | For (b, v, src, data) -> 
         let name = gensym ~prefix:v () in
-          Some (For(rename_var v name b, name, src, data))
+          Some (For(Syntax.rename_fast v name b, name, src, data))
     | Variant_selection (value, clab, cvar, cbody, var, body, data) ->
         let cvar' = gensym ~prefix:cvar ()
         and var'  = gensym ~prefix:var () in
           Some (Variant_selection (value, clab, 
-                                   cvar', rename_var cvar cvar' cbody, 
-                                   var',  rename_var var var' body,
+                                   cvar', Syntax.rename_fast cvar cvar' cbody, 
+                                   var',  Syntax.rename_fast var var' body,
                                    data))
     | Escape (v, b, data) -> 
         let name = gensym ~prefix:v () in
-          Some (Escape (name, rename_var v name b, data))
+          Some (Escape (name, Syntax.rename_fast v name b, data))
     | _ -> None
   (* Note that this will only work bottomup, not topdown, since
      we need to replace bindings from the inside out *)
@@ -190,16 +172,13 @@ let inference_rw env : RewriteSyntax.rewriter = fun input ->
 
 (** {0 Renaming} *)
 
-let rename_var var repl : RewriteSyntax.rewriter = 
-  (* Blindly replace occurrences of a variable with an expression,
-     ignoring bindings *)
-  let rewrite = function
-    | Variable (v, d) when v = var -> Some (Variable (repl, d))
-    | TableQuery(th, q, data) -> 
-        Some (TableQuery (th, Query.query_replace_var var (Query.Variable repl) q, data)) 
-    | _ -> None
-  in RewriteSyntax.topdown rewrite
-
+(** renaming
+    I think this is meant to "remove renamings", that is places where the user
+    has written { var x = y; ... }
+    It is incomplete, becuase the guard is very conservative. If we used
+    capture-avoiding substitution, or ensured binder uniqueness in advance,
+    we would be more complete.
+*)
 let renaming : RewriteSyntax.rewriter = 
   let bound_in var = 
     (* Is a particular name bound inside an expression? *)
@@ -221,7 +200,7 @@ let renaming : RewriteSyntax.rewriter =
   | Let (y, Variable (x,  _), body,  _) when bound_in x body || bound_in y body
       -> None (* Could do better: does the binding shadow? *)
   | Let (y, Variable (x, _), body, _)
-      -> Some (fromOption body (rename_var y x body))
+      -> Some (Syntax.rename_fast y x body)
   | _ -> None
 
 (** [unused_variables]: Remove all let bindings where the name is not used 
@@ -248,8 +227,11 @@ let unused_variables : RewriteSyntax.rewriter = function
        let x in s ~ b
 }
 
- In the following, the order of eval is unspecified:
-   f() ~ /{g()}/
+    (FIXME; Note there are lots of constructors that commute with let,
+    and it might be quite wise to do so).
+
+    In a regex match such as the following, the order of eval is unspecified:
+    f() ~ /{g()}/
 *)
 
 let simplify_regex : RewriteSyntax.rewriter = function
@@ -708,7 +690,6 @@ let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   RewriteSyntax.topdown simplify_regex;
-  RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.topdown (sql_sort);

@@ -88,9 +88,7 @@ let rec replace_var name expr = function
   | Unary_op(op, arg) -> Unary_op(op, replace_var name expr arg)
   | Query query -> Query (query_replace_var name expr query)
   | x -> x
-
 and query_replace_var var expr query =
   {query with condition = replace_var var expr query.condition}
 
-
-
+let occurs_free var q = List.mem var (freevars q)

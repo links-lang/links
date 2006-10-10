@@ -183,9 +183,11 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	    | (Definition(env, name)) -> 
 	        apply_cont (bind env name value) cont value
             | Recv (locals) ->
-                (* If there are any messages, apply the continuation
-                   and continue.  Otherwise, suspend the continuation
-                   (in the blocked_processes table) *)
+                (* If there are any messages, take the first one and
+                   apply the continuation to it.  Otherwise, suspend
+                   the continuation (in the blocked_processes table)
+                   and let the scheduler choose a different thread.
+                *)
                 let mqueue = Hashtbl.find Library.messages !Library.current_pid in
                   if not (Queue.is_empty mqueue) then
                     apply_cont globals cont (Queue.pop mqueue)
@@ -475,7 +477,6 @@ fun globals locals expr cont ->
       failwith("Internal error: Placeholder at runtime")
 
 
-          (* Note: no way to suspend threading *)
 and interpret_safe globals locals expr cont =
   try 
     interpret globals locals expr cont

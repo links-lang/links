@@ -124,12 +124,14 @@ class pg_database host port dbname user password = object(self)
       "("^String.concat "," field_names ^") "^
       String.concat " union all " (List.map (fun vs -> "select " ^ String.concat "," vs) vss)
 end
+
 let driver_name = "postgresql"
-    
+
 let get_pg_database_by_string args =
   match Utility.split_string args ':' with
-    | (name::host::port::user::pass::others) ->
-        (new pg_database host port name user pass, reconstruct_db_string (driver_name, args))
+    | (name::host::port::user::pass::_) ->
+        (new pg_database host port name user pass, 
+         reconstruct_db_string (driver_name, args))
     | _ -> failwith "Insufficient arguments when establishing postgresql connection"
 
 let _ = register_driver (driver_name, get_pg_database_by_string)

@@ -226,7 +226,9 @@ struct
   let rec split_string source delim =
     if String.contains source delim then
       let delim_index = String.index source delim in
-        (String.sub source 0 delim_index) :: (split_string (String.sub source (delim_index+1) ((String.length source) - delim_index - 1)) delim)
+        (String.sub source 0 delim_index) :: 
+          (split_string (String.sub source (delim_index+1) 
+                           ((String.length source) - delim_index - 1)) delim)
     else source :: []
       
   let explode : string -> char list = 
@@ -439,3 +441,6 @@ let gensym =
         incr counter;
         pref ^ "_g" ^ string_of_int !counter
       end
+
+
+let any_true = List.exists (fun x -> x)

@@ -186,14 +186,20 @@ let xml_transform env lookup eval : expression -> expression =
                        [hidden_input "_cont" (marshal_continuation c)]
                    | _ -> failwith "Internal error: l:handler was not a continuation")
         in
+
+        let attrs = (("action", string "#") 
+                     :: filter (attrname ->- is_special ->- not) attrs) in
           Xml_node ("form",
-                    substitute (attrname ->- flip List.mem ["l:onsubmit"; "l:handler"; "l:action"]) ("action", string "#") attrs, 
+                    attrs,
                     new_field @ contents, 
                     data)
 
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
         (try match assoc "l:name" attrs with
-           | String (name, _) -> Xml_node (tag, substitute (attrname ->- (=) "l:name") ("name", string name) attrs, contents, data)
+           | String (name, _) -> 
+               let attrs = (("name", string name) :: 
+                              filter (attrname ->- (=) "l:name" ->- not) attrs) in
+               Xml_node (tag, attrs, contents, data)
            | _ -> failwith ("Internal error transforming xml (no l:name found on " ^ tag)
          with Not_found -> input)
 
@@ -208,6 +214,7 @@ let xml_transform env lookup eval : expression -> expression =
 (*           else *)
           "?_k=" ^ serialise_exprenv href_expr env
         in
-        let attrs = substitute (((=)"l:href") -<- attrname) ("href", string href_val) attrs 
+        let attrs = (("href", string href_val)
+                     :: filter (not -<- is_special -<- attrname) attrs )
         in
           Xml_node ("a", attrs, contents, data)

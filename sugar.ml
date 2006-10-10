@@ -85,38 +85,6 @@ module PatternCompiler =
      let get_equations_pattern_type : equation list -> pattern_type =
        fun (((_, pattern)::_, _)::_) -> get_pattern_type pattern
 
-     (*
-       subst e u v
-       substitutes the variable v for the free variable u in the expression e
-       (not capture avoiding)
-     *)
-     let subst : untyped_expression -> string -> string -> untyped_expression = fun exp u v ->
-       match
-         (RewriteUntypedExpression.bottomup
-            (function
-               | Variable (var, data) ->
-                   if var=u then Some (Variable (v, data))
-                   else None
-               | _ -> None) exp)
-       with
-           None -> exp
-         | Some exp -> exp
-
-      (* [match e with None -> e | Some e -> e] should be a combinator.
-         Coq calls it "try" *)
-
-     let subst_exp : untyped_expression -> string -> untyped_expression -> untyped_expression = fun exp x v ->
-       match
-         (RewriteUntypedExpression.bottomup
-            (function
-               | Variable (var, _) ->
-                   if var=x then Some v
-                   else None
-               | _ -> None) exp)
-       with
-           None -> exp
-         | Some exp -> exp
-
      let string_of_constant = function
        | Syntax.Boolean (v, _) -> string_of_bool v
        | Syntax.Integer (v, _) -> string_of_num v
@@ -251,7 +219,7 @@ module PatternCompiler =
      let bind_or_subst (var, exp, body, pos) =
        match exp with
          | Variable (var', _) ->
-             Syntax.subst body var var'
+             Syntax.rename_free var var' body
          | _ -> Let (var, exp, body, pos)
 
      (* 
@@ -367,11 +335,11 @@ module PatternCompiler =
      let extend var exp (env : pattern_env) =
        let env = StringMap.fold
          (fun var' exp' env ->
-            StringMap.add var' (subst_exp exp' var exp) env) env StringMap.empty 
+            StringMap.add var' (Syntax.subst_free var exp exp') env) env StringMap.empty 
        in
          StringMap.add var exp env
 
-     (* extend the environment with a list of trival bindings
+     (* extend the environment with a list of trivial bindings
         i.e binding each var_i to Variable(var_i, pos)
 
         (we assume the bindings do not occur in the existing environment,
@@ -1057,7 +1025,9 @@ module Desugarer =
                  match opt_driver with
                    | None ->
                        RecordLit ([("name", name)],
-                                  Some (FnAppl((Var "getDatabaseConfig", pos'), ([RecordLit ([], None), pos'], pos')), pos')), pos'
+                                  Some (FnAppl((Var "getDatabaseConfig", pos'),
+                                               ([RecordLit ([], None), pos'], 
+                                                pos')), pos')), pos'
                    | Some driver ->
                        let args =
                          match opt_args with

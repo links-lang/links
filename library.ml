@@ -529,7 +529,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
       ),
    datatype "String -> String -> unit");
 
-  (* this one should probably the only setCookie. *)
+  (* FIXME: this one should probably the only setCookie. *)
   "setCookieUncurried",
   (p1 (fun pair ->
          (match pair with

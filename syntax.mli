@@ -54,9 +54,15 @@ val string_of_expression : 'a expression' -> string
 val stringlit_value : 'a expression' -> string
 
 val freevars : 'a expression' -> string list
-val subst : untyped_expression -> string -> string -> untyped_expression
+(** {0 Variable-substitution functions} 
+    TBD: gen'ize these for typed & other exprs as well *)
+val subst_free : string -> untyped_expression -> untyped_expression -> untyped_expression
+val rename_free : string -> string -> untyped_expression -> untyped_expression
+val subst_fast : string -> expression -> expression -> expression
+val rename_fast : string -> string -> expression -> expression
 
-val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
+val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> 
+  ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
 
 val expression_data : 'a expression' -> 'a
 val strip_data : 'a expression' -> stripped_expression
