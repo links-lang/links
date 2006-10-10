@@ -148,6 +148,19 @@ constant:
 | FALSE                                                        { BoolLit false, pos() }
 | CHAR                                                         { CharLit $1   , pos() }
 
+atomic_expression:
+| VARIABLE                                                     { Var $1, pos() }
+| constant                                                     { $1 }
+| parenthesized_thing                                          { $1 }
+
+primary_expression:
+| atomic_expression                                           { $1 }
+| LBRACKET RBRACKET                                            { ListLit [], pos() } 
+| LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
+| xml                                                          { $1 }
+| FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
+
+/*
 primary_expression:
 | VARIABLE                                                     { Var $1, pos() }
 | constant                                                     { $1 }
@@ -156,6 +169,7 @@ primary_expression:
 | xml                                                          { $1 }
 | parenthesized_thing                                          { $1 }
 | FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
+*/
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -442,16 +456,16 @@ table_expression:
 | TABLE exp WITH datatype FROM exp                             { TableLit ($2, $4, $6), pos()} 
 
 perhaps_db_args:
-| primary_expression                                           { Some $1 }
+| atomic_expression                                           { Some $1 }
 |                                                              { None }
 
 perhaps_db_driver:
-| primary_expression perhaps_db_args                           { Some $1, $2 }
+| atomic_expression perhaps_db_args                           { Some $1, $2 }
 |                                                              { None, None }
 
 database_expression:
 | table_expression                                             { $1 }
-| DATABASE primary_expression perhaps_db_driver                { DatabaseLit ($2, $3), pos() }
+| DATABASE atomic_expression perhaps_db_driver                { DatabaseLit ($2, $3), pos() }
 /* | DATABASE exp                                                { DatabaseLit $2, pos() } */
 
 arg_list:
