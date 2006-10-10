@@ -391,7 +391,7 @@ cases:
 | case cases                                                   { $1 :: $2 }
 
 case:
-| CASE pattern RARROW exp                                      { $2, $4 }
+| CASE pattern RARROW block_contents                           { $2, (Block ($4), pos()) }
 
 perhaps_cases:
 | /* empty */                                                  { [] }
@@ -468,11 +468,14 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 block:
-| LBRACE bindings exp SEMICOLON RBRACE                         { Block ($2 @ [$3], (RecordLit ([], None), pos())), pos() }
-| LBRACE bindings exp RBRACE                                   { Block ($2, $3), pos() }
-| LBRACE exp SEMICOLON RBRACE                                  { Block ([$2], (RecordLit ([], None), pos())), pos() }
-| LBRACE exp RBRACE                                            { $2 }
-| LBRACE perhaps_semi RBRACE                                   { Block ([], (TupleLit [], pos())), pos() }
+| LBRACE block_contents RBRACE                                 { Block $2, pos() }
+
+block_contents:
+| bindings exp SEMICOLON                                       { ($1 @ [$2], (RecordLit ([], None), pos())) }
+| bindings exp                                                 { ($1, $2) }
+| exp SEMICOLON                                                { ([$1], (RecordLit ([], None), pos())) }
+| exp                                                          { [], $1 }
+| perhaps_semi                                                 { ([], (TupleLit [], pos())) }
 
 perhaps_semi:
 | SEMICOLON                                                    {}
