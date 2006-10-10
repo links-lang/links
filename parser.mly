@@ -521,7 +521,8 @@ primary_datatype:
                                                                    | "Int"     -> PrimitiveType `Int
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
-                                                                   | "XmlValue" -> PrimitiveType `XmlValue
+                                                                   | "XmlItem" -> PrimitiveType `XmlItem
+                                                                   | "Xml"     -> ListType (PrimitiveType `XmlItem)
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
                                                                    | t         -> PrimitiveType (`Abstract t)

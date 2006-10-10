@@ -84,12 +84,12 @@ let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
 let string_type : datatype = `Application ("List", [`Primitive `Char])
-let xml : datatype = `Application ("List", [`Primitive `XmlValue])
+let xml : datatype = `Application ("List", [`Primitive `XmlItem])
 
 (* Type printers *)
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XmlValue -> "XmlValue" | `DB -> "Database" | `Abstract s -> s
+  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract s -> s
 
 exception Not_tuple
 
@@ -179,6 +179,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
      | `Application ("List", [`Primitive `Char]) -> "String"
+     | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
      | `Application ("List", [elems])              ->  "["^ string_of_datatype' vars elems ^"]"
      | `Application (s, ts)     ->  s ^ " ("^ String.concat "," (List.map (string_of_datatype' vars) ts) ^")"
 

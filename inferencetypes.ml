@@ -20,7 +20,7 @@ type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
 let string_type = `Application ("List", [`Primitive `Char])
-let xml_type = `Application ("List", [`Primitive `XmlValue])
+let xml_type = `Application ("List", [`Primitive `XmlItem])
 
 type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
 

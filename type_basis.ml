@@ -4,7 +4,7 @@ open Utility
 
 type type_var_set = Utility.IntSet.t
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlValue | `DB
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract of string ]
     deriving (Show, Pickle)
 

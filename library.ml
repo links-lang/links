@@ -200,12 +200,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "stringToXml",
   ((p1 string_to_xml :> located_primitive),
-   datatype "String -> [XmlValue]");
+   datatype "String -> Xml");
   
   "intToXml",
   ((p1 (string_to_xml -<-
 	  (conversion_op' ~unbox:unbox_int ~conv:string_of_num ~box:box_string))),
-   datatype "Int -> [XmlValue]");
+   datatype "Int -> Xml");
   
   "exit",
   (`Continuation [],
@@ -324,7 +324,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   datatype "[XmlValue] -> [XmlValue]");
+   datatype "Xml -> Xml");
 
   "objectType",
   (`Client, datatype "a -> String");
@@ -346,7 +346,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                            with Not_found -> none)
                     | _ -> none)
            | _ -> failwith "Internal error: bad arguments to attribute"),
-   datatype "([XmlValue],String) -> [|Some:String | None:()|]");
+   datatype "(Xml,String) -> [|Some:String | None:()|]");
 
   "alertDialog",
   (client_only_1 "alertDialog",
@@ -399,16 +399,16 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (*    datatype "a -> ()"); *)
 
   "insertBefore",
-  (`Client, datatype "([XmlValue], DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()");
 
   "appendChildren",
-  (`Client, datatype "([XmlValue], DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()");
 
   "replaceNode",
-  (`Client, datatype "([XmlValue], DomNode) -> ()"); 
+  (`Client, datatype "(Xml, DomNode) -> ()"); 
 
   "replaceDocument",
-  (`Client, datatype "[XmlValue] -> ()"); 
+  (`Client, datatype "Xml -> ()"); 
 
   "domInsertBeforeRef",
   (`Client, datatype "(DomNode, DomNode) -> ()");
@@ -420,7 +420,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (`Client, datatype "DomNode -> ()");
 
   "replaceChildren",
-  (`Client, datatype "([XmlValue], DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()");
 
   "swapNodes",
   (`Client, datatype "(DomNode, DomNode) -> ()");
@@ -432,30 +432,30 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (`Client, datatype "String -> DomNode");
 
   "getValue",
-  (`Client, datatype "DomNode -> [XmlValue]");
+  (`Client, datatype "DomNode -> Xml");
 
   "isNull",
   (`Client, datatype "DomNode -> Bool");
 
   (* Section: Accessors for XML *)
   "getTagName",
-  (`Client, datatype "[XmlValue] -> String");
+  (`Client, datatype "Xml -> String");
 
   "getTextContent",
-  (`Client, datatype "[XmlValue] -> String");
+  (`Client, datatype "Xml -> String");
 
   "getAttributes",
-  (`Client, datatype "[XmlValue] -> [(String,String)]");
+  (`Client, datatype "Xml -> [(String,String)]");
 
   "hasAttribute",
-  (`Client, datatype "([XmlValue], String) -> Bool");
+  (`Client, datatype "(Xml, String) -> Bool");
 
   "getAttribute",
-  (`Client, datatype "([XmlValue], String) -> String");
+  (`Client, datatype "(Xml, String) -> String");
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "[XmlValue] -> [XmlValue]");
+  (`Client, datatype "Xml -> Xml");
 
   (* Section: Accessors for DomNodes *)
   "domGetTagNameFromRef",

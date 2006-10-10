@@ -1,10 +1,10 @@
 Braced XML
 <f>{for (var i <- []) <br/>}</f>
-stdout : <f/> : [XmlValue]
+stdout : <f/> : Xml
 
 Escaped braces
 <p>A left: {{ and a right: }}</p>
-stdout : <p>A left: { and a right: }</p> : [XmlValue]
+stdout : <p>A left: { and a right: }</p> : Xml
 
 Escaped braces (not doubled)
 <p>A left: {{ and a right: }</p>
@@ -13,35 +13,35 @@ exit : 1
 
 Backslashes
 <p>A backslash \ </p>
-stdout : <p>A backslash \ </p> : [XmlValue]
+stdout : <p>A backslash \ </p> : Xml
 
 Top-level-bound XML object
 var x = for (var i <- []) <br/>; <f>{x}</f>
-stdout : <f/> : [XmlValue]
+stdout : <f/> : Xml
 
 Let-bound XML object
 {var x = for (var i <- []) <br/>; <f>{x}</f>}
-stdout : <f/> : [XmlValue]
+stdout : <f/> : Xml
 
 Whitespace preservation
 <a b="c"> <d/> </a>
-stdout : <a b="c"> <d/> </a> : [XmlValue]
+stdout : <a b="c"> <d/> </a> : Xml
 
 Element splicing [1]
 {var x = "three"; <a b="c">{stringToXml(x)}</a>}
-stdout : <a b="c">three</a> : [XmlValue]
+stdout : <a b="c">three</a> : Xml
 
 Element splicing [2]
 {var x = "hre"; <a b="c">t{stringToXml(x)}e</a>}
-stdout : <a b="c">three</a> : [XmlValue]
+stdout : <a b="c">three</a> : Xml
 
 Attribute splicing [1]
 {var x = "three"; <a b="{x}"><c/></a>}
-stdout : <a b="three"><c/></a> : [XmlValue]
+stdout : <a b="three"><c/></a> : Xml
 
 Attribute splicing [2]
 {var x = "three"; <a b="a{x}b"><c/></a>}
-stdout : <a b="athreeb"><c/></a> : [XmlValue]
+stdout : <a b="athreeb"><c/></a> : Xml
 
 Rejection of incorrectly nested elements
 <a><b></a></b>
@@ -65,15 +65,15 @@ exit : 1
 
 Accept okay l:name attributes
 <form><input l:name="foo"/></form>
-stdout : <form><input name="foo"/></form> : [XmlValue]
+stdout : <form><input name="foo"/></form> : Xml
 
 Looping in XML quasis
 var things = [1, 2]; <ul>{for (var x <- things) <br/>}</ul>
-stdout : <ul><br/><br/></ul> : [XmlValue]
+stdout : <ul><br/><br/></ul> : Xml
 
 Amp-encoding (OK)
 <xml>&lt;</xml>
-stdout : <xml>&lt;</xml> : [XmlValue]
+stdout : <xml>&lt;</xml> : Xml
 
 Amp-encoding (ill-formed XML)
 <xml>this & that</xml>
@@ -82,8 +82,8 @@ exit : 1
 
 Amp-encoding (converting from string)
 var x = "this & that"; <xml>{stringToXml(x)}</xml>
-stdout : <xml>this &amp; that</xml> : [XmlValue]
+stdout : <xml>this &amp; that</xml> : Xml
 
 Looping in XML quasis, with multiple content elements.
 var things = [1, 2];<ul>{for (var x <- things) <li>{stringToXml(intToString(x))}</li><li>1</li>}</ul>
-stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : [XmlValue]
+stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : Xml

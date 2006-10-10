@@ -44,7 +44,7 @@ exit : 0
 
 handle HTML with VAR -> HANDLER construction
 handle <html>{handler; <body/>}</html> with r -> r
-stdout : @<html>.*</html> : \[XmlValue\]
+stdout : @<html>.*</html> : Xml
 
 No value recursion
 fun f() { g() } var x = f(); fun g() { x }
