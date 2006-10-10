@@ -82,8 +82,8 @@ and phrasenode =
   | TypeAnnotation of (phrase * datatype)
   | TypeDeclaration of (name * name list * datatype)
   | ConstructorLit of (name * phrase option)
-  | Switch of (phrase * (binder list) * (name * phrase) option)
-  | Receive of ((binder list) * (name * phrase) option)
+  | Switch of (phrase * binder list)
+  | Receive of binder list
   | DatabaseLit of (phrase * (phrase option * phrase option))
   | TableLit of (phrase * datatype * phrase)
   | DBDelete of (rawgeneratorphrase * phrase option)

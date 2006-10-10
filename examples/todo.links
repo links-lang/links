@@ -1,5 +1,5 @@
 fun remove(item, items) {
-  switch items {
+  switch (items) {
      case []    -> []
      case x::xs -> if (item == x) xs
                    else x::remove(item, xs)

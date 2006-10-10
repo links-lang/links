@@ -400,8 +400,8 @@ perhaps_cases:
 // TBD: remove `None' from Switch constructor
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH exp LBRACE perhaps_cases RBRACE                       { Switch ($2, $4, None), pos() }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { Receive ($3, None), pos() }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { Switch ($3, $6), pos() }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { Receive ($3), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }

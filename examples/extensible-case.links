@@ -4,7 +4,7 @@
 
 
 fun add_A(f) (e) {
-  switch e {
+  switch (e) {
     case A -> "A"
     case x -> f(x)
   }
@@ -13,7 +13,7 @@ fun add_A(f) (e) {
 
 
 fun add_B(f) (e) {
-  switch e {
+  switch (e) {
     case B -> "B"
     case x -> f(x)
   }
@@ -21,7 +21,7 @@ fun add_B(f) (e) {
 
 
 fun add_C(f) (e) {
-  switch e {
+  switch (e) {
     case C -> "C"
     case x -> f(x)
   }

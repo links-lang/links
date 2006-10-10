@@ -11,14 +11,14 @@ fun upto(i,j) {
 }
 
 fun map(f, xs) {
-  switch xs {
+  switch (xs) {
     case [] -> []
     case (x::xs) -> f(x) :: (map(f, xs))
   }
 }
 
 fun foldr(f, xs, y) {
-  switch xs {
+  switch (xs) {
     case [] -> y
     case (x::xs) -> foldr(f, xs, f(x)(y))
   }

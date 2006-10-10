@@ -66,21 +66,21 @@ fun range(n) {
 fun floatToXml(x) { stringToXml(floatToString(x)) } 
 
 fun sum_float(l) {
-  switch l {
+  switch (l) {
     case [] -> 0.
     case hd::tl -> hd +. sum_float(tl)
   }
 }
 
 fun sum_int(l) {
-  switch l {
+  switch (l) {
     case [] -> 0
     case hd::tl -> hd + sum_int(tl)
   }
 }
 
 fun maximum(result, l) {
-  switch l {
+  switch (l) {
     case [] -> result
     case hd::tl -> if (result >= hd)  
                        maximum(result, tl)
@@ -91,7 +91,7 @@ fun maximum(result, l) {
 
 
 fun minimum(result, l) {
-  switch l {
+  switch (l) {
     case [] -> result
     case hd::tl -> if (result <= hd)  
                        maximum(result, tl)
@@ -101,7 +101,7 @@ fun minimum(result, l) {
 }
 
 fun assoc(x, l, d) {
-  switch l {
+  switch (l) {
     case [] -> d
     case (k,v)::tl -> if (x == k) v
                       else assoc(x, tl, d)

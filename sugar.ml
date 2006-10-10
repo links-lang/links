@@ -282,16 +282,16 @@ module PatternCompiler =
        pattern can be instantiated to any pattern.
 
        Examples:
-        - switch x { case(x,1) -> 1; case (0,1) -> 2;}
+        - switch (x) { case(x,1) -> 1; case (0,1) -> 2;}
        is redundant because 0 in the second pattern has already been
        matched by x in a context where all the other sub-patterns are
        identical
     
-        -  switch x { case(A(B(C(1,2,3)))) -> 0; case(A(B(C(1,2,3)))) -> 1;}
+        -  switch (x) { case(A(B(C(1,2,3)))) -> 0; case(A(B(C(1,2,3)))) -> 1;}
        is redundant because the two patterns are identical
 
        An example of type-oriented redundancy:
-        - switch x { case(true) -> 0; case(false) -> 1; case(x) -> 2 }
+        - switch (x) { case(true) -> 0; case(false) -> 1; case(x) -> 2 }
        The third clause is redundant as true and false cover the whole
        of the type Bool.
      *)
@@ -554,7 +554,7 @@ module PatternCompiler =
                           whose sole argument is unit.
 
                           Consider:
-                            switch A {case A -> 0; case (x:[|B|]) -> 1;}
+                            switch (A) {case A -> 0; case (x:[|B|]) -> 1;}
 
                           Without the unit hack, this gets translated to
                             let x = A in
@@ -751,8 +751,8 @@ module Desugarer =
              | TypeDeclaration (_, args, datatype) -> [List.map (fun k -> `TypeVar k) args] @ tv datatype
 
              | ConstructorLit (_, e) -> opt_etv e
-             | Switch (exp, binders, def) -> flatten [etv exp; btvs binders; opt_etv2 def]
-             | Receive (binders, def) -> flatten [btvs binders; opt_etv2 def]
+             | Switch (exp, binders) -> flatten [etv exp; btvs binders]
+             | Receive (binders) -> btvs binders
 
              | DatabaseLit (name, (opt_driver, opt_args)) -> flatten [etv name; opt_etv opt_driver; opt_etv opt_args]
              | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
@@ -1097,13 +1097,13 @@ module Desugarer =
                                    None, sort_expr),
                           pos')
            | Binding _ -> raise (ASTSyntaxError(pos, "Unexpected binding outside a block"))
-           | Switch (exp, patterns, _) ->
+           | Switch (exp, patterns) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 
                   (List.map (fun (patt, body) -> ([patternize patt], desugar body)) patterns))
-           | Receive (patterns, final) -> 
+           | Receive patterns -> 
                desugar (Switch ((FnAppl ((Var "recv", pos'), ([TupleLit [], pos'], pos')), pos'),
-                                patterns, final), pos')
+                                patterns), pos')
 
            (*  TBD: We should die if the XML text literal has bare ampersands or
                is otherwise ill-formed. It should also be made to properly handle

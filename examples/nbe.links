@@ -18,7 +18,7 @@
 ## utility functions
 # foldr on lists
 fun foldr(f) {fun (a) {fun (xs) {
-   switch xs {
+   switch (xs) {
     case x::xs ->  f(x)(foldr(f)(a)(xs))
     case [] -> a
    }
@@ -149,7 +149,7 @@ fun expToString(exp) {
   else {" " ++ indent(i-1)}
  }
  fun ets(i) {fun (exp) {
-   switch exp {
+   switch (exp) {
     case Var(s) -> s
     case Lam(x, m) -> {"fun (" ++ x ++ ") {" ++ nl() ++
 	indent(i+1) ++ ets(i+1)(m) ++ nl() ++ indent(i) ++ "}"}

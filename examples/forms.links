@@ -7,7 +7,7 @@ infixr 0 $;
 fun f $ x { f(x) }
 
 fun lookup(x,l) {
-  switch l {
+  switch (l) {
     case []    -> error("Not found " ++ x)
     case (k,v)::xs -> if (k == x) v
                       else lookup(x,xs)
@@ -141,7 +141,7 @@ fun showBookingInformation((person=p, age=a, arrive=arr, depart=dep)) {
 
 # sequenceForms : [Form a] -> Form [a]
 fun sequenceForms(forms) { 
-  switch forms {
+  switch (forms) {
     case [] -> pure ([])
     case (x::xs) -> x @@@ (sequenceForms(xs) @@@ pure (fun(ls)(l) { l::ls}))
   }
@@ -149,7 +149,7 @@ fun sequenceForms(forms) {
 
 fun sumNumbers(numbers) {
   fun aux(numbers, total) {
-    switch numbers {
+    switch (numbers) {
        case [] -> total
        case n::nums -> aux(nums, n + total)
     }
