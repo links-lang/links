@@ -499,20 +499,18 @@ will result. To declare a database called C<factorials> using the
 C<mysql> driver, connecting to the default port as the user C<web>
 write:
 
-  var db = database (name="factorials", driver="mysql", args=":3306:web:");
+  var db = database "factorials" "mysql" ":3306:web:";
 
 If database_driver and database_args are defined in the configuration
-file then you can write:
+file then you can write simply:
 
-  var db = database (name="factorials" | getDatabaseConfig());
-
-instead.
+  var db = database "factorials";
 
 Supported drivers are: C<postgres>, C<mysql> and C<sqlite>. The
 C<args> field is only used by the postgres and mysql drivers. It has
 the form:
 
-  name:host:port:user:password
+  host:port:user:password
 
 To declare the table C<factorials> with fields C<i> and C<f> both of type
 C<Int> associated with the database C<db> write:
@@ -852,34 +850,35 @@ not a record and has no directly-accessible fields.
 
 =over 4
 
-=item C<eventGetTarget>
+=item C<getTarget>
 
 An event generally has a I<target>, a DomNode at which the event has 
 occurred (for example, a mouse-down event will have as its target the leaf 
 node upon which the mouse was clicked). This method returns the target.
 
-=item C<eventGetTargetElement>
+=item C<getTargetElement>
 
-This method behaves like C<eventGetTarget>, except that if the node is
+This function behaves like C<getTarget>, except that if the node is
 a text node (rather than an element node), it returns the node's
 parent (which must be an element node).
 
-=item C<eventGetRelatedTarget>
+=item C<getFromElement>
 
-Besides their "target," some events have a I<related target>. For
-example, on a mouse-out event, there is an element which the mouse
-moved I<out of> and one which it moved I<into>. The related target in
-this case is the one which the mouse moved into.
+=item C<getToElement>
 
-=item C<eventGetPageX>
+Mouse-out and mouse-over events have two targets. The function
+C<getFromElement> returns the element the mouse came from.
+C<getToElement> returns the element from which the mouse came.
 
-=item C<eventGetPageY>
+=item C<getPageX>
+
+=item C<getPageY>
 
 Some events refer to a particular point on the page. These methods return 
 the x and y coordinates of that point, relative to the top-left corner of the 
 page (I<right> and I<down> are the positive directions).
 
-=item eventGetTime
+=item getTime
 
 =back
 
