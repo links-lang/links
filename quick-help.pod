@@ -854,7 +854,7 @@ not a record and has no directly-accessible fields.
 
 =item C<eventGetTarget>
 
-An event generally has a I<target>, a DomRef at which the event has 
+An event generally has a I<target>, a DomNode at which the event has 
 occurred (for example, a mouse-down event will have as its target the leaf 
 node upon which the mouse was clicked). This method returns the target.
 
@@ -912,9 +912,9 @@ Actions>.)
 Links makes a distinction between XML trees, which are immutable,
 and DOM nodes, which are mutable objects. DOM nodes are owned by a DOM
 manager module, and all interaction with DOM nodes is through calls to
-that module, using objects call C<DomRef>s. You can create DOM
+that module, using objects call C<DomNode>s. You can create DOM
 nodes by passing an XML tree: the XML constitutes a model for the DOM
-node, which is a rough copy of the XML. Likewise, from a DomRef,
+node, which is a rough copy of the XML. Likewise, from a DomNode,
 you can extract an XML image of the DOM node and its DOM subtree. The
 browser may have special semantics associated with DOM nodes, and may
 add or remove attributes and children without warning; XML values,
@@ -922,27 +922,29 @@ however, are completely within the control of the Links program.
 
 =head3 DOM operations
 
-The operations for DOM interaction are as follows. Operations ending with C<Ref>
+The operations for DOM interaction are as follows.
+
+Operations ending with C<Ref>
 work on DOM nodes; operations ending with C<Xml> take an XML value and convert
 it to a DOM node before working with it.
 
 =over 4
 
-=item C<domInsertBefore(xmlVal, beforeRef)>
+=item C<insertBefore(xml, beforeNode)>
 
-Creates a node using C<xmlVal> as the image, and adds it as the
-previous sibling of the node C<beforeRef>.
+Creates a sequence of nodes using C<xml> as the image, and adds them
+as the previous sibling of the node C<beforeNode>.
 
-=item C<domAppendChild(xmlVal, parentRef)>
+=item C<appendChildren(xml, parentNode)>
 
-Creates a node using xmlVal as the image, and adds it as the last
-child of the node C<parentRef>.
+Creates a sequence of nodes using C<xml> as the image, and adds them as
+the after the last child of the node C<parentNode>.
 
-=item C<domReplaceNode(xmlVal, ref)>
+=item C<replaceNode(xml, node)>
 
-Replaces C<ref> with xmlVal.
+Replaces C<node> with xml.
 
-=item C<domReplaceDocument(xmlVal)>
+=item C<replaceDocument(xmlVal)>
 
 Replaces the entire document with xmlVal.
 
@@ -956,37 +958,36 @@ C<beforeRef>.
 Moves the node C<newChildRef> to become the last child of the node
 C<parentRef>.
 
-=item C<domRemoveRef(ref)>
+=item C<removeNode(node)>
 
-Removes C<ref> from its current position, leaving it with no
+Removes C<node> from its current position, leaving it with no
 parent. This makes it an orphan.
 
-=item C<domReplaceNode(xmlVal, ref)>
+=item C<replaceChildren(xml, node)>
 
-Replaces the children of C<ref> with xmlVal.
+Replaces the children of C<node> with xml.
 
-=item C<domSwapNodeRefs(ref1, ref2)>
+=item C<swapNodes(node1, node2)>
 
-Swap ref1 with ref2.
+Swap node1 with node2.
 
-
-=item C<domGetDocumentRef()>
+=item C<getDocumentNode()>
 
 Return a reference to the I<document element>, that is, the top-level
 of the installed document.
 
-=item C<domGetRefById(id)>
+=item C<getNodeById(id)>
 
 Given a string ID value, finds the DOM node with that ID and returns
 it. If more than one node has that ID, the behavior is undefined.
 
-=item C<domGetXml(ref)>
+=item C<getValue(node)>
 
 Translates the given DOM node into an XML value and returns that.
 
-=item C<domIsNullRef(ref)>
+=item C<isNull(node)>
 
-Returns true if C<ref> is null.
+Returns true if C<node> is null.
 
 =back 
 
@@ -1052,6 +1053,31 @@ Returns the tag name of the given XML node, as a string. For example:
 returns the string C<"h1">. It is an error to apply this to an XML
 text node.
 
+=item getTextContent(xml)
+
+Given an XML text node C<xml>, returns the text as a string. It is an
+error to apply this to an element node.
+
+=item getAttributes(xml)
+
+Fetches a list the list of attributes associated with the given XML
+value.
+
+    getAttributes(<div class="sidebar" />)
+
+returns C<[("class", "sidebar")]>. It is an error to apply this to an XML
+text node.
+
+=item hasAttribute(xml, attrName)
+
+Returns true if the given XML value has the named attribute and false
+otherwise. For example
+
+    hasAttribute(<div class="sidebar" />, "class")
+
+returns C<true>. It is an error to apply this to an XML
+text node.
+
 =item getAttribute(xml, attrName)
 
 Fetches the named attribute of the given XML value, as a string. For
@@ -1062,14 +1088,9 @@ example
 returns C<"sidebar">. It is an error to apply this to an XML
 text node.
 
-=item getTextContent(xml)
+=item getChildNodes(xml)
 
-Given an XML text node C<xml>, returns the text as a string. It is an
-error to apply this to an element node.
-
-=item getChildren(xml)
-
-Returns a list of the child nodes of this xml node (NOT YET IMPLEMENTED).
+Returns a list of the child nodes of this xml node.
 
 =back
 
@@ -1102,8 +1123,8 @@ interactive shell.
  intToFloat       : (Int) -> Float
  intToString      : (Int) -> String
  floatToString    : (Float) -> String
- stringToXml      : (String) -> XML
- intToXml         : (Int) -> XML
+ stringToXml      : (String) -> Xml
+ intToXml         : (Int) -> Xml
 
 These function convert between values of different types.
 
