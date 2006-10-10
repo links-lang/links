@@ -48,7 +48,7 @@ let fresh_pid =
       end
 
 (*
-  assumption:
+[5~  assumption:
     the only kind of lists that are allowed to be inserted into databases
     are strings
 *)
@@ -484,33 +484,37 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (`Client, datatype "DomNode -> DomNode");
 
   (* Section: DOM Event API *)
-  "eventGetTarget",
+  "getTarget",
   (`Client, datatype "Event -> DomNode");
 
-  "eventGetTargetValue",
+  "getTargetValue",
   (`Client, datatype "Event -> String");
 
-  "eventGetTargetElement",
+  "getTargetElement",
   (`Client, datatype "Event -> DomNode");
 
   (* getPageX : Event -> Int *)
-  "eventGetPageX",
+  "getPageX",
   (`Client, datatype "Event -> Int");
 
   (* getPageY : Event -> Int *)
-  "eventGetPageY",
+  "getPageY",
   (`Client, datatype "Event -> Int");
 
-  (* getRelatedTarget : Event -> DomNode *)
-  "eventGetRelatedTarget",
+  (* getFromElement : Event -> DomNode *)
+  "getFromElement",
+  (`Client, datatype "Event -> DomNode");
+
+  (* getToElement : Event -> DomNode *)
+  "getToElement",
   (`Client, datatype "Event -> DomNode");
 
   (* getTime : Event -> Int *)
-  "eventGetTime",
+  "getTime",
   (`Client, datatype "Event -> Int");
 
   (* getCharCode : Event -> Char *)
-  "eventGetCharCode",
+  "getCharCode",
   (`Client, datatype "Event -> Char");
 
   (* Yahoo UI library functions we don't implement: *)

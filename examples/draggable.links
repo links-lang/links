@@ -36,8 +36,8 @@ fun draggableList(id, items)
   var dragger = spawn { waiting(id) };
    <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{dragger ! MouseUp}"
-      l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
-      l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}"
+      l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
+      l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}"
    >
     {for (var item <- items)
          format(item)}

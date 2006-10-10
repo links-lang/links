@@ -96,12 +96,12 @@ fun makeCroppingFrame(left, top, width, height) client{
            top: {intToString(top)}px; 
            z-index: 1000; 
            cursor: pointer"
-    l:onmousedown="{frameMgr ! MouseDown(eventGetPageX(event),
-                                         eventGetPageY(event))}"
-    l:onmouseuppage="{frameMgr ! MouseUp  (eventGetPageX(event),
-                                           eventGetPageY(event))}"
-    l:onmousemovepage="{frameMgr ! MouseMove(eventGetPageX(event),
-                                             eventGetPageY(event))}"
+    l:onmousedown="{frameMgr ! MouseDown(getPageX(event),
+                                         getPageY(event))}"
+    l:onmouseuppage="{frameMgr ! MouseUp  (getPageX(event),
+                                           getPageY(event))}"
+    l:onmousemovepage="{frameMgr ! MouseMove(getPageX(event),
+                                             getPageY(event))}"
 >
     <div id="black-border"
       style="border: 1px solid black; ">

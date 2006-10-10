@@ -13,7 +13,9 @@ fun dragging(id, elem, items) client {
   case MouseDown(elem)  -> dragging(id, elem, items)
   case MouseOut(toElem) ->
    if(isElementOfList(toElem, id)) {
-    var items = swap(elem, toElem, items);
+    var items = permute(items,
+                     getTextContent(getValue(firstChild(elem))),
+                     getTextContent(getValue(firstChild(toElem))));
     swapNodes(elem, toElem);
     dragging(id, elem, items)
    } else waiting(id, items)
@@ -29,34 +31,26 @@ fun isElementOfList(elem, id) {
  else false
 }
 
-fun swap(elem1, elem2, items) {
- var name1 = getTextContent(getValue(firstChild(elem1)));
- var name2 = getTextContent(getValue(firstChild(elem2)));
-
+fun permute(items, name1, name2) {
  for (var item <- items) {
-  if (item == name1) {[name2]} 
-  else if (item == name2) {[name1]}
-  else {[item]}
+  if (item == name1) [name2]
+  else if (item == name2) [name1]
+  else [item]
  }
 }
 
-
 fun draggableList(id, items)
 {
-  var x = id;
   var dragger = spawn { waiting(id, items) };
 
   (<ul id="{id}"
        l:onmouseup   = "{dragger ! MouseUp}"
-       l:onmousedown = "{dragger ! MouseDown(eventGetTarget(event))}"
-       l:onmouseout  = "{dragger ! MouseOut(eventGetRelatedTarget(event))}">
-    {for (var item <- items)
-      <li>{stringToXml(item)}</li>}
+       l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
+       l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
+    {for (var item <- items) <li>{stringToXml(item)}</li>}
    </ul>,
    fun () {dragger ! GetList(self());
-           receive {
-             case Items(items) -> items
-           }})
+           receive {case Items(items) -> items}})
 }
 
 
@@ -67,21 +61,19 @@ fun select(xs, i) {
 ### end of library functions ###
 
 
-fun getItemsTable() server {
+fun itemsTable() server {
   table "items" with (i : Int, name : String)
     from (database "draggable")
 }
 
-
 fun loadItems() server {
-  var itemsTable = getItemsTable();
-  for (var item <-- itemsTable)
+  for (var item <-- itemsTable())
     orderby (item.i)
     [item.name]
 }
 
 fun saveItems(itemsList) server {
-  update (var itemEntry <-- getItemsTable())
+  update (var itemEntry <-- itemsTable())
     set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 
@@ -91,12 +83,8 @@ fun main() {
   replaceDocument(
     <html><body>
       <h2>Great Bears</h2>{bears}
-      <form l:onsubmit="{main()}">
-        <input type="submit" value="load items"/>
-      </form>
-      <form l:onsubmit="{spawn {saveItems(getBears())}}">
-        <input type="submit" value="save items"/>
-      </form>
+      <input type="button" value="load" l:onclick="{main()}"/>
+      <input type="button" value="save" l:onclick="{spawn {saveItems(getBears())}}"/>
     </body></html>
   )
 }
