@@ -40,5 +40,6 @@ val query_replace_var : string -> expression -> query -> query
 val get_renaming : column -> string
 val add_sorting : query -> sorting -> query
 val freevars : query -> string list
+val occurs_free : string -> query -> bool
 module Show_query : Show.Show with type a = query
 module Pickle_query : Pickle.Pickle with type a = query

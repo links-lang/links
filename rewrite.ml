@@ -25,6 +25,7 @@ module type Rewrite =
 sig
   type t
   type rewriter = t -> t option
+  val process_children : rewriter -> rewriter
   val both : rewriter -> rewriter -> rewriter
   val either : rewriter -> rewriter -> rewriter
   val never : rewriter
@@ -43,7 +44,8 @@ module Rewrite (T : RewritePrimitives) : Rewrite
 struct
   include T
 
-  (* Apply a sequence of rewriters in sequence, stopping as soon as one succeeds *)
+  (* Apply a sequence of rewriters in sequence, stopping as soon as
+     one succeeds *)
   let any : rewriter list -> rewriter = List.fold_left T.either T.never
 
   (* Apply a sequence of rewriters in sequence. *)

@@ -57,15 +57,22 @@ module Show_database = Show_unprintable (struct type a = database end)
    deserialisation *)
 module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Result.database" end)
 
-type db_construtor = string -> (database * string)
+type db_constructor = string -> (database * string)
 
-(* list of available database drivers.  Each driver registers itself
-   at load time: the contents of the list depends on which drivers are
-   built.. *)
+(** {1 Database Drivers and Values} *)
 
-let database_drivers = ref ([] : (string * db_construtor) list)
+(** [database_drivers]: a list of available database drivers.  Each
+    driver registers itself at load time: the contents of the list
+    depends on which drivers are built.. *)
 
-let register_driver : (string * db_construtor) -> unit
+let database_drivers = ref ([] : (string * db_constructor) list)
+
+(** [register_driver (name, driver)] registers a DB [driver] under the
+    name [name]. *[driver] is a function taking the database params (a
+    string with db-specific colon-separated fields) to a pair of
+    database object and params (I guess the params could be modified
+    by the driver?) *)
+let register_driver : (string * db_constructor) -> unit
   = fun ((name, _) as pair) -> 
     debug ("registering driver for " ^ name);
     database_drivers := pair :: !database_drivers
