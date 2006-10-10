@@ -3,7 +3,7 @@ fun waiting(id, items) client {
   case MouseDown(elem)  -> dragging(id, elem, items)
   case MouseUp          -> waiting(id, items)
   case MouseOut(toElem) -> waiting(id, items)
-  case GetList(pid)     -> {pid ! Items(items); waiting(id, items)}
+  case GetList(pid)     -> pid ! Items(items); waiting(id, items)
  }
 }
 
@@ -19,7 +19,7 @@ fun dragging(id, elem, items) client {
     swapNodes(elem, toElem);
     dragging(id, elem, items)
    } else waiting(id, items)
-  case GetList(pid)     -> {pid ! Items(items); dragging(id, elem, items)}
+  case GetList(pid)     -> pid ! Items(items); dragging(id, elem, items)
  }
 }
 
