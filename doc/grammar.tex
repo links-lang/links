@@ -71,7 +71,7 @@ primary-datatype &::=& '(' datatype ')' \\
 &&                     '(' < datatype , datatypes > ')' \\
 &&                     '(' fields ')' \\
 &&                     '{' 'VARIABLE' '}' \\
-&&                     TableHandle '(' zfields ')' \\
+&&                     TableHandle '(' tfields ')' \\
 &&                     '[[' < vfields > ']]' \\
 &&                     '[' datatype ']' \\
 &&                     'VARIABLE' \\
@@ -84,7 +84,7 @@ vfields &::=&  'VARIABLE'  \\
 \\
 datatypes &::=& datatype < ',' datatypes > \\
 \\
-zfields &::=& fields \\
+tfields &::=& fields \\
 &&            'VARIABLE' \\
 \\
 fields &::=&  field < ! 'VARIABLE' >  \\
@@ -118,8 +118,6 @@ regex-pattern-sequence &::=& regex-pattern < regex-pattern-sequence > \\
 \section{Grammar for expressions}
 
 \begin{grammar}
-varlist &::=& 'VARIABLE' < ',' varlist > \\
-\\
 location &::=& 'server' \\
 &&             'client' \\
 &&             'native' \\
