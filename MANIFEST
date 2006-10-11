@@ -142,12 +142,15 @@ examples/lib
 examples/dictionary
 examples/dictionary/lib
 examples/dictionary/dict-suggest.links
+examples/dictionary/dict-suggest-lite.links
 examples/dictionary/create-table.sql
 examples/dictionary/create-table-mysql.sql
 examples/dictionary/README
 examples/crop.links
 examples/draggable.links
+examples/draggable-db.links
 examples/factorial.links
+examples/initialise-list.links
 examples/insert-factorials.links
 examples/mandelbrot.links
 examples/mandelcolor.links

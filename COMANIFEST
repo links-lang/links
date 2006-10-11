@@ -2,6 +2,10 @@
 BUGS
 COMANIFEST
 
+doc
+doc/grammar.tex
+doc/quick-help.pod
+
 examples/extras.js
 examples/document-replace.links
 examples/draw.links
@@ -12,7 +16,6 @@ examples/login-flow.cgi
 examples/mandelopt.links
 examples/mandeltest.links
 examples/nbe.links
-examples/new-dom-api.links
 examples/regex.links
 examples/sleep.links
 examples/tofix
@@ -27,9 +30,10 @@ examples/tofix/linkswine/winestore.data
 examples/tofix/linkswine/winestore.data.pg
 examples/tofix/login-contin.links
 examples/tofix/login-recursive.links
+examples/tofix/new-dom-api.links
+examples/tofix/token-ring-client.links
+examples/tofix/token-ring-server.links
 examples/tofix/xml-access.links
-examples/token-ring-client.links
-examples/token-ring-server.links
 examples/varrec.links
 examples/xml_typing.links
 
