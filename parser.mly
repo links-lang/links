@@ -7,7 +7,7 @@ open Sugartypes
 let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-			                   (start, finish)))
+                                           (start, finish)))
 
 let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
@@ -78,7 +78,7 @@ directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
 
 args: 
-|                                                              { [] }
+| /* empty */                                                  { [] }
 | arg args                                                     { $1 :: $2 }
 
 arg:
@@ -160,21 +160,9 @@ primary_expression:
 | xml                                                          { $1 }
 | FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
 
-/*
-primary_expression:
-| VARIABLE                                                     { Var $1, pos() }
-| constant                                                     { $1 }
-| LBRACKET RBRACKET                                            { ListLit [], pos() } 
-| LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
-| xml                                                          { $1 }
-| parenthesized_thing                                          { $1 }
-| FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
-*/
-
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { ConstructorLit($1, Some $2), pos() }
-
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { Section $2, pos() }
@@ -355,7 +343,6 @@ db_expression:
          SET LPAREN labeled_exps RPAREN                        { DBUpdate($3, $5, $8), pos() }
 
 xml:
-/*| xml_tree                                                     { $1 }*/
 | xml_forest                                                   { XmlForest $1, pos() }
 
 /* XML */
@@ -436,11 +423,11 @@ table_generator:
 | VAR pattern LLARROW exp                                      { ($2, $4) }
 
 perhaps_where:
-|                                                              { None }
+| /* empty */                                                  { None }
 | WHERE LPAREN exp RPAREN                                      { Some $3 }
 
 perhaps_orderby:
-|                                                              { None }
+| /* empty */                                                  { None }
 | ORDERBY LPAREN exp RPAREN                                    { Some $3 }
 
 escape_expression:
@@ -457,16 +444,15 @@ table_expression:
 
 perhaps_db_args:
 | atomic_expression                                           { Some $1 }
-|                                                              { None }
+| /* empty */                                                  { None }
 
 perhaps_db_driver:
 | atomic_expression perhaps_db_args                           { Some $1, $2 }
-|                                                              { None, None }
+| /* empty */                                                 { None, None }
 
 database_expression:
 | table_expression                                             { $1 }
 | DATABASE atomic_expression perhaps_db_driver                { DatabaseLit ($2, $3), pos() }
-/* | DATABASE exp                                                { DatabaseLit $2, pos() } */
 
 arg_list:
 | parenthesized_pattern                                        { [$1] }
@@ -493,7 +479,7 @@ block_contents:
 
 perhaps_semi:
 | SEMICOLON                                                    {}
-|                                                              {}
+| /* empty */                                                  {}
 
 exp:
 | database_expression                                          { $1 }
@@ -525,10 +511,10 @@ primary_datatype:
 | LPAREN datatype RPAREN                                       { $2 }
 | LPAREN datatype COMMA datatypes RPAREN                       { TupleType ($2 :: $4) }
 
-| LPAREN row RPAREN                                            { RecordType $2 }
+| LPAREN fields RPAREN                                         { RecordType $2 }
 | LBRACE VARIABLE RBRACE                                       { RecordType ([], Some $2) }
 
-| TABLEHANDLE LPAREN zrow RPAREN                               { TableType $3 }
+| TABLEHANDLE LPAREN zfields RPAREN                            { TableType $3 }
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
@@ -551,15 +537,9 @@ primary_datatype_list:
 | primary_datatype                                             { [$1] }
 | primary_datatype COMMA primary_datatype_list                 { $1 :: $3 }
 
-row:
-| fields                                                       { $1 }
-
-zrow:
-| zfields                                                      { $1 }
-
 vrow:
 | vfields                                                      { $1 }
-| /* empty */ { [], None }
+| /* empty */                                                  { [], None }
 
 datatypes:
 | datatype                                                     { [$1] }
@@ -576,7 +556,7 @@ zfields:
 
 fields:
 | field                                                        { [$1], None }
-| field COMMA VARIABLE                                         { [$1], Some $3 }
+| field VBAR VARIABLE                                         { [$1], Some $3 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 vfields:
@@ -596,7 +576,6 @@ field:
 fname:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
-
 
 /*
  * Regular expression grammar
