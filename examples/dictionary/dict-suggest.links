@@ -2,13 +2,17 @@
 # but our handling of strings on the client is
 # broken, so the example breaks without the
 # server annotation
-fun lowercase(s) server {
+fun lowercase(s) client {
+  debug("s: "++ s);
+#  [toLower(hd(s))]
   for (var c <- s) [toLower(c)]
 }
 
 fun suggest(prefix) client {
+ var lc = lowercase(prefix);
+ debug("lc: "++lc);
  replaceChildren(
-  format(completions(lowercase(prefix))),
+  format(completions(lc)),
   getNodeById("suggestions") 
  )
 } 
@@ -29,6 +33,8 @@ fun completions(prefix) server {
    type : String, 
    meaning : String
  ) from (database "dictionary");
+
+ debug("prefix: " ++ prefix);
 
  if (prefix == "") []
  else {

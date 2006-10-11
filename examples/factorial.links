@@ -19,6 +19,7 @@ fun request(s) client {
 
 fun response(s) client {
  var n = stringToInt(s);
+
  replaceDocument(
   <html>
    <body>
