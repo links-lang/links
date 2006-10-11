@@ -56,7 +56,7 @@ fun draggableList(id, items)
 
 ### library functions ###
 fun select(xs, i) {
-  hd(drop(i)(xs))
+  hd(drop(i, xs))
 }
 ### end of library functions ###
 

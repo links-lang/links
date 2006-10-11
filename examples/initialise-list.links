@@ -64,7 +64,7 @@ fun product(xs) {
 #}
 
 fun select(xs, i) {
-  hd(drop(i)(xs))
+  hd(drop(i, xs))
 }
 
 fun insertItems(itemsTable, itemsList) {
