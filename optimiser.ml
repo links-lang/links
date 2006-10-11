@@ -592,24 +592,44 @@ let lift_lets : RewriteSyntax.rewriter = function
     (Not performed if e1 is a variable or integer literal)
 *)
 let simplify_takedrop : RewriteSyntax.rewriter = function
-  | Apply (Apply (Variable ("take", _), (Variable _|Integer _), _), 
-           Apply (Apply (Variable ("drop", _), ((Variable _| Integer _)), _), _, _), _) -> None
-  | Apply (Apply (Variable ("take", d1), e1, d2), 
-           Apply (Apply (Variable ("drop", d3), e2, d4), e3, d5), d6) ->
-      let x = gensym () 
-      and y = gensym () in
-        Some (Let (x, e2, 
-                   Let (y, e1,
-                        Apply (Apply (Variable ("take", d1), Variable (y, d1), d2), 
-                               Apply (Apply (Variable ("drop", d3), Variable (x, d1), 
-                                             d4), e3, d5),
-                               d6), d1), d1))
-  | Apply (Apply (Variable (("take"|"drop"), _), (Variable _ |Integer _), _), _ , _) -> None
-  | Apply (Apply (Variable ("take"|"drop" as f, d1), e1, d2), e2, d3) ->
-      let var = gensym () in
-        Some (Let (var, e1, 
-                   Apply (Apply (Variable (f, d1), 
-                                 Variable (var, d1), d2), e2, d3), d1))
+  | Apply (Variable ("take", d1),
+           Record_extension("1", e1,
+                            Record_extension("2",
+                                             Apply (Variable ("drop", d2),
+                                                    Record_extension("1", e2, e3, d3), 
+                                                    d4), e4, d5), d6), d7) ->
+      let k, e1 =
+        match e1 with
+          | Variable _|Integer _ ->
+              (fun body -> body), e1
+          | _ ->
+              let x1 = gensym () in
+                (fun body -> Let (x1, e1, body, d7)), Variable (x1, expression_data e1) in
+      let k, e2 =
+        match e2 with
+          | Variable _|Integer _ ->
+              (fun body -> k(body)), e2
+          | _ ->
+              let x2 = gensym () in
+                (fun body -> k(Let (x2, e2, body, d7))), Variable (x2, expression_data e2)
+      in
+        Some(k(Apply (Variable ("take", d1),
+                      Record_extension("1", e1,
+                                       Record_extension("2",
+                                                        Apply (Variable ("drop", d2),
+                                                               Record_extension("1", e2, e3, d3),
+                                                               d4), e4, d5), d6), d7)))
+  | Apply (Variable ("take"|"drop" as f, d1),
+           Record_extension ("1", e1, Record_extension ("2", e2, e3, d2), d3), d4) ->
+      begin
+        match e1 with
+          | Variable _ | Integer _ -> None
+          | _ ->
+              let x1 = gensym () in
+                Some (Let (x1, e1,
+                           Apply (Variable (f, d1),
+                                  Record_extension ("1", Variable (x1, expression_data e1),  Record_extension ("2", e2, e3, d2), d3), d4), d4))
+      end
   | _ -> None
 
 (** [push_takedrop] actually pushes [take] and [drop] calls into a query.
@@ -627,24 +647,58 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Integer  (n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
   function
-    | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as e1), _), 
-             Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as e2), _), 
-                    TableQuery (e, q, d5), _), _) ->
-        Some (TableQuery (e, {q with
+    | Apply (Variable ("take", _),
+             Record_extension("1",
+                              (Variable _|Integer _ as e1),
+                              Record_extension ("2",
+                                                Apply (Variable ("drop", _),
+                                                       Record_extension ("1", (Variable _|Integer _ as e2), 
+                                                                         Record_extension ("2",
+                                                                                           TableQuery (e3, q, d),
+                                                                                           _, _),
+                                                                         _),
+                                                       _),
+                                                _, _),
+                              _),
+             _) ->
+        Some (TableQuery (e3, {q with
                                 Query.max_rows = Some (queryize e1);
-                                Query.offset   = queryize e2}, d5))
-    | Apply (Apply (Variable ("take", _), (Variable _|Integer _ as n), _),
-             TableQuery (e, q, d4), _) -> 
-	Some (TableQuery (e, {q with Query.max_rows = Some (queryize n)}, d4))
-    | Apply (Apply (Variable ("take", _) as tk, (Variable _|Integer _ as n), a1data),
-             For(List_of(expr, ldata) as body, var, src, fordata), a2data) 
-        when pure(expr)
-      -> 
-        Some (For(body, var, Apply (Apply (tk, n, a1data), src, a2data), 
+                                Query.offset   = queryize e2}, d))
+    | Apply (Variable ("take", _),
+             Record_extension("1",
+                              (Variable _|Integer _ as e1),
+                              Record_extension ("2",
+                                                TableQuery (e2, q, d),
+                                                _, _),
+                              _),
+             _) ->
+	Some (TableQuery (e2, {q with Query.max_rows = Some (queryize e1)}, d))
+    | Apply (Variable ("take", _) as tk,
+             Record_extension("1",
+                              (Variable _|Integer _ as e1),
+                              Record_extension ("2",
+                                                For(List_of(expr, ldata) as body, var, src, fordata),
+                                                e2, d1),
+                              d2),
+             d3) when pure(expr) ->
+        Some (For(body, var,
+                  Apply (tk,
+                         Record_extension("1", e1,
+                                          Record_extension("2", src, e2, d1),
+                                          d2),
+                         d3),
                   fordata))
-    | Apply (Apply (Variable ("drop", _), (Variable _|Integer _ as n), _),
-             TableQuery (e, q, d4), _) -> 
-	Some (TableQuery (e, {q with Query.offset = queryize n}, d4))
+
+
+    | Apply (Variable ("drop", _),
+             Record_extension("1",
+                              (Variable _|Integer _ as e1),
+                               Record_extension ("2",
+                                                 TableQuery (e2, q, d),
+                                                 _, _),
+                              _),
+             _) ->
+  	Some (TableQuery (e2, {q with Query.offset = queryize e1}, d))
     | _ -> None
 
 let remove_trivial_extensions : RewriteSyntax.rewriter = function
@@ -701,6 +755,7 @@ let rewriters env = [
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
+  print_definition "wine_listing" ~msg:"after take/drop"
 ]
 
 let run_optimisers : Types.environment -> RewriteSyntax.rewriter

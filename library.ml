@@ -288,18 +288,30 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "[a] -> Int");
 
   "take",
-  (p2 (fun n l -> 
-         match l with 
-           | `List elems -> `List (take (int_of_num (unbox_int n)) elems)
-           | _ -> failwith "Internal error: non-list passed to take"),
-   datatype "Int -> [a] -> [a]");
+  (p1 (function
+         | `Record p -> 
+             let n = assoc "1" p
+             and l = assoc "2" p in
+               begin
+                 match l with 
+                   | `List elems -> `List (take (int_of_num (unbox_int n)) elems)
+                   | _ -> failwith "Internal error: non-list passed to take"
+               end
+         | _ -> failwith "Internal error: non-pair passed to take"),
+   datatype "(Int, [a]) -> [a]");
 
   "drop",
-  (p2 (fun n l ->
-         match l with 
-           | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
-           | _ -> failwith "Internal error: non-list passed to drop"),
-   datatype "Int -> [a] -> [a]");
+  (p1 (function
+         | `Record p ->
+             let n = assoc "1" p
+             and l = assoc "2" p in 
+               begin
+                 match l with 
+                   | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
+                   | _ -> failwith "Internal error: non-list passed to drop"
+               end
+         | _ -> failwith "Internal error: non-pair passed to drop"),
+   datatype "(Int, [a]) -> [a]");
 
   "max",
   (p1 (let max2 x y = if less x y then y else x in
@@ -537,13 +549,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "setCookieUncurried",
   (p1 (fun pair ->
          (match pair with
-             `Record elems ->
-               let cookieName = charlist_as_string (assoc "1" elems) in
-               let cookieVal = charlist_as_string (assoc "2" elems) in
-                 http_response_headers := 
-                   ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
-                 `Record []
-           | _ -> failwith "Impossible error.")
+              `Record elems ->
+                let cookieName = charlist_as_string (assoc "1" elems) in
+                let cookieVal = charlist_as_string (assoc "2" elems) in
+                  http_response_headers := 
+                    ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
+                  `Record []
+            | _ -> failwith "Impossible error.")
       ),
    datatype "(String, String) -> unit");
 

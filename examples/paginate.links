@@ -7,8 +7,8 @@ fun query(n,c) {
   meaning: String
  ) from db;
 
- take(results_per_page) (
-  drop(results_per_page * (n-1)) (
+ take(results_per_page,
+  drop(results_per_page * (n-1),
    for (var r <-- wordlist)
     where (r.word ~ /{c}.*/)
     orderby (r.word)

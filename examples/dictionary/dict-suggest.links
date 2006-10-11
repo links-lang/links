@@ -32,7 +32,7 @@ fun completions(prefix) server {
 
  if (prefix == "") []
  else {
-  take(20)(for (var w <-- wordlist)
+  take(20, for (var w <-- wordlist)
             where (w.word ~ /{prefix}.*/)
             orderby (w.word)
             [w])

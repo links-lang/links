@@ -520,7 +520,7 @@ fun create_cart(cust_id) {
 fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
   var negone = -1;
   var result = 
-    take(page_size)(drop(page * page_size)(
+    take(page_size, drop(page * page_size,
     for (var wine <-- wineTable )
     where (wine_type == 1 || wine.wine_type == wine_type)
     {
