@@ -101,22 +101,28 @@ toplevel:
 | exp SEMICOLON                                                { $1 }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | fixity UINTEGER op SEMICOLON                                 { let assoc, set = $1 in set assoc (Num.int_of_num $2) $3; (InfixDecl, pos()) }
-| VAR pattern perhaps_location EQ exp SEMICOLON                { Definition ($2, $5, $3), pos() }
-| SIG 
-  VARIABLE COLON datatype 
-  FUN VARIABLE arg_list perhaps_location block perhaps_semi    { if $2 <> $6 then 
-                                                                   raise (Sugar.ConcreteSyntaxError
-                                                                            ("Signature for `" ^ $2 ^ "' should precede definition of `"
-                                                                             ^ $2 ^ "', not `"^ $6 ^"'.",
-                                                                             pos ()));
-                                                                 TypeAnnotation (
-                                                                                  (Definition ((`Variable $6, pos()), (FunLit (Some $6, $7, $9), pos()), $8), pos()),
-                                                                                  $4),
-                                                                 pos() }
-| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { Definition ((`Variable $2, pos()), (FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| FUN pattern op pattern perhaps_location block perhaps_semi   { Definition ((`Variable $3, pos()), (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
+| annotated_binding                                            { $1 }
 | typedecl SEMICOLON                                           { $1 }
 
+annotated_binding:
+| tlbinding { let d, pos = $1 in Definition d, pos }
+| signature tlbinding                                          { let signame, datatype = $1
+                                                                 and (name, _, _) as defbit, dpos = $2 in
+                                                                   if signame <> name then 
+                                                                   raise (Sugar.ConcreteSyntaxError
+                                                                            ("Signature for `" ^ signame ^ "' should precede definition of `"
+                                                                             ^ signame ^ "', not `"^ name ^"'.",
+                                                                             pos ()));
+                                                                   TypeAnnotation ((Definition defbit, dpos),datatype), pos() }
+
+tlbinding:
+| VAR VARIABLE perhaps_location EQ exp SEMICOLON               { ($2, $5, $3), pos() }
+| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN pattern op pattern perhaps_location block perhaps_semi   { ($3, (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
+
+
+signature: 
+| SIG VARIABLE COLON datatype                                  { $2, $4 }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { TypeDeclaration ($2, $3, $5), pos()  }
@@ -397,7 +403,6 @@ perhaps_cases:
 | /* empty */                                                  { [] }
 | cases                                                        { $1 }
 
-// TBD: remove `None' from Switch constructor
 case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { Switch ($3, $6), pos() }

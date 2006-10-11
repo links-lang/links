@@ -57,3 +57,7 @@ stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
 Polymorphic functions in different function bodies (not in call order)
 fun f() { cons(5, [6]) } fun cons(x,l) {[x] ++ l} fun g() { cons("a", ["b"]) } (f(), g())
 stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
+
+Signatures on top-level variables
+sig x : Int var x = 3
+stdout : 3 : Int

@@ -906,12 +906,14 @@ module Desugarer =
        let desugar = desugar' lookup_pos
        and patternize = simple_pattern_of_pattern varmap lookup_pos in
          match s with
-           | TypeAnnotation ((Definition ((`Variable name, _), (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
+           | TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
                Define (name,
                        Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype varmap t)],
                             Variable (name, pos),
                             pos),
                        loc,pos)
+           | TypeAnnotation ((Definition (name, rhs, loc), _), t)  -> 
+               Define (name, HasType(desugar rhs, desugar_datatype varmap t, pos),loc, pos)
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype varmap k, pos)
            | FloatLit f  -> Float (f, pos)
            | IntLit i    -> Integer (i, pos)
@@ -1037,8 +1039,7 @@ module Desugarer =
                          RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos'
                in
                  Database (desugar e, pos)
-           | Definition ((`Variable name, _), e, loc) -> Define (name, desugar e, loc, pos)
-           | Definition (_, _, _) -> raise (ASTSyntaxError(pos, "top-level patterns not yet implemented"))
+           | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
            | TypeDeclaration (name, args, rhs) ->
                TypeDecl (name, List.map (flip Utility.StringMap.find varmap) args, desugar_datatype varmap rhs, pos)
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
