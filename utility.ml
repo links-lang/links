@@ -249,6 +249,19 @@ struct
     in List.rev (aux 0 [])
       
   let mapstrcat glue f list = String.concat glue (List.map f list)
+
+  let start_of ~is s =
+    Str.string_match (Str.regexp_string is) s 0 
+
+  let end_of ~is s = 
+    let ilen = String.length is
+    and slen = String.length s in
+      if ilen > slen then false 
+      else
+        try ignore (Str.search_forward (Str.regexp_string is) s (slen - ilen));
+          true
+        with Not_found -> 
+          false
 end
 include StringUtils
 
@@ -262,10 +275,14 @@ let groupingsToString : ('a -> string) -> 'a list list -> string =
 let numberp s = try ignore (int_of_string s); true with _ -> false
 
 let lines (channel : in_channel) : string list = 
+  let input () = 
+    try Some (input_line channel)
+    with End_of_file -> None
+  in
   let rec next_line lines =
-    try
-      next_line (input_line channel :: lines)
-    with End_of_file -> lines
+    match input () with 
+      | Some s -> next_line (s :: lines)
+      | None -> lines
   in List.rev (next_line [])
 
 let call_with_open_infile,

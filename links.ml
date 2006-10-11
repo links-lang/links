@@ -20,8 +20,6 @@ let ps1 = "links> "
 (* Builtin environments *)
 let stdenvs = [], Library.type_env
 
-let c f x y = let _ = f y in x
-
 (* shell directives *)
 let ignore_envs fn envs arg = let _ = fn arg in envs
 let rec directives = lazy (* lazy so we can have applications on the rhs *)

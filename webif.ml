@@ -241,8 +241,6 @@ let error_page body =
 
 let serve_request filename = 
   try 
-    Settings.set_value Performance.measuring true;
-    Pervasives.flush(Pervasives.stderr);
     let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr

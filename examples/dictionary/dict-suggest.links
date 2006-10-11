@@ -32,22 +32,14 @@ fun completions(prefix) server {
 
  if (prefix == "") []
  else {
-  take(10)(for (var w <-- wordlist)
+  take(20)(for (var w <-- wordlist)
             where (w.word ~ /{prefix}.*/)
             orderby (w.word)
             [w])
  }
 }
 
-fun receiver() {
- receive {
-  case Suggest(prefix) -> {suggest(prefix); receiver();}
- }
-}
-
 fun main() {
- var handler = spawn {receiver()};
-
  <html>
   <head>
    <title>Dictionary suggest</title>
@@ -59,7 +51,7 @@ fun main() {
   </head>
  <body>
   <h1>Dictionary suggest</h1>
-  <form l:onkeyup="{handler!Suggest(prefix)}">
+  <form l:onkeyup="{suggest(prefix)}">
    <input type="text" l:name="prefix"
           class="input" autocomplete="off"/>
   </form>

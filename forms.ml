@@ -65,7 +65,7 @@ let islform : 'data expression' -> bool = function
     should be something like is_transformable_anchor *)
 let islhref : 'data expression' -> bool = function
   | Xml_node ("a", attrs, _, _) 
-      when exists (fun (k,_) -> Str.string_match (Str.regexp "l:") k 0) attrs -> true
+      when exists (fun (k,_) -> start_of k ~is:"l:") attrs -> true
   | _ -> false
 
 (* Is an expression an <input l:name ...> expression? *)

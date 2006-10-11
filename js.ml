@@ -10,7 +10,6 @@ open Pickle
 open Forms
 open Debug
 open Utility
-(*open Type *)
 open Syntax
 
 let optimising = Settings.add_bool("optimise_javascript", true, true)
@@ -54,7 +53,17 @@ let code_freevars : code -> string list =
     | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
   in aux []
 
-(* THIS IS NOT CAPTURE-AVOIDING ALPHA-CONVERSION! *)
+(* "Blind" (non-capture-avoiding) renaming.  By the time this is run
+   all variables have unique names so we can just blithely replace one
+   name with another under appropriate bindings.
+
+   This is used in the following optimisation:
+
+       let x1 = x2 in e     -- x2 not free in e
+    => e[x1->x2]
+
+   i.e. to eliminate bindings that simply rename.
+*)
 let rec rename' renamer = function
   | Var x -> Var (renamer x)
   | Defs defs -> Defs(map (fun (x, body) -> renamer x, rename' renamer body) defs)
@@ -85,11 +94,9 @@ let replace var repl = RewriteCode.bottomup (replace var repl)
 
 let remove_renaming : RewriteCode.rewriter = 
   function
-    | Bind (x, Var y, body) when not (freein x body) -> 
-        if x = "__r_g205" then failwith ("Error : " ^ Show_code.show body)
-        else (Some body )
+    | Bind (x, Var y, body) when not (freein x body) -> Some body
     | Bind (x, Var y, body) when not (freein y body) -> Some (rename 
-                                                                (fun name ->
+                                                                 (fun name ->
                                                                    if name = x then y
                                                                    else name) body)
         (* not really a renaming, but it goes here well enough.  In general this is a pessimisation, though *)
@@ -107,7 +114,7 @@ let collapse_extend : RewriteCode.rewriter =
 let collapse_extends = RewriteCode.bottomup collapse_extend
 let remove_renamings = RewriteCode.bottomup remove_renaming
 
-let stringp = flip (Str.string_match (Str.regexp "^[\"']")) 0
+let stringp s = Str.string_match (Str.regexp "^[\"']") s 0
 
 let concat_lits : RewriteCode.rewriter = 
   let join_strings l r = 
@@ -213,7 +220,6 @@ let rec show : code -> string =
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
       | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
-(*       | Call (Var "_concat", [Lst l; Lst r; kappa]) -> Printf.sprintf "%s([%s])" (paren kappa) (arglist (l@r)) *)
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
       | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  
@@ -309,57 +315,6 @@ let rename_builtins name =
 (* Convert colons in qualified names to triple-underscores *) 
 let rename_prefixed name = Str.global_replace (Str.regexp ":") "___" name
 
-
-(* Convert a function that takes a single tuple argument into a
-   multi-argument function *)
-let untuple_def =
-  let rec arglist argvar = 
-    (function
-	 (* This is very fragile.  We shouldn't assume that the
-	    argument destructuring is in a particular form, as this
-	    code does.  Rather, we should define a normal form for our
-	    AST and make sure it's in that form by this point.  *)
-       | Record_selection (lab, 
-			   labvar, 
-			   restvar, 
-			   Variable (avar, _), 
-			   Let (x, Variable (y, _), body,_),
-			   _) 
-	   when numberp lab
-	     && y = labvar
-	     && argvar = avar
-	     (* and restvar is not free in body *)
-	     ->  (let vars, body = arglist restvar body in
-		    x :: vars, body)
-       | Record_selection (lab, 
-			   labvar, 
-			   restvar, 
-			   Variable (avar, _), 
-			   body,_)
-	   when numberp lab
-	     && argvar = avar
-	     (* and restvar is not free in body *)
-	     ->  (let vars, body = arglist restvar body in
-		    labvar :: vars, body)
-       | Record_selection_empty (Variable (avar, _), body, _) 
-	   when avar = argvar 
-	     -> [], body
-       | e -> failwith ("Error unpacking arglist: " ^ Show_expression.show e)) in
-    function
-      | Abstr (var, (Record_selection _ as body), _) -> arglist var body
-      | Abstr (_, (Record_selection_empty _ as body), _) -> [], body
-      | Abstr (var, body, _) -> [var], body
-      | e -> failwith ("Error unpacking arglist " ^ Show_expression.show e)
-
-(* Convert an application of a function to a tuple into an application
-   of a function to several arguments *)
-let untuple_call = 
-  let rec arglist = function
-    | Record_empty _ -> []
-    | Record_extension (label, value, record, _) when numberp label -> value :: arglist record
-    | arg -> [arg]
-  in arglist    (* ?? *)
-
 let strip_lcolon evName = 
   String.sub evName 2 ((String.length evName) - 2)
 
@@ -385,11 +340,6 @@ let trivial_cps expr =
 (* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("_idy")
 
-
-
-
-(* let yield_and_call(func, args, kappa) = *)
-(*   Call(Var("_yield"), [jsthunk(Call(Call(func, [kappa]), args))]) *)
 
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
@@ -491,10 +441,6 @@ let rec generate : 'a expression' -> code =
                                  Var "__b"]))]))
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
-  | Xml_node (tag, attrs, children, _)   -> 
-      let attrs_cps = map (fun (k,e) -> (k, gensym ~prefix:"__" (), generate e)) attrs in
-      let children_cps = map (fun e -> (gensym ~prefix:"__" (), generate e)) children in
-        make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
@@ -542,9 +488,7 @@ let rec generate : 'a expression' -> code =
   | Define (_, _, `Server, _) as d -> generate_server_stub d
   | Define (_, _, `Native, _) as d -> generate_native_stub d
   | Define (n, e, (`Client|`Unknown), _)-> 
-      Defs ([n, Call(generate e,
-		     [Var "_idy"])])   (* definitions are always top 
-					   level, right? *)
+      Defs ([n, Call(generate e, [Var "_idy"])])   (* definitions are always top level *)
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
@@ -588,7 +532,7 @@ let rec generate : 'a expression' -> code =
                                    Call(Var "_remove", [Var name; strlit l]),
                                    Call(b_cps, [Var "__kappa"]))))))]))
 
-  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv -> (* When is lv != lv ? *)
+  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
       (* Could use dot-notation instead of project call *)
       let v_cps = generate v in
         Fn(["__kappa"],
@@ -596,8 +540,6 @@ let rec generate : 'a expression' -> code =
                 Call(Var "__kappa", 
                      [Call (Var "_project", [strlit l; Var "__v"])]))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-(* Isn't this a correct implementation? *)
-(*      failwith("record selection not implemented");*)
       let v_cps = generate v in
       let b_cps = generate b in
         Fn(["__kappa"],
@@ -643,8 +585,8 @@ let rec generate : 'a expression' -> code =
 	       ])
 	)
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
-            (* `Wrong' happens to correspond to pattern matching now, 
-               but perhaps not in the future? *)
+      (* `Wrong' happens to correspond to pattern matching now, 
+         but perhaps not in the future? *)
   | Alien _ -> Nothing
 
   (* Unimplemented stuff *)
@@ -693,21 +635,8 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
       | _ -> []
   in
     
-  let beginswithl str = Str.string_match (Str.regexp "l:") str 0 in
-  let handlers, attrs = partition (fun (attr, _) -> beginswithl attr) attrs in
+  let handlers, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
   let vars = Forms.lname_bound_vars xml in
-    (* handlerInvoker generates onFoo="..." attributes--the first 
-       thing invoked when that event occurs. *)
-(*
-  let handlerInvoker (evName, _) = 
-    (evName, strlit ("_eventHandlers['" ^ evName ^ "'][this.id](event); return false")) in
-*)
-  (* [BUG] the id tag isn't necessarily static! *)
-(*   let elem_id =  *)
-(*     try  *)
-(*       match (assoc "id" attrs) with *)
-(* 	  String(idStr, _) -> strlit idStr *)
-(*     with Not_found -> Lit "0" in *)
 
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left
@@ -729,9 +658,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
                                   handlers)]);
                     ] in
     make_xml_cps attrs_cps ( keyattr
-                            @ essentialAttrs
-                            (* @ map handlerInvoker handlers *)
-			   )
+                            @ essentialAttrs)
       children_cps [] tag
 
 and lname_transformation (Xml_node (tag, attrs, children, d)) = 
@@ -779,18 +706,8 @@ and generate_direct_style : 'a expression' -> code =
   | List_of (e, _)        ->
       Lst [gd e]   
   | Concat (l, r, _)      -> Call (Var "_concat", [gd l; gd r])
-  | For _ ->
-      failwith "not implemented native comprehensions yet"
-(*      Call(Var "_directAccum", [Fn([v], gd e); gd b])*)
+  | For _ -> failwith "not implemented native comprehensions yet"
   | Xml_node _ -> failwith "not implemented handling of XML in native functions yet"
-(*
-  | Xml_node _ as xml when isinput xml -> lname_transformation xml
-  | Xml_node _ as xml -> laction_transformation xml
-  | Xml_node (tag, attrs, children, _)   -> 
-      let attrs_cps = map (fun (k,e) -> (k, gensym "__", generate e)) attrs in
-      let children_cps = map (fun e -> (gensym "__", generate e)) children in
-        make_xml_cps attrs_cps [] children_cps [] tag
-*)
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn ([arglist], gd body)
@@ -823,12 +740,10 @@ and generate_direct_style : 'a expression' -> code =
 	Bind(name, gd r,
 	     Bind(lv, Call(Var "_project", [strlit l; Var name]),
 		  Bind(etcv, Var name, gd b)))
-  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv ->
+  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
       (* Could use dot-notation instead of project call *)
       Call(Var "_project", [strlit l; gd v])
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-(* Isn't this a correct implementation? *)
-(*      failwith("record selection not implemented");*)
       Bind(lv, Call(Var "_project", [strlit l; gd v]), gd b)
   (* Variants *)
   | Variant_injection (l, e, _) -> 
@@ -852,21 +767,22 @@ and generate_direct_style : 'a expression' -> code =
       failwith "escape cannot be called from native code"
   | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
   | Alien _ -> Nothing
+  | HasType (e, _, _) -> gd e
 
   (* Unimplemented stuff *)
   | Database _
   | TableHandle _
+  | Placeholder _
+  | SortBy _
+  | TypeDecl _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
-  | HasType (e, _, _) -> gd e
-  | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
 (* Generate a native stub that calls the corresponding native function *)
 and generate_native_stub = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = [arg] in
         Defs [n, Fn (arglist @ ["__kappa"], Call(Var "__kappa", [generate_direct_style body]))]
-  | e
-    -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
+  | e -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
       
 module StringSet = Set.Make(String)
 
