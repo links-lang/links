@@ -105,7 +105,7 @@ a list; and all but the first n elements of a list.
 
 Cons and nil can also be used in patterns, to deconstruct lists:
 
-  switch s {
+  switch (s) {
     case []    -> Empty
     case x::xs -> NonEmpty
   }
@@ -188,7 +188,7 @@ accomplished using the C<switch> form, which has a target expression
 and a case for each variant label. The following expression determines
 the effective number of humps of a transport (autos have no humps):
 
-  switch target {
+  switch (target) {
     case Automobile(fuelType) -> 0
     case Camel(humpCount) -> humpCount
   }
@@ -207,7 +207,7 @@ Type-checking will also ensure that all possible cases are matched by
 the C<switch> expression. To handle arbitrary variant values, you can
 add an open case to the end of the switch:
 
-  switch target {
+  switch (target) {
     case Automobile(fuelType) -> 0
     case Camel(humpCount) -> humpCount
     case other -> 0
@@ -556,7 +556,7 @@ deletes the rows of table C<t> that satisfy C<condition>.
 As well as lists and variants, pattern matching can also be performed
 on constants.
 
-  switch name {
+  switch (name) {
     case "Ezra" -> "Cooper"
     case "Jeremy" -> "Yallop"
     case "Phil" -> "Wadler"
