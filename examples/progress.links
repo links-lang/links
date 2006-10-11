@@ -1,8 +1,8 @@
-fun compute(count, total) {
+fun compute(count, total) server {
  if (count < total) {
   showProgress(count, total);
   compute(count+1, total)
- } else ("done counting to " ++ intToString(total))
+ } else "done counting to " ++ intToString(total)
 }
 
 fun showProgress(count, total) client {
