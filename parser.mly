@@ -166,8 +166,7 @@ constructor_expression:
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { Section $2, pos() }
-| LPAREN DOT VARIABLE RPAREN                                   { Section (`Project $3), pos() }
-| LPAREN DOT UINTEGER RPAREN                                   { Section (`Project (Num.string_of_num $3)), pos() }
+| LPAREN DOT record_label RPAREN                               { Section (`Project $3), pos() }
 | LPAREN RPAREN                                                { RecordLit ([], None), pos() }
 | LPAREN labeled_exps VBAR exp RPAREN                          { RecordLit ($2, Some $4), pos() }
 | LPAREN labeled_exps RPAREN                                   { RecordLit ($2, None),               pos() }
@@ -488,10 +487,6 @@ labeled_exps:
 | record_label EQ exp                                          { [$1, $3] }
 | record_label EQ exp COMMA labeled_exps                       { ($1, $3) :: $5 }
 
-record_label:
-| VARIABLE                                                     { $1 } 
-| UINTEGER                                                     { Num.string_of_num $1 }
-
 /*
  * Datatype grammar
  */
@@ -570,12 +565,13 @@ vfield:
 | CONSTRUCTOR                                                  { $1, `Present UnitType }
 
 field:
-| fname COLON datatype                                         { $1, `Present $3 }
-| fname COLON MINUS                                            { $1, `Absent }
+| record_label COLON datatype                                  { $1, `Present $3 }
+| record_label COLON MINUS                                     { $1, `Absent }
 
-fname:
+record_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
+| UINTEGER                                                     { Num.string_of_num $1 }
 
 /*
  * Regular expression grammar
