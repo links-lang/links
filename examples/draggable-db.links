@@ -1,14 +1,17 @@
 fun waiting(id, items) client {
  receive {
+  case GetList(pid)     -> pid ! Items(items); waiting(id, items)
+  case Reload           -> main()
   case MouseDown(elem)  -> dragging(id, elem, items)
   case MouseUp          -> waiting(id, items)
   case MouseOut(toElem) -> waiting(id, items)
-  case GetList(pid)     -> pid ! Items(items); waiting(id, items)
  }
 }
 
 fun dragging(id, elem, items) client {
  receive {
+  case GetList(pid)     -> pid ! Items(items); dragging(id, elem, items)
+  case Reload           -> main()
   case MouseUp          -> waiting(id, items)
   case MouseDown(elem)  -> dragging(id, elem, items)
   case MouseOut(toElem) ->
@@ -19,11 +22,10 @@ fun dragging(id, elem, items) client {
     swapNodes(elem, toElem);
     dragging(id, elem, items)
    } else waiting(id, items)
-  case GetList(pid)     -> pid ! Items(items); dragging(id, elem, items)
  }
 }
 
-fun isElementOfList(elem, id) {
+fun isElementOfList(elem, id) client {
  if (not(isNull(elem)) && not(isNull(parentNode(elem)))) {
   var x = getValue(parentNode(elem)); 
   hasAttribute(x, "id") && (getAttribute(x, "id") == id)
@@ -39,7 +41,7 @@ fun permute(items, name1, name2) {
  }
 }
 
-fun draggableList(id, items)
+fun draggableList(id, items) client
 {
   var dragger = spawn { waiting(id, items) };
 
@@ -48,7 +50,7 @@ fun draggableList(id, items)
        l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
     {for (var item <- items) <li>{stringToXml(item)}</li>}
-   </ul>,
+   </ul>, dragger,
    fun () {dragger ! GetList(self());
            receive {case Items(items) -> items}})
 }
@@ -77,13 +79,13 @@ fun saveItems(itemsList) server {
     set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 
-fun main() {
-  var (bears, getBears) = draggableList("bears", loadItems());
+fun main() client {
+  var (bears, bid, getBears) = draggableList("bears", loadItems());
   
   replaceDocument(
     <html><body>
       <h2>Great Bears</h2>{bears}
-      <input type="button" value="load" l:onclick="{main()}"/>
+      <input type="button" value="load" l:onclick="{bid!Reload}"/>
       <input type="button" value="save" l:onclick="{spawn {saveItems(getBears())}}"/>
     </body></html>
   )

@@ -138,9 +138,7 @@ tests/web-tests.pl
 tests/xml.tests
 
 examples
-examples/lib
 examples/dictionary
-examples/dictionary/lib
 examples/dictionary/dict-suggest.links
 examples/dictionary/dict-suggest-lite.links
 examples/dictionary/create-table.sql
