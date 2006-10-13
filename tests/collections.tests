@@ -123,3 +123,19 @@ stdout : [2, 3, 4] : [Int]
 Sorting:
 for (var i <- [2,1,3]) orderby (i) [i]
 stdout : [1, 2, 3] : [Int]
+
+Empty-list comparison (1)
+[] < []
+stdout : false : Bool
+
+Empty-list comparison (2)
+[] > []
+stdout : false : Bool
+
+List comparison (1)
+[1] < []
+stdout : false : Bool
+
+List comparison (2)
+[1] > []
+stdout : false : Bool
