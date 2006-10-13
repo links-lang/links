@@ -2,8 +2,6 @@
 BUGS
 COMANIFEST
 
-doc
-doc/grammar.tex
 doc/quick-help.pod
 
 examples/extras.js

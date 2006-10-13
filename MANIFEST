@@ -13,6 +13,11 @@ MANIFEST
 
 quick-help.html
 
+doc
+doc/grammar.tex
+doc/newvbtm.sty
+doc/Makefile
+
 test-harness
 run-tests
 install-examples
