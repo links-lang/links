@@ -988,6 +988,10 @@ Translates the given DOM node into an XML value and returns that.
 
 Returns true if C<node> is null.
 
+=item C<isElementNode(node)>
+
+Returns true if C<node> is not null and is an element node.
+
 =back 
 
 Note: when manipulating the DOM, care should be taken to ensure that a given 

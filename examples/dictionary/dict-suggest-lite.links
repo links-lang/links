@@ -1,19 +1,11 @@
-# there shouldn't be a server annotation here
-# but our handling of strings on the client is
-# broken, so the example breaks without the
-# server annotation
-fun lowercase(s) server {
-  for (var c <- s) [toLower(c)]
-}
-
 fun suggest(prefix) client {
  replaceChildren(
-  format(completions(lowercase(prefix))),
+  format(completions(prefix)),
   getNodeById("suggestions") 
  )
 } 
 
-fun format(words) {
+fun format(words) client {
  for (var w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>
@@ -45,7 +37,7 @@ fun receiver() {
  }
 }
 
-fun main() {
+fun main() client {
  var handler = spawn {receiver()};
 
  <html>

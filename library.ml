@@ -404,6 +404,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   (* DOM API *)
 
+  "isElementNode",
+  (`Client, datatype "(DomNode) -> Bool");
+
+
   (* [DEACTIVATED] *)
   (*   "domOp", *)
   (*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
