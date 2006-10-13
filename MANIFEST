@@ -143,6 +143,7 @@ tests/web-tests.pl
 tests/xml.tests
 
 examples
+examples/index.html
 examples/dictionary
 examples/dictionary/dict-suggest.links
 examples/dictionary/dict-suggest-lite.links
