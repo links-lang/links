@@ -1,8 +1,5 @@
 BUGS
 
-* Client->server calls, which are asynchronous, break synchronisation
-  of event handlers.
-
 * The following sequence of events happens.  It shouldn't.
 
     * set mailbox typing off.
