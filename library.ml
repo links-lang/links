@@ -171,10 +171,12 @@ let rec less l r =
           | (l,r)::_ when less r l -> false
           | _::rest                -> compare_list rest in
           compare_list (combine lv rv)
-    | `List (l), `List (r) ->
-        (try for_all2 less l r
-         with Invalid_argument msg -> failwith ("Error comparing lists : "^msg))
+    | `List (l), `List (r) -> less_lists (l,r)
     | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
+and less_lists = function
+  | _, [] -> false
+  | [], (_::_) -> true
+  | (lcar::lcdr), (rcar::rcdr) -> less lcar rcar && less_lists (lcdr, rcdr)
 
 let less_or_equal l r = less l r || equal l r
 

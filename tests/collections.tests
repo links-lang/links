@@ -138,4 +138,4 @@ stdout : false : Bool
 
 List comparison (2)
 [1] > []
-stdout : false : Bool
+stdout : true : Bool
