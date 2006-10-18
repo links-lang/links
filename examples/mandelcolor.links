@@ -173,7 +173,7 @@ fun main() client {
   replaceDocument(<body>
     <div id="p0x0" />
   </body>);
-  needless(1000);   # gives the DOM process time to draw the initial div
+#  needless(1000);   # gives the DOM process time to draw the initial div
   goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)
 }
 

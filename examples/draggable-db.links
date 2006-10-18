@@ -1,34 +1,24 @@
-fun waiting(id, items) client {
+fun step(state, id, items) client {
  receive {
-  case MouseDown(elem)  -> dragging(id, elem, items)
-  case MouseUp          -> waiting(id, items)
-  case MouseOut(toElem) -> waiting(id, items)
-  case GetList(pid)     -> pid ! Items(items); waiting(id, items)
- }
-}
-
-fun dragging(id, elem, items) client {
- receive {
-  case MouseUp          -> waiting(id, items)
-  case MouseDown(elem)  -> dragging(id, elem, items)
+  case GetList(pid)     -> pid ! Items(items); step(state, id, items)
+  case SetList(items)   ->
+   draw(id, items);
+   step(state, id, items)
+  case MouseDown(elem)  -> step(Dragging(elem), id, items)
+  case MouseUp          -> step(Waiting, id, items)
   case MouseOut(toElem) ->
-   if(isElementOfList(toElem, id)) {
-    var items = permute(items,
-                     getTextContent(getValue(firstChild(elem))),
-                     getTextContent(getValue(firstChild(toElem))));
-    swapNodes(elem, toElem);
-    dragging(id, elem, items)
-   } else waiting(id, items)
-  case GetList(pid)     -> pid ! Items(items); dragging(id, elem, items)
- }
-}
-
-fun isElementOfList(elem, id) {
- if (not(isNull(elem)) && not(isNull(parentNode(elem)))) {
-  var x = getValue(parentNode(elem)); 
-  hasAttribute(x, "id") && (getAttribute(x, "id") == id)
- }
- else false
+   switch (state) {
+    case Waiting -> step(Waiting, id, items)
+    case Dragging(elem) -> 
+     if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+      var items = permute(items,
+                       getTextContent(getValue(firstChild(elem))),
+                       getTextContent(getValue(firstChild(toElem))));
+       draw(id, items);
+      step(Dragging(elem), id, items)
+     } else step(Waiting, id, items)
+   }
+ } 
 }
 
 fun permute(items, name1, name2) {
@@ -39,9 +29,16 @@ fun permute(items, name1, name2) {
  }
 }
 
-fun draggableList(id, items)
+fun draw(id, items) {
+ replaceChildren(
+  for (var item <- items) <li>{stringToXml(item)}</li>,
+  getNodeById(id)
+ )
+}
+
+fun draggableList(id, items) client
 {
-  var dragger = spawn { waiting(id, items) };
+  var dragger = spawn { step(Waiting, id, items) };
 
   (<ul id="{id}"
        l:onmouseup   = "{dragger ! MouseUp}"
@@ -50,7 +47,11 @@ fun draggableList(id, items)
     {for (var item <- items) <li>{stringToXml(item)}</li>}
    </ul>,
    fun () {dragger ! GetList(self());
-           receive {case Items(items) -> items}})
+           receive {
+             case Items(items) -> items
+          }},
+   fun (items) {dragger ! SetList(items);}
+   )
 }
 
 
@@ -66,25 +67,26 @@ fun itemsTable() server {
     from (database "draggable")
 }
 
-fun loadItems() server {
+fun load() server {
   for (var item <-- itemsTable())
     orderby (item.i)
     [item.name]
 }
 
-fun saveItems(itemsList) server {
+fun save(itemsList) server {
   update (var itemEntry <-- itemsTable())
     set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 
-fun main() {
-  var (bears, getBears) = draggableList("bears", loadItems());
-  
+
+fun main() client {
+  var (bears, read, write) = draggableList("bears", load());
+ 
   replaceDocument(
     <html><body>
       <h2>Great Bears</h2>{bears}
-      <input type="button" value="load" l:onclick="{main()}"/>
-      <input type="button" value="save" l:onclick="{spawn {saveItems(getBears())}}"/>
+      <input type="button" value="load" l:onclick="{spawn {write(load())}}"/>
+      <input type="button" value="save" l:onclick="{spawn {save(read())}}"/>
     </body></html>
   )
 }
