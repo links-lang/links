@@ -169,9 +169,7 @@ fun main() client {
   <html><body>
     <div id="p0x0" />
   </body></html>);
-  # [HACK]
-  #   use a different process otherwise the main process will run out of stack
-  spawn {goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)};
+  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)
 }
 
 main()
