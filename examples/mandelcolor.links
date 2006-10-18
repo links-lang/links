@@ -165,12 +165,13 @@ fun goMandelMadness(mini, minr, maxi, maxr, pixelWidth)
 }
 
 fun main() client {
-  replaceDocument(<body>
+  replaceDocument(
+  <html><body>
     <div id="p0x0" />
-  </body>);
+  </body></html>);
   # [HACK]
   #   use a different process otherwise the main process will run out of stack
-  spawn {goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)}
+  spawn {goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)};
 }
 
 main()
