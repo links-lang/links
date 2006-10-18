@@ -104,16 +104,7 @@ let read_and_optimise_program arg =
   else 
     read_and_optimise_program arg
 
-let encode_continuation (cont : Result.continuation) : string =
-  Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
-
-let serialize_call_to_client (continuation, name, arg) =
-  Json.jsonize_result
-    (`Record [
-       "__continuation", Result.string_as_charlist (encode_continuation continuation);
-       "__name", Result.string_as_charlist name;
-       "__arg", arg
-     ])
+let serialize_call_to_client (continuation, name, arg) = Json.jsonize_call continuation name arg
 
 let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string
 
