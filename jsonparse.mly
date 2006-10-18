@@ -66,7 +66,7 @@ value:
 | NULL                               { `Record [] (* Or an error? *) } 
 
 string:
-| STRING                             { Result.string_as_charlist $1 }
+| STRING                             { assert(String.length $1 == 1); Result.char (String.get $1 0) }
 
 id:
 | STRING                             { $1 }

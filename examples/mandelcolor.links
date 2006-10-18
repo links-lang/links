@@ -164,17 +164,13 @@ fun goMandelMadness(mini, minr, maxi, maxr, pixelWidth)
                 mini, minr, maxi, maxr)
 }
 
-fun needless(n) {
-  if (n <= 0) ()
-  else needless(n-1)
-}
-
 fun main() client {
   replaceDocument(<body>
     <div id="p0x0" />
   </body>);
-  needless(1000);   # gives the DOM process time to draw the initial div
-  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)
+  # [HACK]
+  #   use a different process otherwise the main process will run out of stack
+  spawn {goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)}
 }
 
 main()

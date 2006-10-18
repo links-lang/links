@@ -222,7 +222,7 @@ let rec show : code -> string =
       | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
-      | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  
+(*      | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  *)
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
@@ -236,12 +236,18 @@ let rec show : code -> string =
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
 
 (* create a string literal, quoting special characters *)
-let string_quote s = 
+let string_js_quote s =
   let sub old repl s = Str.global_replace (Str.regexp old) repl s in
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" s) ^ "'"
       
-let strlit s = Lit (string_quote s)
-let chrlit s = Lit (string_quote (string_of_char s))
+(** [strlit] produces a JS literal string from an OCaml string. *)
+let strlit s = Lit (string_js_quote s)
+let chrlit ch = Lit(string_js_quote(string_of_char ch))
+(** [chrlistlit] produces a JS literal for the representation of a Links string. *)
+let chrlistlit s  = Lst(map chrlit (explode s))
+(* let chrlit s = Lit (string_quote (string_of_char s)) *)
+
+    
 
 (* Specialness:
 
@@ -344,10 +350,11 @@ let idy_js = Var("_idy")
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
     Call(Var "_XML",
-         [Var "__kappa";
-          strlit tag;
+         [strlit tag;
           Dict (attrs_noncps @ map (fun (k, n, _) -> (k, Var n)) attrs_cps);
-          Lst (children_noncps @ map (fun (n, _) -> Var n) children_cps)])
+          Lst (children_noncps @ map (fun (n, _) -> Var n) children_cps);
+          Var "__kappa"
+         ])
   in
   let tower = fold_right (fun (name, item) expr ->
                             Call(item, [Fn([name], expr)])
@@ -385,7 +392,7 @@ let rec generate : 'a expression' -> code =
   | Float (v, _)                       -> trivial_cps (Lit (string_of_float v))
   | Boolean (v, _)                     -> trivial_cps (Lit (string_of_bool v))
   | Char (v, _)                        -> trivial_cps (chrlit v)
-  | String (v, _)                      -> trivial_cps (strlit v)
+  | String (v, _)                      -> trivial_cps (chrlistlit v)
   | Condition (i, t, e, _)             -> 
       let i_cps = generate i in
       let t_cps = generate t in
@@ -533,7 +540,7 @@ let rec generate : 'a expression' -> code =
                                    Call(b_cps, [Var "__kappa"]))))))]))
 
   | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
-      (* Could use dot-notation instead of project call *)
+      (* Could use dot-notation instead of [project] call *)
       let v_cps = generate v in
         Fn(["__kappa"],
            Call(v_cps, [Fn(["__v"],
@@ -690,7 +697,7 @@ and generate_direct_style : 'a expression' -> code =
   | Float (v, _)                       -> Lit (string_of_float v)
   | Boolean (v, _)                     -> Lit (string_of_bool v)
   | Char (v, _)                        -> chrlit v
-  | String (v, _)                      -> strlit v
+  | String (v, _)                      -> chrlistlit v
   | Condition (i, t, e, _)             ->
       Cond (gd i, gd t, gd e)
   | Let (v, e, b, _)                   ->

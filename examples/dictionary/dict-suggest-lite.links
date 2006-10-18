@@ -1,6 +1,10 @@
+fun lowercase(s) {
+  for (var c <- s) [toLower(c)]
+}
+
 fun suggest(prefix) client {
  replaceChildren(
-  format(completions(prefix)),
+  format(completions(lowercase(prefix))),
   getNodeById("suggestions") 
  )
 } 

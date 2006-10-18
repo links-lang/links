@@ -8,10 +8,10 @@ fun compute(count, total) server {
 fun showProgress(count, total) client {
  var percentStr = floatToString(100.0 *. intToFloat(count) /. intToFloat(total));
  replaceNode(
-	<div id="bar"
+        <div id="bar"
              style="width:{percentStr}%; background-color: black">|</div>,
         getNodeById("bar")
- )
+ );
 }
 
 fun showAnswer(answer) client {
