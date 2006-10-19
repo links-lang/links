@@ -79,6 +79,7 @@ SOURCES = $(OPC)                		\
           optimiser.ml optimiser.mli   		\
           js.mli js.ml          		\
           webif.ml              		\
+          test.ml                               \
           links.ml              		\
 
 LIBS    = unix nums str $(DB_LIBS) deriving

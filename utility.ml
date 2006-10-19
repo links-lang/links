@@ -334,6 +334,22 @@ let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
           | Left l  -> aux (l :: lefts, rights) xs
           | Right r -> aux (lefts, r :: rights) xs
   in aux ([], []) l
+
+
+module EitherMonad = Monad.MonadPlusUtils(
+  struct
+    type 'a m = (string, 'a) either
+    let return v = Right v
+    let (>>=) m k = match m with
+      | Left _ as l -> l
+      | Right r     -> k r
+    let fail msg = Left msg
+    let (>>) x y = x >>= fun _ -> y
+    let mzero = Left "no error"
+    let mplus l r = match l with 
+      | Left _ -> r
+      | m      -> m
+  end)
     
 module OptionUtils = 
 struct
