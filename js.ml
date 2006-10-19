@@ -636,9 +636,9 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   *)
   let essentialAttrs = 
     match tag with
-        "form" -> ["action", strlit "#";
-                   "method", strlit "post"]
-      | "a" -> ["href", strlit "#"]
+        "form" -> ["action", chrlistlit "#";
+                   "method", chrlistlit "post"]
+      | "a" -> ["href", chrlistlit "#"]
       | _ -> []
   in
     
