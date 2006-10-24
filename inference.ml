@@ -189,6 +189,20 @@ type unify_env = unify_type_env * unify_row_env
 let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
   let rec_types, rec_rows = rec_env in
 
+  let is_unguarded_recursive t =
+    let rec is_unguarded rec_types t = 
+      match t with
+        | `MetaTypeVar point ->
+            begin
+              match (Unionfind.find point) with
+                | `Recursive (var, body) when IntSet.mem var rec_types -> true
+                | `Recursive (var, body) -> is_unguarded (IntSet.add var rec_types) body
+                | t -> is_unguarded rec_types t
+            end
+        |  _ -> false
+    in
+      is_unguarded IntSet.empty t in
+                  
   let unify_rec ((var, body), t) =
     let ts =
       if IntMap.mem var rec_types then
@@ -282,15 +296,43 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		   assert(lvar <> rvar);
 		   debug_if_set (show_recursion)
 		     (fun () -> "rec pair (" ^ (string_of_int lvar) ^ "," ^ (string_of_int rvar) ^")");
-		   unify_rec2 ((lvar, t), (rvar, t'));
+                   begin
+                     if is_unguarded_recursive (`MetaTypeVar lpoint) then
+                       begin
+                         if not (is_unguarded_recursive (`MetaTypeVar rpoint)) then
+                           raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                                                   string_of_datatype (`MetaTypeVar lpoint) ^
+                                                   " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar rpoint)))
+                       end
+                     else if is_unguarded_recursive (`MetaTypeVar lpoint) then
+                       raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                                               string_of_datatype (`MetaTypeVar rpoint) ^
+                                               " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar lpoint)))
+                     else
+		       unify_rec2 ((lvar, t), (rvar, t'))
+                   end;
 		   Unionfind.union lpoint rpoint
 	       | `Recursive (var, t'), t ->
 		   debug_if_set (show_recursion) (fun () -> "rec left (" ^ (string_of_int var) ^ ")");
-		   unify_rec ((var, t'), t);
+                   begin
+                     if is_unguarded_recursive (`MetaTypeVar lpoint) then
+                       raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                                               string_of_datatype (`MetaTypeVar lpoint) ^
+                                               " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint)))
+                     else                   
+		       unify_rec ((var, t'), t)
+                   end;
 		   Unionfind.union rpoint lpoint
-	       | t, `Recursive (var, t')->
+	       | t, `Recursive (var, t') ->
 		   debug_if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
-		   unify_rec ((var, t'), t);
+                   begin
+                     if is_unguarded_recursive (`MetaTypeVar rpoint) then
+                       raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                                               string_of_datatype (`MetaTypeVar rpoint) ^
+                                               " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint)))
+                     else                   
+		       unify_rec ((var, t'), t)
+                   end;
 		   Unionfind.union lpoint rpoint
 	       | t, t' -> unify' rec_env (t, t'); Unionfind.union lpoint rpoint)
       | `MetaTypeVar point, t | t, `MetaTypeVar point ->
@@ -307,7 +349,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		   Unionfind.change point t)
 	     | `Recursive (var, t') ->
    		 debug_if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
-		 unify_rec ((var, t'), t)
+                   begin
+                     if is_unguarded_recursive (`MetaTypeVar point) then
+                       raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                                               string_of_datatype (`MetaTypeVar point) ^
+                                               " with the non-recursive type "^ string_of_datatype t))
+                     else                   
+		       unify_rec ((var, t'), t)
+                   end
 		 (* It's tempting to try to do this, but it isn't sound
 		    as point may appear inside t
 		 
@@ -359,6 +408,21 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		 failwith "Internal error: closed row with absent variable"
 	  ) field_env in
 *)
+
+      let is_unguarded_recursive row =
+        let rec is_unguarded rec_rows (field_env, row_var) =
+          StringMap.is_empty field_env &&
+            (match row_var with
+               | `MetaRowVar point ->
+                     let ((field_env, row_var) as row) = Unionfind.find point in
+                       StringMap.is_empty field_env &&
+                         (match row_var with
+                            | `RecRowVar (var, row) when IntSet.mem var rec_rows -> true
+                            | `RecRowVar (var, row) -> is_unguarded (IntSet.add var rec_rows) row
+                            | _ -> is_unguarded rec_rows row)
+               |  _ -> false)
+        in
+          is_unguarded IntSet.empty row in
 
       (* extend_field_env traversal_env extending_env
            extends traversal_env with all the fields in extending_env
@@ -665,7 +729,24 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
 		  end in
         
+      (* report an error if an attempt is made to unify
+         an unguarded recursive row with a row that is not
+         unguarded recursive
+      *)
+      let check_unguarded_recursion lrow rrow =      
+        if is_unguarded_recursive lrow then
+          if not (is_unguarded_recursive rrow) then
+	    raise (Unify_failure
+		     ("Could not unify unguarded recursive row"^ string_of_row lrow
+		      ^"\nwith row "^ string_of_row rrow))
+        else if is_unguarded_recursive rrow then
+	  raise (Unify_failure
+		   ("Could not unify unguarded recursive row"^ string_of_row rrow
+		    ^"\nwith row "^ string_of_row lrow)) in
+        
       let _ =
+        check_unguarded_recursion lrow rrow;
+
 	if is_rigid_row lrow then
 	  if is_rigid_row rrow then
 	    unify_both_rigid (lrow, rrow)
