@@ -5,7 +5,7 @@ OCAMLMAKEFILE = ./OCamlMakefile
 ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
    DB_AUXLIBS += $(SQLITE_LIBDIR)
-   DB_CLIBS   += cclib lsqlite_stubs cclib lsqlite
+   DB_CLIBS   += sqlite_stubs sqlite
    DB_LIBS    += sqlite
 endif
 
