@@ -1,3 +1,5 @@
+(*pp deriving *)
+
 (* Representation for a very limited subset of (OCaml) regular
    expressions. *)
 

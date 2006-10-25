@@ -1,4 +1,4 @@
-(*open Str*)
+(*pp deriving *)
 open Num
 open List
 

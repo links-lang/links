@@ -25,13 +25,11 @@ DERIVING_DIR=deriving
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
-PP=deriving/syntax/deriving
+OCAMLOPT := ocamlopt.opt
+OCAMLC := ocamlc.opt
+OCAMLDEP := ocamldep.opt
 
-OCAMLOPT := ocamlopt.opt -pp $(PP)
-OCAMLC := ocamlc.opt -pp $(PP)
-OCAMLDEP := ocamldep -pp $(PP)
-
-VPATH=regex
+PATH += :deriving/syntax
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
@@ -86,8 +84,6 @@ LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
-#PROFILING = 1
-
 INCDIRS = $(AUXLIB_DIRS)
 LIBDIRS = $(AUXLIB_DIRS)
 
@@ -121,5 +117,5 @@ docs:
 doc-clean:
 	cd doc && make clean
 
-clean : deriving-clean doc-clean
+clean :: deriving-clean doc-clean
 

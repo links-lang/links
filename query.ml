@@ -1,3 +1,4 @@
+(*pp deriving *)
 open Num
 open Utility
 

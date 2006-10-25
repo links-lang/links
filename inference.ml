@@ -1,3 +1,4 @@
+(*pp deriving *)
 open List
 
 open Utility

@@ -1,3 +1,4 @@
+(*pp deriving *)
 (* js.ml
     JavaScript generation.
 *)

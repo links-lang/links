@@ -1,3 +1,4 @@
+(*pp deriving *)
 (* Basis for types *)
 
 open Utility

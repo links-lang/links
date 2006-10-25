@@ -1,3 +1,4 @@
+(*pp deriving *)
 (* Representations of types *)
 
 open Debug
