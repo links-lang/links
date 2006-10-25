@@ -11,10 +11,10 @@ VERSION # created by the release script
 KNOWN-ISSUES
 MANIFEST
 
-quick-help.html
-
 doc
 doc/grammar.tex
+doc/quick-help.html
+doc/grammar.pdf
 doc/newvbtm.sty
 doc/Makefile
 

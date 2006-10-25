@@ -115,10 +115,11 @@ fixmes:
 
 .PHONY: docs
 
-docs: quick-help.html
+docs:
+	cd doc && make
 
-quick-help.html: quick-help.pod
-	pod2html quick-help.pod > quick-help.html
-	@rm pod2htm*.tmp
+doc-clean:
+	cd doc && make clean
 
-clean : deriving-clean
+clean : deriving-clean doc-clean
+
