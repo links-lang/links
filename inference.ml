@@ -240,6 +240,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
   (* introduce a recursive type
        give an error if it is non-well-founded and
        non-well-founded type inference is switched off
+
+     preconditions:
+      - Unionfind.find point = t
+      - var is free in t
   *)
   let rec_intro point (var, t) =
     if Settings.get_value infer_negative_types || not (is_negative var (`MetaTypeVar point)) then
@@ -251,8 +255,16 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
          we need to make sure var' is given a new point inside t', but we don't
          actually have to give new points to any of the other recursive types inside t'
          (which is one of the side-effects of instantiation).
+
+         Note that we cannot just pass t to instantiate_datatype as it may not be
+         a valid datatype (e.g. `Recursive (var, t) is not a type, but
+         `MetaTypeVar point where Unionfind.point = `Recursive (var, t) is). This is
+         an annoying consequence of deriving Types.datatype and Inferencetypes.datatype
+         from a common basis.
       *)
-      Unionfind.change point (`Recursive (var, instantiate_datatype (IntMap.empty, IntMap.empty) (`MetaTypeVar point)))
+      Unionfind.change point (`Recursive (var,
+                                          instantiate_datatype
+                                            (IntMap.add var (`MetaTypeVar point) (IntMap.empty), IntMap.empty) (`MetaTypeVar point)))
     else
       failwith "non-well-founded type inferred!" in
     
@@ -342,9 +354,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                  raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
 	     | `TypeVar var ->
 		 if var_is_free_in_type var t then
-   		   (let _ = debug_if_set (show_recursion)
-		      (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")") in
-		      rec_intro point (var, t))
+                   begin
+   		     debug_if_set (show_recursion)
+		       (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
+                     let point' = Unionfind.fresh t
+                     in
+                       rec_intro point' (var, t);
+		       Unionfind.union point point'
+                   end
 		 else
 		   (debug_if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
 		   Unionfind.change point t)
@@ -463,6 +480,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
    	   give an error if it is non-well-founded and
 	   non-well-founded type inference is switched off
       *)
+      (*
+         [BUG]
+           need to do the same instantiation trick here that we do for rec_intro
+         [TODO]
+           * expose instantiate_row
+           * use it here!
+      *) 
       let rec_row_intro point (field_env, var, row) =
 	if Settings.get_value infer_negative_types || not (is_negative_row var row) then
 	  Unionfind.change point (field_env, `RecRowVar (var, row))
