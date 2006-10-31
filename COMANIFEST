@@ -43,8 +43,6 @@ monadic_pickle.mli
 monadic_pickle.ml
 sort.ml
 
-quick-help.pod
-
 prelude.links
 tests.links
 

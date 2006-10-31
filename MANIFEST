@@ -15,7 +15,6 @@ doc
 doc/grammar.tex
 doc/quick-help.html
 doc/grammar.pdf
-doc/newvbtm.sty
 doc/Makefile
 
 test-harness
@@ -87,6 +86,7 @@ webif.ml
 links.ml
 linksregex.ml
 regex.ml
+test.ml
 
 deriving/
 deriving/lib
