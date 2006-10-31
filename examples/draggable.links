@@ -11,19 +11,11 @@ fun dragging(id, elem) client {
   case MouseUp          -> waiting(id)
   case MouseDown(elem)  -> dragging(id, elem)
   case MouseOut(toElem) ->
-   if(isElementOfList(toElem, id)) {
+   if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
     swapNodes(elem, toElem);
     dragging(id, elem)
    } else waiting(id)
  }
-}
-
-fun isElementOfList(elem, id) {
- if (not(isNull(elem)) && not(isNull(parentNode(elem)))) {
-  var x = getValue(parentNode(elem)); 
-  hasAttribute(x, "id") && (getAttribute(x, "id") == id)
- }
- else false
 }
 
 fun format(item) {

@@ -9,7 +9,7 @@ fun suggest(prefix) client {
  )
 } 
 
-fun format(words) client {
+fun format(words) {
  for (var w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>

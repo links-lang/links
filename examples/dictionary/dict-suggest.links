@@ -1,18 +1,10 @@
-# there shouldn't be a server annotation here
-# but our handling of strings on the client is
-# broken, so the example breaks without the
-# server annotation
-fun lowercase(s) client {
-  debug("s: "++ s);
-#  [toLower(hd(s))]
+fun lowercase(s) {
   for (var c <- s) [toLower(c)]
 }
 
 fun suggest(prefix) client {
- var lc = lowercase(prefix);
- debug("lc: "++lc);
  replaceChildren(
-  format(completions(lc)),
+  format(completions(lowercase(prefix))),
   getNodeById("suggestions") 
  )
 } 
