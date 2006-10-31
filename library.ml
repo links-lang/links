@@ -122,11 +122,28 @@ let float_fn fn =
    ([], `Primitive `Float --> `Primitive `Float))
 
 let p1 fn = 
-  `PFun (fun a ->  (fn a))
+  `PFun ((fun a ->  (fn a :> primitive)))
 and p2 fn = 
-  `PFun (fun a -> `PFun (fun b ->  (fn a b)))
+  `PFun (fun a -> `PFun (fun b -> (fn a b :> primitive)))
 and p3 fn = 
-  `PFun (fun a -> `PFun (fun b -> `PFun (fun c ->  (fn a b c))))
+  `PFun (fun a -> `PFun (fun b -> `PFun (fun c -> (fn a b c :> primitive))))
+
+let unpack_args = function
+    (* Convert an argument record into an ordered list of arguments.
+       Not currently terribly efficient (assoc, length, sprintf, etc.) *)
+  | `Record args -> 
+      List.fold_right (fun n outargs ->
+                         List.assoc (Printf.sprintf "%d" (n+1)) args :: outargs)
+        (Utility.fromTo 0 (List.length args))
+        []                           
+  | _ -> failwith "Internal error: arguments not passed as tuple"
+
+let one_arg = function
+  | [a] -> a
+  | l -> failwith (Printf.sprintf "Wrong number of arguments: %d (expected one)" (List.length l));;
+let two_args = function
+  | [a;b] -> (a,b)
+  | l -> failwith (Printf.sprintf "Wrong number of arguments: %d (expected two)" (List.length l));;
 
 let client_only_1 fn = 
   p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
@@ -201,7 +218,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
 
   "stringToXml",
-  ((p1 string_to_xml :> located_primitive),
+  ((p1 string_to_xml),
    datatype "String -> Xml");
   
   "intToXml",
@@ -270,49 +287,27 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   (** Lists and collections **)
   "hd",
-  (p1 (function
-         | `List ((#result as x)::_) -> x
-         | `List [] -> failwith "Head of empty list"
-         | _ -> failwith "Internal error: head of non-list"),
+  (p1 (unbox_list ->- List.hd),
    datatype "[a] -> a");
 
   "tl", 
-  (p1 (function
-         | `List (_::xs) -> `List xs
-         | `List [] -> failwith "Tail of empty list"
-         | _ -> failwith "Internal error: tail of non-list"),
+  (p1 (unbox_list ->- List.tl ->- box_list),
    datatype "[a] -> [a]");
   
   "length", 
-  (p1 (function
-         | `List (elems) -> `Int (num_of_int (length elems))
-         | _ -> failwith "Internal error: length of non-collection"),
+  (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
    datatype "[a] -> Int");
 
   "take",
-  (p1 (function
-         | `Record p -> 
-             let n = assoc "1" p
-             and l = assoc "2" p in
-               begin
-                 match l with 
-                   | `List elems -> `List (take (int_of_num (unbox_int n)) elems)
-                   | _ -> failwith "Internal error: non-list passed to take"
-               end
-         | _ -> failwith "Internal error: non-pair passed to take"),
+  (p1 (fun args ->
+         let n,l = two_args (unpack_args args) in
+           box_list (Utility.take (int_of_num (unbox_int n)) (unbox_list l))),
    datatype "(Int, [a]) -> [a]");
 
   "drop",
-  (p1 (function
-         | `Record p ->
-             let n = assoc "1" p
-             and l = assoc "2" p in 
-               begin
-                 match l with 
-                   | `List elems -> `List (drop (int_of_num (unbox_int n)) elems)
-                   | _ -> failwith "Internal error: non-list passed to drop"
-               end
-         | _ -> failwith "Internal error: non-pair passed to drop"),
+  (p1 (fun args ->
+         let n, l = two_args (unpack_args args) in
+           box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
    datatype "(Int, [a]) -> [a]");
 
   "max",
@@ -643,7 +638,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                           and vss = row_values db rows
                           in
                             prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                            (Database.execute_insert (table_name, field_names, vss) db :> primitive)
+                            (Database.execute_insert (table_name, field_names, vss) db)
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
@@ -688,7 +683,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                           let query_string = "delete from " ^ table_name ^ " where " ^ condition
                           in
                             prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
-                            (Database.execute_command query_string db :> primitive)
+                            (Database.execute_command query_string db)
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
@@ -745,10 +740,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             box_bool (Str.string_match regex string 0)),
     let qs, regex = datatype Linksregex.Regex.datatype in
       qs, (string_type --> (regex --> `Primitive `Bool))));
-
-  ("queryParameter",
-   (p2 (fun env name -> failwith "queryParameter"),
-    datatype "Env -> String -> String"));
 
   ("environment",
    (p1 (fun _ -> 

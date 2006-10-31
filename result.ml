@@ -456,6 +456,14 @@ and unbox_xml  :  result -> xmlitem = function
   | `XML x -> x | _ -> failwith "Type error unboxing xml"
 and box_string = string_as_charlist
 and unbox_string : result -> string = charlist_as_string
+and box_list l = `List l
+and unbox_list : result -> result list = function
+  | `List l -> l | _ -> failwith "Type error unboxing list"
+and box_unit : unit -> result 
+  = fun () -> `Record []
+and unbox_unit : result -> unit = function
+  | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+
 
 (* Retain only bindings in env named by members of `names' *)
 let retain names env = filter (fun (x, _) -> mem x names) env

@@ -134,6 +134,10 @@ val box_xml : 'a -> [> `XML of 'a ]
 val unbox_xml : result -> xmlitem
 val box_string : string -> result
 val unbox_string : result -> string
+val box_list : result list -> result
+val unbox_list : result -> result list
+val box_unit : unit -> result 
+val unbox_unit : result -> unit
 val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
 
 val marshal_continuation : continuation -> string
