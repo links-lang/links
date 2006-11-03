@@ -9,6 +9,7 @@ examples/document-replace.links
 examples/draw.links
 examples/extensible-case.links
 examples/forms.links
+examples/funtests.links
 examples/login-flow.cgi
 examples/mandelopt.links
 examples/mandeltest.links
