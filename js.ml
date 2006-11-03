@@ -239,8 +239,8 @@ let rec show : code -> string =
 (* create a string literal, quoting special characters *)
 let string_js_quote s =
   let sub old repl s = Str.global_replace (Str.regexp old) repl s in
-    "'" ^ sub "'" "\\'" (sub "\n" "\\n" s) ^ "'"
-      
+    "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
+
 (** [strlit] produces a JS literal string from an OCaml string. *)
 let strlit s = Lit (string_js_quote s)
 let chrlit ch = Lit(string_js_quote(string_of_char ch))
