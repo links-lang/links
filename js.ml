@@ -561,8 +561,8 @@ let rec generate : 'a expression' -> code =
         Fn(["__kappa"], 
            Call(content_cps, [Fn(["__content"],
                                  Call(Var "__kappa", 
-                                      [Dict [("label", strlit l);
-                                             ("value", Var "__content")]]))]))
+                                      [Dict [("_label", strlit l);
+                                             ("_value", Var "__content")]]))]))
   | Variant_selection_empty (_, _) ->
       Fn(["__kappa"], Call(Var "_fail",
                          [strlit "closed switch got value out of range"]))
@@ -755,7 +755,7 @@ and generate_direct_style : 'a expression' -> code =
       Bind(lv, Call(Var "_project", [strlit l; gd v]), gd b)
   (* Variants *)
   | Variant_injection (l, e, _) -> 
-      Dict [("label", strlit l); ("value", gd e)]
+      Dict [("_label", strlit l); ("_value", gd e)]
   | Variant_selection_empty _ ->
       Call(Var "_fail", [strlit "closed switch got value out of range"])
   | Variant_selection (src, case_label, case_var, case_body, 

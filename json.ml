@@ -8,12 +8,12 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Database _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); ""
 
 let rec jsonize_result : Result.result -> string = function
-  | `Variant _
   | `PFunction _
   | `Continuation _
   | `List ((`XML _)::_)
   | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | #Result.primitive_value as p -> jsonize_primitive p
+  | `Variant (label, value) -> Printf.sprintf "{\"_label\" : \"%s\",\"_value\":%s}" label (jsonize_result value)
   | `Record fields -> "{" ^ String.concat ", " (List.map (fun (kj, v) -> "\"" ^ kj ^ "\" : " ^ jsonize_result v) fields) ^ "}"
   | `List [] -> "[]"
   | `List (elems) ->
@@ -24,3 +24,9 @@ let encode_continuation (cont : Result.continuation) : string =
 
 let rec jsonize_call continuation name arg = 
   Printf.sprintf "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__arg\":%s}" (encode_continuation continuation) name (jsonize_result arg)
+
+let jsonize_result result = 
+  Debug.debug ("jsonize_result => " ^ Result.string_of_result result);
+  let rv = jsonize_result result in
+    Debug.debug ("jsonize_result <= " ^ rv);
+    rv

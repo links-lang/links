@@ -25,3 +25,4 @@ rule jsonlex = parse
   | def_integer as var                   { Jsonparse.INT (Num.num_of_string var) }
   | def_float as var                     { Jsonparse.FLOAT (float_of_string var) }
   | def_blank                            { jsonlex lexbuf }
+

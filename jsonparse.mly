@@ -1,29 +1,8 @@
 %{
-
-(* JSON <-> Result.result *)
-
-
-
-let jsonize_primitive : Result.primitive_value -> string = function
-  | `Bool value -> string_of_bool value
-  | `Int value -> Num.string_of_num value
-  | `Float value -> string_of_float value
-  | `Char c -> "'"^ Char.escaped c ^"'"
-  | `XML _
-  | `Table _
-  | `Database _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); ""
-
-let rec jsonize_result : Result.result -> string = function
-  | `Variant _
-  | `Continuation _
-  | `List ((`XML _)::_)
-  | `PFunction _ 
-  | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
-  | #Result.primitive_value as p -> jsonize_primitive p
-  | `Record fields -> "{" ^ String.concat ", " (List.map (fun (k, v) -> k ^ " : " ^ jsonize_result v) fields) ^ "}"
-  | `List [] -> "[]"
-  | `List ((`Char _)::_) as c  -> "\"" ^ Result.escape (Result.charlist_as_string c) ^ "\""
-  | `List (elems) -> "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
+let unparse_label = function
+  | `Char c -> String.make 1 c
+  | `List (`Char _::_) as s -> Result.unbox_string s
+  | r -> (failwith "(json) error decoding label " ^ Result.Show_result.show r)
 
 %}
 
@@ -42,8 +21,11 @@ parse_json:
 
 object_:
 | LBRACE RBRACE         { `Record [] }
-| LBRACE members RBRACE { `Record (List.rev $2) }
-
+| LBRACE members RBRACE { match $2 with 
+                            | ["_label", l; "_value", v]
+                            | ["_value", v; "_label", l] -> `Variant (unparse_label l, v)
+                            | _ -> `Record (List.rev $2)
+                        }
 members:
 | id COLON value                     { [$1, $3] }
 | members COMMA id  COLON value      { ($3, $5) :: $1 }
@@ -66,7 +48,8 @@ value:
 | NULL                               { `Record [] (* Or an error? *) } 
 
 string:
-| STRING                             { assert(String.length $1 == 1); Result.char (String.get $1 0) }
+| STRING                             { if String.length $1 == 1 then Result.char (String.get $1 0)
+                                       else Result.box_string $1 }
 
 id:
 | STRING                             { $1 }
