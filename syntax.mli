@@ -76,9 +76,6 @@ type data = [untyped_data | typed_data]
 val data_position : [<data] -> position
 val position : [<data] expression' -> position
 
-type unknown_data = private [<data]
-type perhaps_typed_expression = unknown_data expression'
-
 val erase : expression -> untyped_expression
 val labelize : expression -> expression
 

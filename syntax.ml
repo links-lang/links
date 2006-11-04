@@ -483,7 +483,3 @@ let skeleton = function
       
   (* FIXME: Sam, please fill in the names for these *)
   | Alien(a, b, c, d) -> Alien(a, b, c, d)
-
-type unknown_data = private [<data]
-type perhaps_typed_expression = unknown_data expression'
-
