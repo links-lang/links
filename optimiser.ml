@@ -325,7 +325,7 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
                  | Variable (name, _) -> snd (assoc name env)
                  | Abstr _ ->
                      (match snd (Inference.type_expression env (erase apply)) with
-                        | Abstr (_, _, (_, datatype, _)) -> datatype
+                        | Abstr (_, _, `T (_, datatype, _)) -> datatype
                         | _ -> failwith "OP442")
                  | _ -> failwith "OP437"
              ) with
@@ -423,7 +423,7 @@ let rec sql_sort = function
 
 let sql_aslist : RewriteSyntax.rewriter =
   function 
-    | Apply(Variable("asList", _), th, data) ->
+    | Apply(Variable("asList", _), th, `T data) ->
         let pos = fst3 data in
         let th_type = node_datatype th in
         let th_row = match th_type with
@@ -452,14 +452,14 @@ let sql_aslist : RewriteSyntax.rewriter =
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
         let th_list_type = `Application ("List", [`Record(th_row)]) in
-        let table_query = TableQuery([table_alias, 
-                                      Variable(th_var, (pos, th_type, None))],
-                                     select_all,
-                                     (pos, th_list_type, None))
+        let table_query = TableQuery ([table_alias, 
+                                       Variable (th_var, `T (pos, th_type, None))],
+                                      select_all,
+                                      `T (pos, th_list_type, None))
         in
           (match th with
-             | Variable _ -> Some(table_query)
-             | _ -> Some(Let(th_var, th, table_query, data)))
+             | Variable _ -> Some table_query
+             | _ -> Some (Let (th_var, th, table_query, `T data)))
     | _ -> None
 
 (** check_join

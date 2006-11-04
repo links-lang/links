@@ -92,8 +92,8 @@ let read_file_cache filename : (Syntax.expression list) =
       in 
 	(try (* try to write to the cache *)
 	   let outfile = open_out cachename in 
-           let (pos, dt, _) = Syntax.no_expr_data in
-             Marshal.to_channel outfile (List.map (Syntax.Functor_expression'.map (fun (_,_,l) -> pos, dt, l)) program) [Marshal.Closures] ;
+           let `T (pos, dt, _) = Syntax.no_expr_data in
+             Marshal.to_channel outfile (List.map (Syntax.Functor_expression'.map (fun (`T (_,_,l)) -> `T (pos, dt, l))) program) [Marshal.Closures] ;
              close_out outfile
 	 with _ -> ());
         program

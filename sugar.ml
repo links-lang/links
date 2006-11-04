@@ -24,7 +24,7 @@ type 'r a_pattern = [
   | `HasType of ('r * Types.datatype)
 ]
 
-type simple_pattern = simple_pattern a_pattern * Syntax.position
+type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
 (* Various flavours of a sort of `gensym'*)
 let unique_name () = Utility.gensym ()
@@ -227,7 +227,7 @@ module PatternCompiler =
          - rename variables
          - move type annotations into the expression
      *)
-     let apply_annotation : Syntax.position -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
+     let apply_annotation : Syntax.untyped_data -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
        fun pos exp ((names, datatypes), body) ->
          let body = List.fold_right (fun name body ->
                                       bind_or_subst (name, exp, body, pos)) names body in
@@ -237,7 +237,7 @@ module PatternCompiler =
            body
 
      (* apply annotations in an annotated equation list *)
-     let apply_annotations : Syntax.position -> untyped_expression -> annotated_equation list -> equation list =
+     let apply_annotations : Syntax.untyped_data -> untyped_expression -> annotated_equation list -> equation list =
        fun pos exp annotated_equations ->
          map (fun (annotation, (ps, (body, used))) ->
                 (ps, (apply_annotation pos exp (annotation, body), used))) annotated_equations
@@ -351,7 +351,7 @@ module PatternCompiler =
          
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
-         : Syntax.position -> string list -> equation list ->
+         : Syntax.untyped_data -> string list -> equation list ->
        bound_expression -> bound_expression          
          =
        fun pos vars equations def (env : pattern_env) ->
@@ -378,7 +378,7 @@ module PatternCompiler =
                    ) equationss def env
 
      and match_var
-         : Syntax.position -> string list -> equation list ->
+         : Syntax.untyped_data -> string list -> equation list ->
        bound_expression -> string -> bound_expression
          =
        fun pos vars equations def var (env : pattern_env) ->
@@ -394,7 +394,7 @@ module PatternCompiler =
                             | _ -> assert false) equations) def env
 
      and match_list
-         : Syntax.position -> string list -> (annotated_equation list * annotated_equation list)
+         : Syntax.untyped_data -> string list -> (annotated_equation list * annotated_equation list)
            -> bound_expression -> string -> bound_expression =
        fun pos vars (nil_equations, cons_equations) def var env ->
          let var_exp = lookup var env in
@@ -424,7 +424,7 @@ module PatternCompiler =
                       cons_branch, pos))
 
      and match_variant
-         : Syntax.position -> string list -> ((string * ((string * string) * annotated_equation list)) list) ->
+         : Syntax.untyped_data -> string list -> ((string * ((string * string) * annotated_equation list)) list) ->
            bound_expression -> string -> bound_expression =
        fun pos vars bs def var env ->
          match bs with
@@ -483,7 +483,7 @@ module PatternCompiler =
                                            default_branch default_variable,
                                            pos)       
      and match_record
-         : Syntax.position -> string list ->
+         : Syntax.untyped_data -> string list ->
            ((string * ((string * string) * annotated_equation list)) list) ->
            bound_expression -> string -> bound_expression =
        fun pos vars bs def var env ->
@@ -529,7 +529,7 @@ module PatternCompiler =
                             pos)
 
      and match_constant
-         : Syntax.position -> string list -> (string * (untyped_expression * annotated_equation list)) list
+         : Syntax.untyped_data -> string list -> (string * (untyped_expression * annotated_equation list)) list
            -> bound_expression -> string -> bound_expression =
        fun pos vars bs def var env ->
          match bs with
@@ -580,10 +580,10 @@ module PatternCompiler =
    
      (* the interface to the pattern-matching compiler *)
      let match_cases
-         : (Syntax.position * untyped_expression * raw_equation list) -> untyped_expression =
-       fun (pos, exp, raw_equations) ->
+         : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression =
+       fun (`U (p1, _, _) as pos, exp, raw_equations) ->
          Debug.debug_if_set (show_pattern_compilation)
-           (fun () -> "Compiling pattern match: "^(fst3 pos).Lexing.pos_fname);
+           (fun () -> "Compiling pattern match: "^ p1.Lexing.pos_fname);
          let var, wrap =
            match exp with
              | Variable (var, _) ->
@@ -591,7 +591,7 @@ module PatternCompiler =
              | _ ->
                  let var = unique_name()
                  in
-                   var, fun body -> Let(var, exp, body, pos)
+                   var, fun body -> Let (var, exp, body, pos)
          and equations = map reduce_equation raw_equations in
          let initial_env = StringMap.add var (Variable (var, pos)) StringMap.empty in
          let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos) (initial_env : pattern_env))
@@ -601,12 +601,12 @@ module PatternCompiler =
            if (List.for_all (fun (_, (_, used)) -> !used) equations) then
              result
            else
-             raise (RedundantPatternMatch(pos))
+             raise (RedundantPatternMatch (Syntax.data_position pos))
    end 
      : 
     sig
       type raw_equation = simple_pattern list * untyped_expression
-      val match_cases : (Syntax.position * untyped_expression * raw_equation list) -> untyped_expression
+      val match_cases : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression
     end)
 
 
@@ -794,7 +794,7 @@ module Desugarer =
        (i.e.  bindings occuring textually previously.
    *)
    (* pattern-matching let *)
-   let polylet : simple_pattern -> position -> untyped_expression -> untyped_expression -> untyped_expression =
+   let polylet : simple_pattern -> untyped_data -> untyped_expression -> untyped_expression -> untyped_expression =
      fun pat pos value body ->
        let rec pl pat pos value body =
          match fst pat with
@@ -842,7 +842,7 @@ module Desugarer =
        in
          pl pat pos value body
 
-   let rec polylets (bindings : (simple_pattern * untyped_expression * position * bool) list) expression =  
+   let rec polylets (bindings : (simple_pattern * untyped_expression * untyped_data * bool) list) expression =  
      let folder (patt, value, pos, recp) expr = 
        match patt, value, expr, recp with 
          | (`Variable s, _), Abstr _, Rec (bindings, e, p), _ ->  
@@ -854,13 +854,13 @@ module Desugarer =
        fold_right folder bindings expression 
 
 
-   let func (pos : position) (body : untyped_expression) : simple_pattern -> untyped_expression = function
+   let func (pos : untyped_data) (body : untyped_expression) : simple_pattern -> untyped_expression = function
      | `Variable name, _ -> Abstr (name, body, pos)
      | pat -> let temp_var = unique_name () in Abstr (temp_var, polylet pat pos (Variable (temp_var, pos)) body, pos)
                                               
-   let rec polyfunc (patterns : simple_pattern list) (pos : position) (expr : untyped_expression) : untyped_expression =
+   let rec polyfunc (patterns : simple_pattern list) (pos : untyped_data) (expr : untyped_expression) : untyped_expression =
      match patterns with 
-       | [] -> raise (ASTSyntaxError (pos, "At least one parameter must be defined for a function")) 
+       | [] -> raise (ASTSyntaxError (data_position pos, "At least one parameter must be defined for a function")) 
        | [patt] -> func pos expr patt 
        | patt :: patts -> func pos (polyfunc patts pos expr) patt
 
@@ -871,7 +871,7 @@ module Desugarer =
    let check_for_duplicate_names ((pattern, pos) : simple_pattern) =
      let rec check_and_add name env =
        if StringSet.mem name env then
-         raise (ASTSyntaxError(pos, "Duplicate name '"^ name  ^"' in pattern "^string_of_pattern_pos pos))
+         raise (ASTSyntaxError(data_position pos, "Duplicate name '"^ name  ^"' in pattern "^string_of_pattern_pos (data_position pos)))
        else
          StringSet.add name env in
      let rec check env =
@@ -902,7 +902,7 @@ module Desugarer =
    let desugar lookup_pos (e : phrase) : untyped_expression =
      let _, varmap = (generate_var_mapping -<- get_type_vars) e in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
-       let pos = lookup_pos pos' in
+       let pos = `U (lookup_pos pos') in
        let desugar = desugar' lookup_pos
        and patternize = simple_pattern_of_pattern varmap lookup_pos in
          match s with
@@ -933,7 +933,7 @@ module Desugarer =
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
            | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> Apply (Apply (Variable ("~", pos), desugar e1, pos), 
                                                                  desugar (desugar_regex desugar pos' r, pos'), pos)
-           | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(pos, "Internal error: unexpected rhs of regex operator"))
+           | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | InfixAppl (`FloatMinus, e1, e2)  -> Apply (Apply (Variable ("-.", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`Minus, e1, e2)  -> Apply (Apply (Variable ("-", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
@@ -959,9 +959,9 @@ module Desugarer =
                  | RecordType row ->
                      desugar_row varmap row
                  | UnitType ->
-                     raise (ASTSyntaxError(pos, "Tables must have at least one field"))
+                     raise (ASTSyntaxError(data_position pos, "Tables must have at least one field"))
                  | _ ->
-                     raise (ASTSyntaxError(pos, "Tables must take a non-empty record type"))
+                     raise (ASTSyntaxError(data_position pos, "Tables must take a non-empty record type"))
                in
                  TableHandle (desugar db, desugar name, row, pos)
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
@@ -1054,7 +1054,7 @@ module Desugarer =
                              Let (name, Syntax.Escape("handler",  
                                                       Apply (Variable ("return", pos), 
                                                              desugar e1, pos), pos), desugar e2, pos), pos)
-           | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
+           | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (`U(lookup_pos ppos)), pos)
            | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
            | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
            | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
@@ -1064,12 +1064,14 @@ module Desugarer =
            | Block (es, exp) -> let es = 
                List.map (function (* pattern * untyped_expression * position * recursivep *)
                            | Binding (p, e), pos -> 
-                               (patternize p, desugar e, lookup_pos pos, false)
+                               (patternize p, desugar e, `U (lookup_pos pos), false)
                            | FunLit (Some n, patts, body), fpos -> 
-                               (((`Variable n, pos):simple_pattern), desugar (FunLit (None, patts, body), fpos), 
-                                lookup_pos fpos, true)
+                               ((`Variable n, pos), 
+                                desugar (FunLit (None, patts, body), fpos), 
+                                `U (lookup_pos fpos), 
+                                true)
                            | expr, epos -> 
-                               (`Variable "__", pos), desugar (expr, epos), lookup_pos epos, false) es in
+                               (`Variable "__", pos), desugar (expr, epos), `U (lookup_pos epos), false) es in
                polylets es (desugar exp)
            | Foreign (language, name, datatype) -> 
                Alien (language, name, desugar_assumption (generalize datatype), pos)
@@ -1078,7 +1080,7 @@ module Desugarer =
                (match patternize patt with
                   | `Variable var, _ -> 
                       SortBy(desugar expr, (Abstr(var, desugar sort_expr, pos)), pos)
-                  | pattern -> raise (ASTSyntaxError(pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
+                  | pattern -> raise (ASTSyntaxError(data_position pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
            | Iteration (generator, body, None, None) ->
                let pattern, from = as_list pos' generator
                in
@@ -1100,7 +1102,7 @@ module Desugarer =
                                                  (ListLit [], pos')), pos'), 
                                    None, sort_expr),
                           pos')
-           | Binding _ -> raise (ASTSyntaxError(pos, "Unexpected binding outside a block"))
+           | Binding _ -> raise (ASTSyntaxError(data_position pos, "Unexpected binding outside a block"))
            | Switch (exp, patterns) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 
@@ -1160,7 +1162,7 @@ module Desugarer =
               (e, pos))
      and simple_pattern_of_pattern varmap lookup_pos ((pat,pos') : ppattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern varmap lookup_pos
-       and pos = lookup_pos pos' in
+       and pos = `U (lookup_pos pos') in
        let rec aux = function
          | `Variable _
          | `Nil as p -> p, pos

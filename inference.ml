@@ -916,16 +916,16 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   fun var_maps env expression -> let type_check = type_check var_maps in
   try
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
-    match expression with
-  | Define (variable, _, _, pos) -> nested_def pos variable
-  | Boolean (value, pos) -> Boolean (value, (pos, `Primitive `Bool, None))
-  | Integer (value, pos) -> Integer (value, (pos, `Primitive `Int, None))
-  | Float (value, pos) -> Float (value, (pos, `Primitive `Float, None))
-  | String (value, pos) -> String (value, (pos, string_type, None))
-  | Char (value, pos) -> Char (value, (pos, `Primitive `Char, None))
-  | Variable (name, pos) ->
+    match (expression : Syntax.untyped_expression) with
+  | (Define (variable, _, _, `U pos) : Syntax.untyped_expression) -> nested_def pos variable
+  | Boolean (value, `U pos) -> Boolean (value, (pos, `Primitive `Bool, None))
+  | Integer (value, `U pos) -> Integer (value, (pos, `Primitive `Int, None))
+  | Float (value, `U pos) -> Float (value, (pos, `Primitive `Float, None))
+  | String (value, `U pos) -> String (value, (pos, string_type, None))
+  | Char (value, `U pos) -> Char (value, (pos, `Primitive `Char, None))
+  | Variable (name, `U pos) ->
       Variable (name, (pos, instantiate env name, None))
-  | Apply (Apply (f, mb, inner_pos), p, pos) when Types.using_mailbox_typing () ->
+  | Apply (Apply (f, mb, `U inner_pos), p, `U pos) when Types.using_mailbox_typing () ->
       let f = type_check env f in
       let mb = type_check env mb in
       let p = type_check env p in
@@ -943,7 +943,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	    Unify_failure _ -> mistyped_application pos (f, f_type) (p, p_type) (Some (mb, mb_type))
       in
 	Apply (Apply (f, mb, (inner_pos, `Function (p_type, return_type), None)), p, (pos, return_type, None))
-  | Apply (f, p, pos) ->
+  | Apply (f, p, `U pos) ->
       let f = type_check env f in
       let p = type_check env p in
       let f_type = type_of_expression f in
@@ -954,7 +954,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	with Unify_failure _ -> mistyped_application pos (f, f_type) (p, type_of_expression p) None
       in
 	Apply (f, p, (pos, return_type, None))
-  | Condition (if_, then_, else_, pos) ->
+  | Condition (if_, then_, else_, `U pos) ->
       let if_ = type_check env if_ in
       let _ = (try unify (type_of_expression if_, `Primitive `Bool)
                with Unify_failure _ -> mistype (pos_of_expression if_) (if_, type_of_expression if_) (`Primitive `Bool)) in
@@ -973,12 +973,12 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
                                None
                              )) in
         node'
-  | Comparison (l, oper, r, pos) ->
+  | Comparison (l, oper, r, `U pos) ->
       let l = type_check env l in
       let r = type_check env r in
 	unify (type_of_expression l, type_of_expression r);
         Comparison (l, oper, r, (pos, `Primitive `Bool, None))
-  | Abstr (mailbox_variable, Abstr(variable, body, inner_pos), pos) when Types.using_mailbox_typing () ->
+  | Abstr (mailbox_variable, Abstr(variable, body, `U inner_pos), `U pos) when Types.using_mailbox_typing () ->
       begin
 	  (*
 	    if the type inferred for a function term has
@@ -997,7 +997,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 		 Abstr (variable, body, (inner_pos, inner_type, None)),
 		 (pos, outer_type, None))
       end
-  | Abstr (variable, body, pos) ->
+  | Abstr (variable, body, `U pos) ->
       begin
 	(if (Types.using_mailbox_typing ()) then
 	   Debug.debug "mailbox typing assertion failure"
@@ -1009,17 +1009,17 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	let type' = `Function (variable_type, type_of_expression body) in
 	  Abstr (variable, body, (pos, type', None))
       end
-  | Let (variable, value, body, pos) ->
+  | Let (variable, value, body, `U pos) ->
       let value = type_check env value in
       let vtype = (if is_value value then (generalize env (type_of_expression value))
                    else ([], type_of_expression value)) in
       let body = type_check ((variable, vtype) :: env) body in
 	Let (variable, value, body, (pos, type_of_expression body, None))
-  | Rec (variables, body, pos) ->
+  | Rec (variables, body, `U pos) ->
       let best_env, vars = type_check_mutually var_maps env variables in
       let body = type_check best_env body in
 	Rec (vars, body, (pos, type_of_expression body, None))
-  | Xml_node (tag, atts, cs, pos) as xml -> 
+  | Xml_node (tag, atts, cs, `U pos) as xml -> 
       let separate = partition (is_special -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
       let bindings = 
@@ -1055,9 +1055,9 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
 
-  | Record_empty (pos) ->
+  | Record_empty (`U pos) ->
       Record_empty (pos, `Record (ITO.make_empty_closed_row ()), None)
-  | Record_extension (label, value, record, pos) ->
+  | Record_extension (label, value, record, `U pos) ->
       let value = type_check env value in
       let record = type_check env record in
       let unif_datatype = `Record (ITO.make_singleton_open_row (label, `Absent)) in
@@ -1068,7 +1068,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	  
 	let type' = `Record (ITO.set_field (label, `Present value_type) record_row) in
 	  Record_extension (label, value, record, (pos, type', None))
-  | Record_selection (label, label_variable, variable, value, body, pos) ->
+  | Record_selection (label, label_variable, variable, value, body, `U pos) ->
       let value = type_check env value in
       let label_variable_type = ITO.fresh_type_variable () in
 	unify (type_of_expression value, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type))));
@@ -1081,16 +1081,16 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	let body = type_check body_env body in
 	let body_type = type_of_expression body in
 	  Record_selection (label, label_variable, variable, value, body, (pos, body_type, None))
-  | Record_selection_empty (value, body, pos) ->
+  | Record_selection_empty (value, body, `U pos) ->
       let value = type_check env value in
 	unify (`Record (ITO.make_empty_closed_row ()), type_of_expression value);
 	let body = type_check env body in
           Record_selection_empty (value, body, (pos, type_of_expression body, None))
-  | Variant_injection (label, value, pos) ->
+  | Variant_injection (label, value, `U pos) ->
       let value = type_check env value in
       let type' = `Variant (ITO.make_singleton_open_row (label, `Present (type_of_expression value))) in
         Variant_injection (label, value, (pos, type', None))
-  | Variant_selection (value, case_label, case_variable, case_body, variable, body, pos) ->
+  | Variant_selection (value, case_label, case_variable, case_body, variable, body, `U pos) ->
       let value = type_check env value in
       let value_type = type_of_expression value in
       
@@ -1130,18 +1130,18 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	let body_type = type_of_expression body in
 	  unify (case_type, body_type);
 	  Variant_selection (value, case_label, case_variable, case_body, variable, body, (pos, body_type, None))
-  | Variant_selection_empty (value, pos) ->
+  | Variant_selection_empty (value, `U pos) ->
       let value = type_check env value in
       let new_row_type = `Variant (ITO.make_empty_closed_row()) in
         unify(new_row_type, type_of_expression value);
         Variant_selection_empty (value, (pos, ITO.fresh_type_variable (), None))
-  | Nil (pos) ->
+  | Nil (`U pos) ->
       Nil (pos, `Application ("List", [ITO.fresh_type_variable ()]), None)
-  | List_of (elem, pos) ->
+  | List_of (elem, `U pos) ->
       let elem = type_check env elem in
 	List_of (elem,
 		 (pos, `Application ("List", [type_of_expression elem]), None))
-  | Concat (l, r, pos) ->
+  | Concat (l, r, `U pos) ->
       let tvar = ITO.fresh_type_variable () in
       let l = type_check env l in
 	unify (type_of_expression l, `Application ("List", [tvar]));
@@ -1149,7 +1149,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	  unify (type_of_expression r, type_of_expression l);
 	  let type' = `Application ("List", [tvar]) in
 	    Concat (l, r, (pos, type', None))
-  | For (expr, var, value, pos) ->
+  | For (expr, var, value, `U pos) ->
       let value_tvar = ITO.fresh_type_variable () in
       let expr_tvar = ITO.fresh_type_variable () in
       let value = type_check env value in
@@ -1159,7 +1159,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
 	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, (pos, type', None))
-  | Escape(var, body, pos) -> 
+  | Escape(var, body, `U pos) -> 
       let exprtype = ITO.fresh_type_variable () in
       let contrettype = ITO.fresh_type_variable () in
         (* It'd be better if this mailbox didn't intrude here.
@@ -1175,11 +1175,11 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
       let exprtype = exprtype in
 	unify (exprtype, type_of_expression body);
         Escape(var, body, (pos, type_of_expression body, None))
-  | Database (params, pos) ->
+  | Database (params, `U pos) ->
       let params = type_check env params in
         unify (type_of_expression params, db_descriptor_type);
         Database (params, (pos, `Primitive `DB, None))
-  | TableQuery (ths, query, pos) ->
+  | TableQuery (ths, query, `U pos) ->
       let row =
 	(List.fold_right
 	   (fun col env ->
@@ -1195,23 +1195,23 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
              unify (type_of_expression th, `Table row'));
 	unify_rows (row, row');
         TableQuery (ths, query, (pos, datatype, None))
-  | TableHandle (db, tableName, row, pos) ->
+  | TableHandle (db, tableName, row, `U pos) ->
       let datatype =  `Table (inference_row_of_row var_maps row) in
       let db = type_check env db in
       let tableName = type_check env tableName in
 	unify (type_of_expression db, `Primitive `DB);
 	unify (type_of_expression tableName, string_type); 
         TableHandle (db, tableName, row, (pos, datatype, None))
-  | SortBy(expr, byExpr, pos) ->
+  | SortBy(expr, byExpr, `U pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any
          orderable type, of which there are at least several. How to
          resolve this? Would kill for type classes. *)
       let byExpr = type_check env byExpr in
       let expr = type_check env expr in
         SortBy(expr, byExpr, (pos, type_of_expression expr, None))
-  | Wrong pos ->
+  | Wrong (`U pos) ->
       Wrong(pos, ITO.fresh_type_variable(), None)
-  | HasType(expr, datatype, pos) ->
+  | HasType(expr, datatype, `U pos) ->
       let expr = type_check env expr in
 	let expr_type = type_of_expression expr in
 	let inference_datatype = inference_type_of_type var_maps datatype in
@@ -1223,7 +1223,7 @@ let rec type_check : inference_type_map -> environment -> untyped_expression -> 
   with 
       Unify_failure msg
     | UndefinedVariable msg ->
-        raise (Type_error(untyped_pos expression, msg))
+        raise (Type_error(position expression, msg))
           (* end "type_check" *)
 
 (** type_check_mutually
@@ -1344,14 +1344,14 @@ let type_expression : inference_type_map -> Types.environment -> untyped_express
     let env = inference_environment_of_environment var_maps env in
     let env', exp' =
       match untyped_expression with
-	| Define (variable, value, loc, pos) ->
+	| Define (variable, value, loc, `U pos) ->
 	    let value = type_check var_maps env value in
 	    let value_type = if is_value value then 
               (generalize env (type_of_expression value))
             else [], type_of_expression value in
               (((variable, value_type) :: env),
     	       Define (variable, value, loc, (pos, type_of_expression value, None)))
-        | Alien (language, name, assumption, pos)  ->
+        | Alien (language, name, assumption, `U pos)  ->
             let (qs, k) = inference_assumption_of_assumption var_maps assumption in
               ((name, (qs, k)) :: env),
             Alien (language, name, assumption, (pos, k, None))
@@ -1453,7 +1453,7 @@ module RewriteSyntax = Syntax.RewriteSyntax
 (* add / remove mailbox parameter to / from expressions *)
 let add_parameter : RewriteSyntaxU.rewriter = function
   | Abstr (_,_,d) as e -> Some (Abstr ("_MAILBOX_", e, d))
-  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", Syntax.dummy_position), Syntax.dummy_position), a, d))
+  | Apply (f,a,d)      -> Some (Apply (Apply (f, Variable ("_MAILBOX_", `U Syntax.dummy_position), `U Syntax.dummy_position), a, d))
   | _                  -> None
 and remove_parameter : RewriteSyntax.rewriter = function
   | Abstr ("_MAILBOX_", (Abstr (f,a,_)), d)              -> Some (Abstr (f,a,d))
@@ -1485,9 +1485,9 @@ let check_for_duplicate_defs
     (type_env : Types.environment)
     (expressions :  untyped_expression list) =
   let check (env, defined) = function
-    | Define (name, _, _, position) when StringMap.mem name defined ->
+    | Define (name, _, _, `U position) when StringMap.mem name defined ->
         (env, StringMap.add name (position :: StringMap.find name defined) defined)
-    | Define (name, _, _, position) when StringSet.mem name env ->
+    | Define (name, _, _, `U position) when StringSet.mem name env ->
         (env, StringMap.add name [position] defined)
     | Define (name, _, _, _) ->
         (StringSet.add name env, defined)

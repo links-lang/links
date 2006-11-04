@@ -121,11 +121,17 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type expression = (position * Types.datatype * label option) expression'
-and untyped_expression = position expression'
+type typed_data = [`T of (position * Types.datatype * label option)] deriving (Show, Pickle)
+type untyped_data = [`U of position] deriving (Show, Pickle)
+type data = [untyped_data | typed_data] deriving (Show, Pickle)
+type expression = typed_data  expression'
+and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
   deriving (Show, Pickle)
 
+let data_position = function
+  | `T (pos, _, _)
+  | `U pos -> pos
 
 let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
@@ -199,7 +205,7 @@ let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
 let erase : expression -> untyped_expression = 
-  Functor_expression'.map (fun (pos, _, _) -> pos)
+  Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
 
 let labelize =
   let label_seq = ref 0 in
@@ -207,9 +213,9 @@ let new_label () = incr label_seq; !label_seq in
 let new_label_str () = (*"T" ^ string_of_int*) (new_label ()) in
   fun (expr:expression) ->
     Functor_expression'.map
-      (fun (a,b,_) ->
+      (fun (`T(a,b,_)) ->
          let label = new_label_str () in
-           (a, b, Some label)) expr
+           (`T(a, b, Some label))) expr
 
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
@@ -331,17 +337,18 @@ let rec set_data : ('b -> 'a expression -> 'b expression) =
   | Define ... 
 *)
 
-let node_datatype : (expression -> Types.datatype) = (fun (_, datatype, _) -> datatype) -<- expression_data
-and untyped_pos  : (untyped_expression -> position) = expression_data 
+let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
+
+let position e = data_position (expression_data e)
 
 let stringlit_value = function
   | String (name, _) -> name
   | _ -> assert false
 
-let no_expr_data = (dummy_position, `Not_typed, None)
+let no_expr_data = `T(dummy_position, `Not_typed, None)
 
-module RewriteSyntax = Rewrite_expression'(struct type a = (position * Types.datatype * label option) end)
-module RewriteUntypedExpression = Rewrite_expression'(struct type a = position end)
+module RewriteSyntax = Rewrite_expression'(struct type a = typed_data end)
+module RewriteUntypedExpression = Rewrite_expression'(struct type a = untyped_data end)
   
 let rec map_free_occ u f expr =
   let recurse = map_free_occ u f in
@@ -387,11 +394,11 @@ let subst_free u r expr =
    Note: this is *not* presently capture-avoiding (but perhaps it should be).
 *)
 
-let rename_free u v e = 
+let rename_free u v e =
   map_free_occ u (fun (Variable(x, d)) -> Variable(v, d)) e
 
 
-let subst_fast name replacement expr = 
+let subst_fast name replacement expr =
   let replacer name replacement : RewriteSyntax.rewriter = function
     | Variable (n, _) when n = name -> Some replacement
     | _ -> None
@@ -476,3 +483,7 @@ let skeleton = function
       
   (* FIXME: Sam, please fill in the names for these *)
   | Alien(a, b, c, d) -> Alien(a, b, c, d)
+
+type unknown_data = private [<data]
+type perhaps_typed_expression = unknown_data expression'
+

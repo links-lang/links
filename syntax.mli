@@ -39,8 +39,10 @@ type 'a expression' =
   | Alien of (string * string * Types.assumption * 'a)
   | Placeholder of (label * 'a)
 type position = Lexing.position * string * string
-type expression = (position * Types.datatype * label option) expression'
-type untyped_expression = position expression'
+type untyped_data = [`U of position]
+type typed_data = [`T of (position * Types.datatype * label option)]
+type expression = [`T of (position * Types.datatype * label option)] expression'
+type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression'
 
 exception ASTSyntaxError of position * string
@@ -68,13 +70,20 @@ val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) ->
 val expression_data : 'a expression' -> 'a
 val strip_data : 'a expression' -> stripped_expression
 val node_datatype : expression -> Types.datatype
-val untyped_pos : untyped_expression -> position
+
+type data = [untyped_data | typed_data]
+
+val data_position : [<data] -> position
+val position : [<data] expression' -> position
+
+type unknown_data = private [<data]
+type perhaps_typed_expression = unknown_data expression'
 
 val erase : expression -> untyped_expression
 val labelize : expression -> expression
 
 val dummy_position : position
-val no_expr_data : position * Types.datatype * label option
+val no_expr_data : typed_data
 
 module Show_expression : Show.Show with type a = expression
 module Show_label : Show.Show with type a = label

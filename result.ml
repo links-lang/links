@@ -150,13 +150,13 @@ module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
     type a = rexpr
     let pickle buffer e = 
       match expression_data e with
-        | _, _, Some l -> Syntax.Pickle_label.pickle buffer l
+        | `T(_, _, Some l) -> Syntax.Pickle_label.pickle buffer l
         | _             -> failwith ("Not labeled: " ^ string_of_expression e)
     and unpickle stream = 
       let label = Syntax.Pickle_label.unpickle stream in
         (* sadly, we can't do resolution here at present because there's
            no way to pass in the table *)
-        Syntax.Placeholder (label, (Syntax.dummy_position, `Not_typed, Some label))
+        Syntax.Placeholder (label, (`T(Syntax.dummy_position, `Not_typed, Some label)))
   end)
 
 type table = database * string * Types.row
@@ -398,9 +398,9 @@ and map_cont result_f expr_f contframe_f kappa =
 let label_table (program : Syntax.expression) = 
   reduce_expression (fun visit_children expr ->
 		       match expression_data expr with
-			 | (_, _, Some label) ->
+			 | `T(_, _, Some label) ->
                              (label, expr) :: visit_children expr
-			 | (_, _, None) ->
+ 			 | `T(_, _, None) ->
 			     visit_children expr
 		    ) (fun (_, lists) -> concat lists) program 
     
