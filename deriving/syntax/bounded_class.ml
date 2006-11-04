@@ -36,4 +36,7 @@ let gen_bounded_instances loc : instantiator =
   fun tdl -> <:str_item< declare $list:List.map gen_bounded_instance tdl$ end >>
 
 let _ =
-  instantiators := ("Bounded", gen_bounded_instances):: !instantiators
+  begin
+    instantiators := ("Bounded", gen_bounded_instances):: !instantiators;
+    sig_instantiators := ("Bounded", Sig_utils.gen_sigs "Bounded"):: !sig_instantiators;
+  end

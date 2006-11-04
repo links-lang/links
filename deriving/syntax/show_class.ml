@@ -217,7 +217,6 @@ let gen_finstances loc tdl =
            end
 | _ -> assert false
 
-
 let gen_instances loc : instantiator = 
   begin
     currents := [];
@@ -227,4 +226,7 @@ let gen_instances loc : instantiator =
   end
 
 let _ = 
-  instantiators := ("Show", gen_instances):: !instantiators
+  begin
+    instantiators := ("Show", gen_instances):: !instantiators;
+    sig_instantiators := ("Show", Sig_utils.gen_sigs "Show"):: !sig_instantiators;
+  end

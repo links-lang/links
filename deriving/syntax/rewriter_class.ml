@@ -114,4 +114,7 @@ let gen_instances loc : instantiator = function
  | _ -> error loc ("Cannot currently generate rewriter instances for mutually recursive types")
 
 let _ = 
-  instantiators := ("Rewriter", gen_instances):: !instantiators
+  begin
+    instantiators := ("Rewriter", gen_instances):: !instantiators;
+    sig_instantiators := ("Rewriter", Sig_utils.gen_sigs "Rewriter"):: !sig_instantiators;
+  end

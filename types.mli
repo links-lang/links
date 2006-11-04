@@ -1,3 +1,4 @@
+(*pp deriving *)
 (** Definitions of Links types, facing on the rest of the code. *)
 
 open Type_basis
@@ -9,16 +10,13 @@ type datatype = (datatype, row) type_basis
 and field_spec = datatype field_spec_basis
 and field_spec_map = datatype field_spec_map_basis
 and row_var = row row_var_basis
-and row = (datatype, row_var) row_basis
-
-module Show_row : Show.Show with type a = row
-module Pickle_row : Pickle.Pickle with type a = row
+and row = (datatype, row_var) row_basis deriving (Show, Pickle)
 
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
-type assumption = datatype assumption_basis
-type environment = datatype environment_basis
+type assumption = datatype assumption_basis deriving (Show,Pickle)
+type environment = datatype environment_basis deriving (Show,Pickle)
 
 val (-->) : datatype -> datatype -> datatype
 
@@ -72,14 +70,3 @@ val fresh_type : unit -> type_variable * datatype
 val fresh_row : unit -> type_variable * row
 
 val perhaps_process_children : (datatype -> datatype option) ->  datatype -> datatype option
-
-
-(* Eventually all this stuff should be generated *)
-module Show_datatype : Show.Show with type a = datatype
-module Show_assumption : Show.Show with type a = assumption
-module Show_environment : Show.Show with type a = environment
-
-module Pickle_datatype : Pickle.Pickle with type a = datatype
-module Pickle_assumption : Pickle.Pickle with type a = assumption
-module Pickle_environment : Pickle.Pickle with type a = environment
-

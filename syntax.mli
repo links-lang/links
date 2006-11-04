@@ -1,6 +1,7 @@
+(*pp deriving *)
 type location = [ `Client | `Native | `Server | `Unknown ]
-type comparison = [`Less | `LessEq | `Equal | `NotEq]
-type label
+type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Show, Pickle)
+type label deriving (Show,Pickle)
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
   | TypeDecl of (string * int list * Types.datatype * 'a)
@@ -41,9 +42,9 @@ type 'a expression' =
 type position = Lexing.position * string * string
 type untyped_data = [`U of position]
 type typed_data = [`T of (position * Types.datatype * label option)]
-type expression = [`T of (position * Types.datatype * label option)] expression'
+type expression = [`T of (position * Types.datatype * label option)] expression' deriving (Show, Pickle)
 type untyped_expression = untyped_data expression'
-type stripped_expression = unit expression'
+type stripped_expression = unit expression' deriving (Show)
 
 exception ASTSyntaxError of position * string
 
@@ -82,15 +83,7 @@ val labelize : expression -> expression
 val dummy_position : position
 val no_expr_data : typed_data
 
-module Show_expression : Show.Show with type a = expression
-module Show_label : Show.Show with type a = label
-module Show_stripped_expression : Show.Show with type a = stripped_expression
-
-module Pickle_label : Pickle.Pickle with type a = label
-module Pickle_expression : Pickle.Pickle with type a = expression
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
-module Show_comparison : Show.Show with type a = comparison
-module Pickle_comparison : Pickle.Pickle with type a = comparison

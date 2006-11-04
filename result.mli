@@ -1,3 +1,4 @@
+(*pp deriving *)
 (** Defines the "values" of Links, and ops on them, including continuations *)
 
 exception Runtime_error of string
@@ -98,7 +99,7 @@ and result = [ primitive_value
 | `Variant of string * result ]
 and continuation = contin_frame list
 and binding = string * result
-and environment = binding list
+and environment = binding list  deriving (Show, Pickle)
 val expr_of_prim_val : result -> Syntax.expression option
 val prim_val_of_expr : Syntax.expression -> result option
 val xmlitem_of : result -> xmlitem
@@ -142,5 +143,3 @@ val marshal_exprenv : (Syntax.expression * environment) -> string
 val unmarshal_continuation : Syntax.expression list -> string -> continuation
 val unmarshal_exprenv : Syntax.expression list -> string -> (Syntax.expression * environment)
 
-module Pickle_result : Pickle.Pickle with type a = result
-module Show_result : Show.Show with type a = result

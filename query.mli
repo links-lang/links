@@ -1,3 +1,4 @@
+(*pp deriving *)
 type like_expr =
     [ `percent
     | `seq of like_expr list
@@ -32,7 +33,7 @@ and column = {
   name : string;
   renamed : string;
   col_type : Types.datatype;
-}
+} deriving (Show, Pickle)
 
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string
@@ -41,5 +42,3 @@ val get_renaming : column -> string
 val add_sorting : query -> sorting -> query
 val freevars : query -> string list
 val occurs_free : string -> query -> bool
-module Show_query : Show.Show with type a = query
-module Pickle_query : Pickle.Pickle with type a = query

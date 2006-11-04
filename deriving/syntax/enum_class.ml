@@ -30,4 +30,7 @@ let gen_enum_instances loc : instantiator = fun tdl ->
   <:str_item< declare $list:List.map gen_enum_instance tdl$ end >>
 
 let _ = 
-  instantiators := ("Enum", gen_enum_instances):: !instantiators
+  begin
+    instantiators := ("Enum", gen_enum_instances):: !instantiators;
+    sig_instantiators := ("Enum", Sig_utils.gen_sigs "Enum"):: !sig_instantiators;
+  end

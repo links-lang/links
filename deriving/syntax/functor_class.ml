@@ -105,4 +105,7 @@ let gen_instances loc : instantiator =  function
 
 
 let _ = 
-  instantiators :=   ("Functor", gen_instances):: !instantiators
+  begin
+    instantiators :=   ("Functor", gen_instances):: !instantiators;
+    sig_instantiators := ("Functor", Sig_utils.gen_sigs "Functor"):: !sig_instantiators;
+  end

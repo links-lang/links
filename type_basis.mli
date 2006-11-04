@@ -1,3 +1,4 @@
+(*pp deriving *)
 (** Low-level representation of Links types. *)
 
 (** {1 Representation of datatypes} *)
@@ -14,22 +15,22 @@ type ('typ, 'row) type_basis = [
   | `Table of 'row
   | `Recursive of (int * 'typ)
   | `Application of (string * 'typ list)
- ]
+ ] deriving (Show,Pickle)
 
-type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
-type 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t
-type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
-type 'row row_var_basis =
+type 'typ field_spec_basis = [ `Present of 'typ | `Absent ] 
+and 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t 
+and ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
+and 'row row_var_basis =
     [ `RowVar of int option 
-    | `RecRowVar of int * 'row ]
+    | `RecRowVar of int * 'row ] deriving (Show, Pickle)
 
 type type_variable = [`TypeVar of int | `RowVar of int]
 type quantifier = type_variable
 
 type type_var_set = Utility.IntSet.t
 
-type 'typ assumption_basis = ((quantifier list) * 'typ)
-type 'typ environment_basis = ((string * 'typ assumption_basis) list)
+type 'typ assumption_basis = ((quantifier list) * 'typ) 
+and 'typ environment_basis = ((string * 'typ assumption_basis) list) deriving (Show, Pickle)
 
 val environment_values : 'typ environment_basis -> 'typ assumption_basis list
 val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
@@ -101,21 +102,3 @@ module TypeOpsGen(BasicOps: BASICTYPEOPS) :
    with type typ = BasicOps.typ 
    and type row_var = BasicOps.row_var'
 )
-
-(* Eventually all this should be generated *)
-module Show_type_basis (A : Show.Show) (B : Show.Show) : Show.Show with type a = (A.a,B.a) type_basis
-module Show_field_spec_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_basis
-module Show_field_spec_map_basis (A : Show.Show) : Show.Show with type a = (A.a) field_spec_map_basis
-module Show_row_var_basis (A : Show.Show) : Show.Show with type a = (A.a) row_var_basis
-module Show_row_basis (A : Show.Show) (B : Show.Show) : Show.Show with type a = (A.a,B.a) row_basis
-module Show_assumption_basis (A : Show.Show) : Show.Show with type a = (A.a) assumption_basis
-module Show_environment_basis (A : Show.Show) : Show.Show with type a = (A.a) environment_basis
-
-
-module Pickle_type_basis (A : Pickle.Pickle) (B : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a) type_basis
-module Pickle_field_spec_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_basis
-module Pickle_field_spec_map_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) field_spec_map_basis
-module Pickle_row_var_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) row_var_basis
-module Pickle_row_basis (A : Pickle.Pickle) (B : Pickle.Pickle) : Pickle.Pickle with type a = (A.a,B.a) row_basis
-module Pickle_assumption_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) assumption_basis
-module Pickle_environment_basis (A : Pickle.Pickle) : Pickle.Pickle with type a = (A.a) environment_basis

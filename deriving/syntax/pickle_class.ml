@@ -236,6 +236,10 @@ let gen_instances loc : instantiator = function
   | tdl  -> gen_instances loc tdl
 
 let _ = 
-  instantiators := ("Pickle", gen_instances) :: !instantiators
+  begin
+    instantiators := ("Pickle", gen_instances) :: !instantiators;
+    sig_instantiators := ("Pickle", Sig_utils.gen_sigs "Pickle"):: !sig_instantiators;
+  end
+
 
 

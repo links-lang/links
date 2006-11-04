@@ -36,6 +36,7 @@ exception NotImpl of (Lexing.position * Lexing.position)
 (* Generate instances of a particular class for a list of
    possibly-mutually-recursive type declarations *)
 type instantiator = MLast.type_decl list -> MLast.str_item
+type sig_instantiator = MLast.type_decl list -> MLast.sig_item
 
 (* Display a fatal error and exit *)
 let error loc msg = 
@@ -92,23 +93,60 @@ let param_names (params : list (string * (bool*bool))) : list (string * (string 
 
 (* A association list of class names * instance generators *)
 let instantiators : (string * (MLast.loc -> instantiator)) list ref = ref []
+let sig_instantiators : (string * (MLast.loc -> sig_instantiator)) list ref = ref []
+
+(* Utilities for generating module declarations in signatures *)
+module Sig_utils =
+struct
+  let gen_functor_type loc classname : 'a list -> 'b -> 'b = 
+    List.fold_right 
+      (fun (_,(_,mname)) m -> <:module_type< functor ($mname$ : $uid:classname$) -> $m$ >>)
+      
+  let gen_sig (mname : string) (loc : MLast.loc) (((_,tname),params,_,_ ) : MLast.type_decl) = 
+    let params = param_names params in
+    let type_arg = gen_type_a loc <:ctyp< $lid:tname$ >> params  in
+    let rhs =  <:module_type< ($uid:mname$ with type a = $type_arg$) >> in
+    let module_expr = gen_functor_type loc mname params rhs in
+      <:sig_item< declare open $uid:mname$; module $uid:(mname ^ "_" ^ tname)$ : $module_expr$; end >>
+
+  let gen_sigs mname loc : sig_instantiator
+      = fun tdl ->
+        let decls = List.map (gen_sig mname loc) tdl in
+          <:sig_item< declare $list:decls$ end >>
+end
 
 DELETE_RULE Pcaml.str_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
+DELETE_RULE Pcaml.sig_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
 
 EXTEND
   Pcaml.str_item:
-  [ [ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
-        <:str_item< type $list:tdl$ >>
-          | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 UIDENT SEP ","  ; ")" ->
-              let type_decl = <:str_item< type $list:tdl$ >> in 
-                  let instances = 
-                    List.map (fun name -> 
-                                let instantiator = 
-                                  try List.assoc name !instantiators
-                                  with Not_found -> error loc (name ^" is not a known class") in
-                                  instantiator loc tdl)
-                      cl in
-                    <:str_item< declare $list:type_decl :: instances$ end >>
-  ] ]
+  [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
+       <:str_item< type $list:tdl$ >>
+         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 UIDENT SEP ","  ; ")" ->
+             let type_decl = <:str_item< type $list:tdl$ >> in 
+             let instances = 
+               List.map (fun name -> 
+                           let instantiator = 
+                             try List.assoc name !instantiators
+                             with Not_found -> error loc (name ^" is not a known class") in
+                             instantiator loc tdl)
+                 cl in
+               <:str_item< declare $list:type_decl :: instances$ end >>
+  ]]
+;
+  Pcaml.sig_item:
+  [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
+       <:sig_item< type $list:tdl$ >>
+         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 UIDENT SEP ","  ; ")" ->
+             let type_decl = <:sig_item< type $list:tdl$ >> in
+             let instances  = 
+               List.map (fun name -> 
+                           let instantiator = 
+                             try List.assoc name !sig_instantiators
+                             with Not_found -> error loc (name ^" is not a known class (for signatures)") in
+                             instantiator loc tdl)
+                 cl in
+               <:sig_item< declare $list:type_decl :: instances$ end >>
+  ]]
 ;
 END;
