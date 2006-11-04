@@ -419,7 +419,7 @@ module PatternCompiler =
                            match_cases pos (x::xs::vars) cons_equations def env,
                            pos), pos)
          in
-           (Condition(Comparison(var_exp, "==", Syntax.Nil pos, pos),
+           (Condition(Comparison(var_exp, `Equal, Syntax.Nil pos, pos),
                       nil_branch,
                       cons_branch, pos))
 
@@ -573,7 +573,7 @@ module PatternCompiler =
                         Let ("_", HasType (var_exp, Types.unit_type, pos),
                              match_cases pos vars equations def env, pos)
                     | _ ->
-                        (Condition(Comparison(var_exp, "==", exp, pos),
+                        (Condition(Comparison(var_exp, `Equal, exp, pos),
                                    match_cases pos vars equations def env,
                                    match_constant pos vars bs def var env,
                                    pos)))
@@ -799,7 +799,7 @@ module Desugarer =
        let rec pl pat pos value body =
          match fst pat with
            | `Nil ->
-               (Condition(Comparison(value, "==", Syntax.Nil pos, pos),
+               (Condition(Comparison(value, `Equal, Syntax.Nil pos, pos),
                           body,
                           Syntax.Wrong pos, pos))
            | `Cons (head, tail) ->
@@ -831,7 +831,7 @@ module Desugarer =
                                         body),
                                    pos)
            | `Constant c ->
-               (Condition(Comparison(value, "==", c, pos),
+               (Condition(Comparison(value, `Equal, c, pos),
                           body,
                           Syntax.Wrong pos, pos))
            | `Variable name -> Let (name, value, body, pos)
@@ -898,7 +898,7 @@ module Desugarer =
    let as_list pos = function
      | `List (p, e) -> p, e
      | `Table (p, e) -> p, (FnAppl ((Var ("asList"), pos), ([e], pos)), pos)
-         
+
    let desugar lookup_pos (e : phrase) : untyped_expression =
      let _, varmap = (generate_var_mapping -<- get_type_vars) e in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
@@ -921,9 +921,12 @@ module Desugarer =
            | BoolLit b   -> Boolean (b, pos)
            | CharLit c   -> Char (c, pos)
            | Var v       -> Variable (v, pos)
-           | InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, "<", desugar e1, pos)
-           | InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, "<=", desugar e1, pos)
-           | InfixAppl (`Name ("=="|"<"|"<="|"<>" as op), e1, e2)  -> Comparison (desugar e1, op, desugar e2, pos)
+           | InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
+           | InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, `LessEq, desugar e1, pos)
+           | InfixAppl (`Name "==", e1, e2)  -> Comparison (desugar e1, `Equal, desugar e2, pos)
+           | InfixAppl (`Name "<", e1, e2)  -> Comparison (desugar e1, `Less, desugar e2, pos)
+           | InfixAppl (`Name "<=", e1, e2)  -> Comparison (desugar e1, `LessEq, desugar e2, pos)
+           | InfixAppl (`Name "<>", e1, e2)  -> Comparison (desugar e1, `NotEq, desugar e2, pos)
            | InfixAppl (`Name "++", e1, e2)  -> Concat (desugar e1, desugar e2, pos)
            | InfixAppl (`Name "!", e1, e2)  -> Apply (Apply (Variable ("send", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`Name n, e1, e2)  -> Apply (Apply (Variable (n, pos), desugar e1, pos), desugar e2, pos) 

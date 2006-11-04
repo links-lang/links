@@ -242,14 +242,14 @@ let make_sql bindings expr =
 
 let make_binop_sql oper left_value right_value =
   match oper with
-    | "==" -> Binary_op ("=", left_value, right_value)
-    | "<=" -> Binary_op ("<=", left_value, right_value)
-    | "<"  -> Binary_op ("<", left_value, right_value)
-    | "<>" -> Binary_op ("<>", left_value, right_value)
-    | "like" | "~" ->
-        Binary_op ("like", left_value, right_value)
-    | _ -> failwith "Internal error: unknown boolean operator in make_binop_sql"
+    | `Equal -> Binary_op ("=", left_value, right_value)
+    | `LessEq -> Binary_op ("<=", left_value, right_value)
+    | `Less  -> Binary_op ("<", left_value, right_value)
+    | `NotEq -> Binary_op ("<>", left_value, right_value)
+    | `Tilde  -> Binary_op ("like", left_value, right_value)
 
+
+        
 (** Convert a LIKE expression to a string. *)
 let rec like_as_string env : like_expr -> string =
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
@@ -294,12 +294,12 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
           (match make_sql bindings expr with
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))
-      | Syntax.Apply (Syntax.Apply (Syntax.Variable ("~" as oper, _), lhs, _), rhs, _)  ->
+      | Syntax.Apply (Syntax.Apply (Syntax.Variable ("~", _), lhs, _), rhs, _)  ->
           let left_binds, lhs = sep_assgmts bindings lhs in
           let right_binds, rhs = sep_assgmts bindings rhs in
             (match make_sql left_binds lhs, likify_regex right_binds rhs with
                | (Some (lsql, lorigin), Some (rsql, rorigin)) ->
-                   Some (make_binop_sql oper lsql (LikeExpr rsql), lorigin @ rorigin)
+                   Some (make_binop_sql `Tilde lsql (LikeExpr rsql), lorigin @ rorigin)
                | _ -> None)
 
       | Syntax.Comparison (lhs, oper, rhs, _) ->

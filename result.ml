@@ -101,10 +101,8 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
-	     | UnionOp
-	     | RecExtOp of string
-	     | MkTableHandle of row
+type comparison = Syntax.comparison deriving (Show, Pickle)
+type binop = [ `Union | `RecExt of string | `MkTableHandle of row | comparison]
                  deriving (Show, Pickle)
 
 type xmlitem =   Text of string

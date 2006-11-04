@@ -114,37 +114,23 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
 *)
 exception NotFound of string
 
-let get_row_field_type field : Types.row -> Types.datatype = function
-  | (fields, _) ->
-      (match StringMap.find field fields with
-          `Present t -> t
-         | _ -> raise(NotFound field))
-  | _ -> assert false (* failwith("Internal error: non-record in get_row_field_type") *)
+let row_field_type field : Types.row -> Types.datatype = 
+  fun (fields, _) ->
+    match StringMap.find field fields with
+      | `Present t -> t
+      | `Absent -> raise (NotFound field)
 
-let query_result_types (query : Query.query)
-    (table_defs : ((string * Types.row) list)) 
+let query_result_types (query : query) (table_defs : (string * Types.row) list)
     : (string * Types.datatype) list =
-  try (
-    let get_col_type table_alias col_name =
-      let row = assoc table_alias table_defs in
-        get_row_field_type col_name row
+  try 
+    let col_type table_alias col_name =
+      row_field_type col_name (assoc table_alias table_defs) 
     in
-      map (fun col ->
-             (col.renamed,
-              get_col_type col.table_renamed col.name))
-        query.Query.result_cols
-  ) with NotFound field -> failwith("Field " ^ field ^ " from " ^ 
-                                      Sql.string_of_query query ^
-                                      " was not found in tables " ^ 
-                                      mapstrcat "," fst table_defs ^ ".")
-
-(* should we just use BinOp values in the first place?*)
-let binopFromOpString = function
-    | "==" -> EqEqOp
-    | "<>" -> NotEqOp
-    | "<=" -> LessEqOp
-    | "<"  -> LessOp
-    | opstr -> raise(Runtime_error("Evaluating unknown operator "^opstr))
+      map (fun col -> col.renamed, col_type col.table_renamed col.name) query.Query.result_cols
+  with NotFound field -> failwith ("Field " ^ field ^ " from " ^ 
+                                     Sql.string_of_query query ^
+                                     " was not found in tables " ^ 
+                                     mapstrcat "," fst table_defs ^ ".")
 
 exception TopLevel of (Result.environment * Result.result)
 
@@ -239,11 +225,11 @@ and apply_cont (globals : environment) : continuation -> result -> result =
             | (BinopApply(locals, op, lhsVal)) ->
 	        let result = 
                   (match op with
-                     | EqEqOp -> bool (Library.equal lhsVal value)
-                     | NotEqOp -> bool (not (Library.equal lhsVal value))
-                     | LessEqOp -> bool (Library.less_or_equal lhsVal value)
-                     | LessOp -> bool (Library.less lhsVal value)
-	             | UnionOp -> 
+                     | `Equal -> bool (Library.equal lhsVal value)
+                     | `NotEq -> bool (not (Library.equal lhsVal value))
+                     | `LessEq -> bool (Library.less_or_equal lhsVal value)
+                     | `Less -> bool (Library.less lhsVal value)
+	             | `Union -> 
                          (match lhsVal, value with
 	                    | `List (l), `List (r) -> `List (l @ r)
 	                    | _ -> raise(Runtime_error
@@ -251,12 +237,12 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 					    ^ string_of_result lhsVal ^ " and "
 					    ^ string_of_result value))
 			 )
-	             | RecExtOp(label) -> 
+	             | `RecExt label -> 
 		         (match lhsVal with
 		            | `Record fields -> 
 		                `Record ((label, value) :: fields)
 		            | _ -> assert false)
-	             | MkTableHandle (row) ->
+	             | `MkTableHandle row ->
 			 (match lhsVal with
 			    | `Database (db, _) ->
 				apply_cont globals cont 
@@ -385,7 +371,6 @@ fun globals locals expr cont ->
   match expr with
   | Syntax.Define (name, expr, _, _) -> interpret globals [] expr (Definition (globals, name) :: cont)
   | Syntax.Alien _ -> apply_cont globals cont (`Record [])
-(*  | Syntax.Define (name, value, _, _) -> failwith "DF 245"*)
   | Syntax.Boolean (value, _) -> apply_cont globals cont (bool value)
   | Syntax.Integer (value, _) -> apply_cont globals cont (int value)
   | Syntax.String (value, _) -> apply_cont globals cont (string_as_charlist value)
@@ -403,7 +388,7 @@ fun globals locals expr cont ->
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
-      eval l (BinopRight(locals, binopFromOpString oper, r) :: cont)
+      eval l (BinopRight(locals, (oper :> Result.binop), r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
@@ -425,7 +410,7 @@ fun globals locals expr cont ->
 
   | Syntax.Record_empty _ -> apply_cont globals cont (`Record [])
   | Syntax.Record_extension (label, value, record, _) ->
-      eval record (BinopRight(locals, RecExtOp label, value) :: cont)
+      eval record (BinopRight(locals, `RecExt label, value) :: cont)
   | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Record_selection_empty (value, body, _) ->
@@ -441,7 +426,7 @@ fun globals locals expr cont ->
   | Syntax.List_of (elem, _) ->
       eval elem (UnopApply(locals, MkColl) :: cont)
   | Syntax.Concat (l, r, _) ->
-      eval l (BinopRight(locals, UnionOp, r) :: cont)
+      eval l (BinopRight(locals, `Union, r) :: cont)
 
   | Syntax.For (expr, var, value, _) ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
@@ -452,7 +437,7 @@ fun globals locals expr cont ->
 (*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
 
   | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
-      eval database (BinopRight(locals, MkTableHandle(row), table_name) :: cont)
+      eval database (BinopRight(locals, `MkTableHandle row, table_name) :: cont)
 
   | Syntax.TableQuery (ths, query, d) ->
       (* [ths] is an alist mapping table aliases to expressions that

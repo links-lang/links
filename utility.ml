@@ -477,3 +477,8 @@ let gensym =
 
 
 let any_true = List.exists (fun x -> x)
+
+let getenv : string -> string option =
+  fun name ->
+    try Some (Sys.getenv name)
+    with Not_found -> None

@@ -1,4 +1,5 @@
 type location = [ `Client | `Native | `Server | `Unknown ]
+type comparison = [`Less | `LessEq | `Equal | `NotEq]
 type label
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
@@ -11,7 +12,7 @@ type 'a expression' =
   | Variable of (string * 'a)
   | Apply of ('a expression' * 'a expression' * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)
-  | Comparison of ('a expression' * string * 'a expression' * 'a)
+  | Comparison of ('a expression' * comparison * 'a expression' * 'a)
   | Abstr of (string * 'a expression' * 'a)
   | Let of (string * 'a expression' * 'a expression' * 'a)
   | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
@@ -85,3 +86,5 @@ module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expressi
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
+module Show_comparison : Show.Show with type a = comparison
+module Pickle_comparison : Pickle.Pickle with type a = comparison

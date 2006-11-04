@@ -562,21 +562,16 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "getCookie",
   (p1 (fun cookieName -> 
-         try 
-           let cookieName = charlist_as_string cookieName in
-           let cookie_header = getenv "HTTP_COOKIE" in
-           let cookies = Str.split (Str.regexp ",") cookie_header in
-           let cookies = map (fun str -> 
-                                let [nm; vl] = Str.split (Str.regexp "=") str in 
-                                  nm, vl) cookies in
-           let the_cookie = snd (find (fun (nm, _) -> nm = cookieName) 
-                                   cookies) in
-             match string_as_charlist the_cookie with
-                 `List _ as result -> result
-               | _ -> failwith "Internal Error library l469"
-         with Not_found ->
-           `List []
-      ),
+         let cookieName = charlist_as_string cookieName in
+           match getenv "HTTP_COOKIE" with
+             | Some cookie_header ->
+                 (let cookies = Str.split (Str.regexp ",") cookie_header in
+                  let cookies = map (fun str -> 
+                                       let [nm; vl] = Str.split (Str.regexp "=") str in 
+                                         nm, vl) cookies in
+                    box_string (snd (find (fun (nm, _) -> nm = cookieName) 
+                                       cookies)))
+             | None -> `List []),
    datatype "String -> String");
 
 

@@ -24,6 +24,15 @@ type location = [`Client | `Server | `Native | `Unknown]
 type label = int
     deriving (Show, Pickle)
 
+type comparison = [`Less | `LessEq | `Equal | `NotEq]
+    deriving (Show, Pickle)
+
+let string_of_comparison = function
+  | `Less   -> "<"
+  | `LessEq -> "<="
+  | `Equal  -> "=="
+  | `NotEq  -> "<>"
+
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
   | TypeDecl of (string * int list * Types.datatype * 'data)
@@ -37,7 +46,7 @@ type 'data expression' =
   | Apply of ('data expression' * 'data expression' * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
-  | Comparison of ('data expression' * string * 'data expression' * 'data)
+  | Comparison of ('data expression' * comparison * 'data expression' * 'data)
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
@@ -132,7 +141,7 @@ let rec show t : 'a expression' -> string = function
   | Condition (cond, if_true, if_false, data) ->
       "if (" ^ show t cond ^ ") " ^ show t if_true ^ " else " ^ show t if_false ^ t data
   | Comparison (left_value, oper, right_value, data) ->
-      show t left_value ^ " " ^ oper ^ " " ^ show t right_value ^ t data
+      show t left_value ^ " " ^ string_of_comparison oper ^ " " ^ show t right_value ^ t data
   | Abstr (variable, body, data) ->
       "fun (" ^ variable ^ ") { " ^ show t body ^ " }" ^ t data
   | Let (variable, value, body, data) ->

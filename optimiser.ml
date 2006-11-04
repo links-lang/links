@@ -706,11 +706,6 @@ let remove_trivial_extensions : RewriteSyntax.rewriter = function
       when v1 = v2 -> Some e
   | _ -> None
      
-let ops = ["==", (=);
-           "<>", (<>);
-           "<=", (<=);
-           "<",  (<)]
-
 (* Evaluate expressions involving only constants and pure functions at
  * compile time. *)
 let fold_constant : RewriteSyntax.rewriter = 

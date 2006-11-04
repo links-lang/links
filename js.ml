@@ -304,16 +304,14 @@ let binop_name op =
               "*.", "*";
               "/",  "/";
               "/.", "/";
-              "==", "==";
-              "<>", "!=";
-              "<",  "<";
-              ">",  ">";
-              "<=", "<=";
-              ">=", ">=";
 	     ]
-   with Not_found ->  failwith ("Notfound : " ^ op)
-      
+   with Not_found ->  failwith ("Not found : " ^ op)
 
+let comparison_name = function
+  |`Less   -> "<"
+  |`LessEq -> "<="
+  |`Equal  -> "=="
+  |`NotEq  -> "!="
   
 let rename_builtins name =
   try assoc name builtins
@@ -413,7 +411,7 @@ let rec generate : 'a expression' -> code =
                              Call(b', [Var "__kappa"])))]))
   | Variable ("~", _)                  -> trivial_cps (Var "tilde")
   | Variable (v, _)                    -> trivial_cps (Var v)
-  | Comparison (l, "==", r, _)         -> 
+  | Comparison (l, `Equal, r, _)         -> 
       let l_cps = generate l in
       let r_cps = generate r in
         Fn(["__kappa"],
@@ -427,7 +425,7 @@ let rec generate : 'a expression' -> code =
            Call(l_cps, [Fn(["__l"], 
                 Call(r_cps, [Fn(["__r"],
                      Call(Var "__kappa", 
-                          [Binop(Var "__l", binop_name op, Var "__r")]))]))]))
+                          [Binop(Var "__l", comparison_name op, Var "__r")]))]))]))
       (* Should strings be handled differently at this level? *)
   | Nil _                 -> trivial_cps (Lst [])
   | List_of (e, _)        -> 
@@ -705,10 +703,10 @@ and generate_direct_style : 'a expression' -> code =
       Bind(v, gd e, gd b)
   | Variable ("~", _)                  -> Var "tilde"
   | Variable (v, _)                    -> Var v
-  | Comparison (l, "==", r, _)         -> 
+  | Comparison (l, `Equal, r, _)         -> 
       Call(Var "_eq", [gd l; gd r])
   | Comparison (l, op, r, _)           -> 
-      Binop(gd l, binop_name op, gd r)
+      Binop(gd l, comparison_name op, gd r)
       (* Should strings be handled differently at this level? *)
   | Nil _                 -> Lst []
   | List_of (e, _)        ->

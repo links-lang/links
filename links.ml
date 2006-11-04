@@ -153,25 +153,14 @@ let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
 
-(** testenv
-    Test whether an environment variable is set.
-    TBD: Move me to Utility *)
-let testenv env_var = 
-  try 
-    let _ = Sys.getenv env_var in true
-  with Not_found -> false
-
 let run_file filename = 
   Settings.set_value interacting false;
-  if testenv "REQUEST_METHOD" then
-    (Settings.set_value interacting false;
-     Settings.set_value web_mode true;
-     Webif.serve_request filename)
-  else
-    (ignore(evaluate (Parse.parse_file Parse.program) stdenvs filename);
-    ())
-
-let set setting value = Some (fun () -> Settings.set_value setting value)
+  match Utility.getenv "REQUEST_METHOD" with 
+    | Some _ -> 
+        (Settings.set_value web_mode true;
+         Webif.serve_request filename)
+    | None ->
+        ignore (evaluate (Parse.parse_file Parse.program) stdenvs filename)
 
 let evaluate_string v =
   (Settings.set_value interacting false;
@@ -221,6 +210,8 @@ let load_settings filename =
   in
     parse_lines 1
 
+let set setting value = Some (fun () -> Settings.set_value setting value)
+
 let options : opt list = 
     [
       ('d',     "debug",               set Debug.debugging_enabled true, None);
@@ -234,10 +225,7 @@ let options : opt list =
          not crazy about these option letters*)
       ('o',     "print-optimize",      None,                             Some (just_optimise Parse.parse_file stdenvs));
       ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string stdenvs));
-        (* [DEACTIVATED] *)
-(*
-      ('t',     "run-tests",           Some run_tests,                   None);
-*)    ]
+    ]
 
 let welcome_note = Settings.add_string ("welcome_note", "Welcome to Links", false)
 

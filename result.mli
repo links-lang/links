@@ -51,14 +51,11 @@ type unop = | MkColl
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
             | QueryOp of (Query.query * (* the table aliases: *) string list)
-type binop =
-    | EqEqOp
-    | NotEqOp
-    | LessEqOp
-    | LessOp
-    | UnionOp
-    | RecExtOp of string
-    | MkTableHandle of Types.row
+type binop = 
+    [Syntax.comparison
+    | `Union
+    | `RecExt of string
+    | `MkTableHandle of Types.row]
 type xmlitem =
     | Text of string 
     | Attr of (string * string) 
