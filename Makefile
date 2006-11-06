@@ -27,9 +27,9 @@ AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
 OCAMLOPT := ocamlopt.opt
 OCAMLC := ocamlc.opt
-OCAMLDEP := ocamldep.opt
+OCAMLDEP := ocamldep
 
-PATH += :deriving/syntax
+PATH := $(PATH):deriving/syntax
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
