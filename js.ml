@@ -682,7 +682,6 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
     :: attrs in
     generate (Xml_node (tag, attrs, children, Syntax.no_expr_data))
 
-
 (* generate_noncps: generates CPS code for expr and immediately 
   gives idy as the cont. *)
 and generate_noncps expr = Call(generate expr, [idy_js])
@@ -1009,6 +1008,9 @@ let test () =
     (*Nested scopes*)
     assert (equal (jsresult "{ x = 3; ({ x = 4; x }, x)}") "(4, 3)")
 
+let compile environment = String.concat "\n" (map gen environment)
 
-
+let make_handler_code = 
+  (* Doesn't handle l:name-bound variables *)
+  generate ->- end_thread ->- eliminate_admin_redexes ->- show
 

@@ -5,3 +5,6 @@ val test : unit -> unit
 val run_tests : unit -> unit 
 
 val get_js_lib_url : unit -> string
+
+val compile : Syntax.expression list -> string
+val make_handler_code : Syntax.expression -> string

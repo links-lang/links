@@ -107,36 +107,6 @@ type binop = EqEqOp | NotEqOp | LessEqOp | LessOp
 	     | MkTableHandle of row
                  deriving (Show, Pickle)
 
-type xmlitem =   Text of string
-               | Attr of (string * string)
-               | Node of (string * xml)
-and xml = xmlitem list
-    deriving (Show, Pickle)
-
-let is_attr = function
-  | Attr _ -> true
-  | _      -> false
-
-let attrs = filter is_attr
-and nodes = filter (not -<- is_attr)
-
-let rec string_of_xml xml : string
-    = String.concat "" (map string_of_item xml)
-and string_of_item : xmlitem -> string = 
-  let format_attrs attrs = match String.concat " " (map string_of_item attrs) with 
-    | "" -> ""
-    | a -> " " ^ a in
-  let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
-    function
-      | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
-      | Text s -> xml_escape s
-      | Node (tag, children) -> let attrs, nodes = attrs children, nodes children in
-          match nodes with 
-            | [] -> "<" ^ tag ^ format_attrs attrs ^ "/>"
-            | _  -> ("<" ^ tag ^ format_attrs attrs ^ ">" 
-                     ^ string_of_xml nodes
-                     ^ "</" ^ tag ^ ">")
-
 (* Pickling a result value involves replacing expression nodes with
    identifiers.
 
@@ -164,18 +134,20 @@ module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
 type table = database * string * Types.row
    deriving (Show, Pickle)
 
-type primitive_value = [
+type xmlitem =   Text of string
+               | Attr of (string * string)
+               | ActiveAttr of (string * result)
+               | Node of (string * xml)
+and xml = xmlitem list
+and primitive_value = [
 | `Bool of bool
 | `Int of num
 | `Float of float
 | `Char of char
 | `XML of xmlitem
 | `Database of (database * string)
-| `Table of table
-                ]
-    deriving (Show, Pickle)
-
-type contin_frame = 
+| `Table of table ]
+and contin_frame = 
   | Definition of (environment * string)
   | FuncArg of (rexpr * environment) (* FIXME: This is twiddled *)
   | FuncApply of (result * environment )  (* FIXME: This is twiddled *)
@@ -211,13 +183,45 @@ and result = [
   | `Variant of (string * result)
   | `List of (result list)
   | `Continuation of continuation
-  |  primitive_value
+    | `Bool of bool
+    | `Int of num
+    | `Float of float
+    | `Char of char
+    | `XML of xmlitem
+    | `Database of (database * string)
+    | `Table of table
 
 ]
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
     deriving (Show, Pickle)
+
+let is_attr = function
+  | ActiveAttr _
+  | Attr _ -> true
+  | _      -> false
+
+let attrs = filter is_attr
+and nodes = filter (not -<- is_attr)
+
+let rec string_of_xml xml : string
+    = String.concat "" (map string_of_item xml)
+and string_of_item : xmlitem -> string = 
+  let format_attrs attrs = match String.concat " " (map string_of_item attrs) with 
+    | "" -> ""
+    | a -> " " ^ a in
+  let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
+    function
+      | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
+      | ActiveAttr (k, v) -> k ^ "=\"[code elided]\""
+      | Text s -> xml_escape s
+      | Node (tag, children) -> let attrs, nodes = attrs children, nodes children in
+          match nodes with 
+            | [] -> "<" ^ tag ^ format_attrs attrs ^ "/>"
+            | _  -> ("<" ^ tag ^ format_attrs attrs ^ ">" 
+                     ^ string_of_xml nodes
+                     ^ "</" ^ tag ^ ">")
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Boolean(b, Syntax.no_expr_data))

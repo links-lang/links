@@ -1,0 +1,27 @@
+fun f(arg) client { 
+  var k = getNodeById("ken");
+  appendChildren(<p>{stringToXml(arg)}</p>, k);
+}
+
+fun getMeaning(word) server {
+  var words = table "wordlist" with ( word : String, meaning : String ) 
+              from database "dictionary";
+  hd(take(1,for (var w <-- words) where (w.word == word) [w.meaning]))
+}
+
+{ 
+var word = "blink";
+var x = getMeaning(word);
+<html>
+  <head>
+   <style type="text/css">
+     body {{ text-decoration: blink }}
+   </style>
+  </head>
+  <body>
+   <div l:onclick="{f(x)}">{stringToXml(word)}</div>
+   <div l:onclick="{f(getMeaning("links"))}">links</div>
+   <div id="ken"> </div>
+  </body>
+</html>
+}

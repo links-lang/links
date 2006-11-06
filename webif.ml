@@ -197,28 +197,35 @@ let client_return_req env cgi_args =
 let perform_request program globals main req =
   match req with
     | ContInvoke (cont, params) ->
+        prerr_endline "cont invoke";         flush stderr;
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
+        prerr_endline "expr eval";         flush stderr;
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program (globals @ env) [expr])))
     | ClientReturn(cont, value) ->
+        prerr_endline "client return";         flush stderr;
         print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
     | RemoteCall(func, arg) ->
+        prerr_endline "remote call";         flush stderr;
+
         let cont = [Result.FuncApply (func, [])] in
 	  print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode
                (Json.jsonize_result 
                   (Interpreter.apply_cont_safe globals cont arg)))
     | CallMain -> 
+        prerr_endline "call main";         flush stderr;
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
-             Js.generate_program program main
+             (*Js.generate_program program main*)
+             Newstuff.print_xml_result (Newstuff.mostly_run_program program)
            else Result.string_of_result (snd (Interpreter.run_program globals [main])))
 
 let error_page_stylesheet = 
@@ -231,6 +238,7 @@ let error_page body =
     "\n  </body></html>"
 
 let serve_request filename = 
+  prerr_endline "serve request" ; flush stderr;
   try 
     let program = read_and_optimise_program filename in
     let global_env, main = List.partition Syntax.is_define program in
@@ -263,5 +271,6 @@ let serve_request filename =
         (error_page (Errors.format_exception_html exc))
           
 let serve_request filename =
+  prerr_endline "serve_request [1]";         flush stderr;
   Errors.display_errors_fatal stderr
     serve_request filename

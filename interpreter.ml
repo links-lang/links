@@ -347,7 +347,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
             | XMLCont (locals, tag, attrtag, children, attrs, elems) ->
                 (let new_children = 
                    match attrtag, value with 
-                       (* FIXME: multiple attrs resulting from one expr? *)
+                     | Some attrtag, (`Function _ as f) when start_of attrtag ~is:"l:" ->
+                       let strip_l s = StringLabels.sub ~pos:2  ~len:(String.length s - 2) s in
+                         [ActiveAttr (strip_l attrtag, f)]
                      | Some attrtag, (`List (_) as s) -> 
                          [Attr (attrtag, charlist_as_string s)]
                      | None, (`List (elems)) ->
@@ -358,7 +360,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                             | `Char _ :: _ ->
                                 [ Result.Text(charlist_as_string value) ]
                             | _ -> failwith("Internal error: unexpected contents in XML construction"))
-                     | _ -> failwith("Internal error: unexpected contents in XML construction")
+                     | _ -> failwith("Internal error [1]: unexpected contents in XML construction")
                  in
                  let children = children @ new_children in
                    match attrs, elems with
@@ -409,15 +411,10 @@ fun globals locals expr cont ->
   | Syntax.Rec (defs, body, _) ->
       let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
         interpret globals new_env body cont
-  | Syntax.Xml_node _ as xml when Forms.islform xml ->
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
+  | Syntax.Xml_node (tag, (k, v)::attrs, elems, data) when start_of k ~is:"l:" ->
+      eval (Abstr ("event", v, data)) (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_node (tag, [], (child::children), _) -> 

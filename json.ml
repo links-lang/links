@@ -19,6 +19,7 @@ let rec jsonize_result : Result.result -> string = function
   | `List (elems) ->
       "[" ^ String.concat ", " (List.map jsonize_result elems) ^ "]"
 
+
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 

@@ -62,10 +62,12 @@ type binop =
 type xmlitem =
     | Text of string 
     | Attr of (string * string) 
+    | ActiveAttr of (string * result)
     | Node of (string * xml)
 and xml = xmlitem list
-type table = database * string * Types.row
-type primitive_value =
+and table = database * string * Types.row
+
+and primitive_value =
     [ `Bool of bool
     | `Char of char
     | `Database of (database * string)
@@ -73,7 +75,7 @@ type primitive_value =
     | `Float of float
     | `Int of Num.num
     | `XML of xmlitem ]
-type contin_frame =
+and contin_frame =
     | Definition of (environment * string)
     | FuncArg of (Syntax.expression * environment)
     | FuncApply of (result * environment)
@@ -92,7 +94,14 @@ type contin_frame =
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
     | Recv of environment
-and result = [ primitive_value
+and result = 
+    [ `Bool of bool
+    | `Char of char
+    | `Database of (database * string)
+    | `Table of table
+    | `Float of float
+    | `Int of Num.num
+    | `XML of xmlitem 
 | `Continuation of continuation
 | `Function of string * environment * unit * Syntax.expression
 | `List of result list

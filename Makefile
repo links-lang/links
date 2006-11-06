@@ -76,6 +76,7 @@ SOURCES = $(OPC)                		\
           interpreter.mli interpreter.ml 	\
           optimiser.ml optimiser.mli   		\
           js.mli js.ml          		\
+          newstuff.ml                           \
           webif.ml              		\
           test.ml                               \
           links.ml              		\
