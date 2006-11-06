@@ -27,7 +27,10 @@ AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
 OCAMLOPT := ocamlopt.opt
 OCAMLC := ocamlc.opt
-OCAMLDEP := ocamldep
+
+# use ocamldep.opt if it exists
+# (it doesn't exist for all OCaml installations)
+OCAMLDEP := $(shell if ocamldep.opt 1&>0 /dev/null; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
 PATH := $(PATH):deriving/syntax
 
