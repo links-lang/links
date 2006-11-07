@@ -9,3 +9,5 @@ val apply_cont : Result.environment -> Result.continuation -> Result.result -> R
 
 val apply_cont_safe : Result.environment -> Result.continuation -> Result.result -> Result.result 
 
+val spawned_processes : (int * Result.result) list ref
+val maxPid : int ref

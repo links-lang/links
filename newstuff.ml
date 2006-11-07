@@ -67,9 +67,9 @@ let rec js_of_result : result -> string = function
                                           (List.map (uncurry (sprintf "'%s':%s")) 
                                              (Utility.alistmap js_of_result fields)))
   | `Variant (l, v) -> sprintf "{label:%s,value:%s}" l (js_of_result v)
-  | `Function _
+  | `Function (var, locals, (), body)  -> failwith ("(currently) unjavascriptable result : " ^ Syntax.string_of_expression body)
   | `PFunction _
-  | `Continuation _ -> failwith "(currently) unjavascriptable result"
+  | `Continuation _ as r -> failwith ("(currently) unjavascriptable result : " ^ Result.string_of_result r)
 and js_of_primitive = function
   | `Bool b -> sprintf "%b" b
   | `Char c -> sprintf "'%c'" c
@@ -101,6 +101,21 @@ let compile_active_attrs : xmlitem -> xmlitem * (string * string) list =
       let result = compile xml in
         result, !values
 
+let compiled_processes () =
+  let values = ref [] in
+  let bodies = String.concat "\n" (ListLabels.map !Interpreter.spawned_processes
+                                     ~f:(
+                                       function
+                                         | (id, `Function (var, locals, _, body)) -> 
+                                             ListLabels.iter locals
+                                               ~f:(fun (name, value) -> 
+                                                     values := (name, js_of_result value) :: !values)
+                                             ;
+                                             sprintf "var %s = ({});\nvar _ = spawn2(%d, function (kappa){ %s });" var id (Js.make_handler_code body)
+                                         | _ -> failwith "unexpected code when generating process stubs"
+                                     ))
+  in !values, bodies
+
 let insert_script_code (code : string) : result -> result =
   let rec addnode globals : xmlitem -> xmlitem = function
     | Node ("head", children) -> 
@@ -119,6 +134,11 @@ let insert_script_code (code : string) : result -> result =
                                           (Settings.get_value(Debug.debugging_enabled)));
                                   Text (String.concat "\n" (List.map (uncurry (sprintf "var %s = %s;")) globals))])
               :: include_script "jslib.js"
+              :: Node ("script", 
+                       let globals, stubs = compiled_processes () in
+                         [Attr ("type","text/javascript"); 
+                          Text (String.concat "\n" (List.map (uncurry (sprintf "var %s = %s;")) globals));
+                          Text stubs])
               :: Node ("script", [Attr ("type","text/javascript"); Text code])
               :: children)
     | Node (tag, children) -> 

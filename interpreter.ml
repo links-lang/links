@@ -7,6 +7,10 @@ open Result
 open Query
 open Syntax
 
+(* spawned processes *)
+let maxPid = ref 0
+let spawned_processes = ref ([] : (int * result) list)
+
 (* Environment handling *)
 
 (** bind env var value 
@@ -348,6 +352,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 (let new_children = 
                    match attrtag, value with 
                      | Some attrtag, (`Function _ as f) when start_of attrtag ~is:"l:" ->
+                       Debug.debugf "cont active attr %s" attrtag;
                        let strip_l s = StringLabels.sub ~pos:2  ~len:(String.length s - 2) s in
                          [ActiveAttr (strip_l attrtag, f)]
                      | Some attrtag, (`List (_) as s) -> 
@@ -367,9 +372,13 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | [], [] -> 
                          let result = listval [xmlnodeval(tag, children)] in
                            apply_cont globals cont result
+                     | ((k,v)::attrs), _ when start_of k ~is:"l:" -> 
+                       interpret globals locals  (Abstr ("event", v, Syntax.no_expr_data))
+                         (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
                      | ((k,v)::attrs), _ -> 
                          interpret globals locals v
                            (XMLCont (locals, tag, Some k, children, attrs, elems) :: cont)
+
                      | _, (elem::elems) -> 
                          interpret globals locals elem
                            (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
@@ -400,6 +409,13 @@ fun globals locals expr cont ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
   | Syntax.Apply (Variable ("recv", _), Record_empty _, _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
+
+  | Apply (Apply (Variable ("spawn", _), Abstr (variable, body, _), _), Record_empty _, _) ->
+      incr maxPid;
+      spawned_processes := (!maxPid, 
+                            (`Function (variable, retain (freevars body) locals, (), body)))
+      :: !spawned_processes;
+      apply_cont globals cont (`Int (Num.num_of_int !maxPid))
   | Syntax.Apply (fn, param, _) ->
       eval fn (FuncArg(param, locals) :: cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
@@ -414,8 +430,10 @@ fun globals locals expr cont ->
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, data) when start_of k ~is:"l:" ->
-      eval (Abstr ("event", v, data)) (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
+    (Debug.debugf "active attr %s" k;
+     eval (Abstr ("event", v, data)) (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont))
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
+      Debug.debugf "non-active attr %s" k;
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_node (tag, [], (child::children), _) -> 
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)

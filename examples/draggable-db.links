@@ -40,23 +40,17 @@ fun draggableList(id, items) client
 {
   var dragger = spawn { step(Waiting, id, items) };
 
-  (<ul id="{id}"
+  <ul id="{id}"
        l:onmouseup   = "{dragger ! MouseUp}"
        l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
     {for (var item <- items) <li>{stringToXml(item)}</li>}
-   </ul>,
-   fun () {dragger ! GetList(self());
-           receive {
-             case Items(items) -> items
-          }},
-   fun (items) {dragger ! SetList(items);}
-   )
+   </ul>
 }
 
 
 ### library functions ###
-fun select(xs, i) {
+fun select(xs, i) server {
   hd(drop(i, xs))
 }
 ### end of library functions ###
@@ -80,15 +74,16 @@ fun save(itemsList) server {
 
 
 fun main() client {
-  var (bears, read, write) = draggableList("bears", load());
+  var bears = draggableList("bears", load());
  
-  replaceDocument(
-    <html><body>
-      <h2>Great Bears</h2>{bears}
-      <input type="button" value="load" l:onclick="{spawn {write(load())}}"/>
-      <input type="button" value="save" l:onclick="{spawn {save(read())}}"/>
-    </body></html>
-  )
+  <html>
+   <head>
+     <link rel="stylesheet" href="draggable.css" type="text/css"/>
+   </head>
+    <body l:onselectstart = "{preventDefault(event)}">
+    <h2>Great Bears</h2>
+    {bears}
+  </body></html>
 }
 
 main()
