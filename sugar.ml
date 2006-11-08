@@ -43,13 +43,21 @@ let extract_events pos : binder list -> string list =
                                                  pos)))
 
 let make_lattr pos procname name : phrase = 
-  TupleLit [StringLit ("l:on" ^ String.lowercase name),pos;
+  TupleLit [StringLit ("on" ^ String.lowercase name),pos;
             (FunLit (None, [`Variable "event", pos], 
-                     (InfixAppl (`Name "!", 
-                                 procname,
-                                 (ConstructorLit (name, 
-                                                  Some (Var "event", pos)), pos)), pos)), pos)], pos
-  
+                     (Block ([(Binding ((`Variable "clonedEvent", pos),
+                                        (FnAppl ((Var "cloneEvent", pos),
+                                                 ([Var "event", pos],
+                                                  pos)), pos))), pos],
+                             (InfixAppl (`Name "!", 
+                                         procname,
+                                         (ConstructorLit (name, 
+                                                          Some (Var "clonedEvent", pos)
+                                                            
+
+
+), pos)), pos)), pos)), pos)], pos
+               
 
 exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =

@@ -1,18 +1,30 @@
+fun updateCount(n) {
+    var count = getNodeById("count");
+    replaceNode(<p id="count">{intToXml(n)}</p>, count);
+}
 
-
+fun setXY(x,y) {
+   var xy = getNodeById("xy");
+   replaceNode(<p id="xy">{intToXml(x)},{intToXml(y)}</p>, xy);
+}
 
 fun counter(initial) {
-  handle (initial) 
+  handle ((value=initial,x=0,y=0))
     <div>click
       <p id="count">{intToXml(initial)}</p>
+      <p id="xy">unknown</p>
     </div>
-  with
-    case (MouseDown (_), counter) -> counter
-    case (MouseUp (_), counter)   -> {
-       var count = getNodeById("count");
-       replaceNode(<p id="count">{intToXml(counter)}</p>, count);
-       counter + 1
-    }
+  with {
+    case (MouseMove(event), state) ->
+       setXY(getPageX(event), getPageY(event));
+       state
+    case (MouseDown(_), state) -> 
+       updateCount(state.value+10);
+       state
+    case (MouseUp (_), state)   -> 
+       updateCount(state.value+1);
+       (value=state.value + 1,x=state.x,y=state.y)
+  }
 }
 
 

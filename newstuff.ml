@@ -60,26 +60,6 @@ let evaluate = Interpreter.run_program [] ->- snd
 
 let sprintf = Printf.sprintf
 
-let rec js_of_result : result -> string = function
-  | #primitive_value as p -> js_of_primitive p
-  | `List fields -> sprintf "[%s]" (String.concat ", " (List.map js_of_result fields))
-  | `Record (fields) -> sprintf "{%s}" (String.concat ", " 
-                                          (List.map (uncurry (sprintf "'%s':%s")) 
-                                             (Utility.alistmap js_of_result fields)))
-  | `Variant (l, v) -> sprintf "{label:%s,value:%s}" l (js_of_result v)
-  | `Function (var, locals, (), body)  -> failwith ("(currently) unjavascriptable result : " ^ Syntax.string_of_expression body)
-  | `PFunction _
-  | `Continuation _ as r -> failwith ("(currently) unjavascriptable result : " ^ Result.string_of_result r)
-and js_of_primitive = function
-  | `Bool b -> sprintf "%b" b
-  | `Char c -> sprintf "'%c'" c
-  | `Float f -> sprintf "%f" f
-  | `Int n -> Num.string_of_num n
-  | `XML xml -> js_of_xml xml
-  | `Table _
-  | `Database _ -> failwith "(currently) unjavascriptable primitive value"
-and js_of_xml = function
-  | _ -> failwith "xml serialisation not yet implemented"
 
 let compile_active_attrs : xmlitem -> xmlitem * (string * string) list = 
   let values = ref [] in
@@ -92,7 +72,7 @@ let compile_active_attrs : xmlitem -> xmlitem * (string * string) list =
           | `Function ("event", locals, _, body) -> 
               ListLabels.iter locals
                 ~f:(fun (name, value) -> 
-                      values := (name, js_of_result value) :: !values)
+                      values := (name, Js.js_of_result value) :: !values)
               ;
               Attr (name, Js.make_handler_code body)
           | _ -> failwith "unexpected code while compiling active attributes"
@@ -109,7 +89,11 @@ let compiled_processes () =
                                          | (id, `Function (var, locals, _, body)) -> 
                                              ListLabels.iter locals
                                                ~f:(fun (name, value) -> 
-                                                     values := (name, js_of_result value) :: !values)
+                                                     try
+                                                       values := (name, Js.js_of_result value) :: !values
+                                                     with Failure s ->
+                                                       raise (Failure ("failure in compiled_processes " ^ s)
+                                                             ))
                                              ;
                                              sprintf "var %s = ({});\nvar _ = spawn2(%d, function (kappa){ %s });" var id (Js.make_handler_code body)
                                          | _ -> failwith "unexpected code when generating process stubs"
@@ -131,9 +115,10 @@ let insert_script_code (code : string) : result -> result =
               :: include_script "yahoo/event.js"
               :: Node ("script", [Attr ("type","text/javascript"); 
                                   Text (Printf.sprintf "var DEBUGGING = %b;\n"
-                                          (Settings.get_value(Debug.debugging_enabled)));
-                                  Text (String.concat "\n" (List.map (uncurry (sprintf "var %s = %s;")) globals))])
+                                          (Settings.get_value(Debug.debugging_enabled)))])
               :: include_script "jslib.js"
+              :: Node ("script", [Attr ("type","text/javascript"); 
+                                  Text (String.concat "\n" (List.map (uncurry (sprintf "var %s = %s;")) globals))])
               :: Node ("script", 
                        let globals, stubs = compiled_processes () in
                          [Attr ("type","text/javascript"); 

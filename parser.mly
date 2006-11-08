@@ -440,7 +440,7 @@ escape_expression:
 
 handlewith_expression:
 | escape_expression                                            { $1 }
-| HANDLE LPAREN exp RPAREN exp WITH cases                      { HandleWith ($3, $5, $7), pos() }
+| HANDLE LPAREN exp RPAREN exp WITH LBRACE cases RBRACE        { HandleWith ($3, $5, $8), pos() }
 
 table_expression:
 | handlewith_expression                                        { $1 }

@@ -200,7 +200,7 @@ let less_or_equal l r = less l r || equal l r
 let add_attribute : result * result -> result -> result = 
   fun (name,value) -> function
     | `XML (Node (tag, children)) -> 
-      `XML (Node (tag, ActiveAttr (unbox_string name, value) :: children)) 
+        `XML (Node (tag, ActiveAttr (unbox_string name, value) :: children)) 
     | r -> failwith ("cannot add attribute to " ^ Result.string_of_result r)
 
 let add_attributes : (result * result) list -> result -> result =
@@ -524,6 +524,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "getTargetElement",
   (`Client, datatype "Event -> DomNode");
+
+  (* cloneEvent : Event -> Event *)
+  "cloneEvent",
+  (`Client, datatype "Event -> Event");
 
   (* getPageX : Event -> Int *)
   "getPageX",

@@ -197,7 +197,7 @@ let rec show : code -> string =
     ^"{ "^
       (let names = String.concat ", " (local_names body) in
 	if names = "" then "" else "var " ^ names ^ ";\n")
-    ^" "^ show body 
+    ^" return "^ show body 
     ^"; }" 
   and arglist args = String.concat ", " (map show args) 
   and paren = function
@@ -1014,3 +1014,49 @@ let make_handler_code =
   (* Doesn't handle l:name-bound variables *)
   generate ->- end_thread ->- eliminate_admin_redexes ->- show
 
+let compile_closure 
+    (var : string)
+    (locals : (string * code) list)
+    (body : code) = 
+  List.fold_right
+    (fun (name, rhs) body -> Bind (name, rhs, body))
+    locals
+    (Fn ([var], body))
+
+
+let sprintf = Printf.sprintf
+let rec code_of_result : Result.result -> code = function
+  | #Result.primitive_value as p -> js_of_primitive p
+  | `List fields -> Lst (List.map code_of_result fields)
+  | `Record (fields) -> Dict (Utility.alistmap code_of_result fields)
+  | `Variant (l, v) -> Dict( ["label", strlit l;
+                              "value", code_of_result v])
+  | `Function (var, locals, (), body)  -> 
+(*
+  Call (Fn ([],
+  compile_closure var (alistmap code_of_result locals) (generate body)),
+  [])
+*)
+      Call (Fn (List.map fst locals @ ["__kappa"], 
+                Call (eliminate_admin_redexes (generate(Abstr(var, body, Syntax.no_expr_data))),
+                      [Var "__kappa"]
+                     )),
+            List.map (snd ->- code_of_result) locals @ [Var "_idy"])
+              
+
+
+  | `PFunction _
+  | `Continuation _ as r -> failwith ("(currently) unjavascriptable result : " ^ Result.string_of_result r)
+and js_of_primitive = function
+  | `Bool b -> Lit (sprintf "%b" b)
+  | `Char c -> Lit (sprintf "'%c'" c)
+  | `Float f -> Lit (sprintf "%f" f)
+  | `Int n -> Lit (string_of_num n)
+  | `XML xml -> js_of_xml xml
+  | `Table _
+  | `Database _ -> failwith "(currently) unjavascriptable primitive value"
+and js_of_xml = function
+  | _ -> failwith "xml serialisation not yet implemented"
+
+
+let js_of_result = code_of_result ->- show

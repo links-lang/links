@@ -8,3 +8,5 @@ val get_js_lib_url : unit -> string
 
 val compile : Syntax.expression list -> string
 val make_handler_code : Syntax.expression -> string
+
+val js_of_result : Result.result -> string

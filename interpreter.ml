@@ -219,7 +219,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        (*let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
                        let locals = bind (trim_env (fnlocals @ locals)) var value in
                          interpret globals locals body cont
-		           
                    | `PFunction (name, pargs) ->
 		       Library.apply_pfun (apply_cont globals) cont name (pargs @ [value])
 	           | `Continuation (cont) ->
@@ -347,7 +346,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		           (CollExtn(locals, var, expr, 
 				     rslts, inputs) :: cont)
 	        )
-                  
+
             | XMLCont (locals, tag, attrtag, children, attrs, elems) ->
                 (let new_children = 
                    match attrtag, value with 
