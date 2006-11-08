@@ -80,7 +80,7 @@ fun main() client {
    <head>
      <link rel="stylesheet" href="draggable.css" type="text/css"/>
    </head>
-    <body l:onselectstart = "{preventDefault(event)}">
+    <body>
     <h2>Great Bears</h2>
     {bears}
   </body></html>

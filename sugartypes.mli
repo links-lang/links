@@ -64,7 +64,7 @@ and phrasenode =
   | Definition of (name * phrase * location)
   | Iteration of (generatorphrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
   | Escape of (name * phrase)
-  | HandleWith of (phrase * name * phrase)
+  | HandleWith of (phrase * phrase * binder list)
   | Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
   | Conditional of (phrase * phrase * phrase)
   | Binding of binder

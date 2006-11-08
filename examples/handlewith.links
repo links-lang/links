@@ -1,0 +1,24 @@
+
+
+
+fun counter(initial) {
+  handle (initial) 
+    <div>click
+      <p id="count">{intToXml(initial)}</p>
+    </div>
+  with
+    case (MouseDown (_), counter) -> counter
+    case (MouseUp (_), counter)   -> {
+       var count = getNodeById("count");
+       replaceNode(<p id="count">{intToXml(counter)}</p>, count);
+       counter + 1
+    }
+}
+
+
+<html>
+  <head></head>
+  <body>
+    {counter(10)}
+  </body>
+</html>

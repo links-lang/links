@@ -197,6 +197,15 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
+let add_attribute : result * result -> result -> result = 
+  fun (name,value) -> function
+    | `XML (Node (tag, children)) -> 
+      `XML (Node (tag, ActiveAttr (unbox_string name, value) :: children)) 
+    | r -> failwith ("cannot add attribute to " ^ Result.string_of_result r)
+
+let add_attributes : (result * result) list -> result -> result =
+  List.fold_right add_attribute
+
 let env : (string * (located_primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
@@ -230,6 +239,16 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (`Continuation [],
    (datatype "a -> b")
   );
+
+  "addAttributes",
+  (p1 (fun p ->
+         match two_args (unpack_args p) with
+           | `List xmlitems, `List attrs -> 
+               let attrs = List.map (fun p -> two_args (unpack_args p)) attrs in
+                 `List (List.map (add_attributes attrs) xmlitems)
+           | _ -> failwith "error unpacking arguments to addAttributes"),
+   datatype "(Xml, [(String, Event -> a)]) -> Xml");
+
 
   "send",
   (p2 (fun pid msg -> 

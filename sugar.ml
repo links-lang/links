@@ -36,6 +36,21 @@ let list_head expr pos =
 let list_tail expr pos = 
   Apply(Variable ("tl", pos), expr, pos)
 
+let extract_events pos : binder list -> string list = 
+  List.map (function
+              | (`Tuple [(`Variant (name, _),_) ; _], _), _ -> name
+              | _ -> raise (ConcreteSyntaxError ("patterns in handle-with must be of the form (event, data)",
+                                                 pos)))
+
+let make_lattr pos procname name : phrase = 
+  TupleLit [StringLit ("l:on" ^ String.lowercase name),pos;
+            (FunLit (None, [`Variable "event", pos], 
+                     (InfixAppl (`Name "!", 
+                                 procname,
+                                 (ConstructorLit (name, 
+                                                  Some (Var "event", pos)), pos)), pos)), pos)], pos
+  
+
 exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
   (*** pattern matching compiler ***)
@@ -731,7 +746,7 @@ module Desugarer =
              | Iteration (generator, body, filter, sort) ->
                  flatten [gtv generator; etv body; opt_etv filter; opt_etv sort]
              | Escape (_, e) ->  etv e
-             | HandleWith (e1, _, e2) -> flatten [etv e1; etv e2]
+             | HandleWith (e1, e2, binders) -> flatten [etv e1; etv e2; btvs binders]
              | Section _ -> empty
              | Conditional (e1, e2, e3) -> flatten [etv e1; etv e2; etv e3]
              | Binding b -> btv b
@@ -1046,11 +1061,31 @@ module Desugarer =
            | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
            | TupleLit [field] -> desugar field
            | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
-           | HandleWith (e1, name, e2) -> 
-               Syntax.Escape("return", 
-                             Let (name, Syntax.Escape("handler",  
-                                                      Apply (Variable ("return", pos), 
-                                                             desugar e1, pos), pos), desugar e2, pos), pos)
+           | HandleWith (init_state, html, cases) ->
+               let d = pos' in
+               let pid = gensym ~prefix:"process" () in 
+               let funname = gensym ~prefix:"handle_with_fun" () in
+               let statevar = gensym ~prefix:"statevar" () in
+               let eventnames = extract_events d cases in
+               let attributes = ListLit (List.map (make_lattr d (Var pid, d)) eventnames), d in
+               let translation = 
+                 Block (
+                   [FunLit (Some (funname : name), ([`Variable statevar, d] : ppattern list), 
+                            (FnAppl ((Var funname, d),
+                                     ([
+                                        Switch ((TupleLit [FnAppl ((Var "recv", d), ([TupleLit [], d], d)), d;
+                                                           (Var statevar,d)
+                                                          ], d),
+                                                cases), d
+                                      ], d)
+                                    ), d)
+                           ), d;
+                    Binding ((`Variable pid, d), (Spawn (FnAppl ((Var funname, d), ([init_state], d)), d), d)), d],
+                   (FnAppl ((Var "addAttributes", d), ([html; attributes], d)), d)
+
+                 )
+               in
+                 desugar (translation, d)
            | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (lookup_pos ppos), pos)
            | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
            | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
@@ -1206,6 +1241,12 @@ module Desugarer =
        desugar' lookup_pos e
 
    let desugar_datatype = generalize ->- desugar_assumption
+
+   let desugar resolver phrase = 
+     let rv = desugar resolver phrase in
+       Debug.debugf "desugared : \n%s" (Syntax.string_of_expression rv)
+       ;
+       rv
 
  end : 
   sig 
