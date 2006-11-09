@@ -32,6 +32,8 @@ val free_row_type_vars : row -> int list
 type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
 
+type alias_environment = datatype Type_basis.alias_environment_basis
+
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS
    with type typ = datatype
@@ -81,6 +83,8 @@ type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
        (row Unionfind.point) Utility.IntMap.t ref)
 
+(*type context = environment * inference_type_map*)
+
 val empty_var_maps : unit -> inference_type_map
 
 val inference_type_of_type : inference_type_map -> Types.datatype -> datatype
@@ -94,9 +98,11 @@ val row_of_inference_row : row -> Types.row
 val inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption
 val assumption_of_inference_assumption : assumption -> Types.assumption
 
-
 val inference_environment_of_environment : inference_type_map -> Types.environment -> environment
 val environment_of_inference_environment : environment -> Types.environment
+
+val inference_alias_environment_of_alias_environment : inference_type_map -> Types.alias_environment -> alias_environment
+val alias_environment_of_inference_alias_environment : alias_environment -> Types.alias_environment
 
 val inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression
 val expression_of_inference_expression : inference_expression -> Syntax.expression

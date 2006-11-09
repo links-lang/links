@@ -24,9 +24,9 @@ let equals : ('a -> string) -> 'a -> 'a -> (string, 'a) either
 
 open Utility.EitherMonad
 
-let checkTypes = attempt (Inference.type_program Library.type_env ->- snd)
+let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
 let parse = attempt (Parse.parse_string Parse.program)
-let optimise = attempt (fun program -> Optimiser.optimise_program (Library.type_env, program))
+let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
 let run = attempt (Interpreter.run_program [] ->- snd)
 let show = attempt Result.string_of_result
 

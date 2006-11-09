@@ -32,6 +32,8 @@ type type_var_set = Utility.IntSet.t
 type 'typ assumption_basis = ((quantifier list) * 'typ) 
 and 'typ environment_basis = ((string * 'typ assumption_basis) list) deriving (Show, Pickle)
 
+type 'typ alias_environment_basis = ('typ assumption_basis) Utility.StringMap.t
+
 val environment_values : 'typ environment_basis -> 'typ assumption_basis list
 val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
   (** [lookup var typing_env] returns the type of the variable [var] in

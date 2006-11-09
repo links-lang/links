@@ -70,7 +70,7 @@ let is_client_program defs =
 let read_and_optimise_program filename : (Syntax.expression list) = 
   (Performance.measure "optimise" Optimiser.optimise_program)
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-       ((Performance.measure "type" (Inference.type_program Library.type_env))
+       ((Performance.measure "type" (Inference.type_program Library.typing_env))
           ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
               
 let read_file_cache filename : (Syntax.expression list) = 
@@ -87,7 +87,7 @@ let read_file_cache filename : (Syntax.expression list) =
       let program = 
         (Performance.measure "optimise" Optimiser.optimise_program)
           ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-             ((Performance.measure "type" (Inference.type_program Library.type_env))
+             ((Performance.measure "type" (Inference.type_program Library.typing_env))
                 ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
       in 
 	(try (* try to write to the cache *)

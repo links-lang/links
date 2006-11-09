@@ -18,7 +18,7 @@ let printing_types = Settings.add_bool ("printing_types", true, true)
 let ps1 = "links> "
 
 (* Builtin environments *)
-let stdenvs = [], Library.type_env
+let stdenvs = [], Library.typing_env
 
 (* shell directives *)
 let ignore_envs fn envs arg = let _ = fn arg in envs
@@ -55,7 +55,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, typeenv) as envs) _ ->
+    ((fun ((_, (typeenv, _)) as envs) _ ->
         List.iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
                        v (Types.string_of_datatype (snd k)))
@@ -70,25 +70,25 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
                        v (Result.string_of_result k))
           (List.filter (not -<- (flip List.mem_assoc !Library.value_env) -<- fst)  valenv);
      envs),
-     "display the current environment");
+     "display the current value environment");
 
     "load",
     ((fun envs args ->
         match args with
           | [filename] ->
-              let typeenv, exprs =  Inference.type_program Library.type_env (Parse.parse_file Parse.program filename) in
-              let exprs =           Optimiser.optimise_program (typeenv, exprs) in
-                (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typeenv)
+              let typingenv, exprs = Inference.type_program Library.typing_env (Parse.parse_file Parse.program filename) in
+              let exprs =           Optimiser.optimise_program (typingenv, exprs) in
+                (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
   ]
 
-let execute_directive (name, args) valenv typeenv = 
+let execute_directive (name, args) valenv typingenv = 
   let envs = 
-    (try fst (List.assoc name (Lazy.force directives)) (valenv, typeenv) args; 
+    (try fst (List.assoc name (Lazy.force directives)) (valenv, typingenv) args; 
      with Not_found -> 
        Printf.fprintf stderr "unknown directive : %s\n" name;
-       (valenv, typeenv))
+       (valenv, typingenv))
   in
     flush stderr;
     envs
@@ -111,42 +111,42 @@ let print_result rtype result =
                  else "")
 
 (* Read Links source code, then type, optimize and run it. *)
-let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
+let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
   handle_errors
     (fun input ->
        let exprs =          Performance.measure "parse" parse input in 
-       let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
-       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+       let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
+       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
        let exprs = List.map Syntax.labelize exprs in
        let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
          print_result (Syntax.node_datatype (last exprs)) result;
-         (valenv, typeenv), result
+         (valenv, typingenv), result
     ) input
 
 (* Read Links source code, then type and optimize it. *)
-let just_optimise parse (valenv, typeenv) input = 
+let just_optimise parse (valenv, typingenv) input = 
   Settings.set_value interacting false;
   let parse = parse Parse.program in
   let exprs =          Performance.measure "parse" parse input in 
-  let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
-  let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+  let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
+  let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
     print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
 let rec interact envs =
-let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typeenv) input = 
+let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
   handle_errors
     (fun input ->
        match Performance.measure "parse" parse input with 
          | Left exprs -> 
-             let typeenv, exprs = Performance.measure "type_program" (Inference.type_program typeenv) exprs in
-             let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typeenv, exprs) in
+             let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
+             let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
              let exprs = List.map Syntax.labelize exprs in
              let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
                print_result (Syntax.node_datatype (last exprs)) result;
-               (valenv, typeenv)
+               (valenv, typingenv)
          | Right (directive : Sugartypes.directive) -> 
-             execute_directive directive valenv typeenv)
+             execute_directive directive valenv typingenv)
     input
 in
 let error_handler = Errors.display_errors stderr (fun _ -> envs) in

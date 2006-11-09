@@ -24,6 +24,9 @@ type assumption = datatype assumption_basis
     deriving (Show, Pickle)
 type environment = datatype environment_basis
     deriving (Show, Pickle)
+type alias_environment = datatype alias_environment_basis
+(*    deriving (Show, Pickle)*)
+type typing_environment = environment * alias_environment
 
 let (-->) x y = `Function (x,y)
 

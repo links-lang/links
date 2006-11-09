@@ -18,6 +18,10 @@ type quantifier = Type_basis.quantifier
 type assumption = datatype assumption_basis deriving (Show,Pickle)
 type environment = datatype environment_basis deriving (Show,Pickle)
 
+type alias_environment = datatype Type_basis.alias_environment_basis
+
+type typing_environment = environment * alias_environment
+
 val (-->) : datatype -> datatype -> datatype
 
 val show_mailbox_annotations : bool Settings.setting

@@ -310,7 +310,7 @@ type fieldset = All
               | Fields of (string list)
 (* FIXME: Make sure we don't throw away fields that are used in 
    a SortBy clause. *)
-let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
+let sql_projections ((env, alias_env):(Types.environment * Types.alias_environment)) : RewriteSyntax.rewriter =
   let merge_needed : fieldset list -> fieldset =
     let merge2 = function
       | All, _ | _, All -> All
@@ -324,7 +324,7 @@ let sql_projections (env:Types.environment) : RewriteSyntax.rewriter =
                match apply with
                  | Variable (name, _) -> snd (assoc name env)
                  | Abstr _ ->
-                     (match snd (Inference.type_expression env (erase apply)) with
+                     (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
                         | Abstr (_, _, `T (_, datatype, _)) -> datatype
                         | _ -> failwith "OP442")
                  | _ -> failwith "OP437"
@@ -753,7 +753,7 @@ let rewriters env = [
   print_definition "wine_listing" ~msg:"after take/drop"
 ]
 
-let run_optimisers : Types.environment -> RewriteSyntax.rewriter
+let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise env expr =

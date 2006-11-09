@@ -913,7 +913,7 @@ let generate_program environment expression =
 (* p is the gen'd javascript (type `code') *)
 
 let links2js = (Parse.parse_string Parse.program
-                ->- Inference.type_program Library.type_env ->- snd
+                ->- Inference.type_program Library.typing_env ->- snd
                   ->- map ((Utility.perhaps_apply Optimiser.uniquify_expression)
                            ->- generate 
                              ->- simplify_completely))
@@ -968,7 +968,7 @@ let rhino_output linkscode =
   let gen = show
     -<- generate
     -<- (Utility.perhaps_apply Optimiser.uniquify_expression)
-    -<- List.hd -<- snd -<- Inference.type_program Library.type_env -<- Parse.parse_string Parse.program in
+    -<- List.hd -<- snd -<- Inference.type_program Library.typing_env -<- Parse.parse_string Parse.program in
   let tempfile = Filename.temp_file "linkstest" ".js" in
   let cleanup () = (try Sys.remove tempfile with _ -> ()) in
     try

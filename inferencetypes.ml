@@ -72,6 +72,7 @@ let
 
 type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
+type alias_environment = datatype Type_basis.alias_environment_basis
 
 type inference_type_map =
     ((datatype Unionfind.point) IntMap.t ref *
@@ -501,6 +502,12 @@ let inference_environment_of_environment : inference_type_map -> Types.environme
   List.map (fun (name, assumption) -> (name, inference_assumption_of_assumption var_map assumption))
 let environment_of_inference_environment : environment -> Types.environment =
   List.map (fun (name, assumption) -> (name, assumption_of_inference_assumption assumption))
+
+(* alias environments *)
+let inference_alias_environment_of_alias_environment : inference_type_map -> Types.alias_environment -> alias_environment = fun var_map ->
+  StringMap.map (inference_assumption_of_assumption var_map)
+let alias_environment_of_inference_alias_environment : alias_environment -> Types.alias_environment =
+  StringMap.map assumption_of_inference_assumption
 
 (* conversions between expressions and inference expressions *)
 let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun var_map ->

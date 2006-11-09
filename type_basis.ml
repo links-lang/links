@@ -48,6 +48,8 @@ type 'typ assumption_basis = ((quantifier list) * 'typ)
     deriving (Show, Pickle)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
     deriving (Show, Pickle)
+type 'typ alias_environment_basis = ('typ assumption_basis) Utility.StringMap.t
+(*    deriving (Show, Pickle)*)
 
 (* Functions on environments *)
 let environment_values = fun env -> snd (List.split env)
