@@ -30,7 +30,7 @@ OCAMLC := ocamlc.opt
 
 # use ocamldep.opt if it exists
 # (it doesn't exist for all OCaml installations)
-OCAMLDEP := $(shell if ocamldep.opt 1&>0 /dev/null; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
+OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
 PATH := $(PATH):deriving/syntax
 
