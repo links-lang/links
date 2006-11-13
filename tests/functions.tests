@@ -48,3 +48,11 @@ Negative recursive type
 fun (x) {x:a} : a
 stderr : @.*
 exit : 1
+
+Typename [1]
+typename Foo = Int; fun f(x:Foo) {x}; f(1)
+stdout : 1 : Foo
+
+Typename [2]
+typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x}; f(false, 1, "two")
+stdout : (false, 1, "two") : Bar (Bool,Int,String)

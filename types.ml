@@ -185,7 +185,8 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
      | `Application ("List", [`Primitive `Char]) -> "String"
      | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
      | `Application ("List", [elems])              ->  "["^ string_of_datatype' vars elems ^"]"
-     | `Application (s, ts)     ->  s ^ " ("^ String.concat "," (List.map (string_of_datatype' vars) ts) ^")"
+     | `Application (s, []) -> s
+     | `Application (s, ts) ->  s ^ " ("^ String.concat "," (List.map (string_of_datatype' vars) ts) ^")"
 
 and string_of_row' sep vars (field_env, row_var) =
   let present_fields, absent_fields = split_fields field_env in

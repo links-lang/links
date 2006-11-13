@@ -413,11 +413,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                    string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
             else
               let _, tenv =
-                List.fold_right (fun tv (ts, tenv) ->
+                List.fold_left (fun (ts, tenv) tv ->
                                    match tv, ts with
                                      | `TypeVar var, (t::ts) ->
                                          ts, IntMap.add var t tenv
-                                     | _ -> assert false) vars (ts, IntMap.empty) in
+                                     | _ -> assert false) (ts, IntMap.empty) vars in
               let alias' = instantiate_datatype (tenv, IntMap.empty) alias
               in
                 unify' rec_env (alias', t)        
