@@ -137,6 +137,8 @@ let rec show t : 'a expression' -> string = function
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
+  | TypeDecl (typename, quantifiers, datatype, data) ->
+      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -293,6 +295,7 @@ let rec list_expr data = function
 
 let expression_data : ('a expression' -> 'a) = function 
         | Define (_, _, _, data) -> data
+        | TypeDecl (_, _, _, data) -> data
         | HasType (_, _, data) -> data
         | Boolean (_, data) -> data
         | Integer (_, data) -> data
@@ -436,6 +439,8 @@ let skeleton = function
   | TypeDecl(typename, quantifiers, datatype, d) ->
       TypeDecl(typename, quantifiers, datatype, d)
   | Placeholder(label, d) -> Placeholder(label, d)
+  | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
+  | TypeDecl(typename, quantifiers, datatype, d) -> TypeDecl(typename, quantifiers, datatype, d)
 
   (* One sub-expression *)
   | Define(name, expr, loc_annotation, d) ->
@@ -480,6 +485,3 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
-      
-  (* FIXME: Sam, please fill in the names for these *)
-  | Alien(a, b, c, d) -> Alien(a, b, c, d)

@@ -528,7 +528,7 @@ primary_datatype:
                                                                    | "Xml"     -> ListType (PrimitiveType `XmlItem)
                                                                    | "Database"-> DBType
                                                                    | "String"  -> ListType (PrimitiveType `Char)
-                                                                   | t         -> PrimitiveType (`Abstract t)
+                                                                   | t         -> TypeApplication ($1, [])
                                                                }
 
 | CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }
