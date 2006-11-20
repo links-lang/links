@@ -1,6 +1,10 @@
 fun waiting(id) client {
  receive {
-  case MouseDown(elem)  -> dragging(id, elem)
+  case MouseDown(elem)  ->
+   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+    dragging(id, elem)
+   else
+    waiting(id)
   case MouseUp          -> waiting(id)
   case MouseOut(toElem) -> waiting(id)
  }
@@ -9,7 +13,11 @@ fun waiting(id) client {
 fun dragging(id, elem) client {
  receive {
   case MouseUp          -> waiting(id)
-  case MouseDown(elem)  -> dragging(id, elem)
+  case MouseDown(elem)  ->
+   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+    dragging(id, elem)
+   else
+    waiting(id)
   case MouseOut(toElem) ->
    if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
     swapNodes(elem, toElem);

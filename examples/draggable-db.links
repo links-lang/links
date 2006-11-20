@@ -4,7 +4,11 @@ fun step(state, id, items) client {
   case SetList(items)   ->
    draw(id, items);
    step(state, id, items)
-  case MouseDown(elem)  -> step(Dragging(elem), id, items)
+  case MouseDown(elem)  ->
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      step(Dragging(elem), id, items)
+     else
+      step(Waiting, id, items)
   case MouseUp          -> step(Waiting, id, items)
   case MouseOut(toElem) ->
    switch (state) {
