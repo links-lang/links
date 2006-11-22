@@ -348,6 +348,126 @@ let empty_var_maps : unit -> inference_type_map =
       (type_var_map, row_var_map)
     
 
+(* skeleton for performing a fold over (inference) datatypes *)
+let rec datatype_skeleton :  type_var_set -> datatype -> datatype = fun rec_vars ->
+  function
+    | `Not_typed -> `Not_typed
+    | `Primitive p -> `Primitive p
+    | `Function (f, t) -> `Function (datatype_skeleton rec_vars f, datatype_skeleton rec_vars t)
+    | `Record row -> `Record (row_skeleton rec_vars row)
+    | `Variant row -> `Variant (row_skeleton rec_vars row)
+    | `Table row -> `Table (row_skeleton rec_vars row)
+    | `Application (s, ts) -> `Application (s, List.map (datatype_skeleton rec_vars) ts)
+    | `MetaTypeVar point ->
+        (match Unionfind.find point with
+           | `RigidTypeVar var -> `RigidTypeVar var
+           | `TypeVar var -> `TypeVar var
+           | `Recursive (var, t) ->
+               if IntSet.mem var rec_vars then
+                 `Recursive (var, t)
+               else
+                 `Recursive (var, datatype_skeleton (IntSet.add var rec_vars) t)
+           | `MetaTypeVar _ -> assert false
+           | t -> `MetaTypeVar (Unionfind.fresh (datatype_skeleton rec_vars t)))
+    | `Recursive _
+    | `RigidTypeVar _
+    | `TypeVar _ -> assert false
+and field_spec_skeleton = fun rec_vars ->
+  function
+    | `Present t -> `Present (datatype_skeleton rec_vars t)
+    | `Absent -> `Absent
+and field_spec_map_skeleton = fun rec_vars field_env ->
+  StringMap.map (field_spec_skeleton rec_vars) field_env
+and row_skeleton = fun rec_vars row ->
+  let field_env, row_var = row in (*flatten_row row in*)
+  let field_env' = field_spec_map_skeleton rec_vars field_env in
+  let row_var' =
+    match row_var with
+      | `RowVar None -> `RowVar None
+      | `MetaRowVar point ->
+          let (field_env, row_var) = Unionfind.find point in
+            assert(not (contains_present_fields field_env));
+            (match row_var with
+               | `RowVar None -> `RowVar None
+               | `RowVar (Some var)
+               | `RigidRowVar var -> `RowVar (Some var)
+               | `RecRowVar (var, rec_row) ->
+                   if IntSet.mem var rec_vars then
+                     `RowVar (Some var)
+                   else
+                     `RecRowVar (var, row_skeleton (IntSet.add var rec_vars) rec_row)
+               | `MetaRowVar _ -> assert false)
+      | `RigidRowVar _
+      | `RowVar (Some _)
+      | `RecRowVar (_, _) -> assert false
+  in
+    field_env', row_var'
+
+
+(* check for undefined aliases *)
+exception UndefinedAlias of string
+
+let rec free_alias_check alias_env = fun rec_vars ->
+  let fac = free_alias_check alias_env in
+    function
+      | `Not_typed -> ()
+      | `Primitive p -> ()
+      | `Function (f, t) -> fac rec_vars f; fac rec_vars t
+      | `Record row -> free_alias_check_row alias_env rec_vars row
+      | `Variant row -> free_alias_check_row alias_env rec_vars row
+      | `Table row -> free_alias_check_row alias_env rec_vars row
+      | `Application (s, ts) ->
+          if StringMap.mem s alias_env then
+            List.iter (fac rec_vars) ts
+          else
+            raise (UndefinedAlias ("Unbound alias: "^s))
+      | `MetaTypeVar point ->
+          (match Unionfind.find point with
+             | `RigidTypeVar var
+             | `TypeVar var -> ()
+             | `Recursive (var, t) ->
+                 if IntSet.mem var rec_vars then
+                   ()
+                 else
+                   fac (IntSet.add var rec_vars) t
+             | `MetaTypeVar _ -> assert false
+             | t -> fac rec_vars t)
+      | `Recursive _
+      | `RigidTypeVar _
+      | `TypeVar _ -> assert false
+and free_alias_check_field_spec alias_env = fun rec_vars ->
+  function
+    | `Present t -> free_alias_check alias_env rec_vars t
+    | `Absent -> ()
+and free_alias_check_field_spec_map alias_env = fun rec_vars field_env ->
+  StringMap.iter (fun _ -> free_alias_check_field_spec alias_env rec_vars) field_env
+and free_alias_check_row alias_env = fun rec_vars row ->
+  let field_env, row_var = row
+  in
+    free_alias_check_field_spec_map alias_env rec_vars field_env;
+    match row_var with
+      | `RowVar None -> ()
+      | `MetaRowVar point ->
+          let (field_env, row_var) = Unionfind.find point in
+            assert(not (contains_present_fields field_env));
+            (match row_var with
+               | `RowVar None -> ()
+               | `RowVar (Some var)
+               | `RigidRowVar var -> ()
+               | `RecRowVar (var, rec_row) ->
+                   if IntSet.mem var rec_vars then
+                     ()
+                   else
+                     free_alias_check_row alias_env (IntSet.add var rec_vars) rec_row
+               | `MetaRowVar _ -> assert false)
+      | `RigidRowVar _
+      | `RowVar (Some _)
+      | `RecRowVar (_, _) -> assert false
+
+(* interface *)
+let free_alias_check alias_env = free_alias_check alias_env IntSet.empty
+let free_alias_check_row alias_env = free_alias_check_row alias_env IntSet.empty
+
 (*** Conversions ***)
 
 (* implementation *)

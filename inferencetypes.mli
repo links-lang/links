@@ -74,6 +74,12 @@ Also returns the outermost RecRowVar that was unwrapped if it exists,
 or None otherwise.
 *)
 
+(* check for free aliases *)
+exception UndefinedAlias of string
+
+val free_alias_check : alias_environment -> datatype -> unit
+val free_alias_check_row : alias_environment -> row -> unit
+
 module InferenceTypeOps :
   (Type_basis.TYPEOPS
    with type typ = datatype

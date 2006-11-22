@@ -1242,6 +1242,7 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
       let expr = type_check typing_env expr in
 	let expr_type = type_of_expression expr in
 	let inference_datatype = inference_type_of_type var_maps datatype in
+          free_alias_check alias_env inference_datatype;
 	  unify(expr_type, inference_datatype);
 	  HasType(expr, datatype, (pos, type_of_expression expr, None))
   | TypeDecl _ ->
@@ -1251,7 +1252,8 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
       assert(false)
   with 
       Unify_failure msg
-    | UndefinedVariable msg ->
+    | UndefinedVariable msg
+    | UndefinedAlias msg ->
         raise (Type_error(position expression, msg))
           (* end "type_check" *)
 
