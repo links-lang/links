@@ -775,7 +775,9 @@ let value_env = ref (continuationize_env env)
 and type_env : Types.environment = 
   Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
 and alias_env : Types.alias_environment =
-  StringMap.add "Event" ([], (`Primitive (`Abstract "Event"))) StringMap.empty
+  let a = Type_basis.fresh_raw_variable () in
+    StringMap.add "List" ([`TypeVar a], (`Application ("List", [`TypeVar a])))
+      (StringMap.add "Event" ([], (`Primitive (`Abstract "Event"))) StringMap.empty)
 
 let typing_env = (type_env, alias_env)
 
