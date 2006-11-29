@@ -1242,7 +1242,12 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
       let expr = type_check typing_env expr in
 	let expr_type = type_of_expression expr in
 	let inference_datatype = inference_type_of_type var_maps datatype in
-          free_alias_check alias_env inference_datatype;
+(* [HACK]
+   The following line should be uncommented once we have proplery implemented 
+   parameteric abstract types. At the moment we are using a free alias
+   ("List") to simulate the parametric list type.
+*)          
+(*          free_alias_check alias_env inference_datatype; *)
 	  unify(expr_type, inference_datatype);
 	  HasType(expr, datatype, (pos, type_of_expression expr, None))
   | TypeDecl _ ->
