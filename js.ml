@@ -32,6 +32,7 @@ type code = | Var   of string
             | Bind  of (string * code * code)
             | Seq   of (code * code)
             | Die   of (string)
+            | Ret   of code
             | Nothing
  deriving (Show, Rewriter)
 module RewriteCode = Rewrite_code
@@ -52,6 +53,7 @@ let code_freevars : code -> string list =
     | Dict (fs) -> concat_map (aux bound -<- snd) fs
     | Lst elems -> concat_map (aux bound) elems
     | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
+    | Ret e -> aux bound e
   in aux []
 
 (* "Blind" (non-capture-avoiding) renaming.  By the time this is run
@@ -82,6 +84,7 @@ let rec rename' renamer = function
                                    rename' renamer body)
   | Seq(first, second) -> Seq(rename' renamer first,
                               rename' renamer second)
+  | Ret e -> Ret (rename' renamer e)
   | simple_expr -> simple_expr
 and rename renamer body = rename' renamer body
 
@@ -189,6 +192,7 @@ let rec local_names : code -> string list = function
   | Seq (l, r) -> local_names l @ local_names r
   | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
   | Defs (bs) -> map fst bs
+  | Ret (e) -> local_names e
 
 (* Generate code from intermediate language *) 
 let rec show : code -> string = 
@@ -214,7 +218,7 @@ let rec show : code -> string =
   let show_def = function
       | name, (Fn _ as f) -> show_func name f
       | name, Bind (v, (Fn _ as f), Var v') when v = v'  -> show_func (*name*) v f ^ "\nvar " ^ name ^ " = " ^ v
-      | name, value -> "var " ^ name ^ " = " ^ show value in
+      | name, value -> "var " ^ name ^ "; " ^ show value ^ ";" in
     function
       | Var s -> s
       | Lit s -> s
@@ -232,9 +236,10 @@ let rec show : code -> string =
       | Lst elems -> "[" ^ arglist elems ^ "]"
       | Bind (name, value, body) -> "("^ name ^" = "^ 
           show value ^", "^ show body ^")"
-      | Seq (l, r) -> "(" ^ show l ^ ", " ^ show r ^ ")"
+      | Seq (l, r) -> "(" ^ show l ^", "^ show r ^ ")"
       | Nothing -> ""
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
+      | Ret e -> "return (" ^ show e ^ ")"
 
 (* create a string literal, quoting special characters *)
 let string_js_quote s =
@@ -325,6 +330,7 @@ let strip_lcolon evName =
 
 (* Generate a server stub that calls the corresponding server function *)
 let generate_server_stub = function
+  | Define (n, Abstr (arg,_,_), `Server, _)
   | Define (n, Rec ([_, (Abstr (arg,_,_)), _], Variable _, _), `Server, _) ->
       let arglist = [arg] in
         Defs [n, Fn (arglist @ ["__kappa"], 
@@ -336,11 +342,25 @@ let generate_server_stub = function
                            arglist
                        )]))]
   | e
-    -> failwith ("Cannot generate server stub for " ^ string_of_expression e)
+    -> failwith ("Cannot generate server stub for " ^
+(*string_of_expression e)*)
+Syntax.Show_expression.show e)
+
+
+let no_yield_app (f, args) =
+  Call (Var f, args)
+
+let yield_app (f, args) =
+  Call(Var "_yield", (Var f) :: args)
+
+let no_yield_cont_app arg = no_yield_app ("__kappa", [arg])
+
+let yield_cont_app arg =
+  Call(Var "_yieldCont", [Var "__kappa"; arg])
 
 
 let trivial_cps expr = 
-  Fn(["__kappa"], Call(Var "__kappa", [expr]))
+  Fn(["__kappa"], yield_cont_app expr)
 
 (* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("_idy")
@@ -361,8 +381,7 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
   let tower = fold_right (fun (aname, vname, item) expr ->
                             Call(item, [Fn([vname], expr)])
                          ) attrs_cps tower in
-    Fn(["__kappa"], tower)
-      
+    Fn(["__kappa"], tower)       
 
 (** generate
     Generate javascript code for a Links expression
@@ -380,8 +399,7 @@ let rec generate : 'a expression' -> code =
             Fn(["__kappa"],
                Call(l_cps, [Fn(["__l"],
                    Call(r_cps, [Fn(["__r"],
-                        Call(Var "__kappa", 
-                             [Call (Var "_concat", [Var "__l"; Var "__r"])]))]))])) 
+                        yield_cont_app (Call (Var "_concat", [Var "__l"; Var "__r"])))]))]))
       | e ->          
           (* failwith "unimpl"; *)
           generate e
@@ -417,22 +435,20 @@ let rec generate : 'a expression' -> code =
         Fn(["__kappa"],
            Call(l_cps, [Fn(["__l"],
               Call(r_cps, [Fn(["__r"],
-                 Call(Var "__kappa", [Call(Var "_eq", [Var "__l"; Var "__r"])]))]))]))
+                 yield_cont_app (Call(Var "_eq", [Var "__l"; Var "__r"])))]))]))
   | Comparison (l, op, r, _)           -> 
       let l_cps = generate l in
       let r_cps = generate r in
         Fn(["__kappa"],
            Call(l_cps, [Fn(["__l"], 
                 Call(r_cps, [Fn(["__r"],
-                     Call(Var "__kappa", 
-                          [Binop(Var "__l", comparison_name op, Var "__r")]))]))]))
+                     yield_cont_app (Binop(Var "__l", comparison_name op, Var "__r")))]))]))
       (* Should strings be handled differently at this level? *)
   | Nil _                 -> trivial_cps (Lst [])
   | List_of (e, _)        -> 
       let content_cps = generate e in
         Fn(["__kappa"],
-           (Call(content_cps, [Fn(["__x"], 
-                                  (Call(Var "__kappa", [Lst [Var "__x"]])))])))
+           (Call(content_cps, [Fn(["__x"], yield_cont_app (Lst [Var "__x"]))])))
   | (Concat _) as c          -> 
       reduce_list c
 (*  | Concat (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
@@ -440,19 +456,17 @@ let rec generate : 'a expression' -> code =
       let b_cps = generate b in
       let e_cps = generate e in
         Fn(["__kappa"],
-           Call(b_cps, [Fn(["__b"],
-                           Call(Call(Var "_accum", [Var "__kappa"]),
-                                [Fn([v; "__kappa"],
-                                    Call(e_cps, [Var "__kappa"]));
-                                 Var "__b"]))]))
+           Call(b_cps, [Fn(["__b"], Call (Var "_accum",
+                                          [Fn([v; "__kappa"], Call(e_cps, [Var "__kappa"]));
+                                           Var "__b";
+                                           Var "__kappa"]))]))
   | Xml_node _ as xml when isinput xml -> lname_transformation xml
   | Xml_node _ as xml -> laction_transformation xml
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn(["__kappa"], 
-         Call(Var "__kappa", 
-              [Fn ([arglist; "__kappa"], Call(generate body, [Var "__kappa"]))]))
+         yield_cont_app (Fn ([arglist; "__kappa"], Call(generate body, [Var "__kappa"]))))
         
   | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
       let l_cps = generate l in
@@ -460,9 +474,7 @@ let rec generate : 'a expression' -> code =
         Fn(["__kappa"], 
            Call(l_cps, [Fn(["__l"],
                 Call(r_cps, [Fn(["__r"],
-                     Call(Var "__kappa",
-                          [Binop (Var "__l", binop_name op, Var "__r")]))]))]))
-
+                     yield_cont_app (Binop (Var "__l", binop_name op, Var "__r")))]))]))
   | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
       let f_cps = generate f in
@@ -481,9 +493,8 @@ let rec generate : 'a expression' -> code =
                  In the future library functions should be "native". *)
               Call(Var f_name,
                    (map (fun name -> Var name) arg_names) @ [kappa])
-          | _ -> 
-              Call (Var "_yield",
-                    [Var f_name] @ (map (fun name -> Var name) arg_names) @ [kappa])
+          | _ ->
+              yield_app (f_name, (map (fun name -> Var name) arg_names) @ [kappa])
       in
       let arg_tower = fold_right wrap_cps_terms 
         (combine cps_args arg_names)
@@ -494,7 +505,15 @@ let rec generate : 'a expression' -> code =
   | Define (_, _, `Server, _) as d -> generate_server_stub d
   | Define (_, _, `Native, _) as d -> generate_native_stub d
   | Define (n, e, (`Client|`Unknown), _)-> 
-      Defs ([n, Call(generate e, [Var "_idy"])])   (* definitions are always top level *)
+(* [NOTE]
+     Passing in _idy doesn't work because we are not in traditional CPS.
+     Traditional CPS terms return a value, but ours don't (because JavaScript
+     requires you to write an explicit return). To get round this problem, we
+     capture the return value by imperative assignment. An alternative would be
+     to modify our CPS transform to produce CPS terms that explicitly return
+     values.
+*)
+      Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
@@ -513,9 +532,8 @@ let rec generate : 'a expression' -> code =
       in
         Fn(["__kappa"], Call(r_cps, [Fn(["__r"], 
                       Call(v_cps, [Fn(["__v"],
-                                  Call(Var "__kappa",
-                                       [extension_val])
-                                     )]))]))
+                                  yield_cont_app (extension_val))
+                                  ]))]))
   | Record_selection_empty (Variable _, b, _)  -> 
       generate b
   | Record_selection_empty (v, b, _)  -> 
@@ -523,7 +541,7 @@ let rec generate : 'a expression' -> code =
       let b_cps = generate b in
         Fn(["__kappa"], Call(v_cps, [Fn(["ignored"], 
                                         Call(b_cps, [Fn(["__b"],
-                                                        Call(Var "__kappa", [Var "__b"]))]))]))
+                                                        yield_cont_app (Var "__b"))]))]))
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
@@ -543,8 +561,8 @@ let rec generate : 'a expression' -> code =
       let v_cps = generate v in
         Fn(["__kappa"],
            Call(v_cps, [Fn(["__v"],
-                Call(Var "__kappa", 
-                     [Call (Var "_project", [strlit l; Var "__v"])]))]))
+                yield_cont_app
+                     (Call (Var "_project", [strlit l; Var "__v"])))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
       let v_cps = generate v in
       let b_cps = generate b in
@@ -558,9 +576,9 @@ let rec generate : 'a expression' -> code =
       let content_cps = generate e in
         Fn(["__kappa"], 
            Call(content_cps, [Fn(["__content"],
-                                 Call(Var "__kappa", 
-                                      [Dict [("_label", strlit l);
-                                             ("_value", Var "__content")]]))]))
+                                 yield_cont_app
+                                      (Dict [("_label", strlit l);
+                                             ("_value", Var "__content")]))]))
   | Variant_selection_empty (_, _) ->
       Fn(["__kappa"], Call(Var "_fail",
                          [strlit "closed switch got value out of range"]))
@@ -787,7 +805,7 @@ and generate_direct_style : 'a expression' -> code =
 and generate_native_stub = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = [arg] in
-        Defs [n, Fn (arglist @ ["__kappa"], Call(Var "__kappa", [generate_direct_style body]))]
+        Defs [n, Fn (arglist @ ["__kappa"], yield_cont_app (generate_direct_style body))]
   | e -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
       
 module StringSet = Set.Make(String)
@@ -807,6 +825,7 @@ let rec freevars = function
   | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars terms)
   | Bind(var, src, body) -> StringSet.union (freevars src) (StringSet.remove var (freevars body))
   | Seq(first, rest) -> StringSet.union (freevars first) (freevars rest)
+  | Ret(e) -> freevars e
   | _ -> StringSet.empty
 
 (* FIXME: There is some problem with this whereby variables are captured *)
@@ -836,6 +855,7 @@ let rec replace' var replcmt fvs = function
                                    else body)
   | Seq(first, second) -> Seq(replace' var replcmt fvs first,
                               replace' var replcmt fvs second)
+  | Ret(e) -> Ret(replace' var replcmt fvs e)
   | simple_expr -> simple_expr
 and replace var expr body = replace' var expr (freevars expr) body
 and uniquify_args = function
@@ -846,15 +866,23 @@ and uniquify_args = function
                        replace' old (Var noo) (StringSet.singleton noo) body)
            subst body)
 
-
+(* reduce administrative redexes *)
 let rec simplify = function
-  | Call(Fn([formal_arg], body), [actual_arg]) 
+  (* beta reduction *)
+  | Call(Fn([formal_arg], body), [actual_arg])
+  | Call(Var "_yieldCont", [Fn([formal_arg], body); actual_arg])
       when Str.string_match (Str.regexp "^__") formal_arg 0
     ->
       replace formal_arg actual_arg body
 
   | Call(Var "_idy", [arg]) -> arg
-      
+
+  (* eta reduction *)
+  | Fn([arg], Call(f, [Var arg']))
+      when arg = arg' && Str.string_match (Str.regexp "^__") arg 0
+    ->
+      f
+
       (* The other cases are just compatible closure *)
   | Call(f, args) -> Call(simplify f, map (simplify) args )
   | Defs defs -> Defs(alistmap (simplify) defs)
@@ -865,6 +893,7 @@ let rec simplify = function
   | Lst(terms) -> Lst(map (simplify) terms)
   | Bind(name, expr, body) -> Bind(name, simplify expr, simplify body)
   | Seq(first, second) -> Seq(simplify first, simplify second)
+  | Ret(e) -> Ret(simplify e)
   | simple_expr -> simple_expr
 
 let rec simplify_completely expr = 
