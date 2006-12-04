@@ -87,3 +87,7 @@ stdout : <xml>this &amp; that</xml> : Xml
 Looping in XML quasis, with multiple content elements.
 var things = [1, 2];<ul>{for (var x <- things) <li>{stringToXml(intToString(x))}</li><li>1</li>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : Xml
+
+XML forest
+<#>foo<a/><b>bar</b>fubar</#>
+stdout : foo<a/><b>bar</b>fubar : Xml

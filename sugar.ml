@@ -1124,7 +1124,17 @@ module Desugarer =
                  | [] -> String ("", pos)
                  | [x] -> desugar x
                  | xs  -> (fold_right concat xs (Nil (pos))) in
-                 Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
+                 if (tag = "#") then
+                   begin
+                     if List.length attrs != 0 then
+                       raise (ASTSyntaxError (Syntax.data_position pos, "Xml forest literals cannot have attributes"))
+                     else
+                       List.fold_right
+                         (fun node nodes ->
+                            Concat (desugar node, nodes, pos)) subnodes (Nil pos)
+                   end
+                 else
+                   Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
            | XmlForest []  -> Nil  (pos)
            | XmlForest [x] -> desugar x
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
