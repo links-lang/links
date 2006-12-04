@@ -1131,7 +1131,7 @@ module Desugarer =
                      else
                        List.fold_right
                          (fun node nodes ->
-                            Concat (desugar node, nodes, pos)) subnodes (Nil pos)
+                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Types.xml, pos))
                    end
                  else
                    Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
