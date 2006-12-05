@@ -1213,7 +1213,7 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
 *)          
 (*          free_alias_check alias_env inference_datatype; *)
 	  unify(expr_type, inference_datatype);
-	  HasType(expr, datatype, (pos, type_of_expression expr, None))
+	  HasType(expr, datatype, (pos, inference_datatype, None))
   | TypeDecl _ ->
       failwith "Type declarations only supported at top-level"
   | Placeholder _ 
@@ -1463,18 +1463,13 @@ let type_program typing_env expressions =
     debug_if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
-	 type_program (create_var_maps expressions) typing_env expressions) in
-  let typing_env', expressions' =
+	 type_program (create_var_maps expressions) typing_env expressions)
+  in
     (* with mailbox parameters *)
     debug_if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
-    let typing_env, expressions =
-      Types.with_mailbox_typing true
-	(fun () ->
-	   type_program (create_var_maps expressions) typing_env expressions)
-    in
-      typing_env, expressions
-  in
-    typing_env', expressions'
+    Types.with_mailbox_typing true
+      (fun () ->
+	 type_program (create_var_maps expressions) typing_env expressions)
 
 let type_expression typing_env expression =
   check_for_duplicate_defs typing_env [expression];
@@ -1483,15 +1478,10 @@ let type_expression typing_env expression =
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
     Types.with_mailbox_typing false
       (fun () ->
-	 type_expression (create_var_maps [expression]) typing_env expression) in
-  let typing_env', expressions' =
+	 type_expression (create_var_maps [expression]) typing_env expression)
+  in
     (* with mailbox parameters *)
     debug_if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
-    let typing_env, expression = 
-      Types.with_mailbox_typing true
-	(fun () ->
-	   type_expression (create_var_maps [expression]) typing_env expression)
-    in
-      typing_env, expression
-  in
-    typing_env', expressions'
+    Types.with_mailbox_typing true
+      (fun () ->
+	 type_expression (create_var_maps [expression]) typing_env expression)
