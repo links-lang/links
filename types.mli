@@ -22,8 +22,6 @@ type alias_environment = datatype Type_basis.alias_environment_basis
 
 type typing_environment = environment * alias_environment
 
-val (-->) : datatype -> datatype -> datatype
-
 val show_mailbox_annotations : bool Settings.setting
 val using_mailbox_typing : unit -> bool
 val with_mailbox_typing : bool -> (unit -> 'a) -> 'a
