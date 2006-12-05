@@ -22,9 +22,9 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW HANDLE WHERE 
+%token FOR LARROW LLARROW HANDLE WHERE FORM
 %token COMMA VBAR DOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE WITH ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -385,8 +385,12 @@ xml_contents_list:
 
 xml_contents:
 | block                                                        { $1 }
+| form_binding                                                 { $1 }
 | xml_tree                                                     { $1 }
 | CDATA                                                        { TextNode (Utility.xml_unescape $1), pos() }
+
+form_binding:
+| LBRACE exp RARROW VARIABLE RBRACE                            { FormBinding($2, $4), pos()}
 
 conditional_expression:
 | db_expression                                                { $1 }
@@ -441,13 +445,14 @@ escape_expression:
 handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
+| FORM xml YIELDS LBRACE exp RBRACE                            { Form($2, $5), pos() }
 
 table_expression:
 | handlewith_expression                                        { $1 }
 | TABLE exp WITH datatype FROM exp                             { TableLit ($2, $4, $6), pos()} 
 
 perhaps_db_args:
-| atomic_expression                                           { Some $1 }
+| atomic_expression                                            { Some $1 }
 | /* empty */                                                  { None }
 
 perhaps_db_driver:

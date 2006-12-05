@@ -158,8 +158,10 @@ let keywords = [
  "from"     , FROM; 
  "fun"      , FUN; 
  "handle"   , HANDLE; 
+ "form"     , FORM;
  "if"       , IF; 
  "in"       , IN; 
+ "yields"   , YIELDS; 
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)

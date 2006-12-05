@@ -88,8 +88,8 @@ var input =
 
 
 # A form is rendered to Xml, and a handler applied, using the render function
-fun render(continuation)(form) {
-   var ((xml, extractor),_) = runState(form)(0);
+fun render(continuation)(frm) {
+   var ((xml, extractor),_) = runState(frm)(0);
    <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
     <input type="submit"/>
    </form>
@@ -101,11 +101,20 @@ fun render(continuation)(form) {
 var inputInt = input @@@ pure(stringToInt);
 
 # date : Form(Date)
-var date =
+var dateOld =
   inputInt @@@
   text("/") @@@
   inputInt @@@
   pure( fun(m)(_)(d){ Date(d,m) } );
+
+var date = 
+  form
+    <span>
+      { inputInt -> day } / { inputInt -> mo } 
+    </span>
+  yields {
+    Date(day, mo)
+  };
 
 
 fun showDate((Date(d,m))) { intToString(d) ++ "/" ++ intToString(m) }
@@ -119,16 +128,37 @@ fun s `label` m {
 }
 
 # travelForm : Form((person:String, age:Int, arrival:Date, departure:Date))
-var travelForm =
+var travelFormOld =
   ("person" `label` input) @@@
   ("age" `label` inputInt) @@@
   (fun(x){ <div>{x}</div> } `plug`
-    (("arrival date" `label` date) @@@
-     ("departure date" `label` date) @@@
+    (("arrival date" `label` dateOld) @@@
+     ("departure date" `label` dateOld) @@@
      pure( fun(dep)(arr){ (arr,dep) } ))) @@@
   (pure(fun(arr,dep)(a)(p){ (person=p, age=a, arrive=arr, depart=dep) }));
 
-fun showBookingInformation((person=p, age=a, arrive=arr, depart=dep)) {
+# travelForm : Form((person:String, age:Int, arrival:Date, departure:Date))
+var travelForm =
+  form
+    <table>
+     <tr>
+           <td>Person:</td> <td> { input -> person } </td>
+     </tr>
+     <tr>
+              <td>Age:</td> <td> { inputInt -> age } </td>
+     </tr>
+     <tr>
+         <td> Arrival:</td> <td> { date -> arr } </td>
+     </tr>
+     <tr>
+       <td> Departure:</td> <td> { date -> dep }</td>
+     </tr>
+    </table>
+  yields {
+    (person=person, age=age, arrival = arr, departure = dep)
+  };
+
+fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    <html>
      <h1>Results</h1>
      <p>

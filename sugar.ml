@@ -26,6 +26,48 @@ type 'r a_pattern = [
 
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
+(** {Expression Utilities} 
+    Some utilities for constructing expressions.
+
+    I'm absolutely un-crazy about these names; let's have a conference.
+*)
+
+let string_to_ppattern(str, pos) = `Variable str, pos
+
+let stringlist_to_tuplepattern_aux strs pos = `Tuple (map string_to_ppattern strs), pos
+let stringlist_to_tuplepattern ppos : (string * pposition) list -> ppattern list = function
+    [] -> [`Any, ppos]
+  | [x, pos] -> [`Variable x, pos]
+  | xs -> [stringlist_to_tuplepattern_aux xs ppos]
+
+(** [abstract_expr_curried_for_tuple_list ppos expr tuples] 
+
+    Given an expression [expr] (possibly not closed) and a list of
+    lists of variables [tuples], this abstracts the expression to form
+    a curried function of several tuples (each tuple in [tuples]).
+    The expression is in Sugar format, not Syntax.
+*)
+let abstract_expr_curried_for_tuple_list ppos expr tuples = 
+  fold_left (fun result names -> 
+               (FunLit(None, stringlist_to_tuplepattern ppos names, result), ppos)
+            ) expr tuples
+
+(** Construct a Links list out of a list of Links expressions; all
+    will have the source position [pos].
+*)
+let make_links_list pos elems =
+  let concat_expr l r = Concat(l, r, pos) in
+    fold_right concat_expr elems (Nil pos)
+
+(** Returns a (Syntax-format) function that plugs some given XML in as
+    the contents of an XML element having the given tag name and attributes. *)
+let make_xml_context tag (attrs:(string * untyped_expression) list) pos = 
+  let hole = gensym() in
+    Abstr(hole, Xml_node(tag, attrs, [Variable(hole, pos)], pos), pos)
+
+let apply2_curried pos f x y =
+  Apply(Apply(f, x, pos), y, pos)
+
 (* Various flavours of a sort of `gensym'*)
 let unique_name () = Utility.gensym ()
 let db_unique_name = Utility.gensym ~prefix:"Table"
@@ -609,7 +651,6 @@ module PatternCompiler =
       val match_cases : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression
     end)
 
-
 module Desugarer =
   (* Convert a syntax tree as returned by the parser into core syntax *)
 (struct
@@ -764,6 +805,8 @@ module Desugarer =
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
              | XmlForest es -> etvs es
              | TextNode _ -> empty
+             | Form (e1, e2) -> flatten [etv e1; etv e2]
+             | FormBinding (e, _) -> etv e
      and get_pattern_type_vars (p, _) = (* fold *)
        match p with 
          | `Any
@@ -1138,6 +1181,84 @@ module Desugarer =
            | XmlForest []  -> Nil  (pos)
            | XmlForest [x] -> desugar x
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
+
+           | Form (formExpr, formHandler) ->
+               let formHandlerSyntax = desugar formHandler in
+               let XmlForest trees, pos' = formExpr in
+               let result, _ = forest_to_form_expr trees (Some formHandler) pos in
+                 result
+
+     (* TBD: Need to move the Links functions xml, pure, plug, (@@@)
+        into a Prelude of some kind. *)
+     and forest_to_form_expr trees yieldsClause (pos:Syntax.untyped_data) = 
+       (* (TBD: could have a pass-through case for when there are no
+          bindings in the forest.) *)
+
+       (* We pass over the forest finding the bindings and construct a
+          term-context representing all of the form/yields expression
+          except the `yields' part (the handler). Here binding_names
+          is a list of lists, each list representing a tuple returned
+          from an inner instance of forest_to_form_expr--or, if it's a
+          singleton, a single value as bound by a binder.  *)
+       let ctxt, (* body, *) binding_names = 
+         fold_right
+           (fun (_, lpos as l) (ctxt, bs) -> 
+              let l_unsugared, binding_names = desugar_form_expr l pos in
+                ((fun r -> (apply2_curried pos (Variable("@@@", pos)) l_unsugared (ctxt(r)))),
+                 binding_names @ bs)
+           ) trees ((fun r -> r), []) in
+         (* Next we construct the handler body from the yieldsClause,
+            if any.  The yieldsClause is the user's handler; if it is
+            None then we construct a default handler that just bundles
+            up all the bound variables and returns them as a tuple.
+            Here we also form a list of the values we're
+            returning. returning_names is a list of lists,
+            representing a list of tuples of values.  *)
+       let handlerBody, returning_names = 
+         match yieldsClause with
+             Some formHandler -> formHandler, []
+           | None -> ((TupleLit (map (fun(x, pos) -> Var x, pos) (flatten binding_names)), 
+                       (Lexing.dummy_pos, Lexing.dummy_pos)), 
+                      [flatten binding_names])
+       in
+       let _, ppos = handlerBody in
+         (* The handlerFunc is simply formed by abstracting the
+            handlerBody with all the binding names, appropriately
+            destructing tuples. *)
+       let handlerFunc = abstract_expr_curried_for_tuple_list ppos handlerBody binding_names in
+         ctxt(Apply(Variable("pure", pos), desugar' lookup_pos handlerFunc, pos)), returning_names
+
+     and desugar_form_expr formExpr pos : untyped_expression * (string*pposition) list list =
+       (* TBD: Should we use the pos' values below, rather than pos given above? *)
+       if (xml_tree_has_form_binding formExpr) then
+         match formExpr with
+           | XmlForest trees, pos' -> forest_to_form_expr trees None pos
+           | FormBinding ((expr, pos), var), pos' ->
+               desugar' lookup_pos (expr, pos), [[var, pos]]
+           | Xml(tag, attrs, contents), pos' ->
+               let form_expr, bindings = forest_to_form_expr contents None pos in
+               let attrs' = (alistmap 
+                               (fun attr_phrases -> 
+                                  make_links_list pos (map (desugar' lookup_pos) attr_phrases))
+                               attrs) in
+                 (apply2_curried pos (Variable("plug", pos))
+                                     (make_xml_context tag attrs' pos)
+                                     form_expr,
+                  bindings)
+           | TextNode text, pos' -> Apply(Variable("xml", pos),
+                                          Apply(Variable("stringToXml", pos),
+                                                String(text, pos), pos), pos), [[]]
+       else
+         Apply(Variable("xml", pos), desugar' lookup_pos formExpr, pos), [[]]
+
+     and xml_tree_has_form_binding = function
+       | Xml(tag, attrs, contents), _ ->
+           List.exists xml_tree_has_form_binding contents
+       | XmlForest(trees), _ ->  List.exists xml_tree_has_form_binding trees
+       | FormBinding(expr, var), _ -> true
+       | TextNode _, _ -> false
+       | e -> failwith("Unexpected node in XML quasi")
+
      and desugar_repeat _ : Regex.repeat -> phrasenode = function
        | Regex.Star      -> ConstructorLit ("Star", None)
        | Regex.Plus      -> ConstructorLit ("Plus", None)
@@ -1218,7 +1339,12 @@ module Desugarer =
            p
          end
      in
-       desugar' lookup_pos e
+       ((*Debug.debug(Show_phrase.show e);*)
+        let result = desugar' lookup_pos e in
+          Debug.debug (string_of_expression result);
+          result
+       )
+       
 
    let desugar_datatype = generalize ->- desugar_assumption
 

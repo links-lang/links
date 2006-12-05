@@ -33,7 +33,10 @@ let extract_substring
     (code : source_code)
     (start : position)
     (finish : position) : string =
-  Buffer.sub code.text start.pos_cnum (finish.pos_cnum - start.pos_cnum)
+  if start == dummy_pos || finish == dummy_pos then
+    "*** DUMMY POSITION ****"
+  else
+    Buffer.sub code.text start.pos_cnum (finish.pos_cnum - start.pos_cnum)
 
 (* Return some lines of the source code *)
 let extract_line_range
