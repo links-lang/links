@@ -37,3 +37,7 @@ Mailboxes are not polymorphic [2]
 var pid = spawn { recv() ++ [] }; pid ! "one"; pid ! [2]
 stderr : @.*Type error.*
 exit : 1
+
+Built-in functions are polymorphic in their mailbox types
+fun f() {var x = recv(); intToString(x)}; fun g(x) {var () = recv(); intToString(x)}; (f, g)
+stdout : (fun, fun) : (() -{Int}-> String, (Int) -{()}-> String)

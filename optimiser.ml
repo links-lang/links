@@ -329,7 +329,7 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
                         | _ -> failwith "OP442")
                  | _ -> failwith "OP437"
              ) with
-               | `Function (`Record (field_env, _), _) ->
+               | `Function (`Record (field_env, _), _, _) ->
 		   let fields = StringMap.fold (fun label field_spec labels ->
 						  match field_spec with
 						    | `Present _ -> label :: labels

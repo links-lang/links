@@ -654,7 +654,14 @@ module PatternCompiler =
 module Desugarer =
   (* Convert a syntax tree as returned by the parser into core syntax *)
 (struct
-   type quantifier = [`TypeVar of string | `RowVar of string]
+   type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
+
+   (* Generation of fresh type variables *)
+   let type_variable_counter = ref 0
+   let fresh_type_variable : unit -> datatype =
+     function () -> 
+       incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
+
 
    let rec typevars : datatype -> quantifier list = 
      let rvars (fields, rv) =
@@ -667,8 +674,9 @@ module Desugarer =
             fields) @ rowvars
      in function
        | TypeVar s -> [`TypeVar s]
-       | FunctionType (s,t) -> Utility.unduplicate (=) (typevars s @ typevars t)
-       | MuType (v, k) -> snd (partition ((=)(`TypeVar v)) (typevars k))
+       | RigidTypeVar s -> [`RigidTypeVar s]
+       | FunctionType (s, m, t) -> Utility.unduplicate (=) (typevars s @ typevars m @ typevars t)
+       | MuType (v, k) -> snd (partition ((=)(`RigidTypeVar v)) (typevars k))
        | TupleType ks -> Utility.concat_map typevars ks
        | RecordType r
        | VariantType r
@@ -692,17 +700,22 @@ module Desugarer =
               match v with
                 | `TypeVar name ->
                     (`TypeVar var::vars, StringMap.add name var varmap)
+                | `RigidTypeVar name ->
+                    (`RigidTypeVar var::vars, StringMap.add name var varmap)
                 | `RowVar name ->
                     (`RowVar var::vars, StringMap.add name var varmap)) vars ([], StringMap.empty)
 
    let desugar_datatype, desugar_row =
-     let rec desugar varmap = 
+     let rec desugar varmap =
        let lookup = flip StringMap.find varmap in
        let extend = fun (name, value) -> StringMap.add name value varmap in
          function
            | TypeVar s -> (try `TypeVar (lookup s)
                            with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
-           | FunctionType (k1, k2) -> `Function (desugar varmap k1, desugar varmap k2)
+           | RigidTypeVar s -> (try `RigidTypeVar (lookup s)
+                           with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
+           | FunctionType (f, m, t) ->
+               `Function (desugar varmap f, desugar varmap m, desugar varmap t)
            | MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
                                 `Recursive (n, desugar (extend (v,n)) k)
            | UnitType -> Types.unit_type
@@ -789,7 +802,7 @@ module Desugarer =
              | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
 
              | TypeAnnotation(e, k) -> flatten [etv e; tv k]
-             | TypeDeclaration (_, args, datatype) -> [List.map (fun k -> `TypeVar k) args] @ tv datatype
+             | TypeDeclaration (_, args, datatype) -> [List.map (fun k -> `RigidTypeVar k) args] @ tv datatype
 
              | ConstructorLit (_, e) -> opt_etv e
              | Switch (exp, binders) -> flatten [etv exp; btvs binders]
@@ -1352,6 +1365,7 @@ module Desugarer =
   sig 
     val desugar : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val fresh_type_variable : unit -> Sugartypes.datatype
   end)
 
 include Desugarer

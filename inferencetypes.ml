@@ -5,7 +5,6 @@ type type_var_set = Type_basis.type_var_set
 type datatype = [
   | (datatype, row) Type_basis.type_basis
   | `MetaTypeVar of datatype Unionfind.point 
-  | `RigidTypeVar of int
 ]
 and field_spec = datatype Type_basis.field_spec_basis
 and field_spec_map = field_spec StringMap.t
@@ -40,7 +39,8 @@ let
 (*          [] *)
 (*        else *)
             [var]
-      | `Function (from, into)   -> free_type_vars' rec_vars from @ free_type_vars' rec_vars into
+      | `Function (f, m, t)      ->
+          free_type_vars' rec_vars f @ free_type_vars' rec_vars m @ free_type_vars' rec_vars t
       | `Record row
       | `Variant row
       | `Table row               -> free_row_type_vars' rec_vars row
@@ -94,6 +94,7 @@ struct
   let closed_row_var = `RowVar None
 
   let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
+  let make_rigid_type_variable var = `MetaTypeVar (Unionfind.fresh (`RigidTypeVar var))
   let make_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
 
   let is_closed_row =
@@ -353,7 +354,8 @@ let rec datatype_skeleton :  type_var_set -> datatype -> datatype = fun rec_vars
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
-    | `Function (f, t) -> `Function (datatype_skeleton rec_vars f, datatype_skeleton rec_vars t)
+    | `Function (f, m, t) ->
+        `Function (datatype_skeleton rec_vars f, datatype_skeleton rec_vars m, datatype_skeleton rec_vars t)
     | `Record row -> `Record (row_skeleton rec_vars row)
     | `Variant row -> `Variant (row_skeleton rec_vars row)
     | `Table row -> `Table (row_skeleton rec_vars row)
@@ -412,7 +414,7 @@ let rec free_alias_check alias_env = fun rec_vars ->
     function
       | `Not_typed -> ()
       | `Primitive p -> ()
-      | `Function (f, t) -> fac rec_vars f; fac rec_vars t
+      | `Function (f, m, t) -> fac rec_vars f; fac rec_vars m; fac rec_vars t
       | `Record row -> free_alias_check_row alias_env rec_vars row
       | `Variant row -> free_alias_check_row alias_env rec_vars row
       | `Table row -> free_alias_check_row alias_env rec_vars row
@@ -485,7 +487,15 @@ let rec inference_type_of_type : inference_type_map -> Types.datatype -> datatyp
         in
           type_var_map := IntMap.add var point (!type_var_map);
           `MetaTypeVar point
-  | `Function (f, t) -> `Function (itoft f, itoft t)
+  | `RigidTypeVar var ->
+      if IntMap.mem var (!type_var_map) then
+        `MetaTypeVar (IntMap.find var (!type_var_map))
+      else
+        let point = Unionfind.fresh (`RigidTypeVar var)
+        in
+          type_var_map := IntMap.add var point (!type_var_map);
+          `MetaTypeVar point
+  | `Function (f, m, t) -> `Function (itoft f, itoft m, itoft t)
   | `Record row -> `Record (inference_row_of_row var_maps row)
   | `Variant row -> `Variant (inference_row_of_row var_maps row)
   | `Table row -> `Table (inference_row_of_row var_maps row)
@@ -549,15 +559,17 @@ let rec type_of_inference_type : type_var_set -> datatype -> Types.datatype = fu
   function
     | `Not_typed -> `Not_typed
     | `Primitive p -> `Primitive p
-    | `Function (f, t) -> `Function (type_of_inference_type rec_vars f, type_of_inference_type rec_vars t)
+    | `Function (f, m, t) -> `Function (type_of_inference_type rec_vars f,
+                                       type_of_inference_type rec_vars m,
+                                       type_of_inference_type rec_vars t)
     | `Record row -> `Record (row_of_inference_row rec_vars row)
     | `Variant row -> `Variant (row_of_inference_row rec_vars row)
     | `Table row -> `Table (row_of_inference_row rec_vars row)
     | `Application (s, ts) -> `Application (s, List.map (type_of_inference_type rec_vars) ts)
     | `MetaTypeVar point ->
         (match Unionfind.find point with
-           | `RigidTypeVar var
            | `TypeVar var -> `TypeVar var
+           | `RigidTypeVar var -> `RigidTypeVar var
            | `Recursive (var, t) ->
                if IntSet.mem var rec_vars then
                  `TypeVar var
@@ -660,8 +672,8 @@ let rec is_negative : IntSet.t -> int -> datatype -> bool =
         | `TypeVar _ -> false
         | `MetaTypeVar point ->
             isn (Unionfind.find point)
-        | `Function (t, t') ->
-            isp t || isn t'
+        | `Function (f, m, t) ->
+            isp f || isp m || isn t
         | `Record row -> isnr row
         | `Variant row -> isnr row
         | `Table row -> isnr row
@@ -701,8 +713,8 @@ and is_positive : IntSet.t -> int -> datatype -> bool =
         | `TypeVar var' -> var = var'
         | `MetaTypeVar point ->
             isp (Unionfind.find point)
-        | `Function (t, t') ->
-            isn t || isp t'
+        | `Function (f, m, t) ->
+            isn f || isn m || isp t
         | `Record row -> ispr row
         | `Variant row -> ispr row
         | `Table row -> ispr row

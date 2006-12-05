@@ -224,6 +224,8 @@ rule lex optable lexers = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
+  | "-{"                                { RARROWMBL }
+  | "}->"                               { RARROWMBR }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }

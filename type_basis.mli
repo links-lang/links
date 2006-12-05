@@ -9,7 +9,8 @@ type ('typ, 'row) type_basis = [
   | `Not_typed
   | `Primitive of primitive
   | `TypeVar of int
-  | `Function of ('typ * 'typ)
+  | `RigidTypeVar of int
+  | `Function of ('typ * 'typ * 'typ)
   | `Record of 'row
   | `Variant of 'row
   | `Table of 'row
@@ -24,7 +25,7 @@ and 'row row_var_basis =
     [ `RowVar of int option 
     | `RecRowVar of int * 'row ] deriving (Show, Pickle)
 
-type type_variable = [`TypeVar of int | `RowVar of int]
+type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
 type quantifier = type_variable
 
 type type_var_set = Utility.IntSet.t
@@ -53,6 +54,7 @@ sig
 
   (* fresh type variable generation *)
   val fresh_type_variable : unit -> typ
+  val fresh_rigid_type_variable : unit -> typ
   val fresh_row_variable : unit -> row_var
 
   (* empty row constructors *)
@@ -90,6 +92,7 @@ sig
   type row = (typ, row_var') row_basis
 
   val make_type_variable : int -> typ
+  val make_rigid_type_variable : int -> typ
   val make_row_variable : int -> row_var'
 
   val empty_field_env : typ field_spec_map_basis

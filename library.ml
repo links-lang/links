@@ -89,13 +89,15 @@ type primitive =  [
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
+let datatype = Parse.parse_string Parse.datatype
+
 let int_op impl : located_primitive * Types.assumption = 
   (`PFun (fun x -> `PFun (fun y -> `Int (impl (unbox_int x) (unbox_int y))))),
-  ([], `Primitive `Int --> (`Primitive `Int --> `Primitive `Int))
+  datatype "Int -> (Int -> Int)"
 
 let float_op impl : located_primitive * Types.assumption = 
   `PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y))))),
-  ([], `Primitive `Float --> (`Primitive `Float --> `Primitive `Float))
+  datatype "Float -> (Float -> Float)"
     
 let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
@@ -103,7 +105,8 @@ let conversion_op' ~unbox ~conv ~(box :'a->result) =
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
   (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
-   ([], from --> into))
+   let a = Type_basis.fresh_raw_variable () in
+     ([`TypeVar a], `Function (from, `TypeVar a, into)))
 
 let string_to_xml = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
@@ -111,15 +114,15 @@ let string_to_xml = function
 
 let char_test_op fn = 
   (`PFun (fun c -> (`Bool (fn (unbox_char c)))),
-   ([], `Primitive `Char --> `Primitive `Bool))
+   datatype "Char -> Bool")
 
 let char_conversion fn = 
   (`PFun (fun c ->  (box_char (fn (unbox_char c)))),
-   ([], `Primitive `Char --> `Primitive `Char))
+   datatype "Char -> Char")
 
 let float_fn fn = 
   (`PFun (fun c ->  (box_float (fn (unbox_float c)))),
-   ([], `Primitive `Float --> `Primitive `Float))
+   datatype "Float -> Float")
 
 let p1 fn = 
   `PFun ((fun a ->  (fn a :> primitive)))
@@ -149,8 +152,6 @@ let client_only_1 fn =
   p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
 let client_only_2 fn = 
   p2 (fun _ _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
-
-let datatype = Parse.parse_string Parse.datatype
 
 let rec equal l r =
   match l, r with
@@ -245,11 +246,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   datatype "Mailbox (a) -> a -> ()");
+   datatype "Mailbox (a) -{b}-> a -{b}-> ()");
 
   "self",
   (p1 (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "Mailbox (a) -> () -> Mailbox (a)");
+   datatype "() -{a}-> Mailbox (a)");
   
   "recv",
   (* this function is not used, as its application is a special case
@@ -260,7 +261,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (p1 (fun _ -> assert false),
-     datatype "Mailbox (a) -> () -> (a)");
+     datatype "() -{a}-> (a)");
  
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -275,7 +276,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");
+   datatype "(c -{b}-> d) -> c -> Mailbox (b)");
+(*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
   "_MAILBOX_",
   (`Int (num_of_int 0), 
@@ -734,7 +736,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     let qs, regex = datatype Linksregex.Regex.datatype in
-      qs, (string_type --> (regex --> `Primitive `Bool))));
+    let mb1 = Type_basis.fresh_raw_variable () in
+    let mb2 = Type_basis.fresh_raw_variable () in
+      ((`TypeVar mb1) :: (`TypeVar mb2) :: qs,
+       `Function (string_type, `TypeVar mb1, `Function (regex, `TypeVar mb2, `Primitive `Bool)))));
 
   ("environment",
    (p1 (fun _ -> 
@@ -772,11 +777,10 @@ let continuationize_env = Utility.concat_map
       | Some v -> [n,v])
 
 let value_env = ref (continuationize_env env)
-and type_env : Types.environment = 
-  Inference.retype_primitives (List.map (fun (n, (_,t)) -> (n,t)) env)
+and type_env : Types.environment =
+  List.map (fun (n, (_,t)) -> (n,t)) env
 and alias_env : Types.alias_environment =
-  let a = Type_basis.fresh_raw_variable () in
-    (StringMap.add "Event" ([], (`Primitive (`Abstract "Event"))) StringMap.empty)
+  StringMap.add "Event" ([], (`Primitive (`Abstract "Event"))) StringMap.empty
 
 let typing_env = (type_env, alias_env)
 
@@ -787,7 +791,7 @@ let impl : located_primitive -> primitive = function
 
 (* [DISGUSTING HACK] *)
 (* no mailbox type threaded through *)
-let pure_type_env = Inference.unretype_primitives type_env
+let pure_type_env = type_env
 
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function

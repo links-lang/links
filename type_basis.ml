@@ -13,7 +13,8 @@ type ('typ, 'row) type_basis = [
   | `Not_typed
   | `Primitive of primitive
   | `TypeVar of int
-  | `Function of ('typ * 'typ)
+  | `RigidTypeVar of int
+  | `Function of ('typ * 'typ * 'typ)
   | `Record of 'row
   | `Variant of 'row
   | `Table of 'row
@@ -39,7 +40,7 @@ type 'row row_var_basis =
     | `RecRowVar of int * 'row ]
     deriving (Show, Pickle)
 
-type type_variable = [`TypeVar of int | `RowVar of int]
+type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
     deriving (Show, Pickle)
 type quantifier = type_variable
     deriving (Show, Pickle)
@@ -76,6 +77,7 @@ sig
 
   (* fresh type variable generation *)
   val fresh_type_variable : unit -> typ
+  val fresh_rigid_type_variable : unit -> typ
   val fresh_row_variable : unit -> row_var
 
   (* empty row constructors *)
@@ -113,6 +115,7 @@ sig
   type row = (typ, row_var') row_basis
 
   val make_type_variable : int -> typ
+  val make_rigid_type_variable : int -> typ
   val make_row_variable : int -> row_var'
 
   val empty_field_env : typ field_spec_map_basis
@@ -140,6 +143,7 @@ struct
   let is_closed_row = BasicOps.is_closed_row
 
   let fresh_type_variable = BasicOps.make_type_variable -<- fresh_raw_variable
+  let fresh_rigid_type_variable = BasicOps.make_rigid_type_variable -<- fresh_raw_variable
   let fresh_row_variable = BasicOps.make_row_variable -<- fresh_raw_variable
 
   let empty_field_env = BasicOps.empty_field_env

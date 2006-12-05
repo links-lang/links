@@ -28,8 +28,6 @@ type alias_environment = datatype alias_environment_basis
 (*    deriving (Show, Pickle)*)
 type typing_environment = environment * alias_environment
 
-let (-->) x y = `Function (x,y)
-
 (* whether to display mailbox annotations on arrow types
    [NOTE]
       unused mailbox parameters are never shown
@@ -139,42 +137,28 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
     match datatype with
       | `Not_typed       -> "not typed"
       | `Primitive p     -> string_of_primitive p
-      | `TypeVar var      -> IntMap.find var vars
-      | `Function (mailbox_type, t) when using_mailbox_typing () ->
+      | `TypeVar var
+      | `RigidTypeVar var -> IntMap.find var vars
+      | `Function (f, mailbox_type, t) when using_mailbox_typing () ->
 	  let arrow =
 	    match mailbox_type with
 	      | `Application ("Mailbox", [t]) ->
 		  string_of_mailbox_arrow (t)
-	      | _ ->
-		  "->"
+	      | _ -> "->"
 	  in
-	    begin
-	      match t with
-		| `Function (`Record _ as f, t) ->
-		    string_of_datatype' vars f ^ " " ^arrow ^
-		      " " ^ string_of_datatype' vars t
-		| `Function (f, t) ->
-		    "(" ^ string_of_datatype' vars f ^ ") "^ arrow ^
-		      " " ^ string_of_datatype' vars t
-		| _ -> (*assert(false)*)
-		    begin
-		      let f = mailbox_type in
-			debug ("non-mailbox function in mailbox type: pretending it didn't happen!");
-			match mailbox_type with
-			  | `Record _ ->
-			      string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
-			  | _ ->
-			      "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t	
-		   end
-	   end
-     | `Function (f, t) ->
-	 begin
-	   match f with
-	     | `Record _ ->
-		 string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
-	     | _ ->
-		 "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t	
-	 end
+	    (match f with
+	       | `Record _ as f ->
+		   string_of_datatype' vars f ^ " " ^arrow ^
+		     " " ^ string_of_datatype' vars t
+	       | f ->
+		   "(" ^ string_of_datatype' vars f ^ ") "^ arrow ^
+		     " " ^ string_of_datatype' vars t)
+      | `Function (f, _, t) ->
+	 (match f with
+	    | `Record _ ->
+	        string_of_datatype' vars f ^ " -> " ^ string_of_datatype' vars t
+	    | _ ->
+	        "(" ^ string_of_datatype' vars f ^ ") -> " ^ string_of_datatype' vars t)
      | `Record row      -> (if is_tuple row then string_of_tuple row
 			    else
 			      "(" ^ string_of_row' "," vars row ^ ")")
@@ -197,12 +181,11 @@ and string_of_row' sep vars (field_env, row_var) =
       (match row_var_string with
 	 | None -> ""
 	 | Some s -> "|"^s)
-and string_of_row_var' sep vars row_var =
-   match row_var with
-      | `RowVar None -> None
-      |	`RowVar (Some var) -> Some (IntMap.find var vars)
-      | `RecRowVar (var, row) -> 
-	  Some ("(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")")
+and string_of_row_var' sep vars = function
+  | `RowVar None -> None
+  | `RowVar (Some var) -> Some (IntMap.find var vars)
+  | `RecRowVar (var, row) -> 
+      Some ("(mu " ^ IntMap.find var vars ^ " . " ^ string_of_row' sep vars row ^ ")")
 
 let make_names vars =
   if Settings.get_value show_raw_type_vars then
@@ -232,10 +215,11 @@ let make_names vars =
 *)
 let rec type_vars : datatype -> int list = fun datatype ->
   let rec aux = function
-    | `Not_typed               -> []
+    | `Not_typed               -> [] 
     | `Primitive _             -> []
-    | `TypeVar var             -> [var]
-    | `Function (from, into)   -> aux from @ aux into
+    | `TypeVar var
+    | `RigidTypeVar var        -> [var]
+    | `Function (f, m, t)      -> aux f @ aux m @ aux t
     | `Record row              -> row_type_vars row
     | `Variant row             -> row_type_vars row
     | `Table row               -> row_type_vars row
@@ -257,7 +241,8 @@ and row_type_vars (field_env, row_var) =
 let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Not_typed               -> IntSet.empty
   | `Primitive _             -> IntSet.empty
-  | `TypeVar var             -> IntSet.singleton var
+  | `TypeVar var
+  | `RigidTypeVar var        -> IntSet.singleton var
 (*
   [HACK]
     uncommenting this prevents unused mailbox variables from being counted
@@ -271,7 +256,10 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
       in
 	IntSet.union mailbox_type_vars (IntSet.union (free_bound_type_vars from) (free_bound_type_vars into))
 *)
-  | `Function (from, into)   -> IntSet.union (free_bound_type_vars from) (free_bound_type_vars into)
+  | `Function (f, m, t)      ->
+      IntSet.union
+        (IntSet.union (free_bound_type_vars f) (free_bound_type_vars t))
+        (free_bound_type_vars m)
   | `Record row
   | `Variant row
   | `Table row               -> free_bound_row_type_vars row
@@ -319,8 +307,17 @@ let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun va
 	      let fresh_var = fresh_raw_variable () in
 		var_map := IntMap.add var fresh_var !var_map;
 		`TypeVar fresh_var
-	| `Function (from, into) ->
-	    `Function (ftv from, ftv into)
+	| `RigidTypeVar var ->
+	    if IntSet.mem var bound_vars then
+	      t
+	    else if IntMap.mem var !var_map then
+	      `RigidTypeVar (IntMap.find var !var_map)
+	    else
+	      let fresh_var = fresh_raw_variable () in
+		var_map := IntMap.add var fresh_var !var_map;
+		`RigidTypeVar fresh_var
+	| `Function (f, m, t) ->
+	    `Function (ftv f, ftv m, ftv t)
 	| `Record row              -> `Record (rftv row)
 	| `Variant row             -> `Variant (rftv row)
 	| `Table row               -> `Table (rftv row)
@@ -368,6 +365,7 @@ let string_of_row_var row_var =
 
 let string_of_quantifier = function
   | `TypeVar var -> string_of_int var
+  | `RigidTypeVar var -> string_of_int var
   | `RowVar var -> "'" ^ string_of_int var
 let string_of_assumption = function
   | [], datatype -> string_of_datatype datatype
@@ -388,6 +386,7 @@ struct
   type row = (typ, row_var') row_basis
 
   let make_type_variable var = `TypeVar var
+  let make_rigid_type_variable var = `RigidTypeVar var
   let make_row_variable var = `RowVar (Some var)
 
   let empty_field_env = StringMap.empty
@@ -455,7 +454,8 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
         (* no children *)
       | `Not_typed
       | `Primitive _
-      | `TypeVar  _ -> None
+      | `TypeVar  _
+      | `RigidTypeVar _ -> None
           (* one child *)
       | `Recursive (v, k) -> (match f k with 
                                 | Some k -> Some (`Recursive (v, k))
@@ -463,11 +463,11 @@ let perhaps_process_children (f : datatype -> datatype option) :  datatype -> da
       | `Application (s, ks) -> Rewrite.passto f ks (fun ks -> `Application (s, ks))
 
           (* two children *)
-      | `Function (j, k) -> (match f j, f k with
-                               | None,   None   -> None
-                               | Some j, None   -> Some (`Function (j, k))
-                               | None,   Some k -> Some (`Function (j, k))
-                               | Some j, Some k -> Some (`Function (j, k)))
+      | `Function (j, k, l) ->
+          (match f j, f k, f l with
+             | None, None, None -> None
+             | j', k', l' ->
+                 Some (`Function (opt_proj j j', opt_proj k k', opt_proj k k')))
           (* n children *)
       | `Record row  -> (match rewrite_row row with 
                            | Some row -> Some (`Record row)

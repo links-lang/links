@@ -315,9 +315,22 @@ let mem_assoc3 key alist : bool =
 
 (*** option types ***)
 let opt_map f = function
-    None -> None
+  | None -> None
   | Some x -> Some (f x)
-            
+
+let opt_iter f = function
+  | None -> ()
+  | Some x -> f x
+
+let opt_app f def = function
+  | None -> def
+  | Some a -> f a
+
+(* opt_proj def == opt_app (fun x -> x) def  *)
+let opt_proj def = function
+  | None -> def
+  | Some x -> x
+
 type ('a, 'b) either = Left of 'a | Right of 'b
 
 let option_or = function (* !! mplus *)

@@ -24,7 +24,8 @@ type pposition = Lexing.position * Lexing.position (* start * end *)
 type location = Syntax.location
 type datatype = 
   | TypeVar of string
-  | FunctionType of datatype * datatype
+  | RigidTypeVar of string
+  | FunctionType of datatype * datatype * datatype
   | MuType of string * datatype
   | UnitType
   | TupleType of (datatype list)

@@ -15,7 +15,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 %token END
 %token EQ IN 
-%token FUN RARROW VAR
+%token FUN RARROW RARROWMBL RARROWMBR VAR
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN
@@ -505,7 +505,13 @@ just_datatype:
 
 datatype:
 | mu_datatype                                                  { $1 }
-| mu_datatype RARROW datatype                                  { FunctionType ($1, $3) }
+| mu_datatype RARROW datatype                                  { FunctionType ($1,
+                                                                               Sugar.fresh_type_variable (),
+                                                                               $3) }
+| mu_datatype RARROWMBL datatype RARROWMBR datatype            { FunctionType ($1,
+                                                                               TypeApplication ("Mailbox", [$3]),
+                                                                               $5) }
+
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
@@ -523,7 +529,7 @@ primary_datatype:
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
-| VARIABLE                                                     { TypeVar $1 }
+| VARIABLE                                                     { RigidTypeVar $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int

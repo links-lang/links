@@ -5,3 +5,4 @@ exception RedundantPatternMatch of Syntax.position
 
 val desugar : (Sugartypes.pposition -> Syntax.position) -> Sugartypes.phrase -> Syntax.untyped_expression
 val desugar_datatype : Sugartypes.datatype -> Types.assumption
+val fresh_type_variable : unit -> Sugartypes.datatype

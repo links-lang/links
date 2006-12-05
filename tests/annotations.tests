@@ -1,10 +1,10 @@
 Type annotation that matches inference
 fun (x) {x} : a -> a
-stdout : fun : (a) -> a
+stdout : @fun : \(([a-z]+)\) -> \1
 
 More-specific type annotation with typevars
 fun (x) {x} : (a->a) -> (a->a)
-stdout : fun : ((a) -> a) -> (a) -> a
+stdout : @fun : \(\(([a-z]+)\) -> \1\) -> \(\1\) -> \1
 
 Too-general type annotation
 fun (x) {x+1} : a -> a
@@ -13,7 +13,7 @@ exit : 1
 
 Annotations inside functions [1]
 fun (x:a) { x:a } : a -> a
-stdout : fun : (a) -> a
+stdout : @fun : \(([a-z]+)\) -> \1
 
 Annotations inside functions [2]
 fun (x:a) { x:a } : b -> b

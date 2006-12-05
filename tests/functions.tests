@@ -14,7 +14,7 @@ exit : 1
 
 Loose type annotations on functions
 fun (x) { x } : b -> b
-stdout : fun : (a) -> a
+stdout : @fun : \(([a-z])\) -> \1
 
 Trailing semicolon means "ignore the final value" [1]
 { 2 }
