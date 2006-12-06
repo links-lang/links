@@ -76,8 +76,9 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     ((fun envs args ->
         match args with
           | [filename] ->
-              let typingenv, exprs = Inference.type_program Library.typing_env (Parse.parse_file Parse.program filename) in
-              let exprs =           Optimiser.optimise_program (typingenv, exprs) in
+              let program = Parse.parse_file Parse.program filename in
+              let typingenv, exprs = Inference.type_program Library.typing_env program in
+              let exprs = Optimiser.optimise_program (typingenv, exprs) in
                 (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
@@ -127,9 +128,9 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
 let just_optimise parse (valenv, typingenv) input = 
   Settings.set_value interacting false;
   let parse = parse Parse.program in
-  let exprs =          Performance.measure "parse" parse input in 
+  let exprs = Performance.measure "parse" parse input in 
   let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
-  let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+  let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
     print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
@@ -140,7 +141,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
        match Performance.measure "parse" parse input with 
          | Left exprs -> 
              let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
-             let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+             let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
              let exprs = List.map Syntax.labelize exprs in
              let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
                print_result (Syntax.node_datatype (last exprs)) result;

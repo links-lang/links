@@ -109,11 +109,11 @@ var dateOld =
 
 var date = 
   form
-    <span>
+    <#>
       { inputInt -> day } / { inputInt -> mo } 
-    </span>
+    </#>
   yields {
-    Date(day, mo)
+    Date(stringToInt(day), mo)
   };
 
 

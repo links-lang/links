@@ -1184,7 +1184,7 @@ module Desugarer =
                  if (tag = "#") then
                    begin
                      if List.length attrs != 0 then
-                       raise (ASTSyntaxError (Syntax.data_position pos, "Xml forest literals cannot have attributes"))
+                       raise (ASTSyntaxError (Syntax.data_position pos, "XML forest literals cannot have attributes"))
                      else
                        List.fold_right
                          (fun node nodes ->
@@ -1217,7 +1217,7 @@ module Desugarer =
        let ctxt, (* body, *) binding_names = 
          fold_right
            (fun (_, lpos as l) (ctxt, bs) -> 
-              let l_unsugared, binding_names = desugar_form_expr l pos in
+              let l_unsugared, binding_names = desugar_form_expr l in
                 ((fun r -> (apply2_curried pos (Variable("@@@", pos)) l_unsugared (ctxt(r)))),
                  binding_names @ bs)
            ) trees ((fun r -> r), []) in
@@ -1231,7 +1231,7 @@ module Desugarer =
        let handlerBody, returning_names = 
          match yieldsClause with
              Some formHandler -> formHandler, []
-           | None -> ((TupleLit (map (fun(x, pos) -> Var x, pos) (flatten binding_names)), 
+           | None -> ((TupleLit (map (fun(x, ppos) -> Var x, ppos) (flatten binding_names)), 
                        (Lexing.dummy_pos, Lexing.dummy_pos)), 
                       [flatten binding_names])
        in
@@ -1242,27 +1242,35 @@ module Desugarer =
        let handlerFunc = abstract_expr_curried_for_tuple_list ppos handlerBody binding_names in
          ctxt(Apply(Variable("pure", pos), desugar' lookup_pos handlerFunc, pos)), returning_names
 
-     and desugar_form_expr formExpr pos : untyped_expression * (string*pposition) list list =
+     and desugar_form_expr formExpr : untyped_expression * (string*pposition) list list =
        (* TBD: Should we use the pos' values below, rather than pos given above? *)
        if (xml_tree_has_form_binding formExpr) then
          match formExpr with
-           | XmlForest trees, pos' -> forest_to_form_expr trees None pos
+           | XmlForest trees, pos' -> forest_to_form_expr trees None (`U(lookup_pos pos'))
            | FormBinding ((expr, pos), var), pos' ->
                desugar' lookup_pos (expr, pos), [[var, pos]]
+           | Xml("#", [], contents), pos' -> forest_to_form_expr contents None (`U(lookup_pos pos'))
+           | Xml("#", _, contents), pos' -> raise(ASTSyntaxError(Syntax.data_position (`U(lookup_pos pos')),
+                                                                 "XML forest literals cannot have attributes"))
            | Xml(tag, attrs, contents), pos' ->
-               let form_expr, bindings = forest_to_form_expr contents None pos in
+               let form_expr, bindings = forest_to_form_expr contents None (`U(lookup_pos pos')) in
                let attrs' = (alistmap 
                                (fun attr_phrases -> 
-                                  make_links_list pos (map (desugar' lookup_pos) attr_phrases))
+                                  make_links_list (`U(lookup_pos pos')) (map (desugar' lookup_pos) attr_phrases))
                                attrs) in
+               let pos = (`U(lookup_pos pos')) in 
                  (apply2_curried pos (Variable("plug", pos))
                                      (make_xml_context tag attrs' pos)
                                      form_expr,
                   bindings)
-           | TextNode text, pos' -> Apply(Variable("xml", pos),
-                                          Apply(Variable("stringToXml", pos),
-                                                String(text, pos), pos), pos), [[]]
+           | TextNode text, pos' -> 
+               let pos = `U(lookup_pos pos') in 
+                 Apply(Variable("xml", pos),
+                       Apply(Variable("stringToXml", pos),
+                             String(text, pos), pos), pos), [[]]
        else
+         let _, pos' = formExpr in 
+         let pos = (`U(lookup_pos pos')) in 
          Apply(Variable("xml", pos), desugar' lookup_pos formExpr, pos), [[]]
 
      and xml_tree_has_form_binding = function
@@ -1270,8 +1278,7 @@ module Desugarer =
            List.exists xml_tree_has_form_binding contents
        | XmlForest(trees), _ ->  List.exists xml_tree_has_form_binding trees
        | FormBinding(expr, var), _ -> true
-       | TextNode _, _ -> false
-       | e -> failwith("Unexpected node in XML quasi")
+       |  _, _ -> false
 
      and desugar_repeat _ : Regex.repeat -> phrasenode = function
        | Regex.Star      -> ConstructorLit ("Star", None)
