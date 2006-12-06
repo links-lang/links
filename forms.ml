@@ -195,13 +195,17 @@ let xml_transform env lookup eval : expression -> expression =
                     data)
 
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
-        (try match assoc "l:name" attrs with
+         let rec extract = function
+           | HasType (e, _, _) -> extract e
            | String (name, _) -> 
                let attrs = (("name", string name) :: 
                               filter (attrname ->- (=) "l:name" ->- not) attrs) in
                Xml_node (tag, attrs, contents, data)
-           | _ -> failwith ("Internal error transforming xml (no l:name found on " ^ tag)
-         with Not_found -> input)
+           | e -> failwith ("Internal error transforming xml (no l:name found on " ^ tag
+                           ^ "(expression: " ^ string_of_expression e ^ ")")
+         in
+           (try extract (assoc "l:name" attrs)
+            with Not_found -> input)
 
     | Xml_node ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in

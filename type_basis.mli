@@ -3,7 +3,7 @@
 
 (** {1 Representation of datatypes} *)
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `Abstract of string ]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `Abstract ]
 
 type ('typ, 'row) type_basis = [
   | `Not_typed

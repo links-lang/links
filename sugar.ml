@@ -973,7 +973,7 @@ module Desugarer =
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype varmap k, pos)
            | FloatLit f  -> Float (f, pos)
            | IntLit i    -> Integer (i, pos)
-           | StringLit s -> String (s, pos)
+           | StringLit s -> HasType(String (s, pos), Types.string_type, pos)
            | BoolLit b   -> Boolean (b, pos)
            | CharLit c   -> Char (c, pos)
            | Var v       -> Variable (v, pos)
@@ -1192,8 +1192,8 @@ module Desugarer =
                    end
                  else
                    Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
-           | XmlForest []  -> Nil  (pos)
-           | XmlForest [x] -> desugar x
+           | XmlForest []  -> HasType(Nil pos, Types.xml, pos)
+           | XmlForest [x] -> HasType(desugar x, Types.xml, pos)
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
 
            | Form (formExpr, formHandler) ->

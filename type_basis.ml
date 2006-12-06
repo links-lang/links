@@ -6,7 +6,7 @@ open Utility
 type type_var_set = Utility.IntSet.t
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
-                 | `Abstract of string ]
+                 | `Abstract ]
     deriving (Show, Pickle)
 
 type ('typ, 'row) type_basis = [

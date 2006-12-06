@@ -553,9 +553,9 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
-                                                                   | "Xml"     -> ListType (PrimitiveType `XmlItem)
+                                                                (*   | "Xml"     -> ListType (PrimitiveType `XmlItem) *)
                                                                    | "Database"-> DBType
-                                                                   | "String"  -> ListType (PrimitiveType `Char)
+                                                                (*   | "String"  -> ListType (PrimitiveType `Char) *)
                                                                    | t         -> TypeApplication ($1, [])
                                                                }
 

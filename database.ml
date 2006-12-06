@@ -21,15 +21,16 @@ end
 
 let value_of_db_string (value:string) = function
   | `Primitive `Bool -> Result.bool (value = "true")
+  | `Application ("String", [])
   | `Application ("List", [`Primitive `Char]) -> Result.string_as_charlist value
   | `Primitive `Int  -> Result.int (num_of_string value)
   | `Primitive `Float -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
-  | _ -> failwith "value_of_db_string: unsupported datatype"
+  | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ Types.string_of_datatype t ^"'")
 
 let datatype_of_db_type = function
   | BoolField -> `Primitive `Bool
-  | TextField -> `Application ("List", `Primitive `Char)
+  | TextField -> `Application ("String", [])
   | IntField -> `Primitive `Int
   | FloatField -> `Primitive `Float
   | _ -> failwith "datatype_of_db_type: unsupported datatype"

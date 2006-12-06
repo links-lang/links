@@ -344,7 +344,8 @@ let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -
 
 let position e = data_position (expression_data e)
 
-let stringlit_value = function
+let rec stringlit_value = function
+  | HasType (e, _, _) -> stringlit_value e
   | String (name, _) -> name
   | _ -> assert false
 

@@ -2,9 +2,9 @@ fun lowercase(s) {
   for (var c <- s) [toLower(c)]
 }
 
-fun suggest(prefix) client {
+fun suggest(prefixx) client {
  replaceChildren(
-  format(completions(lowercase(prefix))),
+  format(completions(lowercase(prefixx))),
   getNodeById("suggestions") 
  )
 } 
@@ -19,19 +19,19 @@ fun format(words) {
   </span>
 }
 
-fun completions(prefix) server {
+fun completions(prefixx) server {
  var wordlist = table "wordlist" with (
    word : String, 
    type : String, 
    meaning : String
  ) from (database "dictionary");
 
- debug("prefix: " ++ prefix);
+ debug("prefixx: " ++ prefixx);
 
- if (prefix == "") []
+ if (prefixx == "") []
  else {
   take(10, for (var w <-- wordlist)
-            where (w.word ~ /{prefix}.*/)
+            where (w.word ~ /{prefixx}.*/)
             orderby (w.word)
             [w])
  }
@@ -49,8 +49,8 @@ fun main() {
   </head>
  <body>
   <h1>Dictionary suggest</h1>
-  <form l:onkeyup="{suggest(prefix)}">
-   <input type="text" l:name="prefix"
+  <form l:onkeyup="{suggest(prefixx)}">
+   <input type="text" l:name="prefixx"
           class="input" autocomplete="off"/>
   </form>
   <div id="suggestions" class="suggestions"/>

@@ -6,5 +6,5 @@ exit : 0
 Join rewriting
 fun (db) { for (var x <- asList(table "x" with (fld1 : Int) from db)) for (var y <- asList(table "y" with (fld2 : Int) from db)) [(x, y)]}
 flags : -q
-stdout : fun (db) { { var _t_g2=("x" from db[fld1:Int]); { var _t_g4=("y" from db[fld2:Int]); (for (x <- (_t_g4(Table__g3),_t_g2(Table__g1)[SELECT Table__g1.fld1 AS fld1, Table__g3.fld2 AS col_g5 FROM VARIABLE:_t_g2 AS Table__g1, VARIABLE:_t_g4 AS Table__g3])) [(1=x|(2=y|()))])}} }
+stdout : fun (db) { { var _t_g2=("x" : String from db[fld1:Int]); { var _t_g4=("y" : String from db[fld2:Int]); (for (x <- (_t_g4(Table__g3),_t_g2(Table__g1)[SELECT Table__g1.fld1 AS fld1, Table__g3.fld2 AS col_g5 FROM VARIABLE:_t_g2 AS Table__g1, VARIABLE:_t_g4 AS Table__g3])) [(1=x|(2=y|()))])}} }
 exit : 0

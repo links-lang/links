@@ -18,8 +18,8 @@ and row = (datatype, row_var) Type_basis.row_basis
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
 
-let string_type = `Application ("List", [`Primitive `Char])
-let xml_type = `Application ("List", [`Primitive `XmlItem])
+let string_type = `Application ("String", [])
+let xml_type = `Application ("Xml", [])
 
 type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
 

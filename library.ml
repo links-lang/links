@@ -780,7 +780,16 @@ let value_env = ref (continuationize_env env)
 and type_env : Types.environment =
   List.map (fun (n, (_,t)) -> (n,t)) env
 and alias_env : Types.alias_environment =
-  StringMap.add "Event" ([], (`Primitive (`Abstract "Event"))) StringMap.empty
+  List.fold_right
+    (fun (name, assumption) env ->
+       StringMap.add name assumption env)
+    [
+      "Event", ([], `Primitive `Abstract);
+      "List", ([`TypeVar (Type_basis.fresh_raw_variable ())], `Primitive `Abstract);
+      "String", ([], `Application ("List", [`Primitive `Char]));
+      "Xml", ([], `Application ("List", [`Primitive `XmlItem]))
+    ]
+    StringMap.empty
 
 let typing_env = (type_env, alias_env)
 

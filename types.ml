@@ -85,13 +85,13 @@ let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string li
 let get_present_fields field_env = fst (split_fields field_env)
 let get_absent_fields field_env = snd (split_fields field_env)
 
-let string_type : datatype = `Application ("List", [`Primitive `Char])
-let xml : datatype = `Application ("List", [`Primitive `XmlItem])
+let string_type : datatype = `Application ("String", [])
+let xml : datatype = `Application ("Xml", [])
 
 (* Type printers *)
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract s -> s
+  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)"
 
 exception Not_tuple
 
@@ -166,8 +166,30 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
      | `Table row      -> "TableHandle(" ^ string_of_row' "," vars row ^ ")"
      | `Recursive (var, body) ->
 	 "mu " ^ IntMap.find var vars ^ " . " ^ string_of_datatype' vars body
+(*
+  [QUESTION]
+    How should we render the types [Char] and [XmlItem]?
+
+  It isn't clear what the right thing to do here is.
+
+  Option 1 - as lists
+  Then
+    ['a', 'b', 'c] : [Char]
+  but
+    "abc" ++ "def" : [Char]
+
+  Option 2 - as typenames
+  Then
+    "abc" ++ "def" : String
+  but
+    ['a', 'b', 'c] : String
+
+  What do GHCi and SML/NJ Do?
+*) 
+(*
      | `Application ("List", [`Primitive `Char]) -> "String"
      | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
+*)
      | `Application ("List", [elems])              ->  "["^ string_of_datatype' vars elems ^"]"
      | `Application (s, []) -> s
      | `Application (s, ts) ->  s ^ " ("^ String.concat "," (List.map (string_of_datatype' vars) ts) ^")"
