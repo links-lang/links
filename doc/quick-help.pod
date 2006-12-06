@@ -241,6 +241,25 @@ Within an XML quasi, a variety of special features can be used to
 handle browser events. See L<Handling User Actions>, below, for more
 information on these features.
 
+To introduce a forest of XML nodes that have no mutually enclosing XML
+element, use the special C<E<lt>#E<gt>...E<lt>/#E<gt>> syntax:
+
+    <#>
+      Name: <b>{name}</b>
+    </#>
+
+Here a sequence of an XML text node and a B element are included as a
+single expression. This value can be included directly in other XML
+quasis:
+
+    var nameLine = <#>
+      Name: <b>{name}</b>
+    </#>;
+    <div>
+      {nameLine} <br />
+      (c) 2006 Links Team, University of Edinburgh
+    </div>
+
 =head2 Forms
 
 Links provides two special attributes for programming with HTML forms,
