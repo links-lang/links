@@ -35,7 +35,7 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token <float> UFLOAT 
 %token <string> STRING CDATA
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD
+%token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG
@@ -530,6 +530,7 @@ primary_datatype:
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
 | VARIABLE                                                     { RigidTypeVar $1 }
+| QUOTEDVAR                                                    { TypeVar $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int

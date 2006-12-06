@@ -267,6 +267,7 @@ rule lex optable lexers = parse
                                           with Not_found -> 
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
+  | "'" def_id as var                   { QUOTEDVAR var }
   | def_blank                           { lex optable lexers lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag optable lexers = parse
