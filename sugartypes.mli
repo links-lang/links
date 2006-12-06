@@ -13,6 +13,7 @@ type name = string
 type unary_op = [
 | `Minus
 | `FloatMinus
+| `Name of name
 ]
 type logical_binop = [`And | `Or]
 type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name]

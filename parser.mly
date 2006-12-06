@@ -11,6 +11,8 @@ let ensure_match (start, finish) (opening : string) (closing : string) = functio
 
 let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
+let default_fixity = Num.num_of_int 9
+
 %}
 
 %token END
@@ -42,8 +44,9 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 %token QUESTION TILDE PLUS STAR SLASH
 %token <char*char> RANGE
 %token UNDERSCORE AS
-%token <[`Left|`Right|`None] -> int -> string -> unit> INFIX INFIXL INFIXR
+%token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
+%token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
 %token <string> INFIX2 INFIXL2 INFIXR2
@@ -100,9 +103,16 @@ toplevel_seq:
 toplevel:
 | exp SEMICOLON                                                { $1 }
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
-| fixity UINTEGER op SEMICOLON                                 { let assoc, set = $1 in set assoc (Num.int_of_num $2) $3; (InfixDecl, pos()) }
+| fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
+                                                                   set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
+                                                                   (InfixDecl, pos()) }
 | annotated_binding                                            { $1 }
 | typedecl SEMICOLON                                           { $1 }
+
+perhaps_uinteger:
+| /* empty */                                                  { None }
+| UINTEGER                                                     { Some $1 }
+
 
 annotated_binding:
 | tlbinding { let d, pos = $1 in Definition d, pos }
@@ -119,6 +129,8 @@ tlbinding:
 | VAR VARIABLE perhaps_location EQ exp SEMICOLON               { ($2, $5, $3), pos() }
 | FUN VARIABLE arg_list perhaps_location block perhaps_semi    { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
 | FUN pattern op pattern perhaps_location block perhaps_semi   { ($3, (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
+| FUN PREFIXOP pattern perhaps_location block perhaps_semi     { ($2, (FunLit (Some $2, [$3], $5), pos()), $4), pos() }
+| FUN pattern POSTFIXOP perhaps_location block perhaps_semi    { ($3, (FunLit (Some $3, [$2], $5), pos()), $4), pos() }
 
 
 signature: 
@@ -139,6 +151,8 @@ fixity:
 | INFIX                                                        { `None, $1 }
 | INFIXL                                                       { `Left, $1 }
 | INFIXR                                                       { `Right, $1 }
+| PREFIX                                                       { `Pre, $1 }
+| POSTFIX                                                      { `Post, $1 }
 
 perhaps_location:
 | SERVER                                                       { `Server }
@@ -217,6 +231,7 @@ op:
  
 postfix_expression:
 | primary_expression                                           { $1 }
+| primary_expression POSTFIXOP                                 { UnaryAppl (`Name $2, $1), pos() }
 | block                                                        { $1 }
 | SPAWN block                                                  { Spawn $2, pos() }
 | postfix_expression arg_spec                                  { FnAppl ($1, $2), pos() }
@@ -233,6 +248,7 @@ exps:
 unary_expression:
 | MINUS unary_expression                                       { UnaryAppl (`Minus,      $2), pos() }
 | MINUSDOT unary_expression                                    { UnaryAppl (`FloatMinus, $2), pos() }
+| PREFIXOP unary_expression                                    { UnaryAppl (`Name $1, $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
@@ -445,7 +461,7 @@ escape_expression:
 handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
-| FORM xml YIELDS LBRACE exp RBRACE                            { Form($2, $5), pos() }
+| FORM xml YIELDS exp                                          { Form($2, $4), pos() }
 
 table_expression:
 | handlewith_expression                                        { $1 }

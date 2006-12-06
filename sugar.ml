@@ -1022,6 +1022,7 @@ module Desugarer =
                  TableHandle (desugar db, desugar name, row, pos)
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
+           | UnaryAppl (`Name n, e) -> Apply (Variable (n,  pos), desugar e, pos)
            | ListLit  [] -> Nil (pos)
            | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
            | DBDelete ((pattern, table), condition) ->

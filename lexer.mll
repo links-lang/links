@@ -68,6 +68,8 @@ let infixr8 x = INFIXR8 x
 let infix9  x = INFIX9  x
 let infixl9 x = INFIXL9 x
 let infixr9 x = INFIXR9 x
+let prefix  x = PREFIXOP x
+let postfix x = POSTFIXOP x
 
 let precs = 
   [
@@ -123,6 +125,8 @@ let setprec table assoc level name =
     | (a,_,_), `None -> a
     | (_,a,_), `Left -> a
     | (_,_,a), `Right -> a 
+    | _,       `Pre -> prefix
+    | _,       `Post -> postfix
   in
     table := (name, value) :: !table
 
@@ -203,7 +207,7 @@ let directive_prefix = ['' '@' '$' '%']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' ]
+let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' '|' '_' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 
@@ -212,8 +216,6 @@ let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' 
    Each rule takes two arguments: the currently operative precedence
    table and the stack.
 *)
-
-
 
 rule lex optable lexers = parse
   | '#' ([^ '\n'] *)                    { lex optable lexers lexbuf }
@@ -263,6 +265,8 @@ rule lex optable lexers = parse
   | "infix"                             { INFIX (setprec optable) }
   | "infixl"                            { INFIXL (setprec optable) }
   | "infixr"                            { INFIXR (setprec optable) }
+  | "prefix"                            { PREFIX (setprec optable) }
+  | "postfix"                           { POSTFIX (setprec optable) }
   | def_id as var                       { try List.assoc var keywords 
                                           with Not_found -> 
                                             if isupper var.[0] then CONSTRUCTOR var
