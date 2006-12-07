@@ -1256,7 +1256,7 @@ module Desugarer =
      and desugar_form_expr formExpr : untyped_expression * (string*pposition) list list =
        if (xml_tree_has_form_binding formExpr) then
          match formExpr with
-syn           | XmlForest trees, trees_ppos -> forest_to_form_expr trees None (`U(lookup_pos trees_ppos)) trees_ppos
+           | XmlForest trees, trees_ppos -> forest_to_form_expr trees None (`U(lookup_pos trees_ppos)) trees_ppos
                (* re: FormBinding; we ought to pass this pos' to such
                   a place where a duplicate binding could be pinned down
                   to this binding; but the nature of the duplicate-name
