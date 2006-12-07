@@ -141,6 +141,9 @@ BUGS
 
 TODO
 
+* First-class attributes would be very useful with the
+  form-abstraction code.
+
 * There's no way to make use of <input type="button" /> buttons?
 
 * It'd be more symmetric to allow arbitrary let-patterns (rather than

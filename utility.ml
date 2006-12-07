@@ -161,6 +161,9 @@ struct
 	  else first::(substitute predicate replacement rest)
 
   let iter_over l f = List.iter f l
+
+  let push list f = list := !list @ [f]
+  let unshift list f = list := f :: !list
 end
 include ListUtils
   

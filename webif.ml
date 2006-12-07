@@ -1,3 +1,5 @@
+(*pp deriving *)
+
 open Utility
 open Result
 
@@ -7,13 +9,14 @@ open Result
 let cache_programs = Settings.add_bool ("cache_programs", false, true)
 
 type query_params = (string * result) list
+deriving (Show)
 
 type web_request = ContInvoke of continuation * query_params
                    | ExprEval of Syntax.expression * environment
                    | ClientReturn of continuation * result
                    | RemoteCall of result * result
                    | CallMain
-
+                       deriving (Show)
 (*
   [REMARKS (sl)]
    - Currently print_http_response outputs the headers and body in
@@ -67,10 +70,10 @@ let is_client_program defs =
     List.exists is_client_def defs || List.exists is_client_prim prims
 
 (* Read in and optimise the program *)
-let read_and_optimise_program filename : (Syntax.expression list) = 
+let read_and_optimise_program typenv filename : (Syntax.expression list) = 
   (Performance.measure "optimise" Optimiser.optimise_program)
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-       ((Performance.measure "type" (Inference.type_program Library.typing_env))
+       ((Performance.measure "type" (Inference.type_program typenv))
           ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
               
 let read_file_cache filename : (Syntax.expression list) = 
@@ -98,11 +101,11 @@ let read_file_cache filename : (Syntax.expression list) =
 	 with _ -> ());
         program
 
-let read_and_optimise_program arg = 
+let read_and_optimise_program env arg = 
   if Settings.get_value cache_programs then
     read_file_cache arg
   else 
-    read_and_optimise_program arg
+    read_and_optimise_program env arg
 
 let serialize_call_to_client (continuation, name, arg) = Json.jsonize_call continuation name arg
 
@@ -112,7 +115,7 @@ let untuple_single = function
   | `Record ["1",arg] -> arg
   | r -> r
 
-let stubify_client_funcs env = 
+let stubify_client_funcs globals env : Result.environment = 
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
@@ -134,8 +137,8 @@ let stubify_client_funcs env =
       client_env;
     match server_env with 
         [] -> []
-      | server_env ->
-          fst (Interpreter.run_program [] server_env)
+      | server_env -> (* evaluate the definitions to get Result.result values. *)
+          fst (Interpreter.run_program globals server_env)
 
 let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
@@ -222,7 +225,7 @@ let perform_request program globals main req =
            else Result.string_of_result (snd (Interpreter.run_program globals [main])))
 
 let error_page_stylesheet = 
-  "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee}</style>"
+  "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block}</style>"
 
 let error_page body = 
   "<html>\n  <head>\n    <title>Links error</title>" ^ error_page_stylesheet ^ 
@@ -230,29 +233,34 @@ let error_page body =
     body ^ 
     "\n  </body></html>"
 
-let serve_request filename = 
+let catch_notfound msg f a =
+  try
+    f a
+  with Not_found -> failwith ("not found caught ("^msg^")")
+
+let serve_request libraries (valenv, typenv) filename = 
   try 
-    let program = read_and_optimise_program filename in
+    let program = libraries @ catch_notfound "1" (read_and_optimise_program typenv) filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr
     else
     let main = last main in
-    let global_env = stubify_client_funcs global_env in
+    let global_env = catch_notfound "2" (stubify_client_funcs valenv) global_env in
     let cgi_args = Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
     let request = 
-      if is_remote_call cgi_args then 
+      if is_remote_call cgi_args then
         get_remote_call_args global_env cgi_args
       else if is_client_call_return cgi_args then
         client_return_req global_env cgi_args
       else if (is_contin_invocation cgi_args) then
-        contin_invoke_req program cgi_args 
+        contin_invoke_req program cgi_args
       else if (is_expr_request cgi_args) then
-        expr_eval_req program (flip List.assoc global_env) cgi_args           
+        expr_eval_req program (flip List.assoc global_env) cgi_args
       else
         CallMain
     in
-      perform_request program global_env main request
+      perform_request program (global_env @ valenv) main request
   with
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)
@@ -262,6 +270,6 @@ let serve_request filename =
     | exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request filename =
+let serve_request libraries envs filename =
   Errors.display_errors_fatal stderr
-    serve_request filename
+    (serve_request libraries envs) filename

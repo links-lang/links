@@ -65,8 +65,6 @@ let invalid_name pos name message =
 let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
 
-
-(* ARGH! This breaks my structure for discriminating HTML/plaintext errors! *)
 let get_mailbox_msg add_code_tags =
   let wrap =
     if add_code_tags then
@@ -91,14 +89,15 @@ let rec format_exception = function
       Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "`" ^ pexpr ^
-        "' has type \n    " ^ string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
+      let msg = "`" ^ pexpr ^ "' has type \n    " ^ 
+        string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
         "\nand cannot be passed to function `"^ fexpr ^
         "', which has type \n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "`"^ fexpr ^"', which has type "^ string_of_datatype fntype ^
-        ", cannot be applied to `"^ pexpr ^"', of type " ^ 
+      let msg = "`"^ fexpr ^"', which has type\n    "^ 
+        string_of_datatype fntype ^
+        ", cannot be applied to `"^ pexpr ^"'of type\n    " ^ 
         string_of_datatype paramtype ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
   | Result.Runtime_error s -> "*** Runtime error: " ^ s
@@ -108,6 +107,10 @@ let rec format_exception = function
   | Sugar.RedundantPatternMatch (pos,_,expr) -> 
       Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n" 
         pos.pos_fname pos.pos_lnum expr
+  | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
+      Printf.sprintf
+        "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s" 
+        pos.pos_fname pos.pos_lnum name (Utility.xml_escape pattern) (Utility.xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedToplevelNames duplicates ->
     let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
@@ -133,15 +136,18 @@ let rec format_exception_html = function
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s. In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "<code>" ^ Utility.xml_escape(pexpr) ^ (get_mailbox_msg true mb) ^
-        "</code> has type <code>" ^ (Utility.xml_escape(string_of_datatype paramtype)) ^
+      let msg = "<code class=\"typeError\">" ^ Utility.xml_escape pexpr ^ (get_mailbox_msg true mb) ^
+        "</code> has type <code>" ^ Utility.xml_escape(string_of_datatype paramtype) ^
         "</code> and cannot be passed to function <code>"^ Utility.xml_escape(fexpr) ^
         "</code>, which has type <code>"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "<code>"^ fexpr ^"</code>, which has type <code>"^ string_of_datatype fntype ^
-        "</code>, cannot be applied to <code>"^ pexpr ^"</code>, of type <code>" ^ 
+      let msg = "<code class=\"typeError\">"^ 
+        Utility.xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
+        string_of_datatype fntype ^
+        "</code> cannot be applied to <code class=\"typeError\">"^ 
+        Utility.xml_escape pexpr ^"</code>, of type <code class=\"typeError\">" ^ 
         string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
@@ -161,15 +167,16 @@ let rec format_exception_html = function
           
   | Result.Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
   | ASTSyntaxError ((pos,_,expr), s) -> 
-      Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: %s\n" 
-        pos.pos_fname pos.pos_lnum s expr
+      Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
+        pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
+  | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
+      Printf.sprintf
+        "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
+        pos.pos_fname pos.pos_lnum name (Utility.xml_escape pattern) (Utility.xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | NoMainExpr -> "<h1>Links Syntax Error</h1>\nNo \"main\" expression at end of file"
   | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ String.concat "<br/>" (List.map Syntax.string_of_expression es)
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
-
-
-
 
 let display_errors' default stream (f : 'a -> 'b) (a : 'a) = 
   try 

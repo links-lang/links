@@ -1,26 +1,26 @@
 fun all(p, l) { 
-   switch l {
+   switch (l) {
      case []    -> true
      case x::xs -> p(x) && all(p, xs)
    }
 }
 
 fun and(l) { 
-   switch l {
+   switch (l) {
      case [] -> true
      case x::xs -> x && and(xs)
    }
 }
 
 fun or(l) { 
-   switch l {
+   switch (l) {
      case [] -> false
      case x::xs -> x || or(xs)
    }
 }
 
 fun any(p, l) {
-   switch l {
+   switch (l) {
      case [] -> false
      case x::xs -> p(x) || any(p, xs)
    }
@@ -32,7 +32,7 @@ fun even(i) { mod(i)(2) == 0 }
 fun null(l) { l == [] }
 
 fun fold_left(p, u, l) {
-  switch l {
+  switch (l) {
     case [] -> u
     case x::xs -> fold_left(p, p(u, x), xs)
   }
@@ -43,7 +43,7 @@ fun fold_left1(p, l) {
 }
 
 fun fold_right(f, u, l) {
-  switch l {
+  switch (l) {
     case [] -> u
     case x::xs -> f(x, fold_right(f,u,xs))
   }
@@ -54,7 +54,7 @@ fun fold_right1(f, l) {
 }
 
 fun zip(l) {
-  switch l {
+  switch (l) {
     case [] -> ([], [])
     case (a,b)::xs -> { 
      var (c,d) = zip(xs);
@@ -115,7 +115,7 @@ fun product(ns) {
 }
 
 fun map(f, l) {
-  switch l {
+  switch (l) {
     case []     -> []
     case hd::tl -> f(hd) :: map(f,tl)
   }
@@ -123,12 +123,28 @@ fun map(f, l) {
 
 fun reverse(l) {
   fun aux(l,o) {
-    switch l {
+    switch (l) {
       case [] -> o
       case x::xs -> aux(xs, x::o)
     }
   }
   aux(l, [])
+}
+
+
+fun concat(list) {
+  switch (list) {
+    case [] -> []
+    case (x::xs) -> x ++ concat(xs)
+  }
+}
+
+fun join(glue,list) {
+  switch (list) {
+    case [] -> []
+    case [x] -> x
+    case (x::xs) -> x ++ glue ++ concat(xs)
+  }
 }
 
 # break :: (a -> Bool) -> [a] -> ([a],[a])
@@ -188,3 +204,168 @@ fun reverse(l) {
 # round :: Float -> Int
 # truncate :: Float -> Int
 
+#### FORMS ABSTRACTION ####
+#### Ultimately needs to be moved to a different namespaced module
+
+# State a ===  [|State:(d) -> (a,d)|]
+# Form a == State Names (Xml, Collector a)
+# Collector a == Env -> a
+# Combiner a b c == Collector a -> Collector b -> Collector c
+
+infixr 0 $;
+fun f $ x { f(x) }
+
+fun lookup(x,l) {
+  switch (l) {
+    case []    -> error("Not found " ++ x)
+    case (k,v)::xs -> if (k == x) v
+                      else lookup(x,xs)
+  }
+}
+
+fun lookupAll(x,l) {
+  switch (l) {
+    case []    -> []
+    case (k,v)::xs -> if (k == x) 
+                        (v::lookupAll(x,xs))
+                      else
+                        lookupAll(x,xs)
+  }
+}
+
+# TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
+fun memassoc(x,l) {
+  switch (l) {
+    case []    -> false
+    case (k,v)::xs -> k == x || memassoc(x, xs)
+  }
+}
+
+fun repeat(n)(x) {
+   if (n == 0) []
+   else x :: repeat(n-1)(x)
+}
+
+# state monad
+fun runState(State (s)) { s : ((s) -> (a,s)) }
+
+infixl 1 >>=;
+infixl 1 >>;
+
+fun (State (x)) >>= f {
+   State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
+}
+
+sig return : (a) -> [|State:(d) -> (a, d)|]
+fun return(a) {
+  State (fun (s) { (a,s)  })
+}
+
+var get = State (fun (s) { (s,s) });
+
+sig put :  (a) -> [|State:(a) -> ((), a)|] # ?
+fun put(s) {
+  State (fun (_) { ((), s) })
+}
+
+fun m >> k {
+   m >>= fun (_) { k }
+}
+
+fun fmap(f)(x) {
+  x >>= (fun (x) { return (f(x)) })
+} 
+
+# pure : a -> Form(a)
+fun pure(v) {
+  return([], fun (_) { v })
+}
+
+# (@@@) : Form(a) -> Form(a->b) -> Form(b)
+infixr 1 @@@;
+fun m @@@ k {
+  m >>= fun((x,c)){
+  k >>= fun((y,f)){
+  return((x++y, fun(e){ f(e)(c(e)) }))}}
+}
+
+# xml : Xml -> Form(())
+fun xml(x) { return ( (x, fun (e) { () })) }
+
+# text : String -> Form(())
+fun text(s) { xml(stringToXml(s)) }
+
+# plug : (Xml -> Xml) -> Form(a) -> Form(a)
+fun f `plug` m {
+  m >>= fun((x,v)){ return((f(x),v)) }
+}
+
+fun makeName(i : Int) { "input_" ++ intToString(i) }
+var nextName = 
+   get >>= fun (i) {
+   var name = makeName(i);
+   put (i+1) >>
+   return (name)};
+
+# A one element form can be constructed using the input function.
+var input = 
+   nextName >>= fun (name) {
+   (return (<input name="{name}"/>,
+            fun (env) { lookup(name, env)}))};
+
+
+# A form is rendered to Xml, and a handler applied, using the render function
+fun render(continuation)(frm) {
+   var ((xml, extractor),_) = runState(frm)(0);
+   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
+    <input type="submit"/>
+   </form>
+
+}
+
+
+# inputInt : Form(Int)
+var inputInt = input @@@ pure(stringToInt);
+
+fun inputSelect(items) {
+   nextName >>= fun (name) {
+   (return (<select name="{name}">
+              { for (var (text, id) <- items) 
+                  <option value="{intToString(id)}">{stringToXml(text)}</option>
+              }
+            </select>,
+            fun (env) { stringToInt(lookup(name, env))}))}
+}
+
+fun inputText(value) {
+   nextName >>= fun (name) {
+    return (<textarea name="{name}">{stringToXml(value)}</textarea>,
+            fun (env) { lookup(name, env) })}
+}
+
+fun inputButton(value) {
+   nextName >>= fun (name) {
+    return (<button name="{name}" value="{value}" >{stringToXml(value)}</button>,
+            fun (env) { memassoc(name, env) })}
+}
+
+fun inputSelectMultiple(items) {
+   nextName >>= fun (name) {
+   (return (<select multiple="multiple" name="{name}">
+              { for (var (text, id) <- items) 
+                  <option value="{intToString(id)}">{stringToXml(text)}</option>
+              }
+            </select>,
+            fun (env) { map(stringToInt,lookupAll(name, env))}))}
+}
+
+fun inputCheckbox() {
+   nextName >>= fun (name) {
+    return (<input type="checkbox" name="{name}" value="yes" />,
+            fun (env) { (memassoc(name, env)) })}
+}
+
+fun inputRadiogroup(items) {
+}
+
+()

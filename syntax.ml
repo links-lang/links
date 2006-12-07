@@ -8,7 +8,14 @@ open Pickle
 type lexpos = Lexing.position
 module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
-module Pickle_lexpos = Pickle_unpicklable (LexposType)
+(*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
+
+module Pickle_lexpos : Pickle with type a = lexpos = Pickle.Pickle_defaults(
+  struct
+    type a = lexpos
+    let pickle buffer e = ()
+    and unpickle stream = Lexing.dummy_pos 
+  end)
 
 type position = lexpos *  (* source line: *) string 
                   * (* expression source: *) string
@@ -209,6 +216,12 @@ let strip_data : 'a expression' -> stripped_expression =
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
 
+(*let has_label = function
+    (_,_,Some_) -> true
+  | (_,_,None) -> false
+
+let is_labelized = reduce_expression (fun _ -> expression_data) (fun(_,datas) -> ) 
+*)
 let labelize =
   let label_seq = ref 0 in
 let new_label () = incr label_seq; !label_seq in

@@ -2,6 +2,12 @@ open Getopt
 open Utility
 open Debug
 
+let load_file filename =
+  let ast_program = Parse.parse_file Parse.program filename in
+  let typingenv, exprs = Inference.type_program Library.typing_env ast_program in
+  let exprs = List.map Syntax.labelize exprs in
+    typingenv, exprs
+
 (*
  Whether to run the interactive loop
  (default is true)
@@ -154,14 +160,14 @@ let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
 
-let run_file filename = 
+ let run_file libraries envs filename = 
   Settings.set_value interacting false;
   match Utility.getenv "REQUEST_METHOD" with 
     | Some _ -> 
         (Settings.set_value web_mode true;
-         Webif.serve_request filename)
+         Webif.serve_request libraries envs filename)
     | None ->
-        ignore (evaluate (Parse.parse_file Parse.program) stdenvs filename)
+        ignore (evaluate (Parse.parse_file Parse.program) envs filename)
 
 let evaluate_string v =
   (Settings.set_value interacting false;
@@ -232,9 +238,15 @@ let welcome_note = Settings.add_string ("welcome_note", "Welcome to Links", fals
 
 (* main *)
 let _ =
-  Errors.display_errors_fatal stderr (parse_cmdline options) run_file;
+  let file_list = ref [] in
+  Errors.display_errors_fatal stderr (parse_cmdline options) (push file_list);
+  (* load prelude *)
+  let library_types, libraries =
+    (Errors.display_errors_fatal stderr load_file "prelude.links") in 
+  (* TBD: accumulate type/value environment so that "interact" has access *)
+  ListLabels.iter ~f:(run_file libraries ([], library_types)) !file_list;
   if Settings.get_value(interacting) then
     begin
       print_endline (Settings.get_value(welcome_note));
-      interact stdenvs
+      interact ([], library_types)
     end
