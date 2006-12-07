@@ -1,6 +1,7 @@
 (*
   Compiler settings
 *)
+open Utility
 module SettingsMap = Utility.StringMap
 
 type 'a setting = {mutable value: 'a; name: string; user: bool}
@@ -135,3 +136,23 @@ let print_settings () =
   in
     [""] @ user_settings @ [""] @ system_settings
     
+
+let from_argv : string array -> string list =
+  let set name value =
+    parse_and_set_user (name, value)
+  and is_opt = start_of ~is:"--" 
+  and de_opt s = StringLabels.sub ~pos:2 ~len:(String.length s - 2) s in
+  let rec process nonopts = function
+    | [] -> nonopts
+    | option::rest when is_opt option && String.contains option '=' -> 
+        let idx = String.index option '=' in
+          set
+            (de_opt (StringLabels.sub ~pos:0 ~len:idx option))
+            (StringLabels.sub ~pos:idx ~len:(String.length option - idx) option);
+        process nonopts rest
+    | option::value::rest when is_opt option -> 
+        set (de_opt option) value ;
+        process nonopts rest
+    | nonopt::rest -> process (nonopt::nonopts) rest
+  in 
+    process [] -<- Array.to_list 

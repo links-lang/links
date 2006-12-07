@@ -40,3 +40,6 @@ val set_value : 'a setting -> 'a -> unit
 
 (* print all registered settings *)
 val print_settings : unit -> string list
+
+(* ... *)
+val from_argv : string array -> string list
