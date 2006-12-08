@@ -1,0 +1,20 @@
+fun firstButton(buttons) {
+   fromJust(find(isJust, buttons))
+}
+
+var f = 
+  form 
+   <#>
+     {inputInt -> l}
+     {inputInt -> r}
+     <br/>
+     {button("+",(+)) -> plus}
+     {button("*",(*)) -> times}
+   </#>
+  yields (action=firstButton([plus,times]), l=l,r=r);
+
+fun run ((action=action, l=l, r=r)) {
+   l `action` r 
+}
+
+render(run)(f)
