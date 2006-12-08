@@ -52,14 +52,6 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-sig sequenceForms : [Form (a)] -> Form ([a])
-fun sequenceForms(forms) { 
-  switch (forms) {
-    case [] -> pure ([])
-    case (x::xs) -> x @@@ (sequenceForms(xs) @@@ pure (fun(ls)(l) { l::ls}))
-  }
-}
-
 sig sumNumbers : [Int] -> Int
 fun sumNumbers(numbers) {
   fun aux(numbers, total) {
@@ -75,7 +67,7 @@ sig enterNumbers : Int -> Xml
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(sumNumbers)(sequenceForms(repeat(n)((inputInt))))}
+    {render(sumNumbers)(forms(replicate(n, inputInt)))}
   </html> 
 }
 

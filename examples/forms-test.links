@@ -16,7 +16,7 @@ var theForm =
      <div>
        { textarea("This is the song that never ends") -> song }
      </div>
-       { button("Go") -> go }  { button("Stop") -> stop }
+       { button("Go", "go") -> go }  { button("Stop", "stop") -> stop }
      <div>
        <label>Over 65? { checkbox -> over65 }</label>
      </div>
@@ -25,7 +25,7 @@ var theForm =
     (flav=flav,
      song=song,
      over65=over65,
-     do=if (go) "go" else if (stop) "stop" else "",
+     do=if (isJust (go)) fromJust (go) else if (isJust (stop)) fromJust (stop) else "",
      problems=problems);
 
 fun renderer ((flav=flav, song=song, over65=over65, do=do, problems=problems)) {

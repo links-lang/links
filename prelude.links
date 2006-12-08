@@ -204,9 +204,87 @@ fun join(glue,list) {
 # round :: Float -> Int
 # truncate :: Float -> Int
 
+
+# options
+typename Maybe (a) = [|Nothing | Just:a|];
+
+sig isJust : Maybe (a) -> Bool
+fun isJust(x) {
+  switch (x) {
+    case Just (x) -> true
+    case Nothing -> false
+  }
+}
+
+
+sig search : ((a) -> Bool, [a]) -> Maybe (a)
+fun search(p,l) {
+  switch (l) {
+    case [] -> Nothing
+    case x::xs -> if (p(x)) Just(x)
+                  else search(p,xs)
+  }
+}
+
+sig find : ((a) -> Bool, [a]) -> a
+fun find(p,l) {
+  switch (l) {
+    case [] -> error("Not_found")
+    case x::xs -> if (p(x)) x
+                  else find(p,xs)
+  }
+}
+
+sig fromJust : Maybe (a) -> a
+fun fromJust(x) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> error ("fromJust failed")
+  }
+}
+
+# association lists
+# TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
+sig memassoc : (a,[(a,b)]) -> Bool
+fun memassoc(x,l) {
+  switch (l) {
+    case []    -> false
+    case (k,v)::xs -> k == x || memassoc(x, xs)
+  }
+}
+
+sig lookup : (a,[(a,b)]) -> Maybe (b)
+fun lookup(x,l) {
+  switch (l) {
+    case [] -> Nothing
+    case (a,b)::xs -> if (a == x) Just(b)
+                      else lookup(x,xs)
+  }
+}
+
+sig assoc : (String,[(String,b)]) -> b
+fun assoc(x,l) {
+  switch (l) {
+    case []    -> error("Not found " ++ x)
+    case (k,v)::xs -> if (k == x) v
+                      else assoc(x,xs)
+  }
+}
+
+sig assocAll : (String,[(String,b)]) -> [b]
+fun assocAll(x,l) {
+  switch (l) {
+    case []    -> []
+    case (k,v)::xs -> if (k == x) 
+                        (v::assocAll(x,xs))
+                      else
+                        assocAll(x,xs)
+  }
+}
+
+
 #### FORMS ABSTRACTION ####
 #### Ultimately needs to be moved to a different namespaced module
-
 
 typename Env = [(String,String)];
 typename Names = Int;
@@ -219,40 +297,6 @@ infixr 0 $;
 sig $ : (a -> b) -> a -> b
 fun f $ x { f(x) }
 
-sig lookup : (String,Env) -> String
-fun lookup(x,l) {
-  switch (l) {
-    case []    -> error("Not found " ++ x)
-    case (k,v)::xs -> if (k == x) v
-                      else lookup(x,xs)
-  }
-}
-
-sig lookupAll : (String,Env) -> [String]
-fun lookupAll(x,l) {
-  switch (l) {
-    case []    -> []
-    case (k,v)::xs -> if (k == x) 
-                        (v::lookupAll(x,xs))
-                      else
-                        lookupAll(x,xs)
-  }
-}
-
-# TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
-sig memassoc : (a,[(a,b)]) -> Bool
-fun memassoc(x,l) {
-  switch (l) {
-    case []    -> false
-    case (k,v)::xs -> k == x || memassoc(x, xs)
-  }
-}
-
-sig repeat : Int -> (b) -> [b]
-fun repeat(n)(x) {
-   if (n == 0) []
-   else x :: repeat(n-1)(x)
-}
 
 # state monad
 sig runState : State (a,c) -> (a) -> (c,a)
@@ -330,7 +374,7 @@ sig input : Form (String)
 var input = 
    nextName >>= fun (name) {
    (return (<input name="{name}"/>,
-            fun (env) { lookup(name, env)}))};
+            fun (env) { assoc(name, env)}))};
 
 
 # A form is rendered to Xml, and a handler applied, using the render function
@@ -341,6 +385,14 @@ fun render(continuation)(frm) {
     <input type="submit"/>
    </form>
 
+}
+
+#sig forms : ([Form (a)]) -> Form ([a])
+fun forms(fs) { 
+  switch (fs) {
+    case [] -> pure ([])
+    case (x::xs) -> x @@@ (forms(xs) @@@ pure (fun(ls)(l) { l::ls}))
+  }
 }
 
 sig inputInt : Form(Int)
@@ -354,21 +406,21 @@ fun choose(items) {
                   <option value="{intToString(id)}">{stringToXml(text)}</option>
               }
             </select>,
-            fun (env) { stringToInt(lookup(name, env))}))}
+            fun (env) { stringToInt(assoc(name, env))}))}
 }
 
 sig textarea : String -> Form (String)
 fun textarea(value) {
    nextName >>= fun (name) {
     return (<textarea name="{name}">{stringToXml(value)}</textarea>,
-            fun (env) { lookup(name, env) })}
+            fun (env) { assoc(name, env) })}
 }
 
-sig button : String -> Form (Bool)
-fun button(value) {
+sig button : (String,a) -> Form (Maybe(a))
+fun button(text, v) {
    nextName >>= fun (name) {
-    return (<button name="{name}" value="{value}" >{stringToXml(value)}</button>,
-            fun (env) { memassoc(name, env) })}
+    return (<button name="{name}" value="here" >{stringToXml(text)}</button>,
+            fun (env) { if (memassoc(name, env))  Just(v) else Nothing })}
 }
 
 sig options : [(String,Int)] -> Form ([Int])
@@ -379,7 +431,7 @@ fun options(items) {
                   <option value="{intToString(id)}">{stringToXml(text)}</option>
               }
             </select>,
-            fun (env) { map(stringToInt,lookupAll(name, env))}))}
+            fun (env) { map(stringToInt,assocAll(name, env))}))}
 }
 
 sig checkbox : Form (Bool)
@@ -392,4 +444,4 @@ var checkbox =
 fun inputRadiogroup(items) {
 }
 
-()
+
