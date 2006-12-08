@@ -9,16 +9,7 @@ var date =
     </#>
   yields Date(day, mo);
 
-
-sig dateToXml : Date -> Xml
 fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
-
-sig label : String -> Form (a) -> Form(a)
-fun s `label` m {
-  text(s) @@@
-  m @@@
-  pure( fun(v)(_){ v } )
-}
 
 sig travelForm : Form(BookingInfo)
 var travelForm =
@@ -40,7 +31,6 @@ var travelForm =
   yields 
     (person=person, age=age, arrival = arr, departure = dep);
 
-sig showBookingInformation : BookingInfo -> Xml
 fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    <html>
      <h1>Results</h1>
@@ -52,28 +42,7 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-sig sumNumbers : [Int] -> Int
-fun sumNumbers(numbers) {
-  fun aux(numbers, total) {
-    switch (numbers) {
-       case [] -> total
-       case n::nums -> aux(nums, n + total)
-    }
-  }
-  aux(numbers, 0)
-}
-
-sig enterNumbers : Int -> Xml
-fun enterNumbers(n) {
-  <html>
-    <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(sumNumbers)(forms(replicate(n, inputInt)))}
-  </html> 
-}
-
 <html>
    <h1>Date:</h1>
    {render(showBookingInformation)(travelForm)}
-   <h1>Multiple</h1>
-   Enter numbers: {render(enterNumbers)(inputInt)}
 </html>
