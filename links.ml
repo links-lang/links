@@ -141,25 +141,25 @@ let just_optimise parse (valenv, typingenv) input =
 
 (* Interactive loop *)
 let rec interact envs =
-let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
-  handle_errors
-    (fun input ->
-       match Performance.measure "parse" parse input with 
-         | Left exprs -> 
-             let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
-             let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
-             let exprs = List.map Syntax.labelize exprs in
-             let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
-               print_result (Syntax.node_datatype (last exprs)) result;
-               (valenv, typingenv)
-         | Right (directive : Sugartypes.directive) -> 
-             execute_directive directive valenv typingenv)
-    input
-in
-let error_handler = Errors.display_errors stderr (fun _ -> envs) in
+  let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
+    handle_errors
+      (fun input ->
+         match Performance.measure "parse" parse input with 
+           | Left exprs -> 
+               let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
+               let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+               let exprs = List.map Syntax.labelize exprs in
+               let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
+                 print_result (Syntax.node_datatype (last exprs)) result;
+                 (valenv, typingenv)
+           | Right (directive : Sugartypes.directive) -> 
+               execute_directive directive valenv typingenv)
+      input
+  in
+  let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
-
+      
  let run_file libraries envs filename = 
   Settings.set_value interacting false;
   match Utility.getenv "REQUEST_METHOD" with 
@@ -248,5 +248,7 @@ let _ =
   if Settings.get_value(interacting) then
     begin
       print_endline (Settings.get_value(welcome_note));
-      interact ([], library_types)
+      let libraries, _ = Interpreter.run_program [] libraries in
+      interact (libraries, library_types)
     end
+

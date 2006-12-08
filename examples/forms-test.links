@@ -1,34 +1,40 @@
 # An ugly page that exercises the various types of input fields in a form.
 
-var theForm = form
+var theForm = 
+ form
    <#>
      <div>
-       Flavor: { inputSelect([("Cherry", 1),
-                              ("Strawberry", 2),
-                              ("Vanilla", 77)]) -> flav }
+       Flavour: { choose([("Cherry", 1),
+                          ("Strawberry", 2),
+                          ("Vanilla", 77)]) -> flav }
      </div>
      <div>
-       Problems with: <br />{ inputSelectMultiple([("Rats", 2),
-                                             ("Moles", 3),
-                                             ("Neighbors", 5)]) -> problems }
+       Problems with: <br />{ options([("Rats", 2),
+                                       ("Moles", 3),
+                                       ("Neighbours", 5)]) -> problems }
      </div>
      <div>
-       { inputText("This is the song that never ends") -> song }
+       { textarea("This is the song that never ends") -> song }
      </div>
-     {inputButton("Go") -> go}
-     {inputButton("Stop") -> stop}
+       { button("Go") -> go }  { button("Stop") -> stop }
      <div>
-       <label>Over 65? {inputCheckbox() -> over65 }</label>
+       <label>Over 65? { checkbox -> over65 }</label>
      </div>
    </#>
- yields {
-   <#> {intToXml(flav)} <br /> {stringToXml(song)} <br />
-       {stringToXml(if (over65) "You are over 65!" else "")}
-       {stringToXml(if (go) "go" else 
-                      if (stop) "stop" else "") }
-       Problems: {stringToXml(join(", ", map(intToString, problems)))}</#>
-};
+ yields
+    (flav=flav,
+     song=song,
+     over65=over65,
+     do=if (go) "go" else if (stop) "stop" else "",
+     problems=problems);
 
-fun idy(x) { x } 
+fun renderer ((flav=flav, song=song, over65=over65, do=do, problems=problems)) {
+   <#> 
+     {intToXml(flav)} <br /> {stringToXml(song)} <br />
+     {stringToXml(if (over65) "You are over 65!" else "")}
+     {stringToXml(do)}
+     Problems: {stringToXml(join(", ", map(intToString, problems)))}
+   </#>
+}
 
-render(idy)(theForm)
+render(renderer)(theForm)

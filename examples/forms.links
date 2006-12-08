@@ -1,143 +1,26 @@
-# State a ===  [|State:(d) -> (a,d)|]
-# Form a == State Names (Xml, Collector a)
-# Collector a == Env -> a
-# Combiner a b c == Collector a -> Collector b -> Collector c
+typename Date = [|Date:(Int,Int)|];
+typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 
-infixr 0 $;
-fun f $ x { f(x) }
-
-fun lookup(x,l) {
-  switch (l) {
-    case []    -> error("Not found " ++ x)
-    case (k,v)::xs -> if (k == x) v
-                      else lookup(x,xs)
-  }
-}
-
-fun repeat(n)(x) {
-   if (n == 0) []
-   else x :: repeat(n-1)(x)
-}
-
-# state monad
-fun runState(State (s)) { s : ((s) -> (a,s)) }
-
-infixl 1 >>=;
-infixl 1 >>;
-
-fun (State (x)) >>= f {
-   State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
-}
-
-sig return : (a) -> [|State:(d) -> (a, d)|]
-fun return(a) {
-  State (fun (s) { (a,s)  })
-}
-
-var get = State (fun (s) { (s,s) });
-
-sig put :  (a) -> [|State:(a) -> ((), a)|] # ?
-fun put(s) {
-  State (fun (_) { ((), s) })
-}
-
-fun m >> k {
-   m >>= fun (_) { k }
-}
-
-fun fmap(f)(x) {
-  x >>= (fun (x) { return (f(x)) })
-} 
-
-# pure : a -> Form(a)
-fun pure(v) {
-  return([], fun (_) { v })
-}
-
-# (@@@) : Form(a) -> Form(a->b) -> Form(b)
-infixr 1 @@@;
-fun m @@@ k {
-  m >>= fun((x,c)){
-  k >>= fun((y,f)){
-  return((x++y, fun(e){ f(e)(c(e)) }))}}
-}
-
-# xml : Xml -> Form(())
-fun xml(x) { return ( (x, fun (e) { () })) }
-
-# text : String -> Form(())
-fun text(s) { xml(stringToXml(s)) }
-
-# plug : (Xml -> Xml) -> Form(a) -> Form(a)
-fun f `plug` m {
-  m >>= fun((x,v)){ return((f(x),v)) }
-}
-
-fun makeName(i : Int) { "input_" ++ intToString(i) }
-var nextName = 
-   get >>= fun (i) {
-   var name = makeName(i);
-   put (i+1) >>
-   return (name)};
-
-# A one element form can be constructed using the input function.
-var input = 
-   nextName >>= fun (name) {
-   (return (<input name="{name}"/>,
-            fun (env) { lookup(name, env)}))};
-
-
-# A form is rendered to Xml, and a handler applied, using the render function
-fun render(continuation)(frm) {
-   var ((xml, extractor),_) = runState(frm)(0);
-   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
-    <input type="submit"/>
-   </form>
-
-}
-
-# dates example
-# inputInt : Form(Int)
-var inputInt = input @@@ pure(stringToInt);
-
-# date : Form(Date)
-var dateOld =
-  inputInt @@@
-  text("/") @@@
-  inputInt @@@
-  pure( fun(m)(_)(d){ Date(d,m) } );
-
+sig date : Form(Date)
 var date = 
   form
     <#>
       { inputInt -> day } / { inputInt -> mo } 
     </#>
-  yields {
-    Date(stringToInt(day), mo)
-  };
+  yields Date(day, mo);
 
 
-fun showDate((Date(d,m))) { intToString(d) ++ "/" ++ intToString(m) }
+sig dateToXml : Date -> Xml
 fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
 
-# label : String -> Form(a) -> Form(a)
+sig label : String -> Form (a) -> Form(a)
 fun s `label` m {
   text(s) @@@
   m @@@
   pure( fun(v)(_){ v } )
 }
 
-# travelForm : Form((person:String, age:Int, arrival:Date, departure:Date))
-var travelFormOld =
-  ("person" `label` input) @@@
-  ("age" `label` inputInt) @@@
-  (fun(x){ <div>{x}</div> } `plug`
-    (("arrival date" `label` dateOld) @@@
-     ("departure date" `label` dateOld) @@@
-     pure( fun(dep)(arr){ (arr,dep) } ))) @@@
-  (pure(fun(arr,dep)(a)(p){ (person=p, age=a, arrive=arr, depart=dep) }));
-
-# travelForm : Form((person:String, age:Int, arrival:Date, departure:Date))
+sig travelForm : Form(BookingInfo)
 var travelForm =
   form
     <table>
@@ -154,10 +37,10 @@ var travelForm =
        <td> Departure:</td> <td> { date -> dep }</td>
      </tr>
     </table>
-  yields {
-    (person=person, age=age, arrival = arr, departure = dep)
-  };
+  yields 
+    (person=person, age=age, arrival = arr, departure = dep);
 
+sig showBookingInformation : BookingInfo -> Xml
 fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    <html>
      <h1>Results</h1>
@@ -169,7 +52,7 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-# sequenceForms : [Form a] -> Form [a]
+sig sequenceForms : [Form (a)] -> Form ([a])
 fun sequenceForms(forms) { 
   switch (forms) {
     case [] -> pure ([])
@@ -177,6 +60,7 @@ fun sequenceForms(forms) {
   }
 }
 
+sig sumNumbers : [Int] -> Int
 fun sumNumbers(numbers) {
   fun aux(numbers, total) {
     switch (numbers) {
@@ -187,6 +71,7 @@ fun sumNumbers(numbers) {
   aux(numbers, 0)
 }
 
+sig enterNumbers : Int -> Xml
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>

@@ -26,8 +26,8 @@ fun any(p, l) {
    }
 }
 
-fun odd(i)  { mod(i)(2) == 1 }
-fun even(i) { mod(i)(2) == 0 }
+fun odd(i)  { i `mod` 2 == 1 }
+fun even(i) { i `mod` 2 == 0 }
 
 fun null(l) { l == [] }
 
@@ -207,14 +207,19 @@ fun join(glue,list) {
 #### FORMS ABSTRACTION ####
 #### Ultimately needs to be moved to a different namespaced module
 
-# State a ===  [|State:(d) -> (a,d)|]
-# Form a == State Names (Xml, Collector a)
-# Collector a == Env -> a
-# Combiner a b c == Collector a -> Collector b -> Collector c
+
+typename Env = [(String,String)];
+typename Names = Int;
+typename State (d,a) = [|State:(d) ->(a,d)|];
+typename Collector (a) = Env -> a;
+typename Form (a) = State (Names, (Xml,Collector(a)));
+typename Combiner (a,b,c) = Collector (a) -> Collector (b) -> Collector (c);
 
 infixr 0 $;
+sig $ : (a -> b) -> a -> b
 fun f $ x { f(x) }
 
+sig lookup : (String,Env) -> String
 fun lookup(x,l) {
   switch (l) {
     case []    -> error("Not found " ++ x)
@@ -223,6 +228,7 @@ fun lookup(x,l) {
   }
 }
 
+sig lookupAll : (String,Env) -> [String]
 fun lookupAll(x,l) {
   switch (l) {
     case []    -> []
@@ -234,6 +240,7 @@ fun lookupAll(x,l) {
 }
 
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
+sig memassoc : (a,[(a,b)]) -> Bool
 fun memassoc(x,l) {
   switch (l) {
     case []    -> false
@@ -241,66 +248,77 @@ fun memassoc(x,l) {
   }
 }
 
+sig repeat : Int -> (b) -> [b]
 fun repeat(n)(x) {
    if (n == 0) []
    else x :: repeat(n-1)(x)
 }
 
 # state monad
-fun runState(State (s)) { s : ((s) -> (a,s)) }
+sig runState : State (a,c) -> (a) -> (c,a)
+fun runState(State (s)) { s }
 
 infixl 1 >>=;
-infixl 1 >>;
 
+sig >>= : State (d,a) -> (a -> State(d,b)) -> State (d,b)
 fun (State (x)) >>= f {
    State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
 }
 
-sig return : (a) -> [|State:(d) -> (a, d)|]
-fun return(a) {
-  State (fun (s) { (a,s)  })
-}
+infixl 1 >>;
 
-var get = State (fun (s) { (s,s) });
-
-sig put :  (a) -> [|State:(a) -> ((), a)|] # ?
-fun put(s) {
-  State (fun (_) { ((), s) })
-}
-
+sig >> : State(a,b) -> State (a,c) -> State (a,c)
 fun m >> k {
    m >>= fun (_) { k }
 }
 
+sig return : (a) -> State (b,a)
+fun return(a) {
+  State (fun (s) { (a,s)  })
+}
+
+sig get : State (d,d)
+var get = State (fun (s) { (s,s) });
+
+sig put :  (a) -> State(a,())
+fun put(s) {
+  State (fun (_) { ((), s) })
+}
+
+
+sig fmap : (a -> b) -> State (c,a) -> State (c,b)
 fun fmap(f)(x) {
   x >>= (fun (x) { return (f(x)) })
 } 
 
-# pure : a -> Form(a)
+sig pure : a -> Form(a)
 fun pure(v) {
   return([], fun (_) { v })
 }
 
-# (@@@) : Form(a) -> Form(a->b) -> Form(b)
 infixr 1 @@@;
+sig @@@ : Form (a) -> Form (((a)-> b)) -> Form (b)
 fun m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
   return((x++y, fun(e){ f(e)(c(e)) }))}}
 }
 
-# xml : Xml -> Form(())
+sig xml : Xml -> Form (())
 fun xml(x) { return ( (x, fun (e) { () })) }
 
-# text : String -> Form(())
+sig text : String -> Form (())
 fun text(s) { xml(stringToXml(s)) }
 
-# plug : (Xml -> Xml) -> Form(a) -> Form(a)
+sig plug : (Xml -> Xml) -> Form (a) -> Form (a)
 fun f `plug` m {
   m >>= fun((x,v)){ return((f(x),v)) }
 }
 
-fun makeName(i : Int) { "input_" ++ intToString(i) }
+sig makeName : Int -> String
+fun makeName(i) { "input_" ++ intToString(i) }
+
+sig nextName : State (Int,String)
 var nextName = 
    get >>= fun (i) {
    var name = makeName(i);
@@ -308,6 +326,7 @@ var nextName =
    return (name)};
 
 # A one element form can be constructed using the input function.
+sig input : Form (String)
 var input = 
    nextName >>= fun (name) {
    (return (<input name="{name}"/>,
@@ -315,6 +334,7 @@ var input =
 
 
 # A form is rendered to Xml, and a handler applied, using the render function
+sig render : ((a) -> c) -> Form (a) -> Xml
 fun render(continuation)(frm) {
    var ((xml, extractor),_) = runState(frm)(0);
    <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
@@ -323,11 +343,11 @@ fun render(continuation)(frm) {
 
 }
 
-
-# inputInt : Form(Int)
+sig inputInt : Form(Int)
 var inputInt = input @@@ pure(stringToInt);
 
-fun inputSelect(items) {
+sig choose : ([(String,Int)]) -> Form (Int)
+fun choose(items) {
    nextName >>= fun (name) {
    (return (<select name="{name}">
               { for (var (text, id) <- items) 
@@ -337,19 +357,22 @@ fun inputSelect(items) {
             fun (env) { stringToInt(lookup(name, env))}))}
 }
 
-fun inputText(value) {
+sig textarea : String -> Form (String)
+fun textarea(value) {
    nextName >>= fun (name) {
     return (<textarea name="{name}">{stringToXml(value)}</textarea>,
             fun (env) { lookup(name, env) })}
 }
 
-fun inputButton(value) {
+sig button : String -> Form (Bool)
+fun button(value) {
    nextName >>= fun (name) {
     return (<button name="{name}" value="{value}" >{stringToXml(value)}</button>,
             fun (env) { memassoc(name, env) })}
 }
 
-fun inputSelectMultiple(items) {
+sig options : [(String,Int)] -> Form ([Int])
+fun options(items) {
    nextName >>= fun (name) {
    (return (<select multiple="multiple" name="{name}">
               { for (var (text, id) <- items) 
@@ -359,11 +382,12 @@ fun inputSelectMultiple(items) {
             fun (env) { map(stringToInt,lookupAll(name, env))}))}
 }
 
-fun inputCheckbox() {
-   nextName >>= fun (name) {
-    return (<input type="checkbox" name="{name}" value="yes" />,
-            fun (env) { (memassoc(name, env)) })}
-}
+sig checkbox : Form (Bool)
+var checkbox =
+  nextName >>= fun (name) {
+  return (<input type="checkbox" name="{name}" value="yes" />,
+          fun (env) { (memassoc(name, env)) })};
+
 
 fun inputRadiogroup(items) {
 }

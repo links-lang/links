@@ -135,6 +135,7 @@ tlbinding:
 
 signature: 
 | SIG VARIABLE COLON datatype                                  { $2, $4 }
+| SIG op COLON datatype                                        { $2, $4 }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { TypeDeclaration ($2, $3, $5), pos()  }

@@ -120,8 +120,9 @@ let stubify_client_funcs globals env : Result.environment =
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
+    | Syntax.TypeDecl _ -> true
     | e  -> failwith ("Unexpected non-definition in environment : " 
-		      ^ Syntax.string_of_expression e)
+		      ^ Syntax.Show_expression.show e)
   in 
   let server_env, client_env = List.partition is_server_fun env in
     List.iter (function
