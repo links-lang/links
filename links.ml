@@ -82,10 +82,13 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     ((fun envs args ->
         match args with
           | [filename] ->
+              let library_types, libraries =
+                (Errors.display_errors_fatal stderr load_file "prelude.links") in 
+              let libraries, _ = Interpreter.run_program [] libraries in
               let program = Parse.parse_file Parse.program filename in
-              let typingenv, exprs = Inference.type_program Library.typing_env program in
+              let typingenv, exprs = Inference.type_program library_types program in
               let exprs = Optimiser.optimise_program (typingenv, exprs) in
-                (fst ((Interpreter.run_program []) (List.map Syntax.labelize exprs)), typingenv)
+                (fst ((Interpreter.run_program libraries) (List.map Syntax.labelize exprs)), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
   ]
