@@ -80,6 +80,7 @@ and phrasenode =
   | TupleLit of (phrase list)
   | RecordLit of ((name * phrase) list * phrase option)
   | Projection of (phrase * name)
+  | With of (phrase * (name * phrase) list)
   | SortBy_Conc of (ppattern * phrase * phrase)
   | TypeAnnotation of (phrase * datatype)
   | TypeDeclaration of (name * name list * datatype)

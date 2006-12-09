@@ -799,6 +799,8 @@ module Desugarer =
              | TupleLit fields -> etvs fields
              | RecordLit (fields, e) ->
                  flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
+             | With (e, fields) -> 
+                 flatten ((List.map (fun (_, field) -> etv field) fields) @ [etv e])
              | Projection (e, _) -> etv e
              | SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
 
@@ -1013,6 +1015,14 @@ module Desugarer =
            | Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | Projection (e, name) -> (let s = unique_name ()
                                       in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
+           | With (e, fields) -> 
+               ListLabels.fold_right ~init:(desugar e) fields 
+                 ~f:(fun (label, value) record ->
+                       let rvar = gensym () in
+                         Record_extension (label, desugar value,
+                                           Record_selection (label, gensym(), rvar, record,
+                                                             Variable (rvar,pos), pos),
+                                           pos))
            | TableLit (name, datatype, db) -> 
                let row = match datatype with
                  | RecordType row ->

@@ -192,6 +192,7 @@ parenthesized_thing:
 | LPAREN labeled_exps VBAR exp RPAREN                          { RecordLit ($2, Some $4), pos() }
 | LPAREN labeled_exps RPAREN                                   { RecordLit ($2, None),               pos() }
 | LPAREN exps RPAREN                                           { TupleLit ($2), pos() }
+| LPAREN exp WITH labeled_exps RPAREN                          { With ($2, $4), pos() }
 
 binop:
 | MINUS                                                        { `Minus }
