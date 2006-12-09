@@ -4,14 +4,14 @@ var theForm =
  form
    <#>
      <div>
-       Flavour: { choose([("Cherry", 1),
-                          ("Strawberry", 2),
-                          ("Vanilla", 77)]) -> flav }
+       Flavour: { choice([(1, "Cherry"),
+                          (2, "Strawberry"),
+                          (77, "Vanilla")]) -> flav }
      </div>
      <div>
-       Problems with: <br />{ options([("Rats", 2),
-                                       ("Moles", 3),
-                                       ("Neighbours", 5)]) -> problems }
+       Problems with: <br />{ choices([(2, "Rats"),
+                                       (3, "Moles"),
+                                       (6, "Neighbours")]) -> problems }
      </div>
      <div>
        { textarea("This is the song that never ends") -> song }

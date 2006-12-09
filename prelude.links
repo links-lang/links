@@ -143,7 +143,7 @@ fun join(glue,list) {
   switch (list) {
     case [] -> []
     case [x] -> x
-    case (x::xs) -> x ++ glue ++ concat(xs)
+    case (x::xs) -> x ++ glue ++ join(glue,xs)
   }
 }
 
@@ -369,6 +369,20 @@ var nextName =
    put (i+1) >>
    return (name)};
 
+
+# Types of input we need to handle:
+#   text
+#   password
+#   checkbox
+#   radio
+#   submit
+#   reset
+#   file
+#   hidden
+#   image
+#   button
+
+
 # A one element form can be constructed using the input function.
 sig input : Form (String)
 var input = 
@@ -398,17 +412,6 @@ fun forms(fs) {
 sig inputInt : Form(Int)
 var inputInt = input @@@ pure(stringToInt);
 
-sig choose : ([(String,Int)]) -> Form (Int)
-fun choose(items) {
-   nextName >>= fun (name) {
-   (return (<select name="{name}">
-              { for (var (text, id) <- items) 
-                  <option value="{intToString(id)}">{stringToXml(text)}</option>
-              }
-            </select>,
-            fun (env) { stringToInt(assoc(name, env))}))}
-}
-
 sig textarea : String -> Form (String)
 fun textarea(value) {
    nextName >>= fun (name) {
@@ -423,17 +426,6 @@ fun button(text, v) {
             fun (env) { if (memassoc(name, env))  Just(v) else Nothing })}
 }
 
-sig options : [(String,Int)] -> Form ([Int])
-fun options(items) {
-   nextName >>= fun (name) {
-   (return (<select multiple="multiple" name="{name}">
-              { for (var (text, id) <- items) 
-                  <option value="{intToString(id)}">{stringToXml(text)}</option>
-              }
-            </select>,
-            fun (env) { map(stringToInt,assocAll(name, env))}))}
-}
-
 sig checkbox : Form (Bool)
 var checkbox =
   nextName >>= fun (name) {
@@ -445,3 +437,41 @@ fun inputRadiogroup(items) {
 }
 
 
+sig option : (a,String) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
+fun option ((a,b)) {
+   nextName >>= fun (name) {
+   return (<option value="{name}">{stringToXml(b)}</option>,
+           (fun (k) (key) { if (key == name) a::k(key) else k(key) }))
+}}
+
+
+sig options : [(a,String)] -> State(Names,(Xml, (String) -> [a]))
+fun options(items) {
+  switch (items) {
+     case [] -> return (<#/>, fun (_) { [] })
+     case item::items -> option(item) >>= fun (xml, r1) {
+                         options(items) >>= fun (morexml, r2) {
+                         return (xml ++ morexml, r1(r2))}}
+  }
+}
+
+sig choice : [(a,String)] -> Form (a)
+fun choice (items) {
+  nextName >>= fun (name) {
+     options(items) >>= fun (xml, retrieve) {
+        return (<select name="{name}">{xml}</select>,
+                fun (env) { hd(retrieve(assoc(name, env))) })
+     }
+  }
+}
+
+sig choices : [(a,String)] -> Form ([a])
+fun choices (items) {
+  nextName >>= fun (name) {
+     options(items) >>= fun (xml, retrieve) {
+        return (<select name="{name}" multiple="multiple">{xml}</select>,
+                fun (env) { concat(map(retrieve, assocAll(name,env))) })
+
+     }
+  }
+}
