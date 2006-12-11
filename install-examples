@@ -114,7 +114,8 @@ cp lib/js/yahoo/event.js $libdir/yahoo
 cp lib/js/jslib.js $libdir/
 cp lib/js/json.js $libdir/
 cp lib/js/regex.js $libdir/
+cp prelude.links $libdir/
 
 echo "Creating configuration file..."
 echo " $configfile"
-echo -e "jsliburl=$liburl\n" > $configfile
+echo -e "jsliburl=$liburl\nprelude=$libdir/prelude.links\n" > $configfile

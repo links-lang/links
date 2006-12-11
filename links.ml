@@ -20,6 +20,9 @@ let web_mode = Settings.add_bool ("web_mode", false, false)
 (* Whether to print types *)
 let printing_types = Settings.add_bool ("printing_types", true, true)
 
+(* Prelude *)
+let prelude = Settings.add_string ("prelude", "prelude.links", false)
+
 (* Prompt in interactive mode *)
 let ps1 = "links> "
 
@@ -83,7 +86,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_errors_fatal stderr load_file "prelude.links") in 
+                (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
               let libraries, _ = Interpreter.run_program [] libraries in
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
@@ -245,7 +248,7 @@ let _ =
   Errors.display_errors_fatal stderr (parse_cmdline options) (push file_list);
   (* load prelude *)
   let library_types, libraries =
-    (Errors.display_errors_fatal stderr load_file "prelude.links") in 
+    (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
   (* TBD: accumulate type/value environment so that "interact" has access *)
   ListLabels.iter ~f:(run_file libraries ([], library_types)) !file_list;
   if Settings.get_value(interacting) then
