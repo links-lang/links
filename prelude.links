@@ -29,7 +29,7 @@ fun any(p, l) {
 fun odd(i)  { i `mod` 2 == 1 }
 fun even(i) { i `mod` 2 == 0 }
 
-fun null(l) { l == [] }
+#fun null(l) { l == [] }
 
 fun fold_left(p, u, l) {
   switch (l) {
@@ -316,8 +316,8 @@ fun m >> k {
    m >>= fun (_) { k }
 }
 
-sig return : (a) -> State (b,a)
-fun return(a) {
+sig retern : (a) -> State (b,a)
+fun retern(a) {
   State (fun (s) { (a,s)  })
 }
 
@@ -332,12 +332,12 @@ fun put(s) {
 
 sig fmap : (a -> b) -> State (c,a) -> State (c,b)
 fun fmap(f)(x) {
-  x >>= (fun (x) { return (f(x)) })
+  x >>= (fun (x) { retern (f(x)) })
 } 
 
 sig pure : a -> Form(a)
 fun pure(v) {
-  return([], fun (_) { v })
+  retern([], fun (_) { v })
 }
 
 infixr 1 @@@;
@@ -345,18 +345,18 @@ sig @@@ : Form (a) -> Form (((a)-> b)) -> Form (b)
 fun m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
-  return((x++y, fun(e){ f(e)(c(e)) }))}}
+  retern((x++y, fun(e){ f(e)(c(e)) }))}}
 }
 
 sig xml : Xml -> Form (())
-fun xml(x) { return ( (x, fun (e) { () })) }
+fun xml(x) { retern ( (x, fun (e) { () })) }
 
 sig text : String -> Form (())
 fun text(s) { xml(stringToXml(s)) }
 
 sig plug : (Xml -> Xml) -> Form (a) -> Form (a)
 fun f `plug` m {
-  m >>= fun((x,v)){ return((f(x),v)) }
+  m >>= fun((x,v)){ retern((f(x),v)) }
 }
 
 sig makeName : Int -> String
@@ -367,7 +367,7 @@ var nextName =
    get >>= fun (i) {
    var name = makeName(i);
    put (i+1) >>
-   return (name)};
+   retern (name)};
 
 
 # Types of input we need to handle:
@@ -387,7 +387,7 @@ var nextName =
 sig input : Form (String)
 var input = 
    nextName >>= fun (name) {
-   (return (<input name="{name}"/>,
+   (retern (<input name="{name}"/>,
             fun (env) { assoc(name, env)}))};
 
 
@@ -415,21 +415,21 @@ var inputInt = input @@@ pure(stringToInt);
 sig textarea : String -> Form (String)
 fun textarea(value) {
    nextName >>= fun (name) {
-    return (<textarea name="{name}">{stringToXml(value)}</textarea>,
+    retern (<textarea name="{name}">{stringToXml(value)}</textarea>,
             fun (env) { assoc(name, env) })}
 }
 
 sig button : (String,a) -> Form (Maybe(a))
 fun button(text, v) {
    nextName >>= fun (name) {
-    return (<button name="{name}" value="here" >{stringToXml(text)}</button>,
+    retern (<button name="{name}" value="here" >{stringToXml(text)}</button>,
             fun (env) { if (memassoc(name, env))  Just(v) else Nothing })}
 }
 
 sig checkbox : Form (Bool)
 var checkbox =
   nextName >>= fun (name) {
-  return (<input type="checkbox" name="{name}" value="yes" />,
+  retern (<input type="checkbox" name="{name}" value="yes" />,
           fun (env) { (memassoc(name, env)) })};
 
 
@@ -440,7 +440,7 @@ fun inputRadiogroup(items) {
 sig option : (a,String) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
 fun option ((a,b)) {
    nextName >>= fun (name) {
-   return (<option value="{name}">{stringToXml(b)}</option>,
+   retern (<option value="{name}">{stringToXml(b)}</option>,
            (fun (k) (key) { if (key == name) a::k(key) else k(key) }))
 }}
 
@@ -448,10 +448,10 @@ fun option ((a,b)) {
 sig options : [(a,String)] -> State(Names,(Xml, (String) -> [a]))
 fun options(items) {
   switch (items) {
-     case [] -> return (<#/>, fun (_) { [] })
+     case [] -> retern (<#/>, fun (_) { [] })
      case item::items -> option(item) >>= fun (xml, r1) {
                          options(items) >>= fun (morexml, r2) {
-                         return (xml ++ morexml, r1(r2))}}
+                         retern (xml ++ morexml, r1(r2))}}
   }
 }
 
@@ -459,7 +459,7 @@ sig choice : [(a,String)] -> Form (a)
 fun choice (items) {
   nextName >>= fun (name) {
      options(items) >>= fun (xml, retrieve) {
-        return (<select name="{name}">{xml}</select>,
+        retern (<select name="{name}">{xml}</select>,
                 fun (env) { hd(retrieve(assoc(name, env))) })
      }
   }
@@ -469,7 +469,7 @@ sig choices : [(a,String)] -> Form ([a])
 fun choices (items) {
   nextName >>= fun (name) {
      options(items) >>= fun (xml, retrieve) {
-        return (<select name="{name}" multiple="multiple">{xml}</select>,
+        retern (<select name="{name}" multiple="multiple">{xml}</select>,
                 fun (env) { concat(map(retrieve, assocAll(name,env))) })
 
      }

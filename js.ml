@@ -611,7 +611,8 @@ let rec generate : 'a expression' -> code =
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
       (* `Wrong' happens to correspond to pattern matching now, 
          but perhaps not in the future? *)
-  | Alien _ -> Nothing
+  | Alien _ 
+  | TypeDecl _ -> Nothing
 
   (* Unimplemented stuff *)
   | Database _
@@ -914,8 +915,58 @@ let gen =
   ->- optimise
   ->- show
 
+let words = 
+  [ '!', "bang";
+    '$', "usd";
+    '%', "oo";
+    '&', "and";
+    '*', "star";
+    '+', "plus";
+    '/', "slash";
+    '<', "lessthan";
+    '=', "equals";
+    '>', "greaterthan";
+    '?', "huh";
+    '@', "monkey";
+    '\\', "backslash";
+    '^', "carrot";
+    '-', "hyphen";
+    '.', "fullstop";
+    '|', "pipe";
+    '_', "underscore"]
+
+let symbols = List.map fst words
+
+let catch name f a = try f a with Not_found -> failwith name
+
+let wordify x = 
+try
+  "_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)
+with Not_found -> failwith ("wordify " ^ x)
+
+
+let symbolp name =
+  List.for_all (flip List.mem symbols) (explode name)
+
+let wordify_rewrite : RewriteSyntax.rewriter = function
+  | Define (name, b,l,t) when symbolp name -> Some (Define (wordify name, b, l, t))
+  | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
+  | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
+      let rename (x,y,z) =
+        ((if symbolp x then wordify x 
+          else x), y, z) in
+        Some (Rec (List.map rename bindings, body, d))
+  | _ -> None
+
+let rename_symbol_operators program = 
+    fromOption 
+        program
+          (RewriteSyntax.bottomup wordify_rewrite program)
+
  (* TODO: imports *)
 let generate_program environment expression =
+  let environment = try List.map rename_symbol_operators environment with Not_found -> failwith "goo"
+  and expression = try rename_symbol_operators expression  with Not_found -> failwith "gloo" in
   let environment = 
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline environment)) 
