@@ -9,16 +9,30 @@ rest of the line.
 
 =head2 Literals
 
+=over 4
+
+=item *
+
 Integers: C<2>, C<7>
+
+=item *
 
 Floating point numbers: C<3.>, C<14.5>,
 
+=item *
+
 Booleans: C<true>, C<false>.
+
+=item *
 
 Strings: C<"Cappuccino">, C<"\"I've dropped the toothpaste,\" Tom said,
 crestfallen.">.
 
+=item *
+
 Characters: C<'a'>, C<'9'>, C<'\012'>.
+
+=back
 
 =head2 Arithmetic
 
@@ -721,6 +735,96 @@ type you expect.
 
 =head1 Features
 
+=head2 Form-Fragments
+
+Links allows the I<abstraction> of small fragments of an HTML form, so
+that the submitted data can be packaged into more meaningful
+components, and the submitted data can be abstracted from its
+HTML-level representation.
+
+As an example, you may wish to create a I<fragment> to abstract the
+notion of a "date entry field." Concretely, in HTML, this might take a
+variety of forms; it might use just one input field, or a field for
+each component (day, month, and year), or it might present a graphical
+control for the user to select a date. 
+
+The I<client code> of the fragment wants to receive the date value in
+one lump, not as individual fields; furthermore the format of the data
+received by the client need not be the same as the format sent by the
+browser. As a result, the designer of the date fragment may change the 
+HTML representation without changing the date representation that is
+returned to the client code. We say that the fragment is I<abstracted> 
+from its HTML representation.
+
+This abstraction is achieved in Links using a syntactic construct
+known as C<form>/C<yields>. An example date fragment might look like
+this:
+
+  fun dateFragment(msg) {
+    form <#>
+      {stringToXml(msg)} <br />
+      Day:   {inputInt -> day}
+      Month: {inputInt -> month}
+      Year:  {inputInt -> year}
+    </#>
+    yields {
+      Date(day, month, year)
+    }
+  }
+
+This function takes a string C<msg> from the caller (a bit of text to
+include before the input fields) and constructs an XML value including
+three input fields with the C<msg> above them. The inputs are
+introduced using the I<form binding> construct, which looks like this:
+
+   { body -> x }
+
+The expresion C<body> (in the above example, C<inputInt>) is itself a
+form fragment; it has a concrete realization (C<inputInt> is realized
+simply as an HTML C<E<lt>inputE<gt>> field) but will later (when the
+web user submits the form) produce a value, which will be bound to
+C<x>. C<x> is in scope throughout the C<yields> expression.
+
+The C<yields> expression is where the data is packaged for the
+client. It is evaluated only when the form is submitted. The value
+emitted by the yields expression can further be bound by yet another
+form binding. 
+
+Thus, to continue the example, another piece of code can make use of
+the dateFragment as follows:
+
+  form
+    <table>
+    <tr><td>
+      {dateFragment("Arrival") -> arrival}
+    </td><td>
+      {dateFragment("Departure") -> departure}
+    </td></tr>
+    </table>
+  yields
+    Itinerary(arrival, departure)
+
+Here the values bound to C<arrival> and C<departure> are the values
+emitted by the respective C<yields> bodies of the Form structures
+returned by calls to C<dateFragment>; in this case they will be
+C<Date>-tagged values such as C<Date(28, 2, 2007)>.
+
+The type of a C<form>/C<yields> expression is C<Form(>I<a>C<)>, where I<a>
+is the type returned by the C<yields> body. The function C<dateFragment>
+thus has type C<String -E<gt> Form([|Date:(Int, Int, Int)|])>.
+
+A C<Form(>I<a>C<)> value cannot be embedded in HTML until it has been
+"rendered". To render such a value, use the render function:
+
+    render(form <#> {input -> x} </#> yields { x })(handler)
+
+C<render> has type C<(a -E<gt> XML) -E<gt> Form a -E<gt> XML>.
+
+Having C<render>ed a form, the resulting XML can be returned to the
+top-level, and thence served to the browser. When the user submits the
+form, all the submitted data will be processed by all the intermediate
+C<yields> bodies, and finally the function C<handler> will be called.
+
 =head2 Concurrency
 
 A Links program begins as a single thread of control but can fork into
@@ -855,7 +959,7 @@ perform side-effects in response to the event. For example:
 
     <input type="button" value="Add Photo"
            l:onclick="{domAppendChild(container,
-                                         <img src="..."/>)}" />
+                                         <img src="icon.jpeg"/>)}" />
 
 =head3 Interpreting the Event
 
@@ -1090,7 +1194,7 @@ value.
 returns C<[("class", "sidebar")]>. It is an error to apply this to an XML
 text node.
 
-=item hasAttribute(xml, attrName)
+=item hasAttribute(xml,attrName)
 
 Returns true if the given XML value has the named attribute and false
 otherwise. For example
@@ -1100,7 +1204,7 @@ otherwise. For example
 returns C<true>. It is an error to apply this to an XML
 text node.
 
-=item getAttribute(xml, attrName)
+=item getAttribute(xml,attrName)
 
 Fetches the named attribute of the given XML value, as a string. For
 example
