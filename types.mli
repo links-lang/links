@@ -4,6 +4,7 @@
 open Type_basis
 
 type type_var_set = Type_basis.type_var_set
+type type_alias_set = Utility.StringSet.t
 type primitive = Type_basis.primitive
 
 type datatype = (datatype, row) type_basis
@@ -41,6 +42,9 @@ exception Not_tuple
 
 val free_bound_type_vars : datatype -> type_var_set
 val free_bound_row_type_vars : row -> type_var_set
+
+val type_aliases : datatype -> type_alias_set
+val row_type_aliases : row -> type_alias_set
 
 val freshen_free_type_vars : (int Utility.IntMap.t) ref -> datatype -> datatype
 val type_vars : datatype -> int list

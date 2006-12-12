@@ -7,6 +7,7 @@ open Utility
 open Type_basis
 
 type type_var_set = Type_basis.type_var_set
+type type_alias_set = Utility.StringSet.t
 type primitive = Type_basis.primitive
 
 (* Types for datatypes *)
@@ -265,19 +266,6 @@ let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Primitive _             -> IntSet.empty
   | `TypeVar var
   | `RigidTypeVar var        -> IntSet.singleton var
-(*
-  [HACK]
-    uncommenting this prevents unused mailbox variables from being counted
-*)
-(*
-  | `Function (mailbox_type, `Function (from, into)) when using_mailbox_typing() ->
-      let mailbox_type_vars =
-	match mailbox_type with
-	  | `TypeVar _ -> IntSet.empty
-	  | _ -> free_bound_type_vars mailbox_type
-      in
-	IntSet.union mailbox_type_vars (IntSet.union (free_bound_type_vars from) (free_bound_type_vars into))
-*)
   | `Function (f, m, t)      ->
       IntSet.union
         (IntSet.union (free_bound_type_vars f) (free_bound_type_vars t))
@@ -299,6 +287,33 @@ and free_bound_row_var_vars row_var =
     | `RowVar (Some var) -> IntSet.singleton var
     | `RowVar None -> IntSet.empty
     | `RecRowVar (var, row) -> IntSet.add var (free_bound_row_type_vars row)
+
+let rec type_aliases : datatype -> StringSet.t = function
+  | `Not_typed
+  | `Primitive _
+  | `TypeVar _
+  | `RigidTypeVar _        -> StringSet.empty
+  | `Function (f, m, t)      ->
+      StringSet.union
+        (StringSet.union (type_aliases f) (type_aliases t))
+        (type_aliases m)
+  | `Record row
+  | `Variant row
+  | `Table row               -> row_type_aliases row
+  | `Recursive (var, body)   -> type_aliases body
+  | `Application (alias, datatypes) -> List.fold_right StringSet.union (List.map type_aliases datatypes) (StringSet.singleton alias)
+and row_type_aliases (field_env, row_var) =
+  let field_type_vars = 
+    List.fold_right StringSet.union
+      (List.map (fun (_, t) -> type_aliases t) (get_present_fields field_env))
+      StringSet.empty in
+  let row_var = row_var_type_aliases row_var in
+    StringSet.union field_type_vars row_var  
+and row_var_type_aliases row_var = 
+  match row_var with
+    | `RowVar _ -> StringSet.empty
+    | `RecRowVar (var, row) -> row_type_aliases row
+
 
 (* [TODO]
     - make sure TypeVars and RowVars with clashing names are

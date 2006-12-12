@@ -942,12 +942,15 @@ and get_row_quantifiers : type_var_set -> row -> quantifier list =
       in
 	field_vars @ row_vars
 
+let env_type_vars env =
+  concat_map (free_type_vars -<- snd) (Type_basis.environment_values env)
+
 (** generalise: 
     Universally quantify any free type variables in the expression.
 *)
 let generalise : environment -> datatype -> assumption = 
   fun env t ->
-    let vars_in_env = intset_of_list (concat_map (free_type_vars -<- snd) (Type_basis.environment_values env)) in
+    let vars_in_env = intset_of_list (env_type_vars env) in
     let quantifiers = get_quantifiers vars_in_env t in
       debug_if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t)
@@ -1371,6 +1374,40 @@ let mutually_type_defs
                  name, expression_of_inference_expression exp, t) 
        new_defs)
 
+let register_alias var_maps (typename, vars, datatype, pos) (typing_env, alias_env) =
+  let _ =
+    if StringMap.mem typename alias_env then
+      failwith ("Duplicate typename: "^typename) in
+  let aliases = Types.type_aliases datatype in
+  let free_aliases =
+    StringSet.filter (fun alias -> not (StringMap.mem alias alias_env)) aliases in
+  let datatype = inference_type_of_type var_maps datatype in
+(*
+  [PROBLEM]
+    We cannot rule out free type variables in datatype declarations
+    because there may be hidden free type variables in mailbox parameters.
+    For example, from the prelude:
+
+      typename State (d,a) = [|State:(d) ->(a,d)|];
+
+    There is a hidden (flexible) type variable on the arrow.
+    I think this also means that such typenames can only be used in
+    a single process.
+*)
+(*   let _ = Debug.debug ("Datatype: "^string_of_datatype datatype) in *)
+(*   let bound_vars = vars @ (env_type_vars typing_env) in *)
+(*   let free_vars = *)
+(*     List.filter (fun var -> not (List.mem var bound_vars)) (free_type_vars datatype) *)
+(*   in *)
+(*     if free_vars <> [] then *)
+(*       failwith ("Undefined variable(s) in type declaration: "^ *)
+(*                   String.concat "," (List.map string_of_int (free_type_vars datatype))^"; "^ *)
+(*                   String.concat "," (List.map string_of_int bound_vars)) *)
+    if not (StringSet.is_empty free_aliases) then
+      failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
+    else
+      StringMap.add typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
+
 let type_expression : inference_type_map -> Types.typing_environment -> untyped_expression -> (Types.typing_environment * expression) =
   fun var_maps (env, alias_env) untyped_expression ->
     let env = inference_environment_of_environment var_maps env
@@ -1385,8 +1422,9 @@ let type_expression : inference_type_map -> Types.typing_environment -> untyped_
               (((variable, value_type) :: env), alias_env),
     	       Define (variable, value, loc, (pos, type_of_expression value, None))
         | TypeDecl (typename, vars, datatype, `U pos) ->
+(*             Debug.debug ("Typename: "^string_of_expression untyped_expression); *)
             (env,
-             StringMap.add typename ((List.map (fun var -> `TypeVar var) vars), inference_type_of_type var_maps datatype) alias_env),
+             register_alias var_maps (typename, vars, datatype, pos) (env, alias_env)),
             TypeDecl (typename, vars, datatype, (pos, `Record (ITO.make_empty_closed_row ()), None))
         | Alien (language, name, assumption, `U pos)  ->
             let (qs, k) = inference_assumption_of_assumption var_maps assumption
