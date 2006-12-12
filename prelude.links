@@ -390,6 +390,13 @@ var input =
    (retern (<input name="{name}"/>,
             fun (env) { assoc(name, env)}))};
 
+# A one element form with an initial value
+sig inputValue : String -> Form (String)
+fun inputValue(v) { 
+   nextName >>= fun (name) {
+   (retern (<input name="{name}" value="{v}"/>,
+            fun (env) { assoc(name, env)}))}
+}
 
 # A form is rendered to Xml, and a handler applied, using the render function
 sig render : ((a) -> c) -> Form (a) -> Xml

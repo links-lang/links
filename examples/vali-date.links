@@ -1,0 +1,152 @@
+typename Date = [|Date:(Int,Int)|];
+typename BadDate = [|Date:(String,String)|];
+
+typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
+
+typename Value(a,b) = [|Value:a | Error:(b, String)|];
+
+fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
+
+fun dateToBadDate(Date (day, month)) { Date(intToString(day), intToString(month)) }
+
+
+sig isInt : String -> Bool
+fun isInt(s) {
+  switch (s) {
+    case [] -> false
+    case _ -> all(isDigit, s)
+  }
+}
+
+sig intValueInRange : (String, String, Int, Int) -> Value(Int, String)
+fun intValueInRange(s, label, frm, to) {
+  if(isInt(s)) {
+    var i = stringToInt(s);
+    if(frm <= i && i <= to) 
+      Value(i)
+    else
+      Error(s, label++" must be in the range ["++intToString(frm)++"-"++intToString(to)++"]")
+  } else {
+    Error(s, label++" must be a number in the range ["++intToString(frm)++"-"++intToString(to)++"]")
+  }
+}
+
+sig inputPerson : String -> Form(Value(String, String))
+fun inputPerson(person) {
+  form
+    <#>{ inputValue(person) -> person }</#>
+  yields
+    switch (person) {
+      case "" -> Error (person, "Person must not be empty")
+      case _ -> Value(person)
+    }
+}
+
+sig inputAge : String -> Form(Value(Int, String))
+fun inputAge(age) {
+  form
+    <#>{ inputValue(age) -> age }</#>
+  yields {
+    if(isInt(age))
+      Value (stringToInt(age))
+    else
+      Error (age, "Age must be a non-negative integer")
+  }
+}
+ 
+sig inputDate : BadDate -> Form(Value(Date, BadDate))
+fun inputDate(Date(day, month)) {
+  form
+    <#>{ inputValue(day) -> day } / { inputValue(month) -> month }</#>
+  yields {
+    switch(intValueInRange(day, "Day", 1, 31)) {
+      case Error(_, msg) -> Error(Date(day, month), msg)
+      case Value(d) ->
+        switch(intValueInRange(month, "Month", 1, 12)) {
+          case Error(_, msg) -> Error(Date(day, month), msg)
+          case (Value(m)) -> Value(Date(d, m))
+        }
+    }
+  }
+}
+
+sig labelledInput : (String, b -> Form(Value(a,b)), a -> b, Value(a,b)) -> Form (Value(a,b))  
+fun labelledInput(label, inputter, outputter, initialValue) {
+  var (initialValue, err) =
+    switch (initialValue) {
+      case Value(v) -> (outputter(v), <#/>)
+      case Error(s, err) -> (s, <td><div style="color:red">{stringToXml(err)}</div></td>)
+    };
+
+  form
+    <tr>
+      <td>{stringToXml(label)}:</td>
+      <td>{inputter(initialValue) -> v}</td>
+      <td>{err}</td>
+    </tr>
+  yields v
+}
+
+typename TravelRecord = (person:Value(String,String),
+                         age:Value(Int,String),
+                         arrival:Value(Date,BadDate),
+                         departure:Value(Date,BadDate));
+
+sig travelForm : TravelRecord -> Form(TravelRecord)
+fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
+  form
+    <table>
+       { labelledInput("Person", inputPerson, id, p) -> person }
+       { labelledInput("Age", inputAge, intToString, a) -> age }
+       { labelledInput("Arrival", inputDate, dateToBadDate, arr) -> arr }
+       { labelledInput("Departure", inputDate, dateToBadDate, dep) -> dep }
+    </table>
+  yields 
+    (person=person, age=age, arrival=arr, departure=dep)
+}
+
+sig hasError : TravelRecord -> Bool
+fun hasError((person=p, age=a, arrival=arr, departure=dep)) {
+  switch (p) { case Error(_) -> true case _ ->
+  switch (a) { case Error(_) -> true case _ ->
+  switch (arr) { case Error(_) -> true case _ ->
+  switch (dep) { case Error(_) -> true case _ -> false
+  }}}}
+}
+
+sig getv : Value(a,b) -> a
+fun getv(v) {
+  switch (v) {
+    case Value(v) -> v
+    case _ -> error("oops")
+  }
+}
+
+sig showBookingInformation : TravelRecord -> Xml
+fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep) as travelRecord) {
+  if (hasError(travelRecord))
+    showForm(travelRecord)
+  else
+    <html>
+      <h1>Results</h1>
+      <p>
+        You are {stringToXml(getv(p))},  {intToXml(getv(a))} years old.<br/>
+        You'll arrive on {dateToXml(getv(arr))}
+        and leave on {dateToXml(getv(dep))}.
+      </p>
+    </html>
+}
+
+sig showForm : TravelRecord -> Xml
+fun showForm(travelRecord) {
+  <html>
+    <h1>Dates with defaults and validation</h1>
+    {render(showBookingInformation)(travelForm(travelRecord))}
+  </html>
+}
+
+#showForm((age=Value(0), person=Value(""),
+#          arrival=Value(Date(1, 1)), departure=Value(Date(30,12))))
+
+showForm((age=Error("",""), person=Value(""),
+          arrival=Error(Date("", ""), ""), departure=Error(Date("",""), "")))
