@@ -1,14 +1,16 @@
+# Date form components with validation
+
 typename Date = [|Date:(Int,Int)|];
-typename BadDate = [|Date:(String,String)|];
 
-typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
-
-typename Value(a,b) = [|Value:a | Error:(b, String)|];
+# a possibly badly formatted date
+typename RawDate = [|Date:(String,String)|];
 
 fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
+fun dateToRawDate(Date (day, month)) { Date(intToString(day), intToString(month)) }
 
-fun dateToBadDate(Date (day, month)) { Date(intToString(day), intToString(month)) }
+#typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 
+typename Value(a,b) = [|Value:a | Error:(b, String)|];
 
 sig isInt : String -> Bool
 fun isInt(s) {
@@ -54,7 +56,7 @@ fun inputAge(age) {
   }
 }
  
-sig inputDate : BadDate -> Form(Value(Date, BadDate))
+sig inputDate : RawDate -> Form(Value(Date, RawDate))
 fun inputDate(Date(day, month)) {
   form
     <#>{ inputValue(day) -> day } / { inputValue(month) -> month }</#>
@@ -89,8 +91,8 @@ fun labelledInput(label, inputter, outputter, initialValue) {
 
 typename TravelRecord = (person:Value(String,String),
                          age:Value(Int,String),
-                         arrival:Value(Date,BadDate),
-                         departure:Value(Date,BadDate));
+                         arrival:Value(Date,RawDate),
+                         departure:Value(Date,RawDate));
 
 sig travelForm : TravelRecord -> Form(TravelRecord)
 fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
@@ -98,8 +100,8 @@ fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
     <table>
        { labelledInput("Person", inputPerson, id, p) -> person }
        { labelledInput("Age", inputAge, intToString, a) -> age }
-       { labelledInput("Arrival", inputDate, dateToBadDate, arr) -> arr }
-       { labelledInput("Departure", inputDate, dateToBadDate, dep) -> dep }
+       { labelledInput("Arrival", inputDate, dateToRawDate, arr) -> arr }
+       { labelledInput("Departure", inputDate, dateToRawDate, dep) -> dep }
     </table>
   yields 
     (person=person, age=age, arrival=arr, departure=dep)
@@ -148,5 +150,7 @@ fun showForm(travelRecord) {
 #showForm((age=Value(0), person=Value(""),
 #          arrival=Value(Date(1, 1)), departure=Value(Date(30,12))))
 
-showForm((age=Error("",""), person=Value(""),
+# [HACK]
+#   empty default values expressed as blank errors
+showForm((age=Value(158), person=Value("Gottlob Frege"),
           arrival=Error(Date("", ""), ""), departure=Error(Date("",""), "")))
