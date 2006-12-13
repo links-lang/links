@@ -399,11 +399,11 @@ fun inputValue(v) {
 }
 
 # A form is rendered to Xml, and a handler applied, using the render function
-sig render : ((a) -> c) -> Form (a) -> Xml
+sig render : ((a) -> Xml) -> Form (a) -> Xml
 fun render(continuation)(frm) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">{xml}
-    <input type="submit"/>
+   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+     {xml}
    </form>
 
 }

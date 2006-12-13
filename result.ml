@@ -359,6 +359,8 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
 and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
+  | Definition (env, s) ->
+      contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
   | FuncArg(arg, env) -> 
       contframe_f(FuncArg((map_expr result_f expr_f contframe_f) arg, (map_env result_f expr_f contframe_f) env))
   | FuncApply(f, env) -> 
