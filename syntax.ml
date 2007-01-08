@@ -503,9 +503,8 @@ let skeleton = function
          expressions, in the [query.ml] sublanguage *)
 
 let elim_dead_defs env expr =
-  let used_names = freevars(expr) in
+  let used_names = freevars(expr) @ concat (map freevars env) in
     filter (function
                | Define (x, y, z, d) when List.mem x used_names -> true
                | Define _ -> false
                | _ -> true) env
-  
