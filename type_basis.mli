@@ -16,14 +16,14 @@ type ('typ, 'row) type_basis = [
   | `Table of 'row
   | `Recursive of (int * 'typ)
   | `Application of (string * 'typ list)
- ] deriving (Show,Pickle)
+ ] deriving (Typeable, Show, Pickle)
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ] 
 and 'typ field_spec_map_basis = ('typ field_spec_basis) Utility.StringMap.t 
 and ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var 
 and 'row row_var_basis =
     [ `RowVar of int option 
-    | `RecRowVar of int * 'row ] deriving (Show, Pickle)
+    | `RecRowVar of int * 'row ] deriving (Typeable, Show, Pickle)
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
 type quantifier = type_variable

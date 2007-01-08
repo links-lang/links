@@ -7,7 +7,7 @@ type type_var_set = Utility.IntSet.t
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract ]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type ('typ, 'row) type_basis = [
   | `Not_typed
@@ -21,36 +21,41 @@ type ('typ, 'row) type_basis = [
   | `Recursive of (int * 'typ)
   | `Application of (string * 'typ list)
  ]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type 'a stringmap = 'a Utility.StringMap.t
 
+module Typeable_stringmap (A : Typeable) : Typeable with type a = A.a stringmap = 
+struct
+  type a = A.a stringmap
+  let typeRep = TypeRep (Tag.fresh(), [A.typeRep])
+end
 module Show_stringmap (A : Show) = Show_unprintable (struct type a = A.a stringmap  end)
 module Pickle_stringmap (A : Pickle) = Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 
 
 type 'typ field_spec_basis = [ `Present of 'typ | `Absent ]
-     deriving (Show, Pickle)
+     deriving (Typeable, Show, Pickle)
 type 'typ field_spec_map_basis = ('typ field_spec_basis) stringmap
-     deriving (Show, Pickle)
+     deriving (Typeable, Show, Pickle)
 type ('typ, 'row_var) row_basis = 'typ field_spec_map_basis * 'row_var
-      deriving (Show, Pickle)
+      deriving (Typeable, Show, Pickle)
 type 'row row_var_basis =
     [ `RowVar of int option 
     | `RecRowVar of int * 'row ]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 type quantifier = type_variable
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type 'typ assumption_basis = ((quantifier list) * 'typ)
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 type 'typ environment_basis = ((string * 'typ assumption_basis) list)
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 type 'typ alias_environment_basis = ('typ assumption_basis) Utility.StringMap.t
-(*    deriving (Show, Pickle)*)
+(*    deriving (Typeable, Show, Pickle)*)
 
 (* Functions on environments *)
 let environment_values = fun env -> snd (List.split env)

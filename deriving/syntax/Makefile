@@ -7,7 +7,7 @@ OCAMLDEP = ocamldep
 LIBDIR = $(shell ocamlc -where)
 CAMLP4DIR = $(shell camlp4 -where)
 
-DERIVERS=pickle_class show_class enum_class bounded_class functor_class rewriter_class
+DERIVERS=typeable_class pickle_class show_class enum_class bounded_class functor_class rewriter_class
 DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
 DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
 OBJS=deriving.cmo $(DERIVER_OBJS)

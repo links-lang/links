@@ -26,7 +26,7 @@ type assumption = datatype assumption_basis
 type environment = datatype environment_basis
     deriving (Show, Pickle)
 type alias_environment = datatype alias_environment_basis
-(*    deriving (Show, Pickle)*)
+(*    deriving (Typeable, Show, Pickle)*)
 type typing_environment = environment * alias_environment
 
 (* whether to display mailbox annotations on arrow types

@@ -6,6 +6,8 @@ open Show
 open Pickle
 
 type lexpos = Lexing.position
+module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
+
 module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
 (*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
@@ -19,20 +21,20 @@ module Pickle_lexpos : Pickle with type a = lexpos = Pickle.Pickle_defaults(
 
 type position = lexpos *  (* source line: *) string 
                   * (* expression source: *) string
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
 exception ASTSyntaxError of position * string
 
 type location = [`Client | `Server | `Native | `Unknown]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type label = int
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type comparison = [`Less | `LessEq | `Equal | `NotEq]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 let string_of_comparison = function
   | `Less   -> "<"
@@ -88,7 +90,7 @@ type 'data expression' =
   | HasType of ('data expression' * Types.datatype * 'data)
   | Alien of (string * string * Types.assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
+      deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
 let is_define = 
   function
@@ -128,13 +130,13 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type typed_data = [`T of (position * Types.datatype * label option)] deriving (Show, Pickle)
-type untyped_data = [`U of position] deriving (Show, Pickle)
-type data = [untyped_data | typed_data] deriving (Show, Pickle)
+type typed_data = [`T of (position * Types.datatype * label option)] deriving (Typeable, Show, Pickle)
+type untyped_data = [`U of position] deriving (Typeable, Show, Pickle)
+type data = [untyped_data | typed_data] deriving (Typeable, Show, Pickle)
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
-  deriving (Show, Pickle)
+  deriving (Typeable, Show, Pickle)
 
 let data_position = function
   | `T (pos, _, _)

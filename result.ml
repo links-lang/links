@@ -50,6 +50,7 @@ class virtual database = object
         String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
 end
 
+module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)
 module Show_database = Show_unprintable (struct type a = database end)
 
 (* Here we could do something better, like pickling enough information
@@ -97,19 +98,19 @@ type unop = MkColl
             | VrntSelect of (string * string * expression * string option * 
                                expression option)
             | QueryOp of (Query.query * (* table aliases: *) string list)
-                deriving (Show, Pickle)
+                deriving (Typeable, Show, Pickle)
 		
 let string_of_unop = Show_unop.show
 
-type comparison = Syntax.comparison deriving (Show, Pickle)
+type comparison = Syntax.comparison deriving (Typeable, Show, Pickle)
 type binop = [ `Union | `RecExt of string | `MkTableHandle of row | comparison]
-                 deriving (Show, Pickle)
+                 deriving (Typeable, Show, Pickle)
 
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 let is_attr = function
   | Attr _ -> true
@@ -172,7 +173,7 @@ type primitive_value = [
 | `Database of (database * string)
 | `Table of table
                 ]
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 type contin_frame = 
   | Definition of (environment * string)
@@ -216,7 +217,7 @@ and result = [
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
-    deriving (Show, Pickle)
+    deriving (Typeable, Show, Pickle)
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Boolean(b, Syntax.no_expr_data))
