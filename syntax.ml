@@ -501,3 +501,11 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
+
+let elim_dead_defs env expr =
+  let used_names = freevars(expr) in
+    filter (function
+               | Define (x, y, z, d) when List.mem x used_names -> true
+               | Define _ -> false
+               | _ -> true) env
+  

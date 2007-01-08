@@ -15,6 +15,8 @@ open Syntax
 
 let optimising = Settings.add_bool("optimise_javascript", true, true)
 
+let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, true)
+
 let js_lib_url = Settings.add_string("jsliburl", "lib/", true)
 
 let get_js_lib_url () = Settings.get_value js_lib_url
@@ -964,20 +966,21 @@ let rename_symbol_operators program =
           (RewriteSyntax.bottomup wordify_rewrite program)
 
  (* TODO: imports *)
-let generate_program environment expression =
-  let environment = try List.map rename_symbol_operators environment with Not_found -> failwith "goo"
-  and expression = try rename_symbol_operators expression  with Not_found -> failwith "gloo" in
-  let environment = 
+let generate_program env expr =
+  let env = try List.map rename_symbol_operators env with Not_found -> failwith "goo"
+  and expr = try rename_symbol_operators expr with Not_found -> failwith "gloo" in
+  let env = 
     if Settings.get_value optimising then
-      Optimiser.inline (Optimiser.inline (Optimiser.inline environment)) 
-    else environment
+      Optimiser.inline (Optimiser.inline (Optimiser.inline env)) 
+    else env
   in
+  let env = if Settings.get_value elim_dead_defs then Syntax.elim_dead_defs env expr else env in
   (boiler_1 ()
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2 ()
- ^ String.concat "\n" (map gen (butlast environment))
+ ^ String.concat "\n" (map gen (butlast env))
  ^ boiler_3 ()
- ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expression)
+ ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expr)
  ^ boiler_4 ())
 
 (* FIXME: The tests below create an unnecessary dependency on
