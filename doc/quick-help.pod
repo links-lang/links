@@ -281,12 +281,12 @@ C<l:name>, which binds the value of an input field to a variable, and
 C<l:onsubmit>, with which you can supply an expression to be evaluated
 when the form is submitted.
 
-   <form l:onsubmit="{say_hello(name)}>
+   <form l:onsubmit="{say_hello(personName)}>
       What is your name? 
-      <input l:name="{name}"/>
+      <input l:name="{personName}"/>
    </form>
 
-The "name" variable bound by the C<l:name> attribute is in scope in
+The "personName" variable bound by the C<l:name> attribute is in scope in
 the C<l:onsubmit> expression, which may also contain references to
 other variables in the enclosing scope.  The values of these variables
 are passed from form to form automatically.
@@ -1001,7 +1001,7 @@ Some events refer to a particular point on the page. These methods return
 the x and y coordinates of that point, relative to the top-left corner of the 
 page (I<right> and I<down> are the positive directions).
 
-=item getTime
+=item C<getTime>
 
 =back
 
@@ -1415,4 +1415,3 @@ This is particularly useful for configuring settings for a web
 application, where directives cannot otherwise be given.
 
 =cut
-

@@ -492,6 +492,18 @@ let gensym =
       end
 
 
+(** gensyms a new symbol for each item in the list and returns the
+    pairs of each item with its new name.
+    The "graph" of the gensym function, if you will.
+*)
+let assign_fresh_names ?prefix:pfx list = 
+  match pfx with
+      Some pfx ->
+        List.map (fun x -> x, gensym ~prefix:pfx ()) list
+    | None ->
+        List.map (fun x -> x, gensym ()) list
+
+
 let any_true = List.exists (fun x -> x)
 
 let getenv : string -> string option =
