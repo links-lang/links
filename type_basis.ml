@@ -26,10 +26,10 @@ type ('typ, 'row) type_basis = [
 type 'a stringmap = 'a Utility.StringMap.t
 
 module Typeable_stringmap (A : Typeable) : Typeable with type a = A.a stringmap = 
-struct
+Typeable_defaults(struct
   type a = A.a stringmap
   let typeRep = TypeRep (Tag.fresh(), [A.typeRep])
-end
+end)
 module Show_stringmap (A : Show) = Show_unprintable (struct type a = A.a stringmap  end)
 module Pickle_stringmap (A : Pickle) = Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 

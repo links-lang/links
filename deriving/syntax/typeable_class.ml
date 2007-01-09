@@ -33,7 +33,7 @@ let gen_instance  ({loc=loc; tname=tname; atype=atype; rtype=rtype; argmap=param
        <:module_expr< $uid:Printf.sprintf "Typeable_%d" (List.length params)$ >>
          (List.map gen params))
     | _                            -> error loc ("Cannot currently generate typeable instances for "^ tname)
-  in gen rtype
+  in <:module_expr< Typeable_defaults($gen rtype$) >>
 
 let gen_instance ((loc, tname), params, ctyp, constraints) =
   let params = param_names params in

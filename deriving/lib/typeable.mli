@@ -8,11 +8,22 @@ type typeRep = TypeRep of (Tag.tag * typeRep list)
 
 module TypeRep : Map.OrderedType
 
+type dynamic
+
 module type Typeable =
 sig
   type a
   val typeRep : typeRep
+  val hasType : dynamic -> bool
+  val cast : dynamic -> a option
+  val makeDynamic : a -> dynamic
 end
+
+module Typeable_defaults (T : (sig
+                                 type a
+                                 val typeRep : typeRep
+                               end))
+  : Typeable with type a = T.a
 
 module Typeable_unit : Typeable with type a = unit
 module Typeable_2 (S1:Typeable)(S2:Typeable)
