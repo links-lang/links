@@ -199,7 +199,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		          was defined takes precedence over the real current
                           globals. Is there a semanticist in the house? *)
                        (*let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
-                       let locals = bind (trim_env (fnlocals @ locals)) var value in
+                       let locals = trim_env (fnlocals @ locals) in 
+                       let locals = bind locals var value in
+                         Debug.debug("entered function of " ^ var ^ " with " ^ 
+                                       string_of_environment locals);
                          interpret globals locals body cont
 		           
                    | `PFunction (name, pargs) ->
@@ -471,9 +474,9 @@ and interpret_safe globals locals expr cont =
     | TopLevel s -> snd s
     | Not_found -> failwith "Internal error: Not_found while interpreting."
 
-let run_program (globals : environment) exprs : (environment * result)= 
+let run_program (globals : environment) locals exprs : (environment * result)= 
   try (
-    ignore (interpret globals [] (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
+    ignore (interpret globals locals (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
     failwith "boom"
   ) with
     | TopLevel s -> s

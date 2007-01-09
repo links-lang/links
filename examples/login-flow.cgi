@@ -1,6 +1,10 @@
-fun login_widget(return, msg) {
+
+var noMsg = "";
+
+fun login_widget(msg, return) {
     <html>
-      {stringToXml(msg)}
+      <body>
+      <div class="error">{stringToXml(msg)}</div>
       <form l:handler="{return}" method="post">
         <table>
           <tr>
@@ -14,8 +18,13 @@ fun login_widget(return, msg) {
         </table>
         <input type="submit" />
       </form>
-      <a href="test4.cgi">start again</a>
+      <a l:href="{main()}">start again</a>
+      </body>
     </html>
+}
+
+fun validAuth(name, pass) {
+  name == "ezra" && pass == "knock"
 }
 
 fun get_user(msg) {
@@ -24,10 +33,8 @@ fun get_user(msg) {
     current_user
   else {                      # User is not logged in, show login page.
     var (username=name, userpass=pass) = 
-      escape return in {
-        exit(login_widget(msg, return))
-      };
-    if (name == "ezra" && pass == "knock") {
+        sendSuspend(fun (r){login_widget(msg, r)});
+    if (validAuth(name, pass)) {
       # User logged in successfully, set cookie and return creds.
       setCookie("loginname")(name);
       name
@@ -37,9 +44,22 @@ fun get_user(msg) {
   }
 }
 
-var noMsg = "";
-
-{
- var user = get_user(noMsg);
- <html>Thanks for logging in, {stringToXml(user)}</html>
+fun logout() {
+  setCookie("loginname")("");
 }
+
+fun logoutLink(target) {
+  <a l:href="{logout(); freshResource(); target()}">Logout</a>
+}
+
+fun main() {
+ var user = get_user(noMsg);
+ <html>
+   <body>
+     <div>Thanks for logging in, {stringToXml(user)}.</div>
+     <div>{logoutLink(main)}</div>
+   </body>
+ </html>
+}
+
+main()

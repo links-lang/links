@@ -282,6 +282,31 @@ fun assocAll(x,l) {
   }
 }
 
+#### WEB-RELATED ####
+
+# [freshResource] is a bit of magic that makes the subsequent actions a
+# new resource.  That is, it redirects the user to a new URL for the
+# continuation. If you call this immediately after doing a destructive
+# action (e.g. database updates) then reloading and the back button 
+# are made "safe": the visible URL does not refer to the action, but 
+# only to what follows the freshResource call.
+fun freshResource() {
+  escape esc in {
+    exit(redirect("?_cont=" ++ reifyK(esc)))
+  }
+}
+
+# [sendSuspend] generates some XML, outputs it, and terminates. It
+# passes to xmlf the continuation, which will resume at the place
+# of the sendSuspend call. This continuation can be used in l:handler
+# for example, to pass the form values through as the return value
+# of sendSuspend.
+fun sendSuspend(xmlf) {
+  escape returnf in {
+    exit(xmlf(returnf))
+  }
+}
+
 
 #### FORMS ABSTRACTION ####
 #### Ultimately needs to be moved to a different namespaced module

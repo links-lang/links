@@ -8,8 +8,8 @@ open Rewrite
 open Syntax
 open Sql_transform
 
-(* This appears to be ignored *)
 let optimising = Settings.add_bool("optimising", true, true)
+let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, true)
 let show_optimisation = Settings.add_bool("show_optimisation", false, true)
 
 
@@ -208,6 +208,9 @@ let renaming : RewriteSyntax.rewriter =
 
     FIXME: also letrec ("transitively") and record selection
     operators.
+
+    FIXME: needs to take account of variables used within Query
+    expressions.
 *)
 
 let unused_variables : RewriteSyntax.rewriter = function
@@ -724,10 +727,14 @@ let fold_constant : RewriteSyntax.rewriter =
     | Concat (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
     | _ -> None 
 
-let print_expression msg expr =
+(** Useful for printing the program at specific points of the
+    optimisation pipeline.*)
+let print_expression msg expr = 
   debug(msg ^ string_of_expression expr);
   None
 
+(** Useful for checking a specific definition at specific points of the
+    optimisation pipeline.*)
 let print_definition of_name ?msg:msg expr = 
  (match expr with
     | Define (name, value, locn, _) when name = of_name 
@@ -750,20 +757,26 @@ let rewriters env = [
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
-  print_definition "wine_listing" ~msg:"after take/drop"
 ]
 
 let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise env expr =
-  match run_optimisers env expr with
-      None -> debug_if_set show_optimisation (fun () -> "Optimization had no effect"); expr
-    | Some expr' -> (debug_if_set show_optimisation
-                       (fun () -> "Before optimization : " ^ Show_stripped_expression.show (strip_data expr) ^ 
-			  "\nAfter optimization  : " ^ Show_stripped_expression.show (strip_data expr'));
-		     expr')
-
+  if Settings.get_value optimising then 
+    match run_optimisers env expr with
+        None -> debug_if_set show_optimisation (fun () -> "Optimization had no effect"); expr
+      | Some expr' -> (debug_if_set show_optimisation
+                         (fun () -> 
+                            (if (Settings.get_value show_opt_verbose) then 
+                               "Before optimization : " ^ 
+                                 Show_stripped_expression.show (strip_data expr) 
+                             else "") ^ 
+			      "\nAfter optimization  : " ^ 
+                              Show_stripped_expression.show (strip_data expr'));
+	                expr')
+  else expr
+    
 let optimise_program (env, exprs) = 
   map (optimise env) (exprs)
 

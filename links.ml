@@ -87,11 +87,11 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
           | [filename] ->
               let library_types, libraries =
                 (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
-              let libraries, _ = Interpreter.run_program [] libraries in
+              let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
               let exprs = Optimiser.optimise_program (typingenv, exprs) in
-                (fst ((Interpreter.run_program libraries) (List.map Syntax.labelize exprs)), typingenv)
+                (fst ((Interpreter.run_program libraries []) (List.map Syntax.labelize exprs)), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
   ]
@@ -131,7 +131,7 @@ let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, 
        let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
        let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
        let exprs = List.map Syntax.labelize exprs in
-       let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
+       let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) [] exprs in
          print_result (Syntax.node_datatype (last exprs)) result;
          (valenv, typingenv), result
     ) input
@@ -155,7 +155,7 @@ let rec interact envs =
                let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
                let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
                let exprs = List.map Syntax.labelize exprs in
-               let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) exprs in
+               let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv []) exprs in
                  print_result (Syntax.node_datatype (last exprs)) result;
                  (valenv, typingenv)
            | Right (directive : Sugartypes.directive) -> 
@@ -254,7 +254,7 @@ let _ =
   if Settings.get_value(interacting) then
     begin
       print_endline (Settings.get_value(welcome_note));
-      let libraries, _ = Interpreter.run_program [] libraries in
+      let libraries, _ = Interpreter.run_program [] [] libraries in
       interact (libraries, library_types)
     end
 

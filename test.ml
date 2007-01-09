@@ -27,7 +27,7 @@ open Utility.EitherMonad
 let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
 let parse = attempt (Parse.parse_string Parse.program)
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
-let run = attempt (Interpreter.run_program [] ->- snd)
+let run = attempt (Interpreter.run_program [] [] ->- snd)
 let show = attempt Result.string_of_result
 
 (* For now, two types are considered equivalent if they print the

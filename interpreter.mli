@@ -1,7 +1,6 @@
 (* Evaluation of programs and expressions *)
 
-val run_program : Result.environment -> Syntax.expression list -> (Result.environment * Result.result)
-
+val run_program : Result.environment -> Result.environment -> Syntax.expression list -> (Result.environment * Result.result)
 
 
 (* Temporary, I hope *)

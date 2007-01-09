@@ -139,7 +139,7 @@ let stubify_client_funcs globals env : Result.environment =
     match server_env with 
         [] -> []
       | server_env -> (* evaluate the definitions to get Result.result values. *)
-          fst (Interpreter.run_program globals server_env)
+          fst (Interpreter.run_program globals [] server_env)
 
 let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
@@ -207,7 +207,7 @@ let perform_request program globals main req =
     | ExprEval(expr, env) ->
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
-             (snd (Interpreter.run_program (globals @ env) [expr])))
+             (snd (Interpreter.run_program globals env [expr])))
     | ClientReturn(cont, value) ->
         print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode 
@@ -223,7 +223,9 @@ let perform_request program globals main req =
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              Js.generate_program program main
-           else Result.string_of_result (snd (Interpreter.run_program globals [main])))
+           else 
+             let env, rslt = Interpreter.run_program globals [] [main] in
+             Result.string_of_result rslt)
 
 let error_page_stylesheet = 
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block}</style>"

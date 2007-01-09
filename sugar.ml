@@ -79,11 +79,14 @@ let list_head expr pos =
 let list_tail expr pos = 
   Apply(Variable ("tl", pos), expr, pos)
 
+let show_desugared = Settings.add_bool("show_desugared", false, true)
+let show_sugared = Settings.add_bool("show_sugared", false, true)
+
 exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
   (*** pattern matching compiler ***)
   (*
-    This is similar to the pattern matching compiler described in by
+    This is similar to the pattern matching compiler described by
     Phil Wadler in Chapter 5 of 'The Implementation of Functional
     Programming Languages, Simon Peyton Jones, 1987'.
     
@@ -93,7 +96,7 @@ module PatternCompiler =
   *)
   (struct
      let unit_hack = Settings.add_bool("pattern_unit_hack", true, true)
-     let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", true, true)
+     let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, true)
 
      type annotation = string list * Types.datatype list
      type annotated_pattern = annotation * simple_pattern
@@ -1387,12 +1390,10 @@ module Desugarer =
            p
          end
      in
-       ((*Debug.debug(Show_phrase.show e);*)
-        let result = desugar' lookup_pos e in
-          Debug.debug (string_of_expression result);
-          result
-       )
-       
+(*        (Debug.debug_if_set show_sugared (Show_phrase.show e); *)
+     let result = desugar' lookup_pos e in
+       (Debug.debug_if_set show_desugared (fun()-> string_of_expression result);
+       result)
 
    let desugar_datatype = generalize ->- desugar_assumption
 

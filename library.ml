@@ -229,7 +229,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   
   "exit",
   (`Continuation [],
-   (datatype "a -> b")
+   (datatype "a -> b") (* Really, "a -> _|_" or "Continuation a"*)
   );
 
   "send",
@@ -545,10 +545,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            http_response_headers := 
              ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
            `Record []
+             (* Note: perhaps this should affect cookies returned by
+                getcookie during the current request. *)
       ),
    datatype "String -> String -> unit");
 
-  (* FIXME: this one should probably the only setCookie. *)
+  (* FIXME: this one should probably the one and only setCookie. *)
   "setCookieUncurried",
   (p1 (fun pair ->
          (match pair with
@@ -568,9 +570,11 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            match getenv "HTTP_COOKIE" with
              | Some cookie_header ->
                  (let cookies = Str.split (Str.regexp ",") cookie_header in
-                  let cookies = map (fun str -> 
-                                       let [nm; vl] = Str.split (Str.regexp "=") str in 
-                                         nm, vl) cookies in
+                  let cookies = concat_map (fun str -> 
+                                       match Str.split (Str.regexp "=") str with
+                                           [nm; vl] -> [nm, vl]
+                                         | [nm] -> [nm, ""] (* ? *)
+                                         | _ -> assert false) cookies in
                     box_string (snd (find (fun (nm, _) -> nm = cookieName) 
                                        cookies)))
              | None -> `List []),
@@ -602,7 +606,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            `Continuation k -> 
              (match string_as_charlist(marshal_continuation k) with
                   `List _ as result -> result
-                | _ -> failwith "")
+                | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
    datatype "(a -> b) -> String"); (* arg type should actually be limited

@@ -1362,7 +1362,7 @@ list available directives
 =item C<@settings>
 
 print available settings (see L<Configuration settings>)
-4
+
 =item C<@set>
 
 change the value of a setting (see L<Configuration settings>)
