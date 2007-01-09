@@ -142,9 +142,17 @@ let data_position = function
   | `T (pos, _, _)
   | `U pos -> pos
 
+let is_symbolic_ident name = 
+  (Str.string_match (Str.regexp "^[!$%&*+/<=>?@\\^-.|_]+$") name 0)
+
+let is_alphanumeric_ident name = 
+  (Str.string_match (Str.regexp "^[a-zA-Z_][a-zA-Z_0-9]*$") name 0)
+
 let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
-  | Define (variable, value, location, data) -> variable ^ "=" ^ show t value
+  | Define (variable, value, location, data) -> 
+      (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
+      ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
   | TypeDecl (typename, quantifiers, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
@@ -153,6 +161,7 @@ let rec show t : 'a expression' -> string = function
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
   | String (s, data) -> "\"" ^ s ^ "\"" ^ t data
   | Float (value, data)   -> string_of_float value ^ t data
+  | Variable (name, data) when is_symbolic_ident name -> "(" ^ name ^ ")" ^ t data
   | Variable (name, data) -> name ^ t data
   | Apply (f, p, data)    -> show t f ^ "(" ^ show t p ^ ")" ^ t data
   | Condition (cond, if_true, if_false, data) ->
