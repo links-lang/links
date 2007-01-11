@@ -43,6 +43,13 @@ val lookup : string -> 'typ environment_basis -> 'typ assumption_basis
 (** Generate a fresh type variable *)
 val fresh_raw_variable : unit -> int
 
+
+(* extracting fields from a row *)
+val split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list
+val get_present_fields : 'typ field_spec_map_basis -> (string * 'typ) list
+val get_absent_fields : 'typ field_spec_map_basis -> string list
+
+
 module type TYPEOPS =
 sig
   type typ
@@ -107,3 +114,6 @@ module TypeOpsGen(BasicOps: BASICTYPEOPS) :
    with type typ = BasicOps.typ 
    and type row_var = BasicOps.row_var'
 )
+
+(* Type printers *)
+val string_of_primitive : primitive -> string

@@ -53,7 +53,7 @@ let
       | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
   and free_row_type_vars' : type_var_set -> row -> int list = 
     fun rec_vars (field_env, row_var) ->
-      let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Types.get_present_fields field_env)) in
+      let field_vars = List.concat (List.map (fun (_, t) -> free_type_vars' rec_vars t) (Type_basis.get_present_fields field_env)) in
       let row_vars =
         match row_var with
           | `RigidRowVar var
@@ -73,6 +73,7 @@ let
 type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
 type alias_environment = datatype Type_basis.alias_environment_basis
+type typing_environment = environment * alias_environment
 
 type inference_type_map =
     ((datatype Unionfind.point) IntMap.t ref *

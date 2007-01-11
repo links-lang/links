@@ -65,34 +65,10 @@ let with_mailbox_typing b f =
       use_mailbox_typing := oldb;
       raise e
 
-(* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
-   so we need to reverse the result generated.
-*)
-let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
-
-let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list =
-  fun field_env ->
-    let present, absent =
-      StringMap.fold
-	(fun label -> function
-	   | `Present t -> (fun (present_fields, absent_fields) -> (label, t) :: present_fields, absent_fields)
-	   | `Absent -> (fun (present_fields, absent_fields) -> present_fields, label :: absent_fields)) field_env ([], [])
-    in
-      if map_fold_increasing then
-        List.rev present, List.rev absent 
-      else 
-        present, absent
-	
-let get_present_fields field_env = fst (split_fields field_env)
-let get_absent_fields field_env = snd (split_fields field_env)
-
 let string_type : datatype = `Application ("String", [])
 let xml : datatype = `Application ("Xml", [])
 
 (* Type printers *)
-let string_of_primitive : primitive -> string = function
-  | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)"
 
 exception Not_tuple
 
@@ -151,7 +127,7 @@ let rec string_of_datatype' : string IntMap.t -> datatype -> string = fun vars d
 	       | `Record _ as f ->
 		   string_of_datatype' vars f ^ " " ^arrow ^
 		     " " ^ string_of_datatype' vars t
-	       | f ->
+	       | _ ->
 		   "(" ^ string_of_datatype' vars f ^ ") "^ arrow ^
 		     " " ^ string_of_datatype' vars t)
       | `Function (f, _, t) ->
@@ -233,33 +209,34 @@ let make_names vars =
       in
 	name_map
     end
+
 (* [TODO]
       change the return type to be IntSet.t
 *)
-let rec type_vars : datatype -> int list = fun datatype ->
-  let rec aux = function
-    | `Not_typed               -> [] 
-    | `Primitive _             -> []
-    | `TypeVar var
-    | `RigidTypeVar var        -> [var]
-    | `Function (f, m, t)      -> aux f @ aux m @ aux t
-    | `Record row              -> row_type_vars row
-    | `Variant row             -> row_type_vars row
-    | `Table row               -> row_type_vars row
-    | `Recursive (var, body)   -> List.filter ((<>) var) (aux body)
-    | `Application (_, datatype) -> Utility.concat_map aux datatype
-  in unduplicate (=) (aux datatype)
-and row_type_vars (field_env, row_var) =
-  let field_type_vars =
-    List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in
+(* let rec type_vars : datatype -> int list = fun datatype -> *)
+(*   let rec aux = function *)
+(*     | `Not_typed               -> []  *)
+(*     | `Primitive _             -> [] *)
+(*     | `TypeVar var *)
+(*     | `RigidTypeVar var        -> [var] *)
+(*     | `Function (f, m, t)      -> aux f @ aux m @ aux t *)
+(*     | `Record row              -> row_type_vars row *)
+(*     | `Variant row             -> row_type_vars row *)
+(*     | `Table row               -> row_type_vars row *)
+(*     | `Recursive (var, body)   -> List.filter ((<>) var) (aux body) *)
+(*     | `Application (_, datatype) -> Utility.concat_map aux datatype *)
+(*   in unduplicate (=) (aux datatype) *)
+(* and row_type_vars (field_env, row_var) = *)
+(*   let field_type_vars = *)
+(*     List.concat (List.map (fun (_, t) -> type_vars t) (get_present_fields field_env)) in *)
 
-  let row_var =
-      match row_var with
-	| `RowVar (Some var) -> [var]
-	| `RowVar None -> []
-	| `RecRowVar (var, row) -> List.filter ((<>) var) (row_type_vars row)
-  in
-    field_type_vars @ row_var
+(*   let row_var = *)
+(*       match row_var with *)
+(* 	| `RowVar (Some var) -> [var] *)
+(* 	| `RowVar None -> [] *)
+(* 	| `RecRowVar (var, row) -> List.filter ((<>) var) (row_type_vars row) *)
+(*   in *)
+(*     field_type_vars @ row_var *)
 
 let rec free_bound_type_vars : datatype -> IntSet.t = function
   | `Not_typed               -> IntSet.empty
@@ -328,60 +305,61 @@ and row_var_type_aliases row_var =
      - on exit var_map contain mappings from any additional free variables
      in datatype to their new names
 *)
-let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun var_map datatype ->
-  let rec freshen_datatype : IntSet.t -> datatype -> datatype = fun bound_vars t ->
-    let ftv = freshen_datatype bound_vars in
-    let rftv = freshen_row bound_vars in
-      match t with
-	| `Not_typed               
-	| `Primitive _ -> t
-	| `TypeVar var ->
-	    if IntSet.mem var bound_vars then
-	      t
-	    else if IntMap.mem var !var_map then
-	      `TypeVar (IntMap.find var !var_map)
-	    else
-	      let fresh_var = fresh_raw_variable () in
-		var_map := IntMap.add var fresh_var !var_map;
-		`TypeVar fresh_var
-	| `RigidTypeVar var ->
-	    if IntSet.mem var bound_vars then
-	      t
-	    else if IntMap.mem var !var_map then
-	      `RigidTypeVar (IntMap.find var !var_map)
-	    else
-	      let fresh_var = fresh_raw_variable () in
-		var_map := IntMap.add var fresh_var !var_map;
-		`RigidTypeVar fresh_var
-	| `Function (f, m, t) ->
-	    `Function (ftv f, ftv m, ftv t)
-	| `Record row              -> `Record (rftv row)
-	| `Variant row             -> `Variant (rftv row)
-	| `Table row               -> `Table (rftv row)
-	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body)
-	| `Application (s, datatypes) -> `Application (s, List.map ftv datatypes)
-  and freshen_row bound_vars (field_env, row_var) =
-    let field_env =
-      StringMap.map (function
-		       | `Absent -> `Absent
-		       | `Present t -> `Present (freshen_datatype bound_vars t)) field_env in
-    let row_var = freshen_row_var bound_vars row_var in
-      (field_env, row_var)
-  and freshen_row_var bound_vars row_var =
-    match row_var with
-      | `RowVar None -> row_var
-      | `RowVar (Some var) ->
-	  if IntSet.mem var bound_vars then
-	    row_var
-	  else if IntMap.mem var !var_map then
-	    `RowVar (Some (IntMap.find var !var_map))
-	  else
-	    let fresh_var = fresh_raw_variable () in
-	      var_map := IntMap.add var fresh_var !var_map;
-	      `RowVar (Some fresh_var)
-      | `RecRowVar (var, row) -> `RecRowVar (var, freshen_row (IntSet.add var bound_vars) row)
-  in
-    freshen_datatype IntSet.empty datatype
+
+(* let freshen_free_type_vars : (int IntMap.t) ref -> datatype -> datatype = fun var_map datatype -> *)
+(*   let rec freshen_datatype : IntSet.t -> datatype -> datatype = fun bound_vars t -> *)
+(*     let ftv = freshen_datatype bound_vars in *)
+(*     let rftv = freshen_row bound_vars in *)
+(*       match t with *)
+(* 	| `Not_typed                *)
+(* 	| `Primitive _ -> t *)
+(* 	| `TypeVar var -> *)
+(* 	    if IntSet.mem var bound_vars then *)
+(* 	      t *)
+(* 	    else if IntMap.mem var !var_map then *)
+(* 	      `TypeVar (IntMap.find var !var_map) *)
+(* 	    else *)
+(* 	      let fresh_var = fresh_raw_variable () in *)
+(* 		var_map := IntMap.add var fresh_var !var_map; *)
+(* 		`TypeVar fresh_var *)
+(* 	| `RigidTypeVar var -> *)
+(* 	    if IntSet.mem var bound_vars then *)
+(* 	      t *)
+(* 	    else if IntMap.mem var !var_map then *)
+(* 	      `RigidTypeVar (IntMap.find var !var_map) *)
+(* 	    else *)
+(* 	      let fresh_var = fresh_raw_variable () in *)
+(* 		var_map := IntMap.add var fresh_var !var_map; *)
+(* 		`RigidTypeVar fresh_var *)
+(* 	| `Function (f, m, t) -> *)
+(* 	    `Function (ftv f, ftv m, ftv t) *)
+(* 	| `Record row              -> `Record (rftv row) *)
+(* 	| `Variant row             -> `Variant (rftv row) *)
+(* 	| `Table row               -> `Table (rftv row) *)
+(* 	| `Recursive (var, body)   -> `Recursive (var, freshen_datatype (IntSet.add var bound_vars) body) *)
+(* 	| `Application (s, datatypes) -> `Application (s, List.map ftv datatypes) *)
+(*   and freshen_row bound_vars (field_env, row_var) = *)
+(*     let field_env = *)
+(*       StringMap.map (function *)
+(* 		       | `Absent -> `Absent *)
+(* 		       | `Present t -> `Present (freshen_datatype bound_vars t)) field_env in *)
+(*     let row_var = freshen_row_var bound_vars row_var in *)
+(*       (field_env, row_var) *)
+(*   and freshen_row_var bound_vars row_var = *)
+(*     match row_var with *)
+(*       | `RowVar None -> row_var *)
+(*       | `RowVar (Some var) -> *)
+(* 	  if IntSet.mem var bound_vars then *)
+(* 	    row_var *)
+(* 	  else if IntMap.mem var !var_map then *)
+(* 	    `RowVar (Some (IntMap.find var !var_map)) *)
+(* 	  else *)
+(* 	    let fresh_var = fresh_raw_variable () in *)
+(* 	      var_map := IntMap.add var fresh_var !var_map; *)
+(* 	      `RowVar (Some fresh_var) *)
+(*       | `RecRowVar (var, row) -> `RecRowVar (var, freshen_row (IntSet.add var bound_vars) row) *)
+(*   in *)
+(*     freshen_datatype IntSet.empty datatype *)
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
@@ -454,65 +432,66 @@ module TypeOps :
 
 let unit_type = `Record (TypeOps.make_empty_closed_row ())
 
-let tuplify types =
-  let ns = List.map string_of_int (Utility.fromTo 1 (1 + List.length types)) in
-    `Record 
-      (List.fold_right
-         (TypeOps.set_field -<- (fun (f,t) -> (f,`Present t)))
-         (List.combine ns types)
-         (TypeOps.make_empty_closed_row ()))
+(* let tuplify types = *)
+(*   let ns = List.map string_of_int (Utility.fromTo 1 (1 + List.length types)) in *)
+(*     `Record  *)
+(*       (List.fold_right *)
+(*          (TypeOps.set_field -<- (fun (f,t) -> (f,`Present t))) *)
+(*          (List.combine ns types) *)
+(*          (TypeOps.make_empty_closed_row ())) *)
 
-(* fresh type_variable * type *)
-let fresh_type () =
-  let var = fresh_raw_variable () in
-    `TypeVar var, `TypeVar var
+(* (\* fresh type_variable * type *\) *)
+(* let fresh_type () = *)
+(*   let var = fresh_raw_variable () in *)
+(*     `TypeVar var, `TypeVar var *)
 
-(* fresh type_variable * row *)
-let fresh_row () =
-  let var = fresh_raw_variable () in
-    `RowVar var, TypeOps.make_empty_open_row_with_var var
+(* (\* fresh type_variable * row *\) *)
+(* let fresh_row () = *)
+(*   let var = fresh_raw_variable () in *)
+(*     `RowVar var, TypeOps.make_empty_open_row_with_var var *)
 
 
 (* rewriting for types *)
-let perhaps_process_children (f : datatype -> datatype option) :  datatype -> datatype option =
-  let rewrite_row (fields, r) = 
-    match (StringMap.fold
-             (fun name field (changed, row) ->
-                match field with
-                  | `Present k -> (match f k with
-                                     | Some k -> true,    TypeOps.set_field (name, `Present k) row
-                                     | None   -> changed, TypeOps.set_field (name, `Present k) row)
-                  | `Absent    -> changed, TypeOps.set_field (name, `Absent) row)
-             fields
-             (false, (BasicTypeOps.empty_field_env, r))) with
-      | true, row -> Some row
-      | false, _  -> None in
-    function
-        (* no children *)
-      | `Not_typed
-      | `Primitive _
-      | `TypeVar  _
-      | `RigidTypeVar _ -> None
-          (* one child *)
-      | `Recursive (v, k) -> (match f k with 
-                                | Some k -> Some (`Recursive (v, k))
-                                | None   -> None)
-      | `Application (s, ks) -> Rewrite.passto f ks (fun ks -> `Application (s, ks))
 
-          (* two children *)
-      | `Function (j, k, l) ->
-          (match f j, f k, f l with
-             | None, None, None -> None
-             | j', k', l' ->
-                 Some (`Function (opt_proj j j', opt_proj k k', opt_proj k k')))
-          (* n children *)
-      | `Record row  -> (match rewrite_row row with 
-                           | Some row -> Some (`Record row)
-                           | None ->     None)
-      | `Variant row -> (match rewrite_row row with 
-                           | Some row -> Some (`Variant row)
-                           | None ->     None)
-      | `Table row  -> (match rewrite_row row with 
-                           | Some row -> Some (`Table row)
-                           | None ->     None)
+(* let perhaps_process_children (f : datatype -> datatype option) :  datatype -> datatype option = *)
+(*   let rewrite_row (fields, r) =  *)
+(*     match (StringMap.fold *)
+(*              (fun name field (changed, row) -> *)
+(*                 match field with *)
+(*                   | `Present k -> (match f k with *)
+(*                                      | Some k -> true,    TypeOps.set_field (name, `Present k) row *)
+(*                                      | None   -> changed, TypeOps.set_field (name, `Present k) row) *)
+(*                   | `Absent    -> changed, TypeOps.set_field (name, `Absent) row) *)
+(*              fields *)
+(*              (false, (BasicTypeOps.empty_field_env, r))) with *)
+(*       | true, row -> Some row *)
+(*       | false, _  -> None in *)
+(*     function *)
+(*         (\* no children *\) *)
+(*       | `Not_typed *)
+(*       | `Primitive _ *)
+(*       | `TypeVar  _ *)
+(*       | `RigidTypeVar _ -> None *)
+(*           (\* one child *\) *)
+(*       | `Recursive (v, k) -> (match f k with  *)
+(*                                 | Some k -> Some (`Recursive (v, k)) *)
+(*                                 | None   -> None) *)
+(*       | `Application (s, ks) -> Rewrite.passto f ks (fun ks -> `Application (s, ks)) *)
+
+(*           (\* two children *\) *)
+(*       | `Function (j, k, l) -> *)
+(*           (match f j, f k, f l with *)
+(*              | None, None, None -> None *)
+(*              | j', k', l' -> *)
+(*                  Some (`Function (opt_proj j j', opt_proj k k', opt_proj k k'))) *)
+(*           (\* n children *\) *)
+(*       | `Record row  -> (match rewrite_row row with  *)
+(*                            | Some row -> Some (`Record row) *)
+(*                            | None ->     None) *)
+(*       | `Variant row -> (match rewrite_row row with  *)
+(*                            | Some row -> Some (`Variant row) *)
+(*                            | None ->     None) *)
+(*       | `Table row  -> (match rewrite_row row with  *)
+(*                            | Some row -> Some (`Table row) *)
+(*                            | None ->     None) *)
 

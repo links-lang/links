@@ -280,8 +280,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 (*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
   "_MAILBOX_",
-  (`Int (num_of_int 0), 
-   let _, u = fresh_type () in
+  (`Int (num_of_int 0),
+   let u = TypeOps.fresh_type_variable () in
      (* Deliberately non-quantified type.  Mailboxes are
         non-polymorphic, so this is a so-called "weak type
         variable". *)

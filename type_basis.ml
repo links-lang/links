@@ -70,7 +70,31 @@ let fresh_raw_variable : unit -> int =
     incr type_variable_counter; !type_variable_counter
 
 
+(* extracting fields from a row *)
 
+(* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4,
+   so we need to reverse the result generated.
+*)
+let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
+
+let split_fields : 'typ field_spec_map_basis -> (string * 'typ) list * string list =
+  fun field_env ->
+    let present, absent =
+      StringMap.fold
+	(fun label -> function
+	   | `Present t -> (fun (present_fields, absent_fields) -> (label, t) :: present_fields, absent_fields)
+	   | `Absent -> (fun (present_fields, absent_fields) -> present_fields, label :: absent_fields)) field_env ([], [])
+    in
+      if map_fold_increasing then
+        List.rev present, List.rev absent 
+      else 
+        present, absent
+	
+let get_present_fields field_env = fst (split_fields field_env)
+let get_absent_fields field_env = snd (split_fields field_env)
+
+
+(* type operations *)
 module type TYPEOPS =
 sig
   type typ
@@ -174,3 +198,8 @@ struct
   let set_field (label, f) (field_env, row_var) =
     StringMap.add label f field_env, row_var
 end
+
+(* Type printers *)
+let string_of_primitive : primitive -> string = function
+  | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
+  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)"

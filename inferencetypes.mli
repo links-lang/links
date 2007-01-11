@@ -32,6 +32,8 @@ type assumption = datatype Type_basis.assumption_basis
 type environment = datatype Type_basis.environment_basis
 
 type alias_environment = datatype Type_basis.alias_environment_basis
+type typing_environment = environment * alias_environment
+
 
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS

@@ -1494,14 +1494,14 @@ let create_var_maps expressions =
   if Settings.get_value rigid_type_variables then
     let var_maps = Inferencetypes.empty_var_maps () in
     let tv = (get_quantifiers IntSet.empty)  -<- (inference_type_of_type var_maps) in
-    let rec get_quantifiers e = 
+    let rec get_exp_quantifiers e = 
       let annotations default = function
-        | HasType (e, datatype, _) -> get_quantifiers e @ tv datatype
-        | Rec (bs, e, _) -> Utility.concat_map (fun (_,e,t) -> fromOption [] (opt_map tv t) @ get_quantifiers e) bs @ get_quantifiers e
+        | HasType (e, datatype, _) -> get_exp_quantifiers e @ tv datatype
+        | Rec (bs, e, _) -> Utility.concat_map (fun (_,e,t) -> fromOption [] (opt_map tv t) @ get_exp_quantifiers e) bs @ get_exp_quantifiers e
         | e -> default e in
         reduce_expression annotations (snd ->- List.concat) e in
       
-    let quantifiers = Utility.concat_map get_quantifiers expressions in
+    let quantifiers = Utility.concat_map get_exp_quantifiers expressions in
     let tvars, rows = Inferencetypes.empty_var_maps () in
       List.iter (function
 		   | `TypeVar var ->
