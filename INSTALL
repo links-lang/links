@@ -127,23 +127,48 @@ is significant.
 
 DATABASE SUPPORT
 
-In order to use the database you need to copy Makefile.config.sample
-to Makefile.config, and fill in the path to the appropriate OCaml
-database library. Then you need to rebuild links with
+To use a database with Links, follow these steps:
 
- make nc
+  1. Copy Makefile.sample.config to Makefile.config, and fill in the
+     path to the appropriate OCaml database library (this refers to
+     the OCaml bindings, not the library that came with the
+     database). For example:
 
-Refer to the examples directory for instructions on priming the
-databases. The examples all use getDatabaseConfig() in order to read
-the database configuration from the configuration file. The settings
-'database_driver' and 'database_args' should be included in the
-configuration file.
+       POSTGRESQL_LIBDIR=/usr/lib/ocaml/postgreqsql
 
-database_driver can take the values
+  2. If you need to link against the database libraries themselves,
+     you can add these to the EXTRA_LIBDIRS line in Makefile.
 
-  postgres, mysql or sqlite
+  3. Rebuild links with:
 
-database_args is only relevant for postgres and mysql. It takes the
-form
+       make nc
+
+  4. Set up a configuration file to point Links at your database
+     instance. Normally this is called 'links-config' and consists of a
+     list of settings such as
+
+       database_driver=postgres
+
+     To configure database access, the settings 'database_driver' and
+     'database_args' should be set. 'database_driver' can take the
+     values:
+
+       postgres, mysql or sqlite
+
+      'database_args' is only relevant for postgres and mysql. It
+      takes the form
  
-  host:port:user:password
+        <host>:<port>:<user>:<password>
+
+      To invoke Links using a particular config file, use the --config
+      option, like so:
+
+        ./links --config=<config-file> <source-file>
+
+QUESTIONS
+
+If you have trouble installing Links, feel free to join the
+links-users mailing list:
+
+  links-users@inf.ed.ac.uk
+
