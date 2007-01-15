@@ -96,7 +96,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
      "load in a Links source file, replacing the current environment");
   ]
 
-let execute_directive (name, args) valenv typingenv = 
+let execute_directive (name, args) (valenv, typingenv) = 
   let envs = 
     (try fst (List.assoc name (Lazy.force directives)) (valenv, typingenv) args; 
      with Not_found -> 
@@ -123,18 +123,17 @@ let print_result rtype result =
 			" : "^ Types.string_of_datatype rtype)
                  else "")
 
+let process_one (valenv, typingenv) exprs = 
+  let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
+  let exprs =           Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+  let exprs = List.map Syntax.labelize exprs in
+  let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) [] exprs in
+    print_result (Syntax.node_datatype (last exprs)) result;
+    (valenv, typingenv), result
+
 (* Read Links source code, then type, optimize and run it. *)
-let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
-  handle_errors
-    (fun input ->
-       let exprs =          Performance.measure "parse" parse input in 
-       let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
-       let exprs =          Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
-       let exprs = List.map Syntax.labelize exprs in
-       let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) [] exprs in
-         print_result (Syntax.node_datatype (last exprs)) result;
-         (valenv, typingenv), result
-    ) input
+let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse envs = 
+  handle_errors (Performance.measure "parse" parse ->- process_one envs)
 
 (* Read Links source code, then type and optimize it. *)
 let just_optimise parse (valenv, typingenv) input = 
@@ -147,22 +146,15 @@ let just_optimise parse (valenv, typingenv) input =
 
 (* Interactive loop *)
 let rec interact envs =
-  let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse (valenv, typingenv) input = 
+  let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse envs input = 
     handle_errors
       (fun input ->
          match Performance.measure "parse" parse input with 
-           | Left exprs -> 
-               let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
-               let exprs = Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
-               let exprs = List.map Syntax.labelize exprs in
-               let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv []) exprs in
-                 print_result (Syntax.node_datatype (last exprs)) result;
-                 (valenv, typingenv)
-           | Right (directive : Sugartypes.directive) -> 
-               execute_directive directive valenv typingenv)
+           | Left exprs      -> fst (process_one envs exprs)
+           | Right directive -> execute_directive directive envs)
       input
+  and error_handler = Errors.display_errors stderr (fun _ -> envs) 
   in
-  let error_handler = Errors.display_errors stderr (fun _ -> envs) in
     print_string ps1; flush stdout; 
     interact (evaluate ~handle_errors:error_handler (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
       
@@ -179,50 +171,6 @@ let evaluate_string v =
   (Settings.set_value interacting false;
    ignore(evaluate (Parse.parse_string Parse.program) stdenvs v))
 
-let load_settings filename =
-  let file = open_in filename in
-
-  let strip_comment s = 
-    if String.contains s '#' then
-      let i = String.index s '#' in
-	String.sub s 0 i
-    else
-      s in
-
-  let is_empty s =
-    let empty = ref true in
-      String.iter (fun c ->
-		     if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) then
-		       empty := false) s;
-      !empty in
-
-  let parse_line n s =
-    let s = strip_comment s in
-      if not (is_empty s) then
-	(* ignore 'empty' lines *)
-	begin
-	  if String.contains s '=' then
-	    begin
-	      let i = String.index s '=' in
-	      let name = String.sub s 0 i in
-	      let value = String.sub s (i+1) ((String.length s) - (i+1))
-	      in
-		Settings.parse_and_set (name, value)
-	    end
-	  else
-	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
-			"Configuration options must be of the form <name>=<value>")
-	end in
-    
-  let rec parse_lines n =
-    try
-      parse_line n (input_line file);
-      parse_lines (n+1)
-    with
-	End_of_file -> close_in file
-  in
-    parse_lines 1
-
 let set setting value = Some (fun () -> Settings.set_value setting value)
 
 let options : opt list = 
@@ -232,7 +180,7 @@ let options : opt list =
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);
       ('e',     "evaluate",            None,                             Some evaluate_string);
-      (noshort, "config",              None,                             Some load_settings);
+      (noshort, "config",              None,                             Some Settings.load_file);
 
       (* Modes to just optimise a program and print the result. I'm
          not crazy about these option letters*)
@@ -257,4 +205,3 @@ let _ =
       let libraries, _ = Interpreter.run_program [] [] libraries in
       interact (libraries, library_types)
     end
-

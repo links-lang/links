@@ -704,13 +704,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "() -> (driver:String, args:String)");
   
   (** some char functions **)
-  "isAlpha",  char_test_op (function 'a'..'z' | 'A'..'Z' -> true | _ -> false);
-  "isAlnum",  char_test_op (function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false);
-  "isLower",  char_test_op (function 'a'..'z' -> true | _ -> false);
-  "isUpper",  char_test_op (function 'A'..'Z' -> true | _ -> false);
-  "isDigit",  char_test_op (function '0'..'9' -> true | _ -> false);
-  "isXDigit", char_test_op (function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false);
-  "isBlank",  char_test_op (function ' '|'\t' -> true | _ -> false);
+  "isAlpha",  char_test_op Char.isAlpha;
+  "isAlnum",  char_test_op Char.isAlnum;
+  "isLower",  char_test_op Char.isLower;
+  "isUpper",  char_test_op Char.isUpper;
+  "isDigit",  char_test_op Char.isDigit;
+  "isXDigit", char_test_op Char.isXDigit;
+  "isBlank",  char_test_op Char.isBlank;
   (* isCntrl, isGraph, isPrint, isPunct, isSpace *)
   
   "toUpper", char_conversion Char.uppercase;

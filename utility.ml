@@ -242,6 +242,8 @@ struct
       
   let implode : char list -> string = 
     (String.concat "") -<- (List.map (String.make 1))
+
+  let contains p = explode ->- List.exists p
       
   (* Find all occurrences of a character within a string *)
   let find_char (s : string) (c : char) : int list =
@@ -392,6 +394,18 @@ struct
     in aux [] e
 end
 include OptionUtils
+
+module Char = 
+struct
+  include Char
+  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
+  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
+  let isLower = function 'a'..'z' -> true | _ -> false
+  let isUpper = function 'A'..'Z' -> true | _ -> false
+  let isDigit = function '0'..'9' -> true | _ -> false
+  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
+  let isBlank = function ' '|'\t' -> true | _ -> false
+end
 
 (*** character encoding ***)
 

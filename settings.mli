@@ -43,3 +43,6 @@ val print_settings : unit -> string list
 
 (* ... *)
 val from_argv : string array -> string list
+
+(* ... *)
+val load_file : string -> unit

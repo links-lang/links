@@ -156,3 +156,43 @@ let from_argv : string array -> string list =
     | nonopt::rest -> process (nonopt::nonopts) rest
   in 
     process [] -<- Array.to_list 
+
+
+let load_file filename =
+  let file = open_in filename in
+
+  let strip_comment s = 
+    if String.contains s '#' then
+      let i = String.index s '#' in
+	String.sub s 0 i
+    else
+      s in
+
+  let is_empty = not -<- StringUtils.contains Char.isAlpha in
+
+  let parse_line n s =
+    let s = strip_comment s in
+      if not (is_empty s) then
+	(* ignore 'empty' lines *)
+	begin
+	  if String.contains s '=' then
+	    begin
+	      let i = String.index s '=' in
+	      let name = String.sub s 0 i in
+	      let value = String.sub s (i+1) ((String.length s) - (i+1))
+	      in
+		parse_and_set (name, value)
+	    end
+	  else
+	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
+			"Configuration options must be of the form <name>=<value>")
+	end in
+    
+  let rec parse_lines n =
+    try
+      parse_line n (input_line file);
+      parse_lines (n+1)
+    with
+	End_of_file -> close_in file
+  in
+    parse_lines 1
