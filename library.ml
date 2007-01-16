@@ -798,7 +798,7 @@ and alias_env : Types.alias_environment =
 let typing_env = (type_env, alias_env)
 
 let impl : located_primitive -> primitive = function
-  | `Client -> failwith "client function requested"
+  | `Client -> failwith "Implementation of client function requested on server."
   | `Server p
   | (#primitive as p) -> p
 
@@ -836,4 +836,4 @@ let primitive_location p : Syntax.location =
   match fst (assoc p env) with
   | `Client -> `Client
   | `Server _ -> `Server
-  | #primitive -> `Unknown (* not the best nsme: this means "available on both client and server" *)
+  | #primitive -> `Unknown (* not the best name; this means "available on both client and server" *)

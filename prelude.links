@@ -267,7 +267,7 @@ fun assoc(x,l) {
   switch (l) {
     case []    -> error("Not found " ++ x)
     case (k,v)::xs -> if (k == x) v
-                      else assoc(x,xs)
+                      else assoc(x, xs)
   }
 }
 

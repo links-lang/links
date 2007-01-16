@@ -67,7 +67,8 @@ let parse_into
 		   Hashtbl.add code.lines 
 		     (Hashtbl.length code.lines)
 		     (linepos + Buffer.length code.text)) 
-	(Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
+	((Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n') 
+         @ [nchars]);
       Buffer.add_substring code.text buffer 0 nchars;
       nchars
 

@@ -54,7 +54,7 @@ fun fst(pair) {
   a
 }
 
-fun map(f, l) {
+fun map_comprehension(f, l) {
   for (var x <- l) [f(x)]
 }
 
@@ -100,11 +100,11 @@ fun minimum(result, l) {
   }
 }
 
-fun assoc(x, l, d) {
+fun assocd(x, l, d) {
   switch (l) {
     case [] -> d
     case (k,v)::tl -> if (x == k) v
-                      else assoc(x, tl, d)
+                      else assocd(x, tl, d)
   }
 }
 
@@ -128,18 +128,6 @@ fun claimCart(order_id, cust_id) {
   update (var x <-- orderTable)
    where (x.order_id == order_id)
      set (cust_id = cust_id)
-}
-
-# [freshResource] is a bit of magic that makes the following code a new
-# resource.  That is, it redirects the user to a new URL for the
-# continuation. If you use this after doing destructive stuff
-# (e.g. database updates) then reloading and the back button are
-# "safe." Ideally this would be a library function, but lib functions
-# don't as yet have access to the current continuation. 
-fun freshResource() {
-  escape e in {
-    exit(redirect("?_cont=" ++ reifyK(e)))
-  };
 }
 
 sig sign_up : (Int, String, String) -> Xml
