@@ -2,7 +2,7 @@
 #load "q_MLast.cmo";;
 
 open Deriving
-include Deriving.Struct_utils(struct let classname="Show" end)
+include Deriving.Struct_utils(struct let classname="Show" let defaults = "ShowDefaults" end)
 
 let currentp currents = function
 | None -> false
@@ -16,23 +16,21 @@ let module_name currents = function
 
 
 (* Generate a printer for each constructor parameter *)
-let rec gen_printer ({tname=self;loc=loc;currents=currents}as ti) = function
-| c when currentp currents (ltype_of_ctyp c) -> <:module_expr< $uid:(module_name currents (ltype_of_ctyp c))$ >>
-| <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Show_"^ id$ >>
-| <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
-| <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
-| <:ctyp< ( $list:params$ ) >>           -> (List.fold_left 
-                                               (fun s param -> <:module_expr< $s$ $param$ >>)
-                                               <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
-                                               (List.map (gen_printer ti) params))
-| <:ctyp< $_$ -> $_$ >> as a             -> <:module_expr< Show_unprintable(struct type a = $a$; end) >>
-| <:ctyp< '$a$ >>                        -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
-| s                                      -> <:module_expr< (Show_unprintable
-                                                              (struct type a = V0.a; end)
-                                                                 : Show with type a = V0.a) >>
+let gen_printer =
+  let current default (t:MLast.ctyp) gen ({loc=loc;currents=currents} as ti) c = 
+    let lt = ltype_of_ctyp t in
+    if currentp currents lt then 
+      <:module_expr< $uid:(module_name currents lt)$ >>
+    else default t gen ti c
+  in 
+  gen_module_expr
+    ~tyapp:(current gen_app)
+    ~tylid:(current gen_lid)
+    ~tyrec:gen_other 
+    ~tysum:gen_other
+    ~tyvrn:gen_other
 
-
-let gen_printers ({tname=self;loc=loc} as ti) tuple params = 
+let gen_printers ({loc=loc} as ti) tuple params = 
  let m = (List.fold_left
             (fun s param -> <:module_expr< $s$ $param$ >>)
             <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
@@ -46,7 +44,7 @@ case:
          let module S = Show_$(|params|) $(modularized_param_types) in
              S.format formatter $(params)
 *)
-let gen_case ({tname=self} as ti) (loc, name, params') =
+let gen_case ti (loc, name, params') =
   let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
                   params' (range 0 (List.length params' - 1))) in
   let patt = (List.fold_left 
@@ -68,12 +66,12 @@ let gen_case ({tname=self} as ti) (loc, name, params') =
 
 
 (* Generate the format function, the meat of the thing. *)
-let gen_format_sum ({tname=self;loc=loc} as ti) ctors = <:str_item< 
+let gen_format_sum ctors ({loc=loc} as ti) = <:str_item< 
    value rec format formatter = 
              fun [ $list:List.map (gen_case ti) ctors$ ]
 >>
 
-let gen_format_record ({loc=loc;tname=self}as ti) fields = 
+let gen_format_record fields ({loc=loc}as ti) = 
   let showfields = List.map2 (fun (loc,k,_(* what is this? *),v) endp ->
                                 let sep = if endp then <:expr< () >>
                                 else <:expr< Format.pp_print_string formatter "; " >> in
@@ -114,9 +112,7 @@ let gen_polycase ({loc=loc; tname=tname} as ti) = function
     <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
 | MLast.RfInh _ -> error loc ("Cannot generate show instance for " ^ tname)
 
-
-
-let gen_format_polyv ({loc=loc;tname=tname} as ti) (row : MLast.row_field list) =
+let gen_format_polyv (row,_) ({loc=loc} as ti) =
 <:str_item< 
    value rec format formatter = 
              fun [ $list:List.map (gen_polycase ti) row$ ]
@@ -130,31 +126,12 @@ let gen_this_module loc atype = <:module_expr<
                  end) >>
 
 (* TODO: merge with gen_printer *)
-let gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) = 
- let rec gen = function
-| <:ctyp< [ $list:ctors$ ] >>  -> <:module_expr< (ShowDefaults (struct
-                                                                  type a = $atype$;
-                                                                  $gen_format_sum ti ctors$;
-                                                                end) : Show with type a = $atype$) >>
-| <:ctyp< $lid:id$ >>          -> <:module_expr< $uid:"Show_"^ id$ >>
-| <:ctyp< $t1$ $t2$ >>         -> <:module_expr< $gen t1$ $gen t2$ >>
-| <:ctyp< $uid:m$ . $t2$ >>    -> <:module_expr< $uid:m$ . $gen t2$ >>
-| <:ctyp< { $list:fields$ } >> -> <:module_expr< (ShowDefaults (struct
-                                                                  type a = $atype$;
-                                                                  $gen_format_record ti fields$;
-                                                                end) : Show with type a = $atype$) >>
-| <:ctyp< ( $list:params$ ) >> -> (List.fold_left 
-                                     (fun s param -> <:module_expr< $s$ $param$ >>)
-                                     <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
-                                     (List.map gen params))
-| <:ctyp< '$a$ >>              -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
-| <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (ShowDefaults (struct
-                                                                  type a = $atype$;
-                                                                  $gen_format_polyv ti row$;
-                                                                end) : Show with type a = $atype$) >>
-| _                            -> error loc ("Cannot currently generate show instances for "^ tname)
- in gen rtype
-
+let gen_module_expr ti = 
+  let wrapper f ti data = apply_defaults ti (f data ti) in
+  gen_module_expr ti
+    ~tyrec:(fun _ _ -> wrapper gen_format_record)
+    ~tysum:(fun _ _ -> wrapper gen_format_sum)
+    ~tyvrn:(fun _ _ -> wrapper gen_format_polyv) ti.rtype
 
 let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 

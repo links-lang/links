@@ -100,70 +100,81 @@ module Struct_utils
   (S : 
     sig
       val classname : string
+      val defaults : string
     end) =
 struct
   open S
-  let gen_module_expr ~tyacc
-      ~tyali ~tyany ~tyapp ~tyarr ~tycls ~tylab
-      ~tylid ~tyman ~tyobj ~tyolb ~typol ~tyquo
-      ~tyrec ~tysum ~typrv ~tytup ~tyuid ~tyvrn  = function
+  let apply_defaults ({loc=loc} as ti) decls = 
+        <:module_expr< ($uid:defaults$ (struct
+                                         type a = $ti.atype$;
+                                         $decls$;
+                                       end) : $uid:classname$ with type a = $ti.atype$) >>
 
-        (* Module access *)
-        | MLast.TyAcc (loc, ctyp1, ctyp2) -> tyacc (loc, ctyp1, ctyp2)
-            
-        (* alias (as-type) *)
-        | MLast.TyAli (loc, ctyp1, ctyp2) -> tyali (loc, ctyp1, ctyp2)
 
-        (* wildcard *)
-        | MLast.TyAny loc -> tyany loc
-            
-        (* type constructor application *)
-        | MLast.TyApp (loc, ctyp1, ctyp2) -> tyapp (loc, ctyp1, ctyp2)
-            
-        (* arrow (function) type *)
-        | MLast.TyArr (loc, ctyp1, ctyp2) -> tyarr (loc, ctyp1, ctyp2)
-            
-        (* class path *)
-        | MLast.TyCls (loc, strings) -> tycls (loc, strings)
-            
-        (* label type *)
-        | MLast.TyLab (loc, string, ctyp) -> tylab (loc, string, ctyp)
-            
-        (* lowercase identifier *)
-        | MLast.TyLid (loc, string) -> tylid (loc, string)
-            
-        (* type manifest *)
-        | MLast.TyMan (loc, ctyp1, ctyp2) -> tyman (loc, ctyp1, ctyp2)
-            
-        (* object *)
-        | MLast.TyObj (loc, fields, bool) -> tyobj (loc, fields, bool)
-            
-        (* optional label *)
-        | MLast.TyOlb (loc, string, ctyp) -> tyolb (loc, string, ctyp)
-            
-        (* class path application *)
-        | MLast.TyPol (loc, strings, ctyp) -> typol (loc, strings, ctyp)
-            
-        (* type variable *)
-        | MLast.TyQuo (loc, string) -> tyquo (loc, string)
-            
-        (* record *)
-        | MLast.TyRec (loc, fields) -> tyrec (loc, fields)
-            
+  let gen_app t gen {loc=loc} (t1, t2) = <:module_expr< $gen t1$ $gen t2$ >>
+  let gen_acc t gen {loc=loc} (t1,t2) = <:module_expr< $uid:t1$ . $gen t2$ >>
+  let gen_lid t _ {loc=loc} (name) = <:module_expr< $uid:classname ^ "_" ^ name$ >>
+  let gen_quo t _ ({loc=loc}as ti) (name) = <:module_expr< $uid:snd (List.assoc name ti.argmap)$ >>
+  let gen_tup t gen {loc=loc} ts =
+    List.fold_left 
+      (fun s param -> <:module_expr< $s$ $param$ >>)
+    <:module_expr< $uid:Printf.sprintf "%s_%d" classname (List.length ts)$ >>
+      (List.map gen ts)
+  let gen_other t gen {loc=loc;tname=tname} _ =
+    error loc ("Cannot currently generate show instances for "^ tname)
+
+  let gen_module_expr 
+      ?(tyacc=gen_acc)
+      ?(tyapp=gen_app)
+      ?(tylid=gen_lid)
+      ?(tyquo=gen_quo)
+      ?(tytup=gen_tup)
+      ?(other=gen_other)
+      ~tyrec
+      ~tysum
+      ~tyvrn
+      ({loc=loc; tname=tname; atype=_; rtype=rtype} as ti)
+      = 
+    let rec gen t = match t with
         (* sum type *)
-        | MLast.TySum (loc, variants) -> tysum (loc, variants)
-            
-        (* private row *)
-        | MLast.TyPrv (loc, ctyp) -> typrv (loc, ctyp)
+        | MLast.TySum (_, variants) -> tysum t gen ti variants
+
+        (* polymorphic variant *)
+        | MLast.TyVrn (_, fields, extends) -> tyvrn t gen ti (fields, extends)
+
+        (* record *)
+        | MLast.TyRec (_, fields) -> tyrec t gen ti fields
             
         (* tuple *)
-        | MLast.TyTup (loc, ctyps) -> tytup (loc, ctyps)
+        | MLast.TyTup (_, ctyps) -> tytup t gen ti ctyps
+
+        (* type name (lowercase identifier) *)
+        | MLast.TyLid (_, string) -> tylid t gen ti string
+
+        (* type constructor application *)
+        | MLast.TyApp (_, ctyp1, ctyp2) -> tyapp t gen ti (ctyp1, ctyp2)
             
-        (* uppercase identifier *)
-        | MLast.TyUid (loc, string) -> tyuid (loc, string)
+        (* Module access *)
+        | MLast.TyAcc (_, MLast.TyUid (_, name), ctyp2) -> tyacc t gen ti (name, ctyp2)
             
-        (* polymorphic variant *)
-        | MLast.TyVrn (loc, fields, extends) -> tyvrn (loc, fields, extends)
+        (* type variable *)
+        | MLast.TyQuo (_, string) -> tyquo t gen ti (string)
+            
+        | MLast.TyAli _ (* alias (as-type) *)
+        | MLast.TyAny _ (* wildcard *)
+        | MLast.TyArr _ (* arrow (function) type *)
+        | MLast.TyCls _ (* class path *)
+        | MLast.TyLab _ (* label type *)
+        | MLast.TyMan _ (* type manifest *)
+        | MLast.TyObj _ (* object *)
+        | MLast.TyOlb _ (* optional label *)
+        | MLast.TyPol _ (* class path application *)
+        | MLast.TyPrv _ (* private row *)
+        | MLast.TyUid _ (* uppercase identifier *)
+        | MLast.TyAcc _ (* module access *)
+          -> other t gen ti ()
+            
+    in gen
 
   let apply_functor loc funct params =
     List.fold_left 
@@ -197,7 +208,7 @@ struct
                 let rid = random_id 32 in
                 let body = <:module_expr< struct $modules$; end >> in
                   (<:str_item< module $uid:prefix^ rid$ = $gen_functor loc classname params body$ >>,
-                   List.map (fun (tname, mname) ->
+                   List.map (fun ((*tname*)_, mname) ->
                                let body = 
                                  let funct = <:module_expr< $uid:prefix^ rid$ >> in
                                    <:module_expr< struct module S = $apply_functor loc funct params$ ; include S.$uid:mname$; end >>

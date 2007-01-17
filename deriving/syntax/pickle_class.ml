@@ -5,7 +5,7 @@
 #load "q_MLast.cmo";;
 open Deriving
 
-include Deriving.Struct_utils(struct let classname="Pickle" end)
+include Deriving.Struct_utils(struct let classname="Pickle" let defaults="Pickle_defaults"end)
 
 let currentp currents = function
 | None -> false
@@ -18,20 +18,19 @@ let module_name currents = function
 
 
 (* Generate a printer for each constructor parameter *)
-let rec gen_printer ({tname=self;loc=loc;currents=currents}as ti) = function
-  | c when currentp currents (ltype_of_ctyp c) -> <:module_expr< $uid:(module_name currents (ltype_of_ctyp c))$ >>
-  | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Pickle_"^ id$ >>
-  | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
-  | <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
-  | <:ctyp< ( $list:params$ ) >>           -> (List.fold_left 
-                                                  (fun s param -> <:module_expr< $s$ $param$ >>)
-                                                <:module_expr< $uid:Printf.sprintf "Pickle_%d" (List.length params)$ >>
-                                                  (List.map (gen_printer ti) params))
-  | <:ctyp< '$a$ >>                        -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
-  | s                                      -> failwith ("Cannot generate pickle instance for " ^ self)
+let rec gen_printer = 
+  let current default (t:MLast.ctyp) gen ({loc=loc;currents=currents} as ti) c = 
+    let lt = ltype_of_ctyp t in
+    if currentp currents lt then 
+      <:module_expr< $uid:(module_name currents lt)$ >>
+    else default t gen ti c
+  in 
+  gen_module_expr
+    ~tyrec:gen_other ~tysum:gen_other ~tyvrn:gen_other
+    ~tyapp:(current gen_app)
+    ~tylid:(current gen_lid)
 
-
-let gen_printers ({tname=self;loc=loc} as ti) tuple params = 
+let gen_printers ({loc=loc} as ti) tuple params = 
  let m = (List.fold_left
             (fun s param -> <:module_expr< $s$ $param$ >>)
             <:module_expr< $uid:Printf.sprintf "Pickle_%d" (List.length params)$ >>
@@ -45,7 +44,7 @@ case:
          let module S = Pickle_$(|params|) $(modularized_param_types) in
              S.pickle $(params) buffer
 *)
-let gen_pickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
+let gen_pickle_case ti (loc, name, params') (pos : int) =
   let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
                   params' (range 0 (List.length params' - 1))) in
   let patt = (List.fold_left 
@@ -61,7 +60,7 @@ let gen_pickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
             | params -> <:expr< ( $list:params$ )>> 
         in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int pos$; $gen_printers ti tuple params'$ } >>)
 
-let gen_unpickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
+let gen_unpickle_case ti (loc, name, params') (pos : int) =
   let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
                   params' (range 0 (List.length params' - 1))) in
   let expr = 
@@ -84,25 +83,14 @@ let gen_unpickle_case ({tname=self} as ti) (loc, name, params') (pos : int) =
 let unpickle_failure ({loc=loc}as ti) = (<:patt< c >>, None, <:expr< failwith (Printf.sprintf "Unexpected tag %d during unpickling of type : %s" c $str:ti.tname$) >>)
 
 (* Generate the pickle and unpickle functions. *)
-let gen_sum ({tname=self;loc=loc} as ti) thismod ctors = <:str_item< 
+let gen_sum ({loc=loc} as ti) ctors = <:str_item< 
    value rec pickle buffer = 
-         let module This = $thismod$ in 
              fun [ $list:List.map2 (gen_pickle_case ti) ctors (range 0 (List.length ctors - 1))$ ]
    and unpickle stream =
-         let module This = $thismod$ in
            match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1)) @ [unpickle_failure ti]$ ]
 >>
 
-(* Generate a `this' module given the type *)
-let gen_this_module loc atype = <:module_expr< 
-   Pickle_defaults (struct
-                   type a = $atype$; 
-                   value pickle = (pickle : Buffer.t -> $atype$ -> unit)
-                   and unpickle = (unpickle : Stream.t char -> $atype$);
-                 end) >>
-
-
-let gen_funs_record ({loc=loc}as ti) thismod fields = 
+let gen_funs_record ({loc=loc}as ti) fields = 
    let projections = List.map
      (fun (loc,k,_,v) ->
 	<:expr< let module S = $gen_printer ti v$ in
@@ -120,7 +108,6 @@ in
    value rec pickle buffer obj = 
         do { $list:projections$ }
    and unpickle stream =
-      let module This = $thismod$ in
           $constructions$
 >>
 
@@ -151,7 +138,7 @@ let gen_polycase ({loc=loc} as ti) = function
 
 
 
-let gen_unpickle_polycase ({loc=loc; tname=self} as ti) = function
+let gen_unpickle_polycase ({loc=loc} as ti) = function
   |  (MLast.RfTag (name, _, params'), n) -> 
        let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
                         params' (range 0 (List.length params' - 1))) in
@@ -176,42 +163,22 @@ let gen_unpickle_polycase ({loc=loc; tname=self} as ti) = function
       failwith ("Cannot generate pickle instance for " ^ ti.tname)
 
 
-let gen_funs_poly ({loc=loc} as ti) thismod row =
+let gen_funs_poly ({loc=loc} as ti) (row,_) =
 <:str_item<
   value rec pickle buffer =
-     let module This = $thismod$ in
          fun [ $list:List.map2 (curry (gen_polycase ti)) row (range 0 (List.length row - 1))$]
      and unpickle stream =
-         let module This = $thismod$ in
            match Pickle_int.unpickle stream with
              [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure ti]$ ] 
 >>
 
 (* TODO: merge with gen_printer *)
-let gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) = 
- let rec gen = function
-   | <:ctyp< [ $list:ctors$ ] >>  -> <:module_expr< (Pickle_defaults (struct
-                                                                      type a = $atype$;
-                                                                      $gen_sum ti (gen_this_module loc atype) ctors$;
-                                                                      end) : Pickle with type a = $atype$) >>
-   | <:ctyp< $lid:id$ >>          -> <:module_expr< $uid:"Pickle_"^ id$ >>
-   | <:ctyp< $t1$ $t2$ >>         -> <:module_expr< $gen t1$ $gen t2$ >>
-   | <:ctyp< $uid:m$ . $t2$ >>    -> <:module_expr< $uid:m$ . $gen t2$ >>
-   | <:ctyp< ( $list:params$ ) >> -> (List.fold_left 
-                                         (fun s param -> <:module_expr< $s$ $param$ >>)
-                                       <:module_expr< $uid:Printf.sprintf "Pickle_%d" (List.length params)$ >>
-                                         (List.map gen params))
-   | <:ctyp< { $list:fields$ } >> -> <:module_expr< (Pickle_defaults (struct
-                                                                       type a = $atype$;
-                                                                       $gen_funs_record ti (gen_this_module loc atype) fields$;
-                                                                     end) : Pickle with type a = $atype$) >>
-   | <:ctyp< [= $list:row$ ] >>  -> <:module_expr< (Pickle_defaults (struct
-                                                                       type a = $atype$;
-                                                                       $gen_funs_poly ti (gen_this_module loc atype) row$;
-                                                                     end) : Pickle with type a = $atype$) >>
-   | <:ctyp< '$a$ >>              -> <:module_expr< $uid:snd (List.assoc a ti.argmap)$ >>
-   | _                            -> error loc ("Cannot currently generate pickle instances for "^ tname)
- in gen rtype
+let gen_module_expr ti = 
+  gen_module_expr
+    ~tyrec:(fun _ _ ti fields -> apply_defaults ti (gen_funs_record ti fields))
+    ~tysum:(fun _ _ ti ctors -> apply_defaults ti (gen_sum ti ctors))
+     ~tyvrn:(fun _ _ ti row -> apply_defaults ti (gen_funs_poly ti row))
+    ti ti.rtype
 
 let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 
@@ -220,6 +187,3 @@ let _ =
     instantiators := ("Pickle", gen_instances) :: !instantiators;
     sig_instantiators := ("Pickle", Sig_utils.gen_sigs "Pickle"):: !sig_instantiators;
   end
-
-
-
