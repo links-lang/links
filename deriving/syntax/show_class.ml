@@ -2,23 +2,22 @@
 #load "q_MLast.cmo";;
 
 open Deriving
+include Deriving.Struct_utils(struct let classname="Show" end)
 
-let currents = ref ([] : (string * string) list)
-
-let currentp = function
+let currentp currents = function
 | None -> false
-| Some (_, s) -> List.mem_assoc s currents.contents
+| Some (_, s) -> List.mem_assoc s currents
 
 
-let module_name = function
+let module_name currents = function
 | None -> assert false
-| Some (_, s) -> List.assoc s currents.contents
+| Some (_, s) -> List.assoc s currents
 
 
 
 (* Generate a printer for each constructor parameter *)
-let rec gen_printer ({tname=self;loc=loc}as ti) = function
-| c when currentp (ltype_of_ctyp c)      -> <:module_expr< $uid:(module_name (ltype_of_ctyp c))$ >>
+let rec gen_printer ({tname=self;loc=loc;currents=currents}as ti) = function
+| c when currentp currents (ltype_of_ctyp c) -> <:module_expr< $uid:(module_name currents (ltype_of_ctyp c))$ >>
 | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Show_"^ id$ >>
 | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
 | <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
@@ -157,73 +156,7 @@ let gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
  in gen rtype
 
 
-(* Generate n mutually-recursive instances (/not/ functors) *)
-let gen_instances loc tdl = 
-  let modules = 
-    let exprs = (List.map
-                   (fun ((loc,tname),(*params*)_,ctype,(*constraints*)_) -> 
-                      ("Show_" ^  tname, 
-                       <:module_type< Show with type a = $lid:tname$ >>, 
-                       gen_module_expr {loc=loc; argmap=[]; tname=tname; atype= <:ctyp< $lid:tname$ >>; ltype= ([],tname); rtype=ctype})) tdl) in
-      <:str_item< module rec $list:exprs$ >>
-  in
- <:str_item< declare
-   open Show;
-   open Primitives;
-      $modules$;
- end >>
-
-let apply_functor loc funct params =
-    List.fold_left 
-      (fun expr (_,(_,param)) ->
-         <:module_expr< $expr$ $uid:param$>>) funct params
-
-
-
-(* Generate n mutually-recursive instances (possibly functors) *)
-let gen_finstances loc tdl = 
-  match tdl with 
-    | (_,params,_,_)::_ ->
-        let tnames = List.map (fun ((_,tname),_,_,_) -> (tname, "Show_" ^ tname)) tdl in
-          begin
-            currents := tnames;
-            let params = param_names params in
-            let modules = 
-              let exprs = (List.map
-                              (fun ((loc,tname),(*params*)_,ctype,(*constraints*)_) ->
-                                let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in 
-                                  ("Show_" ^  tname, 
-                                  <:module_type< Show with type a = $atype$ >>, 
-                                      gen_module_expr {loc=loc; argmap=params; tname=tname; atype= atype; ltype= ([],tname); rtype=ctype})) tdl) in
-                <:str_item< module rec $list:exprs$ >>
-            in
-            let (enclosing, projections) = 
-              let rid = random_id 32 in
-              let body = <:module_expr< struct $modules$; end >> in
-                (<:str_item< module $uid:"Show_"^ rid$ = 
-                             $gen_functor loc "Show" params body$ >>,
-                List.map (fun (tname, mname) ->
-                  let body = 
-                    let funct = <:module_expr< $uid:"Show_"^ rid$ >> in
-                      <:module_expr< struct module S = $apply_functor loc funct params$ ; include S.$uid:mname$; end >>
-                  in
-                    <:str_item< module $uid:mname$ = $gen_functor loc "Show" params body$ >>) tnames)
-            in <:str_item< declare
-                            open Show;
-                            open Primitives;
-                            $enclosing$;
-                            declare $list:projections$ end;
-                           end >>
-           end
-| _ -> assert false
-
-let gen_instances loc : instantiator = 
-  begin
-    currents := [];
-    function
-      | tdl when List.exists is_polymorphic tdl -> gen_finstances loc tdl
-      | tdl  -> gen_instances loc tdl
-  end
+let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 
 let _ = 
   begin

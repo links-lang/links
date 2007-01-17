@@ -53,7 +53,8 @@ type thisinfo = {
   tname  : string;                 (* name of this type *)
   ltype  : ltype;                  (* The type name plus any parameters, e.g. 'c 'd t *)
   atype  : MLast.ctyp;             (* The type name plus modularized parameters, e.g. V0.a V1.a t  *)
-  rtype  : MLast.ctyp              (* The rhs of the type definitions *)
+  rtype  : MLast.ctyp;             (* The rhs of the type definitions *)
+  currents : list (string * string) (* ? *)
 }
 
 (* Generate the 'a' type element of the generated module by applying
@@ -94,6 +95,124 @@ let param_names (params : list (string * (bool*bool))) : list (string * (string 
 (* A association list of class names * instance generators *)
 let instantiators : (string * (MLast.loc -> instantiator)) list ref = ref []
 let sig_instantiators : (string * (MLast.loc -> sig_instantiator)) list ref = ref []
+
+module Struct_utils
+  (S : 
+    sig
+      val classname : string
+    end) =
+struct
+  open S
+  let gen_module_expr ~tyacc
+      ~tyali ~tyany ~tyapp ~tyarr ~tycls ~tylab
+      ~tylid ~tyman ~tyobj ~tyolb ~typol ~tyquo
+      ~tyrec ~tysum ~typrv ~tytup ~tyuid ~tyvrn  = function
+
+        (* Module access *)
+        | MLast.TyAcc (loc, ctyp1, ctyp2) -> tyacc (loc, ctyp1, ctyp2)
+            
+        (* alias (as-type) *)
+        | MLast.TyAli (loc, ctyp1, ctyp2) -> tyali (loc, ctyp1, ctyp2)
+
+        (* wildcard *)
+        | MLast.TyAny loc -> tyany loc
+            
+        (* type constructor application *)
+        | MLast.TyApp (loc, ctyp1, ctyp2) -> tyapp (loc, ctyp1, ctyp2)
+            
+        (* arrow (function) type *)
+        | MLast.TyArr (loc, ctyp1, ctyp2) -> tyarr (loc, ctyp1, ctyp2)
+            
+        (* class path *)
+        | MLast.TyCls (loc, strings) -> tycls (loc, strings)
+            
+        (* label type *)
+        | MLast.TyLab (loc, string, ctyp) -> tylab (loc, string, ctyp)
+            
+        (* lowercase identifier *)
+        | MLast.TyLid (loc, string) -> tylid (loc, string)
+            
+        (* type manifest *)
+        | MLast.TyMan (loc, ctyp1, ctyp2) -> tyman (loc, ctyp1, ctyp2)
+            
+        (* object *)
+        | MLast.TyObj (loc, fields, bool) -> tyobj (loc, fields, bool)
+            
+        (* optional label *)
+        | MLast.TyOlb (loc, string, ctyp) -> tyolb (loc, string, ctyp)
+            
+        (* class path application *)
+        | MLast.TyPol (loc, strings, ctyp) -> typol (loc, strings, ctyp)
+            
+        (* type variable *)
+        | MLast.TyQuo (loc, string) -> tyquo (loc, string)
+            
+        (* record *)
+        | MLast.TyRec (loc, fields) -> tyrec (loc, fields)
+            
+        (* sum type *)
+        | MLast.TySum (loc, variants) -> tysum (loc, variants)
+            
+        (* private row *)
+        | MLast.TyPrv (loc, ctyp) -> typrv (loc, ctyp)
+            
+        (* tuple *)
+        | MLast.TyTup (loc, ctyps) -> tytup (loc, ctyps)
+            
+        (* uppercase identifier *)
+        | MLast.TyUid (loc, string) -> tyuid (loc, string)
+            
+        (* polymorphic variant *)
+        | MLast.TyVrn (loc, fields, extends) -> tyvrn (loc, fields, extends)
+
+  let apply_functor loc funct params =
+    List.fold_left 
+      (fun expr (_,(_,param)) ->
+         <:module_expr< $expr$ $uid:param$>>) funct params
+
+  (* Generate n mutually-recursive instances (possibly functors) *)
+  let gen_finstances loc ~tdl ~gen_module_expr = 
+    let prefix = classname ^ "_" in
+    match tdl with 
+      | (_,params,_,_)::_ ->
+          let tnames = List.map (fun ((_,tname),_,_,_) -> (tname, prefix ^ tname)) tdl in
+            begin
+              let params = param_names params in
+              let modules = 
+                let exprs = (List.map
+                               (fun ((loc,tname),(*params*)_,ctype,(*constraints*)_) ->
+                                  let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in 
+                                    (prefix ^  tname, 
+                                     <:module_type< $uid:classname$ with type a = $atype$ >>, 
+                                         gen_module_expr {loc=loc;
+                                                          argmap=params;
+                                                          tname=tname;
+                                                          atype=atype;
+                                                          ltype= ([],tname);
+                                                          rtype=ctype;
+                                                          currents=tnames})) tdl) in
+                  <:str_item< module rec $list:exprs$ >>
+              in
+              let (enclosing, projections) = 
+                let rid = random_id 32 in
+                let body = <:module_expr< struct $modules$; end >> in
+                  (<:str_item< module $uid:prefix^ rid$ = $gen_functor loc classname params body$ >>,
+                   List.map (fun (tname, mname) ->
+                               let body = 
+                                 let funct = <:module_expr< $uid:prefix^ rid$ >> in
+                                   <:module_expr< struct module S = $apply_functor loc funct params$ ; include S.$uid:mname$; end >>
+                               in
+                                 <:str_item< module $uid:mname$ = $gen_functor loc classname params body$ >>) tnames)
+              in <:str_item< declare
+                               open $uid:classname$;
+                               open Primitives;
+                               $enclosing$;
+                               declare $list:projections$ end;
+                             end >>
+           end
+      | _ -> assert false
+
+end
 
 (* Utilities for generating module declarations in signatures *)
 module Sig_utils =

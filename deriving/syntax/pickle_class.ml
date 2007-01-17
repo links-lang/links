@@ -5,9 +5,21 @@
 #load "q_MLast.cmo";;
 open Deriving
 
+include Deriving.Struct_utils(struct let classname="Pickle" end)
+
+let currentp currents = function
+| None -> false
+| Some (_, s) -> List.mem_assoc s currents
+
+
+let module_name currents = function
+| None -> assert false
+| Some (_, s) -> List.assoc s currents
+
+
 (* Generate a printer for each constructor parameter *)
-let rec gen_printer ({tname=self;loc=loc}as ti) = function
-  | c when ltype_of_ctyp c = Some ti.ltype -> <:module_expr< This >>
+let rec gen_printer ({tname=self;loc=loc;currents=currents}as ti) = function
+  | c when currentp currents (ltype_of_ctyp c) -> <:module_expr< $uid:(module_name currents (ltype_of_ctyp c))$ >>
   | <:ctyp< $lid:id$ >>                    -> <:module_expr< $uid:"Pickle_"^ id$ >>
   | <:ctyp< $t1$ $t2$ >>                   -> <:module_expr< $gen_printer ti t1$ $gen_printer ti t2$ >>
   | <:ctyp< $uid:t1$ . $t2$ >>             -> <:module_expr< $uid:t1$ . $gen_printer ti t2$ >>
@@ -175,7 +187,6 @@ let gen_funs_poly ({loc=loc} as ti) thismod row =
              [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure ti]$ ] 
 >>
 
-
 (* TODO: merge with gen_printer *)
 let gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) = 
  let rec gen = function
@@ -202,38 +213,7 @@ let gen_module_expr ({loc=loc; tname=tname; atype=atype; rtype=rtype} as ti) =
    | _                            -> error loc ("Cannot currently generate pickle instances for "^ tname)
  in gen rtype
 
-
-(* Generate a single instance, possibly a functor *)
-let gen_instance ((loc, tname), params, ctyp, constraints) =
-  let params = param_names params in
-  let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in
-  let ltype = gen_type_l tname params in
-  let struct_expr = gen_module_expr {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params} in
-    <:str_item< declare
-        open Pickle; 
-        open Primitives; 
-        module $uid:"Pickle_"^ tname$ = $gen_functor loc "Pickle" params struct_expr$; 
-     end >> 
-
-(* Generate n mutually-recursive instances (which are /not/ functors) *)
-let gen_instances loc tdl = 
-  let modules = 
-    let exprs = (List.map
-                   (fun ((loc,tname),_,ctype,_) -> 
-                      ("Pickle_" ^  tname, 
-                       <:module_type< Pickle with type a = $lid:tname$ >>, 
-                       gen_module_expr {loc=loc; argmap=[]; tname=tname; atype= <:ctyp< $lid:tname$ >>; ltype= ([],tname); rtype=ctype})) tdl) in
-      <:str_item< module rec $list:exprs$ >>
-    in
- <:str_item< declare
-   open Pickle;
-   $modules$;
- end >>
-
-let gen_instances loc : instantiator = function
-  | [td] -> gen_instance td
-  | tdl when List.exists is_polymorphic tdl -> error loc "Cannot (currently!) generate Pickle instances for polymoprhic mutually recursive types"
-  | tdl  -> gen_instances loc tdl
+let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 
 let _ = 
   begin

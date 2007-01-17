@@ -35,11 +35,12 @@ let gen_instance  ({loc=loc; tname=tname; atype=atype; rtype=rtype; argmap=param
     | _                            -> error loc ("Cannot currently generate typeable instances for "^ tname)
   in <:module_expr< Typeable_defaults($gen rtype$) >>
 
-let gen_instance ((loc, tname), params, ctyp, constraints) =
+let gen_instance tdl ((loc, tname), params, ctyp, constraints) =
+  let currents = List.map (fun ((_,tname),_,_,_) -> (tname, "Typeable_" ^ tname)) tdl in
   let params = param_names params in
   let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in
   let ltype = gen_type_l tname params in
-  let struct_expr = gen_instance {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params} in
+  let struct_expr = gen_instance {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params; currents=currents} in
     <:str_item< declare
         open Typeable; 
         open Primitives; 
@@ -50,7 +51,7 @@ let gen_instance ((loc, tname), params, ctyp, constraints) =
 let gen_instances loc : instantiator = 
   begin
     fun tdl ->
-      let mods = List.map gen_instance tdl in
+      let mods = List.map (gen_instance tdl) tdl in
         <:str_item< declare $list:mods$ end >>
   end
 
