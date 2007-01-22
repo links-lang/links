@@ -95,11 +95,12 @@ fun pixeldiv(x, y, size, color) {
               background-color: {redshade(color, the_limit)}"> </div>
 }
 
-fun zip(l1, l2) {
-  if (l1 == [] || l2 == []) []
-  else
-    (hd(l1), hd(l2)) :: zip(tl(l1), tl(l2))
-}
+# Now in prelude.
+#fun zip(l1, l2) {
+#  if (l1 == [] || l2 == []) []
+#  else
+#    (hd(l1), hd(l2)) :: zip(tl(l1), tl(l2))
+#}
 
 fun numbers(start, l) {
   if (l == []) []
