@@ -82,6 +82,9 @@ let list_tail expr pos =
 let show_desugared = Settings.add_bool("show_desugared", false, true)
 let show_sugared = Settings.add_bool("show_sugared", false, true)
 
+let unit_hack = Settings.add_bool("pattern_unit_hack", false, true)
+let cons_unit_hack = Settings.add_bool("pattern_cons_unit_hack", true, true)
+
 exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
   (*** pattern matching compiler ***)
@@ -95,7 +98,6 @@ module PatternCompiler =
     to adjust our intermediate language.
   *)
   (struct
-     let unit_hack = Settings.add_bool("pattern_unit_hack", true, true)
      let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, true)
 
      type annotation = string list * Types.datatype list
@@ -585,42 +587,20 @@ module PatternCompiler =
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
                     | Record_empty _ when Settings.get_value unit_hack ->
-                        (* This is the only place in the pattern
+                        (* 
+                           This is the only place in the pattern
                            matching compiler that we do type-directed
-                           optimisation.
+                           optimisation. By default unit_hack is
+                           disabled and cons_unit_hack is enabled (see
+                           the use of cons_unit_hack below for further
+                           details).
 
-                           We make the assumption that a comparison
-                           with unit will always succeed. This
-                           assumption is sound providing we're using
-                           static typing.
-
-                           This is necessary in order for refinement
-                           of variant types to be useful when the
-                           variant constructor being matched takes no
-                           arguments. All variant constructors are
-                           unary in Links, so nullary constructors are
-                           represented by unary constructors, whose
-                           sole argument is unit.
-
-                           Consider:
-                           switch (A) {case A -> 0; case (x:[|B|]) -> 1;}
-
-                           Without the unit hack, this gets translated to
-                           let x = A in
-                           case x of
-                           A(y) -> if y = () then 0
-                           else let _ = (A(y)):[|B|] in 1
-                           x -> let _ = x:[|B|] in 1
-                           which clearly doesn't type check as A(y) 
-                           can't possibly have type B!
-
-                           Some alternative implementation strategies
-                           to consider include: - defer the unit
-                           optimisation until after pattern matching
-                           compilation - perform this and other
-                           type-directed optimisations during pattern
-                           matching compilation, providing that static
-                           typing is enabled *)
+                           Enabling unit_hack allows the compiler to
+                           make the assumption that a comparison with
+                           unit will always succeed. This assumption
+                           is sound providing we're using static
+                           typing.
+                        *)
                         Let ("_", HasType (var_exp, Types.unit_type, pos),
                              match_cases pos vars equations def env, pos)
                     | _ ->
@@ -1376,7 +1356,56 @@ module Desugarer =
          | `Variant (l, Some v) ->
              `Variant (l, desugar v), pos
          | `Variant (l, None) ->
-             `Variant (l, (`Constant (Record_empty pos), pos)), pos
+             if Settings.get_value cons_unit_hack then
+               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Types.unit_type), pos)), pos
+             else
+               `Variant (l, (`Constant (Record_empty pos), pos)), pos
+               (* 
+                  When cons_unit_hack is enabled (the default), elimination of A is identified with
+                  elimination of A(x:()) which allows us to have programs such as:
+
+                    (-)  switch (A) {case A -> B; case x -> x;}
+
+                  compile, even when unit_hack is disabled.
+
+                  When cons_unit_hack is disabled (which makes sense
+                  when unit_hack is enabled) we instead identify
+                  elimination of A with elimination of A().
+                  
+                  If cons_unit_hack is disabled and unit_hack is enabled
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> if y = () then B
+                                else let x = A(y) in x
+                        x -> let _ = x:[|-A|rho|] in x
+
+                  which does not type check as [|A:()|rho'|] cannot be unifed with [|-A|rho|].
+
+                  If cons_unit_hack is disabled and unit_hack is enabled
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> B
+                        x -> let _ = x:[|-A|rho|] in x
+
+                  which does type check.
+
+                  If cons_unit_hack is enabled and unit_hack is disabled (the default)
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> let _ = (y:()); B
+                         x -> let _ = x:[|-A|rho|] in x
+                  
+                  which again type checks.
+
+                  The latter case is chosen as the default, as it will remain sound even if we
+                  disable static typing.
+               *)
          | `Record (labs, base) ->
              List.fold_right
                (fun (label, patt) base ->
