@@ -185,10 +185,12 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                       switch_context globals
                     end
             | (FuncArg(param, locals)) ->
-	        (* just evaluate param; "value" is in fact a function
+	        (* Just evaluate [param]; "value" is in fact a function
 	           value which will later be applied *)
                 interpret globals locals param
 	          (FuncApply(value, locals) :: cont)
+            | (FuncApplyFlipped(locals, arg)) ->
+                apply_cont globals (FuncApply(value, locals) :: cont) arg
             | (FuncApply(func, locals)) ->  
                (match func with
                    | `Function (var, fnlocals, fnglobals, body) ->
@@ -417,8 +419,6 @@ fun globals locals expr cont ->
       eval record (BinopRight(locals, `RecExt label, value) :: cont)
   | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
-  | Syntax.Record_selection_empty (value, body, _) ->
-      eval value (Ignore(locals, body) :: cont)
   | Syntax.Variant_injection (label, value, _) ->
        eval value (UnopApply(locals, MkVariant(label)) :: cont)
   | Syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
@@ -452,12 +452,11 @@ fun globals locals expr cont ->
       let aliases, th_exprs = split ths in
         eval (Syntax.list_expr d th_exprs)
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
-          
-  | Syntax.Escape (var, body, _) ->
-      let locals = (bind locals var (`Continuation cont)) in
-        interpret globals locals body cont
+  | Syntax.Call_cc(arg, d) ->
+      let cc = `Continuation cont in
+        eval arg (FuncApplyFlipped(locals, cc) :: cont)
   | Syntax.SortBy (list, byExpr, _) ->
-      eval list cont (* ! *)
+      eval list cont (* FIXME: does nothing *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->

@@ -33,7 +33,7 @@ let pure : expression -> bool =
       -> pure default arg
     | Apply _    -> false
     | TableQuery _ -> false
-    | Escape _   -> false
+        (* Is callCC pure? *)
     | e       -> default e
   and all_true l = fold_right (&&) l true in
     reduce_expression pure (all_true -<- snd)
@@ -152,9 +152,6 @@ let uniquify_expression : RewriteSyntax.rewriter =
                                    cvar', Syntax.rename_fast cvar cvar' cbody, 
                                    var',  Syntax.rename_fast var var' body,
                                    data))
-    | Escape (v, b, data) -> 
-        let name = gensym ~prefix:v () in
-          Some (Escape (name, Syntax.rename_fast v name b, data))
     | _ -> None
   (* Note that this will only work bottomup, not topdown, since
      we need to replace bindings from the inside out *)
@@ -186,7 +183,7 @@ let renaming : RewriteSyntax.rewriter =
       | Let (v, _, _, _)
       | Abstr (v, _, _)
       | Define (v, _, _, _)
-      | Escape (v, _, _) when v = var -> true
+          when v = var -> true
       | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
       | Rec (bindings, _, _) when List.exists (fun (v,_,_) -> v = var) bindings -> true
@@ -345,7 +342,6 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
             (* Note change of variable *)
             merge_needed (Fields [label] :: (visitor var default body) :: [visitor variable default body])
         | Record_selection (_, _, _, Variable (_, _), body, _) -> visitor var default body
-        | Record_selection_empty (Variable (name, _), _, _) when name = var -> Fields []
         | other -> default other
     in reduce_expression (visitor var) (merge_needed -<- snd) in
   let rewrite = function

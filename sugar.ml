@@ -585,37 +585,42 @@ module PatternCompiler =
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
                     | Record_empty _ when Settings.get_value unit_hack ->
-                        (*
-                          This is the only place in the pattern matching compiler that
-                          we do type-directed optimisation.
+                        (* This is the only place in the pattern
+                           matching compiler that we do type-directed
+                           optimisation.
 
-                          We make the assumption that a comparison with unit will always
-                          succeed. This assumption is sound providing we're using static
-                          typing.
+                           We make the assumption that a comparison
+                           with unit will always succeed. This
+                           assumption is sound providing we're using
+                           static typing.
 
-                          This is necessary in order for refinement of variant types to
-                          be useful when the variant constructor being matched takes no
-                          arguments. All variant constructors are unary in Links, so
-                          nullary constructors are represented by unary constructors, 
-                          whose sole argument is unit.
+                           This is necessary in order for refinement
+                           of variant types to be useful when the
+                           variant constructor being matched takes no
+                           arguments. All variant constructors are
+                           unary in Links, so nullary constructors are
+                           represented by unary constructors, whose
+                           sole argument is unit.
 
-                          Consider:
-                            switch (A) {case A -> 0; case (x:[|B|]) -> 1;}
+                           Consider:
+                           switch (A) {case A -> 0; case (x:[|B|]) -> 1;}
 
-                          Without the unit hack, this gets translated to
-                            let x = A in
-                             case x of
-                              A(y) -> if y = () then 0
-                                      else let _ = (A(y)):[|B|] in 1
-                              x -> let _ = x:[|B|] in 1
-                          which clearly doesn't type check as A(y) can't possibly have type B!
+                           Without the unit hack, this gets translated to
+                           let x = A in
+                           case x of
+                           A(y) -> if y = () then 0
+                           else let _ = (A(y)):[|B|] in 1
+                           x -> let _ = x:[|B|] in 1
+                           which clearly doesn't type check as A(y) 
+                           can't possibly have type B!
 
-                          Some alternative implementation strategies to consider include:
-                           - defer the unit optimisation until after pattern matching
-                           compilation
-                           - perform this and other type-directed optimisations during pattern
-                           matching compilation, providing that static typing is enabled
-                        *)
+                           Some alternative implementation strategies
+                           to consider include: - defer the unit
+                           optimisation until after pattern matching
+                           compilation - perform this and other
+                           type-directed optimisations during pattern
+                           matching compilation, providing that static
+                           typing is enabled *)
                         Let ("_", HasType (var_exp, Types.unit_type, pos),
                              match_cases pos vars equations def env, pos)
                     | _ ->
@@ -623,7 +628,7 @@ module PatternCompiler =
                                    match_cases pos vars equations def env,
                                    match_constant pos vars bs def var env,
                                    pos)))
-   
+                   
      (* the interface to the pattern-matching compiler *)
      let match_cases
          : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression =
@@ -1004,7 +1009,8 @@ module Desugarer =
            | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
            | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
            | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
-           | Escape (name, e) -> Syntax.Escape (name, desugar e, pos)
+           | Escape (name, e) -> 
+               Syntax.Call_cc(Abstr(name, desugar e, pos), pos)
            | Spawn e -> desugar (FnAppl ((FnAppl ((Var "spawn", pos'), 
                                                   ([FunLit (None, [`Record ([],None), pos'], e), 
                                                     pos'], pos')),
@@ -1123,10 +1129,10 @@ module Desugarer =
            | TupleLit [field] -> desugar field
            | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
            | HandleWith (e1, name, e2) -> 
-               Syntax.Escape("return", 
-                             Let (name, Syntax.Escape("handler",  
-                                                      Apply (Variable ("return", pos), 
-                                                             desugar e1, pos), pos), desugar e2, pos), pos)
+               Syntax.Call_cc(Abstr("return", 
+                                    Let (name, Syntax.Call_cc(Abstr("handler",
+                                                                    Apply (Variable ("return", pos), 
+                                                                           desugar e1, pos), pos), pos), desugar e2, pos), pos), pos)
            | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (`U(lookup_pos ppos)), pos)
            | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
            | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)

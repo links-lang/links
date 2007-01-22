@@ -523,14 +523,6 @@ let rec generate : 'a expression' -> code =
                       Call(v_cps, [Fn(["__v"],
                                   callk_yielding (extension_val))
                                   ]))]))
-  | Record_selection_empty (Variable _, b, _)  -> 
-      generate b
-  | Record_selection_empty (v, b, _)  -> 
-      let v_cps = generate v in
-      let b_cps = generate b in
-        Fn(["__kappa"], Call(v_cps, [Fn(["ignored"], 
-                                        Call(b_cps, [Fn(["__b"],
-                                                        callk_yielding (Var "__b"))]))]))
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
@@ -589,9 +581,9 @@ let rec generate : 'a expression' -> code =
                                       Call(else_body_cps, [Var "__kappa"]))
                                 )
                            )]))
-  | Escape (v, e, _) -> 
+  | Call_cc (e, _) -> 
       Fn(["__kappa"], 
-	 Call (Fn ([v], Call(generate e, [Var "__kappa"])), 
+	 Call (Call(generate e, [Var "__kappa"]), 
 	       [
 		 Fn (["__ignore"],
 		     Var "__kappa")
@@ -760,10 +752,6 @@ and generate_direct_style : 'a expression' -> code =
   | Record_empty _                    -> Dict []
   | Record_extension (n, v, r, _)     ->
       Call (Var "_extend", [gd r; strlit n; gd v])
-  | Record_selection_empty (Variable _, b, _)  -> 
-      gd b
-  | Record_selection_empty (v, b, _)  ->
-      Call(Fn(["ignored"], gd b), [gd v])
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let name = gensym ~prefix:"_r" () in
 	Bind(name, gd r,
@@ -792,8 +780,8 @@ and generate_direct_style : 'a expression' -> code =
 		Bind(else_var,
                      Var "__src",
                 gd else_body)))
-  | Escape _ ->
-      failwith "escape cannot be called from native code"
+  | Call_cc _ -> 
+      failwith "escape cannot be used in native code"
   | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
   | Alien _ -> Nothing
   | HasType (e, _, _) -> gd e

@@ -75,6 +75,7 @@ type contin_frame =
     | Definition of (environment * string)
     | FuncArg of (Syntax.expression * environment)
     | FuncApply of (result * environment)
+    | FuncApplyFlipped of (environment * result)
     | LetCont of (environment * string * Syntax.expression)
     | BranchCont of (environment * Syntax.expression * Syntax.expression)
     | BinopRight of (environment * binop * Syntax.expression)

@@ -802,10 +802,6 @@ let impl : located_primitive -> primitive = function
   | `Server p
   | (#primitive as p) -> p
 
-(* [DISGUSTING HACK] *)
-(* no mailbox type threaded through *)
-let pure_type_env = type_env
-
 let apply_pfun (apply_cont :continuation -> result -> result) cont (name : string) (args : result list) = 
   let rec aux args' = function
     | #result as r -> 

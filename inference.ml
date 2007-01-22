@@ -1104,11 +1104,6 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
 	let body = type_check (body_env, alias_env) body in
 	let body_type = type_of_expression body in
 	  Record_selection (label, label_variable, variable, value, body, (pos, body_type, None))
-  | Record_selection_empty (value, body, `U pos) ->
-      let value = type_check typing_env value in
-	unify (`Record (ITO.make_empty_closed_row ()), type_of_expression value);
-	let body = type_check typing_env body in
-          Record_selection_empty (value, body, (pos, type_of_expression body, None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
       let type' = `Variant (ITO.make_singleton_open_row (label, `Present (type_of_expression value))) in
@@ -1182,22 +1177,25 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
 	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, (pos, type', None))
-  | Escape(var, body, `U pos) -> 
-      let exprtype = ITO.fresh_type_variable () in
+  | Call_cc(arg, `U pos) -> 
+      (* TBD: Make this a primitive function (need to pass c.c. to prims). *)
+      let arg = type_check typing_env arg in
       let contrettype = ITO.fresh_type_variable () in
+      let anytype = ITO.fresh_type_variable () in
         (* It'd be better if this mailbox didn't intrude here.
            Perhaps there's some rewrite rule for `escape' that we
-           could use instead. *)
-      let conttype =
+           could use instead. 
+           (FIXME: What does this mean? --eekc 1/07)*)
+      let mailboxtype = 
 	if Types.using_mailbox_typing () then
-	  let mailboxtype = instantiate env "_MAILBOX_" in
-	    `Function (exprtype, mailboxtype, contrettype)
-	else
-	  `Function (exprtype, ITO.fresh_type_variable (), contrettype) in
-      let body = type_check (((var, ([], conttype)):: env), alias_env) body in
-      let exprtype = exprtype in
-	unify (exprtype, type_of_expression body);
-        Escape(var, body, (pos, type_of_expression body, None))
+          instantiate env "_MAILBOX_" 
+        else
+          ITO.fresh_type_variable () in
+      let conttype =
+        `Function (contrettype, mailboxtype, anytype) in
+      let argtype = `Function (conttype, mailboxtype, contrettype) in
+        unify (argtype, type_of_expression arg);
+        Call_cc(arg, (pos,contrettype, None))
   | Database (params, `U pos) ->
       let params = type_check typing_env params in
         unify (type_of_expression params, db_descriptor_type);
@@ -1238,25 +1236,25 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
       let expr = type_check typing_env expr in
       let expr_type = type_of_expression expr in
       let inference_datatype = inference_type_of_type var_maps datatype in
-(* [HACK]
-   The following line should be uncommented once we have properly implemented 
-   parameteric abstract types. At the moment we are using a free alias
-   ("List") to simulate the parametric list type.
-*)          
-          free_alias_check alias_env inference_datatype;
-	  unify(expr_type, inference_datatype);
-	  HasType(expr, datatype, (pos, inference_datatype, None))
+        (* [HACK]
+           The following line should be uncommented once we have properly implemented 
+           parameteric abstract types. At the moment we are using a free alias
+           ("List") to simulate the parametric list type.
+        *)          
+        free_alias_check alias_env inference_datatype;
+	unify(expr_type, inference_datatype);
+	HasType(expr, datatype, (pos, inference_datatype, None))
   | TypeDecl _ ->
       failwith "Type declarations only supported at top-level"
   | Placeholder _ 
   | Alien _ ->
       assert(false)
-  with 
-      Unify_failure msg
-    | UndefinedVariable msg
-    | UndefinedAlias msg ->
-        raise (Type_error(position expression, msg))
-          (* end "type_check" *)
+ with 
+     Unify_failure msg
+   | UndefinedVariable msg
+   | UndefinedAlias msg ->
+       raise (Type_error(position expression, msg))
+         (* end "type_check" *)
 
 (** type_check_mutually
     Companion to "type_check"; does mutual type-inference

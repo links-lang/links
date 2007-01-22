@@ -65,7 +65,6 @@ type 'data expression' =
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
-  | Record_selection_empty of ('data expression' * 'data expression' * 'data)
   | Variant_injection of (string * 'data expression' * 'data)
   | Variant_selection of ('data expression' * 
                             string * string * 'data expression' * 
@@ -85,7 +84,7 @@ type 'data expression' =
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
-  | Escape of (string * 'data expression' * 'data)
+  | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
   | Alien of (string * string * Types.assumption * 'data)
@@ -122,7 +121,6 @@ let rec is_value : 'a expression' -> bool = function
   | Concat (a, b, _)
   | For (a, _, b, _)
   | Record_extension (_, a, b, _)
-  | Record_selection_empty (a, b, _)
   | Record_selection (_, _, _, a, b, _)
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
@@ -175,7 +173,9 @@ let rec show t : 'a expression' -> string = function
   | Rec (variables, body, data) ->
       "{" ^ (String.concat " ; " (map (function (label, expr, _) -> " " ^ label ^ "=" ^ show t expr) variables))
       ^ "; " ^ show t body ^ "}" ^ t data
-  | Escape (var, body, data) -> "escape " ^ var ^ " in " ^ show t body ^ t data
+  | Call_cc (Abstr(var, body, _), data) -> 
+      "escape " ^ var ^ " in " ^ show t body ^ t data
+  | Call_cc (f, data) -> "callCC " ^ show t f ^ t data
   | Xml_node (tag, attrs, elems, data) ->  
       let attrs = 
         let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ show t v ^ "\"") attrs) in
@@ -191,8 +191,6 @@ let rec show t : 'a expression' -> string = function
   | Record_selection (label, label_variable, variable, value, body, data) ->
       "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
       ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
-  | Record_selection_empty (value, body, data) ->
-      "{() = " ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Variant_injection (label, value, data) ->
       label ^ "(" ^ show t value ^ ")" ^ t data
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
@@ -267,7 +265,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Database (e, _)
                | Variant_injection (_, e, _)
                | List_of (e, _)
-               | Escape (_, e, _)
+               | Call_cc(e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
 
                | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
@@ -277,7 +275,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
                | Record_extension (_, e1, e2, _)
-               | Record_selection_empty (e1, e2, _)
                | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _)
@@ -299,7 +296,6 @@ let freevars (expression : 'a expression') : string list =
   let rec aux default = function
     | Variable (name, _) -> [name]
     | Let (var, value, body, _) -> aux default value @ (remove var (aux default body))
-    | Escape (var, body, _)
     | Abstr (var, body, _) -> remove var (aux default body)
     | Record_selection (_, labvar, var, value, body, _) ->
         aux default value @ (remove_all [var;labvar] (aux default body))
@@ -337,7 +333,6 @@ let expression_data : ('a expression' -> 'a) = function
         | Record_empty (data) -> data
         | Record_extension (_, _, _, data) -> data
         | Record_selection (_, _, _, _, _, data) -> data
-        | Record_selection_empty (_, _, data) -> data
         | Variant_injection (_, _, data) -> data
         | Variant_selection (_, _, _, _, _, _, data) -> data
         | Variant_selection_empty (_, data) -> data
@@ -349,7 +344,7 @@ let expression_data : ('a expression' -> 'a) = function
         | TableQuery (_, _, data) -> data
         | TableHandle (_, _, _, data) -> data
         | SortBy (_, _, data) -> data
-        | Escape (_, _, data) -> data
+        | Call_cc (_, data) -> data
         | Wrong data -> data
         | Alien (_,_,_,data) -> data
         | Placeholder (_,data) -> data
@@ -408,8 +403,6 @@ let rec map_free_occ u f expr =
     | For(body, loop_var, src, d) ->
         Some(For((if (u <> loop_var) then recurse body else body),
                  loop_var, recurse src, d))
-    | Escape(esc_var, body, d) when u <> esc_var ->
-        Some(Escape(esc_var, recurse body, d))
     | expr -> RewriteUntypedExpression.process_children rewrite expr
   in fromOption expr (rewrite expr)
 
@@ -486,15 +479,13 @@ let skeleton = function
   | Let(letvar, letsrc, letbody, d) -> Let(letvar, letsrc, letbody, d)
   | Record_selection(label, labelvar, etcvar, src, body, d) ->
       Record_selection(label, labelvar, etcvar, src, body, d)
-  | Record_selection_empty(record, body, d) -> 
-      Record_selection_empty(record, body, d)
   | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
   | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
   | SortBy(list_target, sort_func, d) -> SortBy(list_target, sort_func, d)
   | TableHandle(db_expr, tablename_expr, row_type, d) -> 
       TableHandle(db_expr, tablename_expr, row_type, d)
-  | Escape(esc_var, body, d) -> Escape(esc_var, body, d)
-      
+  | Call_cc(body, d) -> Call_cc(body, d)
+
   (* Three sub-expressions *)
   | Condition(condn, ifcase, elsecase, d) -> 
       Condition(condn, ifcase, elsecase, d)

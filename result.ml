@@ -179,6 +179,7 @@ type contin_frame =
   | Definition of (environment * string)
   | FuncArg of (rexpr * environment) (* FIXME: This is twiddled *)
   | FuncApply of (result * environment )  (* FIXME: This is twiddled *)
+  | FuncApplyFlipped of (environment * result)
   | LetCont of (environment * 
 		  string * rexpr)
   | BranchCont of (environment * 

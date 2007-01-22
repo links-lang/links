@@ -21,7 +21,6 @@ type 'a expression' =
   | Record_empty of 'a
   | Record_extension of (string * 'a expression' * 'a expression' * 'a)
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
-  | Record_selection_empty of ('a expression' * 'a expression' * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
   | Variant_selection of ('a expression' * string * string * 'a expression' * 
                             string * 'a expression' * 'a)
@@ -34,7 +33,7 @@ type 'a expression' =
   | TableQuery of ((string * 'a expression') list * Query.query * 'a)
   | TableHandle of ('a expression' * 'a expression' * Types.row * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
-  | Escape of (string * 'a expression' * 'a)
+  | Call_cc of ('a expression' * 'a)
   | Wrong of 'a
   | HasType of ('a expression' * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
