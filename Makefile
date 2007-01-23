@@ -53,7 +53,6 @@ SOURCES = $(OPC)                		\
           performance.ml        		\
           graph.ml              		\
           type_basis.mli type_basis.ml 		\
-          types.mli types.ml      		\
           inferencetypes.mli inferencetypes.ml 	\
           query.mli query.ml          		\
           sql.mli sql.ml               		\

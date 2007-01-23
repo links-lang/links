@@ -9,3 +9,4 @@ let debugf fmt = Printf.kprintf debug fmt
 
 let debug_if_set setting message =
   (if Settings.get_value(setting) then debug (message ()))
+

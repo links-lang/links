@@ -5,24 +5,6 @@ open Utility
 open Show
 open Pickle
 
-(*** RUBBISH ***)
-(* type gdatatype = Inferencetypes.datatype *)
-(* type grow = Inferencetypes.row  *)
-(* type gassumption = Inferencetypes.assumption *)
-
-(* module Typeable_gdatatype = Typeable.Primitive_typeable(struct type t = gdatatype end) *)
-(* module Show_gdatatype = Show_unprintable (struct type a = gdatatype end) *)
-(* module Pickle_gdatatype = Pickle_unpicklable (struct type a = gdatatype let tname = "gdatatype" end) *)
-
-(* module Typeable_grow = Typeable.Primitive_typeable(struct type t = grow end) *)
-(* module Show_grow = Show_unprintable (struct type a = grow end) *)
-(* module Pickle_grow = Pickle_unpicklable (struct type a = grow let tname = "grow" end) *)
-
-(* module Typeable_gassumption = Typeable.Primitive_typeable(struct type t = gassumption end) *)
-(* module Show_gassumption = Show_unprintable (struct type a = gassumption end) *)
-(* module Pickle_gassumption = Pickle_unpicklable (struct type a = gassumption let tname = "gassumption" end) *)
-(*** RUBBISH ***)
-
 type lexpos = Lexing.position
 module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
 

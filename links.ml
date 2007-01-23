@@ -119,7 +119,7 @@ let run_tests () =
 let print_result rtype result = 
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
-		   Types.with_mailbox_typing (Settings.get_value(Types.show_mailbox_annotations))
+		   Inferencetypes.with_mailbox_typing (Settings.get_value(Inferencetypes.show_mailbox_annotations))
 		     (fun () -> 
 			" : "^ Inferencetypes.string_of_datatype rtype)
                  else "")

@@ -42,7 +42,6 @@ type typing_environment = environment * alias_environment
 
 val concat_environment : typing_environment -> typing_environment -> typing_environment
 
-
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS
    with type typ = datatype
@@ -107,24 +106,9 @@ type inference_type_map =
 
 val make_type_variable : int -> datatype
 
-val empty_var_maps : unit -> inference_type_map
-
-val inference_type_of_type : inference_type_map -> Types.datatype -> datatype
-val inference_field_spec_of_field_spec : inference_type_map -> Types.field_spec -> field_spec
-val inference_row_of_row : inference_type_map -> Types.row -> row
-
-val type_of_inference_type : datatype -> Types.datatype
-val field_spec_of_inference_field_spec : field_spec -> Types.field_spec
-val row_of_inference_row : row -> Types.row
-
-val inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption
-val assumption_of_inference_assumption : assumption -> Types.assumption
-
-val inference_environment_of_environment : inference_type_map -> Types.environment -> environment
-val environment_of_inference_environment : environment -> Types.environment
-
-val inference_alias_environment_of_alias_environment : inference_type_map -> Types.alias_environment -> alias_environment
-val alias_environment_of_inference_alias_environment : alias_environment -> Types.alias_environment
+val show_mailbox_annotations : bool Settings.setting
+val using_mailbox_typing : unit -> bool
+val with_mailbox_typing : bool -> (unit -> 'a) -> 'a
 
 val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
