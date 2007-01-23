@@ -68,10 +68,43 @@ module IO =
             fun () ->
               let v = m () in
                 k v ()
+          let (>>) x y = x >>= (fun _ -> y)
           let fail = failwith
           let putStr s = fun () -> print_string s
           let runIO f = f ()
+          let mkIO (f : unit -> 'b) = return (f ())
         end)
+
+module type MonadUtilsSig =
+sig
+  include Monad
+  val liftM : ('a -> 'b) -> 'a m -> 'b m
+  val liftM2 : ('a -> 'b -> 'c) -> 'a m -> 'b m -> 'c m
+  val liftM3 : ('a -> 'b -> 'c -> 'd) -> 'a m -> 'b m -> 'c m -> 'd m
+  val liftM4 :
+    ('a -> 'b -> 'c -> 'd -> 'e) -> 'a m -> 'b m -> 'c m -> 'd m -> 'e m
+  val liftM5 :
+    ('a -> 'b -> 'c -> 'd -> 'e -> 'f) ->
+    'a m -> 'b m -> 'c m -> 'd m -> 'e m -> 'f m
+  val ap : ('a -> 'b) m -> 'a m -> 'b m
+  val sequence : 'a m list -> 'a list m
+  val sequence_ : 'a m list -> unit m
+  val mapM : ('a -> 'b m) -> 'a list -> 'b list m
+  val mapM_ : ('a -> 'b m) -> 'a list -> unit m
+  val ( =<< ) : ('a -> 'b m) -> 'a m -> 'b m
+  val join : 'a m m -> 'a m
+  val filterM : ('a -> bool m) -> 'a list -> 'a list m
+  val mapAndUnzipM :
+    ('a -> ('b * 'c) m) -> 'a list -> ('b list * 'c list) m
+  val zipWithM : ('a -> 'b -> 'c m) -> 'a list -> 'b list -> 'c list m
+  val zipWithM_ : ('a -> 'b -> 'c m) -> 'a list -> 'b list -> unit m
+  val foldM : ('a -> 'b -> 'a m) -> 'a -> 'b list -> 'a m
+  val foldM_ : ('a -> 'b -> 'a m) -> 'a -> 'b list -> unit m
+  val replicateM : int -> 'a m -> 'a list m
+  val replicateM_ : int -> 'a m -> unit m
+  val quand : bool -> unit m -> unit m
+  val unless : bool -> unit m -> unit m
+end
 
 (* Control.Monad *)
 module MonadUtils (M : Monad) = 
@@ -168,6 +201,15 @@ struct
 
   let unless : bool -> unit m -> unit m
     = fun p s -> if p then return () else s
+end
+
+module type MonadPlusUtilsSig =
+sig
+  include MonadUtilsSig
+  val mzero : 'a m
+  val mplus : 'a m -> 'a m -> 'a m
+  val guard : bool -> unit m
+  val msum : 'a m list -> 'a m
 end
 
 module MonadPlusUtils (M : MonadPlus) =

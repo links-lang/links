@@ -5,10 +5,7 @@ sig
   val process_children : rewriter -> rewriter
 end
 
-module type Type =
-sig
-  type a
-end
+module type Type = sig type a end
 
 module RewriterDefaults
   (R : 

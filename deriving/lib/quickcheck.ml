@@ -136,7 +136,7 @@ let group = groupBy (=)
 
    newStdGen applies split to the current global random generator,
    updates it with one of the results, and returns the other. *)
-let newStdGen : stdgen IO.m = fun () -> Random.State.make [|0|]
+let newStdGen : stdgen IO.m = IO.mkIO (fun () -> Random.State.make [|0|])
 
 module QuickCheck :
 sig
