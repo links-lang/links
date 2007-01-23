@@ -23,6 +23,8 @@ type alias_environment = datatype Type_basis.alias_environment_basis
 
 type typing_environment = environment * alias_environment
 
+val concat_environment : typing_environment -> typing_environment -> typing_environment
+
 val string_type : datatype
 val xml : datatype
 

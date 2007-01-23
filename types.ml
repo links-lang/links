@@ -29,6 +29,11 @@ type alias_environment = datatype alias_environment_basis
 (*    deriving (Typeable, Show, Pickle)*)
 type typing_environment = environment * alias_environment
 
+let concat_environment
+      (types1, aliases1 : typing_environment)
+      (types2, aliases2) : typing_environment = 
+    (types1 @ types2, superimpose aliases1 aliases2)
+
 (* whether to display mailbox annotations on arrow types
    [NOTE]
       unused mailbox parameters are never shown

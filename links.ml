@@ -1,11 +1,12 @@
 open Getopt
 open Utility
 open Debug
+open List
 
 let load_file filename =
   let ast_program = Parse.parse_file Parse.program filename in
   let typingenv, exprs = Inference.type_program Library.typing_env ast_program in
-  let exprs = List.map Syntax.labelize exprs in
+  let exprs = map Syntax.labelize exprs in
     typingenv, exprs
 
 (*
@@ -27,7 +28,7 @@ let prelude = Settings.add_string ("prelude", "prelude.links", false)
 let ps1 = "links> "
 
 (* Builtin environments *)
-let stdenvs = [], Library.typing_env
+let stdenvs = ref([], Library.typing_env)
 
 (* shell directives *)
 let ignore_envs fn envs arg = let _ = fn arg in envs
@@ -36,13 +37,13 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     "directives", 
     (ignore_envs 
        (fun _ -> 
-          List.iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) (Lazy.force directives)),
+          iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) (Lazy.force directives)),
      "list available directives");
     
     "settings",
     (ignore_envs
        (fun _ -> 
-          List.iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
+          iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
      "print available settings");
     
     "set",
@@ -54,7 +55,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     "builtins",
     (ignore_envs 
        (fun _ ->
-          List.iter (fun (n, k) ->
+          iter (fun (n, k) ->
                        Printf.fprintf stderr " %-16s : %s\n" 
                          n (Types.string_of_datatype (snd k)))
           Library.type_env),
@@ -65,19 +66,19 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
 
     "typeenv",
     ((fun ((_, (typeenv, _)) as envs) _ ->
-        List.iter (fun (v, k) ->
+        iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
                        v (Types.string_of_datatype (snd k)))
-          (List.filter (not -<- (flip List.mem_assoc Library.type_env) -<- fst) typeenv);
+          (filter (not -<- (flip mem_assoc Library.type_env) -<- fst) typeenv);
         envs),
     "display the current type environment");
 
     "env",
     ((fun ((valenv, _) as envs) _ ->
-        List.iter (fun (v, k) ->
+        iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
                        v (Result.string_of_result k))
-          (List.filter (not -<- (flip List.mem_assoc !Library.value_env) -<- fst)  valenv);
+          (filter (not -<- (flip mem_assoc !Library.value_env) -<- fst)  valenv);
      envs),
      "display the current value environment");
 
@@ -91,14 +92,14 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
               let exprs = Optimiser.optimise_program (typingenv, exprs) in
-                (fst ((Interpreter.run_program libraries []) (List.map Syntax.labelize exprs)), typingenv)
+                (fst ((Interpreter.run_program libraries []) (map Syntax.labelize exprs)), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
   ]
 
 let execute_directive (name, args) (valenv, typingenv) = 
   let envs = 
-    (try fst (List.assoc name (Lazy.force directives)) (valenv, typingenv) args; 
+    (try fst (assoc name (Lazy.force directives)) (valenv, typingenv) args; 
      with Not_found -> 
        Printf.fprintf stderr "unknown directive : %s\n" name;
        (valenv, typingenv))
@@ -126,7 +127,7 @@ let print_result rtype result =
 let process_one (valenv, typingenv) exprs = 
   let typingenv, exprs = Performance.measure "type_program" (Inference.type_program typingenv) exprs in
   let exprs =           Performance.measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
-  let exprs = List.map Syntax.labelize exprs in
+  let exprs = map Syntax.labelize exprs in
   let valenv, result = Performance.measure "run_program" (Interpreter.run_program valenv) [] exprs in
     print_result (Syntax.node_datatype (last exprs)) result;
     (valenv, typingenv), result
@@ -169,9 +170,15 @@ let rec interact envs =
 
 let evaluate_string v =
   (Settings.set_value interacting false;
-   ignore(evaluate (Parse.parse_string Parse.program) stdenvs v))
+   ignore(evaluate (Parse.parse_string Parse.program) (!stdenvs) v))
 
 let set setting value = Some (fun () -> Settings.set_value setting value)
+
+type action = 
+  [ `Evaluate of string
+  | `LoadFile of string ]
+
+let cmd_line_actions = ref []
 
 let options : opt list = 
     [
@@ -179,16 +186,22 @@ let options : opt list =
       ('O',     "optimize",            set Optimiser.optimising true,    None);
       (noshort, "measure-performance", set Performance.measuring true,   None);
       ('n',     "no-types",            set printing_types false,         None);
-      ('e',     "evaluate",            None,                             Some evaluate_string);
+      ('e',     "evaluate",            None,                             Some (fun str -> push cmd_line_actions (`Evaluate str)));
       (noshort, "config",              None,                             Some Settings.load_file);
 
       (* Modes to just optimise a program and print the result. I'm
-         not crazy about these option letters*)
-      ('o',     "print-optimize",      None,                             Some (just_optimise Parse.parse_file stdenvs));
-      ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string stdenvs));
+         not crazy about these option letters *)
+      ('o',     "print-optimize",      None,                             Some (just_optimise Parse.parse_file (!stdenvs)));
+      ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string (!stdenvs)));
     ]
 
-let welcome_note = Settings.add_string ("welcome_note", "Welcome to Links", false)
+let welcome_note = Settings.add_string ("welcome_note", 
+"  _    __ __   __ __   __ ____
+ | |   | |  \\  | |  | / // .__|
+ | |   | | , \\ | |  V  /|. `-.
+ | |___| | |\\ \\  |     \\ _`.  |
+ |_____|_|_| \\___|__|\\__|____/
+Welcome to Links version x.x.x", false)
 
 (* main *)
 let _ =
@@ -197,6 +210,14 @@ let _ =
   (* load prelude *)
   let library_types, libraries =
     (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
+  let (prelude_code, _) = Interpreter.run_program [] [] libraries in
+  (* (stdtypeenv, stdtypealiasenv) *)
+  (let (stdvalenv, stdtypeenv) = !stdenvs in
+    stdenvs := (stdvalenv @ prelude_code, 
+                Types.concat_environment stdtypeenv library_types));
+  Utility.for_each !cmd_line_actions
+      (function 
+         `Evaluate str -> evaluate_string str);
   (* TBD: accumulate type/value environment so that "interact" has access *)
   ListLabels.iter ~f:(run_file libraries ([], library_types)) !file_list;
   if Settings.get_value(interacting) then

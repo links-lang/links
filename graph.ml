@@ -24,7 +24,7 @@ let hashfind_dflt table elem def =
 
 (** Crazy notation for hashtable updates. Suggestions are welcomed.
 
-   [table *->! k $ v] updates k to v in table
+   [table *->! k v] updates k to v in table
    [table *-> k |-> d] returns the value for [k] in [table], or [d] 
      if [k] is not set.
    [table *+> k ++= newVal] cons'es newVal onto the list stored 
@@ -34,7 +34,7 @@ let hashfind_dflt table elem def =
 *)
 
 let ( *->!) table k v = Hashtbl.replace table k v
-let ($) op arg = op arg
+(* let ($) op arg = op arg*)
 
 let ( *-> ) table k default =
   try Hashtbl.find table k

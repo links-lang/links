@@ -38,7 +38,7 @@ let print_http_response headers body =
     if (!Library.http_response_code <> 200) then
       [("Status", string_of_int !Library.http_response_code)] else []
   in
-    iter_over headers
+    for_each headers
       (fun (name, value) -> print_endline(name ^ ": " ^ value));
     print_endline "";
     print_string body

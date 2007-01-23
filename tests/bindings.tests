@@ -18,7 +18,7 @@ stderr : @..*
 exit : 1
 
 Mutually recursive top-level functions
-fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20)
+fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } evn(20)
 stdout : true : Bool
 exit : 0
 

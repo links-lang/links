@@ -1211,7 +1211,7 @@ let rec type_check : inference_type_map -> typing_environment -> untyped_express
       let row' = ITO.make_empty_open_row () in
       let ths = alistmap (type_check typing_env) ths
       in
-        Utility.iter_over ths 
+        Utility.for_each ths 
           (fun _, th -> 
              unify (type_of_expression th, `Table row'));
 	unify_rows (row, row');

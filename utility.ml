@@ -14,6 +14,18 @@ module StringMap = Map.Make(OrderedString)
 
 type 'a stringmap = 'a StringMap.t
 
+let superimpose a b = 
+  StringMap.fold StringMap.add b a
+
+exception Not_disjoint of string
+
+let union_disjoint a b : 'a StringMap.t = 
+  StringMap.fold
+    (fun k v r -> 
+      if (StringMap.mem k r) then raise (Not_disjoint k) 
+      else
+        StringMap.add k v r) b a
+
 module StringSet = Set.Make(OrderedString)
 
 (*** int environments ***)
@@ -160,7 +172,7 @@ struct
 	  if predicate first then replacement :: rest
 	  else first::(substitute predicate replacement rest)
 
-  let iter_over l f = List.iter f l
+  let for_each l f = List.iter f l
 
   let push list f = list := !list @ [f]
   let unshift list f = list := f :: !list
