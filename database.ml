@@ -26,7 +26,7 @@ let value_of_db_string (value:string) = function
   | `Primitive `Int  -> Result.int (num_of_string value)
   | `Primitive `Float -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
-  | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ Types.string_of_datatype t ^"'")
+  | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ Inferencetypes.string_of_datatype t ^"'")
 
 let datatype_of_db_type = function
   | BoolField -> `Primitive `Bool
@@ -44,7 +44,7 @@ let execute_command  (query:string) (db: database) : result =
 let execute_insert (table_name, field_names, vss) db =
   execute_command (db#make_insert_query (table_name, field_names, vss)) db
 
-let execute_select (field_types:(string * Types.datatype) list) (query:string) (db: database)
+let execute_select (field_types:(string * Inferencetypes.datatype) list) (query:string) (db: database)
     : result =
   let result = (db#exec query) in
     (match result#status with
@@ -64,7 +64,7 @@ let execute_select (field_types:(string * Types.datatype) list) (query:string) (
                     failwith("Column " ^ (result#fname count) ^ 
                                " had no type info in query's type spec: " ^
                                mapstrcat ", " (fun (fld, typ) -> fld ^ ":" ^ 
-                                                 Types.string_of_datatype typ)
+                                                 Inferencetypes.string_of_datatype typ)
                                field_types)
                 done;
                 !temp_fields) in

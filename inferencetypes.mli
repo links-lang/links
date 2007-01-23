@@ -1,18 +1,26 @@
+(*pp deriving *)
 (** Definitions of types used during inference--not for public consumption. *)
 type type_var_set = Type_basis.type_var_set
+
+(* type datatype = (datatype, row) type_basis *)
+(* and field_spec = datatype field_spec_basis *)
+(* and field_spec_map = datatype field_spec_map_basis *)
+(* and row_var = row row_var_basis *)
+(* and row = (datatype, row_var) row_basis deriving (Show, Pickle) *)
+
 
 type datatype = [
   | (datatype, row) Type_basis.type_basis
   | `MetaTypeVar of datatype Unionfind.point
 ]
 and field_spec = datatype Type_basis.field_spec_basis
-and field_spec_map = field_spec Utility.StringMap.t
+and field_spec_map = datatype Type_basis.field_spec_map_basis
 and row_var = [
   | row Type_basis.row_var_basis
   | `MetaRowVar of row Unionfind.point 
   | `RigidRowVar of int
 ]
-and row = (datatype, row_var) Type_basis.row_basis
+and row = (datatype, row_var) Type_basis.row_basis deriving (Show, Pickle)
 
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier
@@ -20,19 +28,19 @@ type quantifier = Type_basis.quantifier
 val string_type : datatype
 val xml_type : datatype
 
-type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
-
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)
 val free_type_vars : datatype -> int list
 val free_row_type_vars : row -> int list
 
-type assumption = datatype Type_basis.assumption_basis
+type assumption = datatype Type_basis.assumption_basis deriving (Show, Pickle)
 type environment = datatype Type_basis.environment_basis
 
 type alias_environment = datatype Type_basis.alias_environment_basis
 type typing_environment = environment * alias_environment
+
+val concat_environment : typing_environment -> typing_environment -> typing_environment
 
 
 module BasicInferenceTypeOps :
@@ -78,8 +86,13 @@ or None otherwise.
 (* check for free aliases *)
 exception UndefinedAlias of string
 
+type type_alias_set = Utility.StringSet.t
+
 val free_alias_check : alias_environment -> datatype -> unit
 val free_alias_check_row : alias_environment -> row -> unit
+
+val type_aliases : datatype -> type_alias_set
+val row_type_aliases : row -> type_alias_set
 
 module InferenceTypeOps :
   (Type_basis.TYPEOPS
@@ -91,6 +104,8 @@ type inference_type_map =
        (row Unionfind.point) Utility.IntMap.t ref)
 
 (*type context = environment * inference_type_map*)
+
+val make_type_variable : int -> datatype
 
 val empty_var_maps : unit -> inference_type_map
 
@@ -111,9 +126,6 @@ val environment_of_inference_environment : environment -> Types.environment
 val inference_alias_environment_of_alias_environment : inference_type_map -> Types.alias_environment -> alias_environment
 val alias_environment_of_inference_alias_environment : alias_environment -> Types.alias_environment
 
-val inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression
-val expression_of_inference_expression : inference_expression -> Syntax.expression
-
 val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
@@ -132,3 +144,5 @@ val is_positive : int -> datatype -> bool
 val is_positive_row : int -> row -> bool
 val is_positive_field_env : int -> field_spec_map -> bool
 val is_positive_row_var : int -> row_var -> bool
+
+val unit_type : datatype

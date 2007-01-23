@@ -22,7 +22,7 @@ type 'r a_pattern = [
   | `Constant of untyped_expression
   | `Variable of string
   | `As of (string * 'r)
-  | `HasType of ('r * Types.datatype)
+  | `HasType of ('r * Inferencetypes.datatype)
 ]
 
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
@@ -100,7 +100,7 @@ module PatternCompiler =
   (struct
      let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, true)
 
-     type annotation = string list * Types.datatype list
+     type annotation = string list * Inferencetypes.datatype list
      type annotated_pattern = annotation * simple_pattern
 
      type ('a, 'b) equation_basis = 'a list * 'b
@@ -601,7 +601,7 @@ module PatternCompiler =
                            is sound providing we're using static
                            typing.
                         *)
-                        Let ("_", HasType (var_exp, Types.unit_type, pos),
+                        Let ("_", HasType (var_exp, Inferencetypes.unit_type, pos),
                              match_cases pos vars equations def env, pos)
                     | _ ->
                         (Condition(Comparison(var_exp, `Equal, exp, pos),
@@ -681,59 +681,75 @@ module Desugarer =
    let generalize (k : datatype) : assumption =
      typevars k, k
 
-   let generate_var_mapping : quantifier list -> (Types.quantifier list * int StringMap.t) =
+   type var_env =
+       (Inferencetypes.datatype Unionfind.point) StringMap.t *
+         (Inferencetypes.row Unionfind.point) StringMap.t 
+
+   let generate_var_mapping : quantifier list -> (Inferencetypes.quantifier list * var_env) =
      fun vars ->
        List.fold_right
-         (fun v (vars, varmap) ->
+         (fun v (vars, (tenv, renv)) ->
             let var = Type_basis.fresh_raw_variable () in
               match v with
                 | `TypeVar name ->
-                    (`TypeVar var::vars, StringMap.add name var varmap)
+                    (`TypeVar var::vars,
+                     (StringMap.add name
+                        (Unionfind.fresh (`TypeVar var)) tenv, renv))
                 | `RigidTypeVar name ->
-                    (`RigidTypeVar var::vars, StringMap.add name var varmap)
+                    (`RigidTypeVar var::vars,
+                     (StringMap.add name
+                        (Unionfind.fresh (`RigidTypeVar var)) tenv, renv))
                 | `RowVar name ->
-                    (`RowVar var::vars, StringMap.add name var varmap)) vars ([], StringMap.empty)
+                    (`RowVar var::vars,
+                     (tenv, StringMap.add name
+                        (Unionfind.fresh (StringMap.empty, `RowVar (Some var))) renv))) vars ([], (StringMap.empty, StringMap.empty))
 
    let desugar_datatype, desugar_row =
-     let rec desugar varmap =
-       let lookup = flip StringMap.find varmap in
-       let extend = fun (name, value) -> StringMap.add name value varmap in
+     let rec desugar ((tenv, renv) as var_env) =
+       let lookup_type = flip StringMap.find tenv in
+(*       let extend = fun (name, value) -> StringMap.add name value varmap in*)
          function
-           | TypeVar s -> (try `TypeVar (lookup s)
+           | TypeVar s -> (try `MetaTypeVar (lookup_type s)
                            with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
-           | RigidTypeVar s -> (try `RigidTypeVar (lookup s)
-                           with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
+           | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
+                                with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
            | FunctionType (f, m, t) ->
-               `Function (desugar varmap f, desugar varmap m, desugar varmap t)
-           | MuType (v, k) -> let n = Type_basis.fresh_raw_variable () in
-                                `Recursive (n, desugar (extend (v,n)) k)
-           | UnitType -> Types.unit_type
+               `Function (desugar var_env f, desugar var_env m, desugar var_env t)
+           | MuType (name, t) ->
+               let var = Type_basis.fresh_raw_variable () in
+               let point = Unionfind.fresh (`TypeVar var) in
+               let tenv = StringMap.add name point tenv in
+               let _ = Unionfind.change point (`Recursive (var, desugar (tenv, renv) t)) in
+                 `MetaTypeVar point
+           | UnitType -> Inferencetypes.unit_type
            | TupleType ks -> 
                let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
-               and unit = Types.TypeOps.make_empty_closed_row ()
+               and unit = Inferencetypes.InferenceTypeOps.make_empty_closed_row ()
                and present (s, x) = (s, `Present x)
-               in `Record (fold_right2 (curry (Types.TypeOps.set_field -<- present)) labels (map (desugar varmap) ks) unit)
-           | RecordType row -> `Record (desugar_row varmap row)
-           | VariantType row -> `Variant (desugar_row varmap row)
-           | TableType row -> `Table (desugar_row varmap row)
-           | ListType k -> `Application ("List", [desugar varmap k])
-           | TypeApplication (t, k) -> `Application (t, List.map (desugar varmap) k)
+               in `Record (fold_right2 (curry (Inferencetypes.InferenceTypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
+           | RecordType row -> `Record (desugar_row var_env row)
+           | VariantType row -> `Variant (desugar_row var_env row)
+           | TableType row -> `Table (desugar_row var_env row)
+           | ListType k -> `Application ("List", [desugar var_env k])
+           | TypeApplication (t, k) -> `Application (t, List.map (desugar var_env) k)
            | PrimitiveType k -> `Primitive k
            | DBType -> `Primitive `DB
-     and desugar_row varmap (fields, rv) =
-       let lookup = flip StringMap.find varmap in
+     and desugar_row ((_, renv) as var_env) (fields, rv) =
+       let lookup_row = flip StringMap.find renv in
        let seed = match rv with
-         | None    -> Types.TypeOps.make_empty_closed_row ()
-         | Some rv -> Types.TypeOps.make_empty_open_row_with_var (lookup rv)
+         | None    -> Inferencetypes.InferenceTypeOps.make_empty_closed_row ()
+         | Some rv ->
+             (StringMap.empty, `MetaRowVar (lookup_row rv))
+(*             Inferencetypes.InferenceTypeOps.make_empty_open_row_with_var (lookup rv)*)
        and fields = map (fun (k, v) -> match v with
                            | `Absent -> (k, `Absent)
-                           | `Present v -> (k, `Present (desugar varmap v))) fields 
-       in fold_right Types.TypeOps.set_field fields seed
+                           | `Present v -> (k, `Present (desugar var_env v))) fields 
+       in fold_right Inferencetypes.InferenceTypeOps.set_field fields seed
      in desugar, desugar_row
 
-   let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
-     let vars, varmap = generate_var_mapping vars in
-       vars, desugar_datatype varmap k
+   let desugar_assumption ((vars, k)  : assumption) : Inferencetypes.assumption = 
+     let vars, var_env = generate_var_mapping vars in
+       vars, desugar_datatype var_env k
 
    let rec get_type_vars : phrase -> quantifier list =
      let empty = [] in
@@ -949,24 +965,24 @@ module Desugarer =
      | `Table (p, e) -> p, (FnAppl ((Var ("asList"), pos), ([e], pos)), pos)
 
    let desugar lookup_pos (e : phrase) : untyped_expression =
-     let _, varmap = (generate_var_mapping -<- get_type_vars) e in
+     let _, ((tenv, renv) as var_env) = (generate_var_mapping -<- get_type_vars) e in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
        let pos = `U (lookup_pos pos') in
        let desugar = desugar' lookup_pos
-       and patternize = simple_pattern_of_pattern varmap lookup_pos in
+       and patternize = simple_pattern_of_pattern var_env lookup_pos in
          match s with
            | TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
                Define (name,
-                       Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype varmap t)],
+                       Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype var_env t)],
                             Variable (name, pos),
                             pos),
                        loc,pos)
            | TypeAnnotation ((Definition (name, rhs, loc), _), t)  -> 
-               Define (name, HasType(desugar rhs, desugar_datatype varmap t, pos),loc, pos)
-           | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype varmap k, pos)
+               Define (name, HasType(desugar rhs, desugar_datatype var_env t, pos),loc, pos)
+           | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
            | FloatLit f  -> Float (f, pos)
            | IntLit i    -> Integer (i, pos)
-           | StringLit s -> HasType(String (s, pos), Types.string_type, pos)
+           | StringLit s -> HasType(String (s, pos), Inferencetypes.string_type, pos)
            | BoolLit b   -> Boolean (b, pos)
            | CharLit c   -> Char (c, pos)
            | Var v       -> Variable (v, pos)
@@ -1015,7 +1031,7 @@ module Desugarer =
            | TableLit (name, datatype, db) -> 
                let row = match datatype with
                  | RecordType row ->
-                     desugar_row varmap row
+                     desugar_row var_env row
                  | UnitType ->
                      raise (ASTSyntaxError(data_position pos, "Tables must have at least one field"))
                  | _ ->
@@ -1103,7 +1119,14 @@ module Desugarer =
                  Database (desugar e, pos)
            | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
            | TypeDeclaration (name, args, rhs) ->
-               TypeDecl (name, List.map (flip Utility.StringMap.find varmap) args, desugar_datatype varmap rhs, pos)
+               let get_var arg =
+                 match (Unionfind.find (StringMap.find arg tenv)) with
+                   | `TypeVar var | `RigidTypeVar var -> var
+                   | _ -> assert false
+               in
+                 TypeDecl (name,
+                           List.map get_var args,
+                           desugar_datatype var_env rhs, pos)
            | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
            | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
            | TupleLit [field] -> desugar field
@@ -1190,12 +1213,12 @@ module Desugarer =
                      else
                        List.fold_right
                          (fun node nodes ->
-                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Types.xml, pos))
+                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Inferencetypes.xml_type, pos))
                    end
                  else
                    Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
-           | XmlForest []  -> HasType(Nil pos, Types.xml, pos)
-           | XmlForest [x] -> HasType(desugar x, Types.xml, pos)
+           | XmlForest []  -> HasType(Nil pos, Inferencetypes.xml_type, pos)
+           | XmlForest [x] -> HasType(desugar x, Inferencetypes.xml_type, pos)
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
 
            | Form (formExpr, formHandler) ->
@@ -1328,8 +1351,8 @@ module Desugarer =
                 (fun (v, e1) -> Binding ((`Variable v, pos), e1), pos)
                 !exprs,
               (e, pos))
-     and simple_pattern_of_pattern varmap lookup_pos ((pat,pos') : ppattern) : simple_pattern = 
-       let desugar = simple_pattern_of_pattern varmap lookup_pos
+     and simple_pattern_of_pattern var_env lookup_pos ((pat,pos') : ppattern) : simple_pattern = 
+       let desugar = simple_pattern_of_pattern var_env lookup_pos
        and pos = `U (lookup_pos pos') in
        let rec aux = function
          | `Variable _
@@ -1352,12 +1375,12 @@ module Desugarer =
                ps
                (`Nil, pos)
          | `As (name, p) -> `As (name, desugar p), pos
-         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype varmap datatype), pos
+         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype var_env datatype), pos
          | `Variant (l, Some v) ->
              `Variant (l, desugar v), pos
          | `Variant (l, None) ->
              if Settings.get_value cons_unit_hack then
-               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Types.unit_type), pos)), pos
+               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Inferencetypes.unit_type), pos)), pos
              else
                `Variant (l, (`Constant (Record_empty pos), pos)), pos
                (* 
@@ -1435,7 +1458,7 @@ module Desugarer =
  end : 
   sig 
     val desugar : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
-    val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val desugar_datatype : Sugartypes.datatype -> Inferencetypes.assumption
     val fresh_type_variable : unit -> Sugartypes.datatype
   end)
 

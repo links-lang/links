@@ -310,7 +310,7 @@ type fieldset = All
               | Fields of (string list)
 (* FIXME: Make sure we don't throw away fields that are used in 
    a SortBy clause. *)
-let sql_projections ((env, alias_env):(Types.environment * Types.alias_environment)) : RewriteSyntax.rewriter =
+let sql_projections ((env, alias_env):(Inferencetypes.environment * Inferencetypes.alias_environment)) : RewriteSyntax.rewriter =
   let merge_needed : fieldset list -> fieldset =
     let merge2 = function
       | All, _ | _, All -> All
@@ -426,8 +426,12 @@ let sql_aslist : RewriteSyntax.rewriter =
         let pos = fst3 data in
         let th_type = node_datatype th in
         let th_row = match th_type with
-            `Table th_row -> th_row
-          | _ -> failwith "Internal Error"
+          | `MetaTypeVar point ->
+              (match Unionfind.find point with
+                 | `Table th_row -> th_row
+                 | _ -> failwith "Internal Error: tables must have table type")
+          |  `Table th_row -> th_row
+          | _ -> failwith "Internal Error: tables must have table type"
         in
         let table_alias = gensym ~prefix:"Table_" () in
 	let rowFieldToTableCol colName = function
@@ -435,7 +439,7 @@ let sql_aslist : RewriteSyntax.rewriter =
                                    Query.name = colName; 
 				   Query.renamed = colName; 
                                    Query.col_type = fieldType}
-	  | _ -> failwith "Internal Error TF8736729**"
+	  | _ -> failwith "Internal Error: missing field in row"
 	in
 	let fields, _ = th_row in
 	let columns = zip_string_map_with rowFieldToTableCol fields in
@@ -755,7 +759,7 @@ let rewriters env = [
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
 ]
 
-let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
+let run_optimisers : (Inferencetypes.environment * Inferencetypes.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise env expr =

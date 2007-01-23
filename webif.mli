@@ -1,3 +1,3 @@
 (* Web interface *)
 
-val serve_request : Syntax.expression list -> (Result.environment * Types.typing_environment) -> string -> unit
+val serve_request : Syntax.expression list -> (Result.environment * Inferencetypes.typing_environment) -> string -> unit

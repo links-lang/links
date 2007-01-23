@@ -1,3 +1,4 @@
+(*pp deriving *)
 (**************************************************************************)
 (*  Mini, a type inference engine based on constraint solving.            *)
 (*  Copyright (C) 2006. François Pottier, Yann Régis-Gianas               *)
@@ -28,6 +29,10 @@
     A point is implemented as a cell, whose (mutable) contents consist of a single link to either information about the equivalence class, or another point. Thus, points form a graph, which must be acyclic, and whose connected components are the equivalence classes. In every equivalence class, exactly one point has no outgoing edge, and carries information about the class instead. It is the class's representative element.
 
     Information about a class consists of an integer weight (the number of elements in the class) and of the class's descriptor. *)
+
+type dummy_type_to_pull_names_into_scope = int
+  deriving (Typeable, Show, Pickle)
+
 type 'a point = {
   mutable link: 'a link
 } 
@@ -40,6 +45,14 @@ and 'a info = {
   mutable weight: int;
   mutable descriptor: 'a
 } 
+
+module Typeable_point (A : Typeable) : Typeable with type a = A.a point = 
+Typeable_defaults(struct
+  type a = A.a point
+  let typeRep = TypeRep (Tag.fresh(), [A.typeRep])
+end)
+module Show_point (A : Show) = Show_unprintable (struct type a = A.a point  end)
+module Pickle_point (A : Pickle) = Pickle_unpicklable (struct type a = A.a point let tname ="point"  end)
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
 let fresh desc = {

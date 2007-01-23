@@ -2,10 +2,29 @@
 open Num
 open List
 
-open Types
+open Inferencetypes
 open Syntax
 open Utility
 open Debug
+
+
+(*** RUBBISH ***)
+(* type gdatatype = Inferencetypes.datatype *)
+(* type grow = Inferencetypes.row  *)
+(* type gassumption = Inferencetypes.assumption *)
+
+(* module Typeable_gdatatype = Typeable.Primitive_typeable(struct type t = gdatatype end) *)
+(* module Show_gdatatype = Show.Show_unprintable (struct type a = gdatatype end) *)
+(* module Pickle_gdatatype = Pickle.Pickle_unpicklable (struct type a = gdatatype let tname = "gdatatype" end) *)
+
+(* module Typeable_grow = Typeable.Primitive_typeable(struct type t = grow end) *)
+(* module Show_grow = Show.Show_unprintable (struct type a = grow end) *)
+(* module Pickle_grow = Pickle.Pickle_unpicklable (struct type a = grow let tname = "grow" end) *)
+
+(* module Typeable_gassumption = Typeable.Primitive_typeable(struct type t = gassumption end) *)
+(* module Show_gassumption = Show.Show_unprintable (struct type a = gassumption end) *)
+(* module Pickle_gassumption = Pickle.Pickle_unpicklable (struct type a = gassumption let tname = "gassumption" end) *)
+(*** RUBBISH ***)
 
 exception Runtime_error of string
 
@@ -40,7 +59,7 @@ class virtual dbresult = object
 end
 
 class virtual database = object
-  method virtual equal_types : Types.datatype -> db_field_type -> bool
+  method virtual equal_types : Inferencetypes.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
   method make_insert_query : (string * string list * string list list) -> string =
@@ -103,7 +122,7 @@ type unop = MkColl
 let string_of_unop = Show_unop.show
 
 type comparison = Syntax.comparison deriving (Typeable, Show, Pickle)
-type binop = [ `Union | `RecExt of string | `MkTableHandle of row | comparison]
+type binop = [ `Union | `RecExt of string | `MkTableHandle of Inferencetypes.row | comparison]
                  deriving (Typeable, Show, Pickle)
 
 type xmlitem =   Text of string
@@ -161,7 +180,7 @@ module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
   end)
 
 
-type table = database * string * Types.row
+type table = database * string * Inferencetypes.row
    deriving (Show, Pickle)
 
 type primitive_value = [

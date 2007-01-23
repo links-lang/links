@@ -31,9 +31,6 @@ type quantifier = Type_basis.quantifier
 let string_type = `Application ("String", [])
 let xml_type = `Application ("Xml", [])
 
-type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'
-
-
 (* [TODO]
       change the return type of these functions to be IntSet.t
 *)
@@ -81,13 +78,21 @@ let
      (fun t -> Utility.unduplicate (=) (free_row_type_vars' IntSet.empty t)))
 
 type assumption = datatype Type_basis.assumption_basis
+  deriving (Show, Pickle)
 type environment = datatype Type_basis.environment_basis
 type alias_environment = datatype Type_basis.alias_environment_basis
 type typing_environment = environment * alias_environment
 
+let concat_environment
+      (types1, aliases1 : typing_environment)
+      (types2, aliases2) : typing_environment = 
+    (types1 @ types2, superimpose aliases1 aliases2)
+
 type inference_type_map =
     ((datatype Unionfind.point) IntMap.t ref *
        (row Unionfind.point) IntMap.t ref)
+
+let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
 
 module BasicInferenceTypeOps :
   (Type_basis.BASICTYPEOPS
@@ -634,6 +639,13 @@ let type_of_inference_type = type_of_inference_type IntSet.empty
 let field_spec_of_inference_field_spec = field_spec_of_inference_field_spec IntSet.empty
 let row_of_inference_row = row_of_inference_row IntSet.empty
 
+
+(* type aliases *)
+type type_alias_set = Utility.StringSet.t
+
+let type_aliases = Types.type_aliases -<- type_of_inference_type
+let row_type_aliases = Types.row_type_aliases -<- row_of_inference_row
+
 (* assumptions *)
 let inference_assumption_of_assumption : inference_type_map -> Types.assumption -> assumption = fun var_map -> function
   | (quantifiers, t) -> (quantifiers, inference_type_of_type var_map t)
@@ -651,12 +663,6 @@ let inference_alias_environment_of_alias_environment : inference_type_map -> Typ
   StringMap.map (inference_assumption_of_assumption var_map)
 let alias_environment_of_inference_alias_environment : alias_environment -> Types.alias_environment =
   StringMap.map assumption_of_inference_assumption
-
-(* conversions between expressions and inference expressions *)
-let inference_expression_of_expression : inference_type_map -> Syntax.expression -> inference_expression = fun var_map ->
-  Syntax.Functor_expression'.map (fun (`T(pos, t, label)) -> (pos, inference_type_of_type var_map t, label))
-let expression_of_inference_expression : inference_expression -> Syntax.expression =
-  Syntax.Functor_expression'.map (fun (pos, t, label) -> `T(pos, type_of_inference_type t, label))
 
 (* output as a string *)
 let string_of_datatype = Types.string_of_datatype -<- type_of_inference_type
@@ -763,3 +769,5 @@ let is_positive = is_positive IntSet.empty
 let is_positive_row = is_positive_row IntSet.empty
 let is_positive_field_env = is_positive_field_env IntSet.empty
 let is_positive_row_var = is_positive_row_var IntSet.empty
+
+let unit_type = `Record (InferenceTypeOps.make_empty_closed_row ())

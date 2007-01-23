@@ -85,13 +85,13 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (`T (Syntax.dummy_position, Types.string_type, None)))
+  String (s, (`T (Syntax.dummy_position, Inferencetypes.string_type, None)))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");
                       ("name", string name);
                       ("value", string value)], [], 
-            (`T (Syntax.dummy_position, Types.xml, None)))
+            (`T (Syntax.dummy_position, Inferencetypes.xml_type, None)))
 
 let attrname = fst
 let attrval = snd

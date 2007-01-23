@@ -32,7 +32,7 @@ and column = {
   table_renamed : string;
   name : string;
   renamed : string;
-  col_type : Types.datatype;
+  col_type : Inferencetypes.datatype;
 } deriving (Typeable, Show, Pickle)
 
 val like_as_string : like_expr -> string

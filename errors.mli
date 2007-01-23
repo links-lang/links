@@ -11,21 +11,24 @@ exception MultiplyDefinedToplevelNames of
 exception Type_error of (Syntax.position * string)
 exception RichSyntaxError of synerrspec
 
+type expression = Syntax.expression
+(*(Syntax.position * Inferencetypes.datatype * Syntax.label option) Syntax.expression'*)
+
 val mistyped_application : Syntax.position ->
-  (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
-  (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
-  (Inferencetypes.inference_expression * Inferencetypes.datatype) option ->
+  (expression * Inferencetypes.datatype) ->
+  (expression * Inferencetypes.datatype) ->
+  (expression * Inferencetypes.datatype) option ->
   'a
                
 val mistyped_union : Syntax.position ->
-  Inferencetypes.inference_expression ->
+  expression ->
   Inferencetypes.datatype ->
-  Inferencetypes.inference_expression ->
+  expression ->
   Inferencetypes.datatype ->
   'a
 
 val mistype : Syntax.position ->
-  Inferencetypes.inference_expression * Inferencetypes.datatype ->
+  expression * Inferencetypes.datatype ->
   Inferencetypes.datatype ->
   'a              
 
@@ -33,7 +36,7 @@ val nested_def : Syntax.position -> string -> 'a
   
   
 val letrec_nonfunction : Syntax.position -> 
-  (Inferencetypes.inference_expression * Inferencetypes.datatype) ->
+  (expression * Inferencetypes.datatype) ->
   'a
 
 val invalid_name : Syntax.position -> string -> string -> 'a

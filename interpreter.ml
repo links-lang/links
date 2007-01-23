@@ -114,14 +114,14 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
 *)
 exception NotFound of string
 
-let row_field_type field : Types.row -> Types.datatype = 
+let row_field_type field : Inferencetypes.row -> Inferencetypes.datatype = 
   fun (fields, _) ->
     match StringMap.find field fields with
       | `Present t -> t
       | `Absent -> raise (NotFound field)
 
-let query_result_types (query : query) (table_defs : (string * Types.row) list)
-    : (string * Types.datatype) list =
+let query_result_types (query : query) (table_defs : (string * Inferencetypes.row) list)
+    : (string * Inferencetypes.datatype) list =
   try 
     let col_type table_alias col_name =
       row_field_type col_name (assoc table_alias table_defs) 

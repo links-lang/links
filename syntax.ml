@@ -5,6 +5,24 @@ open Utility
 open Show
 open Pickle
 
+(*** RUBBISH ***)
+(* type gdatatype = Inferencetypes.datatype *)
+(* type grow = Inferencetypes.row  *)
+(* type gassumption = Inferencetypes.assumption *)
+
+(* module Typeable_gdatatype = Typeable.Primitive_typeable(struct type t = gdatatype end) *)
+(* module Show_gdatatype = Show_unprintable (struct type a = gdatatype end) *)
+(* module Pickle_gdatatype = Pickle_unpicklable (struct type a = gdatatype let tname = "gdatatype" end) *)
+
+(* module Typeable_grow = Typeable.Primitive_typeable(struct type t = grow end) *)
+(* module Show_grow = Show_unprintable (struct type a = grow end) *)
+(* module Pickle_grow = Pickle_unpicklable (struct type a = grow let tname = "grow" end) *)
+
+(* module Typeable_gassumption = Typeable.Primitive_typeable(struct type t = gassumption end) *)
+(* module Show_gassumption = Show_unprintable (struct type a = gassumption end) *)
+(* module Pickle_gassumption = Pickle_unpicklable (struct type a = gassumption let tname = "gassumption" end) *)
+(*** RUBBISH ***)
+
 type lexpos = Lexing.position
 module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
 
@@ -44,7 +62,7 @@ let string_of_comparison = function
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
-  | TypeDecl of (string * int list * Types.datatype * 'data)
+  | TypeDecl of (string * int list * Inferencetypes.datatype * 'data)
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -58,7 +76,7 @@ type 'data expression' =
   | Comparison of ('data expression' * comparison * 'data expression' * 'data)
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * Inferencetypes.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
   | Record_empty of 'data
@@ -80,14 +98,14 @@ type 'data expression' =
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table name: *) 'data expression'
-      * (* the type of a table row: *) Types.row
+      * (* the type of a table row: *) Inferencetypes.row
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
-  | HasType of ('data expression' * Types.datatype * 'data)
-  | Alien of (string * string * Types.assumption * 'data)
+  | HasType of ('data expression' * Inferencetypes.datatype * 'data)
+  | Alien of (string * string * Inferencetypes.assumption * 'data)
   | Placeholder of (label * 'data)
       deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
@@ -128,7 +146,7 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type typed_data = [`T of (position * Types.datatype * label option)] deriving (Typeable, Show, Pickle)
+type typed_data = [`T of (position * Inferencetypes.datatype * label option)] deriving (Typeable, Show, Pickle)
 type untyped_data = [`U of position] deriving (Typeable, Show, Pickle)
 type data = [untyped_data | typed_data] deriving (Typeable, Show, Pickle)
 type expression = typed_data  expression'
@@ -147,13 +165,13 @@ let is_alphanumeric_ident name =
   (Str.string_match (Str.regexp "^[a-zA-Z_][a-zA-Z_0-9]*$") name 0)
 
 let rec show t : 'a expression' -> string = function 
-  | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
+  | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Inferencetypes.string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> 
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
   | TypeDecl (typename, quantifiers, datatype, data) ->
-      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
+      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Inferencetypes.string_of_datatype datatype ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -207,7 +225,7 @@ let rec show t : 'a expression' -> string = function
       "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | TableHandle (db, name, row, data) ->
-      "("^ show t name ^" from "^ show t db ^"["^Types.string_of_row row^"])" ^ t data
+      "("^ show t name ^" from "^ show t db ^"["^Inferencetypes.string_of_row row^"])" ^ t data
   | TableQuery (ths, query, data) ->
       "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
         "["^Sql.string_of_query query^"])" ^ t data
@@ -215,7 +233,7 @@ let rec show t : 'a expression' -> string = function
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ Show_label.show s ^ t data
-  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_assumption k) ^ t data
+  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Inferencetypes.string_of_assumption k) ^ t data
 
 let string_of_expression s = show (fun _ -> "") s
 
@@ -359,7 +377,7 @@ let rec set_data : ('b -> 'a expression -> 'b expression) =
   | Define ... 
 *)
 
-let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
+let node_datatype : (expression -> Inferencetypes.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 
 let position e = data_position (expression_data e)
 

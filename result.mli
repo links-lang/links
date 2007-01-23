@@ -27,7 +27,7 @@ class virtual dbresult :
 
 class virtual database :
   object
-    method virtual equal_types : Types.datatype -> db_field_type -> bool
+    method virtual equal_types : Inferencetypes.datatype -> db_field_type -> bool
     method virtual escape_string : string -> string
     method virtual exec : string -> dbresult
     method make_insert_query : (string * string list * string list list) -> string
@@ -47,7 +47,7 @@ type unop = | MkColl
             | MkVariant of string
             | MkDatabase
 (* 	    | MkTableHandle of ( (\* table name: *\) Syntax.expression * *)
-(* 		                 (\* field spec: *\) Types.row) *)
+(* 		                 (\* field spec: *\) Inferencetypes.row) *)
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
@@ -56,13 +56,13 @@ type binop =
     [Syntax.comparison
     | `Union
     | `RecExt of string
-    | `MkTableHandle of Types.row]
+    | `MkTableHandle of Inferencetypes.row]
 type xmlitem =
     | Text of string 
     | Attr of (string * string) 
     | Node of (string * xml)
 and xml = xmlitem list
-type table = database * string * Types.row
+type table = database * string * Inferencetypes.row
 type primitive_value =
     [ `Bool of bool
     | `Char of char

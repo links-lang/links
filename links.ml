@@ -57,7 +57,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
        (fun _ ->
           iter (fun (n, k) ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (snd k)))
+                         n (Inferencetypes.string_of_datatype (snd k)))
           Library.type_env),
      "list builtin functions and values");
 
@@ -68,7 +68,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     ((fun ((_, (typeenv, _)) as envs) _ ->
         iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
-                       v (Types.string_of_datatype (snd k)))
+                       v (Inferencetypes.string_of_datatype (snd k)))
           (filter (not -<- (flip mem_assoc Library.type_env) -<- fst) typeenv);
         envs),
     "display the current type environment");
@@ -121,7 +121,7 @@ let print_result rtype result =
   print_endline (if Settings.get_value(printing_types) then
 		   Types.with_mailbox_typing (Settings.get_value(Types.show_mailbox_annotations))
 		     (fun () -> 
-			" : "^ Types.string_of_datatype rtype)
+			" : "^ Inferencetypes.string_of_datatype rtype)
                  else "")
 
 let process_one (valenv, typingenv) exprs = 
@@ -214,7 +214,7 @@ let _ =
   (* (stdtypeenv, stdtypealiasenv) *)
   (let (stdvalenv, stdtypeenv) = !stdenvs in
     stdenvs := (stdvalenv @ prelude_code, 
-                Types.concat_environment stdtypeenv library_types));
+                Inferencetypes.concat_environment stdtypeenv library_types));
   Utility.for_each !cmd_line_actions
       (function 
          `Evaluate str -> evaluate_string str);

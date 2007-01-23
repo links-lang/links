@@ -72,7 +72,7 @@ class lite_database file = object(self)
       new lite_result vm
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
+  method equal_types (t: Inferencetypes.datatype) (dt : db_field_type) : bool = true
 end
 
 let driver_name = "sqlite"

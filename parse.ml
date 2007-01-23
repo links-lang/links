@@ -173,7 +173,7 @@ let program : (Syntax.untyped_expression list, Sugartypes.phrase list) grammar =
     parse = Parser.parse_links
   }
 
-let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
+let datatype : (Inferencetypes.assumption, Sugartypes.datatype) grammar = {
     desugar =  (fun _ -> Sugar.desugar_datatype);
     parse = Parser.just_datatype
   }

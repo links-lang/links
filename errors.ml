@@ -22,13 +22,16 @@ exception NonfuncAppliedTypeError of (Syntax.position * string * Inferencetypes.
 					string * Inferencetypes.datatype *
 					(string * Inferencetypes.datatype) option)
 
+type expression = Syntax.expression
+(*type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
+
 let mistyped_application pos (fn, fntype) (param, paramtype) mb =
-  let ((_, _, fexpr),_,_) = expression_data fn in
-  let ((_, _, pexpr),_,_) = expression_data param in
+  let `T ((_, _, fexpr),_,_) = expression_data fn in
+  let `T ((_, _, pexpr),_,_) = expression_data param in
   let mb = match mb with
     | None -> None
     | Some (exp, mbtype) ->
-	let ((_, _, mbexpr),_,_) = expression_data exp in
+	let `T ((_, _, mbexpr),_,_) = expression_data exp in
 	  Some (mbexpr, mbtype)
   in  
     match fntype with 
