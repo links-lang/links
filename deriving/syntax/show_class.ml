@@ -110,7 +110,10 @@ let gen_polycase ({loc=loc; tname=tname} as ti) = function
 | MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
     (<:patt< (# $[tname]$ as $lid:tname$) >>, None, 
     <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
-| MLast.RfInh _ -> error loc ("Cannot generate show instance for " ^ tname)
+| MLast.RfInh ctyp -> let var, guard, expr = cast_pattern loc ctyp in
+    (var, guard, 
+     <:expr< let module S = $gen_printer ti ctyp$ in 
+                S.format formatter $expr$ >>)
 
 let gen_format_polyv (row,_) ({loc=loc} as ti) =
 <:str_item< 

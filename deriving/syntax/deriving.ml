@@ -223,6 +223,21 @@ struct
            end
       | _ -> assert false
 
+  let cast_pattern loc t = 
+    (<:patt< x >>,
+     Some <:expr<
+            let module M = 
+             struct
+              type t = $t$;
+              value test = fun [ #t -> True | _ -> False];
+             end in M.test x >>,
+     <:expr<
+       (let module M = 
+            struct
+              type t = $t$;
+              value cast = fun [#t as t -> t | _ -> assert False];
+            end in M.cast x)>>)
+      
 end
 
 (* Utilities for generating module declarations in signatures *)

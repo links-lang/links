@@ -1,19 +1,29 @@
+(*pp deriving *)
 open Utility
 
 type type_var_set = Type_basis.type_var_set
 
+type 'a point = 'a Unionfind.point 
+type 'a stringmap = 'a StringMap.t
+
+module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end)
+module Show_stringmap (S : Show.Show) = Show.Show_unprintable(struct type a = S.a stringmap end)
+module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
+module Pickle_stringmap (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a stringmap let tname = "stringmap" end)
+
 type datatype = [
   | (datatype, row) Type_basis.type_basis
-  | `MetaTypeVar of datatype Unionfind.point 
+  | `MetaTypeVar of datatype point
 ]
 and field_spec = datatype Type_basis.field_spec_basis
-and field_spec_map = field_spec StringMap.t
+and field_spec_map = field_spec stringmap
 and row_var = [
   | row Type_basis.row_var_basis
-  | `MetaRowVar of row Unionfind.point
+  | `MetaRowVar of row point
   | `RigidRowVar of int
 ]
 and row = (datatype, row_var) Type_basis.row_basis
+    deriving (Show, Pickle)
 
 type type_variable = Type_basis.type_variable
 type quantifier = Type_basis.quantifier

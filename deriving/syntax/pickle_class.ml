@@ -133,9 +133,13 @@ let gen_polycase ({loc=loc} as ti) = function
               Pickle_int.pickle buffer $int:string_of_int n$ ;
               S.pickle buffer $lid:tname$
         } >>)
-  | (MLast.RfInh _, _) ->
-      failwith ("Cannot generate pickle instance for " ^ ti.tname)
-
+  | (MLast.RfInh ctyp, n) -> 
+      let var, guard, expr = cast_pattern loc ctyp in
+        (var, guard, 
+         <:expr< let module S = $gen_printer ti ctyp$ in do {
+              Pickle_int.pickle buffer $int:string_of_int n$ ;
+              S.pickle buffer $expr$
+        } >>)
 
 
 let gen_unpickle_polycase ({loc=loc} as ti) = function
@@ -155,12 +159,10 @@ let gen_unpickle_polycase ({loc=loc} as ti) = function
                       let $lid:var$ = S.unpickle stream in $expr$ >>)
            params
            expr)
-  | (MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp), n) -> 
+  | (MLast.RfInh ctyp, n) -> 
     (<:patt< $int:string_of_int n$ >>, None,
     <:expr<  let module S = $gen_printer ti ctyp$ in
                (S.unpickle stream :> a) >>)
-  | (MLast.RfInh _, _) ->
-      failwith ("Cannot generate pickle instance for " ^ ti.tname)
 
 
 let gen_funs_poly ({loc=loc} as ti) (row,_) =
