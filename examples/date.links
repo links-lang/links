@@ -27,7 +27,8 @@ var travelForm =
      <tr>
        <td> Departure:</td> <td> { date -> dep }</td>
      </tr>
-    </table>
+     <tr><td>{ button("Submit", ()) -> dummy }</td></tr>
+    </table>   
   yields 
     (person=person, age=age, arrival = arr, departure = dep);
 
