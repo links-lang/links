@@ -96,7 +96,7 @@ and phrasenode =
   | XmlForest of (phrase list)
   | TextNode of (string)
   | Form of (phrase * phrase)
-  | FormBinding of (phrase * string)
+  | FormBinding of (phrase * ppattern)
 and phrase = phrasenode * pposition
 and binder = ppattern * phrase
 and regex = | Range of (char * char)

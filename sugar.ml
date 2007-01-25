@@ -32,14 +32,10 @@ type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
     I'm absolutely un-crazy about these names; let's have a conference.
 *)
+let patternlist_to_tuplepattern ppos : ppattern list -> ppattern list = function
+  | [p] -> [p]
+  | ps -> [`Tuple ps, ppos]
 
-let string_to_ppattern(str, pos) = `Variable str, pos
-
-let stringlist_to_tuplepattern_aux strs pos = `Tuple (map string_to_ppattern strs), pos
-let stringlist_to_tuplepattern ppos : (string * pposition) list -> ppattern list = function
-    [] -> [`Any, ppos]
-  | [x, pos] -> [`Variable x, pos]
-  | xs -> [stringlist_to_tuplepattern_aux xs ppos]
 
 (** [abstract_expr_curried_for_tuple_list ppos expr tuples] 
 
@@ -49,8 +45,8 @@ let stringlist_to_tuplepattern ppos : (string * pposition) list -> ppattern list
     The expression is in Sugar format, not Syntax.
 *)
 let abstract_expr_curried_for_tuple_list ppos expr tuples = 
-  fold_left (fun result names -> 
-               (FunLit(None, stringlist_to_tuplepattern ppos names, result), ppos)
+  fold_left (fun result ps -> 
+               (FunLit(None, patternlist_to_tuplepattern ppos ps, result), ppos)
             ) expr tuples
 
 (** Construct a Links list out of a list of Links expressions; all
@@ -826,7 +822,7 @@ module Desugarer =
              | XmlForest es -> etvs es
              | TextNode _ -> empty
              | Form (e1, e2) -> flatten [etv e1; etv e2]
-             | FormBinding (e, _) -> etv e
+             | FormBinding (e, p) -> flatten [etv e; ptv p]
      and get_pattern_type_vars (p, _) = (* fold *)
        match p with 
          | `Any
@@ -1236,34 +1232,39 @@ module Desugarer =
 
        (* We pass over the forest finding the bindings and construct a
           term-context representing all of the form/yields expression
-          except the `yields' part (the handler). Here binding_names
+          except the `yields' part (the handler). Here bindings
           is a list of lists, each list representing a tuple returned
           from an inner instance of forest_to_form_expr--or, if it's a
           singleton, a single value as bound by a binder.  *)
-       let ctxt, binding_names = 
+       let ctxt, bindings =
          fold_right
            (fun (_, lpos as l) (ctxt, bs) -> 
-              let l_unsugared, binding_names = desugar_form_expr l in
+              let l_unsugared, bindings = desugar_form_expr l in
                 ((fun r -> (apply2_curried pos
                               (Variable("@@@", pos)) 
                               l_unsugared
                               (ctxt(r)))),
-                 binding_names @ bs)
+                 bindings @ bs)
            ) trees ((fun r -> r), []) in
          (* Next we construct the handler body from the yieldsClause,
             if any.  The yieldsClause is the user's handler; if it is
             None then we construct a default handler that just bundles
             up all the bound variables and returns them as a tuple.
             Here we also form a list of the values we're
-            returning. returning_names is a list of lists,
+            returning. returning_bindings is a list of lists,
             representing a list of tuples of values.  *)
-       let handlerBody, returning_names = 
+       let handlerBody, bindings, returning_bindings = 
          match yieldsClause with
-             Some formHandler -> formHandler, []
-           | None -> ((TupleLit (map (fun(x, ppos) -> Var x, ppos) 
-                                   (flatten binding_names)), 
-                       (Lexing.dummy_pos, Lexing.dummy_pos)), 
-                      [flatten binding_names])
+             Some formHandler -> formHandler, bindings, []
+           | None ->
+               let fresh_bindings = map (fun bs ->
+                                           map (fun (_, ppos) ->
+                                                  `Variable (unique_name ()), ppos) bs) bindings
+               in
+                 ((TupleLit (map (fun (`Variable x, ppos) -> Var x, ppos) (flatten fresh_bindings)),
+                   (Lexing.dummy_pos, Lexing.dummy_pos)),
+                  fresh_bindings,
+                  [flatten bindings])
        in
        let _, ppos = handlerBody in
          (* The handlerFunc is simply formed by abstracting the
@@ -1272,10 +1273,10 @@ module Desugarer =
          (* Note: trees_ppos will become the position for each tuple;
             the position of the tuple is what's reported when duplicate
             bindings are present within one form. *)
-       let handlerFunc = abstract_expr_curried_for_tuple_list (trees_ppos) handlerBody binding_names in
-         ctxt(Apply(Variable("pure", pos), desugar' lookup_pos handlerFunc, pos)), returning_names
+       let handlerFunc = abstract_expr_curried_for_tuple_list (trees_ppos) handlerBody bindings in
+         ctxt(Apply(Variable("pure", pos), desugar' lookup_pos handlerFunc, pos)), returning_bindings
 
-     and desugar_form_expr formExpr : untyped_expression * (string*pposition) list list =
+     and desugar_form_expr formExpr : untyped_expression * ppattern list list =
        if (xml_tree_has_form_binding formExpr) then
          match formExpr with
            | XmlForest trees, trees_ppos -> forest_to_form_expr trees None (`U(lookup_pos trees_ppos)) trees_ppos
@@ -1285,8 +1286,8 @@ module Desugarer =
                   checking for patterns is that it finds the error in the
                   whole tuple (the tuple argument that's used by the
                   handler function we later construct.) *)
-           | FormBinding ((expr, pos), var), pos' ->
-               desugar' lookup_pos (expr, pos), [[var, pos]]
+           | FormBinding ((expr, pos), ppattern), pos' ->
+               desugar' lookup_pos (expr, pos), [[ppattern]]
            | Xml("#", [], contents), pos' -> forest_to_form_expr contents None (`U(lookup_pos pos')) pos'
            | Xml("#", _, contents), pos' -> raise(ASTSyntaxError(Syntax.data_position (`U(lookup_pos pos')),
                                                                  "XML forest literals cannot have attributes"))

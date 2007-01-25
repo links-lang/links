@@ -766,7 +766,6 @@ let free_bound_row_type_vars = free_bound_row_type_vars IntSet.empty
 let free_bound_row_var_vars = free_bound_row_var_vars IntSet.empty
 
 let rec type_aliases : type_var_set -> datatype -> StringSet.t = fun rec_vars t ->
-  Debug.debug "A";
   let tas = type_aliases rec_vars in
     match t with
       | `Not_typed
@@ -802,7 +801,6 @@ and row_type_aliases rec_vars (field_env, row_var) =
   let row_var = row_var_type_aliases rec_vars row_var in
     StringSet.union field_type_vars row_var  
 and row_var_type_aliases rec_vars row_var = 
-  Debug.debug "B";
   match row_var with
     | `RowVar None -> StringSet.empty
     | `MetaRowVar point ->

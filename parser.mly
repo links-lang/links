@@ -408,7 +408,7 @@ xml_contents:
 | CDATA                                                        { TextNode (Utility.xml_unescape $1), pos() }
 
 form_binding:
-| LBRACE logical_expression RARROW VARIABLE RBRACE             { FormBinding($2, $4), pos()}
+| LBRACE logical_expression RARROW pattern RBRACE              { FormBinding($2, $4), pos()}
 
 conditional_expression:
 | db_expression                                                { $1 }
