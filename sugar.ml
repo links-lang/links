@@ -685,7 +685,7 @@ module Desugarer =
      fun vars ->
        List.fold_right
          (fun v (vars, (tenv, renv)) ->
-            let var = Type_basis.fresh_raw_variable () in
+            let var = Inferencetypes.fresh_raw_variable () in
               match v with
                 | `TypeVar name ->
                     (`TypeVar var::vars,
@@ -712,7 +712,7 @@ module Desugarer =
            | FunctionType (f, m, t) ->
                `Function (desugar var_env f, desugar var_env m, desugar var_env t)
            | MuType (name, t) ->
-               let var = Type_basis.fresh_raw_variable () in
+               let var = Inferencetypes.fresh_raw_variable () in
                let point = Unionfind.fresh (`TypeVar var) in
                let tenv = StringMap.add name point tenv in
                let _ = Unionfind.change point (`Recursive (var, desugar (tenv, renv) t)) in

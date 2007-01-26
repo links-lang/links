@@ -103,11 +103,11 @@ let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
     fun x -> (box (conv (unbox x)))
 
-let make_type_variable = Inferencetypes.make_type_variable
+let make_type_variable = Inferencetypes.InferenceTypeOps.make_type_variable
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Inferencetypes.assumption =
   (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
-   let a = Type_basis.fresh_raw_variable () in
+   let a = Inferencetypes.fresh_raw_variable () in
      ([`TypeVar a], `Function (from, make_type_variable a, into)))
 
 let string_to_xml = function 
@@ -742,8 +742,8 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     let qs, regex = datatype Linksregex.Regex.datatype in
-    let mb1 = Type_basis.fresh_raw_variable () in
-    let mb2 = Type_basis.fresh_raw_variable () in
+    let mb1 = Inferencetypes.fresh_raw_variable () in
+    let mb2 = Inferencetypes.fresh_raw_variable () in
       ((`TypeVar mb1) :: (`TypeVar mb2) :: qs,
        `Function (string_type, make_type_variable mb1, `Function (regex, make_type_variable mb2, `Primitive `Bool)))));
 
@@ -791,7 +791,7 @@ and alias_env : Inferencetypes.alias_environment =
        StringMap.add name assumption env)
     [
       "Event", ([], `Primitive `Abstract);
-      "List", ([`TypeVar (Type_basis.fresh_raw_variable ())], `Primitive `Abstract);
+      "List", ([`TypeVar (Inferencetypes.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
       "Xml", ([], `Application ("List", [`Primitive `XmlItem]))
     ]

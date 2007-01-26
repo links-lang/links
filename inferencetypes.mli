@@ -1,30 +1,70 @@
 (*pp deriving *)
-(** Definitions of types used during inference--not for public consumption. *)
-type type_var_set = Type_basis.type_var_set
+(** Core types *)
 
-(* type datatype = (datatype, row) type_basis *)
-(* and field_spec = datatype field_spec_basis *)
-(* and field_spec_map = datatype field_spec_map_basis *)
-(* and row_var = row row_var_basis *)
-(* and row = (datatype, row_var) row_basis deriving (Show, Pickle) *)
+(* field environments *)
+(*module FieldEnv : Map.S with type key = string*)
+type 'a stringmap = 'a Utility.StringMap.t
+
+module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap
+module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap
+module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap
+
+type 'a field_env = 'a stringmap
+
+(* type var sets *)
+(*module TypeVarSet : Set.S with type elt = int*)
+type type_var_set = Utility.IntSet.t
+
+(* points *)
+type 'a point = 'a Unionfind.point 
+
+module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
+module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
 
 
-type datatype = [
-  | (datatype, row) Type_basis.type_basis
-  | `MetaTypeVar of datatype Unionfind.point
-]
-and field_spec = datatype Type_basis.field_spec_basis
-and field_spec_map = datatype Type_basis.field_spec_map_basis
-and row_var = [
-  | row Type_basis.row_var_basis
-  | `MetaRowVar of row Unionfind.point 
-  | `RigidRowVar of int
-]
-and row = (datatype, row_var) Type_basis.row_basis deriving (Show, Pickle)
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
+                 | `Abstract ]
+    deriving (Typeable, Show, Pickle)
 
-type type_variable = Type_basis.type_variable
-type quantifier = Type_basis.quantifier
+type datatype =
+    [ `Not_typed
+    | `Primitive of primitive
+    | `TypeVar of int
+    | `RigidTypeVar of int
+    | `Function of (datatype * datatype * datatype)
+    | `Record of row
+    | `Variant of row
+    | `Table of row
+    | `Recursive of (int * datatype)
+    | `Application of (string * datatype list)
+    | `MetaTypeVar of datatype point ]
+and field_spec = [ `Present of datatype | `Absent ]
+and field_spec_map = field_spec field_env
+and row = field_spec_map * row_var
+and row_var =
+    [ `RowVar of int option
+    | `RecRowVar of int * row
+    | `MetaRowVar of row point
+    | `RigidRowVar of int ]
+      deriving (Show, Pickle)
 
+
+type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
+    deriving (Typeable, Show, Pickle)
+type quantifier = type_variable
+    deriving (Typeable, Show, Pickle)
+
+type assumption = ((quantifier list) * datatype)
+    deriving (Show, Pickle)
+type environment = ((string * assumption) list)
+    deriving (Show, Pickle)
+type alias_environment = assumption stringmap
+    deriving (Show, Pickle)
+type typing_environment = environment * alias_environment
+    deriving (Show, Pickle)
+
+(* useful types *)
+val unit_type : datatype
 val string_type : datatype
 val xml_type : datatype
 
@@ -34,18 +74,46 @@ val xml_type : datatype
 val free_type_vars : datatype -> int list
 val free_row_type_vars : row -> int list
 
-type assumption = datatype Type_basis.assumption_basis deriving (Show, Pickle)
-type environment = datatype Type_basis.environment_basis
 
-type alias_environment = datatype Type_basis.alias_environment_basis
-type typing_environment = environment * alias_environment
+(* type operations *)
+module type TYPEOPS =
+sig
+  (* type variable construction *)
+  val make_type_variable : int -> datatype
+  val make_rigid_type_variable : int -> datatype
+  val make_row_variable : int -> row_var
 
-val concat_environment : typing_environment -> typing_environment -> typing_environment
+  (* fresh type variable generation *)
+  val fresh_type_variable : unit -> datatype
+  val fresh_rigid_type_variable : unit -> datatype
+  val fresh_row_variable : unit -> row_var
 
-module BasicInferenceTypeOps :
-  (Type_basis.BASICTYPEOPS
-   with type typ = datatype
-   and type row_var' = row_var)
+  (* empty row constructors *)
+  val make_empty_closed_row : unit -> row
+  val make_empty_open_row : unit -> row
+  val make_empty_open_row_with_var : int -> row
+
+  (* singleton row constructors *)
+  val make_singleton_closed_row : (string * field_spec) -> row
+  val make_singleton_open_row : (string * field_spec) -> row
+  val make_singleton_open_row_with_var : (string * field_spec) -> int -> row
+
+  (* row predicates *)
+  val is_closed_row : row -> bool
+  val is_absent_from_row : string -> row -> bool
+
+  (* row_var retrieval *)
+  val get_row_var : row -> int option
+
+  (* row update *)
+  val set_field : (string * field_spec) -> row -> row
+
+  (* constants *)
+  val empty_field_env : field_spec_map
+  val closed_row_var : row_var
+end
+
+module InferenceTypeOps : TYPEOPS
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
@@ -59,7 +127,6 @@ val is_rigid_row_with_var : int -> row -> bool
 val is_flattened_row : row -> bool
 val is_empty_row : row -> bool
 
-val flatten_row : row -> row
 (** Convert a row to the form (field_env, row_var)
     where row_var is of the form:
 {[
@@ -68,8 +135,8 @@ val flatten_row : row -> row
   | `MetaRowVar (`RecRowVar (var, rec_row))
 ]}
 *)
+val flatten_row : row -> row
 
-val unwrap_row : row -> (row * (int * row) option)
 (**
  As flatten_row except if the flattened row_var is of the form:
 
@@ -81,6 +148,7 @@ in field_env.
 Also returns the outermost RecRowVar that was unwrapped if it exists,
 or None otherwise.
 *)
+val unwrap_row : row -> (row * (int * row) option)
 
 (* check for free aliases *)
 exception UndefinedAlias of string
@@ -93,23 +161,26 @@ val free_alias_check_row : alias_environment -> row -> unit
 val type_aliases : datatype -> type_alias_set
 val row_type_aliases : row -> type_alias_set
 
-module InferenceTypeOps :
-  (Type_basis.TYPEOPS
-   with type typ = datatype
-   and type row_var = row_var)
-
 type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
        (row Unionfind.point) Utility.IntMap.t ref)
 
 (*type context = environment * inference_type_map*)
 
-val make_type_variable : int -> datatype
+(** Generate a fresh type variable *)
+val fresh_raw_variable : unit -> int
 
+(* environments *)
+val concat_environment : typing_environment -> typing_environment -> typing_environment
+val environment_values : environment -> assumption list
+val lookup : string -> environment -> assumption
+
+(* mailboxes *)
 val show_mailbox_annotations : bool Settings.setting
 val using_mailbox_typing : unit -> bool
 val with_mailbox_typing : bool -> (unit -> 'a) -> 'a
 
+(* pretty printing *)
 val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
@@ -128,5 +199,3 @@ val is_positive : int -> datatype -> bool
 val is_positive_row : int -> row -> bool
 val is_positive_field_env : int -> field_spec_map -> bool
 val is_positive_row_var : int -> row_var -> bool
-
-val unit_type : datatype

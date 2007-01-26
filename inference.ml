@@ -110,7 +110,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 			 (`MetaTypeVar (IntMap.find var rec_type_env))
 		       else
 			 (
-			   let var' = Type_basis.fresh_raw_variable () in
+			   let var' = Inferencetypes.fresh_raw_variable () in
 			   let point' = Unionfind.fresh (`TypeVar var') in
 			   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
 			   let _ = Unionfind.change point' (`Recursive (var', t')) in
@@ -162,7 +162,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 		     (`MetaRowVar (IntMap.find var rec_row_env))
 		   else
 		     (
-		       let var' = Type_basis.fresh_raw_variable () in
+		       let var' = Inferencetypes.fresh_raw_variable () in
 		       let point' = Unionfind.fresh (field_env, `RowVar (Some var')) in
 		       let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
 		       let _ = Unionfind.change point' (field_env, `RecRowVar (var', rec_row')) in
@@ -840,7 +840,7 @@ and unify_rows alias_env (row1, row2) =
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
   try
-    let quantifiers, t = Type_basis.lookup var env in
+    let quantifiers, t = Inferencetypes.lookup var env in
       if quantifiers = [] then
 	t
       else
@@ -941,7 +941,7 @@ and get_row_quantifiers : type_var_set -> row -> quantifier list =
 	field_vars @ row_vars
 
 let env_type_vars env =
-  concat_map (free_type_vars -<- snd) (Type_basis.environment_values env)
+  concat_map (free_type_vars -<- snd) (Inferencetypes.environment_values env)
 
 (** generalise: 
     Universally quantify any free type variables in the expression.
