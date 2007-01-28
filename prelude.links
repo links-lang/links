@@ -454,7 +454,7 @@ fun textarea(value) {
 sig button : (String,a) -> Form (Maybe(a))
 fun button(text, v) {
    nextName >>= fun (name) {
-    retern (<button name="{name}" value="here" >{stringToXml(text)}</button>,
+    retern (<button name="{name}" value="here" type="submit">{stringToXml(text)}</button>,
             fun (env) { if (memassoc(name, env))  Just(v) else Nothing })}
 }
 
