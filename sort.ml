@@ -21,7 +21,7 @@ let rec sql_sort : optimiser = fun expr ->
                | `Field field -> `Found [field])
         | Let (variable, Variable (name, _), body, _) when mem_assoc name bindings -> fields_from_list ((variable, assoc name bindings) :: bindings) body
         | Let (variable, Variable (name, _), body, _)                              -> fields_from_list bindings body
-        | Record_extension (_, value, Record_empty _, _) ->
+        | Record_extension (_, value, unit_expression, _) ->
             let val_bindings, value = skip_lets bindings value in
               (match value with
                  | Variable (name, _) when mem_assoc name val_bindings ->

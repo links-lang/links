@@ -135,7 +135,7 @@ module PatternCompiler =
        | Syntax.Char (v, _) -> string_of_char v
        | Syntax.String (v, _) -> v
        | Syntax.Float (v, _) -> string_of_float v
-       | Syntax.Record_empty _ -> "()"
+       | Syntax.Record_intro ([], _) -> "()"
 
      (* compile away top-level As and HasType patterns *)
      let rec reduce_pattern : simple_pattern -> annotated_pattern = function
@@ -224,17 +224,6 @@ module PatternCompiler =
                          StringMap.add name (vars, (annotation, (pattern::ext_pattern::ps, body))::annotated_equations) env
                    | _ -> assert false
               ) equations StringMap.empty)
-
-(*
- [TODO]
- 
- use fold_left and fold_right consistently...
-
- It seems that fold_right is correct here, because cons is used to build up
- the equations.
-
- Apparently this doesn't work for the other partition_ functions though
-*)
 
      (* partition constant equations by constant value *)
      let partition_constant_equations
@@ -582,7 +571,7 @@ module PatternCompiler =
                let var_exp = lookup var env in
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
-                    | Record_empty _ when Settings.get_value unit_hack ->
+                    | Record_intro ([], _) when Settings.get_value unit_hack ->
                         (* 
                            This is the only place in the pattern
                            matching compiler that we do type-directed
@@ -999,7 +988,7 @@ module Desugarer =
            | InfixAppl (`Minus, e1, e2)  -> Apply (Apply (Variable ("-", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
            | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
-           | ConstructorLit (name, None) -> Variant_injection (name, Record_empty pos, pos)
+           | ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
            | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | Escape (name, e) -> 
                Syntax.Call_cc(Abstr(name, desugar e, pos), pos)
@@ -1123,16 +1112,25 @@ module Desugarer =
                  TypeDecl (name,
                            List.map get_var args,
                            desugar_datatype var_env rhs, pos)
-           | RecordLit (fields, None)   -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (Record_empty pos)
-           | RecordLit (fields, Some e) -> fold_right (fun (label, value) next -> Syntax.Record_extension (label, value, next, pos)) (alistmap desugar fields) (desugar e)
+           | RecordLit (fields, Some e) ->
+               fold_right (fun (label, value) next ->
+                             Syntax.Record_extension
+                               (label, value, next, pos))
+                 (alistmap desugar fields)
+                 (desugar e)
+           | RecordLit (fields, None) ->
+               Record_intro (alistmap desugar fields, pos) 
            | TupleLit [field] -> desugar field
-           | TupleLit fields  -> desugar (RecordLit (List.map2 (fun exp n -> string_of_int n, exp) fields (fromTo 1 (1 + length fields)), None), pos')
+           | TupleLit fields  ->
+               desugar (RecordLit (List.map2 (fun exp n ->
+                                                string_of_int n, exp)
+                                     fields (fromTo 1 (1 + length fields)), None), pos')
            | HandleWith (e1, name, e2) -> 
                Syntax.Call_cc(Abstr("return", 
                                     Let (name, Syntax.Call_cc(Abstr("handler",
                                                                     Apply (Variable ("return", pos), 
                                                                            desugar e1, pos), pos), pos), desugar e2, pos), pos), pos)
-           | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, Record_empty (`U(lookup_pos ppos)), pos)
+           | FnAppl (fn, ([],ppos))  -> Apply (desugar fn, unit_expression (`U(lookup_pos ppos)), pos)
            | FnAppl (fn, ([p], _)) -> Apply (desugar fn, desugar p, pos)
            | FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, desugar (TupleLit ps, ppos), pos)
            | FunLit (None, patterns, body) -> polyfunc (List.map patternize patterns) pos (desugar body)
@@ -1153,7 +1151,7 @@ module Desugarer =
                polylets es (desugar exp)
            | Foreign (language, name, datatype) -> 
                Alien (language, name, desugar_assumption (generalize datatype), pos)
-           | InfixDecl -> Record_empty pos
+           | InfixDecl -> unit_expression pos
            | SortBy_Conc(patt, expr, sort_expr) ->
                (match patternize patt with
                   | `Variable var, _ -> 
@@ -1383,7 +1381,7 @@ module Desugarer =
              if Settings.get_value cons_unit_hack then
                `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Inferencetypes.unit_type), pos)), pos
              else
-               `Variant (l, (`Constant (Record_empty pos), pos)), pos
+               `Variant (l, (`Constant (unit_expression pos), pos)), pos
                (* 
                   When cons_unit_hack is enabled (the default), elimination of A is identified with
                   elimination of A(x:()) which allows us to have programs such as:
@@ -1435,14 +1433,14 @@ module Desugarer =
                (fun (label, patt) base ->
                   `Record (label, desugar patt, base), pos)
                labs
-               ((fromOption (`Constant (Record_empty pos), pos) (Utility.opt_map desugar base)))
+               ((fromOption (`Constant (unit_expression pos), pos) (Utility.opt_map desugar base)))
          | `Tuple ps ->
              List.fold_right2
                (fun patt n base ->
                   `Record (string_of_int n, desugar patt, base), pos)
                ps
                (Utility.fromTo 1 (1 + List.length ps))
-               ((`Constant (Record_empty pos)), pos)
+               ((`Constant (unit_expression pos)), pos)
        in let p = aux pat in
          begin
            check_for_duplicate_names p;

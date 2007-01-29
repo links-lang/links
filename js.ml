@@ -231,7 +231,7 @@ let rec show : code -> string =
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
-      | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> "'" ^ name ^ "' : " ^ show value) elems) ^ "}"
+      | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) ->  name ^ " : " ^ show value) elems) ^ "}"
       | Lst [] -> "[]"
       | Lst elems -> "[" ^ arglist elems ^ "]"
       | Bind (name, value, body) -> "("^ name ^" = "^ 
@@ -511,7 +511,15 @@ let rec generate : 'a expression' -> code =
             (Call (generate body, [Var "__kappa"]))))
         
   (* Records *)
-  | Record_empty _                    -> trivial_cps (Dict [])
+  | Record_intro (bs, _)              ->
+      let c, dict =
+        List.fold_left (fun (c, dict) (label, e) ->
+                          let name = gensym ~prefix:"__e" () in
+                            ((fun body -> c (Call(generate e, [Fn([name], body)]))),
+                             (label, Var name) :: dict)
+                       ) ((fun x -> x), []) bs
+      in
+        Fn(["__kappa"], c (callk_yielding (Dict dict)))
   | Record_extension (n, v, r, _)     -> 
       let r_cps = generate r in
       let v_cps = generate v in
@@ -747,7 +755,8 @@ and generate_direct_style : 'a expression' -> code =
 	(gd body)
 
   (* Records *)
-  | Record_empty _                    -> Dict []
+  | Record_intro (bs, _) ->
+      Dict (List.map (fun (label, e) -> label, generate e) bs)
   | Record_extension (n, v, r, _)     ->
       Call (Var "_extend", [gd r; strlit n; gd v])
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->

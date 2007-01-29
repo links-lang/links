@@ -715,7 +715,7 @@ let fold_constant : RewriteSyntax.rewriter =
   (* TODO: Also arithmetic, etc. *)
   let constantp = function
     | Boolean _ | Integer _ | Char _ | String _ 
-    | Float _ | Record_empty _ | Nil _ -> true
+    | Float _ | Record_intro ([], _) | Nil _ -> true
     | _ -> false 
   in function 
 	(* Is this safe without unboxing? *)

@@ -18,7 +18,7 @@ type 'a expression' =
   | Let of (string * 'a expression' * 'a expression' * 'a)
   | Rec of ((string * 'a expression' * Inferencetypes.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
-  | Record_empty of 'a
+  | Record_intro of ((string * 'a expression') list * 'a)
   | Record_extension of (string * 'a expression' * 'a expression' * 'a)
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
@@ -38,6 +38,7 @@ type 'a expression' =
   | HasType of ('a expression' * Inferencetypes.datatype * 'a)
   | Alien of (string * string * Inferencetypes.assumption * 'a)
   | Placeholder of (label * 'a)
+
 type position = Lexing.position * string * string
 type untyped_data = [`U of position]
 type typed_data = [`T of (position * Inferencetypes.datatype * label option)]
@@ -46,6 +47,8 @@ type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression' deriving (Show)
 
 exception ASTSyntaxError of position * string
+
+val unit_expression : 'a -> 'a expression'
 
 val list_expr : 'a -> 'a expression' list -> 'a expression'
 

@@ -180,8 +180,10 @@ let rec is_free var expr = mem var (freevars expr)
 (* TODO: make this less appalling, somehow. *)
 let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_source list) option = 
   let unpair : 'a Syntax.expression' -> ('a Syntax.expression' * 'a Syntax.expression') option  = function
-    | Record_extension ("1", p1, Record_extension ("2", p2, Record_empty _, _), _)
-    | Record_extension ("2", p2, Record_extension ("1", p1, Record_empty _, _), _)
+    | Record_extension ("1", p1, Record_extension ("2", p2, Record_intro ([], _), _), _)
+    | Record_extension ("2", p2, Record_extension ("1", p1, Record_intro ([], _), _), _)
+    | Record_intro (["1", p1; "2", p2], _)
+    | Record_intro (["2", p2; "1", p1], _)
         -> Some (p1, p2)
     | _ -> None in
   let rec unlist = function

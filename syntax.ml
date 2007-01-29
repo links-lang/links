@@ -61,7 +61,7 @@ type 'data expression' =
   | Rec of ((string * 'data expression' * Inferencetypes.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_empty of 'data
+  | Record_intro of ((string * 'data expression') list * 'data)
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
@@ -91,6 +91,8 @@ type 'data expression' =
   | Placeholder of (label * 'data)
       deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
+let unit_expression data = Record_intro ([], data)
+
 let is_define = 
   function
     | Define _
@@ -108,7 +110,6 @@ let rec is_value : 'a expression' -> bool = function
   | Float _
   | Variable _
   | Xml_node _ (* ? *)
-  | Record_empty _
   | Nil _
   | Abstr _ -> true
   | HasType (e, _, _)
@@ -125,6 +126,7 @@ let rec is_value : 'a expression' -> bool = function
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
+  | Record_intro (bs, _) -> List.for_all (is_value -<- snd) bs
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
@@ -185,7 +187,8 @@ let rec show t : 'a expression' -> string = function
         (match elems with 
            | []    -> "<" ^ tag ^ attrs ^ "/>" ^ t data
            | elems -> "<" ^ tag ^ attrs ^ ">" ^ String.concat "" (map (show t) elems) ^ "</" ^ tag ^ ">" ^ t data)
-  | Record_empty (data) ->  "()" ^ t data
+  | Record_intro (bs, data) ->
+      "(" ^ mapstrcat "," (fun (label, e) -> label ^ "=" ^ (show t e)) bs ^ ")" ^ t data
   | Record_extension (label, value, record, data) ->
       "(" ^ label ^ "=" ^ show t value ^ "|" ^ show t record ^ ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
@@ -250,8 +253,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Integer _
                | Char _
                | String _
-               | Float _ 
-               | Record_empty _
+               | Float _
                | Nil _
                | Alien _
                | Placeholder _ 
@@ -282,8 +284,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                    [visitor visit_children e1; visitor visit_children e2]
                    
                | Condition (e1, e2, e3, _)
-               | Variant_selection (e1, _, _, e2, _, e3, _) -> [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
-
+               | Variant_selection (e1, _, _, e2, _, e3, _) ->
+                   [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
+               | Record_intro (bs, _) -> map (fun (_, e) -> visitor visit_children e) bs
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
   in
@@ -330,7 +333,7 @@ let expression_data : ('a expression' -> 'a) = function
         | Let (_, _, _, data) -> data
         | Rec (_, _, data) -> data
         | Xml_node (_, _, _, data) -> data
-        | Record_empty (data) -> data
+        | Record_intro (_, data) -> data
         | Record_extension (_, _, _, data) -> data
         | Record_selection (_, _, _, _, _, data) -> data
         | Variant_injection (_, _, data) -> data
@@ -446,7 +449,6 @@ let skeleton = function
     (* Zero sub-expressions *)
   | Nil d -> Nil d
   | Wrong d -> Wrong d
-  | Record_empty d -> Record_empty d
   | Boolean(value, d) -> Boolean(value, d)
   | Integer(value, d) -> Integer(value, d)
   | Char(value, d) -> Char(value, d)
@@ -495,6 +497,7 @@ let skeleton = function
                       etc_var, etc_body, d)
 
   (* n-ary expressions *)
+  | Record_intro(bs) -> Record_intro(bs)
   | Rec(defs, body, d) -> Rec(defs, body, d)
   | Xml_node(tagname, attrs, contents, d) -> 
       Xml_node(tagname, attrs, contents, d)
