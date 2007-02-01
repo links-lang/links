@@ -18,9 +18,7 @@ type 'a expression' =
   | Let of (string * 'a expression' * 'a expression' * 'a)
   | Rec of ((string * 'a expression' * Inferencetypes.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
-  | Record_intro of (('a expression') Utility.stringmap * 'a)
-(*  | Record_intro of ((string * 'a expression') list * 'a)*)
-  | Record_extension of (string * 'a expression' * 'a expression' * 'a)
+  | Record_intro of (('a expression') Utility.stringmap * ('a expression') option * 'a)
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
   | Variant_selection of ('a expression' * string * string * 'a expression' * 

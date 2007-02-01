@@ -61,8 +61,7 @@ type 'data expression' =
   | Rec of ((string * 'data expression' * Inferencetypes.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_intro of (('data expression') stringmap * 'data)
-  | Record_extension of (string * 'data expression' * 'data expression' * 'data)
+  | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Variant_injection of (string * 'data expression' * 'data)
@@ -91,7 +90,7 @@ type 'data expression' =
   | Placeholder of (label * 'data)
       deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
-let unit_expression data = Record_intro (StringMap.empty, data)
+let unit_expression data = Record_intro (StringMap.empty, None, data)
 
 let is_define = 
   function
@@ -121,13 +120,12 @@ let rec is_value : 'a expression' -> bool = function
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
   | For (a, _, b, _)
-  | Record_extension (_, a, b, _)
   | Record_selection (_, _, _, a, b, _)
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
-  | Record_intro (bs, _) -> 
-      StringMapUtils.for_all (is_value) bs
+  | Record_intro (bs, e, _) ->
+      StringMapUtils.for_all (is_value) bs && opt_app is_value true e
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
@@ -188,13 +186,12 @@ let rec show t : 'a expression' -> string = function
         (match elems with 
            | []    -> "<" ^ tag ^ attrs ^ "/>" ^ t data
            | elems -> "<" ^ tag ^ attrs ^ ">" ^ String.concat "" (map (show t) elems) ^ "</" ^ tag ^ ">" ^ t data)
-  | Record_intro (bs, data) ->
+  | Record_intro (bs, r, data) ->
       "(" ^
         String.concat ","
         (StringMapUtils.map_to_list (fun (label, e) -> label ^ "=" ^ (show t e)) bs) ^
+        (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
-  | Record_extension (label, value, record, data) ->
-      "(" ^ label ^ "=" ^ show t value ^ "|" ^ show t record ^ ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
       "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
       ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
@@ -280,7 +277,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Apply (e1, e2, _)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
-               | Record_extension (_, e1, e2, _)
                | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _)
@@ -290,8 +286,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Condition (e1, e2, e3, _)
                | Variant_selection (e1, _, _, e2, _, e3, _) ->
                    [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
-               | Record_intro (bs, _) ->
-                   StringMapUtils.map_to_list (fun (_, e) -> visitor visit_children e) bs
+               | Record_intro (bs, r, _) ->
+                   (StringMapUtils.map_to_list (fun (_, e) -> visitor visit_children e) bs) @
+                     (opt_app (fun e -> [visitor visit_children e]) [] r)
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
   in
@@ -338,8 +335,7 @@ let expression_data : ('a expression' -> 'a) = function
         | Let (_, _, _, data) -> data
         | Rec (_, _, data) -> data
         | Xml_node (_, _, _, data) -> data
-        | Record_intro (_, data) -> data
-        | Record_extension (_, _, _, data) -> data
+        | Record_intro (_, _, data) -> data
         | Record_selection (_, _, _, _, _, data) -> data
         | Variant_injection (_, _, data) -> data
         | Variant_selection (_, _, _, _, _, _, data) -> data
@@ -471,8 +467,6 @@ let skeleton = function
   | Define(name, expr, loc_annotation, d) ->
       Define(name, expr, loc_annotation, d)
   | Abstr(var, body, d) -> Abstr(var, body, d)
-  | Record_extension(label, labelval, record, d) ->
-      Record_extension(label, labelval, record, d)
   | Variant_injection(label, value_expr, d) -> 
       Variant_injection(label, value_expr, d)
   | Variant_selection_empty(src_expr, d) -> 
@@ -502,7 +496,7 @@ let skeleton = function
                       etc_var, etc_body, d)
 
   (* n-ary expressions *)
-  | Record_intro(bs) -> Record_intro(bs)
+  | Record_intro(bs, r, d) -> Record_intro(bs, r, d)
   | Rec(defs, body, d) -> Rec(defs, body, d)
   | Xml_node(tagname, attrs, contents, d) -> 
       Xml_node(tagname, attrs, contents, d)

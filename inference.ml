@@ -1068,7 +1068,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       in                                    (* | *)
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
-  | Record_intro (bs, `U pos) ->
+  | Record_intro (bs, r, `U pos) ->
       let bs, field_env =
         StringMap.fold (fun label e (bs, field_env)  ->
                           let e = type_check typing_env e in
@@ -1076,18 +1076,39 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                             StringMap.add label e bs, StringMap.add label (`Present t) field_env)
           bs (StringMap.empty, StringMap.empty)
       in
-        Record_intro (bs, `T (pos, `Record (field_env, `RowVar None), None))
-  | Record_extension (label, value, record, `U pos) ->
-      let value = type_check typing_env value in
-      let record = type_check typing_env record in
-      let unif_datatype = `Record (ITO.make_singleton_open_row (label, `Absent)) in
-	unify (type_of_expression record, unif_datatype);
+        begin
+          match r with
+            | None ->
+                Record_intro (bs, None, `T (pos, `Record (field_env, `RowVar None), None))
+            | Some r ->
+                let r = type_check typing_env r in
+                let rtype = type_of_expression r in
+                
+                let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
 
-	let record_row = extract_row (type_of_expression record) in
-	let value_type = type_of_expression value in
-	  
-	let type' = `Record (ITO.set_field (label, `Present value_type) record_row) in
-	  Record_extension (label, value, record, `T (pos, type', None))
+                (* attempt to extend field_env with the labels from rfield_env
+                   i.e. all the labels belonging to the record r
+                *)
+                let field_env' =
+                  StringMap.fold (fun label t field_env' ->
+                                    match t with
+                                      | `Absent ->
+                                          if StringMap.mem label field_env then
+                                            field_env'
+                                          else
+                                            StringMap.add label `Absent field_env'
+                                      | `Present _ ->
+                                          if StringMap.mem label field_env then
+                                            failwith ("Could not extend record "^string_of_expression r^" (of type "^
+                                                        string_of_datatype rtype^") with "^
+                                                        string_of_expression
+                                                        (Record_intro (bs, None, `T (pos, `Record (field_env, `RowVar None), None)))^
+                                                        " (of type"^string_of_datatype (`Record (field_env, `RowVar None))^
+                                                        ") because the labels overlap")
+                                          else
+                                            StringMap.add label t field_env') rfield_env field_env in
+                  Record_intro (bs, Some r, `T (pos, `Record (field_env', rrow_var), None))                  
+        end           
   | Record_selection (label, label_variable, variable, value, body, `U pos) ->
       let value = type_check typing_env value in
       let label_variable_type = ITO.fresh_type_variable () in

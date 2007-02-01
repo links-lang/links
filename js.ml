@@ -109,13 +109,6 @@ let remove_renaming : RewriteCode.rewriter =
 
     | _ -> None
 
-let collapse_extend : RewriteCode.rewriter = 
-  let unquote = Str.replace_first (Str.regexp ("^'\\(.*\\)'$")) "\\1" in
-    function
-      | Call (Var "_extend", [Dict d; Lit name; value]) -> Some (Dict ((unquote name, value)::d))
-      | _                                               -> None 
-
-let collapse_extends = RewriteCode.bottomup collapse_extend
 let remove_renamings = RewriteCode.bottomup remove_renaming
 
 let stringp s = Str.string_match (Str.regexp "^[\"']") s 0
@@ -138,7 +131,7 @@ let concat_lits = RewriteCode.bottomup concat_lits
 let optimise e = 
   if Settings.get_value optimising then
     fromOption e 
-      (RewriteCode.all [collapse_extends; remove_renamings; concat_lits] e)
+      (RewriteCode.all [remove_renamings; concat_lits] e)
   else e
 
 
@@ -155,9 +148,9 @@ let optimise e =
     create a DOM node with name `tag'
                        and attributes `attrs' (a dictionary)
                        and children `children' (a sequence of DOM nodes and strings)    
-  _extend(record, tag, value)
-    extend a record (dictionary) with a new field (label `tag'; value `value').
-    Don't update the old record.
+  _union(r, s)
+    return the union of the records r and s
+    precondition: r and s have disjoint labels 
   _project(record, tag, value)
     project a field of a record
 
@@ -493,7 +486,6 @@ let rec generate : 'a expression' -> code =
   | Define (n, e, (`Client|`Unknown), _)-> 
 (* [NOTE]
      Passing in _idy doesn't work because we are not in traditional CPS.
-     (What does this mean? --ez 1/07)
      Traditional CPS terms return a value, but ours don't (because JavaScript
      requires you to write an explicit return). To get round this problem, we
      capture the return value by imperative assignment. An alternative would be
@@ -511,7 +503,7 @@ let rec generate : 'a expression' -> code =
             (Call (generate body, [Var "__kappa"]))))
         
   (* Records *)
-  | Record_intro (bs, _)              ->
+  | Record_intro (bs, r, _) ->
       let c, dict =
         StringMap.fold (fun label e (c, dict) ->
                           let name = gensym ~prefix:"__e" () in
@@ -519,16 +511,18 @@ let rec generate : 'a expression' -> code =
                              (label, Var name) :: dict)
                        ) bs ((fun x -> x), [])
       in
-        Fn(["__kappa"], c (callk_yielding (Dict dict)))
-  | Record_extension (n, v, r, _)     -> 
-      let r_cps = generate r in
-      let v_cps = generate v in
-      let extension_val = Call (Var "_extend", [Var "__r"; strlit n; Var "__v"])
-      in
-        Fn(["__kappa"], Call(r_cps, [Fn(["__r"], 
-                      Call(v_cps, [Fn(["__v"],
-                                  callk_yielding (extension_val))
-                                  ]))]))
+        begin
+          match r with
+            | None ->
+                Fn(["__kappa"], c (callk_yielding (Dict dict)))
+            | Some r ->
+                Fn(["__kappa"], c (
+                     let name = gensym ~prefix:"__r" () in
+                       Call(generate r,
+                            [Fn([name],
+                                callk_yielding (
+                                  Call (Var "_union", [Var name; Dict dict])))])))
+        end
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let r_cps = generate r in
       let b_cps = generate b in
@@ -755,10 +749,16 @@ and generate_direct_style : 'a expression' -> code =
 	(gd body)
 
   (* Records *)
-  | Record_intro (bs, _) ->
-      Dict (StringMapUtils.map_to_list (fun (label, e) -> label, generate e) bs)
-  | Record_extension (n, v, r, _)     ->
-      Call (Var "_extend", [gd r; strlit n; gd v])
+  | Record_intro (bs, r, _) ->
+      let dict =
+        Dict (StringMapUtils.map_to_list (fun (label, e) -> label, generate e) bs)
+      in
+        begin
+          match r with
+            | None -> dict
+            | Some r ->
+                Call (Var "_union", [dict; generate r])
+        end
   | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
       let name = gensym ~prefix:"_r" () in
 	Bind(name, gd r,

@@ -135,7 +135,7 @@ module PatternCompiler =
        | Syntax.Char (v, _) -> string_of_char v
        | Syntax.String (v, _) -> v
        | Syntax.Float (v, _) -> string_of_float v
-       | Syntax.Record_intro (fields, _) when StringMap.is_empty fields -> "()"
+       | Syntax.Record_intro (fields, None, _) when StringMap.is_empty fields -> "()"
 
      (* compile away top-level As and HasType patterns *)
      let rec reduce_pattern : simple_pattern -> annotated_pattern = function
@@ -528,9 +528,9 @@ module PatternCompiler =
 (* is this worth doing here / does it ever happen? *)
 (*
                  match var_exp with
-                   | Record_extension(name',
-                                      Variable (label_variable, _),
-                                      Variable (extension_variable, _), _) when name=name' ->
+                   | Record_intro(StringMap.add name' (Variable (label_variable, _)) StringMap.empty,
+                                      Some (Variable (extension_variable, _)),
+                                      _) when name=name' ->
                        match_cases
                          pos
                          (label_variable::extension_variable::vars)
@@ -539,27 +539,26 @@ module PatternCompiler =
                          env
                    | _ ->
 *)
-                     let env =
-                         extend_trivial pos [label_variable; extension_variable]
-                           (extend var (Record_extension(
-                                          name,
-                                          Variable (label_variable, pos),
-                                          Variable (extension_variable, pos),
-                                          pos))
-                              env)
-                       in                        
-                         Record_selection
-                           (name,
-                            label_variable,
-                            extension_variable,
-                            var_exp,
-                            match_cases
-                              pos
-                              (label_variable::extension_variable::vars)
-                              equations
-                              (match_record pos vars bs def var)
-                              env,
-                            pos)
+               let env =
+                 extend_trivial pos [label_variable; extension_variable]
+                   (extend var (Record_intro(
+                                  StringMap.add name (Variable (label_variable, pos)) StringMap.empty,
+                                  Some (Variable (extension_variable, pos)),
+                                  pos))
+                      env)
+               in                        
+                 Record_selection
+                   (name,
+                    label_variable,
+                    extension_variable,
+                    var_exp,
+                    match_cases
+                      pos
+                      (label_variable::extension_variable::vars)
+                      equations
+                      (match_record pos vars bs def var)
+                      env,
+                    pos)
 
      and match_constant
          : Syntax.untyped_data -> string list -> (string * (untyped_expression * annotated_equation list)) list
@@ -571,7 +570,7 @@ module PatternCompiler =
                let var_exp = lookup var env in
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
-                    | Record_intro (fields, _)
+                    | Record_intro (fields, None, _)
                         when Settings.get_value unit_hack 
                           && StringMap.is_empty fields ->
                         (* 
@@ -1011,10 +1010,10 @@ module Desugarer =
                ListLabels.fold_right ~init:(desugar e) fields 
                  ~f:(fun (label, value) record ->
                        let rvar = gensym () in
-                         Record_extension (label, desugar value,
-                                           Record_selection (label, gensym(), rvar, record,
-                                                             Variable (rvar,pos), pos),
-                                           pos))
+                         Record_intro (StringMap.add label (desugar value) StringMap.empty,
+                                       Some (Record_selection (label, gensym(), rvar, record,
+                                                               Variable (rvar,pos), pos)),
+                                       pos))
            | TableLit (name, datatype, db) -> 
                let row = match datatype with
                  | RecordType row ->
@@ -1114,14 +1113,10 @@ module Desugarer =
                  TypeDecl (name,
                            List.map get_var args,
                            desugar_datatype var_env rhs, pos)
-           | RecordLit (fields, Some e) ->
-               fold_right (fun (label, value) next ->
-                             Syntax.Record_extension
-                               (label, value, next, pos))
-                 (alistmap desugar fields)
-                 (desugar e)
-           | RecordLit (fields, None) ->
-               Record_intro (string_map_of_assoc_list (alistmap desugar fields), pos) 
+           | RecordLit (fields, r) ->
+               Record_intro (string_map_of_assoc_list (alistmap desugar fields),
+                             opt_map desugar r,
+                             pos) 
            | TupleLit [field] -> desugar field
            | TupleLit fields  ->
                desugar (RecordLit (List.map2 (fun exp n ->
