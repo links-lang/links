@@ -1083,31 +1083,33 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
             | Some r ->
                 let r = type_check typing_env r in
                 let rtype = type_of_expression r in
-                
-                let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
-
-                (* attempt to extend field_env with the labels from rfield_env
-                   i.e. all the labels belonging to the record r
-                *)
-                let field_env' =
-                  StringMap.fold (fun label t field_env' ->
-                                    match t with
-                                      | `Absent ->
-                                          if StringMap.mem label field_env then
-                                            field_env'
-                                          else
-                                            StringMap.add label `Absent field_env'
-                                      | `Present _ ->
-                                          if StringMap.mem label field_env then
-                                            failwith ("Could not extend record "^string_of_expression r^" (of type "^
-                                                        string_of_datatype rtype^") with "^
-                                                        string_of_expression
-                                                        (Record_intro (bs, None, `T (pos, `Record (field_env, `RowVar None), None)))^
-                                                        " (of type"^string_of_datatype (`Record (field_env, `RowVar None))^
-                                                        ") because the labels overlap")
-                                          else
-                                            StringMap.add label t field_env') rfield_env field_env in
-                  Record_intro (bs, Some r, `T (pos, `Record (field_env', rrow_var), None))                  
+                  (* make sure rtype is a record type! *)
+                  unify(rtype, `Record (ITO.make_empty_open_row ()));
+                  
+                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
+                    
+                  (* attempt to extend field_env with the labels from rfield_env
+                     i.e. all the labels belonging to the record r
+                  *)
+                  let field_env' =
+                    StringMap.fold (fun label t field_env' ->
+                                      match t with
+                                        | `Absent ->
+                                            if StringMap.mem label field_env then
+                                              field_env'
+                                            else
+                                              StringMap.add label `Absent field_env'
+                                        | `Present _ ->
+                                            if StringMap.mem label field_env then
+                                              failwith ("Could not extend record "^string_of_expression r^" (of type "^
+                                                          string_of_datatype rtype^") with "^
+                                                          string_of_expression
+                                                          (Record_intro (bs, None, `T (pos, `Record (field_env, `RowVar None), None)))^
+                                                          " (of type"^string_of_datatype (`Record (field_env, `RowVar None))^
+                                                          ") because the labels overlap")
+                                            else
+                                              StringMap.add label t field_env') rfield_env field_env in
+                    Record_intro (bs, Some r, `T (pos, `Record (field_env', rrow_var), None))                  
         end           
   | Record_selection (label, label_variable, variable, value, body, `U pos) ->
       let value = type_check typing_env value in
