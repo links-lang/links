@@ -61,7 +61,7 @@ type 'data expression' =
   | Rec of ((string * 'data expression' * Inferencetypes.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_intro of ((string * 'data expression') list * 'data)
+  | Record_intro of (('data expression') stringmap * 'data)
   | Record_extension of (string * 'data expression' * 'data expression' * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
@@ -91,7 +91,7 @@ type 'data expression' =
   | Placeholder of (label * 'data)
       deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
 
-let unit_expression data = Record_intro ([], data)
+let unit_expression data = Record_intro (StringMap.empty, data)
 
 let is_define = 
   function
@@ -126,7 +126,8 @@ let rec is_value : 'a expression' -> bool = function
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
-  | Record_intro (bs, _) -> List.for_all (is_value -<- snd) bs
+  | Record_intro (bs, _) -> 
+      StringMapUtils.for_all (is_value) bs
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
@@ -188,7 +189,10 @@ let rec show t : 'a expression' -> string = function
            | []    -> "<" ^ tag ^ attrs ^ "/>" ^ t data
            | elems -> "<" ^ tag ^ attrs ^ ">" ^ String.concat "" (map (show t) elems) ^ "</" ^ tag ^ ">" ^ t data)
   | Record_intro (bs, data) ->
-      "(" ^ mapstrcat "," (fun (label, e) -> label ^ "=" ^ (show t e)) bs ^ ")" ^ t data
+      "(" ^
+        String.concat ","
+        (StringMapUtils.map_to_list (fun (label, e) -> label ^ "=" ^ (show t e)) bs) ^
+        ")" ^ t data
   | Record_extension (label, value, record, data) ->
       "(" ^ label ^ "=" ^ show t value ^ "|" ^ show t record ^ ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
@@ -286,7 +290,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Condition (e1, e2, e3, _)
                | Variant_selection (e1, _, _, e2, _, e3, _) ->
                    [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
-               | Record_intro (bs, _) -> map (fun (_, e) -> visitor visit_children e) bs
+               | Record_intro (bs, _) ->
+                   StringMapUtils.map_to_list (fun (_, e) -> visitor visit_children e) bs
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
   in

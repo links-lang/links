@@ -579,11 +579,30 @@ let lift_lets : RewriteSyntax.rewriter = function
       Some (Let(letvar, letval, SortBy(letbody, byExpr, data), letdata))
   | _ -> None
 
+
+(* return true if the argument is an atom *)
+let is_atom = function
+  | Variable _ | Integer _ -> true
+  | _ -> false
+
+(* if e is not an atom then bind it to a variable by extending the
+   continuation k return the new continuation and an atomic expression
+   representing e
+ *)
+let lift_let data e k =
+  if is_atom e then
+    (fun body -> k body), e
+  else
+    let x = gensym () in
+      (fun body -> k (Let (x, e, body, data))), Variable (x, expression_data e)
+
+
+
 (** (1 take/drop optimization).
     Push calls to take and drop that surround queries into the query.
     [N.B. these rewrite rules play fast and loose with the `data'
-     component of expression nodes.  Don't assume anything about the
-     data after these have run.]
+    component of expression nodes.  Don't assume anything about the
+    data after these have run.]
 *)
 
 (** [simplify_takedrop]
@@ -601,20 +620,8 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
                                              Apply (Variable ("drop", d2),
                                                     Record_extension("1", e2, e3, d3), 
                                                     d4), e4, d5), d6), d7) ->
-      let k, e1 =
-        match e1 with
-          | Variable _|Integer _ ->
-              (fun body -> body), e1
-          | _ ->
-              let x1 = gensym () in
-                (fun body -> Let (x1, e1, body, d7)), Variable (x1, expression_data e1) in
-      let k, e2 =
-        match e2 with
-          | Variable _|Integer _ ->
-              (fun body -> k(body)), e2
-          | _ ->
-              let x2 = gensym () in
-                (fun body -> k(Let (x2, e2, body, d7))), Variable (x2, expression_data e2)
+      let k, e1 = lift_let d7 e1 (fun x -> x) in
+      let k, e2 = lift_let d7 e2 k
       in
         Some(k(Apply (Variable ("take", d1),
                       Record_extension("1", e1,
@@ -624,15 +631,34 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
                                                                d4), e4, d5), d6), d7)))
   | Apply (Variable ("take"|"drop" as f, d1),
            Record_extension ("1", e1, Record_extension ("2", e2, e3, d2), d3), d4) ->
-      begin
-        match e1 with
-          | Variable _ | Integer _ -> None
-          | _ ->
-              let x1 = gensym () in
-                Some (Let (x1, e1,
-                           Apply (Variable (f, d1),
-                                  Record_extension ("1", Variable (x1, expression_data e1),  Record_extension ("2", e2, e3, d2), d3), d4), d4))
-      end
+        let k, e1 = lift_let d4 e1 (fun x -> x)
+        in
+          Some (k (Apply (Variable (f, d1),
+                          Record_extension ("1", e1,  Record_extension ("2", e2, e3, d2), d3), d4)))
+  | Apply (Variable ("take"|"drop" as f, d1),
+           Record_intro (fields1, d2), d3) ->
+      let k, e1 = lift_let d3 (StringMap.find "1" fields1) (fun x -> x) in
+        begin
+          match f, StringMap.find "2" fields1 with
+            | "take", Apply (Variable ("drop", d4),
+                             Record_intro(fields2, d5), d6) ->                
+                let k, e2 = lift_let d3 (StringMap.find "1" fields2) k
+                in
+                  Some(k(Apply (Variable ("take", d1),
+                                Record_intro (
+                                  ((StringMap.add "1" e1) ->-
+                                     (StringMap.add "2"
+                                        (Apply (Variable ("drop", d4),
+                                                Record_intro (
+                                                  ((StringMap.add "1" e2) ->-
+                                                     StringMap.add "2" (StringMap.find "2" fields2)) StringMap.empty,
+                                                  d5), d6)))) StringMap.empty, d2), d3)))
+            | _ ->
+                Some (k (Apply (Variable (f, d1),
+                                Record_intro (
+                                  ((StringMap.add "1" e1) ->-
+                                     (StringMap.add "2" (StringMap.find "2" fields1))) StringMap.empty, d2), d3)))
+        end
   | _ -> None
 
 (** [push_takedrop] actually pushes [take] and [drop] calls into a query.
@@ -691,8 +717,36 @@ let push_takedrop : RewriteSyntax.rewriter =
                                           d2),
                          d3),
                   fordata))
-
-
+    | Apply (Variable ("take", _) as f,
+             Record_intro(fields1, d1), d2) ->
+        let e1 = StringMap.find "1" fields1 in
+          if is_atom e1 then
+            begin
+              match StringMap.find "2" fields1 with
+                | TableQuery (e2, q, d) ->
+	            Some (TableQuery (e2, {q with Query.max_rows = Some (queryize e1)}, d))
+                | Apply (Variable ("drop", _),
+                         Record_intro (fields2, _), _) ->
+                    let e2 = StringMap.find "1" fields2 in
+                      if is_atom e2 then
+                        begin
+                          match StringMap.find "2" fields2 with
+                            | TableQuery(e3, q, d) ->
+                                Some (TableQuery (e3, {q with
+                                                         Query.max_rows = Some (queryize e1);
+                                                         Query.offset   = queryize e2}, d))
+                            | _ -> None
+                        end
+                      else None
+                | For(List_of(expr, ldata) as body, var, src, fordata) when pure(expr) ->
+                    Some (For(body, var,
+                              Apply (f,
+                                     Record_intro (
+                                       ((StringMap.add "1" e1) ->-
+                                          (StringMap.add "2" src)) StringMap.empty, d1), d2), fordata))
+                | _ -> None
+            end
+          else None
     | Apply (Variable ("drop", _),
              Record_extension("1",
                               (Variable _|Integer _ as e1),
@@ -702,6 +756,23 @@ let push_takedrop : RewriteSyntax.rewriter =
                               _),
              _) ->
   	Some (TableQuery (e2, {q with Query.offset = queryize e1}, d))
+    | Apply (Variable ("drop", _) as f,
+             Record_intro(fields, d1), d2) ->
+        let e1 = StringMap.find "1" fields in
+          if is_atom e1 then
+            begin
+              match StringMap.find "2" fields with
+                | TableQuery (e2, q, d) ->
+  	            Some (TableQuery (e2, {q with Query.offset = queryize e1}, d))
+                | For(List_of(expr, ldata) as body, var, src, fordata) when pure(expr) ->
+                    Some (For(body, var,
+                              Apply (f,
+                                     Record_intro (
+                                       ((StringMap.add "1" e1) ->-
+                                          (StringMap.add "2" src)) StringMap.empty, d1), d2), fordata))
+                | _ -> None
+            end
+          else None
     | _ -> None
 
 let remove_trivial_extensions : RewriteSyntax.rewriter = function
@@ -715,7 +786,8 @@ let fold_constant : RewriteSyntax.rewriter =
   (* TODO: Also arithmetic, etc. *)
   let constantp = function
     | Boolean _ | Integer _ | Char _ | String _ 
-    | Float _ | Record_intro ([], _) | Nil _ -> true
+    | Float _ | Nil _ -> true
+    | Record_intro (fields, _) when StringMap.is_empty fields -> true
     | _ -> false 
   in function 
 	(* Is this safe without unboxing? *)
@@ -772,8 +844,10 @@ let optimise env expr =
                                "Before optimization : " ^ 
                                  Show_stripped_expression.show (strip_data expr) 
                              else "") ^ 
-			      "\nAfter optimization  : " ^ 
-                              Show_stripped_expression.show (strip_data expr'));
+			      "\nAfter optimization  : " ^
+                              string_of_expression expr'
+(*                               Show_stripped_expression.show (strip_data expr') *)
+                         );
 	                expr')
   else expr
     

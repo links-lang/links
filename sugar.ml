@@ -135,7 +135,7 @@ module PatternCompiler =
        | Syntax.Char (v, _) -> string_of_char v
        | Syntax.String (v, _) -> v
        | Syntax.Float (v, _) -> string_of_float v
-       | Syntax.Record_intro ([], _) -> "()"
+       | Syntax.Record_intro (fields, _) when StringMap.is_empty fields -> "()"
 
      (* compile away top-level As and HasType patterns *)
      let rec reduce_pattern : simple_pattern -> annotated_pattern = function
@@ -571,7 +571,9 @@ module PatternCompiler =
                let var_exp = lookup var env in
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
-                    | Record_intro ([], _) when Settings.get_value unit_hack ->
+                    | Record_intro (fields, _)
+                        when Settings.get_value unit_hack 
+                          && StringMap.is_empty fields ->
                         (* 
                            This is the only place in the pattern
                            matching compiler that we do type-directed
@@ -1119,7 +1121,7 @@ module Desugarer =
                  (alistmap desugar fields)
                  (desugar e)
            | RecordLit (fields, None) ->
-               Record_intro (alistmap desugar fields, pos) 
+               Record_intro (string_map_of_assoc_list (alistmap desugar fields), pos) 
            | TupleLit [field] -> desugar field
            | TupleLit fields  ->
                desugar (RecordLit (List.map2 (fun exp n ->

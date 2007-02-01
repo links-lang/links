@@ -1,32 +1,13 @@
 (*pp deriving *)
 open Utility
 
-(* field environments *)
 module FieldEnv = Utility.StringMap
-type 'a stringmap = 'a Utility.StringMap.t
-type 'a field_env = 'a FieldEnv.t
+type 'a stringmap = 'a Utility.stringmap
+type 'a field_env = 'a stringmap
 
-module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Typeable_defaults(struct
-  type a = A.a stringmap
-  let typeRep = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep])
-end)
-module Show_stringmap (A : Show.Show) = Show.Show_unprintable (struct type a = A.a stringmap  end)
-module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
-
-(* 
-   [REMARK]
-   
-   It seems silly that we have to write the boilerplate for
-   stringmap and field_env given that they are the same type.
-*)
-module Typeable_field_env (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a field_env = 
-Typeable.Typeable_defaults(struct
-  type a = A.a field_env
-  let typeRep = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep])
-end)
-module Show_field_env (A : Show.Show) = Show.Show_unprintable (struct type a = A.a field_env  end)
-module Pickle_field_env (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a field_env let tname ="field_env"  end)
+module Typeable_field_env = Typeable_stringmap
+module Show_field_env = Show_stringmap
+module Pickle_field_env = Pickle_stringmap
 
 (* type var sets *)
 module TypeVarSet = Utility.IntSet

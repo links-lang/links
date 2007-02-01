@@ -387,7 +387,7 @@ fun globals locals expr cont ->
 	apply_cont globals cont varval
   | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
-  | Syntax.Apply (Variable ("recv", _), Record_intro ([], _), _) ->
+  | Syntax.Apply (Variable ("recv", _), Record_intro (fields, _), _) when StringMap.is_empty fields ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
   | Syntax.Apply (fn, param, _) ->
       eval fn (FuncArg(param, locals) :: cont)
@@ -414,9 +414,16 @@ fun globals locals expr cont ->
   | Syntax.Xml_node (tag, [], (child::children), _) -> 
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
 
-  | Syntax.Record_intro ([], _) -> apply_cont globals cont (`Record [])
-  | Syntax.Record_intro ((label, value) :: bs, pos) ->
-      eval (Syntax.Record_intro (bs, pos)) (BinopRight(locals, `RecExt label, value) :: cont)
+  | Syntax.Record_intro (fields, _) ->
+      apply_cont
+        globals
+        (StringMap.fold (fun label value cont ->
+                           BinopRight(locals, `RecExt label, value) :: cont) fields cont)
+        (`Record [])
+
+(*   | Syntax.Record_intro (fields, _) when StringMap.is_empty fields -> apply_cont globals cont (`Record []) *)
+(*   | Syntax.Record_intro ((label, value) :: bs, pos) -> *)
+(*       eval (Syntax.Record_intro (bs, pos)) (BinopRight(locals, `RecExt label, value) :: cont) *)
   | Syntax.Record_extension (label, value, record, _) ->
       eval record (BinopRight(locals, `RecExt label, value) :: cont)
   | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->

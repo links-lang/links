@@ -3,12 +3,13 @@
 
 (* field environments *)
 (*module FieldEnv : Map.S with type key = string*)
-type 'a stringmap = 'a Utility.StringMap.t
+(*type 'a stringmap = 'a Utility.StringMap.t*)
 
-module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap
-module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap
-module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap
+(* module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap *)
+(* module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap *)
+(* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
 
+type 'a stringmap = 'a Utility.stringmap
 type 'a field_env = 'a stringmap
 
 (* type var sets *)

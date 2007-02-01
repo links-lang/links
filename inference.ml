@@ -1070,15 +1070,13 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         add_attrs special_attrs trimmed_node
   | Record_intro (bs, `U pos) ->
       let bs, field_env =
-        List.fold_left (fun (bs, field_env) (label, e)  ->
+        StringMap.fold (fun label e (bs, field_env)  ->
                           let e = type_check typing_env e in
                           let t = type_of_expression e in
-                            (label, e) :: bs, StringMap.add label (`Present t) field_env)
-          ([], StringMap.empty)
-          bs in
-      let bs = List.rev bs
-      and t = `Record (field_env, `RowVar None) in
-        Record_intro (bs, `T (pos, t, None))
+                            StringMap.add label e bs, StringMap.add label (`Present t) field_env)
+          bs (StringMap.empty, StringMap.empty)
+      in
+        Record_intro (bs, `T (pos, `Record (field_env, `RowVar None), None))
   | Record_extension (label, value, record, `U pos) ->
       let value = type_check typing_env value in
       let record = type_check typing_env record in

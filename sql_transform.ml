@@ -180,11 +180,16 @@ let rec is_free var expr = mem var (freevars expr)
 (* TODO: make this less appalling, somehow. *)
 let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_source list) option = 
   let unpair : 'a Syntax.expression' -> ('a Syntax.expression' * 'a Syntax.expression') option  = function
-    | Record_extension ("1", p1, Record_extension ("2", p2, Record_intro ([], _), _), _)
-    | Record_extension ("2", p2, Record_extension ("1", p1, Record_intro ([], _), _), _)
-    | Record_intro (["1", p1; "2", p2], _)
-    | Record_intro (["2", p2; "1", p1], _)
+    | Record_extension ("1", p1, Record_extension ("2", p2, Record_intro (fields, _), _), _)
+    | Record_extension ("2", p2, Record_extension ("1", p1, Record_intro (fields, _), _), _)
+        when StringMap.is_empty fields
         -> Some (p1, p2)
+    | Record_intro (fields, _)
+    | Record_intro (fields, _)
+        when StringMap.mem "1" fields
+          && StringMap.mem "2" fields
+          && StringMapUtils.size fields == 2
+        -> Some (StringMap.find "1" fields, StringMap.find "2" fields)
     | _ -> None in
   let rec unlist = function
     | List_of (x,_) -> [x]

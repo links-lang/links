@@ -14,6 +14,30 @@ module StringMap = Map.Make(OrderedString)
 
 type 'a stringmap = 'a StringMap.t
 
+module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
+Typeable.Typeable_defaults(struct
+  type a = A.a stringmap
+  let typeRep = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep])
+end)
+module Show_stringmap (A : Show.Show) = Show.Show_unprintable (struct type a = A.a stringmap  end)
+module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Functor_stringmap = Functor.Functor_map(OrderedString)
+
+module MapUtils(M : Map.S) =
+struct
+  (* return true if p holds for all values in the range of m *)
+  let for_all p m =
+    M.fold (fun _ v b -> b && p v) m true
+
+  (* convert m to a list using the function f to build elements of the list *)
+  let map_to_list f m =
+    List.rev (M.fold (fun key v xs -> f(key, v) :: xs) m [])
+
+  let size m =
+    List.length (map_to_list (fun x -> x) m)
+end
+module StringMapUtils = MapUtils(StringMap)
+
 let superimpose a b = 
   StringMap.fold StringMap.add b a
 
