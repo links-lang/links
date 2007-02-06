@@ -2,7 +2,7 @@
 let measuring = Settings.add_bool("measure_performance", false, true)
 
 let notify_gc () = 
-  Debug.debug ("Completing GC cycle")
+  Debug.print ("Completing GC cycle")
 
 let measure_diff obtain diff f a = 
   let start = obtain () in

@@ -5,7 +5,6 @@ open List
 open Inferencetypes
 open Syntax
 open Utility
-open Debug
 
 exception Runtime_error of string
 
@@ -75,7 +74,7 @@ let database_drivers = ref ([] : (string * db_constructor) list)
     by the driver?) *)
 let register_driver : (string * db_constructor) -> unit
   = fun ((name, _) as pair) -> 
-    debug ("registering driver for " ^ name);
+    Debug.print ("registering driver for " ^ name);
     database_drivers := pair :: !database_drivers
 
 let db_connect driver params =

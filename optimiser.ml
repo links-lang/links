@@ -3,7 +3,6 @@
 open List
 
 open Utility
-open Debug
 open Rewrite
 open Syntax
 open Sql_transform
@@ -380,7 +379,8 @@ let substitute_projections' new_src renamings bindings expr =
     | Record_selection (label, label_var, etc_var, Variable (src, d), body, 
                         data) as orig
         when from.Query.renamed = label ->
-        debug("Renaming " ^ from.Query.renamed ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
+        Debug.if_set show_optimisation
+          (fun () -> "Renaming " ^ from.Query.renamed ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
         (match trace_variable src bindings with
 	   | `Table query when mem from.Query.table_renamed (map snd query.Query.tables) ->
                Some(Record_selection(to', label_var, etc_var, 
@@ -388,10 +388,11 @@ let substitute_projections' new_src renamings bindings expr =
            | `Table_field (table_as, _) when from.Query.table_renamed = table_as ->
                (* NOTE: I think this case never occurs *)
                Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
-           | `Unavailable -> debug(src ^ " was unavailable."); None
-           | `Earlier(str, _) -> debug("Earlier: " ^ str); None
+           | `Unavailable -> Debug.if_set show_optimisation
+               (fun () -> src ^ " was unavailable."); None
+           | `Earlier(str, _) -> Debug.if_set show_optimisation (fun () -> "Earlier: " ^ str); None
            | _ -> 
-               debug "NOT renaming after all!";
+               Debug.if_set show_optimisation (fun () -> "NOT renaming after all!");
                Some (Record_selection (label, label_var, etc_var, 
                                        Variable (src, d), body,  (* not new_src? *)
                                        data)))
@@ -731,7 +732,8 @@ let fold_constant : RewriteSyntax.rewriter =
 (** Useful for printing the program at specific points of the
     optimisation pipeline.*)
 let print_expression msg expr = 
-  debug(msg ^ string_of_expression expr);
+  Debug.if_set show_optimisation
+    (fun () -> msg ^ string_of_expression expr);
   None
 
 (** Useful for checking a specific definition at specific points of the
@@ -739,7 +741,8 @@ let print_expression msg expr =
 let print_definition of_name ?msg:msg expr = 
  (match expr with
     | Define (name, value, locn, _) when name = of_name 
-        -> debug(fromOption "" msg ^ string_of_expression expr)
+        -> Debug.if_set show_optimisation
+        (fun () -> fromOption "" msg ^ string_of_expression expr)
     | _ -> ());
   None
 
@@ -766,8 +769,8 @@ let run_optimisers : (Inferencetypes.environment * Inferencetypes.alias_environm
 let optimise env expr =
   if Settings.get_value optimising then 
     match run_optimisers env expr with
-        None -> debug_if_set show_optimisation (fun () -> "Optimization had no effect"); expr
-      | Some expr' -> (debug_if_set show_optimisation
+        None -> Debug.if_set show_optimisation (fun () -> "Optimization had no effect"); expr
+      | Some expr' -> (Debug.if_set show_optimisation
                          (fun () -> 
                             (if (Settings.get_value show_opt_verbose) then 
                                "Before optimization : " ^ 

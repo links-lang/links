@@ -1,3 +1,5 @@
+let show_json = Settings.add_bool("show_json", false, true)
+
 let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
@@ -26,7 +28,9 @@ let rec jsonize_call continuation name arg =
   Printf.sprintf "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__arg\":%s}" (encode_continuation continuation) name (jsonize_result arg)
 
 let jsonize_result result = 
-  Debug.debug ("jsonize_result => " ^ Result.string_of_result result);
+  Debug.if_set show_json
+    (fun () -> "jsonize_result => " ^ Result.string_of_result result);
   let rv = jsonize_result result in
-    Debug.debug ("jsonize_result <= " ^ rv);
+    Debug.if_set show_json
+      (fun () -> "jsonize_result <= " ^ rv);
     rv

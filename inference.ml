@@ -2,7 +2,6 @@
 open List
 
 open Utility
-open Debug
 open Syntax
 open Inferencetypes
 open Forms
@@ -104,7 +103,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 		       else
 			 datatype
 		   | `Recursive (var, t) ->
-		       debug_if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
+		       Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
 
 		       if IntMap.mem var rec_type_env then
 			 (`MetaTypeVar (IntMap.find var rec_type_env))
@@ -291,7 +290,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       instantiate_datatype (tenv, IntMap.empty) alias in
 
     fun (t1, t2) ->
-      (debug_if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
+      (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
           | `Primitive x, `Primitive y when x = y -> ()
@@ -309,14 +308,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		       Unionfind.union lpoint rpoint
 	           | `TypeVar var, t ->
 		       (if var_is_free_in_type var (`MetaTypeVar rpoint) then
-		          (debug_if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
+		          (Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
 		           rec_intro rpoint (var, t))
 		        else
 		          ());
 		       Unionfind.union lpoint rpoint
 	           | t, `TypeVar var ->
 		       (if var_is_free_in_type var (`MetaTypeVar lpoint) then
-		          (debug_if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
+		          (Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
 		           rec_intro lpoint (var, t))
 		        else
 		          ());
@@ -329,7 +328,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                                                string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint)))
 	           | `Recursive (lvar, t), `Recursive (rvar, t') ->
 		       assert(lvar <> rvar);
-		       debug_if_set (show_recursion)
+		       Debug.if_set (show_recursion)
 		         (fun () -> "rec pair (" ^ (string_of_int lvar) ^ "," ^ (string_of_int rvar) ^")");
                        begin
                          if is_unguarded_recursive (`MetaTypeVar lpoint) then
@@ -348,7 +347,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                        end;
 		       Unionfind.union lpoint rpoint
 	           | `Recursive (var, t'), t ->
-		       debug_if_set (show_recursion) (fun () -> "rec left (" ^ (string_of_int var) ^ ")");
+		       Debug.if_set (show_recursion) (fun () -> "rec left (" ^ (string_of_int var) ^ ")");
                        begin
                          if is_unguarded_recursive (`MetaTypeVar lpoint) then
                            raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
@@ -359,7 +358,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                        end;
 		       Unionfind.union rpoint lpoint
 	           | t, `Recursive (var, t') ->
-		       debug_if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
+		       Debug.if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
                        begin
                          if is_unguarded_recursive (`MetaTypeVar rpoint) then
                            raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
@@ -377,7 +376,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	         | `TypeVar var ->
 		     if var_is_free_in_type var t then
                        begin
-   		         debug_if_set (show_recursion)
+   		         Debug.if_set (show_recursion)
 		           (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
                          let point' = Unionfind.fresh t
                          in
@@ -385,10 +384,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		           Unionfind.union point point'
                        end
 		     else
-		       (debug_if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
+		       (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
 		        Unionfind.change point t)
 	         | `Recursive (var, t') ->
-   		     debug_if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
+   		     Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
                      begin
                        if is_unguarded_recursive (`MetaTypeVar point) then
                          raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
@@ -443,12 +442,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                 end
           | _, _ ->
               raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
-       debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
+       Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
       )
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
   fun rec_env (lrow, rrow) ->
-    debug_if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
+    Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
     (* 
        [NOTE]
@@ -826,12 +825,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       else
 	unify_both_open (rrow, lrow)
     in
-      debug_if_set (show_row_unification)
+      Debug.if_set (show_row_unification)
 	(fun () -> "Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
 
 let unify alias_env (t1, t2) =
   unify' (IntMap.empty, IntMap.empty, alias_env) (t1, t2)
-(* debug_if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
+(* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows alias_env (row1, row2) =
   unify_rows' (IntMap.empty, IntMap.empty, alias_env) (row1, row2)
 
@@ -845,7 +844,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	t
       else
 	(
-	  let _ = debug_if_set (show_instantiation)
+	  let _ = Debug.if_set (show_instantiation)
 	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (quantifiers, t))) in
 
 	  let tenv, renv = List.fold_left
@@ -881,7 +880,7 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
 	     | `TypeVar var -> [`TypeVar var]
 	     | `RigidTypeVar var -> [`RigidTypeVar var]
 	     | `Recursive (var, body) ->
-		 debug_if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
+		 Debug.if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
 		 if IntSet.mem var bound_vars then
 		   []
 		 else
@@ -915,7 +914,7 @@ and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
 		 | `RigidRowVar var
 		 | `RowVar (Some var) -> [`RowVar var]
 		 | `RecRowVar (var, rec_row) ->
-		     debug_if_set (show_recursion) (fun () -> "rec (get_row_var_quantifiers): " ^(string_of_int var));
+		     Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_quantifiers): " ^(string_of_int var));
 		     (if IntSet.mem var bound_vars then
 			[]
 		      else
@@ -950,7 +949,7 @@ let generalise : environment -> datatype -> assumption =
   fun env t ->
     let vars_in_env = intset_of_list (env_type_vars env) in
     let quantifiers = get_quantifiers vars_in_env t in
-      debug_if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
+      Debug.if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t) 
 
 type typing_environment = environment * alias_environment
@@ -960,7 +959,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
     let unify = unify alias_env
     and unify_rows = unify_rows alias_env in
   try
-    debug_if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
+    Debug.if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match (expression : Syntax.untyped_expression) with
   | (Define (variable, _, _, `U pos) : Syntax.untyped_expression) -> nested_def pos variable
   | Boolean (value, `U pos) -> Boolean (value, `T (pos, `Primitive `Bool, None))
@@ -1341,9 +1340,9 @@ let group_and_order_bindings_by_callgraph
   
   let call_graph = make_callgraph bindings in
     (* TBD: let's make a setting to print the callgraph any old time! *)
-(*     debug("call_graph is " ^ mapstrcat ", " (Graph.edge_to_str) (Graph.unroll_edges call_graph)); *)
+(*     Debug.print("call_graph is " ^ mapstrcat ", " (Graph.edge_to_str) (Graph.unroll_edges call_graph)); *)
   let call_cliques = Graph.topo_sort_cliques call_graph in
-(*     debug("call_cliques are: " ^ groupingsToString (identity) call_cliques); *)
+(*     Debug.print("call_cliques are: " ^ groupingsToString (identity) call_cliques); *)
     call_cliques
 
 (* let defs_as_alist =  *)
@@ -1405,7 +1404,7 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
     I think this also means that such typenames can only be used in
     a single process.
 *)
-(*   let _ = Debug.debug ("Datatype: "^string_of_datatype datatype) in *)
+(*   let _ = Debug.print("Datatype: "^string_of_datatype datatype) in *)
 (*   let bound_vars = vars @ (env_type_vars typing_env) in *)
 (*   let free_vars = *)
 (*     List.filter (fun var -> not (List.mem var bound_vars)) (free_type_vars datatype) *)
@@ -1431,7 +1430,7 @@ let type_expression : Inferencetypes.typing_environment -> untyped_expression ->
               (((variable, value_type) :: env), alias_env),
     	       Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | TypeDecl (typename, vars, datatype, `U pos) ->
-(*             Debug.debug ("Typename: "^string_of_expression untyped_expression); *)
+(*             Debug.print ("Typename: "^string_of_expression untyped_expression); *)
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),
             TypeDecl (typename, vars, datatype, `T (pos, `Record (ITO.make_empty_closed_row ()), None))
@@ -1502,13 +1501,13 @@ let type_program typing_env expressions =
   check_for_duplicate_defs typing_env expressions;
   let _ =
     (* without mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
+    Debug.if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
     Inferencetypes.with_mailbox_typing false
       (fun () ->
 	 type_program typing_env expressions)
   in
     (* with mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
+    Debug.if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
     Inferencetypes.with_mailbox_typing true
       (fun () ->
 	 type_program typing_env expressions)
@@ -1517,13 +1516,13 @@ let type_expression typing_env expression =
   check_for_duplicate_defs typing_env [expression];
   let _ =
     (* without mailbox parameters *)	
-    debug_if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
+    Debug.if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
     Inferencetypes.with_mailbox_typing false
       (fun () ->
 	 type_expression typing_env expression)
   in
     (* with mailbox parameters *)
-    debug_if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
+    Debug.if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
     Inferencetypes.with_mailbox_typing true
       (fun () ->
 	 type_expression typing_env expression)

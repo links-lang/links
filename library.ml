@@ -5,7 +5,6 @@ open List
 open Result
 open Inferencetypes
 open Utility
-open Debug
 
 (* Data structures/utilities for proc mgmt *)
 

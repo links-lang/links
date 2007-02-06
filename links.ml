@@ -1,6 +1,5 @@
 open Getopt
 open Utility
-open Debug
 open List
 
 let load_file filename =

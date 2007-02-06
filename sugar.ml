@@ -599,7 +599,7 @@ module PatternCompiler =
      let match_cases
          : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression =
        fun (`U (p1, _, _) as pos, exp, raw_equations) ->
-         Debug.debug_if_set (show_pattern_compilation)
+         Debug.if_set (show_pattern_compilation)
            (fun () -> "Compiling pattern match: "^ p1.Lexing.pos_fname);
          let var, wrap =
            match exp with
@@ -613,7 +613,7 @@ module PatternCompiler =
          let initial_env = StringMap.add var (Variable (var, pos)) StringMap.empty in
          let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos) (initial_env : pattern_env))
          in
-           Debug.debug_if_set (show_pattern_compilation)
+           Debug.if_set (show_pattern_compilation)
              (fun () -> "Compiled pattern: "^(string_of_expression result));
            if (List.for_all (fun (_, (_, used)) -> !used) equations) then
              result
@@ -1444,9 +1444,9 @@ module Desugarer =
            p
          end
      in
-(*        (Debug.debug_if_set show_sugared (Show_phrase.show e); *)
+(*        (Debug.if_set show_sugared (Show_phrase.show e); *)
      let result = desugar' lookup_pos e in
-       (Debug.debug_if_set show_desugared (fun()-> string_of_expression result);
+       (Debug.if_set show_desugared (fun()-> string_of_expression result);
        result)
 
    let desugar_datatype = generalize ->- desugar_assumption
