@@ -77,6 +77,7 @@ SOURCES = $(OPC)                		\
           interpreter.mli interpreter.ml 	\
           optimiser.mli optimiser.ml    	\
           js.mli js.ml          		\
+          loader.ml                             \
           webif.mli webif.ml           		\
           test.ml                               \
           links.ml              		\
@@ -110,13 +111,13 @@ test: $(RESULT)
 fixmes:
 	@grep FIXME *.ml *.mli *.mly *.mll
 
-.PHONY: docs
+.PHONY: docs docs-clean clean
 
 docs:
 	cd doc && make
 
-doc-clean:
+docs-clean:
 	cd doc && make clean
 
-clean :: deriving-clean doc-clean
+clean :: deriving-clean docs-clean
 

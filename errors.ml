@@ -190,5 +190,12 @@ let display_errors' default stream (f : 'a -> 'b) (a : 'a) =
     default ()
 
 let display_errors stream default = display_errors' default stream
-and display_errors_fatal stream = display_errors' (fun () -> exit 1) stream
+let display_errors_fatal stream = display_errors' (fun () -> exit 1) stream
 
+let display ?(default=(fun e -> raise e)) (e) = 
+  try 
+    Lazy.force e
+  with exc ->
+    output_string stderr (format_exception exc ^ "\n");
+    flush stderr;
+    default exc

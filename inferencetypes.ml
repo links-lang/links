@@ -78,7 +78,7 @@ let environment_values = fun env -> snd (List.split env)
 let lookup = fun x -> List.assoc x
 
 let concat_environment
-      (types1, aliases1 : typing_environment)
+      ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
     (types1 @ types2, superimpose aliases1 aliases2)
 

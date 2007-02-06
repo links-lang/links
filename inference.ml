@@ -1430,7 +1430,6 @@ let type_expression : Inferencetypes.typing_environment -> untyped_expression ->
               (((variable, value_type) :: env), alias_env),
     	       Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | TypeDecl (typename, vars, datatype, `U pos) ->
-(*             Debug.print ("Typename: "^string_of_expression untyped_expression); *)
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),
             TypeDecl (typename, vars, datatype, `T (pos, `Record (ITO.make_empty_closed_row ()), None))

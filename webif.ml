@@ -1,5 +1,6 @@
 (*pp deriving *)
 
+open Performance
 open Utility
 open Result
 
@@ -70,44 +71,24 @@ let is_client_program defs =
     List.exists is_client_def defs || List.exists is_client_prim prims
 
 (* Read in and optimise the program *)
-let read_and_optimise_program typenv filename : (Syntax.expression list) = 
-  (Performance.measure "optimise" Optimiser.optimise_program)
+let read_and_optimise_program typenv filename = 
+  (fun (env, exprs) ->
+     (env, 
+      measure "optimise" Optimiser.optimise_program (env, exprs)))
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-       ((Performance.measure "type" (Inference.type_program typenv))
-          ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
+       ((measure "type" (Inference.type_program typenv))
+          ((measure "parse" (Parse.parse_file Parse.program)) filename)))
               
-let read_file_cache filename : (Syntax.expression list) = 
-  let cachename = filename ^ ".cache" in
-    try
-      if ((Unix.stat cachename).Unix.st_mtime > (Unix.stat filename).Unix.st_mtime) then
-        let infile = open_in cachename in
-        let program = Marshal.from_channel infile in
-          close_in infile;
-          program
-      else
-        raise (Sys_error "booyah")
-    with (Sys_error _| Unix.Unix_error _) ->
-      let program = 
-        (Performance.measure "optimise" Optimiser.optimise_program)
-          ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-             ((Performance.measure "type" (Inference.type_program Library.typing_env))
-                ((Performance.measure "parse" (Parse.parse_file Parse.program)) filename)))
-      in 
-	(try (* try to write to the cache *)
-	   let outfile = open_out cachename in 
-           let `T (pos, dt, _) = Syntax.no_expr_data in
-             Marshal.to_channel outfile (List.map (Syntax.Functor_expression'.map (fun (`T (_,_,l)) -> `T (pos, dt, l))) program) [Marshal.Closures] ;
-             close_out outfile
-	 with _ -> ());
-        program
-
-let read_and_optimise_program env arg = 
+let read_and_optimise_program env arg 
+    : Inferencetypes.typing_environment * Syntax.expression list 
+  = 
   if Settings.get_value cache_programs then
-    read_file_cache arg
+    Loader.read_file_cache arg
   else 
     read_and_optimise_program env arg
 
-let serialize_call_to_client (continuation, name, arg) = Json.jsonize_call continuation name arg
+let serialize_call_to_client (continuation, name, arg) = 
+  Json.jsonize_call continuation name arg
 
 let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string
 
@@ -241,14 +222,15 @@ let catch_notfound msg f a =
     f a
   with Not_found -> failwith ("not found caught ("^msg^")")
 
-let serve_request libraries (valenv, typenv) filename = 
+let serve_request (valenv, typenv) filename = 
   try 
-    let program = libraries @ catch_notfound "1" (read_and_optimise_program typenv) filename in
+    let _, program = catch_notfound "reading and optimising"
+      (read_and_optimise_program typenv) filename in
     let global_env, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr
     else
     let main = last main in
-    let global_env = catch_notfound "2" (stubify_client_funcs valenv) global_env in
+    let global_env = catch_notfound "stubifying" (stubify_client_funcs valenv) global_env in
     let cgi_args = Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
     let request = 
@@ -273,6 +255,6 @@ let serve_request libraries (valenv, typenv) filename =
     | exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request libraries envs filename =
+let serve_request envs filename =
   Errors.display_errors_fatal stderr
-    (serve_request libraries envs) filename
+    (serve_request envs) filename

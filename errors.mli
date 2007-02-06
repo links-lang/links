@@ -46,4 +46,4 @@ val format_exception_html : exn -> string
 
 val display_errors : out_channel -> (unit -> 'a) -> ('b -> 'a) -> ('b -> 'a)
 val display_errors_fatal : out_channel -> ('a -> 'b) -> ('a -> 'b)
-
+val display : ?default:(exn -> 'a) -> ('a lazy_t) -> 'a

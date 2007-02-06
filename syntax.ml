@@ -223,6 +223,8 @@ let rec show t : 'a expression' -> string = function
 
 let string_of_expression s = show (fun _ -> "") s
 
+let as_string = string_of_expression
+
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
