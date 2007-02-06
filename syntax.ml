@@ -225,6 +225,10 @@ let string_of_expression s = show (fun _ -> "") s
 
 let as_string = string_of_expression
 
+let labelled_string_of_expression s = show (function
+                                              | (`T (_,_,Some lbl)) -> "(label:" ^ Show_label.show lbl ^ ")"
+                                              | _ -> "(label: NONE)") s
+
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 

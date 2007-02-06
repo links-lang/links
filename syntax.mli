@@ -55,6 +55,7 @@ val is_define : 'a expression' -> bool
 val is_value : 'a expression' -> bool
 
 val string_of_expression : 'a expression' -> string
+val labelled_string_of_expression : expression -> string
 val as_string : 'a expression' -> string
 
 val stringlit_value : 'a expression' -> string
