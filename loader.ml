@@ -39,24 +39,18 @@ let read_file_cache filename : (Inferencetypes.typing_environment * Syntax.expre
         (Debug.print("No precompiled " ^ filename);
          raise (Sys_error "Precompiled source file out of date."))
     with (Sys_error _| Unix.Unix_error _) ->
-      let type_env, program = 
-        (fun (env, exprs) ->
-           (env, measure "optimise" Optimiser.optimise_program (env, exprs)))
-          ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
-             ((measure "type" (Inference.type_program Library.typing_env))
-                ((measure "parse" (Parse.parse_file Parse.program)) filename)))
+      let exprs = measure "parse" (Parse.parse_file Parse.program) filename in
+      let env, exprs = measure "type" (Inference.type_program Library.typing_env) exprs in
+      let exprs = measure "optimise" Optimiser.optimise_program (env, exprs)in
+      let env, exprs =
+        env, List.map Syntax.labelize exprs 
       in 
 	(try (* try to write to the cache *)
            with_open_out_bin_file cachename 
              (fun cachefile ->
                 Marshal.to_channel cachefile 
-                  (type_env, (expunge_all_source_pos program))
+                  (env, (expunge_all_source_pos exprs))
                   [Marshal.Closures])
-                
-(* 	   let outfile = open_out_bin cachename in  *)
-(*              Marshal.to_channel outfile  *)
-(*                (type_env, (expunge_all_source_pos program)) *)
-(*                [Marshal.Closures]; *)
-(*              close_out outfile *)
 	 with _ -> ()) (* Ignore errors writing the cache file*);
-type_env, program
+        Debug.print (Utility.mapstrcat "\n" Syntax.labelled_string_of_expression exprs);
+        env, exprs
