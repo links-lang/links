@@ -200,7 +200,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\ | |  V  /|. `-.
  | |___| | |\\ \\  |     \\ _`.  |
  |_____|_|_| \\___|__|\\__|____/
-Welcome to Links version x.x.x", false)
+Welcome to Links version 0.3.6 (Gogarloch)", false)
 
 (* main *)
 let _ =
