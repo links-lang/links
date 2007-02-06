@@ -38,6 +38,7 @@ PATH := $(PATH):deriving/syntax
 OCAMLYACC := ocamlyacc -v
 
 OCAMLFLAGS=-w Aef
+OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
 TRASH=*.tmp *.output
