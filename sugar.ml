@@ -75,11 +75,11 @@ let list_head expr pos =
 let list_tail expr pos = 
   Apply(Variable ("tl", pos), expr, pos)
 
-let show_desugared = Settings.add_bool("show_desugared", false, true)
-let show_sugared = Settings.add_bool("show_sugared", false, true)
+let show_desugared = Settings.add_bool("show_desugared", false, `User)
+let show_sugared = Settings.add_bool("show_sugared", false, `User)
 
-let unit_hack = Settings.add_bool("pattern_unit_hack", false, true)
-let cons_unit_hack = Settings.add_bool("pattern_cons_unit_hack", true, true)
+let unit_hack = Settings.add_bool("pattern_unit_hack", false, `User)
+let cons_unit_hack = Settings.add_bool("pattern_cons_unit_hack", true, `User)
 
 exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
@@ -94,7 +94,7 @@ module PatternCompiler =
     to adjust our intermediate language.
   *)
   (struct
-     let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, true)
+     let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, `User)
 
      type annotation = string list * Inferencetypes.datatype list
      type annotated_pattern = annotation * simple_pattern

@@ -12,10 +12,10 @@ open Forms
 open Utility
 open Syntax
 
-let optimising = Settings.add_bool("optimise_javascript", true, true)
-let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, true)
-let js_rename_builtins = Settings.add_bool("js_rename_builtins", false, true)
-let js_lib_url = Settings.add_string("jsliburl", "lib/", true)
+let optimising = Settings.add_bool("optimise_javascript", true, `User)
+let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, `User)
+let js_rename_builtins = Settings.add_bool("js_rename_builtins", false, `User)
+let js_lib_url = Settings.add_string("jsliburl", "lib/", `User)
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (* Intermediate language *)

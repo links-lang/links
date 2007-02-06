@@ -6,7 +6,7 @@ open Result
 (*
  Whether to cache programs after the optimization phase
 *)
-let cache_programs = Settings.add_bool ("cache_programs", false, true)
+let cache_programs = Settings.add_bool ("cache_programs", false, `User)
 
 type query_params = (string * result) list
 deriving (Show)

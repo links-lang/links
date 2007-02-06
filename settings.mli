@@ -7,10 +7,12 @@
  *)
 type 'a setting
 
+type mode = [`User | `System]
+
 (* add a new setting *)
-val add_bool : (string * bool * bool) -> bool setting
-val add_int : (string * int * bool) -> int setting
-val add_string : (string * string * bool) -> string setting 
+val add_bool : (string * bool * mode) -> bool setting
+val add_int : (string * int * mode) -> int setting
+val add_string : (string * string * mode) -> string setting 
 
 (*
   parse_and_set(name, value)

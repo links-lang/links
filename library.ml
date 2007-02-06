@@ -27,8 +27,8 @@ let http_response_headers = ref []
 let http_response_code = ref 200
 
 (* default database settings *)
-let database_driver = Settings.add_string("database_driver", "", true)
-let database_args = Settings.add_string("database_args", "", true)
+let database_driver = Settings.add_string("database_driver", "", `User)
+let database_args = Settings.add_string("database_args", "", `User)
 
 let debug_process_status () =
   prerr_endline("processes : " ^ 

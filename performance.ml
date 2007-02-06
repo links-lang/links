@@ -1,5 +1,5 @@
 (* Measure performance *)
-let measuring = Settings.add_bool("measure_performance", false, true)
+let measuring = Settings.add_bool("measure_performance", false, `User)
 
 let notify_gc () = 
   Debug.print ("Completing GC cycle")

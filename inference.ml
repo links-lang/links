@@ -8,19 +8,19 @@ open Forms
 open Errors
 
 (* debug flags *)
-let show_unification = Settings.add_bool("show_unification", false, true)
-let show_row_unification = Settings.add_bool("show_row_unification", false, true)
+let show_unification = Settings.add_bool("show_unification", false, `User)
+let show_row_unification = Settings.add_bool("show_row_unification", false, `User)
 
-let show_instantiation = Settings.add_bool("show_instantiation", false, true)
-let show_generalisation = Settings.add_bool("show_generalisation", false, true)
+let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
+let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
 
-let show_typechecking = Settings.add_bool("show_typechecking", false, true)
-let show_recursion = Settings.add_bool("show_recursion", false, true)
+let show_typechecking = Settings.add_bool("show_typechecking", false, `User)
+let show_recursion = Settings.add_bool("show_recursion", false, `User)
 
-let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, true)
+let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, `User)
 
 (* whether to allow negative recursive types to be inferred *)
-let infer_negative_types = Settings.add_bool("infer_negative_types", true, true)
+let infer_negative_types = Settings.add_bool("infer_negative_types", true, `User)
 
 exception Unify_failure of string
 exception UndefinedVariable of string

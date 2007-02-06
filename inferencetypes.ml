@@ -620,10 +620,10 @@ let free_alias_check_row alias_env = free_alias_check_row alias_env TypeVarSet.e
    [NOTE]
       unused mailbox parameters are never shown
  *)
-let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, true)
+let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
 
 (* pretty-print type vars as raw numbers rather than letters *)
-let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, true)
+let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
 
 (*
   [HACK]

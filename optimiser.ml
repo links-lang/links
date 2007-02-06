@@ -7,9 +7,9 @@ open Rewrite
 open Syntax
 open Sql_transform
 
-let optimising = Settings.add_bool("optimising", true, true)
-let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, true)
-let show_optimisation = Settings.add_bool("show_optimisation", false, true)
+let optimising = Settings.add_bool("optimising", true, `User)
+let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, `User)
+let show_optimisation = Settings.add_bool("show_optimisation", false, `User)
 
 
 

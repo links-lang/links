@@ -1,4 +1,4 @@
-let show_json = Settings.add_bool("show_json", false, true)
+let show_json = Settings.add_bool("show_json", false, `User)
 
 let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value

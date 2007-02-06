@@ -12,16 +12,16 @@ let load_file filename =
  Whether to run the interactive loop
  (default is true)
 *)
-let interacting = Settings.add_bool ("interacting", true, false)
+let interacting = Settings.add_bool ("interacting", true, `System)
 
 (* Whether we're in web mode or not *)
-let web_mode = Settings.add_bool ("web_mode", false, false)
+let web_mode = Settings.add_bool ("web_mode", false, `System)
 
 (* Whether to print types *)
-let printing_types = Settings.add_bool ("printing_types", true, true)
+let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (* Prelude *)
-let prelude = Settings.add_string ("prelude", "prelude.links", false)
+let prelude = Settings.add_string ("prelude", "prelude.links", `System)
 
 (* Prompt in interactive mode *)
 let ps1 = "links> "
@@ -200,7 +200,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\ | |  V  /|. `-.
  | |___| | |\\ \\  |     \\ _`.  |
  |_____|_|_| \\___|__|\\__|____/
-Welcome to Links version 0.3.6 (Gogarloch)", false)
+Welcome to Links version 0.3.7 (Gogarloch)", `System)
 
 (* main *)
 let _ =
