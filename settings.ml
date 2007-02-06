@@ -52,9 +52,9 @@ let settings : ((universal SettingsMap.t) ref) = ref (SettingsMap.empty)
 let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind (name, value) ->
   if SettingsMap.mem name (!settings) then
     let universal_setting = SettingsMap.find name (!settings) in
-      match kind with
-        | `Any
-        | `OnlyUser when is_user (universal_setting) ->
+      match kind, is_user(universal_setting) with
+        | `Any, _
+        | `OnlyUser, true ->
             begin
 	      match universal_setting with
 	        | `Bool setting ->
