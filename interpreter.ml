@@ -7,7 +7,7 @@ open Result
 open Query
 open Syntax
 
-(* Environment handling *)
+(** {0 Environment handling} *)
 
 (** bind env var value 
     Extends `env' with a binding of `var' to `value'.
@@ -26,19 +26,21 @@ let trim_env =
             else (k, v) :: (trim (k :: names) rest) in
     trim []
       
-(* Remove toplevel bindings from an environment *)
+(** Remove toplevel bindings from an environment *)
 let remove_toplevel_bindings toplevel env = 
   filter (fun pair -> mem pair toplevel) env
 
-let lookup toplevel locals name = 
+exception RuntimeUndefVar of string
+
+let lookup globals locals name = 
   try 
-    (match lookup name locals with
+    (match Utility.lookup name locals with
       | Some v -> v
-      | None -> match lookup name toplevel with
+      | None -> match Utility.lookup name globals with
           | Some v -> v
           | None -> Library.primitive_stub name)
   with Not_found -> 
-    failwith("Internal error: variable \"" ^ name ^ "\" not in environment")
+    raise(RuntimeUndefVar name) (* ("Internal error: variable \"" ^ name ^ "\" not in environment")*)
 
 let bind_rec locals defs =
   (* create bindings for these functions, with no local variables for now *)
@@ -67,14 +69,14 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
 
 (** [normalise_query] substitutes values for the variables in a query,
     and performs interpolation in LIKE expressions.  *)
-let rec normalise_query (toplevel:environment) (env:environment) (db:database) (qry:query) : query =
+let rec normalise_query (globals:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
-      Text (Sql_transform.like_as_string (env @ toplevel) l)
+      Text (Sql_transform.like_as_string (env @ globals) l)
   in
   let rec normalise_expression : Query.expression -> Query.expression = function
       | Query.Variable name ->
           (try
-             match lookup toplevel env name with
+             match lookup globals env name with
                | `Bool value -> Query.Boolean value
                | `Int value -> Query.Integer value
                | `Float value -> Query.Float value
@@ -99,7 +101,7 @@ let rec normalise_query (toplevel:environment) (env:environment) (db:database) (
   let normalise_tables  = map (function 
                                  | `TableName t, alias -> `TableName t, alias
                                  | `TableVariable var, alias ->
-                                     (match lookup toplevel env var with
+                                     (match lookup globals env var with
                                          `Table(_, tableName, _) -> `TableName tableName, alias
                                        | _ -> failwith "Internal Error: table source was not a table!")
                               ) 
@@ -193,6 +195,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 apply_cont globals (FuncApply(value, locals) :: cont) arg
             | (FuncApply(func, locals)) ->  
                (match func with
+                    (* FIXME: functional abstractions no longer capture
+                       global variables; remove the fnglobals element here. *)
                    | `Function (var, fnlocals, fnglobals, body) ->
 		       (* Interpret the body in the following environments:
 		          locals are augmented with function locals and
@@ -225,6 +229,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
             | (BinopRight(locals, op, rhsExpr)) ->
 	        interpret globals locals rhsExpr
                   (BinopApply(locals, op, value) :: cont)
+                  (* FIXME: locals aren't needed here *)
             | (BinopApply(locals, op, lhsVal)) ->
 	        let result = 
                   (match op with
@@ -281,9 +286,11 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let result = 
                          match value with
                            | `List(tbls) ->
-                               let (dbs, table_defs) = split(map (function `Table(db, tname, row) -> (db, row)
-                                                              | _ -> failwith "THX1138") 
-                                                         tbls) in
+                               let (dbs, table_defs) = 
+                                 split(map(function `Table(db, _table_name, row) 
+                                               -> (db, row)
+                                             | _ -> failwith "THX1138") 
+                                         tbls) in
                                  assert (all_equiv (=) dbs);
                                  let table_defs = combine table_aliases table_defs in
                                  let db = hd(dbs) in
@@ -381,8 +388,8 @@ fun globals locals expr cont ->
   | Syntax.Float (value, _) -> apply_cont globals cont (float value)
   | Syntax.Char (value, _) -> apply_cont globals cont (char value)
   | Syntax.Variable(name, _) -> 
-      let varval = (lookup globals locals name) in
-	apply_cont globals cont varval
+      let value = (lookup globals locals name) in
+	apply_cont globals cont value
   | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
   | Syntax.Apply (Variable ("recv", _), Record_intro (fields, None, _), _) when StringMap.is_empty fields ->
@@ -456,11 +463,11 @@ fun globals locals expr cont ->
       let aliases, th_exprs = split ths in
         eval (Syntax.list_expr d th_exprs)
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
-  | Syntax.Call_cc(arg, d) ->
+  | Syntax.Call_cc(arg, _) ->
       let cc = `Continuation cont in
         eval arg (FuncApplyFlipped(locals, cc) :: cont)
   | Syntax.SortBy (list, byExpr, _) ->
-      eval list cont (* FIXME: does nothing *)
+      eval list cont (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->

@@ -44,6 +44,7 @@ val invalid_name : Syntax.position -> string -> string -> 'a
 val format_exception : exn -> string
 val format_exception_html : exn -> string
 
-val display_errors : out_channel -> (unit -> 'a) -> ('b -> 'a) -> ('b -> 'a)
-val display_errors_fatal : out_channel -> ('a -> 'b) -> ('a -> 'b)
-val display : ?default:(exn -> 'a) -> ('a lazy_t) -> 'a
+(* val display_errors : out_channel -> (unit -> 'a) -> ('b -> 'a) -> ('b -> 'a) *)
+val display_fatal : ?stream:out_channel -> ('a -> 'b) -> ('a -> 'b)
+val display_fatal_l : ?stream:out_channel -> ('b lazy_t) -> 'b
+val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a

@@ -296,13 +296,16 @@ and charlist_as_string chlist =
 and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `PFunction (name, _) -> name
-  | `Function (_, _, _, Placeholder (str, _)) -> "fun [" ^ Show_label.show str ^ "]"
-  | `Function _ -> "fun"
+  | `Function (_, _, _, Placeholder (str, _)) -> 
+      "fun [" ^ Show_label.show str ^ "]"
+    (* Choose from fancy or simple printing of functions: *)
+(*   | `Function(formal,env,_,body) -> "fun (" ^ formal ^ ") {" ^ Syntax.string_of_expression body ^ "}[" ^ string_of_environment env ^ "]" *)
+  | `Function(formal,env,_,body) -> "fun"
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
-         "(" ^ mapstrcat "," (fun (label, value) -> 
-                                label ^ "=" ^ string_of_result value) 
+         "(" ^ mapstrcat "," (fun (label, value) ->
+                                label ^ "=" ^ string_of_result value)
            fields ^ ")")
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_result value ^ ")"
@@ -342,14 +345,14 @@ and string_of_xresult = function
   | `Char c -> String.make 1 c
   | otherwise -> string_of_result otherwise
 
-(* generic visitation functions for results *)
+(** {0 generic visitation functions for results} *)
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
   | #primitive_value as x -> result_f x
   | `PFunction (str, pargs) ->
       result_f(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs))
 
-  | `Function (str, locals, globals, body) ->
+  | `Function (str, locals, _globals, body) ->
       result_f(`Function(str, 
                          map_env result_f expr_f contframe_f locals,
 (*                         map_env result_f expr_f contframe_f globals,*)
@@ -359,13 +362,18 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
-and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
-  | Definition (env, s) ->
-      contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
+and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = 
+  function
+    | Recv (env) -> contframe_f(Recv(map_env result_f expr_f contframe_f env))
+    | Definition (env, s) ->
+        contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
   | FuncArg(arg, env) -> 
       contframe_f(FuncArg((map_expr result_f expr_f contframe_f) arg, (map_env result_f expr_f contframe_f) env))
   | FuncApply(f, env) -> 
       contframe_f(FuncApply((map_result result_f expr_f contframe_f) f, (map_env result_f expr_f contframe_f) env))
+  | FuncApplyFlipped(env, a) -> 
+      contframe_f(FuncApplyFlipped((map_env result_f expr_f contframe_f) env,
+                  (map_result result_f expr_f contframe_f) a))
   | LetCont(env, var, body) -> 
       contframe_f(LetCont((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
   | BranchCont(env, tru, fls) -> 
@@ -397,45 +405,102 @@ and map_env result_f expr_f contframe_f env =
 and map_cont result_f expr_f contframe_f kappa =
   map (map_contframe result_f expr_f contframe_f) kappa
 
-(* resolving labels *)
+(** return a list of all the core-syntax expressions hidden within
+    a result. A bit hackish. *)
+let rec extract_code_from_result = 
+  function
+    | #primitive_value -> []
+    | `PFunction (str, pargs) ->
+        concat_map (extract_code_from_result) pargs
+    | `Function (str, locals, _globals, body) ->
+        extract_code_from_env locals @ [body]
+    | `Record fields -> concat_map (snd ->- extract_code_from_result) fields
+    | `Variant(tag, body) -> extract_code_from_result body
+    | `List(elems) -> concat_map (extract_code_from_result) elems
+    | `Continuation kappa -> extract_code_from_cont kappa
+and extract_code_from_env env = 
+  concat_map (snd ->- extract_code_from_result) env
+and extract_code_from_cont kappa = 
+  concat_map (extract_code_from_contframe) kappa
+and extract_code_from_contframe = 
+  function
+    | Recv (env) -> extract_code_from_env env
+    | Definition (env, s) ->
+        extract_code_from_env env
+    | FuncArg(arg, env) ->
+        arg :: extract_code_from_env env
+    | FuncApply(f, env) -> 
+        extract_code_from_result f @ extract_code_from_env env
+    | FuncApplyFlipped(env, a) -> 
+        extract_code_from_result a @ extract_code_from_env env
+    | LetCont(env, var, body) ->
+        extract_code_from_env env @ [body]
+    | BranchCont(env, tru, fls) -> 
+        extract_code_from_env env @ [tru; fls]
+    | BinopRight(env, op, rhs) -> 
+        extract_code_from_env env @ [rhs]
+    | BinopApply(env, op, lhs) -> 
+        extract_code_from_env env @ extract_code_from_result lhs
+    | UnopApply(env, op) -> 
+        extract_code_from_env env
+    | RecSelect(env, label, var, label_var, body) -> 
+        assert(false)
+    | CollExtn(env, var, body, results, inputs) ->
+        assert(false)
+    | StartCollExtn(env, var, body) ->
+        assert(false)
+    | XMLCont(env, tag, attr_name, children, attr_exprs, elem_exprs) ->
+        assert(false)
+    | Ignore(env, next) ->
+        extract_code_from_env env @ [next]
 
-let label_table (program : Syntax.expression) = 
+(** {0 Resolving labels } *)
+
+(** Compute a label table from a program. For use with
+    [resolve_label], below. *)
+(* Presently these tables are a-lists, which are slow, and we don't
+   have any sanity check against redundant labels. Switch to hash tables?*)
+let expr_label_table (expr : Syntax.expression) = 
   reduce_expression (fun visit_children expr ->
 		       match expression_data expr with
 			 | `T(_, _, Some label) ->
                              (label, expr) :: visit_children expr
  			 | `T(_, _, None) ->
 			     visit_children expr
-		    ) (fun (_, lists) -> concat lists) program 
-    
+		    ) (fun (_, lists) -> concat lists) expr 
+
+let val_label_table value =
+  let exprs = extract_code_from_result value in
+    concat_map expr_label_table exprs
+
 (** resolve_label
-    Given a program and label, return the expression having the
-    corresponding label. Currently very inefficient because it
-    generates a complete label table for the program each time. We
-    should generate this table once and keep it with the program.
+    Given a label and a label table, return the expression having the
+    corresponding label.
+    Currently uses linear search
 *)
-let resolve_label program label : 'a expression' =
+let resolve_label table label : 'a expression' =
   try
-    assoc label (concat_map label_table program) 
+    assoc label table
   with
-      Not_found -> (prerr_endline("Placeholder not found: " ^ Show_label.show label);
+      Not_found -> (Debug.print("Placeholder not found: ");
                     raise Not_found)
 
-let resolve_placeholder program = function
-    Placeholder(s,_) -> resolve_label program s
+let resolve_placeholder table = function
+    Placeholder(s,_) -> resolve_label table s
   | x -> x
       
-let resolve_placeholders_result program rslt = 
-  map_result identity (resolve_placeholder program) identity rslt
+let resolve_placeholders_result table rslt = 
+  map_result identity (resolve_placeholder table) identity rslt
 
-let resolve_placeholders_cont program rslt = 
-  map_cont identity (resolve_placeholder program) identity rslt
+let resolve_placeholders_cont table rslt = 
+  map_cont identity (resolve_placeholder table) identity rslt
 
-let resolve_placeholders_env program env = 
-  map_env identity (resolve_placeholder program) identity env
+let resolve_placeholders_env table env = 
+  map_env identity (resolve_placeholder table) identity env
 
-let resolve_placeholders_expr program expr = 
-  map_expr identity (resolve_placeholder program) identity expr
+let resolve_placeholders_expr table expr = 
+  map_expr identity (resolve_placeholder table) identity expr
+
 
 let label_of_expression expr =
   let (_, _, label) = expression_data expr in fromOption "TUNLABELED" label
@@ -480,14 +545,29 @@ let marshal_continuation : continuation -> string
 let marshal_exprenv : (expression * environment) -> string
   = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
 
-let unmarshal_continuation program : string -> continuation
-  = Netencoding.Base64.decode
-  ->- Pickle_continuation.unpickleS
-  ->- resolve_placeholders_cont program 
-let unmarshal_exprenv program : string -> (expression * environment)
-  = let resolve (expr, env) = 
-     resolve_placeholders_expr program expr, 
-     resolve_placeholders_env program env  in
+exception UnrealizableContinuation
+
+let unmarshal_continuation valenv program : string -> continuation
+  = 
+  (* a bit hackish: we need to extract all the core-syntax expressions
+  from the valenv, since placeholders may make reference to them. *)
+  let table = (concat_map expr_label_table program
+                 @ concat_map val_label_table valenv) in
+    Netencoding.Base64.decode
+    ->- Pickle_continuation.unpickleS
+    ->- resolve_placeholders_cont table 
+let unmarshal_exprenv valenv program : string -> (expression * environment)
+  = let resolve (expr, env) =     
+    try
+      let table = (concat_map expr_label_table program
+                   @ concat_map val_label_table valenv) in
+        (resolve_placeholders_expr table expr, 
+         resolve_placeholders_env table env) 
+    with Not_found ->
+      Debug.print("\nPlaceholder didn't match code: " ^
+                    labelled_string_of_expression expr);
+      raise UnrealizableContinuation
+ in
   Netencoding.Base64.decode
   ->- Pickle_ExprEnv.unpickleS
   ->- resolve

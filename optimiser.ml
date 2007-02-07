@@ -28,6 +28,7 @@ let pure : expression -> bool =
      replace `x = f(3); 4' with `4' if `f' is a continuation.
   *)
   let rec pure default = function 
+      (* TBD: annotate ALL prim funcs as to pureness *)
     | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
       -> pure default arg
     | Apply _    -> false
@@ -57,14 +58,16 @@ let recursivep : Syntax.expression -> bool = function
 
 let size_limit = 150
 
-let is_inline_candidate= function
-  | Define (_, (Rec _ as e), _, _) -> not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
+let is_inline_candidate' = function
+  | Define (_, (Rec _ as e), _, _) -> 
+      not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
   | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
   | _ -> false
 
 let find_inline_candidates es : (string * expression * location) list = 
   let is_inline_candidate = function
-    | Define (name, rhs, location, _) as e when is_inline_candidate e -> [name, rhs, location]
+    | Define (name, rhs, location, _) as e when is_inline_candidate' e -> 
+        [name, rhs, location]
     | _ -> []
   in Utility.concat_map is_inline_candidate es
 

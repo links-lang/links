@@ -65,7 +65,7 @@ let make_xml_context tag (attrs:(string * untyped_expression) list) pos =
 let apply2_curried pos f x y =
   Apply(Apply(f, x, pos), y, pos)
 
-(* Various flavours of a sort of `gensym'*)
+(* Various specializations of [gensym] *)
 let unique_name () = Utility.gensym ()
 let db_unique_name = Utility.gensym ~prefix:"Table"
 

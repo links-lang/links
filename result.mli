@@ -2,6 +2,7 @@
 (** Defines the "values" of Links, and ops on them, including continuations *)
 
 exception Runtime_error of string
+exception UnrealizableContinuation
 
 class type otherfield
  = object method show : string end
@@ -141,6 +142,6 @@ val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
 
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
-val unmarshal_continuation : Syntax.expression list -> string -> continuation
-val unmarshal_exprenv : Syntax.expression list -> string -> (Syntax.expression * environment)
+val unmarshal_continuation : result list -> Syntax.expression list -> string -> continuation
+val unmarshal_exprenv : result list -> Syntax.expression list -> string -> (Syntax.expression * environment)
 

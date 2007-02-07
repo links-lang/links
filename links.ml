@@ -5,7 +5,7 @@ open List
 
 let load_file filename =
   let typingenv, exprs = Loader.read_file_cache filename in
-  let exprs = map Syntax.labelize exprs in
+(*   let exprs = map Syntax.labelize exprs in *)
     typingenv, exprs
 
 (**
@@ -86,12 +86,13 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
+                (Errors.display_fatal load_file (Settings.get_value prelude)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
               let exprs = Optimiser.optimise_program (typingenv, exprs) in
-                (fst ((Interpreter.run_program libraries []) (map Syntax.labelize exprs)), typingenv)
+              let exprs = map Syntax.labelize exprs in
+                (fst ((Interpreter.run_program libraries []) exprs), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
   ]
@@ -125,24 +126,30 @@ let print_result rtype result =
 
 (** type, optimise and evaluate a list of expressions *)
 let process_one (valenv, typingenv) exprs = 
-  let typingenv, exprs = measure "type_program" (Inference.type_program typingenv) exprs in
-  let exprs =           measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+  let typingenv, exprs = lazy (Inference.type_program typingenv exprs) 
+    <|measure_as|> "type_program" in
+  let exprs = lazy (Optimiser.optimise_program (typingenv, exprs))
+    <|measure_as|> "optimise_program" in
   let exprs = map Syntax.labelize exprs in
-  let valenv, result = measure "run_program" (Interpreter.run_program valenv) [] exprs in
+  let valenv, result = lazy (Interpreter.run_program valenv [] exprs)
+    <|measure_as|> "run_program" 
+  in
     print_result (Syntax.node_datatype (last exprs)) result;
     (valenv, typingenv), result
 
 (* Read Links source code, then type, optimize and run it. *)
-let evaluate ?(handle_errors=Errors.display_errors_fatal stderr) parse envs = 
+let evaluate ?(handle_errors=Errors.display_fatal) parse envs = 
   handle_errors (measure "parse" parse ->- process_one envs)
 
 (* Read Links source code, then type and optimize it. *)
-let just_optimise parse (valenv, typingenv) input = 
+let just_optimise parse (_valenv, typingenv) input = 
   Settings.set_value interacting false;
   let parse = parse Parse.program in
   let exprs = measure "parse" parse input in 
-  let typingenv, exprs = measure "type_program" (Inference.type_program typingenv) exprs in
-  let exprs = measure "optimise_program" Optimiser.optimise_program (typingenv, exprs) in
+  let typingenv, exprs = measure_l "type_program"
+    (lazy (Inference.type_program typingenv exprs)) in
+  let exprs = measure_l "optimise_program"
+    (lazy (Optimiser.optimise_program (typingenv, exprs))) in
     print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
 
 (* Interactive loop *)
@@ -196,6 +203,7 @@ let options : opt list =
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push cmd_line_actions (`Evaluate str)));
     (noshort, "config",              None,                             Some Settings.load_file);
+    (noshort, "dump",                None,                             Some Loader.dump_cached);
 
     (* Modes to just optimise a program and print the result. I'm
        not crazy about these option letters *)
@@ -211,13 +219,14 @@ let welcome_note = Settings.add_string ("welcome_note",
  |_____|_|_| \\___|__|\\__|____/
 Welcome to Links version 0.3.7 (Gogarloch)", `System)
 
-(* main *)
+(** main *)
 let _ =
   let file_list = ref [] in
-  Errors.display_errors_fatal stderr (parse_cmdline options) (push file_list);
-  (* load prelude *)
+  Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
+  (* load prelude: *)
   let prelude_types, prelude =
-    (Errors.display_errors_fatal stderr load_file (Settings.get_value prelude)) in 
+    (Errors.display_fatal load_file (Settings.get_value prelude)) in
+
   let (prelude_compiled, _) = Interpreter.run_program [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 

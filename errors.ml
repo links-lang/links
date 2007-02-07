@@ -179,23 +179,20 @@ let rec format_exception_html = function
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | NoMainExpr -> "<h1>Links Syntax Error</h1>\nNo \"main\" expression at end of file"
   | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ String.concat "<br/>" (List.map Syntax.string_of_expression es)
+  | Result.UnrealizableContinuation ->
+      "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>"
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
 
-let display_errors' default stream (f : 'a -> 'b) (a : 'a) = 
-  try 
-    f a
-  with e ->
-    output_string stream (format_exception e ^ "\n");
-    flush stream;
-    default ()
-
-let display_errors stream default = display_errors' default stream
-let display_errors_fatal stream = display_errors' (fun () -> exit 1) stream
-
-let display ?(default=(fun e -> raise e)) (e) = 
+let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) = 
   try 
     Lazy.force e
   with exc ->
-    output_string stderr (format_exception exc ^ "\n");
-    flush stderr;
+    output_string stream (format_exception exc ^ "\n");
+    flush stream;
     default exc
+
+let display_fatal ?(stream=stderr) f a = 
+  display ~default:(fun _ -> exit 1) ~stream:stream (lazy (f a))
+
+let display_fatal_l ?(stream=stderr) e =
+  display ~default:(fun _ -> exit 1) ~stream:stream e

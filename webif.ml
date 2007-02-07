@@ -146,15 +146,15 @@ let lookup_either a b env =
   with Not_found -> List.assoc b env
 
 (* Extract continuation from the parameters passed in over CGI.*)
-let contin_invoke_req program params =
+let contin_invoke_req valenv program params =
   let pickled_continuation = List.assoc "_cont" params in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
-    ContInvoke(unmarshal_continuation program pickled_continuation, params)
+    ContInvoke(unmarshal_continuation valenv program pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
-let expr_eval_req program prim_lookup params =
-  let expression, environment = unmarshal_exprenv program (List.assoc "_k" params) in
+let expr_eval_req valenv program params =
+  let expression, environment = unmarshal_exprenv valenv program (List.assoc "_k" params) in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
     ExprEval(expression, params @ environment)
@@ -173,13 +173,15 @@ let is_contin_invocation params =
 
 let is_expr_request = List.exists is_special_param
         
-let client_return_req env cgi_args = 
+let client_return_req cgi_args = 
   let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
   let parse_json_b64 = parse_json -<- Utility.base64decode in
   let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
     ClientReturn(continuation, untuple_single arg)
 
-let perform_request program globals main req =
+let perform_request 
+    (program (* orig. src.: only used for gen'ing js*))
+    globals main req =
   match req with
     | ContInvoke (cont, params) ->
         print_http_response [("Content-type", "text/html")]
@@ -205,9 +207,9 @@ let perform_request program globals main req =
           (if is_client_program program then
              Js.generate_program program main
            else 
-             let env, rslt = Interpreter.run_program globals [] [main] in
-             Result.string_of_result rslt)
-
+             let _env, rslt = Interpreter.run_program globals [] [main] in
+               Result.string_of_result rslt)
+          
 let error_page_stylesheet = 
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block}</style>"
 
@@ -222,30 +224,35 @@ let catch_notfound msg f a =
     f a
   with Not_found -> failwith ("not found caught ("^msg^")")
 
+let catch_notfound_l msg e =
+  try
+    Lazy.force e
+  with Not_found -> failwith ("not found caught ("^msg^")")
+
 let serve_request (valenv, typenv) filename = 
   try 
-    let _, program = catch_notfound "reading and optimising"
-      (read_and_optimise_program typenv) filename in
-    let global_env, main = List.partition Syntax.is_define program in
-    if (List.length main < 1) then raise Errors.NoMainExpr
-    else
+    let _, program = catch_notfound_l "reading and optimising"
+      (lazy (read_and_optimise_program typenv filename)) in
+    let defs, main = List.partition Syntax.is_define program in
+    if (List.length main < 1) then raise Errors.NoMainExpr else
     let main = last main in
-    let global_env = catch_notfound "stubifying" (stubify_client_funcs valenv) global_env in
+    let defs = catch_notfound_l "stubifying" 
+      (lazy (stubify_client_funcs valenv defs)) in
     let cgi_args = Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
     let request = 
       if is_remote_call cgi_args then
-        get_remote_call_args global_env cgi_args
+        get_remote_call_args defs cgi_args
       else if is_client_call_return cgi_args then
-        client_return_req global_env cgi_args
+        client_return_req cgi_args
       else if (is_contin_invocation cgi_args) then
-        contin_invoke_req program cgi_args
+        contin_invoke_req (rng valenv) program cgi_args
       else if (is_expr_request cgi_args) then
-        expr_eval_req program (flip List.assoc global_env) cgi_args
+        expr_eval_req (rng valenv) program cgi_args
       else
         CallMain
     in
-      perform_request program (global_env @ valenv) main request
+      perform_request program (defs @ valenv) main request
   with
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)
@@ -256,5 +263,4 @@ let serve_request (valenv, typenv) filename =
         (error_page (Errors.format_exception_html exc))
           
 let serve_request envs filename =
-  Errors.display_errors_fatal stderr
-    (serve_request envs) filename
+  Errors.display (lazy (serve_request envs filename))

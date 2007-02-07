@@ -30,8 +30,10 @@ exception ASTSyntaxError of position * string
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Typeable, Show, Pickle)
 
-type label = int
-    deriving (Typeable, Show, Pickle)
+type label = string
+    deriving (Show, Pickle)
+ (* The derived Typeable instance failed for some reason. *)
+    (* Q: Can I write my own show for these? I want to base64 it *)
 
 type comparison = [`Less | `LessEq | `Equal | `NotEq]
     deriving (Typeable, Show, Pickle)
@@ -88,7 +90,8 @@ type 'data expression' =
   | HasType of ('data expression' * Inferencetypes.datatype * 'data)
   | Alien of (string * string * Inferencetypes.assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Typeable, Show, Pickle, Functor, Rewriter) (* Should this be picklable? *)
+      deriving (Typeable, Show, Pickle, Functor, Rewriter)
+      (* Q: Should syntax exprs be picklable or not? *)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
@@ -218,38 +221,23 @@ let rec show t : 'a expression' -> string = function
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
-  | Placeholder (s, data) -> "PLACEHOLDER : " ^ Show_label.show s ^ t data
+  | Placeholder (s, data) -> "PLACEHOLDER : " ^ Utility.base64encode s ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Inferencetypes.string_of_assumption k) ^ t data
 
 let string_of_expression s = show (fun _ -> "") s
 
 let as_string = string_of_expression
 
-let labelled_string_of_expression s = show (function
-                                              | (`T (_,_,Some lbl)) -> "(label:" ^ Show_label.show lbl ^ ")"
-                                              | _ -> "(label: NONE)") s
+let labelled_string_of_expression s = 
+  show (function
+            `T (_,_,Some lbl) -> "(label:" ^ Utility.base64encode(lbl) ^ ")"
+          | _ -> "(NO LABEL)") s
 
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
-
-(*let has_label = function
-    (_,_,Some_) -> true
-  | (_,_,None) -> false
-
-let is_labelized = reduce_expression (fun _ -> expression_data) (fun(_,datas) -> ) 
-*)
-let labelize =
-  let label_seq = ref 0 in
-let new_label () = incr label_seq; !label_seq in
-let new_label_str () = (*"T" ^ string_of_int*) (new_label ()) in
-  fun (expr:expression) ->
-    Functor_expression'.map
-      (fun (`T(a,b,_)) ->
-         let label = new_label_str () in
-           (`T(a, b, Some label))) expr
 
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
@@ -359,15 +347,47 @@ let expression_data : ('a expression' -> 'a) = function
         | Alien (_,_,_,data) -> data
         | Placeholder (_,data) -> data
 
-(*
-(** A hypothetical [set_data] would set the data members of all the
-    subnodes to a given value; could be useful when you have a big tree to
-    insert somewhere during desugaring & you want it be at certain line
-    numbers, etc. *)
-let rec set_data : ('b -> 'a expression -> 'b expression) =
-  fun d -> function
-  | Define ... 
-*)
+(** [set_data] sets the data member of an expression to a given value;
+ *)
+let rec set_data : ('b -> 'a expression' -> 'b expression') =
+  fun data -> function
+  | Define (a, b, c, _) -> 
+      Define (a, b, c, data)
+  | TypeDecl (a, b, c, _) -> TypeDecl (a, b, c, data)
+  | HasType (a, b,_) ->  HasType (a, b,data) 
+  | Boolean (a, _) -> Boolean (a, data)
+  | Integer (a, _) -> Integer (a, data)
+  | Float (a, _) ->  Float (a, data)
+  | Char (a, _) -> Char (a, data)
+  | String (a, _) -> String (a, data)
+  | Variable (a, _) -> Variable (a, data)
+  | Apply (a, b,_) -> Apply (a, b,data)
+  | Condition (a, b, c, _) -> Condition (a, b, c, data)
+  | Comparison (a, b, c, _) -> Comparison (a, b, c, data)
+  | Abstr (a, b,_) -> Abstr (a, b,data)
+  | Let (a, b, c, _) -> Let (a, b, c, data) 
+  | Rec (a, b,_) -> Rec (a, b,data)
+  | Xml_node (a, b, c, data) ->  Xml_node (a, b, c, data)
+  | Record_intro (a, b,_) -> Record_intro (a, b,data)
+  | Record_selection (a, b, c, d, e, _) -> 
+      Record_selection (a, b, c, d, e,data)
+  | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
+  | Variant_selection (a, b, c, d, e, f, _) ->
+      Variant_selection (a, b, c, d, e, f, data)
+  | Variant_selection_empty (a, _) -> Variant_selection_empty (a, data)
+  | Nil (_) -> Nil (data)
+  | List_of (a, _) -> List_of (a, data)
+  | Concat (a, b,_) -> Concat (a, b,data)
+  | For (a, b, c, _) -> For (a, b, c, data)
+  | Database (a, _) ->  Database (a, data)
+  | TableQuery (a, b,_) ->  TableQuery (a, b,data)
+  | TableHandle (a, b, c, _) -> TableHandle (a, b, c, data)
+  | SortBy (a, b,_) -> SortBy (a, b,data)
+  | Call_cc (a, _) -> Call_cc (a, data)
+  | Wrong _ -> Wrong data
+  | Alien (a, b, c,_) ->  Alien (a, b, c,data)
+  | Placeholder (a,_) -> Placeholder (a,data) 
+      
 
 let node_datatype : (expression -> Inferencetypes.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 
@@ -447,7 +467,41 @@ let rename_fast name replacement expr =
     fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
 
+(** {0 Labelizing} *)
 
+let set_label expr lbl = 
+  let (`T(pos, t, _)) = expression_data expr in
+    set_data (`T(pos, t, lbl)) expr
+
+let has_label expr =
+  match expression_data expr with
+      (_,_,None) -> false
+    | (_,_,Some _) -> true
+
+let label_for_expr =
+  (Digest.string -<- string_of_expression)
+
+let labelize expr =
+  (function None -> expr
+     | Some x -> x)
+    (RewriteSyntax.topdown 
+       (fun expr -> 
+          Debug.print(Utility.base64encode(label_for_expr expr));
+          Some(set_label expr (Some(label_for_expr expr))))
+       expr)
+
+
+(** {0 Helpful syntax operation} *)
+(** Removes defs from [env] that aren't used by [expr].
+    Move this to optimiser.ml? *)
+let elim_dead_defs env expr =
+  let used_names = freevars(expr) @ concat (map freevars env) in
+    filter (function
+               | Define (x, y, z, d) when List.mem x used_names -> true
+               | Define _ -> false
+               | _ -> true) env
+
+(** {0 Skeleton} *)
 
 (** [skeleton] has a case for each of the [Syntax] constructors, and
     gives an approrpiate name to each component. Use this to get 
@@ -509,10 +563,3 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
-
-let elim_dead_defs env expr =
-  let used_names = freevars(expr) @ concat (map freevars env) in
-    filter (function
-               | Define (x, y, z, d) when List.mem x used_names -> true
-               | Define _ -> false
-               | _ -> true) env

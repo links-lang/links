@@ -1,7 +1,7 @@
 (*pp deriving *)
 type location = [ `Client | `Native | `Server | `Unknown ]
 type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle)
-type label deriving (Typeable, Show, Pickle)
+type label deriving (Show, Pickle)
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
   | TypeDecl of (string * int list * Inferencetypes.datatype * 'a)
@@ -57,6 +57,7 @@ val is_value : 'a expression' -> bool
 val string_of_expression : 'a expression' -> string
 val labelled_string_of_expression : expression -> string
 val as_string : 'a expression' -> string
+val labelled_string_of_expression : expression -> string
 
 val stringlit_value : 'a expression' -> string
 

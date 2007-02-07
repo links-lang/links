@@ -243,6 +243,8 @@ struct
   let map2alist f list = List.map (fun x -> (x, f x)) list
   let graph_func f list = map2alist f list
 
+  let rng alist = List.map snd alist
+
 end
 include AList
 
@@ -560,3 +562,10 @@ let getenv : string -> string option =
   fun name ->
     try Some (Sys.getenv name)
     with Not_found -> None
+
+
+(** {0 Simulating infix function words (a la Haskell backticks)} *)
+
+(** left-associative *)
+let ( <| ) arg f = f arg
+let ( |> ) f arg = f arg
