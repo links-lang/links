@@ -4,37 +4,43 @@ var theForm =
  form
    <#>
      <div>
-       Flavour: { choice([(1, "Cherry"),
-                          (2, "Strawberry"),
-                          (77, "Vanilla")]) -> flav }
+       <label>Style of bike: { choice([(1, "Road bike"),
+                                       (2, "Mountain Bike"),
+                                       (77, "Hybrid")]) -> bikeStyle }
+       </label>
      </div>
      <div>
-       Problems with: <br />{ choices([(2, "Rats"),
-                                       (3, "Moles"),
-                                       (6, "Neighbours")]) -> problems }
+       Add-ons: <br />{ choices([(2, "Bell"),
+                                 (3, "Rack"),
+                                 (6, "Glow-in-the-dark handlebar tape")]) -> addons }
      </div>
-     <div>
-       { textarea("This is the song that never ends") -> song }
-     </div>
-       { button("Go", "go") -> go }  { button("Stop", "stop") -> stop }
+     <div><label>
+       Comments about your order: <br />
+       { textarea("Comments") -> comments }
+     </label></div>
      <div>
        <label>Over 65? { checkbox -> over65 }</label>
      </div>
+       { button("Check Out", "checkout") -> checkout }  
+       { button("Cancel", "cancel") -> cancel }
    </#>
  yields
-    (flav=flav,
-     song=song,
+    (bikeStyle=bikeStyle,
+     comments=comments,
      over65=over65,
-     do=if (isJust (go)) fromJust (go) else if (isJust (stop)) fromJust (stop) else "",
-     problems=problems);
+     cmd=if (isJust (checkout)) Checkout else if (isJust (cancel)) Cancel else NoButton,
+     addons=addons);
 
-fun renderer ((flav=flav, song=song, over65=over65, do=do, problems=problems)) {
-   <#> 
-     {intToXml(flav)} <br /> {stringToXml(song)} <br />
-     {stringToXml(if (over65) "You are over 65!" else "")}
-     {stringToXml(do)}
-     Problems: {stringToXml(join(", ", map(intToString, problems)))}
-   </#>
+fun renderer (formData) {
+   if (formData.cmd == Checkout)
+     <#> 
+       <div> Bike style code: {intToXml(formData.bikeStyle)} </div> 
+       <div> Add-ons: {stringToXml(join(", ", map(intToString, formData.addons)))} </div>
+       <div> Comments: {stringToXml(formData.comments)} </div>
+       <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>
+     </#>
+   else
+   <#> Order Cancelled. Thanks for visiting! </#>
 }
 
 render(renderer)(theForm)
