@@ -8,13 +8,17 @@ var f =
      {inputInt -> l}
      {inputInt -> r}
      <br/>
-     {button("+",(+)) -> plus}
-     {button("*",(*)) -> times}
+     {submitButton("+",(+)) -> plus}
+     {submitButton("*",(*)) -> times}
    </#>
   yields (action=firstButton([plus,times]), l=l,r=r);
 
 fun run ((action=action, l=l, r=r)) {
-   l `action` r 
+   <html>
+    <body>
+     {intToXml(l `action` r)}
+    </body>
+   </html>
 }
 
 render(run)(f)

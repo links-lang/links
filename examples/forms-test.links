@@ -1,5 +1,12 @@
 # An ugly page that exercises the various types of input fields in a form.
 
+fun radioGroupVertical(items) {
+  for(var (key, label) <- items)
+    <label>
+      {key} {stringToXml(label)}
+    </label> <br/>
+}
+
 var theForm = 
  form
    <#>
@@ -14,6 +21,9 @@ var theForm =
                                  (3, "Rack"),
                                  (6, "Glow-in-the-dark handlebar tape")]) -> addons }
      </div>
+     <div>
+        { inputRadiogroup([("red", "Red"), ("green", "Green"), ("blue", "Blue")], radioGroupVertical) -> colour }
+     </div>
      <div><label>
        Comments about your order: <br />
        { textarea("Comments") -> comments }
@@ -21,21 +31,23 @@ var theForm =
      <div>
        <label>Over 65? { checkbox -> over65 }</label>
      </div>
-       { button("Check Out", "checkout") -> checkout }  
-       { button("Cancel", "cancel") -> cancel }
+       { submitButton("Check Out", "checkout") -> checkout }  
+       { submitButton("Cancel", "cancel") -> cancel }
    </#>
  yields
     (bikeStyle=bikeStyle,
      comments=comments,
      over65=over65,
      cmd=if (isJust (checkout)) Checkout else if (isJust (cancel)) Cancel else NoButton,
-     addons=addons);
+     addons=addons,
+     colour=colour);
 
 fun renderer (formData) {
    if (formData.cmd == Checkout)
      <#> 
        <div> Bike style code: {intToXml(formData.bikeStyle)} </div> 
        <div> Add-ons: {stringToXml(join(", ", map(intToString, formData.addons)))} </div>
+       <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
        <div> Comments: {stringToXml(formData.comments)} </div>
        <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>
      </#>

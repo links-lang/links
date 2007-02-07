@@ -407,7 +407,6 @@ var nextName =
 #   image
 #   button
 
-
 # A one element form can be constructed using the input function.
 sig input : Form (String)
 var input = 
@@ -422,6 +421,22 @@ fun inputValue(v) {
    (retern (<input name="{name}" value="{v}"/>,
             fun (env) { assoc(name, env)}))}
 }
+
+# A hidden form element
+sig hidden : String -> Form (String)
+fun hidden(v) { 
+   nextName >>= fun (name) {
+   (retern (<input name="{name}" value="{v}" type="hidden" />,
+            fun (env) { assoc(name, env)}))}
+}
+
+
+# A file
+sig inputFile : Form (String)
+var inputFile = 
+   nextName >>= fun (name) {
+   (retern (<input name="{name}" type="file" />,
+            fun (env) { assoc(name, env)}))};
 
 # A form is rendered to Xml, and a handler applied, using the render function
 sig render : ((a) -> Xml) -> Form (a) -> Xml
@@ -451,11 +466,32 @@ fun textarea(value) {
             fun (env) { assoc(name, env) })}
 }
 
-sig button : (String,a) -> Form (Maybe(a))
-fun button(text, v) {
-   nextName >>= fun (name) {
-    retern (<button name="{name}" value="here" type="submit">{stringToXml(text)}</button>,
-            fun (env) { if (memassoc(name, env))  Just(v) else Nothing })}
+sig button : (String,[|Submit|Reset|Button|],a) -> Form (Maybe(a))
+fun button(text, behaviour, v) {
+  nextName >>= fun (name) {
+    var behaviour = switch (behaviour) {
+      case Submit -> "submit"
+      case Reset -> "reset"
+      case Button -> "button"
+    };
+    retern (<button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>,
+            fun (env) { if (memassoc(name, env))  Just(v) else Nothing })
+  }
+}
+
+sig submitButton : (String,a) -> Form (Maybe(a))
+fun submitButton(text, v) {
+  button(text, Submit, v)
+}
+
+sig resetButton : (String,a) -> Form (Maybe(a))
+fun resetButton(text, v) {
+  button(text, Reset, v)
+}
+
+sig pushButton : (String,a) -> Form (Maybe(a))
+fun pushButton(text, v) {
+  button(text, Button, v)
 }
 
 sig checkbox : Form (Bool)
@@ -465,7 +501,23 @@ var checkbox =
           fun (env) { (memassoc(name, env)) })};
 
 
-fun inputRadiogroup(items) {
+# buttons is a list of (value, data) pairs
+# layout is a function for rendering a list of (radio button, data) pairs
+#
+# It is the users responsibility to ensure that layout produces Xml that
+# uses each radio button exactly once and does not introduce any other input
+# elements.
+#
+# The data components are useful for attaching extra data such as labels to
+# the radio buttons.
+sig inputRadiogroup : ([(String, a)], [(Xml, a)] -> Xml) -> Form (String) 
+fun inputRadiogroup(buttons, layout) {
+  nextName >>= fun (name) {
+    var vs = for (var (value, data) <- buttons)
+                  [(<input type="radio" name="{name}" value="{value}" />, data)];
+
+    retern (layout(vs), fun (env) { (assoc(name, env))})
+  }
 }
 
 

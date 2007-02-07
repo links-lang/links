@@ -102,7 +102,7 @@ fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
        { labelledInput("Age", inputAge, intToString, a) -> age }
        { labelledInput("Arrival", inputDate, dateToRawDate, arr) -> arr }
        { labelledInput("Departure", inputDate, dateToRawDate, dep) -> dep }
-      <tr><td>{ button("Submit", ()) -> _ }</td></tr>
+      <tr><td>{ submitButton("Submit", ()) -> _ }</td></tr>
     </table>
   yields 
     (person=person, age=age, arrival=arr, departure=dep)
