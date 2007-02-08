@@ -442,11 +442,22 @@ var inputFile =
 sig render : ((a) -> Xml) -> Form (a) -> Xml
 fun render(continuation)(frm) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+   <form enctype="application/x-www-form-urlencoded" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
 }
+
+# Render a multipart form
+sig renderMultipart : ((a) -> Xml) -> Form (a) -> Xml
+fun renderMultipart(continuation)(frm) {
+   var ((xml, extractor),_) = runState(frm)(0);
+   <form enctype="multipart/form-data" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+     {xml}
+   </form>
+
+}
+
 
 #sig forms : ([Form (a)]) -> Form ([a])
 fun forms(fs) { 
@@ -501,8 +512,12 @@ var checkbox =
           fun (env) { (memassoc(name, env)) })};
 
 
-# buttons is a list of (value, data) pairs
+# before ++ [selected] ++ after is a list of (value, data) pairs
 # layout is a function for rendering a list of (radio button, data) pairs
+#
+# [NOTE]
+#   A default selection is compulsory as recommended by the HTML spec.
+#   We should probably do the same for 'choice' (drop-down menus) as well.
 #
 # It is the users responsibility to ensure that layout produces Xml that
 # uses each radio button exactly once and does not introduce any other input
@@ -510,13 +525,16 @@ var checkbox =
 #
 # The data components are useful for attaching extra data such as labels to
 # the radio buttons.
-sig inputRadiogroup : ([(String, a)], [(Xml, a)] -> Xml) -> Form (String) 
-fun inputRadiogroup(buttons, layout) {
+sig inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Form (String) 
+fun inputRadiogroup(before, selected, after, layout) {
   nextName >>= fun (name) {
-    var vs = for (var (value, data) <- buttons)
+    var before = for (var (value, data) <- before)
                   [(<input type="radio" name="{name}" value="{value}" />, data)];
-
-    retern (layout(vs), fun (env) { (assoc(name, env))})
+    var selected = [(<input type="radio" checked="on" name="{name}" value="{selected.1}" />, selected.2)];
+    var after = for (var (value, data) <- after)
+                  [(<input type="radio" name="{name}" value="{value}" />, data)];
+    
+    retern (layout(before ++ selected ++ after), fun (env) { (assoc(name, env))})
   }
 }
 

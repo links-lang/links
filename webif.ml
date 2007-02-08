@@ -229,6 +229,11 @@ let catch_notfound_l msg e =
     Lazy.force e
   with Not_found -> failwith ("not found caught ("^msg^")")
 
+
+let is_multipart () =
+  ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
+      Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
+
 let serve_request (valenv, typenv) filename = 
   try 
     let _, program = catch_notfound_l "reading and optimising"
@@ -238,7 +243,12 @@ let serve_request (valenv, typenv) filename =
     let main = last main in
     let defs = catch_notfound_l "stubifying" 
       (lazy (stubify_client_funcs valenv defs)) in
-    let cgi_args = Cgi.parse_args () in
+    let cgi_args =
+      if is_multipart () then
+        List.map (fun (name, {Cgi.filename=_; Cgi.content_type=_; Cgi.value=value}) ->
+                    (name, value)) (Cgi.parse_multipart_args ())
+      else
+        Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
     let request = 
       if is_remote_call cgi_args then

@@ -22,7 +22,7 @@ var theForm =
                                  (6, "Glow-in-the-dark handlebar tape")]) -> addons }
      </div>
      <div>
-        { inputRadiogroup([("red", "Red"), ("green", "Green"), ("blue", "Blue")], radioGroupVertical) -> colour }
+        { inputRadiogroup([("red", "Red")], ("green", "Green"), [("blue", "Blue")], radioGroupVertical) -> colour }
      </div>
      <div><label>
        Comments about your order: <br />
@@ -30,6 +30,9 @@ var theForm =
      </label></div>
      <div>
        <label>Over 65? { checkbox -> over65 }</label>
+     </div>
+     <div>
+       Upload a file: { inputFile -> file }
      </div>
        { submitButton("Check Out", "checkout") -> checkout }  
        { submitButton("Cancel", "cancel") -> cancel }
@@ -40,7 +43,8 @@ var theForm =
      over65=over65,
      cmd=if (isJust (checkout)) Checkout else if (isJust (cancel)) Cancel else NoButton,
      addons=addons,
-     colour=colour);
+     colour=colour,
+     file=file);
 
 fun renderer (formData) {
    if (formData.cmd == Checkout)
@@ -50,9 +54,10 @@ fun renderer (formData) {
        <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
        <div> Comments: {stringToXml(formData.comments)} </div>
        <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>
+       <div> File: {stringToXml(formData.file)}</div>
      </#>
    else
    <#> Order Cancelled. Thanks for visiting! </#>
 }
 
-render(renderer)(theForm)
+renderMultipart(renderer)(theForm)
