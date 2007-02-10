@@ -49,20 +49,12 @@ let gen_case ti (loc, name, params') =
                   params' (range 0 (List.length params' - 1))) in
   let patt = (List.fold_left 
                 (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< $uid:name$>> params) in
-  match params' with
-  | [] -> 
-      (patt, None, <:expr< Format.pp_print_string formatter $str:name$ >>)
-  | _ -> 
-      let tuple = 
-        match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with (* 0-tuples and 1-tuples are invalid *)
-        | []     -> <:expr< () >>
-        | [x]    -> x
-        | params -> <:expr< ( $list:params$ )>> 
-      in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
-                                   Format.pp_print_string formatter $str:name$;
-                                   Format.pp_print_break formatter 1 2;
-                                   $gen_printers ti tuple params'$;
-                                   Format.pp_close_box formatter () } >>)
+  let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+  in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                               Format.pp_print_string formatter $str:name$;
+                               Format.pp_print_break formatter 1 2;
+                               $gen_printers ti tuple params'$;
+                               Format.pp_close_box formatter () } >>)
 
 
 (* Generate the format function, the meat of the thing. *)

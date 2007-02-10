@@ -9,6 +9,7 @@ OCAMLFLAGS=-w Ae
 
 SOURCES = util.ml util.mli              \
           show.ml show.mli              \
+          eq.ml eq.mli                  \
           bounded.ml bounded.mli        \
           enum.ml enum.mli              \
           monad.ml monad.mli            \

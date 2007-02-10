@@ -49,16 +49,8 @@ let gen_pickle_case ti (loc, name, params') (pos : int) =
                   params' (range 0 (List.length params' - 1))) in
   let patt = (List.fold_left 
                 (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< $uid:name$>> params) in
-  match params' with 
-    | [] -> 
-        (patt, None, <:expr< Pickle_int.pickle buffer $int:string_of_int pos$ >>)
-    | _ -> 
-        let tuple = 
-          match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with (* 0-tuples and 1-tuples are invalid *)
-            | []     -> <:expr< () >>
-            | [x]    -> x
-            | params -> <:expr< ( $list:params$ )>> 
-        in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int pos$; $gen_printers ti tuple params'$ } >>)
+  let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+  in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int pos$; $gen_printers ti tuple params'$ } >>)
 
 let gen_unpickle_case ti (loc, name, params') (pos : int) =
   let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 

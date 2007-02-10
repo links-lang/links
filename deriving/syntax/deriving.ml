@@ -31,6 +31,11 @@ let random_id length =
     done;
     s
 
+let tuple_expr loc = function  (* 0-tuples and 1-tuples are invalid *)
+  | []  -> <:expr< () >>
+  | [x] -> x
+  | xs  -> <:expr< ( $list:xs$ ) >>
+
 exception NotImpl of (Lexing.position * Lexing.position)
 
 (* Generate instances of a particular class for a list of
