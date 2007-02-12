@@ -339,8 +339,8 @@ let call_with_open_infile,
       with x -> 
         closer fd;
         raise x
-  in ((fun x -> call open_in close_in x),
-      (fun x -> call open_out close_out x))
+  in ((fun x ?(binary=false) -> call (if binary then open_in_bin else open_in) close_in x),
+      (fun x ?(binary=false) -> call (if binary then open_out_bin else open_out) close_out x))
 
 let process_output : string -> string
   = String.concat "\n" -<- lines -<- Unix.open_process_in
