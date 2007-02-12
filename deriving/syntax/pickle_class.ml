@@ -126,7 +126,7 @@ let gen_polycase ({loc=loc} as ti) = function
               S.pickle buffer $lid:tname$
         } >>)
   | (MLast.RfInh ctyp, n) -> 
-      let var, guard, expr = cast_pattern loc ctyp in
+      let var, guard, expr = cast_pattern loc ctyp ~param:"x" in
         (var, guard, 
          <:expr< let module S = $gen_printer ti ctyp$ in do {
               Pickle_int.pickle buffer $int:string_of_int n$ ;

@@ -102,7 +102,7 @@ let gen_polycase ({loc=loc; tname=tname} as ti) = function
 | MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
     (<:patt< (# $[tname]$ as $lid:tname$) >>, None, 
     <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
-| MLast.RfInh ctyp -> let var, guard, expr = cast_pattern loc ctyp in
+| MLast.RfInh ctyp -> let var, guard, expr = cast_pattern loc ctyp ~param:"x" in
     (var, guard, 
      <:expr< let module S = $gen_printer ti ctyp$ in 
                 S.format formatter $expr$ >>)
