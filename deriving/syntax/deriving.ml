@@ -228,20 +228,20 @@ struct
            end
       | _ -> assert false
 
-  let cast_pattern loc t = 
-    (<:patt< x >>,
+  let cast_pattern loc t ?(param="x") = 
+    (<:patt< $lid:param$ >>,
      Some <:expr<
             let module M = 
              struct
               type t = $t$;
               value test = fun [ #t -> True | _ -> False];
-             end in M.test x >>,
+             end in M.test $lid:param$ >>,
      <:expr<
        (let module M = 
             struct
               type t = $t$;
               value cast = fun [#t as t -> t | _ -> assert False];
-            end in M.cast x)>>)
+            end in M.cast $lid:param$ )>>)
       
 end
 

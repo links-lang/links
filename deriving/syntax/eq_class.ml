@@ -52,30 +52,54 @@ let gen_case ti (loc, name, params) =
          None,
          gen_printers ti exprl exprr params)
 
+let wildcard_failure loc = <:patt<_>>, None, <:expr< False>>
+
 (* Generate the format function, the meat of the thing. *)
 let gen_eq_sum ({loc=loc} as ti) ctors = 
-  let matches = (List.map (gen_case ti) ctors) @ [<:patt<_>>, None, <:expr< False>>] in
+  let matches = (List.map (gen_case ti) ctors) @ [wildcard_failure loc] in
 <:str_item< 
    value rec eq l r = match (l, r) with
        [ $list:matches$ ]
 >>
 
 let gen_eq_record ({loc=loc}as ti) fields = 
-  failwith "gen_eq_record nyi"
+  let matches = List.fold_right
+    (fun (loc,k,_,v) rest -> 
+       <:expr< let module M = $gen_printer ti v$
+               in M.eq (l.$lid:k$) (r.$lid:k$) && $rest$ >>) 
+    fields
+    <:expr< True >> in
+  <:str_item< value rec eq l r = $matches$ >>
 
-let gen_polycase ({loc=loc; tname=tname} as ti) = function
+let gen_polycase ({loc=loc} as ti) = function
 | MLast.RfTag (name, _ (* what is this? *), params') ->
-    failwith "gen_polycase nyi"
+    (* label + params *)
+    begin match params' with 
+      | []  -> <:patt< (`$uid:name$, `$uid:name$) >>, None, <:expr< True >>
+      | [x] -> <:patt< (`$uid:name$ l, `$uid:name$ r) >>, 
+               None,
+               <:expr< let module M = $gen_printer ti x$ in M.eq l r>>
+      | _   -> assert false
+    end
+
 | MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
-    failwith "gen_polycase nyi"
-| MLast.RfInh _ -> error loc ("Cannot generate eq instance for " ^ tname)
+    (<:patt< ((#$[tname]$ as l), (#$[tname]$ as r)) >>),
+    None, 
+    (<:expr< let module M = $gen_printer ti ctyp$ in M.eq l r>>)
+
+| MLast.RfInh ctyp -> 
+    let lvar, Some lguard, lexpr = cast_pattern loc ctyp ~param:"l" 
+    and rvar, Some rguard, rexpr = cast_pattern loc ctyp ~param:"r" in
+      (<:patt< ($lvar$, $rvar$) >>,
+       Some <:expr< $lguard$ && $rguard$ >>,
+       <:expr< let module M = $gen_printer ti ctyp$ in
+               M.eq $lexpr$ $rexpr$ >>)
 
 
-
-let gen_eq_polyv ({loc=loc;tname=tname} as ti) (row,_) =
+let gen_eq_polyv ({loc=loc} as ti) (row,_) =
+  let matches = List.map (gen_polycase ti) row @ [wildcard_failure loc] in
 <:str_item< 
-   value rec eq = 
-             fun [ $list:List.map (gen_polycase ti) row$ ]
+  value rec eq l r = match (l, r) with  [ $list:matches$ ]
 >>
 
 let gen_module_expr ti = 

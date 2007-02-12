@@ -215,3 +215,5 @@ builtin types:
       Weak.S.data 	
             .t
           .t 	
+
+Are mutable records handled correctly?

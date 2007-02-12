@@ -25,6 +25,8 @@ module Eq_string         : Eq with type a = string
 module Eq_ref (E : Eq)   : Eq with type a = E.a ref
 module Eq_array (E : Eq) : Eq with type a = E.a array
 module Eq_list (E : Eq)  : Eq with type a = E.a list
+module Eq_option (E : Eq): Eq with type a = E.a option
+module Eq_map_s_t (E : Eq) (M : Map.S) : Eq with type a = E.a M.t
 
 module Eq_2 (E1 : Eq) (E2 : Eq) :
   Eq with type a = E1.a * E2.a
@@ -42,3 +44,4 @@ module Eq_8 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) (E7 : Eq
   Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a * E7.a * E8.a
 module Eq_9 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) (E7 : Eq) (E8 : Eq) (E9 : Eq) :
   Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a * E7.a * E8.a * E9.a
+

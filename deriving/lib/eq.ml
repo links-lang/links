@@ -31,6 +31,23 @@ module Eq_string = Eq_mutable(struct type a = string end)
 module Eq_ref (E : Eq) = Eq_mutable(struct type a = E.a ref end)
 module Eq_array (E : Eq) = Eq_mutable(struct type a = E.a array end)
 
+module Eq_option (E : Eq) 
+  : Eq with type a = E.a option =
+struct 
+  type a = E.a option
+  let eq l r = match l, r with
+    | None, None -> true
+    | Some l, Some r -> E.eq l r
+    | _ -> false
+end
+
+module Eq_map_s_t (E : Eq) (M : Map.S)
+  : Eq with type a = E.a M.t =
+struct
+  type a = E.a M.t
+  let eq = M.equal (E.eq)
+end  
+
 module Eq_list (E : Eq) :
   Eq with type a = E.a list =
 struct
