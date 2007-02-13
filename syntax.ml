@@ -8,6 +8,8 @@ open Pickle
 type lexpos = Lexing.position
 module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
 
+let print_digest_junk = Settings.add_bool("print_digest_junk", false, `User)
+
 module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
 (*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
@@ -486,7 +488,7 @@ let labelize expr =
      | Some x -> x)
     (RewriteSyntax.topdown 
        (fun expr -> 
-          Debug.print(Utility.base64encode(label_for_expr expr));
+          Debug.if_set print_digest_junk (fun _-> Utility.base64encode(label_for_expr expr));
           Some(set_label expr (Some(label_for_expr expr))))
        expr)
 
