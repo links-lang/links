@@ -15,7 +15,7 @@ fun step(state, id, items) client {
     case Waiting -> step(Waiting, id, items)
     case Dragging(elem) -> 
      if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
-      var items = permute(items,
+      var items = swap(items,
                        getTextContent(getValue(firstChild(elem))),
                        getTextContent(getValue(firstChild(toElem))));
        draw(id, items);
@@ -23,14 +23,6 @@ fun step(state, id, items) client {
      } else step(Waiting, id, items)
    }
  } 
-}
-
-fun permute(items, name1, name2) {
- for (var item <- items) {
-  if (item == name1) [name2]
-  else if (item == name2) [name1]
-  else [item]
- }
 }
 
 fun draw(id, items) {
@@ -57,14 +49,6 @@ fun draggableList(id, items) client
    fun (items) {dragger ! SetList(items);}
    )
 }
-
-
-### library functions ###
-fun select(xs, i) {
-  hd(drop(i, xs))
-}
-### end of library functions ###
-
 
 fun itemsTable() server {
   table "items" with (i : Int, name : String)

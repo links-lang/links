@@ -31,6 +31,20 @@ fun even(i) { i `mod` 2 == 0 }
 
 #fun null(l) { l == [] }
 
+# return element i of xs
+fun select(xs, i) {
+  hd(drop(i, xs))
+}
+
+# swap all instances of x1 and x2 in xs
+fun swap(xs, x1, x2) {
+ for (var x <- xs) {
+  if (x == x1) [x2]
+  else if (x == x2) [x1]
+  else [x]
+ }
+}
+
 fun fold_left(p, u, l) {
   switch (l) {
     case [] -> u
