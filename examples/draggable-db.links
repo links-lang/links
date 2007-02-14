@@ -42,10 +42,7 @@ fun draggableList(id, items) client
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
     {for (var item <- items) <li>{stringToXml(item)}</li>}
    </ul>,
-   fun () {dragger ! GetList(self());
-           receive {
-             case Items(items) -> items
-          }},
+   fun () {dragger ! GetList(self())},
    fun (items) {dragger ! SetList(items);}
    )
 }
@@ -69,12 +66,36 @@ fun save(itemsList) server {
 
 fun main() client {
   var (bears, read, write) = draggableList("bears", load());
- 
+
+  var marshaller = spawn {
+    fun saveItems() {
+      receive {
+        case Items(items) -> save(items)
+        # Ignore any other load/save requests
+        # until we have performed the current save.
+        # We could queue them up, but that would require
+        # more code...
+        case Load -> saveItems()
+        case Save -> saveItems()
+      }
+    }
+
+    fun listen() {
+      receive {
+        case Load -> write(load())
+        case Save -> read(); saveItems()
+        case Items(_) -> error("unreachable")
+      };
+      listen()
+    }
+    listen()
+  };
+
   replaceDocument(
     <html><body>
       <h2>Great Bears</h2>{bears}
-      <input type="button" value="load" l:onclick="{spawn {write(load())}}"/>
-      <input type="button" value="save" l:onclick="{spawn {save(read())}}"/>
+      <input type="button" value="load" l:onclick="{marshaller!Load}"/>
+      <input type="button" value="save" l:onclick="{marshaller!Save}"/>
     </body></html>
   )
 }
