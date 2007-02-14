@@ -8,7 +8,9 @@ OCAMLDEP := ocamldep
 PATH := $(PATH):../syntax
 OCAMLFLAGS=-w Ae
 
-SOURCES = eqtest.ml
+SOURCES = eqtest.ml     \
+          shelvetest.ml \
+          typeabletest.ml
 
 LIBS    = nums deriving
 RESULT  = test

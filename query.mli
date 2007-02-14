@@ -33,7 +33,7 @@ and column = {
   name : string;
   renamed : string;
   col_type : Inferencetypes.datatype;
-} deriving (Typeable, Show, Pickle)
+} deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string

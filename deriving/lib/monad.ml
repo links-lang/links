@@ -39,6 +39,7 @@ struct
         match x with 
           | None    -> None
           | Some x  -> f x
+
     end)
   let mzero = None
   let mplus l r = match l, r with
@@ -229,3 +230,37 @@ end
 module MonadPlusUtils_option = MonadPlusUtils(Monad_option)
 module MonadPlusUtils_list = MonadPlusUtils(Monad_list)
 module Monad_IO = MonadUtils(MonadDefault (IO))
+
+module type Monad_state_type =
+sig
+  include MonadUtilsSig
+  type state
+  val get : state m
+  val put : state -> unit m
+  val runState : 'a m -> state -> 'a * state
+end
+
+module Monad_state_impl (A : sig type state end) =
+struct
+  type state = A.state
+  type 'a m = State of (A.state -> ('a * A.state))
+  let get = State (fun s -> s,s)
+  let put s = State (fun _ -> (), s)
+  let runState (State s) = s
+  let return a = State (fun state -> (a, state))
+  let fail s = failwith ("state monad error " ^ s)
+  let (>>=) (State x) f = State (fun s -> (let v, s' = x s in
+                                             runState (f v) s'))
+  let (>>) s f = s >>= fun _ -> f
+end
+
+module Monad_state(S : sig type state end) :
+  Monad_state_type with type state = S.state = 
+struct
+  module M = Monad_state_impl(S)
+  include MonadUtils(M)
+  type state = M.state
+  let get = M.get 
+  let put = M.put
+  let runState = M.runState
+end

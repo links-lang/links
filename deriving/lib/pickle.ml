@@ -162,6 +162,7 @@ module Pickle_list (P : SimplePickle) = Pickle_defaults (
   end
 )
 
+(* This doesn't preserve sharing, so it shouldn't be allowed *)
 module Pickle_ref (P : SimplePickle) = Pickle_defaults (
   struct
     type a = P.a ref
@@ -188,6 +189,7 @@ module Pickle_option (P : SimplePickle) = Pickle_defaults (
   end
 )
 
+(* This doesn't preserve sharing, so it shouldn't be allowed *)
 module Pickle_array (P : SimplePickle) = Pickle_defaults (
   struct
     type a = P.a array

@@ -11,13 +11,13 @@ let gen_instance  ({loc=loc; tname=tname; atype=atype; rtype=rtype; argmap=param
       let paramList = 
         List.fold_right 
           (fun (_,(_,name)) cdr ->
-             <:expr< [$uid:name$.typeRep::$cdr$] >>) 
+             <:expr< [$uid:name$.typeRep()::$cdr$] >>) 
           params
         <:expr< [] >>  in
         <:module_expr< 
         struct
           type a = $atype$; 
-          value typeRep = TypeRep (Tag.fresh(), $paramList$);
+          value typeRep = let t = TypeRep (Tag.fresh(), $paramList$) in fun _ -> t;
         end >>
     | <:ctyp< '$lid:name$ >> ->
       <:module_expr< $uid:snd (List.assoc name params)$ >>

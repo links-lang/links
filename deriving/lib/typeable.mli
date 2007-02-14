@@ -6,14 +6,15 @@ end
 
 type typeRep = TypeRep of (Tag.tag * typeRep list)
 
-module TypeRep : Map.OrderedType
+module TypeRep : Map.OrderedType with type t = typeRep
 
 type dynamic
+val tagOf : dynamic -> typeRep
 
 module type Typeable =
 sig
   type a
-  val typeRep : typeRep
+  val typeRep : unit -> typeRep
   val hasType : dynamic -> bool
   val cast : dynamic -> a option
   val makeDynamic : a -> dynamic
@@ -21,7 +22,7 @@ end
 
 module Typeable_defaults (T : (sig
                                  type a
-                                 val typeRep : typeRep
+                                 val typeRep : unit -> typeRep
                                end))
   : Typeable with type a = T.a
 
@@ -44,10 +45,13 @@ module Typeable_9 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeab
   : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
 
 module Typeable_list (A:Typeable) : Typeable with type a = A.a list
+module Typeable_option (A:Typeable) : Typeable with type a = A.a option
 
 module Primitive_typeable (T : sig type t end): Typeable with type a = T.t 
 
 module Typeable_int : Typeable with type a = int
-module Typeable_float : Typeable with type a = int
-module Typeable_bool : Typeable with type a = int
-module Typeable_string : Typeable with type a = int
+module Typeable_num : Typeable with type a = Num.num
+module Typeable_float : Typeable with type a = float
+module Typeable_bool : Typeable with type a = bool
+module Typeable_string : Typeable with type a = string
+module Typeable_char : Typeable with type a = char

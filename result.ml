@@ -49,6 +49,7 @@ class virtual database = object
         String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
 end
 
+module Eq_database = Eq.Eq_mutable(struct type a = database end)
 module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)
 module Show_database = Show_unprintable (struct type a = database end)
 
@@ -56,6 +57,13 @@ module Show_database = Show_unprintable (struct type a = database end)
    about the database to be able to restore the connection on
    deserialisation *)
 module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Result.database" end)
+module Shelve_database : Shelve.Shelve with type a = database = 
+struct
+  module Typeable = Typeable_database
+  module Eq = Eq_database
+  type a = database
+  let shelve _ = failwith "shelve database nyi"
+end
 
 type db_constructor = string -> (database * string)
 
@@ -91,25 +99,51 @@ let parse_db_string : string -> (string * string) =
 and reconstruct_db_string : (string * string) -> string =
   fun (x,y) -> x ^ ":" ^ y
 
+(* Pickling a result value involves replacing expression nodes with
+   identifiers.
+
+   This (rexpr) is pulled out as a separate type so that we can
+   provide a custom pickling strategy (namely replacing expressions
+   with labels while pickling).
+*)
+type rexpr = expression
+    deriving (Show, Eq, Typeable)
+
+module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults(
+  struct
+    type a = rexpr
+    let pickle buffer e = 
+      match expression_data e with
+        | `T(_, _, Some l) -> Syntax.Pickle_label.pickle buffer l
+        | _             -> failwith ("Not labeled: " ^ string_of_expression e)
+    and unpickle stream = 
+      let label = Syntax.Pickle_label.unpickle stream in
+        (* sadly, we can't do resolution here at present because there's
+           no way to pass in the table *)
+        Syntax.Placeholder (label, (`T(Syntax.dummy_position, `Not_typed, Some label)))
+  end)
+
+module Shelve_rexpr = Shelve.Shelve_primtype(Pickle_rexpr)(Eq_rexpr)(Typeable_rexpr)
+
 type unop = MkColl
             | MkVariant of string
             | MkDatabase
-            | VrntSelect of (string * string * expression * string option * 
-                               expression option)
+            | VrntSelect of (string * string * rexpr * string option * 
+                               rexpr option)
             | QueryOp of (Query.query * (* table aliases: *) string list)
-                deriving (Typeable, Show, Pickle)
+                deriving (Typeable, Show, Pickle, Eq, Shelve)
 		
 let string_of_unop = Show_unop.show
 
-type comparison = Syntax.comparison deriving (Typeable, Show, Pickle)
+type comparison = Syntax.comparison deriving (Typeable, Show, Pickle, Eq, Shelve)
 type binop = [ `Union | `RecExt of string | `MkTableHandle of Inferencetypes.row | comparison]
-                 deriving (Typeable, Show, Pickle)
+                 deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 let is_attr = function
   | Attr _ -> true
@@ -135,33 +169,8 @@ and string_of_item : xmlitem -> string =
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
 
-(* Pickling a result value involves replacing expression nodes with
-   identifiers.
-
-   This (rexpr) is pulled out as a separate type so that we can
-   provide a custom pickling strategy (namely replacing expressions
-   with labels while pickling).
-*)
-type rexpr = expression
-    deriving (Show)
-
-module Pickle_rexpr : Pickle with type a = rexpr = Pickle.Pickle_defaults(
-  struct
-    type a = rexpr
-    let pickle buffer e = 
-      match expression_data e with
-        | `T(_, _, Some l) -> Syntax.Pickle_label.pickle buffer l
-        | _             -> failwith ("Not labeled: " ^ string_of_expression e)
-    and unpickle stream = 
-      let label = Syntax.Pickle_label.unpickle stream in
-        (* sadly, we can't do resolution here at present because there's
-           no way to pass in the table *)
-        Syntax.Placeholder (label, (`T(Syntax.dummy_position, `Not_typed, Some label)))
-  end)
-
-
 type table = database * string * Inferencetypes.row
-   deriving (Show, Pickle)
+   deriving (Show, Pickle, Eq, Typeable, Shelve)
 
 type primitive_value = [
 | `Bool of bool
@@ -172,7 +181,7 @@ type primitive_value = [
 | `Database of (database * string)
 | `Table of table
                 ]
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type contin_frame = 
   | Definition of (environment * string)
@@ -217,7 +226,7 @@ and result = [
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Eq, Show, Pickle, Shelve)
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Boolean(b, Syntax.no_expr_data))
@@ -538,6 +547,7 @@ let retain names env = filter (fun (x, _) -> mem x names) env
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
 
+module Shelve_ExprEnv = Shelve.Shelve_2(Shelve_rexpr)(Shelve_environment)
 module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
 
 let marshal_continuation : continuation -> string

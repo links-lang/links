@@ -1,7 +1,8 @@
 (*pp deriving *)
 type location = [ `Client | `Native | `Server | `Unknown ]
-type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle)
-type label deriving (Show, Pickle)
+type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle, Eq, Shelve)
+type label deriving (Typeable, Show, Pickle)
+
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
   | TypeDecl of (string * int list * Inferencetypes.datatype * 'a)
@@ -40,8 +41,10 @@ type 'a expression' =
 
 type position = Lexing.position * string * string
 type untyped_data = [`U of position]
+
 type typed_data = [`T of (position * Inferencetypes.datatype * label option)]
-type expression = [`T of (position * Inferencetypes.datatype * label option)] expression' deriving (Typeable, Show, Pickle)
+type expression = [`T of (position * Inferencetypes.datatype * label option)] expression' deriving (Typeable, Show, Pickle, Eq, Shelve)
+
 type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression' deriving (Show)
 

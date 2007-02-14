@@ -17,11 +17,21 @@ type 'a stringmap = 'a StringMap.t
 module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
 Typeable.Typeable_defaults(struct
   type a = A.a stringmap
-  let typeRep = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep])
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
 end)
 module Show_stringmap (A : Show.Show) = Show.Show_unprintable (struct type a = A.a stringmap  end)
 module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 module Functor_stringmap = Functor.Functor_map(OrderedString)
+module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
+module Shelve_stringmap (S : Shelve.Shelve) = 
+struct
+  module Typeable = Typeable_stringmap(S.Typeable)
+  module Eq = Eq_stringmap(S.Eq)
+  type a = S.a stringmap
+  let shelve  _ = failwith "shelve stringmap nyi"
+end
 
 module MapUtils(M : Map.S) =
 struct

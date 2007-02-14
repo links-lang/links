@@ -126,7 +126,7 @@ struct
     <:module_expr< $uid:Printf.sprintf "%s_%d" classname (List.length ts)$ >>
       (List.map gen ts)
   let gen_other t gen {loc=loc;tname=tname} _ =
-    error loc ("Cannot currently generate show instances for "^ tname)
+    error loc ("Cannot currently generate "^S.classname^" instances for "^ tname)
 
   let gen_module_expr 
       ?(tyacc=gen_acc)

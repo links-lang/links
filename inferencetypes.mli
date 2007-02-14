@@ -47,7 +47,7 @@ and row_var =
     | `RecRowVar of int * row
     | `MetaRowVar of row point
     | `RigidRowVar of int ]
-      deriving (Show, Pickle)
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
@@ -56,7 +56,7 @@ type quantifier = type_variable
     deriving (Typeable, Show, Pickle)
 
 type assumption = ((quantifier list) * datatype)
-    deriving (Show, Pickle)
+    deriving (Eq, Show, Pickle, Typeable, Shelve)
 type environment = ((string * assumption) list)
     deriving (Show, Pickle)
 type alias_environment = assumption stringmap

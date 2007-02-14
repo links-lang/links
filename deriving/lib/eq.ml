@@ -52,7 +52,10 @@ module Eq_list (E : Eq) :
   Eq with type a = E.a list =
 struct
   type a = E.a list
-  let eq = List.for_all2 E.eq
+  let rec eq l r = match l, r with
+    | [], [] -> true
+    | (lfst::lrst), (rfst::rrst) when E.eq lfst rfst -> eq lrst rrst
+    | _ -> false
 end
 
 module Eq_2 (E1 : Eq) (E2 : Eq) :

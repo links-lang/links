@@ -64,7 +64,10 @@ let gen_eq_sum ({loc=loc} as ti) ctors =
 
 let gen_eq_record ({loc=loc}as ti) fields = 
   let matches = List.fold_right
-    (fun (loc,k,_,v) rest -> 
+    (fun (loc,k,mutablep,v) rest -> 
+       if mutablep then 
+         <:expr<  (l.$lid:k$) == (r.$lid:k$) && $rest$ >>
+       else 
        <:expr< let module M = $gen_printer ti v$
                in M.eq (l.$lid:k$) (r.$lid:k$) && $rest$ >>) 
     fields

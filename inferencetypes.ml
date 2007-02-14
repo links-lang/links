@@ -3,11 +3,7 @@ open Utility
 
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap
-type 'a field_env = 'a stringmap
-
-module Typeable_field_env = Typeable_stringmap
-module Show_field_env = Show_stringmap
-module Pickle_field_env = Pickle_stringmap
+type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 
 (* type var sets *)
 module TypeVarSet = Utility.IntSet
@@ -15,7 +11,7 @@ type type_var_set = TypeVarSet.t
 
 
 (* points *)
-type 'a point = 'a Unionfind.point 
+type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve)
 
 module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end)
 module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
@@ -23,7 +19,7 @@ module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type 
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract ]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (* this is what we should replace meta type vars with *)
 type 't meta_type_var =
@@ -51,21 +47,21 @@ type datatype =
     | `MetaTypeVar of datatype point ]
 and field_spec = [ `Present of datatype | `Absent ]
 and field_spec_map = (field_spec) field_env
-and row = field_spec_map * row_var
 and row_var =
     [ `RowVar of int option
     | `RecRowVar of int * row
     | `MetaRowVar of row point
     | `RigidRowVar of int ]
-      deriving (Show, Pickle)
+and row = field_spec_map * row_var
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 type quantifier = type_variable
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type assumption = ((quantifier list) * datatype)
-    deriving (Show, Pickle)
+    deriving (Eq, Show, Pickle, Typeable, Shelve)
 type environment = ((string * assumption) list)
     deriving (Show, Pickle)
 type alias_environment = assumption stringmap

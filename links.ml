@@ -241,3 +241,4 @@ let _ =
       print_endline (Settings.get_value(welcome_note));
       interact (prelude_compiled, prelude_types)
     end
+

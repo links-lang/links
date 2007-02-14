@@ -8,12 +8,9 @@ let currentp currents = function
 | None -> false
 | Some (_, s) -> List.mem_assoc s currents
 
-
 let module_name currents = function
 | None -> assert false
 | Some (_, s) -> List.assoc s currents
-
-
 
 (* Generate a printer for each constructor parameter *)
 let gen_printer =
@@ -72,8 +69,7 @@ let gen_format_record fields ({loc=loc}as ti) =
                                                  S.format formatter obj.$lid:k$ ; 
                                                  $sep$
                                                } >>) 
-    fields (endmarker fields)
-    in
+    fields (endmarker fields) in
 <:str_item<
    value format formatter obj = do {
       Format.pp_print_char formatter '{';
@@ -82,23 +78,17 @@ let gen_format_record fields ({loc=loc}as ti) =
    }
 >>
 
-let gen_polycase ({loc=loc; tname=tname} as ti) = function
+let gen_polycase ({loc=loc} as ti) = function
 | MLast.RfTag (name, _ (* what is this? *), params') ->
     let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
                     params' (range 0 (List.length params' - 1))) in
     let patt = (List.fold_left 
                   (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< `$name$>> params) in
-      (match params' with
-        | [] -> (patt, None, <:expr< Format.pp_print_string formatter $str:"`" ^ name$ >>)
-        | _ -> (let tuple = (match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with (* 0-tuples and 1-tuples are invalid *)
-                               | []     -> <:expr< () >>
-                               | [x]    -> x
-                               | params -> <:expr< ( $list:params$ )>>)
-          in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
-                                       Format.pp_print_string formatter $str:"`" ^ name ^" "$; 
-				       $gen_printers ti tuple params'$;
-                                       Format.pp_close_box formatter () }
-		              >>)))
+      (let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+       in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                                    Format.pp_print_string formatter $str:"`" ^ name ^" "$; 
+				    $gen_printers ti tuple params'$;
+                                    Format.pp_close_box formatter () } >>))
 | MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
     (<:patt< (# $[tname]$ as $lid:tname$) >>, None, 
     <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
@@ -107,18 +97,9 @@ let gen_polycase ({loc=loc; tname=tname} as ti) = function
      <:expr< let module S = $gen_printer ti ctyp$ in 
                 S.format formatter $expr$ >>)
 
-let gen_format_polyv (row,_) ({loc=loc} as ti) =
-<:str_item< 
-   value rec format formatter = 
-             fun [ $list:List.map (gen_polycase ti) row$ ]
+let gen_format_polyv (row,_) ({loc=loc} as ti) = <:str_item< 
+   value rec format formatter = fun [ $list:List.map (gen_polycase ti) row$ ]
 >>
-
-(* Generate a `this' module given the type *)
-let gen_this_module loc atype = <:module_expr< 
-   ShowDefaults (struct
-                   type a = $atype$; 
-                   value showBuf = (showBuf : Format.formatter -> $atype$ -> unit); 
-                 end) >>
 
 (* TODO: merge with gen_printer *)
 let gen_module_expr ti = 

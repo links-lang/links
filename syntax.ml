@@ -5,8 +5,14 @@ open Utility
 open Show
 open Pickle
 
-type lexpos = Lexing.position
+type lexpos = Lexing.position 
 module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
+
+module Eq_lexpos : Eq.Eq with type a = lexpos = 
+struct
+  type a = lexpos
+  let eq = (==)
+end
 
 let print_digest_junk = Settings.add_bool("print_digest_junk", false, `User)
 
@@ -21,24 +27,33 @@ module Pickle_lexpos : Pickle with type a = lexpos = Pickle.Pickle_defaults(
     and unpickle stream = Lexing.dummy_pos 
   end)
 
+open Shelve
+module Shelve_lexpos : Shelve with type a = lexpos = Shelve.Shelve_defaults(
+  struct
+    type a = lexpos
+    module Eq = Eq_lexpos
+    module Typeable = Typeable_lexpos
+    let shelve _ = failwith "lexpos shelve nyi"
+  end
+)
+
 type position = lexpos *  (* source line: *) string 
                   * (* expression source: *) string
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Pickle, Shelve, Eq)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
 exception ASTSyntaxError of position * string
 
 type location = [`Client | `Server | `Native | `Unknown]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type label = string
-    deriving (Show, Pickle)
- (* The derived Typeable instance failed for some reason. *)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
     (* Q: Can I write my own show for these? I want to base64 it *)
 
 type comparison = [`Less | `LessEq | `Equal | `NotEq]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let string_of_comparison = function
   | `Less   -> "<"
@@ -92,7 +107,7 @@ type 'data expression' =
   | HasType of ('data expression' * Inferencetypes.datatype * 'data)
   | Alien of (string * string * Inferencetypes.assumption * 'data)
   | Placeholder of (label * 'data)
-      deriving (Typeable, Show, Pickle, Functor, Rewriter)
+      deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
       (* Q: Should syntax exprs be picklable or not? *)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
@@ -134,13 +149,14 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type typed_data = [`T of (position * Inferencetypes.datatype * label option)] deriving (Typeable, Show, Pickle)
-type untyped_data = [`U of position] deriving (Typeable, Show, Pickle)
+type typed_data = [`T of (position * Inferencetypes.datatype * label option)] deriving (Eq, Typeable, Show, Pickle, Shelve)
+type untyped_data = [`U of position] deriving (Eq, Typeable, Show, Pickle, Shelve)
 type data = [untyped_data | typed_data] deriving (Typeable, Show, Pickle)
+
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
-  deriving (Typeable, Show, Pickle)
+  deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let data_position = function
   | `T (pos, _, _)

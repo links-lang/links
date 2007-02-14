@@ -9,11 +9,7 @@ module type Monad =
 
 module type MonadPlus =
   sig
-    type 'a m
-    val return : 'a -> 'a m
-    val fail : string -> 'a m
-    val ( >>= ) : 'a m -> ('a -> 'b m) -> 'b m
-    val ( >> ) : 'a m -> 'b m -> 'b m
+    include Monad
     val mzero : 'a m
     val mplus : 'a m -> 'a m -> 'a m
   end
@@ -81,3 +77,15 @@ module MonadPlusUtils (M : MonadPlus) : MonadPlusUtilsSig with type 'a m = 'a M.
 module MonadPlusUtils_option : MonadPlusUtilsSig with type 'a m = 'a Monad_option.m
 module MonadPlusUtils_list : MonadPlusUtilsSig with type 'a m = 'a Monad_list.m
 module Monad_IO : MonadUtilsSig with type 'a m = 'a IO.m
+
+module type Monad_state_type =
+sig
+  include MonadUtilsSig
+  type state
+  val get : state m
+  val put : state -> unit m
+  val runState : 'a m -> state -> 'a * state
+end
+
+module Monad_state (S : sig type state end) :
+  Monad_state_type with type state = S.state

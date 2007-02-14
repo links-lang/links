@@ -44,13 +44,8 @@ and 'a link =
 and 'a info = {
   mutable weight: int;
   mutable descriptor: 'a
-} 
+} deriving (Eq, Typeable, Shelve)
 
-module Typeable_point (A : Typeable) : Typeable with type a = A.a point = 
-Typeable_defaults(struct
-  type a = A.a point
-  let typeRep = TypeRep (Tag.fresh(), [A.typeRep])
-end)
 module Show_point (A : Show) = Show_unprintable (struct type a = A.a point  end)
 module Pickle_point (A : Pickle) = Pickle_unpicklable (struct type a = A.a point let tname ="point"  end)
 

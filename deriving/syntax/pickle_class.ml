@@ -110,10 +110,7 @@ let gen_polycase ({loc=loc} as ti) = function
                        params' (range 0 (List.length params' - 1))) in
       let patt = (List.fold_left 
                      (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< `$uid:name$>> params) in (* the "uid" isn't really safe here *)
-        (let tuple = match List.map (fun (_,p) -> <:expr< $lid:p$ >>) params with (* 0-tuples and 1-tuples are invalid *)
-            []     -> <:expr< () >>
-          | [x]    -> x
-          | params -> <:expr< ( $list:params$ )>> 
+        (let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
           in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int n$ ; 
 			               $gen_printers ti tuple params'$ }
 	      >>))
@@ -170,8 +167,8 @@ let gen_funs_poly ({loc=loc} as ti) (row,_) =
 let gen_module_expr ti = 
   gen_module_expr
     ~tyrec:(fun _ _ ti fields -> apply_defaults ti (gen_funs_record ti fields))
-    ~tysum:(fun _ _ ti ctors -> apply_defaults ti (gen_sum ti ctors))
-     ~tyvrn:(fun _ _ ti row -> apply_defaults ti (gen_funs_poly ti row))
+    ~tysum:(fun _ _ ti ctors  -> apply_defaults ti (gen_sum ti ctors))
+    ~tyvrn:(fun _ _ ti row    -> apply_defaults ti (gen_funs_poly ti row))
     ti ti.rtype
 
 let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl

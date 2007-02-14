@@ -3,7 +3,7 @@ open Num
 open Utility
 
 type like_expr = [`percent | `string of string | `variable of string | `seq of like_expr list]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (* Convert a like expression to a string. *)
 let rec like_as_string : like_expr -> string =
@@ -15,10 +15,10 @@ let rec like_as_string : like_expr -> string =
       | `seq rs -> mapstrcat "" like_as_string rs
 
 type table_spec = [ `TableName of string | `TableVariable of string ]
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type table_instance = table_spec * string (* (real_name, alias) *)
-    deriving (Typeable, Show, Pickle)
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (** A SQL expression to be used as the condition for a query. *)
 type expression =
@@ -58,8 +58,7 @@ and column = {table_renamed : string;
               name : string;
               renamed : string; (* TBD: call this `alias' *)
               col_type : Inferencetypes.datatype}
-    deriving (Typeable, Show, Pickle)
-
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 (* Simple accessors *)
 let get_renaming col = col.renamed
 
