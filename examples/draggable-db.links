@@ -19,15 +19,16 @@ fun step(state, id, items) client {
                        getTextContent(getValue(firstChild(elem))),
                        getTextContent(getValue(firstChild(toElem))));
        draw(id, items);
-      step(Dragging(elem), id, items)
-     } else step(Waiting, id, items)
+       step(Dragging(elem), id, items)
+     } else step(Dragging(elem), id, items)
    }
  } 
 }
 
 fun draw(id, items) {
  replaceChildren(
-  for (var item <- items) <li>{stringToXml(item)}</li>,
+  for (var item <- items)
+   <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li>,
   getNodeById(id)
  )
 }
@@ -36,11 +37,12 @@ fun draggableList(id, items) client
 {
   var dragger = spawn { step(Waiting, id, items) };
 
-  (<ul id="{id}"
+  (<ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
        l:onmouseup   = "{dragger ! MouseUp}"
+       l:onmouseuppage = "{dragger ! MouseUp}"
        l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
-    {for (var item <- items) <li>{stringToXml(item)}</li>}
+    {for (var item <- items) <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li>}
    </ul>,
    fun () {dragger ! GetList(self())},
    fun (items) {dragger ! SetList(items);}
@@ -68,22 +70,22 @@ fun main() client {
   var (bears, read, write) = draggableList("bears", load());
 
   var marshaller = spawn {
-    fun saveItems() {
+    fun saveItems(pending) {
       receive {
-        case Items(items) -> save(items)
-        # Ignore any other load/save requests
-        # until we have performed the current save.
-        # We could queue them up, but that would require
-        # more code...
-        case Load -> saveItems()
-        case Save -> saveItems()
+        case msg -> switch (msg) {
+          case Items(items) ->
+            save(items);
+            for (var request <- pending)
+              {self()!request; []};
+          case (_:[|Load|Save|]) -> saveItems(msg :: pending)
+        }
       }
     }
 
     fun listen() {
       receive {
         case Load -> write(load())
-        case Save -> read(); saveItems()
+        case Save -> read(); saveItems([])
         case Items(_) -> error("unreachable")
       };
       listen()
@@ -91,13 +93,11 @@ fun main() client {
     listen()
   };
 
-  replaceDocument(
-    <html><body>
-      <h2>Great Bears</h2>{bears}
-      <input type="button" value="load" l:onclick="{marshaller!Load}"/>
-      <input type="button" value="save" l:onclick="{marshaller!Save}"/>
-    </body></html>
-  )
+  <html><body>
+    <h2>Great Bears</h2>{bears}
+    <input type="button" value="load" l:onclick="{marshaller!Load}"/>
+    <input type="button" value="save" l:onclick="{marshaller!Save}"/>
+  </body></html>
 }
 
 main()
