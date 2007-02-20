@@ -257,44 +257,45 @@ let simplify_regex : RewriteSyntax.rewriter = function
 (*TODO: The calculated expression for the collection extension case
    is not valid *)
 let rec extract_tests (bindings:bindings) (expr:expression)
-    : (Query.expression list * Query.expression list * expression * projection_source list) =
+    : (Query.expression list * expression * projection_source list) =
   match expr with
     | Let (_, Variable (_, _), _, _) ->
         failwith "TR115 (renaming declarations should have been removed by earlier optimisations)"
     | Let (variable, value, body, data) ->
-        let (positive, negative, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
-          (positive, negative, Let (variable, value, body, data), origin)
+        let (condns, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
+          (condns, Let (variable, value, body, data), origin)
 
     | Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data) ->
         let trace_data = `Selected{field_name=label; field_var=label_variable;
                                    etc_var = variable; source_var = name} in
-        let (positive, negative, body, origin) = extract_tests (trace_data :: bindings) body in
-          (positive, negative,
+        let (condns, body, origin) = extract_tests (trace_data :: bindings) body in
+          (condns,
 	   Record_selection (label, label_variable, variable, 
 			     Syntax.Variable (name, vdata), body, data), 
 	   origin)
     | Record_selection (label, label_variable, variable, value, body, data) ->
-        let positive, negative, body, origin = extract_tests (`Unavailable variable :: bindings) body in
-          (positive, negative, Record_selection (label, label_variable, variable, value, body, data), origin)
+        let condns, body, origin = extract_tests (`Unavailable variable :: bindings) body in
+          (condns, Record_selection (label, label_variable, variable, value, body, data), origin)
 
     | Condition (condition, t, ((Nil _) as e), data)  ->
-        let positive, negative, t, origin = extract_tests bindings t in
+        let condns, t, origin = extract_tests bindings t in
           (match condition_to_sql condition bindings with
              | Some (sql_condition, new_origin) ->
-                 (sql_condition :: positive, negative, t, new_origin @ origin)
+                 (sql_condition:: condns, t, new_origin @ origin)
              | None ->
-                 (positive, negative, Condition(condition, t, e, data), origin))
+                 (condns, Condition(condition, t, e, data), origin))
     | Condition (condition, ((Nil _) as t), e, data) ->
-        let positive, negative, e, origin = extract_tests bindings e in
+        let condns, e, origin = extract_tests bindings e in
           (match condition_to_sql condition bindings with
              | Some (sql_condition, new_origin) ->
-                 (positive, sql_condition :: negative, e, new_origin @ origin)
+                 (Sql.negation sql_condition:: condns, e, new_origin @ origin)
              | None ->
-                 (positive, negative, Condition(condition, t, e, data), origin))
+                 (condns, Condition(condition, t, e, data), origin))
     | For (expr, variable, value, data) ->
-        let positive, negative, expr, origin = extract_tests (`Calculated (variable, expr) :: bindings) expr in
-          (positive, negative, For (expr, variable, value, data), origin)
-    | _ -> ([], [], expr, [])
+        let condns, expr, origin = 
+          extract_tests (`Calculated (variable, expr) :: bindings) expr in
+          (condns, For (expr, variable, value, data), origin)
+    | _ -> ([], expr, [])
 
 (** {3 SQL optimisers} All following values are optimiser functions
     that can be applied to an expression. Generally, they try to push
@@ -372,8 +373,8 @@ let sql_projections ((env, alias_env):(Inferencetypes.environment * Inferencetyp
     extension. *)
 let sql_selections : RewriteSyntax.rewriter = function 
   | For (expr, variable, TableQuery(th, query, tdata), data) ->
-      let positive, negative, expr, origin = extract_tests [`Table_loop (variable, query)] expr in
-      let table = TableQuery(th, select (positive, negative) query, tdata) in
+      let condns, expr, origin = extract_tests [`Table_loop (variable, query)] expr in
+      let table = TableQuery(th, select condns query, tdata) in
         Some (select_by_origin origin (For (expr, variable, table, data)))
   | _ -> None
 
@@ -493,22 +494,22 @@ let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
     match expr with
       | Condition (condition, t, ((Nil _) as e), data)  ->
           (match check_join loop_var bindings t with
-	     | Some (positive, negative, th, query, projs, var, t) ->
-                 Some (positive, negative, th, query, projs, var, 
+	     | Some (condns, th, query, projs, var, t) ->
+                 Some (condns, th, query, projs, var, 
                        Condition (condition, t, e, data))
 	     | None -> None)
       | Condition (condition, ((Nil _) as t), e, data) ->
           (match check_join loop_var bindings e with
-	     | Some (positive, negative, th, query, projs, var, e) ->
-                 Some (positive, negative, th, query, projs, var,
+	     | Some (condns, th, query, projs, var, e) ->
+                 Some (condns, th, query, projs, var,
                        Condition (condition, t, e, data))
 	     | None -> None)
       | For (expr, variable, TableQuery(th, query, _), _) ->
           (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
-               (*  ([], [], _, _) -> None *)
-	     | (positives, negatives, expr, origin) ->
-                   Some (positives, negatives, th, query, 
+               (*  ([], _, _) -> None *)
+	     | (condns, expr, origin) ->
+                   Some (condns, th, query, 
                          origin, variable, expr))
       | _ -> None
 
@@ -524,8 +525,8 @@ let rec sql_joins : RewriteSyntax.rewriter =
     | For (body, outer_var, (TableQuery (outer_ths, query, tdata)), data) ->
         let bindings = [`Table_loop (outer_var, query)] in
         (match check_join outer_var bindings body with
-           | Some(positives, negatives, inner_ths, inner_query, origins, inner_var, body) ->
-               let renamings, query = join (positives, negatives) (query, inner_query) in
+           | Some(condns, inner_ths, inner_query, origins, inner_var, body) ->
+               let renamings, query = join condns (query, inner_query) in
                  
                (* Replace anything of the form inner_var.field with 
                   outer_var.renamed_field with renamings as given by 

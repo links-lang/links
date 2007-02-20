@@ -350,14 +350,9 @@ let pos_and_neg (positives, negatives) =
       conditions that where not selectable with {! Sql_transform.selectable}
       might cause such exceptions. *)
 (* TODO: Support conditions on records *)
-let rec select ((positives, negatives):(expression list * expression list)) (query:query) : query =
-  let where = (
-    match query.condition with
-      | Boolean true -> pos_and_neg (positives, negatives)
-      | Boolean false as where -> where 
-      | _ -> Binary_op ("AND", pos_and_neg (positives, negatives), 
-			query.condition)
-  ) in {query with condition = where}
+let rec select condns (query:query) : query =
+  let where = conjunction (query.condition :: condns)
+  in {query with condition = where}
          
 (** rename_uniquely
     Takes two lists of column names and produces a list of
@@ -384,20 +379,19 @@ let append_uniquely left right : (column list * (column * string) list) =
         conditions that where not selectable with 
     {! Sql_transform.selectable} might cause such exceptions. *)
 (* FIXME: This ought to uniquely rename the tables (as well as the columns) *)
-let join ((positives, negatives):(expression list * expression list))
+let join condns
     ((left, right) : query * query)
     : ((column * string) list * query) =
   if (left.distinct_only <> right.distinct_only) then failwith "TR167"
   else 
-    let where = simplify(conjunction([left.condition; right.condition]
-                                     @ positives @ map negation negatives))
+    let where_clause = simplify(conjunction(left.condition :: right.condition :: condns))
     in
       let (columns, col_renamings) = append_uniquely left.result_cols right.result_cols in
       (col_renamings,
        {distinct_only = left.distinct_only;
         result_cols   = columns;
         tables        = left.tables @ right.tables;
-        condition     = where;
+        condition     = where_clause;
         sortings      = left.sortings @ right.sortings;
         max_rows      = (match left.max_rows, right.max_rows with
                            | None, None -> None

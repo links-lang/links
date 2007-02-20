@@ -80,4 +80,11 @@ let rec negation = function
   | Unary_op("NOT", t) -> t
   | t -> Unary_op("NOT", t)
 
-let rec simplify expr = expr
+let rec simplify = function
+  | Unary_op("NOT", Unary_op("NOT", expr)) -> simplify expr
+  | Binary_op("AND", lhs, Boolean true) -> simplify lhs
+  | Binary_op("AND", Boolean true, rhs) -> simplify rhs
+  | Binary_op("OR", lhs, Boolean false) -> simplify lhs
+  | Binary_op("OR", Boolean false, rhs) -> simplify rhs
+  | Binary_op("=", lhs, rhs) when lhs == rhs -> Boolean true
+  | expr -> expr (* really, need to descend inside *)
