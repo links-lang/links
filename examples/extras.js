@@ -24,7 +24,7 @@ function _getCanvasById(id) {
   return node.getContext('2d'); 
 }
 function _canvasSetFillStyle(context, colour) {
-  context.fillStyle = colour;
+  context.fillStyle = _charlistToString(colour);
 }
 function _canvasFillRect(context, x, y, width, height) {
   context.fillRect(x, y, width, height);
@@ -47,14 +47,14 @@ function _fullyNativeMandelbrot() {
   var id;
   var i = 0;
   while(true) {
-    var node = _getNodeById(base+i)
+    var node = document.getElementById(id);
     if(node == null) {
       id = base+i;
       break;
     }
   }
 
-  var body = _getNodeById("body"); 
+  var body = document.getElementById("body"); 
   var div = document.createElement("div");
   div.innerHTML =
    "<canvas id=\""+id+
@@ -64,8 +64,8 @@ function _fullyNativeMandelbrot() {
   var canvas = div.firstChild;
   _domAppendChildRef(canvas, body);
   
-  var context = _getCanvasById(id);
-  _canvasSetFillStyle(context, "red");
+  var context = _getCanvasById(_stringToCharlist(id));
+  context.fillStyle = "red";
   
   var startTime = _getCurrentTime();
 

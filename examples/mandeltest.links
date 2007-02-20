@@ -13,34 +13,34 @@ var bailout = 16.;
 var max_iterations = 200;
 
 fun makeCanvasDiv(id, height, width) {
- domAppendChild(
+ appendChildren(
         <div id="{id}"
              style="position: relative; float: left;
                     width: {intToString(2*width)}px;
                     height: {intToString(2*height)}px">
         </div>,
-        domGetRefById("body"))
+        getNodeById("body"))
 }
 
 
 fun plotDiv(id, colour, x, y) {
- domAppendChild(
+ appendChildren(
         <div style="position: absolute;
                     background-color: {colour}; 
                     width: 2px;
                     height: 2px;
                     left: {intToString(2*x)}px;
                     top: {intToString(2*y)}px"> </div>,
-        domGetRefById(id))
+        getNodeById(id))
 }
 
 fun makeCanvas(id, colour, height, width) {
-  domAppendChild(
+  appendChildren(
     <canvas id="{id}"
 	    width="{intToString(2*width)}"
             height="{intToString(2*height)}">
     </canvas>,
-    domGetRefById("body"));
+    getNodeById("body"));
    var context = getCanvasById(id);
    canvasSetFillStyle(context, colour);
    context
@@ -110,7 +110,7 @@ fun block(x, y) {
 
 fun makefreshname(base, n) client {
   var name = base++intToString(n);
-  if(domIsNullRef(domGetRefById(name)))
+  if(isNull(getNodeById(name)))
     name
   else
     makefreshname(base, n+1)
@@ -145,7 +145,7 @@ fun iterative(compute, c) client {
   };
 }
 
-fun lookup(bindings, s) {
+fun lookupName(bindings, s) {
   var fs = (for (var (name, f) <- bindings)
         if(name == s) {[f]} else {[]});
   hd(fs)
@@ -153,22 +153,25 @@ fun lookup(bindings, s) {
 
 var traversals = [("recursive", recursive), ("iterative", iterative)];
 var drawings = [("empty", nowt), ("line", line), ("block", block),
-             ("Mandlebrot set (Links computation)", mandelbrot), ("Mandelbrot set (JavaScript computation)", jsmandelbrot)];
+             ("Mandlebrot set (Links computation)", mandelbrot),
+             ("Mandelbrot set (JavaScript computation)", jsmandelbrot)];
 
 fun dodrawing(drawingName, traversalName) client {
   var id = getfreshid("drawing");
   var c = canvas (80, 80, "red", id);
   var startTime = getCurrentTime();
 
-  var drawing = lookup(drawings, drawingName);
-  var traversal = lookup(traversals, traversalName);
+
+  var drawing = lookupName(drawings, drawingName);
+
+  var traversal = lookupName(traversals, traversalName);
 
   traversal(drawing, c);
 
   var endTime = getCurrentTime();
   var totalTime = (endTime-startTime);
 
-  domInsertBefore(stringToXml(intToString(totalTime)++"ms"), domGetRefById(id));
+  insertBefore(stringToXml(intToString(totalTime)++"ms"), getNodeById(id));
 
   debug("Time to draw "++id++": "++intToString(totalTime)++"ms")
 }
@@ -212,7 +215,7 @@ fun selection(name, bindings) {
 <html>
  <body>
   <h1>Mandelbrot benchmarks using the canvas API</h1>
-  <form l:onsubmit="{dodrawing(drawingName, traversalName)}">
+  <form l:onsubmit="{spawn{dodrawing(drawingName, traversalName)}}">
   Traversal: 
   <select l:name="traversalName">
     {for (var (name, traversal) <- traversals)
@@ -220,7 +223,8 @@ fun selection(name, bindings) {
   </select>
   Drawing:
   <select l:name="drawingName">
-    {for (var (name, drawing) <- drawings)
+    {debug(intToString(length(drawings)));
+     for (var (name, drawing) <- drawings)
        <option>{stringToXml(name)}</option>}
   </select>
   <button type="submit">Draw</button>
