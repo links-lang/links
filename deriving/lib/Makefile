@@ -19,7 +19,7 @@ SOURCES = util.ml util.mli              	\
           dynmap.ml dynmap.mli                  \
           primitives.ml primitives.mli  	\
           shelvehelper.ml shelvehelper.mli      \
-          shelve.ml shelve.mli           	\
+          shelve.ml                            	\
           functor.ml functor.mli        	\
           rewriter.ml rewriter.mli      	\
           quickcheck.ml                 	\
