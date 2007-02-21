@@ -78,10 +78,9 @@ module Functional =
 struct
   
   (** "compose" operators (arrow indicates direction of composition) *)
-  let (-<-) = fun f g x -> f (g x)
+  let (-<-) f g x = f (g x)
   let (->-) f g x = g (f x)
     
-
   let curry f a b = f (a, b)
   let uncurry f (a, b) = f a b
   let identity x = x
@@ -94,9 +93,12 @@ include Functional
 (** {1 Lists} *)
 module ListUtils = 
 struct
-  let rec fromTo f t = 
-    if f = t then []
-    else f :: fromTo (f+1) t
+  let fromTo f t = 
+    let rec aux f t result = 
+      if f = t then result
+      else aux (f+1) t (f::result)
+    in if t < f then raise (Invalid_argument "fromTo")
+      else List.rev (aux f t [])
 
   (** [all_equiv rel list]: given an equiv. rel'n [rel], determine
       whether all elements of [list] are equivalent. *)
@@ -199,13 +201,6 @@ struct
     
   let concat_map_undup cmp f l = unduplicate cmp (concat_map f l)
     
-  let rec substitute predicate replacement
-      = function
-        | [] -> []
-      | (first::rest) -> 
-	  if predicate first then replacement :: rest
-	  else first::(substitute predicate replacement rest)
-
   let for_each l f = List.iter f l
 
   let push list f = list := !list @ [f]
@@ -251,7 +246,7 @@ struct
       In category theory this is called the `graph' of f (restricted by [list]).
   *)
   let map2alist f list = List.map (fun x -> (x, f x)) list
-  let graph_func f list = map2alist f list
+  let graph_func = map2alist
 
   let rng alist = List.map snd alist
 
@@ -362,34 +357,19 @@ let lookup_in alist x = List.assoc x alist
    exceptions to signal absence *)
 let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
 
-let mem_assoc3 key alist : bool = 
-  List.exists (fun x -> x = key)
-    (List.map fst3 alist)
+let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
+  List.exists (fun (x,_,_) -> x = key)
 
 (*** option types ***)
 let opt_map f = function
   | None -> None
   | Some x -> Some (f x)
 
-let opt_iter f = function
-  | None -> ()
-  | Some x -> f x
-
 let opt_app f def = function
   | None -> def
   | Some a -> f a
 
-(* opt_proj def == opt_app (fun x -> x) def  *)
-let opt_proj def = function
-  | None -> def
-  | Some x -> x
-
 type ('a, 'b) either = Left of 'a | Right of 'b
-
-let option_or = function (* !! mplus *)
-  | Some x, _ -> Some x
-  | _, Some y -> Some y
-  | _, _      -> None
 
 let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
     : 'b list * 'c list =
@@ -533,7 +513,6 @@ let rec version_atleast a b =
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
 
-
 let split3 (s :  ('a * 'b * 'c) list):  'a list * 'b list * 'c list
   =  List.fold_right (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z::zs))  s ([],[],[])
 
@@ -559,14 +538,13 @@ let gensym =
     The "graph" of the gensym function, if you will.
 *)
 let assign_fresh_names ?prefix:pfx list = 
-  match pfx with
-      Some pfx ->
-        List.map (fun x -> x, gensym ~prefix:pfx ()) list
-    | None ->
-        List.map (fun x -> x, gensym ()) list
+  graph_func
+    (match pfx with
+       | Some pfx -> (fun _ -> gensym ~prefix:pfx ())
+       | None     -> (fun _ -> gensym ()))
+    list 
 
-
-let any_true = List.exists (fun x -> x)
+let any_true = List.exists identity
 
 let getenv : string -> string option =
   fun name ->
