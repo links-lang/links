@@ -17,7 +17,14 @@ let gen_instance  ({loc=loc; tname=tname; atype=atype; rtype=rtype; argmap=param
         <:module_expr< 
         struct
           type a = $atype$; 
-          value typeRep = let t = TypeRep (Tag.fresh(), $paramList$) in fun _ -> t;
+(*          value typeRep = let t = TypeRep (Tag.fresh(), $paramList$) in fun _ -> t;*)
+          value typeRep = 
+            let rep = ref None in 
+            fun _ -> 
+             (match rep.contents with
+              [ None -> let t = TypeRep (Tag.fresh(), $paramList$) in 
+                        do {rep.contents := Some t; t}
+              | Some r -> r ]);
         end >>
     | <:ctyp< '$lid:name$ >> ->
       <:module_expr< $uid:snd (List.assoc name params)$ >>

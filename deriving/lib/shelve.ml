@@ -64,30 +64,24 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option =
 module Shelve_list (V0 : Shelve)
   : Shelve with type a = V0.a list =
 struct
-  module rec Shelve_pllist : Shelve with type a = V0.a list =
-  struct
-    module Typeable = Typeable.Typeable_list (V0.Typeable)
-    module Eq = Eq.Eq_list (V0.Eq)
-    module Comp = Dynmap.Comp (Typeable) (Eq)
-    type a = V0.a list
-    let rec shelve = function
-        [] as obj ->
-          allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-            (make_repr ~constructor:0 [])
-      | (v0::v1) as obj ->
-          let module M = V0
-          in
-            M.shelve v0 >>= fun id0 ->
+  module Typeable = Typeable.Typeable_list (V0.Typeable)
+  module Eq = Eq.Eq_list (V0.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
+  type a = V0.a list
+  let rec shelve = function
+      [] as obj ->
+        allocate_store_return (Typeable.makeDynamic obj) Comp.eq
+          (make_repr ~constructor:0 [])
+    | (v0::v1) as obj ->
+        let module M = V0
+        in
+          M.shelve v0 >>= fun id0 ->
             shelve v1 >>= fun id1 ->
-            allocate_store_return
-              (Typeable.makeDynamic obj)
-              Comp.eq
-              (make_repr ~constructor:1 [id0; id1])
-  end 
-  include Shelve_pllist
-end
-
-
+              allocate_store_return
+                (Typeable.makeDynamic obj)
+                Comp.eq
+                (make_repr ~constructor:1 [id0; id1])
+end 
   
 
 (* Is this right for mutable strings?  I think so, because of Eq, but it should be checked *)
