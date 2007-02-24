@@ -243,6 +243,7 @@ end
 class mysql_database spec = object
   inherit database
   val connection = connect spec
+  method driver_name () = "mysql"
   method exec query : dbresult = 
     try
       new mysql_result (exec connection query)connection

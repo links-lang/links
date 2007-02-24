@@ -1,3 +1,4 @@
+
 open Postgresql
 open Utility
 open Result
@@ -110,6 +111,7 @@ class pg_database host port dbname user password = object(self)
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
+  method driver_name () = "postgresql"
   method exec : string -> dbresult = fun query ->
     try
       let raw_result = connection#exec query in

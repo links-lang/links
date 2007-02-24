@@ -39,6 +39,7 @@ class virtual dbresult = object
 end
 
 class virtual database = object
+  method virtual driver_name : unit -> string
   method virtual equal_types : Inferencetypes.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult

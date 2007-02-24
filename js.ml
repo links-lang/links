@@ -593,9 +593,13 @@ let rec generate : 'a expression' -> code =
          but perhaps not in the future? *)
   | Alien _ 
   | TypeDecl _ -> Nothing
-
+  | Database (e, _) ->
+      let db_cps = generate e in
+        Fn(["__kappa"],
+           Call(db_cps, [Fn(["__db"],
+                                 callk_yielding
+                                      (Dict [("_db", Var "__db")]))]))
   (* Unimplemented stuff *)
-  | Database _
   | TableHandle _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)

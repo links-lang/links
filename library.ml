@@ -792,7 +792,8 @@ and alias_env : Inferencetypes.alias_environment =
       "Event", ([], `Primitive `Abstract);
       "List", ([`TypeVar (Inferencetypes.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
-      "Xml", ([], `Application ("List", [`Primitive `XmlItem]))
+      "Xml", ([], `Application ("List", [`Primitive `XmlItem]));
+      "Mailbox", ([`TypeVar (Inferencetypes.fresh_raw_variable ())], `Primitive `Abstract)
     ]
     StringMap.empty
 

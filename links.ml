@@ -21,7 +21,7 @@ let web_mode = Settings.add_bool ("web_mode", false, `System)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (** Name of the file containing the prelude code. *)
-let prelude = Settings.add_string ("prelude", "prelude.links", `System)
+let prelude_file = Settings.add_string ("prelude", "prelude.links", `System)
 
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
@@ -86,7 +86,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_fatal load_file (Settings.get_value prelude)) in 
+                (Errors.display_fatal load_file (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
@@ -168,12 +168,12 @@ let rec interact envs =
 let concat_envs (valenv1, typingenv1) (valenv2, typingenv2) =
   (valenv1 @ valenv2, Inferencetypes.concat_environment typingenv1 typingenv2)
       
-let run_file envs filename = 
+let run_file prelude envs filename = 
   Settings.set_value interacting false;
   match Utility.getenv "REQUEST_METHOD" with 
     | Some _ -> 
         (Settings.set_value web_mode true;
-         Webif.serve_request envs filename)
+         Webif.serve_request prelude envs filename)
     | None ->
         ignore (evaluate (Parse.parse_file Parse.program) envs filename)
 
@@ -225,7 +225,7 @@ let _ =
   Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
   (* load prelude: *)
   let prelude_types, prelude =
-    (Errors.display_fatal load_file (Settings.get_value prelude)) in
+    (Errors.display_fatal load_file (Settings.get_value prelude_file)) in
 
   let (prelude_compiled, _) = Interpreter.run_program [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
@@ -235,7 +235,7 @@ let _ =
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in_stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)
-  ListLabels.iter ~f:(run_file (prelude_compiled, prelude_types)) !file_list;
+  ListLabels.iter ~f:(run_file prelude (prelude_compiled, prelude_types)) !file_list;
   if Settings.get_value(interacting) then
     begin
       print_endline (Settings.get_value(welcome_note));

@@ -67,6 +67,7 @@ end
 class lite_database file = object(self)
   inherit database
   val connection = db_open file
+  method driver_name () = "sqlite"
   method exec query : dbresult =
     let vm, _, _ = compile connection query 0 true in
       new lite_result vm

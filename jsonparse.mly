@@ -24,6 +24,23 @@ object_:
 | LBRACE members RBRACE { match $2 with 
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (unparse_label l, v)
+                            | ["_db", db] ->
+                                begin
+                                  match db with
+                                    | `Record bs ->
+                                        let driver = Result.unbox_string (List.assoc "driver" bs)
+                                        and params =
+                                          Result.reconstruct_db_string
+                                            (Result.unbox_string (List.assoc "name" bs),
+                                             Result.unbox_string (List.assoc "args" bs)) in
+                                          `Database (Result.db_connect driver params) 
+(*
+                            | ["_params", params; "_driver", driver] -> `Database (Result.db_connect
+                                                                                     (Result.unbox_string driver)
+                                                                                     (Result.unbox_string params))
+*)
+                                    | _ -> failwith ("database value must be a record")
+                                end
                             | _ -> `Record (List.rev $2)
                         }
 members:

@@ -71,21 +71,21 @@ let is_client_program defs =
     List.exists is_client_def defs || List.exists is_client_prim prims
 
 (* Read in and optimise the program *)
-let read_and_optimise_program typenv filename = 
+let read_and_optimise_program prelude typenv filename = 
   (fun (env, exprs) ->
      (env, 
-      measure "optimise" Optimiser.optimise_program (env, exprs)))
+      measure "optimise" Optimiser.optimise_program (env, prelude @ exprs)))
     ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
        ((measure "type" (Inference.type_program typenv))
           ((measure "parse" (Parse.parse_file Parse.program)) filename)))
               
-let read_and_optimise_program env arg 
+let read_and_optimise_program prelude env arg 
     : Inferencetypes.typing_environment * Syntax.expression list 
   = 
   if Settings.get_value cache_programs then
     Loader.read_file_cache arg
-  else 
-    read_and_optimise_program env arg
+  else
+    read_and_optimise_program prelude env arg
 
 let serialize_call_to_client (continuation, name, arg) = 
   Json.jsonize_call continuation name arg
@@ -234,10 +234,10 @@ let is_multipart () =
   ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
-let serve_request (valenv, typenv) filename = 
+let serve_request prelude (valenv, typenv) filename = 
   try 
     let _, program = catch_notfound_l "reading and optimising"
-      (lazy (read_and_optimise_program typenv filename)) in
+      (lazy (read_and_optimise_program prelude typenv filename)) in
     let defs, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr else
     let main = last main in

@@ -28,7 +28,7 @@ fun step(state, id, items) client {
 fun draw(id, items) {
  replaceChildren(
   for (var item <- items)
-   <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li>,
+   <li class="draggable_element">{stringToXml(item)}</li>,
   getNodeById(id)
  )
 }
@@ -37,12 +37,12 @@ fun draggableList(id, items) client
 {
   var dragger = spawn { step(Waiting, id, items) };
 
-  (<ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+  (<ul id="{id}" class="draggable_list"
        l:onmouseup   = "{dragger ! MouseUp}"
        l:onmouseuppage = "{dragger ! MouseUp}"
        l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
-    {for (var item <- items) <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li>}
+    {for (var item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
    </ul>,
    fun () {dragger ! GetList(self())},
    fun (items) {dragger ! SetList(items);}
@@ -51,7 +51,7 @@ fun draggableList(id, items) client
 
 fun itemsTable() server {
   table "items" with (i : Int, name : String)
-    from (database "draggable")
+    from database "draggable"
 }
 
 fun load() server {
@@ -64,7 +64,6 @@ fun save(itemsList) server {
   update (var itemEntry <-- itemsTable())
     set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
-
 
 fun main() client {
   var (bears, read, write) = draggableList("bears", load());
@@ -93,7 +92,14 @@ fun main() client {
     listen()
   };
 
-  <html><body>
+  <html>
+  <head>
+   <style>
+     .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
+     .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
+   </style>
+  </head>
+  <body>
     <h2>Great Bears</h2>{bears}
     <input type="button" value="load" l:onclick="{marshaller!Load}"/>
     <input type="button" value="save" l:onclick="{marshaller!Save}"/>

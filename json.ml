@@ -1,13 +1,26 @@
 let show_json = Settings.add_bool("show_json", false, `User)
 
+(*
+  [REMARK][SL]
+    Having implemented jsonisation of database values, I'm now
+    unsure if this is what we really want. From a security point
+    of view it certainly isn't a very good idea to pass this kind of
+    information to the client.
+*)
+let json_of_db (db, params) =
+  let driver = db#driver_name() in
+  let (name, args) = Result.parse_db_string params in
+    "{ _db : { driver : '" ^ driver ^ "', name : '" ^ name ^ "', args : '" ^ args ^ "'} }"
+
+
 let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
   | `Char c -> "\"" ^ String.escaped (Char.escaped c) ^"\"" (* FIXME: what does [escaped] escape? *)
   | `XML _
-  | `Table _
-  | `Database _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); ""
+  | `Table _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); ""
+  | `Database db -> json_of_db db
 
 let rec jsonize_result : Result.result -> string = function
   | `PFunction _
