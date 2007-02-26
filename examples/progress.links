@@ -6,12 +6,13 @@ fun compute(count, total) server {
 }
 
 fun showProgress(count, total) client {
- var percentStr = floatToString(100.0 *. intToFloat(count) /. intToFloat(total));
+ var percent = 100.0 *. intToFloat(count) /. intToFloat(total);
  replaceNode(
         <div id="bar"
-             style="width:{percentStr}%; background-color: black">|</div>,
+             style="width:{floatToString(percent)}%;
+                    background-color: black">|</div>,
         getNodeById("bar")
- );
+ )
 }
 
 fun showAnswer(answer) client {
@@ -23,7 +24,7 @@ fun showAnswer(answer) client {
 
 <html>
  <body>
-  <form l:onsubmit="{var ans = compute(0, stringToInt(n)); showAnswer(ans)}">
+  <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">
    <input type="text" l:name="n"/>
    <input type="submit"/>
   </form>
