@@ -35,19 +35,18 @@ fun completions(pre) server {
  }
 }
 
-fun receiver() {
- receive {
-  case Suggest(pre) -> {suggest(pre); receiver();}
+
+var handler = spawn {
+ fun receiver() {
+  receive { case Suggest(pre) -> suggest(pre); receiver() }
  }
-}
+ receiver()
+};
 
-fun main() client {
- var handler = spawn {receiver()};
-
- <html>
-  <head>
-   <title>Dictionary suggest</title>
-  </head>
+<html>
+ <head>
+  <title>Dictionary suggest</title>
+ </head>
  <body>
   <h1>Dictionary suggest</h1>
   <form l:onkeyup="{handler!Suggest(pre)}">
@@ -55,8 +54,6 @@ fun main() client {
           autocomplete="off"/>
   </form>
   <div id="suggestions"/>
-  </body>
- </html>
-}
+ </body>
+</html>
 
-main()
