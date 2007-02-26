@@ -75,6 +75,8 @@ val xml_type : datatype
 val free_type_vars : datatype -> int list
 val free_row_type_vars : row -> int list
 
+(* used to freshen mailboxes in typename aliases *)
+val freshen_mailboxes : datatype -> datatype
 
 (* type operations *)
 module type TYPEOPS =

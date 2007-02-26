@@ -662,6 +662,39 @@ module Desugarer =
        | PrimitiveType _
        | DBType -> []
 
+   let rec alias_is_closed vars t =
+     let aic = alias_is_closed vars in
+       match t with
+         | TypeVar var
+         | RigidTypeVar var -> StringSet.mem var vars
+         | FunctionType (s, m, t) ->
+             (aic s) &&
+               (match m with
+                  | TypeVar var -> true
+                  | _ -> aic m) &&
+               (aic t)
+         | MuType (v, k) ->
+             alias_is_closed (StringSet.add v vars) k
+         | TupleType ks ->
+             List.for_all aic ks
+         | RecordType r
+         | VariantType r
+         | TableType r -> row_alias_is_closed vars r
+         | ListType k -> aic k
+         | TypeApplication (_,ks) -> List.for_all aic ks
+         | UnitType
+         | PrimitiveType _
+         | DBType -> true
+   and row_alias_is_closed vars (fields, rv) =
+     (List.for_all (function
+                  | (_, `Present k) -> alias_is_closed vars k
+                  | (_, `Absent) -> true) fields)
+     && row_var_alias_is_closed vars rv
+   and row_var_alias_is_closed vars =
+     function
+       | None -> true
+       | Some var -> StringSet.mem var vars
+
    type assumption = quantifier list * datatype
 
    let generalize (k : datatype) : assumption =
@@ -1110,9 +1143,12 @@ module Desugarer =
                    | `TypeVar var | `RigidTypeVar var -> var
                    | _ -> assert false
                in
-                 TypeDecl (name,
-                           List.map get_var args,
-                           desugar_datatype var_env rhs, pos)
+                 if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
+                   TypeDecl (name,
+                             List.map get_var args,
+                             desugar_datatype var_env rhs, pos)
+                 else
+                   failwith ("Free variable(s) in alias")
            | RecordLit (fields, r) ->
                Record_intro (string_map_of_assoc_list (alistmap desugar fields),
                              opt_map desugar r,

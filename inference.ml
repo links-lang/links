@@ -287,7 +287,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                               ts, IntMap.add var t tenv
                           | _ -> assert false) (ts, IntMap.empty) vars
     in
-      instantiate_datatype (tenv, IntMap.empty) alias in
+      instantiate_datatype (tenv, IntMap.empty) (Inferencetypes.freshen_mailboxes alias) in
 
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -1255,11 +1255,6 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let expr = type_check typing_env expr in
       let expr_type = type_of_expression expr in
       let inference_datatype = datatype in
-        (* [HACK]
-           The following line should be uncommented once we have properly implemented 
-           parameteric abstract types. At the moment we are using a free alias
-           ("List") to simulate the parametric list type.
-        *)          
         free_alias_check alias_env inference_datatype;
 	unify(expr_type, inference_datatype);
 	HasType(expr, datatype, `T (pos, inference_datatype, None))
@@ -1391,28 +1386,8 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
       failwith ("Duplicate typename: "^typename) in
   let aliases = Inferencetypes.type_aliases datatype in
   let free_aliases =
-    StringSet.filter (fun alias -> not (StringMap.mem alias alias_env)) aliases in
-(*
-  [PROBLEM]
-    We cannot rule out free type variables in datatype declarations
-    because there may be hidden free type variables in mailbox parameters.
-    For example, from the prelude:
-
-      typename State (d,a) = [|State:(d) ->(a,d)|];
-
-    There is a hidden (flexible) type variable on the arrow.
-    I think this also means that such typenames can only be used in
-    a single process.
-*)
-(*   let _ = Debug.print("Datatype: "^string_of_datatype datatype) in *)
-(*   let bound_vars = vars @ (env_type_vars typing_env) in *)
-(*   let free_vars = *)
-(*     List.filter (fun var -> not (List.mem var bound_vars)) (free_type_vars datatype) *)
-(*   in *)
-(*     if free_vars <> [] then *)
-(*       failwith ("Undefined variable(s) in type declaration: "^ *)
-(*                   String.concat "," (List.map string_of_int (free_type_vars datatype))^"; "^ *)
-(*                   String.concat "," (List.map string_of_int bound_vars)) *)
+    StringSet.filter (fun alias -> not (StringMap.mem alias alias_env)) aliases
+  in
     if not (StringSet.is_empty free_aliases) then
       failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
     else

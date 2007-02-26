@@ -837,6 +837,89 @@ let make_names vars =
 	name_map
     end
 
+(* freshen uninstantiated mailbox types
+
+   precondition:
+     the input type is closed (apart from free mailbox types)
+ *)
+let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars t ->
+  let fmb = freshen_mailboxes rec_vars in
+    match t with
+      | `Not_typed  
+      | `Primitive _ -> t
+      | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `TypeVar _
+              | `RigidTypeVar _ -> t
+              | `Recursive (var, body) ->
+                  if TypeVarSet.mem var rec_vars then
+                    t
+                  else
+                    freshen_mailboxes (TypeVarSet.add var rec_vars) body
+              | t -> fmb t
+          end
+      | `Function (f, m, t) ->
+          `Function (
+            fmb f,
+            begin
+              match m with
+                | `MetaTypeVar point ->
+                    begin
+                      match Unionfind.find point with
+                        | `TypeVar var ->
+                            InferenceTypeOps.fresh_type_variable ()
+                        | _ -> fmb m
+                    end
+                | _ -> fmb m
+            end,
+            fmb t)
+      | `Record row -> `Record (row_freshen_mailboxes rec_vars row)
+      | `Variant row -> `Variant (row_freshen_mailboxes rec_vars row)
+      | `Table row -> `Table (row_freshen_mailboxes rec_vars row)
+      | `Application (name, datatypes) -> `Application (name, List.map fmb datatypes)
+      | `TypeVar _
+      | `RigidTypeVar _
+      | `Recursive _ -> assert false
+and row_freshen_mailboxes rec_vars (field_env, row_var) =
+  (FieldEnv.map (fun t ->
+                   match t with
+                     | `Present t ->
+                         `Present (freshen_mailboxes rec_vars t)
+                     | `Absent ->
+                         `Absent) field_env,
+   row_var_freshen_mailboxes rec_vars row_var)
+and row_var_freshen_mailboxes rec_vars row_var = 
+  match row_var with
+    | `RowVar None -> row_var
+    | `MetaRowVar point ->
+        begin
+          match Unionfind.find point with
+            | (field_env, `RowVar (Some var))
+            | (field_env, `RigidRowVar var)  ->
+                assert(not (contains_present_fields field_env));
+                row_var
+            | (field_env, `RecRowVar (var, row)) ->
+                assert(not (contains_present_fields field_env));
+                if TypeVarSet.mem var rec_vars then
+                  row_var
+                else
+                  `MetaRowVar
+                    (Unionfind.fresh
+                       (field_env,
+                        `RecRowVar (var,
+                                     row_freshen_mailboxes (TypeVarSet.add var rec_vars) row)))
+            | row ->
+                `MetaRowVar
+                  (Unionfind.fresh
+                     (row_freshen_mailboxes rec_vars row))
+        end
+    | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false
+
+let freshen_mailboxes = freshen_mailboxes TypeVarSet.empty
+let row_freshen_mailboxes = row_freshen_mailboxes TypeVarSet.empty
+let row_var_freshen_mailboxes = row_var_freshen_mailboxes TypeVarSet.empty
+
 let rec free_bound_type_vars : type_var_set -> datatype -> TypeVarSet.t = fun rec_vars t ->
   let fbtv = free_bound_type_vars rec_vars in
     match t with
