@@ -71,6 +71,7 @@ SOURCES = $(OPC)                		\
           database.mli database.ml 		\
           lexer.mll             		\
           parse.mli parse.ml    		\
+          callgraph.ml                          \
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\

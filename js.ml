@@ -951,11 +951,14 @@ with Not_found -> failwith ("wordify " ^ x)
 
 
 let symbolp name =
-  List.for_all (flip List.mem symbols) (explode name)
+  List.for_all (flip List.mem symbols) (explode name) &&
+    (if Settings.get_value js_rename_builtins then true
+     else (not (List.mem_assoc name !Library.value_env)))
 
 let wordify_rewrite : RewriteSyntax.rewriter = function
   | Define (name, b,l,t) when symbolp name -> Some (Define (wordify name, b, l, t))
   | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
+  | Let (name, rhs, body, d) when symbolp name -> Some (Let (wordify name, rhs, body, d))
   | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
       let rename (x,y,z) =
         ((if symbolp x then wordify x 
@@ -964,23 +967,14 @@ let wordify_rewrite : RewriteSyntax.rewriter = function
   | _ -> None
 
 let rename_symbol_operators program = 
-    fromOption 
-        program
-          (RewriteSyntax.bottomup wordify_rewrite program)
-
+  fromOption 
+    program
+    (RewriteSyntax.bottomup wordify_rewrite program)
+    
  (* TODO: imports *)
 let generate_program env expr =
-  let env, expr =
-    if Settings.get_value js_rename_builtins then
-      let env =
-        try List.map rename_symbol_operators env
-        with Not_found -> failwith "goo"
-      and expr =
-         try rename_symbol_operators expr
-         with Not_found -> failwith "gloo" in
-        env, expr
-    else
-      env, expr in
+  let env = List.map rename_symbol_operators env
+  and expr = rename_symbol_operators expr in
   let env =
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline env)) 

@@ -10,7 +10,7 @@ open Sql_transform
 let optimising = Settings.add_bool("optimising", true, `User)
 let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, `User)
 let show_optimisation = Settings.add_bool("show_optimisation", false, `User)
-
+let reduce_recs = Settings.add_bool("reduce_recursion", false, `User)
 
 
 (** [pure]
@@ -117,6 +117,31 @@ let inline program =
       program'
       fn_candidates
   in program''
+
+(* Minimize the amount of recursion expressed in the syntax tree *)
+let reduce_recursion : RewriteSyntax.rewriter = function
+  | Rec (bindings, cont, data) ->
+      let untyped_bindings = List.map (fun (name, expr, _) -> name, expr) bindings in
+      let find_definition v = List.find (fun (name, expr, annotation) -> name = v) bindings in
+      let recursive_p (name, expr, annot) =  mem name (freevars expr) in
+      let cliques = Callgraph.group_and_order_bindings_by_callgraph untyped_bindings in
+        begin match map (map find_definition) cliques with
+          | [_::_::_] -> None (* one multi-element group.  Everything must be mutually-recursive *)
+          | [[x]] when recursive_p x -> None (* One single-element group; element is recursive. *)
+          | groups -> (* either a group consisting of a single-element non-recursive element 
+                         or multiple groups *)
+              Some (List.fold_right
+                      (fun group body -> 
+                         match group with 
+                           | [(name, expr, annot)] when not (mem name (freevars expr)) ->
+                               let rhs = match annot with
+                                 | Some annot -> HasType (expr, annot, data)
+                                 | None -> expr in
+                                 Let (name, rhs, body, data)
+                           | xs -> Rec (xs, body, data)) groups cont) end
+  | _ -> None
+
+
 
 (** [uniquify_expression]
 
@@ -750,9 +775,13 @@ let print_definition of_name ?msg:msg expr =
     | _ -> ());
   None
 
+
 let rewriters env = [
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
+  if Settings.get_value reduce_recs then
+    RewriteSyntax.topdown reduce_recursion
+  else RewriteSyntax.never;
   RewriteSyntax.topdown simplify_regex;
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);

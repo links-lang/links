@@ -1303,75 +1303,6 @@ and
       in
         (env, alias_env), defns     
 
-(** {1 Callgraph ordering}
-
-    Find the cliques in a group of functions.  Whenever there's mutual
-    recursion we need to type all the functions in the cycle as
-    `letrec-bound'; we want to avoid doing this in all other cases to
-    make everything as polymorphic as possible (and to make typing
-    faster).  In such cases the bindings must be reordered so that we
-    type called functions before their callers.
-
-    The plan is as follows:
-    1. Find the call graph (by analysing the rhs for free variables.)
-    2. Find all the cycles (strongly-connected components) in the call graph.
-    3. Collapse cycles to single nodes and perform a topological sort
-       to obtain the ordering.
-*)
-
-let is_mapped_by alist x = mem_assoc x alist
-
-(** [make_callgraph bindings] returns an alist that gives a list of called
-    functions for each function in [bindings] *)
-let make_callgraph bindings = 
-  alistmap
-    (fun expr -> 
-       filter (is_mapped_by bindings) (freevars expr)) 
-    bindings
-
-let group_and_order_bindings_by_callgraph 
-    (bindings : (string * untyped_expression) list) 
-    : string list list = 
-  
-  let call_graph = make_callgraph bindings in
-    (* TBD: let's make a setting to print the callgraph any old time! *)
-(*     Debug.print("call_graph is " ^ mapstrcat ", " (Graph.edge_to_str) (Graph.unroll_edges call_graph)); *)
-  let call_cliques = Graph.topo_sort_cliques call_graph in
-(*     Debug.print("call_cliques are: " ^ groupingsToString (identity) call_cliques); *)
-    call_cliques
-
-(* let defs_as_alist =  *)
-(*   map (fun (Define (name, body, _, _) as e) -> name, e) *)
-
-let defs_to_bindings = 
-  map (fun (Define (name, body, _, _)) -> name, body)
-
-let rec defn_of symbol = function
-  | Define(n, _, _, _) as expr :: _ when n = symbol -> expr
-  | _ :: defns -> defn_of symbol defns
-
-let find_defn_in = flip defn_of
-
-(** order_exprs_by_callgraph takes a list of groupings of functions
-    and returns a new, possibly finer, list of groupings of functions.
-    Each of the new groupings should truly be mutually recursive and
-    the groupings should be ordered in callgraph-order (but note that
-    bindings are only determined within the original groupings; how
-    does this work with redefined function names that are part of
-    mut-rec call groups? )*)
-let refine_def_groups (expr_lists : untyped_expression list list) : untyped_expression list list = 
-  let regroup_defs defs = 
-    let bindings = defs_to_bindings defs in
-    let cliques = group_and_order_bindings_by_callgraph bindings in
-      map (map (find_defn_in defs)) cliques 
-  in
-    (* Each grouping in the input will be broken down into a new list
-       of groupings. We only care about the new groupings, so we
-       concat_map to bring them together *)
-    concat_map (function
-                  | Define _ :: _ as defs -> regroup_defs defs
-                  | e                     -> [e]) expr_lists
-      
 let mutually_type_defs
     ((env, alias_env) : Inferencetypes.typing_environment)
     (defs : (string * untyped_expression * 'a option) list)
@@ -1416,18 +1347,17 @@ let type_expression : Inferencetypes.typing_environment -> untyped_expression ->
     in
       (env', alias_env'), exp'
 
-let type_program : Inferencetypes.typing_environment -> untyped_expression list ->
-  (Inferencetypes.typing_environment * expression list) =
-  fun typing_env exprs ->
-
-    let type_group (typing_env, typed_exprs) : untyped_expression list ->
-      (Inferencetypes.typing_environment * expression list) = function
+let type_program
+    (typing_env : Inferencetypes.typing_environment)
+    (exprs : untyped_expression list) :
+    Inferencetypes.typing_environment * expression list =
+  let type_group (typing_env, typed_exprs) : untyped_expression list ->
+    Inferencetypes.typing_environment * expression list = function
       | [x] -> (* A single node *)
 	  let typing_env, expression = type_expression typing_env x in 
             typing_env, typed_exprs @ [expression]
       | xs  -> (* A group of potentially mutually-recursive definitions *)
           let defparts = map (fun (Define x) -> x) xs in
-            (* Why can we assume we'll find a [Rec] with a single term here?*)
           let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
                                  name, expr, t) defparts in
           let (typing_env : Inferencetypes.typing_environment), defs = mutually_type_defs typing_env defbodies in
@@ -1441,7 +1371,7 @@ let type_program : Inferencetypes.typing_environment -> untyped_expression list 
       | _ ->  false
     in
     let def_seqs = groupBy bothdefs exprs in
-    let mutrec_groups = (refine_def_groups def_seqs) in
+    let mutrec_groups = (Callgraph.refine_def_groups def_seqs) in
       fold_left type_group (typing_env, []) mutrec_groups
 
 (* Check for duplicate top-level definitions.  This probably shouldn't

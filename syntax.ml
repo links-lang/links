@@ -508,10 +508,7 @@ let labelize expr =
           Some(set_label expr (Some(label_for_expr expr))))
        expr)
 
-
-(** {0 Helpful syntax operation} *)
-(** Removes defs from [env] that aren't used by [expr].
-    Move this to optimiser.ml? *)
+(** Removes defs from [env] that aren't used by [expr]. *)
 let elim_dead_defs env expr =
   let used_names = freevars(expr) @ concat (map freevars env) in
     filter (function
