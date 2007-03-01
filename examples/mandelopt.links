@@ -30,30 +30,26 @@ fun mandelloop(z, c, i) {
   }
 }
 
-# fun mandelbrot(r, i, limit) {
-#   mandelloop((0,0), (r,i), 0);
-# }
-
 fun hexdigit(i) {
-       if (i ==  0) "0"
-  else if (i ==  1) "1"
-  else if (i ==  2) "2"
-  else if (i ==  3) "3"
-  else if (i ==  4) "4"
-  else if (i ==  5) "5"
-  else if (i ==  6) "6"
-  else if (i ==  7) "7"
-  else if (i ==  8) "8"
-  else if (i ==  9) "9"
-  else if (i == 10) "a"
-  else if (i == 11) "a"
-  else if (i == 12) "b"
-  else if (i == 13) "c"
-  else if (i == 14) "d"
-  else if (i == 15) "e"
-  else # if (i == 16) 
-    "f"
-
+  switch (i) {
+   case 0 -> "0"
+   case 1 -> "1"
+   case 2 -> "2"
+   case 3 -> "3"
+   case 4 -> "4"
+   case 5 -> "5"
+   case 6 -> "6"
+   case 7 -> "7"
+   case 8 -> "8"
+   case 9 -> "9"
+   case 10 -> "a"
+   case 11 -> "a"
+   case 12 -> "b"
+   case 13 -> "c"
+   case 14 -> "d"
+   case 15 -> "e"
+   case _ ->  "f"
+  }
 }
 
 fun redshade(i, max) {
@@ -66,13 +62,7 @@ fun pixeldiv(x, y, size, color) {
   var s = intToString(size);
   var sx = intToString(x);
   var sy = intToString(y);
-  <div id="{"p" ++ sx ++ "x" ++ sy}"
-       style="width: {s}px; 
-              height: {s}px;
-              position: absolute;
-              left: {sx}px;
-              top: {sy}px;
-              background-color: {redshade(color, the_limit)}"/>
+  <div style="width:{s}px;height:{s}px;position:absolute;left:{sx}px;top:{sy}px;background-color:{redshade(color, the_limit)}"/>
 }
 
 fun mandelBlock(pixSize, x, y, regionSize, r, i) {
@@ -115,16 +105,10 @@ fun mandelMadness(x, y, r, i, pixSize,
 } mm(x,y,r,i,pixSize)
 }
 
-#fun goMandelMadness(minr, mini, maxr, maxi, pixelWidth)
-#{
-#}
-
 fun main() client {
   replaceDocument(<body>
     <div id="p0x0" />
   </body>);
-
-
 
   var minr = -20;
   var mini = -15;
