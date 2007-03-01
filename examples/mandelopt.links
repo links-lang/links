@@ -86,7 +86,7 @@ fun mandelMadness(x, y, r, i, pixSize,
                   maxx, maxy,
                   mini, minr, maxi, maxr)
 {
-  var docElt = domGetDocumentRef();
+  var docElt = getDocumentNode();
   var xdil = (maxi - mini) / (maxx - 0);
   var regionSize = pixSize * xdil;
 
@@ -103,7 +103,7 @@ fun mandelMadness(x, y, r, i, pixSize,
       }
     } else {
 #      debug("x is " ++ intToString(x));
-      domAppendChild(mandelBlock(pixSize, x, y,
+      appendChildren(mandelBlock(pixSize, x, y,
                                  regionSize, r, i), docElt);
       mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,
                     maxx, maxy,
@@ -120,7 +120,7 @@ fun mandelMadness(x, y, r, i, pixSize,
 #}
 
 fun main() client {
-  domReplaceDocument(<body>
+  replaceDocument(<body>
     <div id="p0x0" />
   </body>);
 
