@@ -123,6 +123,9 @@ let concat_lits : RewriteCode.rewriter =
     | Call (Var "_concat", [(Lit lit as l); r])
     | Call (Var "_concat", [l; (Binop (Lit lit, _, _) as r)])
     | Call (Var "_concat", [l; (Lit lit as r)]) when stringp lit -> Some (Binop (l, "+", r))
+
+    (* Merge literal lists *)
+    | Call (Var "_concat", [Lst l; Lst r]) -> Some (Lst (l @ r))
     | _ -> None
 
 let concat_lits = RewriteCode.bottomup concat_lits
