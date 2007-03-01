@@ -65,9 +65,11 @@ let gen_format_record fields ({loc=loc}as ti) =
                                 let sep = if endp then <:expr< () >>
                                 else <:expr< Format.pp_print_string formatter "; " >> in
                                 <:expr< let module S = $gen_printer ti v$ in
-                                            do { Format.pp_print_string formatter $str:k ^ "="$; 
+                                            do { Format.pp_open_box formatter 0;
+                                                 Format.pp_print_string formatter $str:k ^ "="$; 
                                                  S.format formatter obj.$lid:k$ ; 
-                                                 $sep$
+                                                 $sep$;
+                                                 Format.pp_close_box formatter ()
                                                } >>) 
     fields (endmarker fields) in
 <:str_item<
