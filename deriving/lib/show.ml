@@ -173,3 +173,27 @@ module Show_9
                     Format.fprintf formatter
                       "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a,@;%a,@;%a,@;%a,@;%a)@]" S1.format s1 S2.format s2 S3.format s3 S4.format s4 S5.format s5 S6.format s6 S7.format s7 S8.format s8 S9.format s9
                 end)
+
+module Show_map
+  (O : Map.OrderedType) 
+  (K : Show with type a = O.t)
+  (V : Show)
+  : Show with type a = V.a Map.Make(O).t =
+ShowDefaults(
+  struct
+    module M = Map.Make(O)
+    type a = V.a M.t
+    let format formatter map = 
+      Format.pp_open_box formatter 0;
+      Format.pp_print_string formatter "{";
+      M.iter (fun key value -> 
+                Format.pp_open_box formatter 0;
+                K.format formatter key;
+                Format.pp_print_string formatter " => ";
+                V.format formatter value;
+                Format.pp_close_box formatter ();
+             ) map;
+      Format.pp_print_string formatter "}";
+      Format.pp_close_box formatter ();
+      
+  end)

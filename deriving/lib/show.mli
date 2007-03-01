@@ -44,3 +44,9 @@ module Show_8 (S1 : Show) (S2 : Show) (S3 : Show) (S4 : Show) (S5 : Show) (S6 : 
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
 module Show_9 (S1 : Show) (S2 : Show) (S3 : Show) (S4 : Show) (S5 : Show) (S6 : Show) (S7 : Show) (S8 : Show) (S9 : Show)
   : Show with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
+module Show_map
+  (O : Map.OrderedType) 
+  (K : Show with type a = O.t)
+  (V : Show)
+  : Show with type a = V.a Map.Make(O).t
+

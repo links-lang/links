@@ -188,7 +188,7 @@ module PatternCompiler =
      let partition_variant_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
-         assoc_list_of_string_map
+         StringMapUtils.to_alist
            (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -208,7 +208,7 @@ module PatternCompiler =
      let partition_record_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
-         assoc_list_of_string_map
+         StringMapUtils.to_alist
            (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -229,7 +229,7 @@ module PatternCompiler =
      let partition_constant_equations
          : equation list -> (string * (untyped_expression * annotated_equation list)) list =
        fun equations ->
-         assoc_list_of_string_map
+         StringMapUtils.to_alist
           (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -1150,7 +1150,7 @@ module Desugarer =
                  else
                    failwith ("Free variable(s) in alias")
            | RecordLit (fields, r) ->
-               Record_intro (string_map_of_assoc_list (alistmap desugar fields),
+               Record_intro (StringMapUtils.from_alist (alistmap desugar fields),
                              opt_map desugar r,
                              pos) 
            | TupleLit [field] -> desugar field

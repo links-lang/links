@@ -757,7 +757,7 @@ and generate_direct_style : 'a expression' -> code =
   (* Records *)
   | Record_intro (bs, r, _) ->
       let dict =
-        Dict (StringMapUtils.map_to_list (fun (label, e) -> label, generate e) bs)
+        Dict (StringMapUtils.zip_with (fun label e -> label, generate e) bs)
       in
         begin
           match r with

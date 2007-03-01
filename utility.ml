@@ -4,75 +4,6 @@ let fst3(x, _, _) = x
 let snd3(_, y, _) = y
 let thd3(_, _, z) = z
 
-(*** string environments ***)
-module OrderedString =
-struct
-  type t = string
-  let compare : string -> string -> int = String.compare
-end
-module StringMap = Map.Make(OrderedString)
-
-type 'a stringmap = 'a StringMap.t
-
-module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Typeable_defaults(struct
-  type a = A.a stringmap
-  let typeRep = 
-    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
-    in fun _ -> t
-end)
-module Show_stringmap (A : Show.Show) = Show.Show_unprintable (struct type a = A.a stringmap  end)
-module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
-module Functor_stringmap = Functor.Functor_map(OrderedString)
-module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
-module Shelve_stringmap (S : Shelve.Shelve) = 
-struct
-  module Typeable = Typeable_stringmap(S.Typeable)
-  module Eq = Eq_stringmap(S.Eq)
-  type a = S.a stringmap
-  let shelve  _ = failwith "shelve stringmap nyi"
-end
-
-module MapUtils(M : Map.S) =
-struct
-  (* return true if p holds for all values in the range of m *)
-  let for_all p m =
-    M.fold (fun _ v b -> b && p v) m true
-
-  (* convert m to a list using the function f to build elements of the list *)
-  let map_to_list f m =
-    List.rev (M.fold (fun key v xs -> f(key, v) :: xs) m [])
-
-  let size m =
-    List.length (map_to_list (fun x -> x) m)
-end
-module StringMapUtils = MapUtils(StringMap)
-
-let superimpose a b = 
-  StringMap.fold StringMap.add b a
-
-exception Not_disjoint of string
-
-let union_disjoint a b : 'a StringMap.t = 
-  StringMap.fold
-    (fun k v r -> 
-      if (StringMap.mem k r) then raise (Not_disjoint k) 
-      else
-        StringMap.add k v r) b a
-
-module StringSet = Set.Make(OrderedString)
-
-(*** int environments ***)
-module OrderedInt =
-struct
-  type t = int
-  let compare : int -> int -> int = compare
-end
-module IntMap = Map.Make(OrderedInt)
-module IntSet = Set.Make(OrderedInt)
-
-let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
-
 (** {1 Functional combinators} *)
 module Functional =
 struct
@@ -89,7 +20,77 @@ struct
   let cross f g = fun (x, y) -> f x, g y
 end    
 include Functional
-    
+
+(*** string environments ***)
+module StringMap = Map.Make(String)
+
+type 'a stringmap = 'a StringMap.t
+
+module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
+Typeable.Typeable_defaults(struct
+  type a = A.a stringmap
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
+end)
+module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap = Show.Show_map(String)(Primitives.Show_string)(A)
+module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Functor_stringmap = Functor.Functor_map(String)
+module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
+module Shelve_stringmap (S : Shelve.Shelve) = 
+struct
+  module Typeable = Typeable_stringmap(S.Typeable)
+  module Eq = Eq_stringmap(S.Eq)
+  type a = S.a stringmap
+  let shelve  _ = failwith "shelve stringmap nyi"
+end
+
+module MapUtils(M : Map.S) =
+struct
+  (* return true if p holds for all values in the range of m *)
+  let for_all p m =
+    M.fold (fun _ v b -> b && p v) m true
+
+  let size m =
+    M.fold (fun _ _ n -> n+1) m 0
+
+  let to_alist map =
+    List.rev (M.fold (fun x y l -> (x, y) :: l) map [])
+
+  let zip_with f map =
+    List.rev (M.fold (fun x y l -> (f x y) :: l) map [])
+
+  let from_alist l =
+    List.fold_right (uncurry M.add) l M.empty 
+
+  exception Not_disjoint of M.key
+
+  let union_disjoint a b = 
+  M.fold
+    (fun k v r -> 
+      if (M.mem k r) then raise (Not_disjoint k) 
+      else
+        M.add k v r) b a
+
+end
+module StringMapUtils = MapUtils(StringMap)
+
+let superimpose a b = 
+  StringMap.fold StringMap.add b a
+
+module StringSet = Set.Make(String)
+
+(*** int environments ***)
+module OrderedInt =
+struct
+  type t = int
+  let compare : int -> int -> int = compare
+end
+module IntMap = Map.Make(OrderedInt)
+module IntSet = Set.Make(OrderedInt)
+
+let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
+
 (** {1 Lists} *)
 module ListUtils = 
 struct
@@ -252,15 +253,6 @@ struct
 
 end
 include AList
-
-let assoc_list_of_string_map env =
-  List.rev (StringMap.fold (fun x y l -> (x, y) :: l) env [])
-
-let zip_string_map_with f env =
-  List.rev (StringMap.fold (fun x y l -> (f x y) :: l) env [])
-
-let string_map_of_assoc_list l =
-  List.fold_right (fun (x, y) env -> StringMap.add x y env) l StringMap.empty 
 
 (** {1 Strings} *)
 module StringUtils = 

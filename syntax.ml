@@ -210,7 +210,7 @@ let rec show t : 'a expression' -> string = function
   | Record_intro (bs, r, data) ->
       "(" ^
         String.concat ","
-        (StringMapUtils.map_to_list (fun (label, e) -> label ^ "=" ^ (show t e)) bs) ^
+        (StringMapUtils.zip_with (fun label e -> label ^ "=" ^ (show t e)) bs) ^
         (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
@@ -299,7 +299,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_selection (e1, _, _, e2, _, e3, _) ->
                    [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
                | Record_intro (bs, r, _) ->
-                   (StringMapUtils.map_to_list (fun (_, e) -> visitor visit_children e) bs) @
+                   (StringMapUtils.zip_with (fun _ e -> visitor visit_children e) bs) @
                      (opt_app (fun e -> [visitor visit_children e]) [] r)
                | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)

@@ -447,7 +447,7 @@ let sql_aslist : RewriteSyntax.rewriter =
 	  | _ -> failwith "Internal Error: missing field in row"
 	in
 	let fields, _ = th_row in
-	let columns = zip_string_map_with rowFieldToTableCol fields in
+	let columns = StringMapUtils.zip_with rowFieldToTableCol fields in
         let th_var = match th with
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
@@ -781,8 +781,7 @@ let optimise env expr =
                                  Show_stripped_expression.show (strip_data expr) 
                              else "") ^ 
 			      "\nAfter optimization  : " ^
-                              string_of_expression expr'
-(*                               Show_stripped_expression.show (strip_data expr') *)
+                              Show_stripped_expression.show (strip_data expr') 
                          );
 	                expr')
   else expr
