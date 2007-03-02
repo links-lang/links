@@ -291,7 +291,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                                                -> (db, row)
                                              | _ -> failwith "THX1138") 
                                          tbls) in
-                                 assert (all_equiv (=) dbs);
+
+                                 if(not (all_equiv (=) dbs)) then
+                                   failwith ("Cannot join across different databases");
+
                                  let table_defs = combine table_aliases table_defs in
                                  let db = hd(dbs) in
                                    (* TBD: factor this stuff out into
