@@ -48,13 +48,17 @@ function showz(z) {
 }
 
 function mandelloop(z, c, i) {
-  if (zmagsq_traced(z) > (4 * precision)) {
-    return i
-  } else if (i >= the_limit) {
-    return i
-  } else {
-    return mandelloop(zplus(c, zsquare_traced(z)), c, i+1)
+  for (;;) {
+    if (zmagsq_traced(z) > (4 * precision)) {
+      break;
+    } else if (i >= the_limit) {
+      break;
+    } else {
+      z = zplus(c, zsquare_traced(z));
+      i = i + 1;
+    }
   }
+  return i;
 }
 
 function intToString(n) { 
@@ -92,32 +96,40 @@ function mandelMadness(x, y, r, i, pixSize,
                        maxx, maxy,
                        mini, minr, maxi, maxr)
 {
-  var docElt = document.documentElement;
-  var xdil = (maxi - mini) / (maxx - 0);
-  var regionSize = pixSize * xdil;
-
-  function mm(x,y,r,ii,pixSize) {
-    if (x+pixSize >= maxx) {
-        return mm(0, y+pixSize, minr, ii+regionSize, pixSize)
-    } else {
-      if (y+pixSize >= maxy) {
-        if (pixSize > minPixSize) {
-          return mm(0, 0, minr, mini, pixSize/2)
-        }
-        return ({})
-      }
-      else {
-        var block = mandelBlock(pixSize, x, y, regionSize, r, ii);
-        for (var j = 0; j != block.length; j++) {
-           docElt.appendChild(block[j]);
-        }
-        return mandelMadness(x+pixSize, y, r+regionSize, ii, pixSize,
-                             maxx, maxy,
-                             mini, minr, maxi, maxr)
-      }
-    }
-  } 
-  return mm(x,y,r,i,pixSize)
+  for (;;) {
+     var docElt = document.documentElement;
+     var xdil = (maxi - mini) / (maxx - 0);
+     var regionSize = pixSize * xdil;
+     for (;;) {
+         if (x+pixSize >= maxx) {
+               x = 0;
+               y += pixSize;
+               r = minr;
+               i += regionSize;
+               continue;
+         } else {
+           if (y+pixSize >= maxy) {
+             if (pixSize > minPixSize) {
+               x = 0;
+               y = 0;
+               r = minr;
+               i = mini;
+               pixSize /= 2;
+               continue;
+             }
+             return ({})
+           } else {
+             var block = mandelBlock(pixSize, x, y, regionSize, r, i);
+             for (var j = 0; j != block.length; j++) {
+                docElt.appendChild(block[j]);
+             }
+             x += pixSize;
+             r += regionSize;
+             break;
+           }
+         }
+     }
+  }
 }
 
 function main() {
