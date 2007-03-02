@@ -230,7 +230,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   
   "exit",
   (`Continuation [],
-   (datatype "a -> b") (* Really, "a -> _|_" or "Continuation a"*)
+   (datatype "a -> [||]") (* Really, "a -> _|_" or "Continuation a"*)
   );
 
   "send",
@@ -474,6 +474,9 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   (`Client, datatype "Xml -> Xml");
 
   (* Section: Accessors for DomNodes *)
+  "domGetNodeValueFromRef",
+  (`Client, datatype "DomNode -> String");
+
   "domGetTagNameFromRef",
   (`Client, datatype "DomNode -> String");
 
