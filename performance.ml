@@ -1,8 +1,9 @@
 (* Measure performance *)
 let measuring = Settings.add_bool("measure_performance", false, `User)
+let noisy = Settings.add_bool("noisy_garbage_collection", false, `User)
 
 let notify_gc () = 
-  Debug.print ("Completing GC cycle")
+  Debug.if_set noisy (fun _ -> "Completing GC cycle")
 
 let measure_diff_l obtain diff e = 
   let start = obtain () in
