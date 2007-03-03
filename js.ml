@@ -970,6 +970,14 @@ let rename_symbol_operators program =
   fromOption 
     program
     (RewriteSyntax.bottomup wordify_rewrite program)
+
+(* Remove "units" that get inserted into the environment as a result
+   of declarations.  This doesn't really belong here.  It should
+   disappear naturally when we have a better IR type. *)
+let remove_nulls = filter
+  (function 
+     | Record_intro (fields, None, _) when fields = StringMap.empty -> false
+     | _ -> true)
     
  (* TODO: imports *)
 let generate_program env expr =
@@ -985,7 +993,7 @@ let generate_program env expr =
   (boiler_1 ()
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2 ()
- ^ String.concat "\n" (map gen (butlast env))
+ ^ String.concat "\n" (map gen (remove_nulls (butlast env)))
  ^ boiler_3 ()
  ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expr)
  ^ boiler_4 ())
