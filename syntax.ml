@@ -306,6 +306,35 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
   in
     visitor visit_children
 
+let rec stringlit_value = function
+  | HasType (e, _, _) -> stringlit_value e
+  | String (name, _) -> name
+  | _ -> assert false
+
+(* Walk the XML tree, looking for <input l:name> bindings that are
+   inside the top <form> element, with no intervening <form>s.
+*)
+let lname_bound_vars : 'a expression' -> string list = 
+  let rec lnames = function
+    | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
+        (try 
+          let lname_attr = assoc "l:name" attrs in 
+            (try
+               [stringlit_value(lname_attr)]
+             with
+               | Match_failure _ ->failwith("l:name attribute was not a string: "
+                                           ^ string_of_expression lname_attr))
+        with Not_found -> concat (map lnames contents))
+    | Xml_node ("form", _, _, _) -> (* new scope *) []
+    | Xml_node (_, _, contents, _) -> concat (map lnames contents)
+    | Concat (l, r, _) -> lnames l @ lnames r
+    | _ -> [] 
+  in function
+    | Xml_node ("form", _, contents, _)  ->
+        concat (map lnames contents)
+    | Xml_node (_, _, _, _)  -> []
+        
+
 let freevars (expression : 'a expression') : string list = 
   let remove x = List.filter ((<>)x)
   and remove_all xs = List.filter (not -<- flip List.mem xs) 
@@ -322,6 +351,9 @@ let freevars (expression : 'a expression') : string list =
         let vars, vals = List.split (map (fun (n,v,_) -> (n,v)) bindings) in
           remove_all vars (concat_map (aux default) (body::vals))
     | TableQuery (_, query, _) -> Query.freevars query
+    | Xml_node (_, attrs, children, _) as x -> 
+        remove_all (lname_bound_vars x) 
+          (concat_map (snd ->- aux default) attrs @ concat_map (aux default) children)
     | other -> default other
   in 
     reduce_expression aux (combine -<- snd) expression
@@ -410,11 +442,6 @@ let rec set_data : ('b -> 'a expression' -> 'b expression') =
 let node_datatype : (expression -> Inferencetypes.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 
 let position e = data_position (expression_data e)
-
-let rec stringlit_value = function
-  | HasType (e, _, _) -> stringlit_value e
-  | String (name, _) -> name
-  | _ -> assert false
 
 let no_expr_data = `T(dummy_position, `Not_typed, None)
 

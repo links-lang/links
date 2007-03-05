@@ -12,9 +12,6 @@ val islhref : 'data Syntax.expression' -> bool
 (* Add an l:action attribute into an XML form expression *)
  val add_attrs : (string * 'data Syntax.expression') list -> 'data Syntax.expression' -> 'data Syntax.expression' 
 
-(* Which variables are l:name-bound? *)
-val lname_bound_vars : 'data Syntax.expression' -> string list
-
 (** Serialise the continuation and environment; adjust the form accordingly *)
 val xml_transform : Result.environment -> (string -> Result.result) -> (Syntax.expression -> Result.continuation -> Result.result) -> Syntax.expression -> Syntax.expression
 

@@ -652,7 +652,7 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
   in
     
   let handlers, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
-  let vars = Forms.lname_bound_vars xml in
+  let vars = Syntax.lname_bound_vars xml in
 
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left

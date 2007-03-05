@@ -90,7 +90,11 @@ val labelize : expression -> expression
 val dummy_position : position
 val no_expr_data : typed_data
 
+(* Which variables are l:name-bound? *)
+val lname_bound_vars : 'data expression' -> string list
+
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
+
