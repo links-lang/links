@@ -222,7 +222,6 @@ let rec show : code -> string =
       | Call (Var "_project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
-(*      | Call (Var "intToString", [n;kappa]) -> Printf.sprintf "%s(%s.toString())" (paren kappa) (paren n)  *)
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
@@ -337,9 +336,7 @@ let generate_server_stub = function
                            arglist
                        )]))]
   | e
-    -> failwith ("Cannot generate server stub for " ^
-(*string_of_expression e)*)
-Syntax.Show_expression.show e)
+    -> failwith ("Cannot generate server stub for " ^Syntax.Show_expression.show e)
 
  let apply_no_yield (f, args) =
   Call (Var f, args)
@@ -356,7 +353,6 @@ let callk_yielding arg =
 let trivial_cps expr = 
   Fn(["__kappa"], callk_yielding expr)
 
-(* let idy_js = Fn(["x"], Var "x")*)
 let idy_js = Var("_idy")
 let thread_end_k = idy_js
           
@@ -586,14 +582,8 @@ let rec generate : 'a expression' -> code =
   | Call_cc (e, _) -> 
       Fn(["__kappa"], 
 	 Call (Call(generate e, [Var "__kappa"]), 
-	       [
-		 Fn (["__ignore"],
-		     Var "__kappa")
-	       ])
-	)
+	       [Fn (["__ignore"],Var "__kappa")]))
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
-      (* `Wrong' happens to correspond to pattern matching now, 
-         but perhaps not in the future? *)
   | Alien _ 
   | TypeDecl _ -> Nothing
   | Database (e, _) ->
@@ -978,7 +968,7 @@ let remove_nulls = filter
   (function 
      | Record_intro (fields, None, _) when fields = StringMap.empty -> false
      | _ -> true)
-    
+
  (* TODO: imports *)
 let generate_program env expr =
   let env = List.map rename_symbol_operators env
@@ -989,7 +979,7 @@ let generate_program env expr =
     else env
   in
   let env = (if Settings.get_value elim_dead_defs 
-             then Syntax.elim_dead_defs env expr else env) in
+             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) env expr else env) in
   (boiler_1 ()
  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
  ^ boiler_2 ()

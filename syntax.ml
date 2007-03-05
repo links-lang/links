@@ -508,14 +508,6 @@ let labelize expr =
           Some(set_label expr (Some(label_for_expr expr))))
        expr)
 
-(** Removes defs from [env] that aren't used by [expr]. *)
-let elim_dead_defs env expr =
-  let used_names = freevars(expr) @ concat (map freevars env) in
-    filter (function
-               | Define (x, y, z, d) when List.mem x used_names -> true
-               | Define _ -> false
-               | _ -> true) env
-
 (** {0 Skeleton} *)
 
 (** [skeleton] has a case for each of the [Syntax] constructors, and

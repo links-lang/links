@@ -90,8 +90,6 @@ val labelize : expression -> expression
 val dummy_position : position
 val no_expr_data : typed_data
 
-val  elim_dead_defs : 'a expression' list -> 'a expression' -> 'a expression' list
-
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 
