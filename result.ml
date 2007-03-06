@@ -316,7 +316,7 @@ and string_of_result : result -> string = function
        with Not_tuple ->
          "(" ^ mapstrcat "," (fun (label, value) ->
                                 label ^ "=" ^ string_of_result value)
-           fields ^ ")")
+           (List.sort (fun (l,_) (r, _) -> compare l r) fields) ^ ")")
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_result value ^ ")"
   | `List [] -> "[]"
