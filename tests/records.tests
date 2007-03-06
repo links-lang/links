@@ -42,3 +42,24 @@ stdout : (1, 'a') : (Int, Char)
 Row types preserved across functions
 (fun (x) { var (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
 stdout : 4 : Int
+
+With syntax (same type)
+((x = 3) with x = 4)
+stdout : (x=4) : (x:Int)
+
+With syntax (different type)
+((x = 3) with x = "four")
+stdout : (x="four") : (x:String)
+
+With syntax: multiple labels (a)
+((x=3,y=4) with y="four")
+stdout : (x=3,y="four") : (x:Int,y:String)
+
+With syntax: multiple labels (b)
+((z='a',x=3,y=4) with x="four",y=3)
+stdout : (x="four",y=3,z='a') : (x:String,y:Int,z:Char)
+
+With syntax (missing label)
+((x = 3) with y=4)
+stderr : @.
+exit : 1
