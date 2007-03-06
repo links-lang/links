@@ -550,6 +550,17 @@ let rec generate : 'a expression' -> code =
                 Bind (lv,
 	              Call (Var "_project", [strlit l; Var "__v"]),
                       Call(b_cps, [Var "__kappa"])))]))
+
+  | Project (expr, label, _) -> 
+      let expr_cps = generate expr in
+         Fn(["__kappa"],
+           (Call(expr_cps, 
+                 [Fn(["__v"], callk_yielding (Call (Var "_project", [strlit label; Var "__v"])))])))
+  | Erase (expr, label, _) -> 
+      (* should we do something here? *)
+      generate expr
+
+
   (* Variants *)
   | Variant_injection (l, e, _) -> 
       let content_cps = generate e in
@@ -765,6 +776,11 @@ and generate_direct_style : 'a expression' -> code =
       Call(Var "_project", [strlit l; gd v])
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
       Bind(lv, Call(Var "_project", [strlit l; gd v]), gd b)
+  | Project (expr, label, _) ->
+      Call (Var "_project", [strlit label; gd expr])
+  | Erase (expr, label, _) -> 
+      (* should we do anything here? *)
+      gd expr
   (* Variants *)
   | Variant_injection (l, e, _) -> 
       Dict [("_label", strlit l); ("_value", gd e)]

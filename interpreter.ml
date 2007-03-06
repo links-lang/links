@@ -282,6 +282,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 				     in
                                        `Database (db_connect driver params)) in
 	               apply_cont globals cont result
+                   | Result.Erase label ->
+                       apply_cont globals cont (`Record (snd (crack_row label (recfields value))))
+                   | Result.Project label ->
+                       apply_cont globals cont (fst (crack_row label (recfields value)))
                    | QueryOp(query, table_aliases) ->
                        let result = 
                          match value with
@@ -433,6 +437,10 @@ fun globals locals expr cont ->
                                      BinopRight(locals, `RecExt label, value) :: cont) fields cont)
   | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
+  | Syntax.Project (expr, label, _) ->
+      eval expr (UnopApply (locals, Result.Project label) :: cont)
+  | Syntax.Erase (expr, label, _) ->
+      eval expr (UnopApply (locals, Result.Erase label) :: cont)
   | Syntax.Variant_injection (label, value, _) ->
        eval value (UnopApply(locals, MkVariant(label)) :: cont)
   | Syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->

@@ -83,6 +83,8 @@ type 'data expression' =
   | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
+  | Project of ('data expression' * string * 'data)
+  | Erase of ('data expression' * string * 'data)
   | Variant_injection of (string * 'data expression' * 'data)
   | Variant_selection of ('data expression' * 
                             string * string * 'data expression' * 
@@ -132,6 +134,8 @@ let rec is_value : 'a expression' -> bool = function
   | Nil _
   | Abstr _ -> true
   | HasType (e, _, _)
+  | Project (e, _, _)
+  | Erase (e, _,_)
   | Variant_injection (_, e, _)
   | Variant_selection_empty (e, _)
   | Database (e, _)
@@ -216,6 +220,8 @@ let rec show t : 'a expression' -> string = function
   | Record_selection (label, label_variable, variable, value, body, data) ->
       "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
       ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
+  | Project (e, l, data) -> show t e ^ "." ^ l ^ t data
+  | Erase (e, l, data) -> show t e ^ "\\" ^ l ^ t data
   | Variant_injection (label, value, data) ->
       label ^ "(" ^ show t value ^ ")" ^ t data
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, data) ->
@@ -279,6 +285,8 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Abstr (_, e, _)
                | Database (e, _)
                | Variant_injection (_, e, _)
+               | Project (e, _, _)
+               | Erase (e, _, _)
                | List_of (e, _)
                | Call_cc(e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
@@ -381,6 +389,8 @@ let expression_data : ('a expression' -> 'a) = function
         | Xml_node (_, _, _, data) -> data
         | Record_intro (_, _, data) -> data
         | Record_selection (_, _, _, _, _, data) -> data
+        | Project (_,_,data) -> data
+        | Erase (_,_,data) -> data
         | Variant_injection (_, _, data) -> data
         | Variant_selection (_, _, _, _, _, _, data) -> data
         | Variant_selection_empty (_, data) -> data
@@ -574,6 +584,7 @@ let skeleton = function
   | Let(letvar, letsrc, letbody, d) -> Let(letvar, letsrc, letbody, d)
   | Record_selection(label, labelvar, etcvar, src, body, d) ->
       Record_selection(label, labelvar, etcvar, src, body, d)
+  | Project (expr, label, d) -> Project (expr, label, d)
   | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
   | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
   | SortBy(list_target, sort_func, d) -> SortBy(list_target, sort_func, d)

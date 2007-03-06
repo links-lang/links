@@ -131,6 +131,8 @@ type unop = MkColl
             | MkDatabase
             | VrntSelect of (string * string * rexpr * string option * 
                                rexpr option)
+            | Erase of string
+            | Project of string
             | QueryOp of (Query.query * (* table aliases: *) string list)
                 deriving (Typeable, Show, Pickle, Eq, Shelve)
 		

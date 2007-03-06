@@ -12,6 +12,13 @@ let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, `User)
 let show_optimisation = Settings.add_bool("show_optimisation", false, `User)
 let reduce_recs = Settings.add_bool("reduce_recursion", false, `User)
 
+(**
+   Check that "Project" and "Erase" do not occur in the syntax tree.
+*)
+let no_project_erase : RewriteSyntax.rewriter = function
+  | Project _ 
+  | Erase _ -> assert false
+  | _ -> None
 
 (** [pure]
 
@@ -777,6 +784,7 @@ let print_definition of_name ?msg:msg expr =
 
 
 let rewriters env = [
+  RewriteSyntax.bottomup no_project_erase;  
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   if Settings.get_value reduce_recs then

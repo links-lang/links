@@ -53,6 +53,8 @@ type unop = | MkColl
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
+            | Erase of string
+            | Project of string
             | QueryOp of (Query.query * (* the table aliases: *) string list)
 type binop = 
     [Syntax.comparison

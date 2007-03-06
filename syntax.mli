@@ -21,6 +21,8 @@ type 'a expression' =
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
   | Record_intro of (('a expression') Utility.stringmap * ('a expression') option * 'a)
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
+  | Project of ('a expression' * string * 'a)
+  | Erase of ('a expression' * string * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
   | Variant_selection of ('a expression' * string * string * 'a expression' * 
                             string * 'a expression' * 'a)

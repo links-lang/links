@@ -1123,6 +1123,16 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	let body = type_check (body_env, alias_env) body in
 	let body_type = type_of_expression body in
 	  Record_selection (label, label_variable, variable, value, body, `T (pos, body_type, None))
+  | Project (expr, label, `U pos) ->
+      let expr = type_check typing_env expr in
+      let label_variable_type = ITO.fresh_type_variable () in
+	unify (type_of_expression expr, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type))));
+        Project (expr, label, `T (pos, label_variable_type, None))
+  | Erase (value, label, `U pos) ->
+      let value = type_check typing_env value in
+      let label_variable_type = ITO.fresh_type_variable () in
+      let value_row = extract_row (type_of_expression value) in
+        Erase (value, label, `T (pos, `Record (ITO.set_field (label, `Absent) value_row), None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
       let type' = `Variant (ITO.make_singleton_open_row (label, `Present (type_of_expression value))) in
