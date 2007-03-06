@@ -309,11 +309,75 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_intro (bs, r, _) ->
                    (StringMapUtils.zip_with (fun _ e -> visitor visit_children e) bs) @
                      (opt_app (fun e -> [visitor visit_children e]) [] r)
-               | Rec (b, e, _) -> visitor visit_children e :: map (fun (_, e, _) -> visitor visit_children e) b
+               | Rec (b, e, _) -> map (fun (_, e, _) -> visitor visit_children e) b @ [visitor visit_children e]
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
   in
     visitor visit_children
 
+(* This is a candidate for `deriving', I think, perhaps in conjunction with a fold *)
+let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expression' =
+  match exp, exps with
+      (* 0 subnodes *)
+    | TypeDecl _, []
+    | Boolean _, []
+    | Integer _, []
+    | Char _, []
+    | String _, []
+    | Float _, []
+    | Variable _, []
+    | Nil _, [] 
+    | Placeholder _, []
+    | Wrong _, []
+    | Alien _, [] -> exp
+        
+    (* 1 subnodes *)
+    | Define (a, _, l, d)            , [e] -> Define (a, e, l, d)
+    | Abstr (s, _, d)                , [e] -> Abstr (s, e, d)
+    | Project (_, s, d)              , [e] -> Project (e, s, d)
+    | Erase (_, s, d)                , [e] -> Erase (e, s, d)
+    | Variant_injection (s, _, d)    , [e] -> Variant_injection (s, e, d)
+    | Variant_selection_empty (_, d) , [e] -> Variant_selection_empty (e, d)
+    | List_of (_, d)                 , [e] -> List_of (e, d)
+    | Database (_, d)                , [e] -> Database (e, d)
+    | Call_cc (_, d)                 , [e] -> Call_cc (e, d)
+    | HasType (_, t, d)              , [e] -> HasType (e, t, d)
+
+    (* 2 subnodes *)
+    | Apply (_, _, d)                        , [e1;e2] -> Apply (e1, e2, d)
+    | Comparison (_, c, _, d)                , [e1;e2] -> Comparison (e1, c, e2, d)
+    | Let (s, _, _, d)                       , [e1;e2] -> Let (s, e1, e2, d)
+    | Record_selection (s1, s2, s3, _, _, d) , [e1;e2] -> Record_selection (s1, s2, s3, e1, e2, d)
+    | Concat (_, _, d)                       , [e1;e2] -> Concat (e1, e2, d)
+    | For (_, s, _, d)                       , [e1;e2] -> For (e1, s, e2, d)
+    | TableHandle (_, _, r, d)               , [e1;e2] -> TableHandle (e1, e2, r, d)
+    | SortBy (_, _, d)                       , [e1;e2] -> SortBy (e1, e2, d)
+
+    (* 3 subnodes *)
+    | Condition (_, _, _, d), [e1;e2;e3] -> Condition (e1, e2, e3, d)
+    | Variant_selection (_, s1, s2, _, s3, _, d), [e1;e2;e3] -> Variant_selection (e1, s1, s2, e2, s3, e3, d)
+
+    (* n subnodes *)
+    | Rec (bindings, _, d), (_::_ as nodes) ->
+        let others, body = unsnoc nodes in 
+          Rec (List.map2 (fun (a,_,c) b -> (a,b,c)) bindings others, body, d)
+    | Record_intro (fields, None, d), nodes -> 
+        let addnode k _ ((node::nodes), map) = nodes, StringMap.add k node map in
+          Record_intro (snd (StringMap.fold addnode fields (nodes, StringMap.empty)), None, d)
+    | Record_intro (fields, Some _, d), (_::_ as nodes) -> 
+        let addnode k _ ((node::nodes), map) = nodes, StringMap.add k node map in
+        let others, expr = unsnoc nodes in
+          Record_intro (snd (StringMap.fold addnode fields (others, StringMap.empty)), Some expr, d)
+    | Xml_node (tag, attrs, _, d), nodes -> (* (string, ((string, EXP) list), (EXP list), 'data)*)
+        let nattrs = length attrs in
+        let attrnodes, childnodes = take nattrs nodes, drop nattrs nodes in
+          Xml_node (tag, 
+                    List.map2 (fun (k,_) v -> (k,v)) attrs attrnodes,
+                    childnodes,
+                    d)
+    | TableQuery (es, q, d), nodes ->
+        TableQuery (List.map2 (fun (k,_) v -> (k,v)) es nodes, q, d)
+    | e -> raise (Invalid_argument "set_subnodes")
+        
 let rec stringlit_value = function
   | HasType (e, _, _) -> stringlit_value e
   | String (name, _) -> name

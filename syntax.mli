@@ -76,6 +76,7 @@ val rename_fast : string -> string -> expression -> expression
 
 val reduce_expression : (('a expression' -> 'b) -> 'a expression' -> 'b) -> 
   ('a expression' * 'b list -> 'b) -> 'a expression' -> 'b
+val set_subnodes : 'a expression' -> 'a expression' list -> 'a expression'
 
 val expression_data : 'a expression' -> 'a
 val strip_data : 'a expression' -> stripped_expression
