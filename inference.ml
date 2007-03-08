@@ -942,6 +942,13 @@ and get_row_quantifiers : type_var_set -> row -> quantifier list =
 let env_type_vars env =
   concat_map (free_type_vars -<- snd) (Inferencetypes.environment_values env)
 
+let type_mismatch ~expected ~inferred ~pos ~src msg =
+  raise (Type_error (pos, 
+                     src ^" has type "^string_of_datatype inferred
+                     ^" but is annotated with type "
+                     ^ string_of_datatype expected^"\n"^
+                       msg))
+
 (** generalise: 
     Universally quantify any free type variables in the expression.
 *)
@@ -1266,7 +1273,16 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let expr_type = type_of_expression expr in
       let inference_datatype = datatype in
         free_alias_check alias_env inference_datatype;
-	unify(expr_type, inference_datatype);
+        begin
+          try unify(expr_type, inference_datatype);
+          with Unify_failure msg -> 
+            let _,_,src = position expr in
+            type_mismatch
+              ~expected:inference_datatype
+              ~inferred:expr_type
+              ~src:src
+              ~pos:pos msg
+        end;
 	HasType(expr, datatype, `T (pos, inference_datatype, None))
   | TypeDecl _ ->
       failwith "Type declarations only supported at top-level"
