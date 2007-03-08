@@ -536,6 +536,9 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   "getCharCode",
   (`Client, datatype "Event -> Char");
 
+  "event",
+  (`Client, datatype "Event");
+
   (* Yahoo UI library functions we don't implement: *)
   (* # stopEvent : ??? *)
   (* # stopPropagation : ??? *)
