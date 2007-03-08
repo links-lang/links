@@ -1,3 +1,4 @@
+(*pp deriving *)
 (**** Various utility functions ****)
 
 let fst3(x, _, _) = x
@@ -16,6 +17,7 @@ struct
   let uncurry f (a, b) = f a b
   let identity x = x
   let flip f x y = f y x
+  let const x _ = x
     
   let cross f g = fun (x, y) -> f x, g y
 end    
@@ -62,6 +64,9 @@ struct
 
   let from_alist l =
     List.fold_right (uncurry M.add) l M.empty 
+
+  let pop item map = 
+    (M.find item map, M.remove item map)
 
   exception Not_disjoint of M.key
 
@@ -362,6 +367,7 @@ let opt_app f def = function
   | Some a -> f a
 
 type ('a, 'b) either = Left of 'a | Right of 'b
+  deriving (Show, Eq, Typeable, Pickle, Shelve)
 
 let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
     : 'b list * 'c list =

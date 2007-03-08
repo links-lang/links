@@ -45,7 +45,7 @@ type expression =
          `Desc (table renaming, column name) for descending ordering. If the list is empty, no ordering is done.}}
     @version 1.0 *)
 and query = {distinct_only : bool;
-             result_cols : column list;
+             result_cols : col_or_expr list;
              tables : table_instance list;
              condition : expression;
              sortings : sorting list;
@@ -58,6 +58,7 @@ and column = {table_renamed : string;
               name : string;
               renamed : string; (* TBD: call this `alias' *)
               col_type : Inferencetypes.datatype}
+and col_or_expr = (column, expression) either
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 (* Simple accessors *)
 let get_renaming col = col.renamed
@@ -67,8 +68,11 @@ let add_sorting query col =
      sortings = col :: query.sortings}
 
 let owning_table of_col qry =
-  let col_rec = (List.find (fun c -> c.name = of_col) qry.result_cols) in
-    col_rec.table_renamed
+  match (List.find (function
+                              | Left c -> c.name = of_col
+                              | Right _ -> false) qry.result_cols) with
+    | Left col_rec -> col_rec.table_renamed
+    | Right _ -> assert false
 
 let rec freevars {condition = condition;
                   offset = offset;

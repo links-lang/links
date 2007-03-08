@@ -20,7 +20,7 @@ type expression =
   | Query of query
 and query = {
   distinct_only : bool;
-  result_cols : column list;
+  result_cols : col_or_expr list;
   tables : table_instance list;
   condition : expression;
   sortings : sorting list;
@@ -33,7 +33,9 @@ and column = {
   name : string;
   renamed : string;
   col_type : Inferencetypes.datatype;
-} deriving (Eq, Typeable, Show, Pickle, Shelve)
+} 
+and col_or_expr = (column, expression) Utility.either
+deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string
@@ -42,3 +44,18 @@ val get_renaming : column -> string
 val add_sorting : query -> sorting -> query
 val freevars : query -> string list
 val occurs_free : string -> query -> bool
+
+(*
+mini-sql that we handle here:
+
+  SELECT [ DISTINCT * | expression [ AS output_name ] ]
+    [ FROM from_item [, ...] ]
+    [ WHERE condition ]
+    [ ORDER BY expression [ ASC | DESC ] ]
+    [ LIMIT { count } ]
+    [ OFFSET start ]
+
+where from_item is:
+
+    table_name [ [ AS ] alias ]
+*)

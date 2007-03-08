@@ -29,8 +29,9 @@ and string_of_query (qry:query) : string =
      ^ (match selects with
 	  | [] -> "NULL as null"
 	  | _ -> (Utility.mapstrcat ", " 
-                    (fun col -> 
-                       col.table_renamed ^"."^ col.name ^" AS "^ col.renamed)
+                    (function 
+                       | Utility.Left col -> col.table_renamed ^"."^ col.name ^" AS "^ col.renamed
+                       | Utility.Right expr -> string_of_expression expr)
                     qry.result_cols))
      ^ " FROM " ^ (Utility.mapstrcat ", " 
                      (fun (table, rename) ->

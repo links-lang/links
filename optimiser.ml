@@ -459,8 +459,7 @@ let rec sql_sort = function
 
 let sql_aslist : RewriteSyntax.rewriter =
   function 
-    | Apply(Variable("asList", _), th, `T data) ->
-        let pos = fst3 data in
+    | Apply(Variable("asList", _), th, (`T (pos,_,_) as data)) ->
         let th_type = node_datatype th in
         let th_row = match th_type with
           | `MetaTypeVar point ->
@@ -484,7 +483,7 @@ let sql_aslist : RewriteSyntax.rewriter =
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
 	let select_all = {Query.distinct_only = false;
-			  Query.result_cols = columns;
+			  Query.result_cols = List.map (fun l -> Left l) columns;
 			  Query.tables = [(`TableVariable th_var,
                                            table_alias)];
 			  Query.condition = Query.Boolean true;
@@ -499,7 +498,7 @@ let sql_aslist : RewriteSyntax.rewriter =
         in
           (match th with
              | Variable _ -> Some table_query
-             | _ -> Some (Let (th_var, th, table_query, `T data)))
+             | _ -> Some (Let (th_var, th, table_query, data)))
     | _ -> None
 
 (** check_join

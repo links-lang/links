@@ -20,17 +20,16 @@ let col_unique_name = Utility.gensym ~prefix:"col"
     @param query The query to modify.
     @return The modified query. *)
 let rec project (projs:string list) (query:query) : query =
-  let rec filter_selects projs =
-    function
-      | [] -> if projs <> [] then failwith "ST022"
-	else []
-      | col :: result_cols when mem col.renamed projs ->
-	  col ::
-            (filter_selects (filter (fun proj -> proj <> col.renamed) projs)
-               result_cols)
-      | col :: result_cols ->
-          (filter_selects (filter (fun proj -> proj <> col.renamed) projs)
-             result_cols)
+  let rec filter_selects projs cols =
+    match cols, projs with 
+      | [], [] -> []
+      | [], _ -> failwith "ST022"
+      | Left col :: result_cols, projs when mem col.renamed projs ->
+	  Left col :: (filter_selects (filter ((<>) col.renamed) projs) result_cols)
+      | Left col :: result_cols, projs ->
+          (filter_selects (filter ((<>) col.renamed) projs) result_cols)
+      | Right expr :: result_cols, projs -> 
+          Right expr :: (filter_selects projs result_cols)
   in
     {query with result_cols = filter_selects projs query.result_cols}
 
@@ -90,11 +89,12 @@ exception ColumnNotInQuery of string
 *)
 let query_field_for_var query field =
   try
-  find (fun x -> x <> `Unavailable)
-    (map (fun col -> (if col.renamed = field then
-                       `Table_field (col.table_renamed, col.name)
-                      else
-			`Unavailable))
+  find ((<>) `Unavailable)
+    (map (function
+            | Left col when col.renamed = field ->
+                `Table_field (col.table_renamed, col.name)
+            | Left _ -> `Unavailable
+            | Right _ -> `Unavailable)
        query.result_cols)
   with Not_found -> raise(ColumnNotInQuery(field))
     
@@ -360,9 +360,15 @@ let rec select condns (query:query) : query =
     distinct. Only the `right` argument needs renamings, since the
     `left` values are already distinct anyway.
 *)
-let append_uniquely left right : (column list * (column * string) list) =
-  let right = map ( fun x -> (x, {x with renamed = col_unique_name ()}) ) right in
-    (left @ map snd right, map (fun (x, y) -> (x, get_renaming y)) right)
+let append_uniquely
+    (left : col_or_expr list)
+    (right : col_or_expr list) : (col_or_expr list * (column * string) list) =
+  let rename = function
+    | Left col -> [(col, {col with renamed = col_unique_name ()})]
+    | Right expr -> [] in
+  let (right : (Query.column *Query.column) list) = concat_map rename right in
+    (left @ map (snd ->- fun l -> Left l) right,
+     concat_map (fun (x, y) -> [(x, get_renaming y)]) right)
   
 (** join
     Joins two queries into one, over the given condtions. If the

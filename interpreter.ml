@@ -128,7 +128,9 @@ let query_result_types (query : query) (table_defs : (string * Inferencetypes.ro
     let col_type table_alias col_name =
       row_field_type col_name (assoc table_alias table_defs) 
     in
-      map (fun col -> col.renamed, col_type col.table_renamed col.name) query.Query.result_cols
+      concat_map (function
+                    | Left col -> [col.renamed, col_type col.table_renamed col.name]
+                    | Right _ -> []) query.Query.result_cols
   with NotFound field -> failwith ("Field " ^ field ^ " from " ^ 
                                      Sql.string_of_query query ^
                                      " was not found in tables " ^ 
