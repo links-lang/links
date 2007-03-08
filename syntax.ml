@@ -413,6 +413,7 @@ let freevars (expression : 'a expression') : string list =
   and combine = unduplicate (=) -<-List.concat in
   let rec aux default = function
     | Variable (name, _) -> [name]
+    | For (body, var, generator, _) -> aux default generator @ remove var (aux default body)
     | Let (var, value, body, _) -> aux default value @ (remove var (aux default body))
     | Abstr (var, body, _) -> remove var (aux default body)
     | Record_selection (_, labvar, var, value, body, _) ->
