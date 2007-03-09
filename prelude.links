@@ -296,6 +296,18 @@ fun assocAll(x,l) {
   }
 }
 
+sig sortBy : ((a) -> b, [a]) -> [a]
+fun sortBy (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = for (var y <- xs) where (f(y) < f(x))  [y];
+      var ge = for (var y <- xs) where (f(y) >= f(x)) [y];
+      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
+    }
+  }
+}
+
 #### WEB-RELATED ####
 
 # [freshResource] is a bit of magic that makes the subsequent actions a

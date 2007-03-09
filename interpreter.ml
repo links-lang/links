@@ -479,8 +479,16 @@ fun globals locals expr cont ->
   | Syntax.Call_cc(arg, _) ->
       let cc = `Continuation cont in
         eval arg (FuncApplyFlipped(locals, cc) :: cont)
-  | Syntax.SortBy (list, byExpr, _) ->
-      eval list cont (* FIXME: does nothing; perhaps assert(false) here ? *)
+  | Syntax.SortBy (list, byExpr, d) ->
+      eval (Apply (Variable ("sortBy", d), 
+                   Record_intro
+                     ((StringMap.add "1" byExpr
+                         (StringMap.add "2" list
+                            StringMap.empty)),
+                      None,
+                      d),
+                   d)) cont
+        (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->

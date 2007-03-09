@@ -124,6 +124,10 @@ Sorting:
 for (var i <- [2,1,3]) orderby (i) [i]
 stdout : [1, 2, 3] : [Int]
 
+Sorting:
+for (var i <- [2,1,3]) orderby (-i) [i]
+stdout : [3, 2, 1] : [Int]
+
 Empty-list comparison (1)
 [] < []
 stdout : false : Bool
