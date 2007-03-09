@@ -4,7 +4,7 @@ stdout : true : Bool
 
 list syntax
 ['a', 'b', 'c']
-stdout : "abc" : String
+stdout : @"abc" : (\[Char\]|String)
 
 octal literals
 "L\151nks"
@@ -16,4 +16,4 @@ stdout : "Links" : String
 
 concatenation
 "abc" ++ "def"
-stdout : "abcdef" : String
+stdout : @"abcdef" : (\[Char\]|String)
