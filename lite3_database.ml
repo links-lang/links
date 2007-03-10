@@ -1,0 +1,97 @@
+open Sqlite3
+open Result
+
+(* TODO: Better type/error handling *)
+
+let error_as_string = function
+| Rc.OK -> "ok"
+| Rc.ERROR -> "error"
+| Rc.INTERNAL -> "internal"
+| Rc.PERM -> "perm"
+| Rc.ABORT -> "abort"
+| Rc.BUSY -> "busy"
+| Rc.LOCKED -> "locked"
+| Rc.NOMEM -> "nomem"
+| Rc.READONLY -> "readonly"
+| Rc.INTERRUPT -> "interrupt"
+| Rc.IOERR -> "ioerr"
+| Rc.CORRUPT -> "corrupt"
+| Rc.NOTFOUND -> "notfound"
+| Rc.FULL -> "full"
+| Rc.CANTOPEN -> "cantopen"
+| Rc.PROTOCOL -> "protocol"
+| Rc.EMPTY -> "empty"
+| Rc.SCHEMA -> "schema"
+| Rc.TOOBIG -> "toobig"
+| Rc.CONSTRAINT -> "constraint"
+| Rc.MISMATCH -> "mismatch"
+| Rc.MISUSE -> "misuse"
+| Rc.NOFLS -> "nofls"
+| Rc.AUTH -> "auth"
+| Rc.FORMAT -> "format"
+| Rc.RANGE -> "range"
+| Rc.NOTADB -> "notadb"
+| Rc.ROW -> "row"
+| Rc.DONE -> "done"
+| Rc.UNKNOWN e -> "unknown: "^ string_of_int (Rc.int_of_unknown e)
+
+let data_to_string data =
+  match data with 
+    Data.NONE -> ""
+  | Data.NULL -> ""
+  | Data.INT i -> Int64.to_string i
+  | Data.FLOAT f -> string_of_float f
+  | Data.TEXT s | Data.BLOB s -> s
+;;
+
+class lite3_result (stmt: stmt) = object
+  inherit dbresult
+  val result_list_and_status =
+    let rec get_results (results,status) = 
+      match status with
+        QueryOk -> (
+          match step stmt with
+            Rc.OK|Rc.ROW -> 
+            let data = Array.to_list (row_data stmt) in 
+            let row = List.map data_to_string data in 
+            get_results (row::results,QueryOk )
+          | Rc.DONE -> 
+            results,QueryOk 
+          | e -> results, QueryError (error_as_string e)
+        )
+      | _ -> (results,status)
+    in 
+    get_results ([],QueryOk)
+  
+  method status : db_status = 
+    snd(result_list_and_status)
+  method nfields : int =  1
+  method fname  n : string = column_name stmt n
+  method ftype  n : db_field_type = 
+    match column_decltype stmt n with
+      | "" -> TextField (* SQLite was untyped prior to version 3. Need to 
+                           take type information from Links context *)
+      | "TEXT"|"STRING"|"VARCHAR"    -> TextField
+      | "INT"|"INTEGER" -> IntField
+      | other -> failwith( "unknown field type : " ^ other)
+          (* others? *)
+  method get_all_lst : string list list =
+    fst(result_list_and_status)
+  method error : string = "NYI"
+end
+
+
+class lite3_database file = object(self)
+  inherit database
+  val connection = db_open file
+  method exec query : dbresult =
+    let stmt = prepare connection query in
+      new lite3_result stmt
+  (* See http://www.sqlite.org/lang_expr.html *)
+  method escape_string = Str.global_replace (Str.regexp_string "'") "''"
+  method equal_types (t: Inferencetypes.datatype) (dt : db_field_type) : bool = true
+  method driver_name () = "sqlite3"
+end
+
+let driver_name = "sqlite3"
+let _ = register_driver (driver_name, fun args -> new lite3_database args, reconstruct_db_string (driver_name, args))
