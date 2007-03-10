@@ -9,6 +9,13 @@ ifdef SQLITE_LIBDIR
    DB_LIBS    += sqlite
 endif
 
+ifdef SQLITE3_LIBDIR
+   DB_CODE    += lite3_database.ml
+   DB_AUXLIBS += $(SQLITE3_LIBDIR)
+   DB_CLIBS   += sqlite3
+   DB_LIBS    += sqlite3
+endif
+
 ifdef MYSQL_LIBDIR
    DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
