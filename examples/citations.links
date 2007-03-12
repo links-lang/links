@@ -1,0 +1,304 @@
+typename Author = (id:Int, name:String);
+typename Paper = (id:Int, title:String);
+
+fun renderAuthor(author) {<b>{stringToXml(author.name)}</b>}
+fun renderPaper(paper) {<b>{stringToXml(paper.title)}</b>}
+
+var authorId = "author";
+var paperId = "paper";
+
+var authorLabel = "Author";
+var paperLabel = "Paper";
+
+sig header : String -> Xml
+fun header(title) {
+  <head>
+   <title>{stringToXml(title)}</title>
+   <style>
+     .input {{ width:500px }}
+     .suggestions {{ text-align:left; width:500px;
+                     background-color:#ccccff }}
+   </style>
+  </head>
+}
+
+sig suggest : (String, String) -> ()
+fun suggest(authorPrefix, paperPrefix) client {
+  var (authorList, paperList) = completions(authorPrefix, paperPrefix);
+  replaceChildren(
+    authorList,
+    getNodeById(authorId)
+  );
+  replaceChildren(
+    paperList,
+    getNodeById(paperId)
+  )
+}
+
+sig formatAuthorList : [Author] -> Xml
+fun formatAuthorList(authors) server {
+  for (var a <- authors)
+    <a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/>
+}
+
+sig formatPaperList : [Paper] -> Xml
+fun formatPaperList(papers) server {
+  for (var p <- papers)
+    <a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/>
+}
+
+fun getTables() server {
+  var db = database "citations";
+
+  (table "authors" with (id : Int, name : String) from db,
+   table "papers" with (id : Int, title : String) from db,
+   table "paperauthor" with (paperid : Int, authorid : Int) from db)
+}
+
+sig getPapersAndCollaborators : Author -> ([Paper], [Author])
+fun getPapersAndCollaborators(author) server {
+  var (_, tp, tr) = getTables();
+
+  var papers =
+   for (var r <-- tr)
+   where (r.authorid == author.id)
+    for (var p <-- tp)
+    where (p.id == r.paperid)
+     [(id=p.id, title=p.title)];
+
+# this can't be used because it isn't being optimised
+#  var collaborators =
+#   for (var r <-- tr)
+#   for (var q <-- tr)
+#   for (var a <-- ta)
+#    where (r.authorid == author.id &&
+#           r.paperid == q.paperid && not (q.authorid == author.id) &&
+#           q.authorid == a.id)
+#      [(id=a.id, name=a.name)];
+
+  (papers, [])
+}
+
+sig showAuthorInfo : (Author) -> Xml
+fun showAuthorInfo(author) server {
+   var (papers, collaborators) = getPapersAndCollaborators(author);
+
+  <html>
+   {header(author.name)}
+   <body>
+    <h1>{stringToXml(author.name)}</h1>
+    <form l:onsubmit="{updateAuthor((id=author.id, name=authorName))}" method="POST">
+      <input type="text" class="input" l:name="authorName" value="{author.name}"/>
+      <button type="submit">update name</button>
+    </form>
+    <h2>Papers</h2>
+    <div class="suggestions">{formatPaperList(papers)}</div>
+   </body>
+  </html>
+
+
+# Removed because the query isn't being optimised properly
+#
+#    <h2>Collaborators</h2>
+#    <div class="suggestions">{formatAuthorList(collaborators)}</div>
+}
+
+sig getAuthors : Paper -> [Author]
+fun getAuthors(paper) server {
+  var (ta, _, tr) = getTables();
+
+  for (var r <-- tr)
+  where (paper.id == r.paperid)
+   for (var a <-- ta)
+   where (r.authorid == a.id)
+    [(id=a.id, name=a.name)]
+}
+
+fun updatePaper(paper) server {
+  var (_, tp, _) = getTables();
+
+  update (var p <-- tp)
+   where (p.id == paper.id)
+   set (title=paper.title);
+
+  showPaperInfo(paper)
+}
+
+fun updateAuthor(author) server {
+  var (ta, _, _) = getTables();
+
+  update (var a <-- ta)
+   where (a.id == author.id)
+   set (name=author.name);
+
+  showAuthorInfo(author)
+}
+
+sig showPaperInfo : (Paper) -> Xml
+fun showPaperInfo(paper) server {
+  var authors = getAuthors(paper);
+
+  <html>
+   {header(paper.title)}
+   <body>
+    <h1>{stringToXml(paper.title)}</h1>
+    <form l:onsubmit="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
+      <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
+      <button type="submit">update title</button>
+    </form>
+    <h2>Authors</h2>
+    <div class="suggestions">{formatAuthorList(authors)}</div>
+   </body>
+  </html>
+}
+
+sig completions : (String, String) -> (Xml, Xml)
+fun completions(authorPrefix, paperPrefix) server {
+  var (ta, tp, tr) = getTables();
+
+  var authors =
+    if (authorPrefix == "") []
+    else {
+      if (paperPrefix == "") {
+        take(10, for (var a <-- ta)
+                  where (a.name ~ /{authorPrefix}.*/)
+                  orderby (a.name)
+                   [(id=a.id, name=a.name)])
+      } else {
+        distinct(
+          take(10, for (var a <-- ta)
+                   orderby (a.name)
+                   for (var p <-- tp)
+                   for (var r <-- tr)
+                     where (a.name ~ /{authorPrefix}.*/ &&
+                            p.title ~ /{paperPrefix}.*/ &&
+                            p.id == r.paperid && r.authorid == a.id)
+                      [(id=a.id, name=a.name)]))
+      }
+    };
+
+  var papers =
+    if (paperPrefix == "") []
+    else {
+      if (authorPrefix == "") {
+        take(10, for (var p <-- tp)
+                  where (p.title ~ /{paperPrefix}.*/)
+                  orderby (p.title)
+                   [(id=p.id, title=p.title)])
+      } else {
+        distinct(
+          take(10, for (var p <-- tp)
+                  orderby (p.title)
+                   for (var a <-- ta)
+                   for (var r <-- tr)
+                     where (a.name ~ /{authorPrefix}.*/ &&
+                            p.title ~ /{paperPrefix}.*/ &&
+                            p.id == r.paperid && r.authorid == a.id)
+                      [(id=p.id, title=p.title)]))
+      }
+    };
+
+  (formatAuthorList(authors), formatPaperList(papers))
+}
+
+sig distinct : [(id:Int|r)] -> [(id:Int|r)]
+fun distinct(xs) {
+  fold_left(
+    fun (ys, x) {
+       switch (ys) {
+         case [] -> [x]
+         case (y::ys) ->
+           if(x.id == y.id) {ys} else {x::y::ys}
+       }
+    },
+    [],
+    xs)
+}
+
+
+  # granularity of server requests
+  var w = 10;
+    fun startSuggester(handler) {
+      spawn {
+        fun suggester(a, p, t) {
+          receive {
+            case Change -> {
+              # in practice sleeping isn't necessary
+              # because JavaScript is so slow that sending the
+              # message back and forth has the desired effect
+              # but this is what the code should look like
+              var u = getCurrentTime();        
+              if(u-t < w) { sleep(w-(u-t)) } else {()};
+
+              handler!GetCurrentState;
+              fun f() {
+                receive {
+                  case Change -> f()
+                  case Suggest(b, q) ->
+                    if(a <> b || p <> q) {suggest(b, q)} else {()};
+                    suggester(b, q, t)
+                }
+              }
+              f();
+              suggester(a, p, t)
+            }
+            case Suggest(b, q) ->
+              error("Didn't ask for a suggestion!");
+          }
+        }
+        var t = getCurrentTime();
+        suggester("", "", t)
+      }
+    }
+
+  var handler = spawn {
+    fun receiver(a, p, s) {
+      receive {
+        case Suggest(authorPrefix, paperPrefix) -> {
+          var suggester =
+            switch(s) {
+              case Some(suggester) -> suggester
+              case None -> startSuggester(self())
+            };
+
+          if(authorPrefix <> a || paperPrefix <> p)
+            {suggester!Change}
+# slow version
+#            {suggest(authorPrefix, paperPrefix)}
+          else {()};
+
+          receiver(authorPrefix, paperPrefix, Some(suggester))
+        }
+        case GetCurrentState ->
+          switch (s) {
+            case Some(suggester) -> suggester!Suggest(a, p); receiver(a, p, s)
+            case None -> error("No suggester!")
+          };
+          receiver(a, p, s)
+      }
+    }
+    receiver("", "", None)
+  };
+
+  <html>
+   {header("Citations")}
+   <body>
+    <h1>Find authors and papers</h1>
+    <form l:onkeyup="{handler!Suggest(authorPrefix, paperPrefix)}">
+     <table>
+      <tr>
+       <td>{stringToXml(authorLabel)}:</td>
+       <td><input type="text" l:name="authorPrefix"
+                  class="input" autocomplete="off"/></td>
+      </tr>
+      <tr><td></td><td><div id="{authorId}" class="suggestions"/></td></tr>
+      <tr>
+       <td>{stringToXml(paperLabel)}:</td>
+       <td><input type="text" l:name="paperPrefix"
+                  class="input" autocomplete="off"/></td>
+      </tr>
+      <tr><td></td><td><div id="{paperId}" class="suggestions"/></td></tr>
+     </table>
+    </form>
+   </body>
+  </html>

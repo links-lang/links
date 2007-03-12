@@ -1,5 +1,9 @@
 open Result
 
+(* database config *)
+val database_driver : string Settings.setting
+val database_args : string Settings.setting
+
 (* Process management *)
 type pid
 type proc_state = continuation * result

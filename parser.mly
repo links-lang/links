@@ -28,6 +28,7 @@ let default_fixity = Num.num_of_int 9
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
+%token READONLY
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -467,19 +468,34 @@ handlewith_expression:
 
 table_expression:
 | handlewith_expression                                        { $1 }
-| TABLE exp WITH datatype FROM exp                             { TableLit ($2, $4, $6), pos()} 
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { TableLit ($2, $4, $5, $7), pos()} 
+
+perhaps_table_constraints:
+| WHERE table_constraints                                      { $2 }
+| /* empty */                                                  { [] }
+
+table_constraints:
+| record_label field_constraints                               { [($1, $2)] } 
+| record_label field_constraints COMMA table_constraints       { ($1, $2) :: $4 }
+
+field_constraints:
+| field_constraint                                             { [$1] }
+| field_constraint field_constraints                           { $1 :: $2 }
+
+field_constraint:
+| READONLY                                                     { `Readonly }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }
 | /* empty */                                                  { None }
 
 perhaps_db_driver:
-| atomic_expression perhaps_db_args                           { Some $1, $2 }
-| /* empty */                                                 { None, None }
+| atomic_expression perhaps_db_args                            { Some $1, $2 }
+| /* empty */                                                  { None, None }
 
 database_expression:
 | table_expression                                             { $1 }
-| DATABASE atomic_expression perhaps_db_driver                { DatabaseLit ($2, $3), pos() }
+| DATABASE atomic_expression perhaps_db_driver                 { DatabaseLit ($2, $3), pos() }
 
 arg_list:
 | parenthesized_pattern                                        { [$1] }
@@ -543,7 +559,7 @@ primary_datatype:
 | LPAREN fields RPAREN                                         { RecordType $2 }
 | LBRACE VARIABLE RBRACE                                       { RecordType ([], Some $2) }
 
-| TABLEHANDLE LPAREN zfields RPAREN                            { TableType $3 }
+| TABLEHANDLE LPAREN zfields RPAREN                            { TableType ($3, $3) }
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }

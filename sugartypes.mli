@@ -32,7 +32,7 @@ type datatype =
   | TupleType of (datatype list)
   | RecordType of row
   | VariantType of row
-  | TableType of row
+  | TableType of row * row
   | ListType of datatype
   | TypeApplication of (string * datatype list)
   | PrimitiveType of Inferencetypes.primitive
@@ -88,7 +88,7 @@ and phrasenode =
   | Switch of (phrase * binder list)
   | Receive of binder list
   | DatabaseLit of (phrase * (phrase option * phrase option))
-  | TableLit of (phrase * datatype * phrase)
+  | TableLit of (phrase * datatype * (string * fieldconstraint list) list * phrase)
   | DBDelete of (rawgeneratorphrase * phrase option)
   | DBInsert of (phrase * phrase)
   | DBUpdate of (rawgeneratorphrase * phrase option * (name * phrase) list)
@@ -107,7 +107,7 @@ and regex = | Range of (char * char)
             | Splice of phrase
 and rawgeneratorphrase = ppattern * phrase
 and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]
-
+and fieldconstraint = [ `Readonly ]
 
 type directive = string * string list
 type sentence = (phrase list, directive) Utility.either

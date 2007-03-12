@@ -272,7 +272,12 @@ let boiler_1 () = "<html>
    <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>
  "^script_header (get_js_lib_url()) "jslib.js"^"
-   <script type='text/javascript'><!-- \n"
+   <script type='text/javascript'><!-- "^"
+    function _getDatabaseConfig() {
+      return {driver:'" ^ Settings.get_value Library.database_driver ^
+ "', args:'" ^ Settings.get_value Library.database_args ^"'}
+    }
+    var getDatabaseConfig = _continuationize(_getDatabaseConfig, 0);\n"
 and boiler_3 () =    "\n--> </script>
  </head>
  <!-- $Id$ -->
@@ -604,7 +609,20 @@ let rec generate : 'a expression' -> code =
                                  callk_yielding
                                       (Dict [("_db", Var "__db")]))]))
   (* Unimplemented stuff *)
-  | TableHandle _
+  | TableHandle (db, name, row, _) ->
+      let db_cps = generate db in
+      let name_cps = generate name in
+        Fn(["__kappa"],
+           Call(db_cps,
+                [Fn(["__db"],
+                    Call(name_cps,
+                         [Fn(["__name"],
+                             callk_yielding
+                               (Dict [("_table",
+                                       Dict [("db", Var "__db");
+                                             ("name", Var "__name");
+                                             ("row",
+                                              strlit (Inferencetypes.string_of_datatype (`Record row)))])]))]))]))
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 

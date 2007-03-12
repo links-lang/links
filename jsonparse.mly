@@ -39,10 +39,33 @@ object_:
                                                                                      (Result.unbox_string driver)
                                                                                      (Result.unbox_string params))
 *)
-                                    | _ -> failwith ("database value must be a record")
+                                    | _ -> failwith ("jsonparse: database value must be a record")
+                                end
+                            | ["_table", t] ->
+                                begin
+                                  match t with
+                                    | `Record bs ->
+                                        let db =
+                                          begin
+                                            match List.assoc "db" bs with
+                                              | `Database db -> db
+                                              | _ -> failwith ("jsonparse: first argument to a table must be a database")
+                                          end
+                                        and name = Result.unbox_string (List.assoc "name" bs)
+                                        and row =
+                                          begin
+                                            match Parse.parse_string Parse.datatype
+                                              (Result.unbox_string (List.assoc "row" bs)) with
+                                                | (_, `Record row) -> row
+                                                | _ -> failwith ("jsonparse: tables must have record type")
+                                          end
+                                        in
+                                          `Table (db, name, row)
+                                    | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | _ -> `Record (List.rev $2)
                         }
+
 members:
 | id COLON value                     { [$1, $3] }
 | members COMMA id  COLON value      { ($3, $5) :: $1 }

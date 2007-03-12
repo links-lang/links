@@ -254,9 +254,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		            | _ -> assert false)
 	             | `MkTableHandle row ->
 			 (match lhsVal with
-			    | `Database (db, _) ->
+			    | `Database (db, params) ->
 				apply_cont globals cont 
-                                  (`Table(db, charlist_as_string value, row))
+                                  (`Table((db, params), charlist_as_string value, row))
 			    | _ -> failwith("Runtime type error: argument to table was not a database."))
 	          )
 	        in
@@ -293,7 +293,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                          match value with
                            | `List(tbls) ->
                                let (dbs, table_defs) = 
-                                 split(map(function `Table(db, _table_name, row) 
+                                 split(map(function `Table((db, params), _table_name, row) 
                                                -> (db, row)
                                              | _ -> failwith "THX1138") 
                                          tbls) in

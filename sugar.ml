@@ -654,8 +654,8 @@ module Desugarer =
        | MuType (v, k) -> snd (partition ((=)(`RigidTypeVar v)) (typevars k))
        | TupleType ks -> Utility.concat_map typevars ks
        | RecordType r
-       | VariantType r
-       | TableType r -> rvars r
+       | VariantType r -> rvars r
+       | TableType (r, w) -> rvars r @ rvars w
        | ListType k -> typevars k
        | TypeApplication (_,ks) -> Utility.concat_map typevars ks
        | UnitType
@@ -678,8 +678,8 @@ module Desugarer =
          | TupleType ks ->
              List.for_all aic ks
          | RecordType r
-         | VariantType r
-         | TableType r -> row_alias_is_closed vars r
+         | VariantType r -> row_alias_is_closed vars r
+         | TableType (r, w) -> row_alias_is_closed vars r && row_alias_is_closed vars w
          | ListType k -> aic k
          | TypeApplication (_,ks) -> List.for_all aic ks
          | UnitType
@@ -748,7 +748,7 @@ module Desugarer =
                in `Record (fold_right2 (curry (Inferencetypes.InferenceTypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
            | RecordType row -> `Record (desugar_row var_env row)
            | VariantType row -> `Variant (desugar_row var_env row)
-           | TableType row -> `Table (desugar_row var_env row)
+           | TableType (r, w) -> `Table (desugar_row var_env r)
            | ListType k -> `Application ("List", [desugar var_env k])
            | TypeApplication (t, k) -> `Application (t, List.map (desugar var_env) k)
            | PrimitiveType k -> `Primitive k
@@ -835,7 +835,7 @@ module Desugarer =
              | Receive (binders) -> btvs binders
 
              | DatabaseLit (name, (opt_driver, opt_args)) -> flatten [etv name; opt_etv opt_driver; opt_etv opt_args]
-             | TableLit (_, datatype, db) -> flatten [tv datatype; etv db]
+             | TableLit (_, datatype, _, db) -> flatten [tv datatype; etv db]
              | DBInsert (e1, e2) -> flatten [etv e1; etv e2]
              | DBDelete ((p, e1), e2) -> flatten [ptv p; etv e1; opt_etv e2]
              | DBUpdate ((p, e1), e2, fs) -> flatten [ptv p; etv e1; opt_etv e2; ftvs fs]
@@ -1047,7 +1047,7 @@ module Desugarer =
                                        Some (Record_selection (label, gensym(), rvar, record,
                                                                Variable (rvar,pos), pos)),
                                        pos))
-           | TableLit (name, datatype, db) -> 
+           | TableLit (name, datatype, constraints, db) -> 
                let row = match datatype with
                  | RecordType row ->
                      desugar_row var_env row

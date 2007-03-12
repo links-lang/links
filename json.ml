@@ -13,12 +13,25 @@ let json_of_db (db, params) =
     "{ _db : { driver : '" ^ driver ^ "', name : '" ^ name ^ "', args : '" ^ args ^ "'} }"
 
 
+(*
+[WARNING]
+  May need to be careful about free type variables / aliases in row
+*)
+let json_of_table ((db, params), name, row) =
+  "{ _table : { db : '" ^ json_of_db (db, params) ^ "', name : '" ^ name ^
+  "', row : '" ^ Inferencetypes.string_of_datatype (`Record row) ^ "'} }"
+
+(* make sure single quotes are escaped *)
+let escape_string s =
+  let s = String.escaped s in
+    Str.global_replace (Str.regexp "'") "\\'" s   
+      
 let jscharlist_of_string s =
   "["^String.concat ", " (List.map (fun c -> "\"" ^ Char.escaped c ^ "\"") (Utility.StringUtils.explode s))^"]"
 
 let rec json_of_xmlitem = function
   | Result.Text s ->
-      "[\"TEXT\", \"" ^ String.escaped (s) ^ "\"]"
+      "[\"TEXT\", \"" ^ escape_string (s) ^ "\"]"
   | Result.Node (tag, xml) ->
       let attrs, body =
         List.fold_right (fun xmlitem (attrs, body) ->
@@ -35,9 +48,10 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
-  | `Char c -> "\"" ^ String.escaped (Char.escaped c) ^"\"" (* FIXME: what does [escaped] escape? *)
-  | `Table _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); ""
+  | `Char c -> "\"" ^ escape_string (Char.escaped c) ^"\"" (* FIXME: what does [escaped] escape? *)
+(*  | `Table _ as p -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_primitive p); "" *)
   | `Database db -> json_of_db db
+  | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
 
 let rec jsonize_result : Result.result -> string = function

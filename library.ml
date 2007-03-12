@@ -627,6 +627,15 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
          `Record []),
    datatype "Int -> ()");
 
+
+  (* [TODO]
+       Implement server version of the timer
+       (note: the OCaml unix time functionality is not portable
+       so we shouldn't use that)
+  *)
+  "getCurrentTime",
+  (`Client, datatype "() -> Int");
+
   (** Database functions **)
   "asList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
@@ -641,7 +650,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                   begin
                     match table, rows with
                       | `Table _, `List [] -> `Record []
-                      | `Table (db, table_name, _), _ ->
+                      | `Table ((db, params), table_name, _), _ ->
                           let field_names = row_columns rows
                           and vss = row_values db rows
                           in
@@ -660,7 +669,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                 and rows = assoc "2" fields in begin
                     match table, rows with
                       | _, `List [] -> `Record []
-                      | `Table (db, table_name, _), `List rows ->
+                      | `Table ((db, params), table_name, _), `List rows ->
                           List.iter (fun row ->
                                        let query_string =
                                          "update " ^ table_name
@@ -686,7 +695,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                     match table, rows with
                       | `Table _, `List [] ->
                           `Record []
-                      | `Table (db, table_name, _), _  ->
+                      | `Table ((db, params), table_name, _), _  ->
                           let condition = delete_condition db rows in
                           let query_string = "delete from " ^ table_name ^ " where " ^ condition
                           in
@@ -698,8 +707,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
    datatype "(TableHandle(r), [{r}]) -> ()");
 
   "getDatabaseConfig",
-  (`Server
-     (p1 (fun _ ->
+  (p1 (fun _ ->
 	    let driver = Settings.get_value database_driver
 	    and args = Settings.get_value database_args in
 	      if driver = "" then
@@ -707,7 +715,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
 	      else
 	        `Record(["driver", string_as_charlist driver;
 		         "args", string_as_charlist args])
-	 )),
+	 ),
    datatype "() -> (driver:String, args:String)");
   
   (** some char functions **)

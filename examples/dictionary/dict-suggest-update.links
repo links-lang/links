@@ -1,0 +1,124 @@
+var definitionsTable =
+  table "definitions" with (
+    id : String,
+    word : String, 
+    meaning : String
+  ) from (database "dictionary");
+
+#table "definitions" with (
+#  id : String,
+#  word : String,
+#  meaning : String
+#) where id(readonly) from (database "dictionary")
+
+fun suggest(s) client {
+  replaceChildren(format(completions(s)), getNodeById("suggestions"))
+} 
+
+fun completions(s) server {
+  if (s == "") []
+  else {
+    take(10, for (var def <-- definitionsTable)
+              where (def.word ~ /{s}.*/)
+              orderby (def.word)
+               [def])
+  }
+}
+
+fun newDefinition(def) server {
+  var t = table "definitions" with (
+    word : String,
+    meaning : String
+  ) from (database "dictionary");
+
+  insert t values [def]
+}
+
+fun updateDefinition(def) server {
+  update (var d <-- definitionsTable)
+   where (d.id == def.id)
+   set (word=def.word, meaning=def.meaning)
+}
+
+fun deleteDefinition(id) server {
+  delete (var def <-- definitionsTable)
+   where (def.id == id)
+}
+
+fun editDefinition(def) client {
+  updateDisplay(
+   <form l:onsubmit="{var def = (id=def.id, word=w, meaning=m);
+                      updateDefinition(def); updateDisplay(formatDefinition(def), def.id)}" method="POST">
+     <table>
+      <tr><td>Word:</td><td><input l:name="w" value="{def.word}"/></td></tr>
+      <tr><td>Meaning:</td><td><textarea l:name="m" rows="5" cols="80">{stringToXml(def.meaning)}</textarea></td></tr>
+     </table>
+     <button type="submit">Update</button>
+     <button type="button" l:onclick="{updateDisplay(formatDefinition(def), def.id)}">Cancel</button>
+     <button style="position:absolute; right:0px" type="button" l:onclick="{deleteDefinition(def.id); updateDisplay([], def.id)}">Delete</button>
+   </form>,
+    def.id)
+}
+
+fun updateDisplay(xml, defId) {
+  replaceChildren(xml, getNodeById("def:"++defId))
+}
+
+fun formatDefinition(def) {
+  <span l:onclick="{editDefinition(def)}">
+   <b>{stringToXml(def.word)}</b>
+   {stringToXml(def.meaning)}
+   <br/>
+  </span>
+}
+
+fun format(definitions) {
+  <#>
+   <h3>Click an entry to edit it</h3>
+   {for (var def <- definitions)
+     <span class="def" id="def:{def.id}">{formatDefinition(def)}</span>}
+  </#>
+}
+
+fun addForm(handler) {
+  <form l:onsubmit="{handler!NewDefinition((word=w, meaning=m))}">
+   <table>
+    <tr><td>Word:</td><td><input type="text" l:name="w"/></td></tr>
+    <tr><td>Meaning:</td><td><textarea l:name="m" rows="5" cols="80"/></td></tr>
+    <tr><td><button type="submit">Add</button></td></tr>
+   </table>
+  </form>
+}
+
+var handler = spawn {
+  fun receiver(s) {
+    receive {
+      case Suggest(s) -> suggest(s); receiver(s)
+      case NewDefinition(def) ->
+        newDefinition(def);
+        replaceChildren(addForm(self()), getNodeById("add"));
+        suggest(s);
+        receiver(s)
+    }
+  }
+  receiver("")
+};
+
+<html>
+ <head>
+  <style>.def {{ color:blue }}</style>
+  <title>Dictionary suggest</title>
+ </head>
+ <body>
+  <h1>Dictionary suggest</h1>
+  <h3>Search for definitions</h3>
+  <form l:onkeyup="{handler!Suggest(s)}">
+   <input type="text" l:name="s" width="80" autocomplete="off"/>
+  </form>
+  <div id="suggestions"/>
+  <h3>New definition</h3>
+  <div id="add">
+   {addForm(handler)}
+  </div>
+ </body>
+</html>

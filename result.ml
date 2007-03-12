@@ -172,7 +172,7 @@ and string_of_item : xmlitem -> string =
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
 
-type table = database * string * Inferencetypes.row
+type table = (database * string) * string * Inferencetypes.row
    deriving (Show, Pickle, Eq, Typeable, Shelve)
 
 type primitive_value = [

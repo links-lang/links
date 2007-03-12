@@ -172,7 +172,8 @@ let keywords = [
  "insert"   , INSERT; 
  "mu"       , MU; 
  "native"   , NATIVE;
- "orderby"  , ORDERBY; 
+ "orderby"  , ORDERBY;
+ "readonly" , READONLY;
  "receive"  , RECEIVE;
  "server"   , SERVER; 
  "set"      , SET;

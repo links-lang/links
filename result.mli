@@ -66,7 +66,7 @@ type xmlitem =
     | Attr of (string * string) 
     | Node of (string * xml)
 and xml = xmlitem list
-type table = database * string * Inferencetypes.row
+type table = (database * string) * string * Inferencetypes.row
 type primitive_value =
     [ `Bool of bool
     | `Char of char
