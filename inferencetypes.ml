@@ -41,7 +41,7 @@ type datatype =
     | `Function of (datatype * datatype * datatype)
     | `Record of row
     | `Variant of row
-    | `Table of row
+    | `Table of datatype * datatype
     | `Recursive of (int * datatype)
     | `Application of (string * datatype list)
     | `MetaTypeVar of datatype point ]
@@ -233,8 +233,8 @@ let
       | `Function (f, m, t)      ->
           free_type_vars' rec_vars f @ free_type_vars' rec_vars m @ free_type_vars' rec_vars t
       | `Record row
-      | `Variant row
-      | `Table row               -> free_row_type_vars' rec_vars row
+      | `Variant row             -> free_row_type_vars' rec_vars row
+      | `Table (r, w)            -> free_type_vars' rec_vars r @ free_type_vars' rec_vars w
       | `Recursive (var, body)   ->
           if TypeVarSet.mem var rec_vars then
             []
@@ -499,7 +499,7 @@ let rec datatype_skeleton :  type_var_set -> datatype -> datatype = fun rec_vars
         `Function (datatype_skeleton rec_vars f, datatype_skeleton rec_vars m, datatype_skeleton rec_vars t)
     | `Record row -> `Record (row_skeleton rec_vars row)
     | `Variant row -> `Variant (row_skeleton rec_vars row)
-    | `Table row -> `Table (row_skeleton rec_vars row)
+    | `Table (r, w) -> `Table (datatype_skeleton rec_vars r, datatype_skeleton rec_vars w)
     | `Application (s, ts) -> `Application (s, List.map (datatype_skeleton rec_vars) ts)
     | `MetaTypeVar point ->
         (match Unionfind.find point with
@@ -558,7 +558,7 @@ let rec free_alias_check alias_env = fun rec_vars ->
       | `Function (f, m, t) -> fac rec_vars f; fac rec_vars m; fac rec_vars t
       | `Record row -> free_alias_check_row alias_env rec_vars row
       | `Variant row -> free_alias_check_row alias_env rec_vars row
-      | `Table row -> free_alias_check_row alias_env rec_vars row
+      | `Table (r, w) -> fac rec_vars r; fac rec_vars w
       | `Application (s, ts) ->
           if StringMap.mem s alias_env then
             List.iter (fac rec_vars) ts
@@ -748,7 +748,10 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
               (if is_tuple row then string_of_tuple row
 	       else "(" ^ string_of_row' "," rec_vars vars row ^ ")")
         | `Variant row    -> "[|" ^ string_of_row' " | " rec_vars vars row ^ "|]"
-        | `Table row      -> "TableHandle(" ^ string_of_row' "," rec_vars vars row ^ ")"
+        | `Table (r, w)   ->
+            "TableHandle(" ^
+              string_of_datatype' rec_vars vars r ^ "," ^
+              string_of_datatype' rec_vars vars w ^ ")"
             (*
               [QUESTION]
               How should we render the types [Char] and [XmlItem]?
@@ -876,7 +879,7 @@ let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars 
             fmb t)
       | `Record row -> `Record (row_freshen_mailboxes rec_vars row)
       | `Variant row -> `Variant (row_freshen_mailboxes rec_vars row)
-      | `Table row -> `Table (row_freshen_mailboxes rec_vars row)
+      | `Table (r, w) -> `Table (freshen_mailboxes rec_vars r, freshen_mailboxes rec_vars w)
       | `Application (name, datatypes) -> `Application (name, List.map fmb datatypes)
       | `TypeVar _
       | `RigidTypeVar _
@@ -942,8 +945,8 @@ let rec free_bound_type_vars : type_var_set -> datatype -> TypeVarSet.t = fun re
             (TypeVarSet.union (fbtv f) (fbtv t))
             (fbtv m)
       | `Record row
-      | `Variant row
-      | `Table row               -> free_bound_row_type_vars rec_vars row
+      | `Variant row -> free_bound_row_type_vars rec_vars row
+      | `Table (r, w) -> TypeVarSet.union (fbtv r) (fbtv w)
       | `Application (_, datatypes) -> List.fold_right TypeVarSet.union (List.map fbtv datatypes) TypeVarSet.empty
       | `TypeVar _
       | `RigidTypeVar _
@@ -1001,14 +1004,14 @@ let rec type_aliases : type_var_set -> datatype -> StringSet.t = fun rec_vars t 
               | t -> tas t
           end
       | `TypeVar _
-      | `RigidTypeVar _        -> StringSet.empty
-      | `Function (f, m, t)      ->
+      | `RigidTypeVar _ -> StringSet.empty
+      | `Function (f, m, t) ->
           StringSet.union
             (StringSet.union (tas f) (tas t))
             (tas m)
       | `Record row
-      | `Variant row
-      | `Table row               -> row_type_aliases rec_vars row
+      | `Variant row -> row_type_aliases rec_vars row
+      | `Table (r, w) -> StringSet.union (tas r) (tas w)
       | `Application (alias, datatypes) -> List.fold_right StringSet.union (List.map tas datatypes) (StringSet.singleton alias)
       | `TypeVar _ | `RigidTypeVar _ | `Recursive _ -> assert false
 and row_type_aliases rec_vars (field_env, row_var) =
@@ -1095,7 +1098,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
             isp f || isp m || isn t
         | `Record row -> isnr row
         | `Variant row -> isnr row
-        | `Table row -> isnr row
+        | `Table (r, w) -> isn r || isn w
         | `Application (_, ts) -> List.exists isn ts (* is this right? -jdy *)
         | `Recursive (var', t) ->
             not (TypeVarSet.mem var' rec_vars) &&
@@ -1136,7 +1139,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
             isn f || isn m || isp t
         | `Record row -> ispr row
         | `Variant row -> ispr row
-        | `Table row -> ispr row
+        | `Table (r, w) -> isp r || isp w
         | `Application (_,ts) -> List.exists isp ts (* is this right? -jdy *)
         | `Recursive (var', t) ->
             not (TypeVarSet.mem var' rec_vars) &&

@@ -464,9 +464,9 @@ let sql_aslist : RewriteSyntax.rewriter =
         let th_row = match th_type with
           | `MetaTypeVar point ->
               (match Unionfind.find point with
-                 | `Table th_row -> th_row
+                 | `Table (`Record th_row, _) -> th_row
                  | _ -> failwith "Internal Error: tables must have table type")
-          |  `Table th_row -> th_row
+          |  `Table (`Record th_row, _) -> th_row
           | _ -> failwith "Internal Error: tables must have table type"
         in
         let table_alias = gensym ~prefix:"Table_" () in

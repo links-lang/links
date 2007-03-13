@@ -639,7 +639,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   (** Database functions **)
   "asList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
-   datatype "TableHandle(r) -> [{r}]");
+   datatype "TableHandle(r, w) -> [r]");
 
   "insertrows",
   (`Server 
@@ -659,7 +659,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                       | _ -> failwith "Internal error: insert row into non-database"
                   end
             | _ -> failwith "Internal error unboxing args (insertrow)")),
-   datatype "(TableHandle(r), [{r}]) -> ()");
+   datatype "(TableHandle(r, w), [w]) -> ()");
 
   "updaterows", 
   (`Server
@@ -683,7 +683,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                       | _ -> failwith "Internal error: bad value passed to `updaterows'"
                   end
             | _ -> failwith "Internal error unboxing args (updaterows)")),
-   datatype "(TableHandle(r), [({r},{r})]) -> ()");
+   datatype "(TableHandle(r, w), [(r, w)]) -> ()");
 
   "deleterows", 
   (`Server
@@ -704,7 +704,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
                       | _ -> failwith "Internal error: delete row from non-database"
                   end
             | _ -> failwith "Internal error unboxing args (deleterows)")),
-   datatype "(TableHandle(r), [{r}]) -> ()");
+   datatype "(TableHandle(r, w), [r]) -> ()");
 
   "getDatabaseConfig",
   (p1 (fun _ ->

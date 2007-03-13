@@ -464,8 +464,14 @@ fun globals locals expr cont ->
 (*   | Syntax.Table (database, s, query, _) -> *)
 (*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
 
-  | Syntax.TableHandle (database, table_name, row, _) ->   (* getting type from inferred type *)
-      eval database (BinopRight(locals, `MkTableHandle row, table_name) :: cont)
+  | Syntax.TableHandle (database, table_name, (readtype, writetype), _) ->   (* getting type from inferred type *)
+      begin
+        match readtype with
+          | `Record row ->
+              eval database (BinopRight(locals, `MkTableHandle row, table_name) :: cont)
+          | _ ->
+              failwith ("table rows must have record type")
+      end
 
   | Syntax.TableQuery (ths, query, d) ->
       (* [ths] is an alist mapping table aliases to expressions that

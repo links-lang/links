@@ -33,7 +33,7 @@ type 'a expression' =
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
   | TableQuery of ((string * 'a expression') list * Query.query * 'a)
-  | TableHandle of ('a expression' * 'a expression' * Inferencetypes.row * 'a)
+  | TableHandle of ('a expression' * 'a expression' * (Inferencetypes.datatype * Inferencetypes.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
   | Call_cc of ('a expression' * 'a)
   | Wrong of 'a

@@ -655,7 +655,7 @@ module Desugarer =
        | TupleType ks -> Utility.concat_map typevars ks
        | RecordType r
        | VariantType r -> rvars r
-       | TableType (r, w) -> rvars r @ rvars w
+       | TableType (r, w) -> typevars r @ typevars w
        | ListType k -> typevars k
        | TypeApplication (_,ks) -> Utility.concat_map typevars ks
        | UnitType
@@ -679,7 +679,7 @@ module Desugarer =
              List.for_all aic ks
          | RecordType r
          | VariantType r -> row_alias_is_closed vars r
-         | TableType (r, w) -> row_alias_is_closed vars r && row_alias_is_closed vars w
+         | TableType (r, w) -> aic r && aic w
          | ListType k -> aic k
          | TypeApplication (_,ks) -> List.for_all aic ks
          | UnitType
@@ -748,7 +748,7 @@ module Desugarer =
                in `Record (fold_right2 (curry (Inferencetypes.InferenceTypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
            | RecordType row -> `Record (desugar_row var_env row)
            | VariantType row -> `Variant (desugar_row var_env row)
-           | TableType (r, w) -> `Table (desugar_row var_env r)
+           | TableType (r, w) -> `Table (desugar var_env r, desugar var_env w)
            | ListType k -> `Application ("List", [desugar var_env k])
            | TypeApplication (t, k) -> `Application (t, List.map (desugar var_env) k)
            | PrimitiveType k -> `Primitive k
@@ -1048,15 +1048,40 @@ module Desugarer =
                                                                Variable (rvar,pos), pos)),
                                        pos))
            | TableLit (name, datatype, constraints, db) -> 
+               (* [HACK]
+
+                  This isn't as flexible as it should be - it's just a
+                  quick hack to get things going. We should probably
+                  maintain the constraints in the IR and generate the
+                  actual table types during type inference.
+                  
+               *)
                let row = match datatype with
                  | RecordType row ->
-                     desugar_row var_env row
+                     row
                  | UnitType ->
                      raise (ASTSyntaxError(data_position pos, "Tables must have at least one field"))
                  | _ ->
-                     raise (ASTSyntaxError(data_position pos, "Tables must take a non-empty record type"))
-               in
-                 TableHandle (desugar db, desugar name, row, pos)
+                     raise (ASTSyntaxError(data_position pos, "Tables must take a non-empty record type")) in
+               let make_write_row (fields, rest) constraints =
+                 let rec mr =
+                   function
+                     | [] -> []
+                     | ((name, body) :: fields) ->
+                         if List.mem_assoc name constraints
+                           && List.exists (function
+                                             | `Readonly -> true) (List.assoc name constraints) then
+                             mr fields
+                         else
+                           (name, body) :: mr fields
+                 in
+                   (mr fields, rest) in
+
+               let write_row = make_write_row row constraints in
+
+               let readtype = `Record (desugar_row var_env row) in
+               let writetype = `Record (desugar_row var_env write_row) in
+                 TableHandle (desugar db, desugar name, (readtype, writetype), pos)
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), desugar e, pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), desugar e, pos)
            | UnaryAppl (`Name n, e) -> Apply (Variable (n,  pos), desugar e, pos)
@@ -1076,7 +1101,7 @@ module Desugarer =
                                    ([tv;
                                      rows
                                     ], pos')), pos')), pos')
-(*            | DBDelete (table, rows) -> *)
+                   (*            | DBDelete (table, rows) -> *)
 (*                desugar (FnAppl ((Var "deleterows", pos'), *)
 (*                                 ([table; *)
 (*                                   rows *)
@@ -1089,23 +1114,19 @@ module Desugarer =
            | DBUpdate ((pattern, table), condition, row) ->
                let t = unique_name () in
                let r = unique_name () in
-               let s = unique_name () in
+
                let tv = ((Var t), pos') in
                let rv = ((Var r), pos') in
-               let sv = ((Var s), pos') in
+
                let generator =
                  `Table ((`As (r, pattern), pos'), tv) in
                let ignorefields = 
                  List.map (fun (name, value) -> name, ((`Variable (unique_name ())), pos')) row in
-               let row_pair = 
-                 (TupleLit
-                    [rv;
-                     (RecordLit (row, Some sv), pos')]), pos' in
-               let body =
-                 Block([Binding (
-                          ((`Record (ignorefields,
-                                     Some ((`Variable s), pos'))), pos'), rv), pos'],
-                       ((ListLit [row_pair]), pos')), pos' in
+               let body = 
+                 (ListLit
+                    [(TupleLit
+                        [rv;
+                         (RecordLit (row, None), pos')]), pos']), pos' in
                let row_pairs = Iteration (generator, body, condition, None), pos'
                in      
                  desugar (

@@ -35,7 +35,7 @@ type datatype =
     | `Function of (datatype * datatype * datatype)
     | `Record of row
     | `Variant of row
-    | `Table of row
+    | `Table of datatype * datatype
     | `Recursive of (int * datatype)
     | `Application of (string * datatype list)
     | `MetaTypeVar of datatype point ]

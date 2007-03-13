@@ -100,7 +100,7 @@ type 'data expression' =
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table name: *) 'data expression'
-      * (* the type of a table row: *) Inferencetypes.row
+      * (* the read / write (record) types of a table row: *) (Inferencetypes.datatype * Inferencetypes.datatype)
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
@@ -237,8 +237,9 @@ let rec show t : 'a expression' -> string = function
   | For (expr, variable, value, data) ->
       "(for (" ^ variable ^ " <- " ^ show t value ^ ") " ^ show t expr ^ ")" ^ t data
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
-  | TableHandle (db, name, row, data) ->
-      "("^ show t name ^" from "^ show t db ^"["^Inferencetypes.string_of_row row^"])" ^ t data
+  | TableHandle (db, name, (readtype, writetype), data) ->
+      "("^ show t name ^" from "^ show t db ^
+      "["^Inferencetypes.string_of_datatype readtype^";"^Inferencetypes.string_of_datatype writetype^"])" ^ t data
   | TableQuery (ths, query, data) ->
       "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
         "["^Sql.string_of_query query^"])" ^ t data
@@ -349,7 +350,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | Record_selection (s1, s2, s3, _, _, d) , [e1;e2] -> Record_selection (s1, s2, s3, e1, e2, d)
     | Concat (_, _, d)                       , [e1;e2] -> Concat (e1, e2, d)
     | For (_, s, _, d)                       , [e1;e2] -> For (e1, s, e2, d)
-    | TableHandle (_, _, r, d)               , [e1;e2] -> TableHandle (e1, e2, r, d)
+    | TableHandle (_, _, t, d)               , [e1;e2] -> TableHandle (e1, e2, t, d)
     | SortBy (_, _, d)                       , [e1;e2] -> SortBy (e1, e2, d)
 
     (* 3 subnodes *)
@@ -653,8 +654,8 @@ let skeleton = function
   | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
   | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
   | SortBy(list_target, sort_func, d) -> SortBy(list_target, sort_func, d)
-  | TableHandle(db_expr, tablename_expr, row_type, d) -> 
-      TableHandle(db_expr, tablename_expr, row_type, d)
+  | TableHandle(db_expr, tablename_expr, t, d) -> 
+      TableHandle(db_expr, tablename_expr, t, d)
   | Call_cc(body, d) -> Call_cc(body, d)
 
   (* Three sub-expressions *)

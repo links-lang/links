@@ -119,7 +119,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
 	  | `Record row -> `Record (inst_row rec_env row)
 	  | `Variant row ->  `Variant (inst_row rec_env row)
-	  | `Table row -> `Table (inst_row rec_env row)
+	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
 	  | `Application (n, elem_type) ->
 	      `Application (n, List.map (inst rec_env) elem_type)
 	  | `Recursive _
@@ -412,7 +412,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
               unify' rec_env (lto, rto)
           | `Record l, `Record r -> unify_rows' rec_env (l, r)
           | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
-          | `Table l, `Table r -> unify_rows' rec_env (l, r)
+          | `Table (lr, lw), `Table (rr, rw) ->
+              (unify' rec_env (lr, rr);
+               unify' rec_env (lw, rw))
           | `Application (ls, lts), `Application (rs, rts) when ls = rs -> List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) lts rts
           | `Application (ls, lts), `Application (rs, rts) ->
               let lvars, lalias = lookup_alias (ls, lts) alias_env
@@ -892,8 +894,8 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
           and to_gens = get_quantifiers bound_vars t in
             unduplicate (=) (from_gens @ mailbox_gens @ to_gens)
       | `Record row
-      | `Variant row 
-      | `Table row -> get_row_quantifiers bound_vars row
+      | `Variant row -> get_row_quantifiers bound_vars row 
+      | `Table (r, w) -> unduplicate (=) (get_quantifiers bound_vars r @ get_quantifiers bound_vars w)
       | `Application (_, args) ->
           unduplicate (=) (Utility.concat_map (get_quantifiers bound_vars) args)
 
@@ -1031,7 +1033,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let value = type_check typing_env value in
       let vtype = (if is_value value then (generalise env (type_of_expression value))
                    else ([], type_of_expression value)) in
-      let body = type_check (((variable, vtype) :: env), alias_env) body in
+      let body = type_check (((variable, vtype) :: env), alias_env) body in        
 	Let (variable, value, body, `T (pos, type_of_expression body, None))
   | Rec (variables, body, `U pos) ->
       let best_typing_env, vars = type_check_mutually typing_env variables in
@@ -1245,21 +1247,22 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                 | Right _ -> env)
 	   query.Query.result_cols StringMap.empty, `RowVar None) in
       let datatype =  `Application ("List", [`Record row]) in
-      let row' = ITO.make_empty_open_row () in
+      let rrow = ITO.make_empty_open_row () in
+      let wrow = ITO.make_empty_open_row () in
       let ths = alistmap (type_check typing_env) ths
       in
         Utility.for_each ths 
           (fun _, th -> 
-             unify (type_of_expression th, `Table row'));
-	unify_rows (row, row');
+             unify (type_of_expression th, `Table (`Record rrow, `Record wrow)));
+	unify_rows (row, rrow);
         TableQuery (ths, query, `T (pos, datatype, None))
-  | TableHandle (db, tableName, row, `U pos) ->
-      let datatype =  `Table row in
+  | TableHandle (db, tableName, (readtype, writetype), `U pos) ->
+      let datatype =  `Table (readtype, writetype) in
       let db = type_check typing_env db in
       let tableName = type_check typing_env tableName in
 	unify (type_of_expression db, `Primitive `DB);
 	unify (type_of_expression tableName, string_type); 
-        TableHandle (db, tableName, row, `T (pos, datatype, None))
+        TableHandle (db, tableName, (readtype, writetype), `T (pos, datatype, None))
   | SortBy(expr, byExpr, `U pos) ->
       (* FIXME: the byExpr is typed freely as yet. It could have any
          orderable type, of which there are at least several. How to

@@ -3,13 +3,7 @@ var definitionsTable =
     id : String,
     word : String, 
     meaning : String
-  ) from (database "dictionary");
-
-#table "definitions" with (
-#  id : String,
-#  word : String,
-#  meaning : String
-#) where id(readonly) from (database "dictionary")
+  ) where id readonly from (database "dictionary");
 
 fun suggest(s) client {
   replaceChildren(format(completions(s)), getNodeById("suggestions"))
@@ -26,12 +20,7 @@ fun completions(s) server {
 }
 
 fun newDefinition(def) server {
-  var t = table "definitions" with (
-    word : String,
-    meaning : String
-  ) from (database "dictionary");
-
-  insert t values [def]
+  insert definitionsTable values [def]
 }
 
 fun updateDefinition(def) server {

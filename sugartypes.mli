@@ -32,7 +32,7 @@ type datatype =
   | TupleType of (datatype list)
   | RecordType of row
   | VariantType of row
-  | TableType of row * row
+  | TableType of datatype * datatype
   | ListType of datatype
   | TypeApplication of (string * datatype list)
   | PrimitiveType of Inferencetypes.primitive

@@ -609,7 +609,7 @@ let rec generate : 'a expression' -> code =
                                  callk_yielding
                                       (Dict [("_db", Var "__db")]))]))
   (* Unimplemented stuff *)
-  | TableHandle (db, name, row, _) ->
+  | TableHandle (db, name, (readtype, writetype), _) ->
       let db_cps = generate db in
       let name_cps = generate name in
         Fn(["__kappa"],
@@ -622,7 +622,7 @@ let rec generate : 'a expression' -> code =
                                        Dict [("db", Var "__db");
                                              ("name", Var "__name");
                                              ("row",
-                                              strlit (Inferencetypes.string_of_datatype (`Record row)))])]))]))]))
+                                              strlit (Inferencetypes.string_of_datatype (readtype)))])]))]))]))
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 

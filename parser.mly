@@ -559,7 +559,7 @@ primary_datatype:
 | LPAREN fields RPAREN                                         { RecordType $2 }
 | LBRACE VARIABLE RBRACE                                       { RecordType ([], Some $2) }
 
-| TABLEHANDLE LPAREN zfields RPAREN                            { TableType ($3, $3) }
+| TABLEHANDLE LPAREN datatype COMMA datatype RPAREN            { TableType ($3, $5) }
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
