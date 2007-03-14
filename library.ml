@@ -195,7 +195,9 @@ let rec less l r =
 and less_lists = function
   | _, [] -> false
   | [], (_::_) -> true
-  | (lcar::lcdr), (rcar::rcdr) -> less lcar rcar && less_lists (lcdr, rcdr)
+  | (l::_), (r::_) when less l r -> true
+  | (l::_), (r::_) when less r l -> false
+  | (_::l), (_::r) -> less_lists (l, r)
 
 let less_or_equal l r = less l r || equal l r
 
