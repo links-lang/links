@@ -3,7 +3,7 @@ var definitionsTable =
     id : String,
     word : String, 
     meaning : String
-  ) where id readonly from (database "dictionary");
+  ) where id readonly from database "dictionary";
 
 fun suggest(s) client {
   replaceChildren(format(completions(s)), getNodeById("suggestions"))

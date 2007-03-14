@@ -17,3 +17,7 @@ stdout : "Links" : String
 concatenation
 "abc" ++ "def"
 stdout : @"abcdef" : (\[Char\]|String)
+
+comparision
+"a" < "z"
+stdout : true : Bool
