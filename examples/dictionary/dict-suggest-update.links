@@ -1,79 +1,84 @@
-var definitionsTable =
-  table "definitions" with (
-    id : String,
-    word : String, 
-    meaning : String
-  ) where id readonly from database "dictionary";
+var defsTable =
+  table "definitions"
+  with (id:String, word:String, meaning:String)
+  where id readonly from database "dictionary";
 
-fun suggest(s) client {
-  replaceChildren(format(completions(s)), getNodeById("suggestions"))
-} 
+fun newDef(def) server {
+  insert defsTable values [def]
+}
+
+fun updateDef(def) server {
+  update (var d <-- defsTable)
+   where (d.id == def.id)
+   set (word=def.word, meaning=def.meaning)
+}
+
+fun deleteDef(id) server {
+  delete (var def <-- defsTable)
+   where (def.id == id)
+}
 
 fun completions(s) server {
   if (s == "") []
   else {
-    take(10, for (var def <-- definitionsTable)
+    take(10, for (var def <-- defsTable)
               where (def.word ~ /{s}.*/)
               orderby (def.word)
                [def])
   }
 }
 
-fun newDefinition(def) server {
-  insert definitionsTable values [def]
-}
+fun suggest(s) client {
+  replaceChildren(format(completions(s)), getNodeById("suggestions"))
+} 
 
-fun updateDefinition(def) server {
-  update (var d <-- definitionsTable)
-   where (d.id == def.id)
-   set (word=def.word, meaning=def.meaning)
-}
-
-fun deleteDefinition(id) server {
-  delete (var def <-- definitionsTable)
-   where (def.id == id)
-}
-
-fun editDefinition(def) client {
-  updateDisplay(
-   <form l:onsubmit="{var def = (id=def.id, word=w, meaning=m);
-                      updateDefinition(def); updateDisplay(formatDefinition(def), def.id)}" method="POST">
+fun editDef(def) client {
+  redraw(
+    <form l:onsubmit="{
+     var def = (id=def.id, word=w, meaning=m); updateDef(def);
+     redraw(formatDef(def), def.id)}" method="POST">
      <table>
-      <tr><td>Word:</td><td><input l:name="w" value="{def.word}"/></td></tr>
-      <tr><td>Meaning:</td><td><textarea l:name="m" rows="5" cols="80">{stringToXml(def.meaning)}</textarea></td></tr>
+      <tr><td>Word:</td><td>
+       <input l:name="w" value="{def.word}"/></td></tr>
+      <tr><td>Meaning:</td><td>
+       <textarea l:name="m" rows="5" cols="80">
+        {stringToXml(def.meaning)}</textarea></td></tr>
      </table>
      <button type="submit">Update</button>
-     <button type="button" l:onclick="{updateDisplay(formatDefinition(def), def.id)}">Cancel</button>
-     <button style="position:absolute; right:0px" type="button" l:onclick="{deleteDefinition(def.id); updateDisplay([], def.id)}">Delete</button>
-   </form>,
+     <button l:onclick="{redraw(formatDef(def), def.id)}" type="button">
+      Cancel</button>
+     <button l:onclick="{deleteDef(def.id); redraw([], def.id)}"
+      style="position:absolute; right:0px" type="button">Delete</button>
+    </form>,
     def.id)
 }
 
-fun updateDisplay(xml, defId) {
+fun redraw(xml, defId) {
   replaceChildren(xml, getNodeById("def:"++defId))
 }
 
-fun formatDefinition(def) {
-  <span l:onclick="{editDefinition(def)}">
+fun formatDef(def) {
+  <span l:onclick="{editDef(def)}">
    <b>{stringToXml(def.word)}</b>
-   {stringToXml(def.meaning)}
-   <br/>
+   {stringToXml(def.meaning)}<br/>
   </span>
 }
 
-fun format(definitions) {
+fun format(defs) {
   <#>
-   <h3>Click an entry to edit it</h3>
-   {for (var def <- definitions)
-     <span class="def" id="def:{def.id}">{formatDefinition(def)}</span>}
+   <h3>Click a definition to edit it</h3>
+   {for (var def <- defs)
+     <span class="def" id="def:{def.id}">{formatDef(def)}</span>}
   </#>
 }
 
 fun addForm(handler) {
-  <form l:onsubmit="{handler!NewDefinition((word=w, meaning=m))}">
+  <form l:onsubmit="{handler!NewDef((word=w, meaning=m))}">
    <table>
-    <tr><td>Word:</td><td><input type="text" l:name="w"/></td></tr>
-    <tr><td>Meaning:</td><td><textarea l:name="m" rows="5" cols="80"/></td></tr>
+    <tr><td>Word:</td><td>
+     <input type="text" l:name="w"/></td></tr>
+    <tr><td>Meaning:</td><td>
+     <textarea l:name="m" rows="5" cols="80"/></td></tr>
     <tr><td><button type="submit">Add</button></td></tr>
    </table>
   </form>
@@ -83,11 +88,10 @@ var handler = spawn {
   fun receiver(s) {
     receive {
       case Suggest(s) -> suggest(s); receiver(s)
-      case NewDefinition(def) ->
-        newDefinition(def);
+      case NewDef(def) ->
+        newDef(def);
         replaceChildren(addForm(self()), getNodeById("add"));
-        suggest(s);
-        receiver(s)
+        suggest(s); receiver(s)
     }
   }
   receiver("")
@@ -102,7 +106,7 @@ var handler = spawn {
   <h1>Dictionary suggest</h1>
   <h3>Search for definitions</h3>
   <form l:onkeyup="{handler!Suggest(s)}">
-   <input type="text" l:name="s" width="80" autocomplete="off"/>
+   <input type="text" l:name="s" autocomplete="off"/>
   </form>
   <div id="suggestions"/>
   <h3>New definition</h3>
