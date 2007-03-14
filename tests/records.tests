@@ -63,3 +63,8 @@ With syntax (missing label)
 ((x = 3) with y=4)
 stderr : @.
 exit : 1
+
+Tables must have table type.
+fun (t) { for (var x <-- t) [x.y]}
+stdout : 0
+exit : 0
