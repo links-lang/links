@@ -164,12 +164,35 @@ fun join(glue,list) {
 # break :: (a -> Bool) -> [a] -> ([a],[a])
 # concat :: [[a]] -> [a]
 # const :: const :: a -> b -> a
-# dropWhile :: (a -> Bool) -> [a] -> [a]
 # elemBy :: (a -> a -> Bool) -> a -> [a] -> Bool
 # notElemBy :: (a -> a -> Bool) -> a -> [a] -> Bool
 # span :: (a -> Bool) -> [a] -> ([a],[a])
 # splitAt :: Int -> [a] -> ([a],[a])
-# takeWhile :: (a -> Bool) -> [a] -> [a]
+
+sig takeWhile : (a -> Bool, [a]) -> [a]
+fun takeWhile(pred, list) {
+  switch (list) {
+    case [] -> []
+    case (h::t) -> 
+      switch (pred(h)) {
+        case true -> h :: takeWhile(pred, t)
+        case false -> []
+      }
+  }
+}
+
+sig dropWhile : (a -> Bool, [a]) -> [a]
+fun dropWhile(pred, list) {
+  switch (list) {
+    case [] -> []
+    case (h::t) -> 
+      switch (pred(h)) {
+        case true -> dropWhile(pred, t)
+        case false -> list
+      }
+  }
+}
+
 # until :: (a -> Bool) -> (a -> a) -> a -> a
 # zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
 
