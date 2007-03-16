@@ -20,6 +20,7 @@ let col_unique_name = Utility.gensym ~prefix:"col"
     @param query The query to modify.
     @return The modified query. *)
 let rec project (projs:string list) (query:query) : query =
+  (* TODO: the right thing for expressions *)
   let rec filter_selects projs cols =
     match cols, projs with 
       | [], [] -> []
@@ -367,7 +368,7 @@ let append_uniquely
     | Left col -> [(col, {col with renamed = col_unique_name ()})]
     | Right expr -> [] in
   let (right : (Query.column *Query.column) list) = concat_map rename right in
-    (left @ map (snd ->- fun l -> Left l) right,
+    (left @ map (snd ->- inLeft) right,
      concat_map (fun (x, y) -> [(x, get_renaming y)]) right)
   
 (** join

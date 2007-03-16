@@ -68,6 +68,10 @@ struct
   let pop item map = 
     (M.find item map, M.remove item map)
 
+  let lookup item map =
+    try Some (M.find item map) 
+    with Not_found -> None
+
   exception Not_disjoint of M.key
 
   let union_disjoint a b = 
@@ -368,6 +372,15 @@ let opt_app f def = function
 
 type ('a, 'b) either = Left of 'a | Right of 'b
   deriving (Show, Eq, Typeable, Pickle, Shelve)
+
+let inLeft l = Left l
+let inRight r = Right r
+let fromLeft = function
+  | Left l -> l
+  | _ -> assert false
+let fromRight = function
+  | Right  r -> r
+  | _ -> assert false
 
 let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
     : 'b list * 'c list =

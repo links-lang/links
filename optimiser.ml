@@ -483,7 +483,7 @@ let sql_aslist : RewriteSyntax.rewriter =
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
 	let select_all = {Query.distinct_only = false;
-			  Query.result_cols = List.map (fun l -> Left l) columns;
+			  Query.result_cols = List.map inLeft columns;
 			  Query.tables = [(`TableVariable th_var,
                                            table_alias)];
 			  Query.condition = Query.Boolean true;

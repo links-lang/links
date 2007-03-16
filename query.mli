@@ -15,6 +15,7 @@ type expression =
   | Boolean of bool
   | LikeExpr of like_expr
   | Text of string
+  | Funcall of (string * expression list)
   | Binary_op of (string * expression * expression)
   | Unary_op of (string * expression)
   | Query of query

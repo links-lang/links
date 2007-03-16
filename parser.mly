@@ -596,10 +596,6 @@ datatypes:
   assumption is that "(a)" is ambiguous (is it an empty open record or a 
   parenthesized regular type variable?).
 */
-zfields:
-| fields                                                       { $1 }
-| VARIABLE                                                     { [], Some $1 }
-
 fields:
 | field                                                        { [$1], None }
 | field VBAR VARIABLE                                         { [$1], Some $3 }

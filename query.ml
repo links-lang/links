@@ -30,6 +30,7 @@ type expression =
   | Boolean of bool
   | LikeExpr of like_expr
   | Text of string
+  | Funcall of (string * expression list)
   | Binary_op of (string * expression * expression)
   | Unary_op of (string * expression)
   | Query of query
@@ -76,17 +77,26 @@ let owning_table of_col qry =
 
 let rec freevars {condition = condition;
                   offset = offset;
+                  result_cols = result_cols;
                   max_rows = max_rows} =
-  qexpr_freevars condition @ qexpr_freevars offset @ fromOption [] (opt_map qexpr_freevars max_rows)
+  qexpr_freevars condition
+@ qexpr_freevars offset
+@ fromOption [] (opt_map qexpr_freevars max_rows)
+@ concat_map colorexpr_freevars result_cols
 and qexpr_freevars = function
     Variable name -> [name]
+  | Funcall (_, exprs) -> concat_map qexpr_freevars exprs
   | Binary_op (_, lhs, rhs) -> qexpr_freevars lhs @ qexpr_freevars rhs
   | Unary_op (_, arg) -> qexpr_freevars arg
   | Query q -> freevars q
   | _ -> []
+and colorexpr_freevars = function
+  | Left _ -> []
+  | Right e -> qexpr_freevars e
 
 let rec replace_var name expr = function
   | Variable var when var = name -> expr
+  | Funcall (op, args) -> Funcall(op, List.map (replace_var name expr) args)
   | Binary_op(op, lhs, rhs) -> Binary_op(op, replace_var name expr lhs,
                                          replace_var name expr rhs)
   | Unary_op(op, arg) -> Unary_op(op, replace_var name expr arg)

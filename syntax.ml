@@ -430,7 +430,7 @@ let freevars (expression : 'a expression') : string list =
           (concat_map (snd ->- aux default) attrs @ concat_map (aux default) children)
     | other -> default other
   in 
-    reduce_expression aux (combine -<- snd) expression
+    unduplicate (=) (reduce_expression aux (combine -<- snd) expression)
           
 let rec list_expr data = function
     [] -> Nil(data)

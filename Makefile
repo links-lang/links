@@ -44,7 +44,7 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-w Aef
+OCAMLFLAGS=-w Ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -85,6 +85,7 @@ SOURCES = $(OPC)                		\
           jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
           optimiser.mli optimiser.ml    	\
+rewritenew.ml \
           js.mli js.ml          		\
           loader.ml                             \
           webif.mli webif.ml           		\
