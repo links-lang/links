@@ -19,6 +19,10 @@ Continuation typing [2]
 escape e in { e(1) }
 stdout : 1 : Int
 
+continuation typing [3]
+{ escape y in { ("" == y(1), true == y(1)); 2 } }
+stdout : 1 : Int
+
 continuation mailbox typing (see r321) 
 fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
 stderr : @..*
