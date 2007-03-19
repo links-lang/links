@@ -1,6 +1,12 @@
 typename Author = (id:Int, name:String);
 typename Paper = (id:Int, title:String);
 
+var db = database "citations";
+
+var authorsTable = table "authors" with (id : Int, name : String) where id readonly from db;
+var papersTable = table "papers" with (id : Int, title : String) where id readonly from db;
+var paperauthorTable = table "paperauthor" with (paperid : Int, authorid : Int) from db;
+
 fun renderAuthor(author) {<b>{stringToXml(author.name)}</b>}
 fun renderPaper(paper) {<b>{stringToXml(paper.title)}</b>}
 
@@ -47,30 +53,20 @@ fun formatPaperList(papers) server {
     <a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/>
 }
 
-fun getTables() server {
-  var db = database "citations";
-
-  (table "authors" with (id : Int, name : String) from db,
-   table "papers" with (id : Int, title : String) from db,
-   table "paperauthor" with (paperid : Int, authorid : Int) from db)
-}
-
 sig getPapersAndCollaborators : Author -> ([Paper], [Author])
 fun getPapersAndCollaborators(author) server {
-  var (_, tp, tr) = getTables();
-
   var papers =
-   for (var r <-- tr)
+   for (var r <-- paperauthorTable)
    where (r.authorid == author.id)
-    for (var p <-- tp)
+    for (var p <-- papersTable)
     where (p.id == r.paperid)
      [(id=p.id, title=p.title)];
 
 # this can't be used because it isn't being optimised
 #  var collaborators =
-#   for (var r <-- tr)
-#   for (var q <-- tr)
-#   for (var a <-- ta)
+#   for (var r <-- paperauthorTable)
+#   for (var q <-- paperauthorTable)
+#   for (var a <-- authorsTable)
 #    where (r.authorid == author.id &&
 #           r.paperid == q.paperid && not (q.authorid == author.id) &&
 #           q.authorid == a.id)
@@ -105,19 +101,15 @@ fun showAuthorInfo(author) server {
 
 sig getAuthors : Paper -> [Author]
 fun getAuthors(paper) server {
-  var (ta, _, tr) = getTables();
-
-  for (var r <-- tr)
+  for (var r <-- paperauthorTable)
   where (paper.id == r.paperid)
-   for (var a <-- ta)
+   for (var a <-- authorsTable)
    where (r.authorid == a.id)
     [(id=a.id, name=a.name)]
 }
 
 fun updatePaper(paper) server {
-  var (_, tp, _) = getTables();
-
-  update (var p <-- tp)
+  update (var p <-- papersTable)
    where (p.id == paper.id)
    set (title=paper.title);
 
@@ -125,9 +117,7 @@ fun updatePaper(paper) server {
 }
 
 fun updateAuthor(author) server {
-  var (ta, _, _) = getTables();
-
-  update (var a <-- ta)
+  update (var a <-- authorsTable)
    where (a.id == author.id)
    set (name=author.name);
 
@@ -154,22 +144,20 @@ fun showPaperInfo(paper) server {
 
 sig completions : (String, String) -> (Xml, Xml)
 fun completions(authorPrefix, paperPrefix) server {
-  var (ta, tp, tr) = getTables();
-
   var authors =
     if (authorPrefix == "") []
     else {
       if (paperPrefix == "") {
-        take(10, for (var a <-- ta)
+        take(10, for (var a <-- authorsTable)
                   where (a.name ~ /{authorPrefix}.*/)
                   orderby (a.name)
                    [(id=a.id, name=a.name)])
       } else {
         distinct(
-          take(10, for (var a <-- ta)
+          take(10, for (var a <-- authorsTable)
                    orderby (a.name)
-                   for (var p <-- tp)
-                   for (var r <-- tr)
+                   for (var p <-- papersTable)
+                   for (var r <-- paperauthorTable)
                      where (a.name ~ /{authorPrefix}.*/ &&
                             p.title ~ /{paperPrefix}.*/ &&
                             p.id == r.paperid && r.authorid == a.id)
@@ -181,16 +169,16 @@ fun completions(authorPrefix, paperPrefix) server {
     if (paperPrefix == "") []
     else {
       if (authorPrefix == "") {
-        take(10, for (var p <-- tp)
+        take(10, for (var p <-- papersTable)
                   where (p.title ~ /{paperPrefix}.*/)
                   orderby (p.title)
                    [(id=p.id, title=p.title)])
       } else {
         distinct(
-          take(10, for (var p <-- tp)
+          take(10, for (var p <-- papersTable)
                   orderby (p.title)
-                   for (var a <-- ta)
-                   for (var r <-- tr)
+                   for (var a <-- authorsTable)
+                   for (var r <-- paperauthorTable)
                      where (a.name ~ /{authorPrefix}.*/ &&
                             p.title ~ /{paperPrefix}.*/ &&
                             p.id == r.paperid && r.authorid == a.id)

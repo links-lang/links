@@ -124,10 +124,22 @@ fun claimCart(order_id, cust_id) {
   # Should we guard this to only claim carts with cust_id = -1?
   update (var x <-- cartItemsTable)
    where (x.order_id == order_id)
-     set (cust_id = cust_id);
+     set (item_id = x.item_id,
+          cust_id = cust_id,
+          order_id = x.order_id,
+          price = x.price,
+          qty = x.qty,
+          wine_id = x.wine_id);
+#     set (cust_id = cust_id);
   update (var x <-- orderTable)
    where (x.order_id == order_id)
-     set (cust_id = cust_id)
+     set (cust_id = cust_id,
+          order_id = x.order_id,
+          date = x.date,
+          instructions = x.instructions,
+          creditcard = x.creditcard,
+          expirydate = x.expirydate)
+#     set (cust_id = cust_id)
 }
 
 sig sign_up : (Int, String, String) -> Xml
