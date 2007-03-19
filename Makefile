@@ -85,7 +85,7 @@ SOURCES = $(OPC)                		\
           jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
           optimiser.mli optimiser.ml    	\
-rewritenew.ml \
+          rewriterules.ml                       \
           js.mli js.ml          		\
           loader.ml                             \
           webif.mli webif.ml           		\
