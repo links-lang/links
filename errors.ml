@@ -92,13 +92,13 @@ let rec format_exception = function
       Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "`" ^ pexpr ^ "' has type \n    " ^ 
+      let msg = "The expression `" ^ pexpr ^ "' has type \n    " ^ 
         string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
         "\nand cannot be passed to function `"^ fexpr ^
         "', which has type \n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "`"^ fexpr ^"', which has type\n    "^ 
+      let msg = "The expression `"^ fexpr ^"', which has type\n    "^ 
         string_of_datatype fntype ^
         ", cannot be applied to `"^ pexpr ^"'of type\n    " ^ 
         string_of_datatype paramtype ^ (get_mailbox_msg false mb)
@@ -139,14 +139,14 @@ let rec format_exception_html = function
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s. In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "<code class=\"typeError\">" ^ Utility.xml_escape pexpr ^ (get_mailbox_msg true mb) ^
-        "</code> has type <code>" ^ Utility.xml_escape(string_of_datatype paramtype) ^
-        "</code> and cannot be passed to function <code>"^ Utility.xml_escape(fexpr) ^
-        "</code>, which has type <code>"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
+      let msg = "The expression <code class=\"typeError\">" ^ Utility.xml_escape pexpr ^ (get_mailbox_msg true mb) ^
+        "</code> has type <code class=\"typeError\">" ^ Utility.xml_escape(string_of_datatype paramtype) ^
+        "</code> and cannot be passed to function <code class=\"typeError\">"^ Utility.xml_escape(fexpr) ^
+        "</code>, which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "<code class=\"typeError\">"^ 
+      let msg = "The expression <code class=\"typeError\">"^ 
         Utility.xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
         string_of_datatype fntype ^
         "</code> cannot be applied to <code class=\"typeError\">"^ 
