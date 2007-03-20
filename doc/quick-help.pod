@@ -321,7 +321,7 @@ True iff the operands evaluate to different values.
 
 True iff the left operand's value is less than the right operand's
 
-=item * >>
+=item * >
 
 True iff the right operand's value is less than the left operand's
 
