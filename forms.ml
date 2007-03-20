@@ -69,9 +69,7 @@ let attrval = snd
 
 let serialise_exprenv expr env : string =
   let env = retain (freevars expr) env in
-(*  let thunk = delay_expr expr in*)
     marshal_exprenv (expr, env)
-(*  (marshal_result thunk, marshal_environment env)*)
 
 let rec is_trivial_apply_aux = function
     Variable(_, _) -> true
