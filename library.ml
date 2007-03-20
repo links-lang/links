@@ -220,6 +220,7 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
   "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Inferencetypes.string_type;
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Inferencetypes.string_type;
+  "stringToFloat",   conversion_op ~from:Inferencetypes.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float);
 
   "stringToXml",
   ((p1 string_to_xml),
@@ -232,7 +233,10 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   
   "exit",
   (`Continuation [],
-   (datatype "a -> [||]") (* Really, "a -> _|_" or "Continuation a"*)
+   (datatype "a -> b")
+     (* Return type must be free so that it unifies with things that
+        might be used alternatively. E.g.: 
+	    if (test) exit(1) else 42 *)
   );
 
   "send",
