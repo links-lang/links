@@ -11,14 +11,6 @@ class virtual db_args from_str = object
   method virtual from_string : string -> unit
 end
 
-(* let value_of_db_string (value:string) = function *)
-(*   | BoolField -> Result.bool (value = "true") *)
-(*   | TextField -> Result.string_as_charlist value *)
-(*   | IntField  -> Result.int (num_of_string value) *)
-(*   | FloatField -> (if value = "" then Result.float 0.00      (\* HACK HACK *\) *)
-(*                    else Result.float (float_of_string value)) *)
-(*   | _ -> failwith "value_of_db_string: unsupported datatype" *)
-
 let value_of_db_string (value:string) = function
   | `Primitive `Bool -> Result.bool (value = "true")
   | `Application ("String", [])
