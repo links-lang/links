@@ -45,7 +45,12 @@ let extract_line_range
     (finishline : int) : string =
   try 
     let start  = Hashtbl.find code.lines startline
-    and finish = Hashtbl.find code.lines finishline in
+    and finish = (if finishline == Hashtbl.length code.lines
+                  then (* handle the last line of input *)
+                    Buffer.length code.text
+                  else
+                    Hashtbl.find code.lines finishline)
+    in
       trim_initial_newline (Buffer.sub code.text (start) (finish - start))
   with Not_found -> "<unknown>"
 
@@ -64,11 +69,10 @@ let parse_into
   fun buffer nchars ->
     let nchars = infun buffer nchars in
       List.iter (fun linepos ->
-		   Hashtbl.add code.lines 
-		     (Hashtbl.length code.lines)
-		     (linepos + Buffer.length code.text)) 
-	((Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n') 
-         @ [nchars]);
+                  Hashtbl.add code.lines 
+                    (Hashtbl.length code.lines)
+                    (linepos + Buffer.length code.text))
+        (Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
       Buffer.add_substring code.text buffer 0 nchars;
       nchars
 
@@ -100,43 +104,43 @@ let read : parse:('intermediate parser_)
 fun ~parse ~desugarer ~infun ~name ->
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
- 		with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
+                 with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
       desugarer code (parse (Lexer.lexer ()) lexbuf)
     with 
       | Parsing.Parse_error -> 
-	  let line, column = find_line code lexbuf.lex_curr_p in
-	    raise
-	      (Errors.RichSyntaxError
-		 {Errors.filename = name;
-		  Errors.linespec = string_of_int lexbuf.lex_curr_p.pos_lnum;
-		  Errors.message = "";
-		  Errors.linetext = line;
-		  Errors.marker = String.make column ' ' ^ "^" })
-      | Sugar.ConcreteSyntaxError (msg, (start, finish)) ->
-	  let linespec = 
-	    if start.pos_lnum = finish.pos_lnum 
-	    then string_of_int start.pos_lnum
-	    else (string_of_int start.pos_lnum  ^ "..."
-		  ^ string_of_int finish.pos_lnum) in
-          let line = extract_line_range code (start.pos_lnum-1) finish.pos_lnum in
-	  let _, column = find_line code finish in
-	    raise 
-	      (Errors.RichSyntaxError
-		 {Errors.filename = name;
-		  Errors.linespec = linespec;
-		  Errors.message = msg;
-                  Errors.linetext = line;
-		  Errors.marker = String.make column ' ' ^ "^"})
-      | Lexer.LexicalError (lexeme, position) ->
-	  let line, column = find_line code position in
-	    raise
-	      (Errors.RichSyntaxError
+          let line, column = find_line code lexbuf.lex_curr_p in
+            raise
+              (Errors.RichSyntaxError
                  {Errors.filename = name;
-		  Errors.linespec = string_of_int position.pos_lnum;
-		  Errors.message = "Unexpected character : " ^ lexeme;
+                  Errors.linespec = string_of_int lexbuf.lex_curr_p.pos_lnum;
+                  Errors.message = "";
                   Errors.linetext = line;
-		  Errors.marker = String.make column ' ' ^ "^"})
+                  Errors.marker = String.make column ' ' ^ "^" })
+      | Sugar.ConcreteSyntaxError (msg, (start, finish)) ->
+          let linespec = 
+            if start.pos_lnum = finish.pos_lnum 
+            then string_of_int start.pos_lnum
+            else (string_of_int start.pos_lnum  ^ "..."
+                  ^ string_of_int finish.pos_lnum) in
+          let line = extract_line_range code (start.pos_lnum-1) finish.pos_lnum in
+          let _, column = find_line code finish in
+            raise 
+              (Errors.RichSyntaxError
+                 {Errors.filename = name;
+                  Errors.linespec = linespec;
+                  Errors.message = msg;
+                  Errors.linetext = line;
+                  Errors.marker = String.make column ' ' ^ "^"})
+      | Lexer.LexicalError (lexeme, position) ->
+          let line, column = find_line code position in
+            raise
+              (Errors.RichSyntaxError
+                 {Errors.filename = name;
+                  Errors.linespec = string_of_int position.pos_lnum;
+                  Errors.message = "Unexpected character : " ^ lexeme;
+                  Errors.linetext = line;
+                  Errors.marker = String.make column ' ' ^ "^"})
 
 (* Given an input channel, return a function suitable for input to
    Lexing.from_function that reads characters from the channel.
