@@ -179,6 +179,20 @@ let client_return_req cgi_args =
   let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
     ClientReturn(continuation, untuple_single arg)
 
+let error_page_stylesheet = 
+  "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block; padding:1em;}</style>"
+
+let error_page body = 
+  "<html>\n  <head>\n    <title>Links error</title>\n    " ^ 
+    error_page_stylesheet ^ 
+    "\n  </head>\n  <body>" ^ 
+    body ^ 
+    "\n  </body></html>"
+
+let is_multipart () =
+  ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
+      Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
+
 let perform_request 
     (program (* orig. src.: only used for gen'ing js*))
     globals main req =
@@ -205,43 +219,20 @@ let perform_request
     | CallMain -> 
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
-             Js.generate_program program main
+             catch_notfound_l "generate_program"
+               (lazy(Js.generate_program program main))
            else 
              let _env, rslt = Interpreter.run_program globals [] [main] in
                Result.string_of_result rslt)
-          
-let error_page_stylesheet = 
-  "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block}</style>"
-
-let error_page body = 
-  "<html>\n  <head>\n    <title>Links error</title>" ^ error_page_stylesheet ^ 
-    "\n  </head>\n  <body>" ^ 
-    body ^ 
-    "\n  </body></html>"
-
-let catch_notfound msg f a =
-  try
-    f a
-  with Not_found -> failwith ("not found caught ("^msg^")")
-
-let catch_notfound_l msg e =
-  try
-    Lazy.force e
-  with Not_found -> failwith ("not found caught ("^msg^")")
-
-
-let is_multipart () =
-  ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
-      Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
 let serve_request prelude (valenv, typenv) filename = 
   try 
-    let _, program = catch_notfound_l "reading and optimising"
+    let _, program = Utility.catch_notfound_l "reading and optimising"
       (lazy (read_and_optimise_program prelude typenv filename)) in
     let defs, main = List.partition Syntax.is_define program in
     if (List.length main < 1) then raise Errors.NoMainExpr else
     let main = last main in
-    let defs = catch_notfound_l "stubifying" 
+    let defs = Utility.catch_notfound_l "stubifying" 
       (lazy (stubify_client_funcs valenv defs)) in
     let cgi_args =
       if is_multipart () then
@@ -262,7 +253,8 @@ let serve_request prelude (valenv, typenv) filename =
       else
         CallMain
     in
-      perform_request program (defs @ valenv) main request
+      Utility.catch_notfound_l "performing request"
+        (lazy (perform_request program (defs @ valenv) main request))
   with
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)

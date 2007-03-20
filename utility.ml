@@ -562,6 +562,18 @@ let getenv : string -> string option =
     try Some (Sys.getenv name)
     with Not_found -> None
 
+(* {0 Exception-handling helpers} *)
+
+let catch_notfound msg f a =
+  try
+    f a
+  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
+
+let catch_notfound_l msg e =
+  try
+    Lazy.force e
+  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
+
 
 (** {0 Simulating infix function words (a la Haskell backticks)} *)
 

@@ -966,13 +966,9 @@ let words =
 
 let symbols = List.map fst words
 
-let catch name f a = try f a with Not_found -> failwith name
-
 let wordify x = 
-try
-  "_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)
-with Not_found -> failwith ("wordify " ^ x)
-
+  catch_notfound_l "wordify"
+    (lazy("_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)))
 
 let symbolp name =
   List.for_all (flip List.mem symbols) (explode name) &&
@@ -1012,15 +1008,22 @@ let generate_program env expr =
       Optimiser.inline (Optimiser.inline (Optimiser.inline env)) 
     else env
   in
-  let env = (if Settings.get_value elim_dead_defs 
-             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) env expr else env) in
-  (boiler_1 ()
- ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
- ^ boiler_2 ()
- ^ String.concat "\n" (map gen (remove_nulls (butlast env)))
- ^ boiler_3 ()
- ^ ((generate ->- (fun expr -> Call(expr, [Var "_start"])) ->- eliminate_admin_redexes ->- show) expr)
- ^ boiler_4 ())
+  let env = 
+    catch_notfound_l "elim_dead_defs call in js.ml"
+      (lazy (if Settings.get_value elim_dead_defs 
+             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) env expr
+             else env)) in
+    catch_notfound_l "JS code generation"
+      (lazy(  boiler_1 ()
+	    ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
+	    ^ boiler_2 ()
+	    ^ String.concat "\n" (map gen (remove_nulls (butlast env)))
+	    ^ boiler_3 ()
+	    ^ ((generate ->-
+		  (fun expr -> Call(expr, [Var "_start"])) ->- 
+		    eliminate_admin_redexes ->- 
+		      show) expr)
+	    ^ boiler_4 ()))
 
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
