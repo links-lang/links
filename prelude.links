@@ -67,13 +67,22 @@ fun fold_right1(f, l) {
   fold_right(f, hd(l), tl(l))
 }
 
-fun zip(l) {
+fun unzip(l) {
   switch (l) {
     case [] -> ([], [])
     case (a,b)::xs -> { 
-     var (c,d) = zip(xs);
+     var (c,d) = unzip(xs);
      (a :: c, b :: d)
     }
+  }
+}
+
+fun zip(l, r) {
+  switch ((l, r)) {
+    case ([], []) -> []
+    case (lh::lt, rh::rt) -> 
+        (lh, rh) :: zip (lt, rt)
+    case (_, _) -> []
   }
 }
 
@@ -371,16 +380,15 @@ infixr 0 $;
 sig $ : (a -> b) -> a -> b
 fun f $ x { f(x) }
 
-
 # state monad
-sig runState : State (a,c) -> (a) -> (c,a)
+sig runState : State (d,a) -> (d) -> (a,d)
 fun runState(State (s)) { s }
 
 infixl 1 >>=;
 
 sig >>= : State (d,a) -> (a -> State(d,b)) -> State (d,b)
 fun (State (x)) >>= f {
-   State (fun (s) { var (v,s_) = x (s); runState (f (v)) (s_) })
+   State (fun (s1) { var (v,s2) = x (s1); runState (f (v)) (s2) })
 }
 
 infixl 1 >>;
@@ -409,6 +417,11 @@ fun fmap(f)(x) {
   x >>= (fun (x) { retern (f(x)) })
 } 
 
+sig lift2 : ((a,b) -> c) -> (State (d,a), State (d,b)) -> State(d,c)
+fun lift2(f)(x,y) {
+  x >>= (fun (x) { y >>= fun (y) { retern(f(x,y)) } })
+}
+
 sig pure : a -> Form(a)
 fun pure(v) {
   retern([], fun (_) { v })
@@ -420,6 +433,11 @@ fun m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
   retern((x++y, fun(e){ f(e)(c(e)) }))}}
+}
+
+sig @@=> : Form(a) -> (a -> b) -> Form(b)
+fun m @@=> f {
+  m @@@ pure(f)
 }
 
 sig xml : Xml -> Form (())
@@ -463,7 +481,9 @@ var input =
    (retern (<input name="{name}"/>,
             fun (env) { assoc(name, env)}))};
 
-# A one element form with an initial value
+fun emptyForm(_) { pure([]) }
+
+# A one-element form with an initial value
 sig inputValue : String -> Form (String)
 fun inputValue(v) { 
    nextName >>= fun (name) {
@@ -479,8 +499,13 @@ fun hidden(v) {
             fun (env) { assoc(name, env)}))}
 }
 
+fun hiddenInt(val) {
+  form <#>{ hidden(intToString(val)) -> rslt }</#>
+  yields { stringToInt(rslt) }
+}
 
-# A file
+
+# A "file" type input.
 sig inputFile : Form (String)
 var inputFile = 
    nextName >>= fun (name) {
@@ -491,7 +516,8 @@ var inputFile =
 sig render : ((a) -> Xml) -> Form (a) -> Xml
 fun render(continuation)(frm) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="application/x-www-form-urlencoded" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+   <form enctype="application/x-www-form-urlencoded"
+         l:onsubmit="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
@@ -508,16 +534,21 @@ fun renderMultipart(continuation)(frm) {
 }
 
 
-#sig forms : ([Form (a)]) -> Form ([a])
-fun forms(fs) { 
+#sig sequenceFormlets : ([Form (a)]) -> Form ([a])
+fun sequenceFormlets(fs) { 
   switch (fs) {
     case [] -> pure ([])
-    case (x::xs) -> x @@@ (forms(xs) @@@ pure (fun(ls)(l) { l::ls}))
+    case (x::xs) -> x @@@ (sequenceFormlets(xs) @@@ pure (fun(ls)(l) { l::ls}))
   }
 }
 
 sig inputInt : Form(Int)
 var inputInt = input @@@ pure(stringToInt);
+
+sig inputIntValue : Int -> Form(Int)
+var inputIntValue = fun (value) { 
+  inputValue(intToString(value)) @@@ pure(stringToInt)
+};
 
 sig inputFloat : Form(Float)
 var inputFloat = input @@@ pure(stringToFloat);
