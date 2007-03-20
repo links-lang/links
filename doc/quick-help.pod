@@ -846,7 +846,7 @@ many processes by executing the C<spawn> primitive:
 
 This starts a new process which begins by evaluating
 C<expression>. The value of the expression is discarded if evaluation
-ever completes.  C<spawn> returns an identifier f the new process to
+ever completes.  C<spawn> returns an identifier of the new process to
 the calling process. This identifier can be used to address messages
 to the new process, with the C<!> primitive (pronounced "send"):
 
