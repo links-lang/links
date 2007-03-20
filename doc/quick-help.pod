@@ -153,14 +153,26 @@ the dot notation:
   item.drinkname == "latte"
   (lastname="Bond", firstname="James").lastname == "Bond"
 
-You can also add a field to an arbitrary record using the I<record
-extension> operation.
+=head3 Record modifications
+
+You can I<add> a field to an arbitrary record using the I<record
+extension> operation. This operation works only when the field is not
+already present in the record. As an example:
 
   (caffeineContent = 60 | item)
 
-With the previous definition, this yields a value
+Given the definition from above, this would yield a value
 
   (caffeineContent = 60, drinkname = "latte", price = 2.5)
+
+To I<overwrite> the value in a field, when that field is already
+present, use the "with" notation:
+
+  (item with drinkname = "capuccino")
+
+This yields
+
+  (drinkname="capuccino", price=2.5)
 
 Records do not need to be declared; a given field name can appear in
 any record. The only requirement is that a given field is used with a
@@ -562,7 +574,7 @@ sugar for C<r <- asList(t)>. So you can write:
    where (i <= 20)
    [r]
 
-=head2 Databases modification
+=head2 Database modifications
 
 Databases can be read from using tables and C<for>
 comprehensions. Insert, update and delete operations are also
@@ -834,7 +846,7 @@ many processes by executing the C<spawn> primitive:
 
 This starts a new process which begins by evaluating
 C<expression>. The value of the expression is discarded if evaluation
-ever completes.  C<spawn> returns an identifier of the new process to
+ever completes.  C<spawn> returns an identifier f the new process to
 the calling process. This identifier can be used to address messages
 to the new process, with the C<!> primitive (pronounced "send"):
 
