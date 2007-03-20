@@ -138,6 +138,11 @@ To use a database with Links, follow these steps:
 
   2. If you need to link against the database libraries themselves,
      you can add these to the EXTRA_LIBDIRS line in Makefile.
+     
+     For example, on MacOS X, I use this setting to include the 
+     PostgreSQL libraries:
+     
+       EXTRA_LIBDIRS=/usr/local/pgsql/lib
 
   3. Rebuild links with:
 
