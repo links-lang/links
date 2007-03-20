@@ -830,7 +830,7 @@ C<yields> bodies, and finally the function C<handler> will be called.
 A Links program begins as a single thread of control but can fork into
 many processes by executing the C<spawn> primitive:
 
-  var newProcID = spawn(func, arg);
+  var newProcID = spawn { expression };
 
 This starts a new process which begins by evaluating
 C<expression>. The value of the expression is discarded if evaluation
