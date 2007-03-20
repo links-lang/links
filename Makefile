@@ -129,5 +129,13 @@ docs:
 docs-clean:
 	cd doc && make clean
 
-clean :: deriving-clean docs-clean
+cache-clean:
+	-rm prelude.links.cache
+
+byte-code: cache-clean
+
+native-code: cache-clean
+
+clean :: deriving-clean docs-clean cache-clean
+
 
