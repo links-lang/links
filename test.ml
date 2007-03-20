@@ -33,17 +33,17 @@ let show = attempt Result.string_of_result
 (* For now, two types are considered equivalent if they print the
    same.  We'll do better later, perhaps when we have type
    minimisation. *)
-let equivalent_types l r = Inferencetypes.string_of_datatype l = Inferencetypes.string_of_datatype r
+let equivalent_types l r = Types.string_of_datatype l = Types.string_of_datatype r
 
 (* Check that the last expression of `es' has a type equivalent to `t' *)
-let has_type ((_, t) : Inferencetypes.assumption) (es : Syntax.expression list) = 
+let has_type ((_, t) : Types.assumption) (es : Syntax.expression list) = 
   let e = Utility.last es in
   let etype = Syntax.node_datatype e in
     if equivalent_types t etype then Right es
     else Left (Printf.sprintf
                  "Types not equivalent : expected %s, got %s" 
-                 (Inferencetypes.string_of_datatype t)
-                 (Inferencetypes.string_of_datatype etype))
+                 (Types.string_of_datatype t)
+                 (Types.string_of_datatype etype))
 
 let datatype = Parse.parse_string Parse.datatype
 

@@ -33,7 +33,7 @@ and column = {
   table_renamed : string;
   name : string;
   renamed : string;
-  col_type : Inferencetypes.datatype;
+  col_type : Types.datatype;
 } 
 and col_or_expr = (column, expression) Utility.either
 deriving (Eq, Typeable, Show, Pickle, Shelve)

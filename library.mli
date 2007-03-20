@@ -27,9 +27,9 @@ type continuationized_val = [
 | `PFun of (continuation -> result -> result) * continuation * result -> continuationized_val
 ]
 val value_env : (string * continuationized_val) list ref
-val type_env : Inferencetypes.environment
-val alias_env : Inferencetypes.alias_environment
-val typing_env : Inferencetypes.typing_environment
+val type_env : Types.environment
+val alias_env : Types.alias_environment
+val typing_env : Types.typing_environment
 val apply_pfun : (continuation -> result -> result) -> continuation -> string -> result list -> result
 val primitive_stub : string -> result
 

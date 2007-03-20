@@ -63,7 +63,7 @@ let string_of_comparison = function
 
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
-  | TypeDecl of (string * int list * Inferencetypes.datatype * 'data)
+  | TypeDecl of (string * int list * Types.datatype * 'data)
   | Boolean of (bool * 'data)
   | Integer of (num * 'data)
   | Char of (char * 'data)
@@ -77,7 +77,7 @@ type 'data expression' =
   | Comparison of ('data expression' * comparison * 'data expression' * 'data)
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * 'data expression' * Inferencetypes.datatype option) list * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
   | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
@@ -100,14 +100,14 @@ type 'data expression' =
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table name: *) 'data expression'
-      * (* the read / write (record) types of a table row: *) (Inferencetypes.datatype * Inferencetypes.datatype)
+      * (* the read / write (record) types of a table row: *) (Types.datatype * Types.datatype)
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
-  | HasType of ('data expression' * Inferencetypes.datatype * 'data)
-  | Alien of (string * string * Inferencetypes.assumption * 'data)
+  | HasType of ('data expression' * Types.datatype * 'data)
+  | Alien of (string * string * Types.assumption * 'data)
   | Placeholder of (label * 'data)
       deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
       (* Q: Should syntax exprs be picklable or not? *)
@@ -153,7 +153,7 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type typed_data = [`T of (position * Inferencetypes.datatype * label option)] deriving (Eq, Typeable, Show, Pickle, Shelve)
+type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show, Pickle, Shelve)
 type untyped_data = [`U of position] deriving (Eq, Typeable, Show, Pickle, Shelve)
 type data = [untyped_data | typed_data] deriving (Typeable, Show, Pickle)
 
@@ -173,13 +173,13 @@ let is_alphanumeric_ident name =
   (Str.string_match (Str.regexp "^[a-zA-Z_][a-zA-Z_0-9]*$") name 0)
 
 let rec show t : 'a expression' -> string = function 
-  | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Inferencetypes.string_of_datatype datatype ^ t data
+  | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
   | Define (variable, value, location, data) -> 
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
   | TypeDecl (typename, quantifiers, datatype, data) ->
-      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Inferencetypes.string_of_datatype datatype ^ t data
+      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Boolean (value, data) -> string_of_bool value ^ t data
   | Integer (value, data) -> string_of_num value ^ t data
   | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
@@ -239,7 +239,7 @@ let rec show t : 'a expression' -> string = function
   | Database (params, data) -> "database (" ^ show t params ^ ")" ^ t data
   | TableHandle (db, name, (readtype, writetype), data) ->
       "("^ show t name ^" from "^ show t db ^
-      "["^Inferencetypes.string_of_datatype readtype^";"^Inferencetypes.string_of_datatype writetype^"])" ^ t data
+      "["^Types.string_of_datatype readtype^";"^Types.string_of_datatype writetype^"])" ^ t data
   | TableQuery (ths, query, data) ->
       "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
         "["^Sql.string_of_query query^"])" ^ t data
@@ -247,7 +247,7 @@ let rec show t : 'a expression' -> string = function
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ Utility.base64encode s ^ t data
-  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Inferencetypes.string_of_assumption k) ^ t data
+  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_assumption k) ^ t data
 
 let string_of_expression s = show (fun _ -> "") s
 
@@ -515,7 +515,7 @@ let rec set_data : ('b -> 'a expression' -> 'b expression') =
   | Placeholder (a,_) -> Placeholder (a,data) 
       
 
-let node_datatype : (expression -> Inferencetypes.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
+let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 
 let position e = data_position (expression_data e)
 

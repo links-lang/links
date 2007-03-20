@@ -35,7 +35,7 @@ type datatype =
   | TableType of datatype * datatype
   | ListType of datatype
   | TypeApplication of (string * datatype list)
-  | PrimitiveType of Inferencetypes.primitive
+  | PrimitiveType of Types.primitive
   | DBType
 and row = (string * [`Present of datatype | `Absent]) list * string option
 

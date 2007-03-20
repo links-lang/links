@@ -1,4 +1,4 @@
-open Inferencetypes
+open Types
 open Syntax
 open Sugar
 open Lexing
@@ -14,13 +14,13 @@ exception MultiplyDefinedToplevelNames of ((Syntax.position list) Utility.string
 exception RichSyntaxError of synerrspec
 
 exception WrongArgumentTypeError of (Syntax.position *
-				       string * Inferencetypes.datatype * 
-                                       string * Inferencetypes.datatype *
-				       (string * Inferencetypes.datatype) option)
+				       string * Types.datatype * 
+                                       string * Types.datatype *
+				       (string * Types.datatype) option)
 
-exception NonfuncAppliedTypeError of (Syntax.position * string * Inferencetypes.datatype * 
-					string * Inferencetypes.datatype *
-					(string * Inferencetypes.datatype) option)
+exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype * 
+					string * Types.datatype *
+					(string * Types.datatype) option)
 
 type expression = Syntax.expression
 (*type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)

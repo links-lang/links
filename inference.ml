@@ -3,7 +3,7 @@ open List
 
 open Utility
 open Syntax
-open Inferencetypes
+open Types
 open Forms
 open Errors
 
@@ -109,7 +109,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 			 (`MetaTypeVar (IntMap.find var rec_type_env))
 		       else
 			 (
-			   let var' = Inferencetypes.fresh_raw_variable () in
+			   let var' = Types.fresh_raw_variable () in
 			   let point' = Unionfind.fresh (`TypeVar var') in
 			   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
 			   let _ = Unionfind.change point' (`Recursive (var', t')) in
@@ -161,7 +161,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 		     (`MetaRowVar (IntMap.find var rec_row_env))
 		   else
 		     (
-		       let var' = Inferencetypes.fresh_raw_variable () in
+		       let var' = Types.fresh_raw_variable () in
 		       let point' = Unionfind.fresh (field_env, `RowVar (Some var')) in
 		       let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
 		       let _ = Unionfind.change point' (field_env, `RecRowVar (var', rec_row')) in
@@ -256,7 +256,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
          Note that we cannot just pass t to instantiate_datatype as it may not be
          a valid datatype (e.g. `Recursive (var, t) is not a type, but
          `MetaTypeVar point where Unionfind.point = `Recursive (var, t) is). This is
-         an annoying consequence of deriving Types.datatype and Inferencetypes.datatype
+         an annoying consequence of deriving Types.datatype and Types.datatype
          from a common basis.
       *)
       Unionfind.change point (`Recursive (var,
@@ -287,7 +287,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                               ts, IntMap.add var t tenv
                           | _ -> assert false) (ts, IntMap.empty) vars
     in
-      instantiate_datatype (tenv, IntMap.empty) (Inferencetypes.freshen_mailboxes alias) in
+      instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias) in
 
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -403,7 +403,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		       *)
 	         | t' -> unify' rec_env (t, t'))
           | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto)
-	      when Inferencetypes.using_mailbox_typing () ->
+	      when Types.using_mailbox_typing () ->
               (unify' rec_env (lm, rm);
                unify' rec_env (lfrom, rfrom);
                unify' rec_env (lto, rto))
@@ -841,7 +841,7 @@ and unify_rows alias_env (row1, row2) =
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
   try
-    let quantifiers, t = Inferencetypes.lookup var env in
+    let quantifiers, t = Types.lookup var env in
       if quantifiers = [] then
 	t
       else
@@ -942,7 +942,7 @@ and get_row_quantifiers : type_var_set -> row -> quantifier list =
 	field_vars @ row_vars
 
 let env_type_vars env =
-  concat_map (free_type_vars -<- snd) (Inferencetypes.environment_values env)
+  concat_map (free_type_vars -<- snd) (Types.environment_values env)
 
 let type_mismatch ~expected ~inferred ~pos ~src msg =
   raise (Type_error (pos, 
@@ -990,7 +990,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let _ =
 	try unify (`Function(p_type, mb_type, return_type), f_type)
 	with Unify_failure _ ->
-          if Inferencetypes.using_mailbox_typing () then
+          if Types.using_mailbox_typing () then
             mistyped_application pos (f, f_type) (p, type_of_expression p) (Some (m, mb_type))
           else
             mistyped_application pos (f, f_type) (p, type_of_expression p) None
@@ -1225,7 +1225,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
            could use instead. 
            (FIXME: What does this mean? --eekc 1/07)*)
       let mailboxtype = 
-	if Inferencetypes.using_mailbox_typing () then
+	if Types.using_mailbox_typing () then
           instantiate env "_MAILBOX_" 
         else
           ITO.fresh_type_variable () in
@@ -1308,7 +1308,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       - do the functions have to be recursive?
 *)
 and
-    type_check_mutually (env, alias_env) (defns : (string * untyped_expression * Inferencetypes.datatype option) list) =
+    type_check_mutually (env, alias_env) (defns : (string * untyped_expression * Types.datatype option) list) =
       let var_env = (map (fun (name, _, t) ->
                             match t with
                               | Some t ->
@@ -1334,9 +1334,9 @@ and
         (env, alias_env), defns     
 
 let mutually_type_defs
-    ((env, alias_env) : Inferencetypes.typing_environment)
+    ((env, alias_env) : Types.typing_environment)
     (defs : (string * untyped_expression * 'a option) list)
-    : (Inferencetypes.typing_environment * (string * expression * 'c) list) =
+    : (Types.typing_environment * (string * expression * 'c) list) =
   let (new_type_env, new_alias_env), new_defs = type_check_mutually (env, alias_env) defs
   in
     ((new_type_env, new_alias_env), new_defs)
@@ -1345,7 +1345,7 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
   let _ =
     if StringMap.mem typename alias_env then
       failwith ("Duplicate typename: "^typename) in
-  let aliases = Inferencetypes.type_aliases datatype in
+  let aliases = Types.type_aliases datatype in
   let free_aliases =
     StringSet.filter (fun alias -> not (StringMap.mem alias alias_env)) aliases
   in
@@ -1354,7 +1354,7 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
     else
       StringMap.add typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
 
-let type_expression : Inferencetypes.typing_environment -> untyped_expression -> (Inferencetypes.typing_environment * expression) =
+let type_expression : Types.typing_environment -> untyped_expression -> (Types.typing_environment * expression) =
   fun (env, alias_env) untyped_expression ->
     let (env', alias_env'), exp' =
       match untyped_expression with
@@ -1378,11 +1378,11 @@ let type_expression : Inferencetypes.typing_environment -> untyped_expression ->
       (env', alias_env'), exp'
 
 let type_program
-    (typing_env : Inferencetypes.typing_environment)
+    (typing_env : Types.typing_environment)
     (exprs : untyped_expression list) :
-    Inferencetypes.typing_environment * expression list =
+    Types.typing_environment * expression list =
   let type_group (typing_env, typed_exprs) : untyped_expression list ->
-    Inferencetypes.typing_environment * expression list = function
+    Types.typing_environment * expression list = function
       | [x] -> (* A single node *)
 	  let typing_env, expression = type_expression typing_env x in 
             typing_env, typed_exprs @ [expression]
@@ -1390,7 +1390,7 @@ let type_program
           let defparts = map (fun (Define x) -> x) xs in
           let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
                                  name, expr, t) defparts in
-          let (typing_env : Inferencetypes.typing_environment), defs = mutually_type_defs typing_env defbodies in
+          let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
           let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
                               Define(name, expr, location, expression_data expr))
 			defparts defs) in
@@ -1436,13 +1436,13 @@ let type_program typing_env expressions =
   let _ =
     (* without mailbox parameters *)
     Debug.if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
-    Inferencetypes.with_mailbox_typing false
+    Types.with_mailbox_typing false
       (fun () ->
 	 type_program typing_env expressions)
   in
     (* with mailbox parameters *)
     Debug.if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
-    Inferencetypes.with_mailbox_typing true
+    Types.with_mailbox_typing true
       (fun () ->
 	 type_program typing_env expressions)
 
@@ -1451,12 +1451,12 @@ let type_expression typing_env expression =
   let _ =
     (* without mailbox parameters *)	
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
-    Inferencetypes.with_mailbox_typing false
+    Types.with_mailbox_typing false
       (fun () ->
 	 type_expression typing_env expression)
   in
     (* with mailbox parameters *)
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
-    Inferencetypes.with_mailbox_typing true
+    Types.with_mailbox_typing true
       (fun () ->
 	 type_expression typing_env expression)

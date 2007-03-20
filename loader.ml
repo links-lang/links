@@ -17,14 +17,14 @@ let newer f1 f2 =
   
 let make_cache = true
 
-let read_file_cache filename : (Inferencetypes.typing_environment * Syntax.expression list) = 
+let read_file_cache filename : (Types.typing_environment * Syntax.expression list) = 
   let cachename = filename ^ ".cache" in
     try
       if make_cache && newer cachename filename then
         call_with_open_infile cachename ~binary:true
           (fun cachefile ->
              (Marshal.from_channel cachefile 
-                : (Inferencetypes.typing_environment *Syntax.expression list)))
+                : (Types.typing_environment *Syntax.expression list)))
           (* (OCaml manual recommends putting a type signature on unmarshal 
              calls; not clear whether this actually helps. It seems we get 
              a segfault if the marhsaled data is not the right type.) *)

@@ -89,7 +89,7 @@ class lite3_database file = object(self)
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method equal_types (t: Inferencetypes.datatype) (dt : db_field_type) : bool = true
+  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method driver_name () = "sqlite3"
 end
 

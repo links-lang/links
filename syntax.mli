@@ -5,7 +5,7 @@ type label deriving (Typeable, Show, Pickle)
 
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
-  | TypeDecl of (string * int list * Inferencetypes.datatype * 'a)
+  | TypeDecl of (string * int list * Types.datatype * 'a)
   | Boolean of (bool * 'a)
   | Integer of (Num.num * 'a)
   | Char of (char * 'a)
@@ -17,7 +17,7 @@ type 'a expression' =
   | Comparison of ('a expression' * comparison * 'a expression' * 'a)
   | Abstr of (string * 'a expression' * 'a)
   | Let of (string * 'a expression' * 'a expression' * 'a)
-  | Rec of ((string * 'a expression' * Inferencetypes.datatype option) list * 'a expression' * 'a)
+  | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
   | Record_intro of (('a expression') Utility.stringmap * ('a expression') option * 'a)
   | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
@@ -33,19 +33,19 @@ type 'a expression' =
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
   | TableQuery of ((string * 'a expression') list * Query.query * 'a)
-  | TableHandle of ('a expression' * 'a expression' * (Inferencetypes.datatype * Inferencetypes.datatype) * 'a)
+  | TableHandle of ('a expression' * 'a expression' * (Types.datatype * Types.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
   | Call_cc of ('a expression' * 'a)
   | Wrong of 'a
-  | HasType of ('a expression' * Inferencetypes.datatype * 'a)
-  | Alien of (string * string * Inferencetypes.assumption * 'a)
+  | HasType of ('a expression' * Types.datatype * 'a)
+  | Alien of (string * string * Types.assumption * 'a)
   | Placeholder of (label * 'a)
 
 type position = Lexing.position * string * string
 type untyped_data = [`U of position]
 
-type typed_data = [`T of (position * Inferencetypes.datatype * label option)]
-type expression = [`T of (position * Inferencetypes.datatype * label option)] expression' deriving (Typeable, Show, Pickle, Eq, Shelve)
+type typed_data = [`T of (position * Types.datatype * label option)]
+type expression = [`T of (position * Types.datatype * label option)] expression' deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression' deriving (Show)
@@ -80,7 +80,7 @@ val set_subnodes : 'a expression' -> 'a expression' list -> 'a expression'
 
 val expression_data : 'a expression' -> 'a
 val strip_data : 'a expression' -> stripped_expression
-val node_datatype : expression -> Inferencetypes.datatype
+val node_datatype : expression -> Types.datatype
 
 type data = [untyped_data | typed_data]
 

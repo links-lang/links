@@ -345,7 +345,7 @@ type fieldset = All
               | Fields of (string list)
 (* FIXME: Make sure we don't throw away fields that are used in 
    a SortBy clause. *)
-let sql_projections ((env, alias_env):(Inferencetypes.environment * Inferencetypes.alias_environment)) : RewriteSyntax.rewriter =
+let sql_projections ((env, alias_env):(Types.environment * Types.alias_environment)) : RewriteSyntax.rewriter =
   let merge_needed : fieldset list -> fieldset =
     let merge2 = function
       | All, _ | _, All -> All
@@ -803,7 +803,7 @@ let rewriters env = [
   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
 ]
 
-let run_optimisers : (Inferencetypes.environment * Inferencetypes.alias_environment) -> RewriteSyntax.rewriter
+let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise env expr =

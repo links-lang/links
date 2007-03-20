@@ -22,7 +22,7 @@ type 'r a_pattern = [
   | `Constant of untyped_expression
   | `Variable of string
   | `As of (string * 'r)
-  | `HasType of ('r * Inferencetypes.datatype)
+  | `HasType of ('r * Types.datatype)
 ]
 
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
@@ -96,7 +96,7 @@ module PatternCompiler =
   (struct
      let show_pattern_compilation = Settings.add_bool("show_pattern_compilation", false, `User)
 
-     type annotation = string list * Inferencetypes.datatype list
+     type annotation = string list * Types.datatype list
      type annotated_pattern = annotation * simple_pattern
 
      type ('a, 'b) equation_basis = 'a list * 'b
@@ -587,7 +587,7 @@ module PatternCompiler =
                            is sound providing we're using static
                            typing.
                         *)
-                        Let ("_", HasType (var_exp, Inferencetypes.unit_type, pos),
+                        Let ("_", HasType (var_exp, Types.unit_type, pos),
                              match_cases pos vars equations def env, pos)
                     | _ ->
                         (Condition(Comparison(var_exp, `Equal, exp, pos),
@@ -701,14 +701,14 @@ module Desugarer =
      typevars k, k
 
    type var_env =
-       (Inferencetypes.datatype Unionfind.point) StringMap.t *
-         (Inferencetypes.row Unionfind.point) StringMap.t 
+       (Types.datatype Unionfind.point) StringMap.t *
+         (Types.row Unionfind.point) StringMap.t 
 
-   let generate_var_mapping : quantifier list -> (Inferencetypes.quantifier list * var_env) =
+   let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) =
      fun vars ->
        List.fold_right
          (fun v (vars, (tenv, renv)) ->
-            let var = Inferencetypes.fresh_raw_variable () in
+            let var = Types.fresh_raw_variable () in
               match v with
                 | `TypeVar name ->
                     (`TypeVar var::vars,
@@ -735,17 +735,17 @@ module Desugarer =
            | FunctionType (f, m, t) ->
                `Function (desugar var_env f, desugar var_env m, desugar var_env t)
            | MuType (name, t) ->
-               let var = Inferencetypes.fresh_raw_variable () in
+               let var = Types.fresh_raw_variable () in
                let point = Unionfind.fresh (`TypeVar var) in
                let tenv = StringMap.add name point tenv in
                let _ = Unionfind.change point (`Recursive (var, desugar (tenv, renv) t)) in
                  `MetaTypeVar point
-           | UnitType -> Inferencetypes.unit_type
+           | UnitType -> Types.unit_type
            | TupleType ks -> 
                let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
-               and unit = Inferencetypes.InferenceTypeOps.make_empty_closed_row ()
+               and unit = Types.InferenceTypeOps.make_empty_closed_row ()
                and present (s, x) = (s, `Present x)
-               in `Record (fold_right2 (curry (Inferencetypes.InferenceTypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
+               in `Record (fold_right2 (curry (Types.InferenceTypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
            | RecordType row -> `Record (desugar_row var_env row)
            | VariantType row -> `Variant (desugar_row var_env row)
            | TableType (r, w) -> `Table (desugar var_env r, desugar var_env w)
@@ -756,17 +756,17 @@ module Desugarer =
      and desugar_row ((_, renv) as var_env) (fields, rv) =
        let lookup_row = flip StringMap.find renv in
        let seed = match rv with
-         | None    -> Inferencetypes.InferenceTypeOps.make_empty_closed_row ()
+         | None    -> Types.InferenceTypeOps.make_empty_closed_row ()
          | Some rv ->
              (StringMap.empty, `MetaRowVar (lookup_row rv))
-(*             Inferencetypes.InferenceTypeOps.make_empty_open_row_with_var (lookup rv)*)
+(*             Types.InferenceTypeOps.make_empty_open_row_with_var (lookup rv)*)
        and fields = map (fun (k, v) -> match v with
                            | `Absent -> (k, `Absent)
                            | `Present v -> (k, `Present (desugar var_env v))) fields 
-       in fold_right Inferencetypes.InferenceTypeOps.set_field fields seed
+       in fold_right Types.InferenceTypeOps.set_field fields seed
      in desugar, desugar_row
 
-   let desugar_assumption ((vars, k)  : assumption) : Inferencetypes.assumption = 
+   let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
      let vars, var_env = generate_var_mapping vars in
        vars, desugar_datatype var_env k
 
@@ -1001,7 +1001,7 @@ module Desugarer =
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
            | FloatLit f  -> Float (f, pos)
            | IntLit i    -> Integer (i, pos)
-           | StringLit s -> HasType(String (s, pos), Inferencetypes.string_type, pos)
+           | StringLit s -> HasType(String (s, pos), Types.string_type, pos)
            | BoolLit b   -> Boolean (b, pos)
            | CharLit c   -> Char (c, pos)
            | Var v       -> Variable (v, pos)
@@ -1261,12 +1261,12 @@ module Desugarer =
                      else
                        List.fold_right
                          (fun node nodes ->
-                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Inferencetypes.xml_type, pos))
+                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Types.xml_type, pos))
                    end
                  else
                    Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
-           | XmlForest []  -> HasType(Nil pos, Inferencetypes.xml_type, pos)
-           | XmlForest [x] -> HasType(desugar x, Inferencetypes.xml_type, pos)
+           | XmlForest []  -> HasType(Nil pos, Types.xml_type, pos)
+           | XmlForest [x] -> HasType(desugar x, Types.xml_type, pos)
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
 
            | Form (formExpr, formHandler) ->
@@ -1433,7 +1433,7 @@ module Desugarer =
              `Variant (l, desugar v), pos
          | `Variant (l, None) ->
              if Settings.get_value cons_unit_hack then
-               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Inferencetypes.unit_type), pos)), pos
+               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Types.unit_type), pos)), pos
              else
                `Variant (l, (`Constant (unit_expression pos), pos)), pos
                (* 
@@ -1511,7 +1511,7 @@ module Desugarer =
  end : 
   sig 
     val desugar : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
-    val desugar_datatype : Sugartypes.datatype -> Inferencetypes.assumption
+    val desugar_datatype : Sugartypes.datatype -> Types.assumption
     val fresh_type_variable : unit -> Sugartypes.datatype
   end)
 

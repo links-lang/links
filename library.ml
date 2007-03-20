@@ -3,7 +3,7 @@ open Num
 open List
 
 open Result
-open Inferencetypes
+open Types
 open Utility
 
 (* Data structures/utilities for proc mgmt *)
@@ -90,11 +90,11 @@ type located_primitive = [ `Client | `Server of primitive | primitive ]
 
 let datatype = Parse.parse_string Parse.datatype
 
-let int_op impl : located_primitive * Inferencetypes.assumption = 
+let int_op impl : located_primitive * Types.assumption = 
   (`PFun (fun x -> `PFun (fun y -> `Int (impl (unbox_int x) (unbox_int y))))),
   datatype "Int -> (Int -> Int)"
 
-let float_op impl : located_primitive * Inferencetypes.assumption = 
+let float_op impl : located_primitive * Types.assumption = 
   `PFun (fun x -> `PFun (fun y -> (`Float (impl (unbox_float x) (unbox_float y))))),
   datatype "Float -> (Float -> Float)"
     
@@ -102,11 +102,11 @@ let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
     fun x -> (box (conv (unbox x)))
 
-let make_type_variable = Inferencetypes.InferenceTypeOps.make_type_variable
+let make_type_variable = Types.InferenceTypeOps.make_type_variable
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Inferencetypes.assumption =
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
   (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
-   let a = Inferencetypes.fresh_raw_variable () in
+   let a = Types.fresh_raw_variable () in
      ([`TypeVar a], `Function (from, make_type_variable a, into)))
 
 let string_to_xml = function 
@@ -201,7 +201,7 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
-let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
+let env : (string * (located_primitive * Types.assumption)) list = [
   "+", int_op (+/);
   "-", int_op (-/);
   "*", int_op ( */);
@@ -216,11 +216,11 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
   "^.", float_op ( ** );
 
   (** Conversions (any missing?) **)
-  "stringToInt",   conversion_op ~from:Inferencetypes.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
+  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
   "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Inferencetypes.string_type;
-  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Inferencetypes.string_type;
-  "stringToFloat",   conversion_op ~from:Inferencetypes.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float);
+  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
+  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
+  "stringToFloat",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float);
 
   "stringToXml",
   ((p1 string_to_xml),
@@ -761,8 +761,8 @@ let env : (string * (located_primitive * Inferencetypes.assumption)) list = [
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     let qs, regex = datatype Linksregex.Regex.datatype in
-    let mb1 = Inferencetypes.fresh_raw_variable () in
-    let mb2 = Inferencetypes.fresh_raw_variable () in
+    let mb1 = Types.fresh_raw_variable () in
+    let mb2 = Types.fresh_raw_variable () in
       ((`TypeVar mb1) :: (`TypeVar mb2) :: qs,
        `Function (string_type, make_type_variable mb1, `Function (regex, make_type_variable mb2, `Primitive `Bool)))));
 
@@ -802,18 +802,18 @@ let continuationize_env = Utility.concat_map
       | Some v -> [n,v])
 
 let value_env = ref (continuationize_env env)
-and type_env : Inferencetypes.environment =
+and type_env : Types.environment =
   List.map (fun (n, (_,t)) -> (n,t)) env
-and alias_env : Inferencetypes.alias_environment =
+and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->
        StringMap.add name assumption env)
     [
       "Event", ([], `Primitive `Abstract);
-      "List", ([`TypeVar (Inferencetypes.fresh_raw_variable ())], `Primitive `Abstract);
+      "List", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
       "Xml", ([], `Application ("List", [`Primitive `XmlItem]));
-      "Mailbox", ([`TypeVar (Inferencetypes.fresh_raw_variable ())], `Primitive `Abstract)
+      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract)
     ]
     StringMap.empty
 

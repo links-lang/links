@@ -19,7 +19,7 @@ let json_of_db (db, params) =
 *)
 let json_of_table ((db, params), name, row) =
   "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
-  "\",row:\"" ^ Inferencetypes.string_of_datatype (`Record row) ^ "\"}}"
+  "\",row:\"" ^ Types.string_of_datatype (`Record row) ^ "\"}}"
 
 let escape_string = String.escaped
 

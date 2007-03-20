@@ -80,7 +80,7 @@ let read_and_optimise_program prelude typenv filename =
           ((measure "parse" (Parse.parse_file Parse.program)) filename)))
               
 let read_and_optimise_program prelude env arg 
-    : Inferencetypes.typing_environment * Syntax.expression list 
+    : Types.typing_environment * Syntax.expression list 
   = 
   if Settings.get_value cache_programs then
     Loader.read_file_cache arg

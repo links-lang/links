@@ -12,31 +12,31 @@ exception Type_error of (Syntax.position * string)
 exception RichSyntaxError of synerrspec
 
 type expression = Syntax.expression
-(*(Syntax.position * Inferencetypes.datatype * Syntax.label option) Syntax.expression'*)
+(*(Syntax.position * Types.datatype * Syntax.label option) Syntax.expression'*)
 
 val mistyped_application : Syntax.position ->
-  (expression * Inferencetypes.datatype) ->
-  (expression * Inferencetypes.datatype) ->
-  (expression * Inferencetypes.datatype) option ->
+  (expression * Types.datatype) ->
+  (expression * Types.datatype) ->
+  (expression * Types.datatype) option ->
   'a
                
 val mistyped_union : Syntax.position ->
   expression ->
-  Inferencetypes.datatype ->
+  Types.datatype ->
   expression ->
-  Inferencetypes.datatype ->
+  Types.datatype ->
   'a
 
 val mistype : Syntax.position ->
-  expression * Inferencetypes.datatype ->
-  Inferencetypes.datatype ->
+  expression * Types.datatype ->
+  Types.datatype ->
   'a              
 
 val nested_def : Syntax.position -> string -> 'a
   
   
 val letrec_nonfunction : Syntax.position -> 
-  (expression * Inferencetypes.datatype) ->
+  (expression * Types.datatype) ->
   'a
 
 val invalid_name : Syntax.position -> string -> string -> 'a

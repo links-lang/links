@@ -2,7 +2,7 @@
 open Num
 open List
 
-open Inferencetypes
+open Types
 open Syntax
 open Utility
 
@@ -40,7 +40,7 @@ end
 
 class virtual database = object
   method virtual driver_name : unit -> string
-  method virtual equal_types : Inferencetypes.datatype -> db_field_type -> bool
+  method virtual equal_types : Types.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
   method make_insert_query : (string * string list * string list list) -> string =
@@ -139,7 +139,7 @@ type unop = MkColl
 let string_of_unop = Show_unop.show
 
 type comparison = Syntax.comparison deriving (Typeable, Show, Pickle, Eq, Shelve)
-type binop = [ `Union | `RecExt of string | `MkTableHandle of Inferencetypes.row | comparison]
+type binop = [ `Union | `RecExt of string | `MkTableHandle of Types.row | comparison]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string
@@ -172,7 +172,7 @@ and string_of_item : xmlitem -> string =
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
 
-type table = (database * string) * string * Inferencetypes.row
+type table = (database * string) * string * Types.row
    deriving (Show, Pickle, Eq, Typeable, Shelve)
 
 type primitive_value = [

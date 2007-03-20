@@ -56,7 +56,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
        (fun _ ->
           iter (fun (n, k) ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Inferencetypes.string_of_datatype (snd k)))
+                         n (Types.string_of_datatype (snd k)))
           Library.type_env),
      "list builtin functions and values");
 
@@ -67,7 +67,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
     ((fun ((_, (typeenv, _)) as envs) _ ->
         iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
-                       v (Inferencetypes.string_of_datatype (snd k)))
+                       v (Types.string_of_datatype (snd k)))
           (filter (not -<- (flip mem_assoc Library.type_env) -<- fst) typeenv);
         envs),
     "display the current type environment");
@@ -119,9 +119,9 @@ let run_tests () =
 let print_result rtype result = 
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
-		   Inferencetypes.with_mailbox_typing (Settings.get_value(Inferencetypes.show_mailbox_annotations))
+		   Types.with_mailbox_typing (Settings.get_value(Types.show_mailbox_annotations))
 		     (fun () -> 
-			" : "^ Inferencetypes.string_of_datatype rtype)
+			" : "^ Types.string_of_datatype rtype)
                  else "")
 
 (** type, optimise and evaluate a list of expressions *)
@@ -166,7 +166,7 @@ let rec interact envs =
     interact (evaluate_replitem (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
 
 let concat_envs (valenv1, typingenv1) (valenv2, typingenv2) =
-  (valenv1 @ valenv2, Inferencetypes.concat_environment typingenv1 typingenv2)
+  (valenv1 @ valenv2, Types.concat_environment typingenv1 typingenv2)
       
 let run_file prelude envs filename = 
   Settings.set_value interacting false;
@@ -231,7 +231,7 @@ let _ =
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 
          (stdvalenv @ prelude_compiled,
-          Inferencetypes.concat_environment stdtypeenv prelude_types));
+          Types.concat_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in_stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)

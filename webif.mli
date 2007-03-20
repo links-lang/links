@@ -2,6 +2,6 @@
 
 val serve_request : 
   Syntax.expression list ->
-  (Result.environment * Inferencetypes.typing_environment) -> 
+  (Result.environment * Types.typing_environment) -> 
   string -> 
   unit

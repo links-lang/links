@@ -622,7 +622,7 @@ let rec generate : 'a expression' -> code =
                                        Dict [("db", Var "__db");
                                              ("name", Var "__name");
                                              ("row",
-                                              strlit (Inferencetypes.string_of_datatype (readtype)))])]))]))]))
+                                              strlit (Types.string_of_datatype (readtype)))])]))]))]))
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 

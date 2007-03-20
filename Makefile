@@ -60,7 +60,7 @@ SOURCES = $(OPC)                		\
           rewrite.ml            		\
           performance.ml        		\
           graph.ml              		\
-          inferencetypes.mli inferencetypes.ml 	\
+          types.mli types.ml 	\
           query.mli query.ml          		\
           sql.mli sql.ml               		\
           syntax.mli syntax.ml        		\

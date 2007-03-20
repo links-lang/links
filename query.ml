@@ -58,7 +58,7 @@ and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_renamed : string;
               name : string;
               renamed : string; (* TBD: call this `alias' *)
-              col_type : Inferencetypes.datatype}
+              col_type : Types.datatype}
 and col_or_expr = (column, expression) either
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 (* Simple accessors *)

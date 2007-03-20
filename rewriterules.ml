@@ -28,7 +28,7 @@ type simpleExpr = [
 |`For    of pat * simpleExpr * simpleExpr
 |`Where  of baseexpr * simpleExpr
 |`Let    of name * baseexpr * simpleExpr
-|`Table  of (name * Inferencetypes.datatype) list * string
+|`Table  of (name * Types.datatype) list * string
 |`Return of baseexpr]
 type expr = [
 |`Take of num * expr
@@ -339,10 +339,10 @@ struct
                           debug "successfully compiled comprehension";
                           `For ((List.map (fun (field, fname) -> (field.Env.label, fname)) fieldinfo), s, t)
                       end
-                | t -> failwith ("comprehension source: wrong inner type : " ^Inferencetypes.Show_datatype.show t);
+                | t -> failwith ("comprehension source: wrong inner type : " ^Types.Show_datatype.show t);
               end
           | t -> 
-              debug ("comprehension source: wrong type : " ^Inferencetypes.Show_datatype.show t);
+              debug ("comprehension source: wrong type : " ^Types.Show_datatype.show t);
               uncompilable e
         end
 
@@ -359,7 +359,7 @@ struct
             t ->
               let fields = (match t with
                               | `Application ("List", [`Record (fields,_)]) -> fields
-                              | s -> failwith ("unexpected type:"^Inferencetypes.Show_datatype.show s)) in
+                              | s -> failwith ("unexpected type:"^Types.Show_datatype.show s)) in
               (`Table (present_fields fields, th_var))
           | _ -> 
               debug "could not compile table query";
