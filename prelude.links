@@ -242,7 +242,7 @@ fun dropWhile(pred, list) {
 # truncate :: Float -> Int
 
 
-# options
+# Option types
 typename Maybe (a) = [|Nothing | Just:a|];
 
 sig isJust : Maybe (a) -> Bool
@@ -519,6 +519,9 @@ fun forms(fs) {
 sig inputInt : Form(Int)
 var inputInt = input @@@ pure(stringToInt);
 
+sig inputFloat : Form(Float)
+var inputFloat = input @@@ pure(stringToFloat);
+
 sig textarea : String -> Form (String)
 fun textarea(value) {
    nextName >>= fun (name) {
@@ -587,29 +590,40 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-
-sig option : (a,String) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
-fun option ((a,b)) {
+sig preludeOption : ((a,String), a) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
+fun preludeOption ((a,b), default) {
+   var selectedAttr = if (default == a) "SELECTED" else "";
    nextName >>= fun (name) {
-   retern (<option value="{name}">{stringToXml(b)}</option>,
+   retern (<option value="{name}" selected="{selectedAttr}">{stringToXml(b)}</option>,
            (fun (k) (key) { if (key == name) a::k(key) else k(key) }))
 }}
 
 
-sig options : [(a,String)] -> State(Names,(Xml, (String) -> [a]))
-fun options(items) {
+sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
+fun preludeOptions(items, default) {
   switch (items) {
      case [] -> retern (<#/>, fun (_) { [] })
-     case item::items -> option(item) >>= fun (xml, r1) {
-                         options(items) >>= fun (morexml, r2) {
+     case item::items -> preludeOption(item, default) >>= fun (xml, r1) {
+                         preludeOptions(items, default) >>= fun (morexml, r2) {
                          retern (xml ++ morexml, r1(r2))}}
   }
 }
 
 sig choice : [(a,String)] -> Form (a)
 fun choice (items) {
+  var (default, _) = hd(items);
   nextName >>= fun (name) {
-     options(items) >>= fun (xml, retrieve) {
+     preludeOptions(items, default) >>= fun (xml, retrieve) {
+        retern (<select name="{name}">{xml}</select>,
+                fun (env) { hd(retrieve(assoc(name, env))) })
+     }
+  }
+}
+
+sig choiceDefault : ([(a,String)], a) -> Form (a)
+fun choiceDefault (items, default) {
+  nextName >>= fun (name) {
+     preludeOptions(items, default) >>= fun (xml, retrieve) {
         retern (<select name="{name}">{xml}</select>,
                 fun (env) { hd(retrieve(assoc(name, env))) })
      }
@@ -618,8 +632,9 @@ fun choice (items) {
 
 sig choices : [(a,String)] -> Form ([a])
 fun choices (items) {
+  var default = first(hd(items));
   nextName >>= fun (name) {
-     options(items) >>= fun (xml, retrieve) {
+     preludeOptions(items, default) >>= fun (xml, retrieve) {
         retern (<select name="{name}" multiple="multiple">{xml}</select>,
                 fun (env) { concat(map(retrieve, assocAll(name,env))) })
 
