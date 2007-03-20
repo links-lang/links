@@ -130,7 +130,7 @@ docs-clean:
 	cd doc && make clean
 
 cache-clean:
-	-rm prelude.links.cache
+	-rm -f prelude.links.cache
 
 byte-code: cache-clean
 
