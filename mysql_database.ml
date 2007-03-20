@@ -246,7 +246,7 @@ class mysql_database spec = object
   method driver_name () = "mysql"
   method exec query : dbresult = 
     try
-      new mysql_result (exec connection query)connection
+      new mysql_result (exec connection query) connection
     with
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)

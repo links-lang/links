@@ -41,8 +41,8 @@ fun editDef(def) client {
       <tr><td>Word:</td><td>
        <input l:name="w" value="{def.word}"/></td></tr>
       <tr><td>Meaning:</td><td>
-       <textarea l:name="m" rows="5" cols="80">
-        {stringToXml(def.meaning)}</textarea></td></tr>
+       <textarea l:name="m" rows="5" cols="80">{
+        stringToXml(def.meaning)}</textarea></td></tr>
      </table>
      <button type="submit">Update</button>
      <button l:onclick="{redraw(formatDef(def), def.id)}" type="button">
