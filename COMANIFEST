@@ -1,18 +1,22 @@
 # this file lists files in the repository, but not in the distribution
-BUGS
 COMANIFEST
+RELEASE-CHECKLIST
 
 doc/quick-help.pod
+doc/grammar.aux
+doc/grammar.log
+doc/grammar.toc
 
 examples/extras.js
 examples/document-replace.links
 examples/draw.links
 examples/extensible-case.links
-examples/forms.links
 examples/funtests.links
 examples/login-flow.cgi
 examples/mandelopt.links
+examples/mandelopt.html
 examples/mandeltest.links
+examples/multiple.links
 examples/nbe.links
 examples/regex.links
 examples/sleep.links
@@ -32,6 +36,7 @@ examples/tofix/new-dom-api.links
 examples/tofix/token-ring-client.links
 examples/tofix/token-ring-server.links
 examples/tofix/xml-access.links
+examples/vali-date.links
 examples/varrec.links
 examples/xml_typing.links
 

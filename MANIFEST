@@ -29,9 +29,11 @@ getopt.ml
 getopt.mli
 
 lite_database.ml
+lite3_database.ml
 mysql_database.ml
 pg_database.ml
 
+callgraph.ml
 utility.ml
 settings.mli
 settings.ml
@@ -40,8 +42,6 @@ debug.ml
 rewrite.ml
 performance.ml
 graph.ml
-type_basis.mli
-type_basis.ml
 types.mli
 types.ml
 query.mli
@@ -51,8 +51,6 @@ sql.ml
 sql_transform.mli
 syntax.mli
 syntax.ml
-inferencetypes.mli
-inferencetypes.ml
 sugartypes.mli
 sugar.mli
 sugar.ml
@@ -87,29 +85,60 @@ links.ml
 linksregex.ml
 regex.ml
 test.ml
+loader.ml
+performance.mli
+rewriteexamples.ml
+rewriterules.ml
+webif.mli
 
+# deriving stuff
 deriving/
 deriving/lib
 deriving/lib/bounded.ml
+deriving/lib/bounded.mli
+deriving/lib/dynmap.ml
+deriving/lib/dynmap.mli
 deriving/lib/enum.ml
+deriving/lib/enum.mli
+deriving/lib/eq.ml
+deriving/lib/eq.mli
 deriving/lib/functor.ml
+deriving/lib/functor.mli
 deriving/lib/monad.ml
+deriving/lib/monad.mli
 deriving/lib/pickle.ml
+deriving/lib/pickle.mli
 deriving/lib/primitives.ml
-deriving/lib/rewriter.ml
+deriving/lib/primitives.mli
 deriving/lib/quickcheck.ml
+deriving/lib/rewriter.ml
+deriving/lib/rewriter.mli
+deriving/lib/shelve.ml
+deriving/lib/shelvehelper.ml
+deriving/lib/shelvehelper.mli
 deriving/lib/show.ml
+deriving/lib/show.mli
+deriving/lib/typeable.ml
+deriving/lib/typeable.mli
 deriving/lib/util.ml
+deriving/lib/util.mli
 deriving/lib/Makefile
 deriving/syntax
-deriving/syntax/enum_class.ml
-deriving/syntax/pickle_class.ml
 deriving/syntax/bounded_class.ml
-deriving/syntax/show_class.ml
-deriving/syntax/Makefile
 deriving/syntax/deriving.ml
+deriving/syntax/enum_class.ml
+deriving/syntax/eq_class.ml
 deriving/syntax/functor_class.ml
+deriving/syntax/pickle_class.ml
 deriving/syntax/rewriter_class.ml
+deriving/syntax/shelve_class.ml
+deriving/syntax/show_class.ml
+deriving/syntax/typeable_class.ml
+deriving/syntax/Makefile
+deriving/tests
+deriving/tests/Makefile
+deriving/tests/eqtest.ml
+deriving/tests/notes.txt
 deriving/Makefile
 
 lib/
@@ -130,6 +159,7 @@ tests/conditionals.tests
 tests/continuations.tests
 tests/database.tests
 tests/functions.tests
+tests/library.tests
 tests/messages.tests
 tests/numbers.tests
 tests/patterns.tests
@@ -144,16 +174,21 @@ tests/xml.tests
 
 examples
 examples/index.html
+examples/buttons.links
+examples/citations.links
+examples/crop.links
+examples/date.links
 examples/dictionary
 examples/dictionary/dict-suggest.links
 examples/dictionary/dict-suggest-lite.links
+examples/dictionary/dict-suggest-update.links
 examples/dictionary/create-table.sql
 examples/dictionary/create-table-mysql.sql
 examples/dictionary/README
-examples/crop.links
 examples/draggable.links
 examples/draggable-db.links
 examples/factorial.links
+examples/forms-test.links
 examples/initialise-list.links
 examples/insert-factorials.links
 examples/mandelbrot.links
