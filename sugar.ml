@@ -1201,7 +1201,9 @@ module Desugarer =
                                 `U (lookup_pos fpos), 
                                 true)
                            | expr, epos -> 
-                               (`Variable "__", pos), desugar (expr, epos), `U (lookup_pos epos), false) es in
+                               (`HasType ((`Variable "__", pos), Types.unit_type), pos), 
+                               desugar (expr, epos),
+                               `U (lookup_pos epos), false) es in
                polylets es (desugar exp)
            | Foreign (language, name, datatype) -> 
                Alien (language, name, desugar_assumption (generalize datatype), pos)
