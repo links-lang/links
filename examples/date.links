@@ -45,5 +45,5 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
 
 <html>
    <h1>Date:</h1>
-   {render(showBookingInformation)(travelForm)}
+   {render(travelForm, showBookingInformation)}
 </html>

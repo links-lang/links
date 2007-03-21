@@ -144,7 +144,7 @@ sig showForm : TravelRecord -> Xml
 fun showForm(travelRecord) {
   <html>
     <h1>Dates with defaults and validation</h1>
-    {render(showBookingInformation)(travelForm(travelRecord))}
+    {render(travelForm(travelRecord), showBookingInformation)}
   </html>
 }
 

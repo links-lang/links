@@ -1,11 +1,11 @@
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(sum)(forms(replicate(n, inputInt)))}
+    {render(forms(replicate(n, inputInt)), sum)}
   </html> 
 }
 
 <html>
    <h1>Multiple</h1>
-   Enter numbers: {render(enterNumbers)(inputInt)}
+   Enter numbers: {render(inputInt, enterNumbers)}
 </html>

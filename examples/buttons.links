@@ -21,4 +21,5 @@ fun run ((action=action, l=l, r=r)) {
    </html>
 }
 
-render(run)(f)
+render(f, run)
+

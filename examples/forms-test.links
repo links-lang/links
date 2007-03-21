@@ -60,4 +60,4 @@ fun renderer (formData) {
    <#> Order Cancelled. Thanks for visiting! </#>
 }
 
-renderMultipart(renderer)(theForm)
+renderMultipart(theForm, renderer)
