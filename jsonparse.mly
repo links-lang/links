@@ -34,11 +34,6 @@ object_:
                                             (Result.unbox_string (List.assoc "name" bs),
                                              Result.unbox_string (List.assoc "args" bs)) in
                                           `Database (Result.db_connect driver params) 
-(*
-                            | ["_params", params; "_driver", driver] -> `Database (Result.db_connect
-                                                                                     (Result.unbox_string driver)
-                                                                                     (Result.unbox_string params))
-*)
                                     | _ -> failwith ("jsonparse: database value must be a record")
                                 end
                             | ["_table", t] ->
@@ -63,6 +58,42 @@ object_:
                                           `Table (db, name, row)
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
+                            | ["_xml", t] ->
+                                let unbox_string_or_char r =
+                                  match r with
+                                    | `List _ -> Result.unbox_string r
+                                    | `Char c -> String.make 1 c
+                                    | _ -> failwith ("Cannot unbox '"^ Result.string_of_result r ^"' as a string") in
+                                  begin
+                                    match t with
+                                      | `List [node_type; s] when (Result.unbox_string node_type = "TEXT") ->
+                                          `XML (Result.Text (unbox_string_or_char s))
+                                      | `List [node_type; tag; attrs; body]
+                                          when (Result.unbox_string node_type = "ELEMENT") ->
+                                          let tag = unbox_string_or_char tag in
+                                          let attrs =
+                                            match attrs with
+                                              | `Record attrs -> attrs
+                                              | _ -> failwith ("jsonparse: xml attributes should be an attribute record") in
+                                            let attrs =
+                                              List.fold_left
+                                                (fun attrs (label, value) ->
+                                                   Result.Attr (label, unbox_string_or_char value) :: attrs)
+                                                [] attrs in
+                                              let body =
+                                                match body with
+                                                  | `List body -> List.map
+                                                      (function 
+                                                         | `XML body -> body
+                                                         | _ -> failwith ("jsonparse: xml body should be a list of xmlitems"))
+                                                        body
+                                                  | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
+                                              in
+                                                `XML (Result.Node (tag, attrs @ body))
+                                      | _ ->
+                                          failwith ("jsonparse: xml should be either a text node or an element node. Got: "
+                                                    ^ Result.string_of_result t)
+                                  end
                             | _ -> `Record (List.rev $2)
                         }
 
@@ -90,7 +121,6 @@ value:
 string:
 | STRING                             { if String.length $1 == 1 then Result.char (String.get $1 0)
                                        else Result.box_string $1 }
-
 id:
 | STRING                             { $1 }
 
