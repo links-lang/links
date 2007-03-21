@@ -1458,7 +1458,7 @@ C<@set> directive:
 Settings can also be configured using a configuration file. To select
 a configuration file, use the command-line option C<--config>:
 
-    $ links --config=E<lt>filenameE<gt>
+    $ links --config=<filename>
 
 A configuration file is just a set of lines, each of which contains a
 setting formatted as 
