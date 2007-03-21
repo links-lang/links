@@ -21,7 +21,7 @@ Trailing semicolon means "ignore the final value" [1]
 stdout : 2 : Int
 
 Trailing semicolon means "ignore the final value" [2]
-{ 2; }
+{ ignore(2); }
 stdout : () : ()
 
 Trailing semicolon means "ignore the final value" [3]
@@ -29,7 +29,7 @@ fun () { 2 }
 stdout : fun : () -> Int
 
 Trailing semicolon means "ignore the final value" [4]
-fun () { 2; }
+fun () { ignore(2); }
 stdout : fun : () -> ()
 
 Type annotations
