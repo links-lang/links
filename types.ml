@@ -1174,3 +1174,43 @@ let is_positive = is_positive TypeVarSet.empty
 let is_positive_row = is_positive_row TypeVarSet.empty
 let is_positive_field_env = is_positive_field_env TypeVarSet.empty
 let is_positive_row_var = is_positive_row_var TypeVarSet.empty
+
+
+let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
+  let module M = IntMap in
+  let empties = M.empty, M.empty in
+  let union2 a b = M.fold M.add a b in
+  let union2both (l,r) (ll,rr) = (union2 l ll, union2 r rr) in
+  let union = List.fold_left union2both empties in
+  let rec makeEnv recvars = function
+      | `Not_typed
+      | `Primitive _             -> empties
+      | `RigidTypeVar var        -> let l,r = empties in
+          (M.add var (InferenceTypeOps.fresh_rigid_type_variable ()) l, r)
+      | `TypeVar var             -> let l, r = empties in
+          (M.add var (InferenceTypeOps.fresh_type_variable ()) l, r)
+      | `Function (f, m, t)      -> union [makeEnv recvars f; makeEnv recvars m; makeEnv recvars t]
+      | `Record row              
+      | `Variant row             -> makeEnvR recvars row
+      | `Table (l,r)             -> union [makeEnv recvars l; makeEnv recvars r]
+      | `Recursive (l, _) when List.mem l recvars -> empties
+      | `Recursive (l, b)        -> makeEnv (l::recvars) b
+      | `Application (_, ds)     -> union (List.map (makeEnv recvars) ds)
+      | `MetaTypeVar point       -> makeEnv recvars (Unionfind.find point)
+  and makeEnvR recvars ((field_env, row_var):row) =
+    let field_vars = 
+      FieldEnv.fold (fun _ t envs ->
+                       match t with 
+                           `Present t -> union [envs; makeEnv recvars t]
+                         | `Absent -> envs) field_env empties
+    and row_vars = 
+      match row_var with
+        | `RigidRowVar var
+        | `RowVar (Some var) -> let l, r = empties in
+            (l, M.add var (InferenceTypeOps.fresh_row_variable ()) r)
+        | `RowVar None -> empties
+        | `RecRowVar (l, _) when List.mem l recvars -> empties
+        | `RecRowVar (l, row) -> makeEnvR (l::recvars) row
+        | `MetaRowVar point -> makeEnvR recvars (Unionfind.find point)
+    in union [field_vars; row_vars]
+  in makeEnv []

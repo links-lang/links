@@ -202,3 +202,5 @@ val is_positive : int -> datatype -> bool
 val is_positive_row : int -> row -> bool
 val is_positive_field_env : int -> field_spec_map -> bool
 val is_positive_row_var : int -> row_var -> bool
+
+val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t

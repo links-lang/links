@@ -95,6 +95,25 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
                 (fst ((Interpreter.run_program libraries []) exprs), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
+
+    "withtype",
+    ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
+        match args with 
+          [] -> prerr_endline "syntax: @withtype type"; envs
+          | _ -> let _,t = Parse.parse_string Parse.datatype (String.concat " " args) in
+              ListLabels.iter tenv
+                ~f:(fun (id,(_,t')) -> 
+                      if id <> "_MAILBOX_" then
+                        (try begin
+                           let ttype = Types.string_of_datatype t' in
+                           let fresh_envs = Types.make_fresh_envs t' in
+                           let t' = Inference.instantiate_datatype fresh_envs t' in 
+                             Inference.unify alias_env (t,t');
+                             Printf.fprintf stderr " %s : %s\n" id ttype
+                         end with _ -> ()))
+              ; envs),
+     "search for functions that match the given type");
+
   ]
 
 let execute_directive (name, args) (valenv, typingenv) = 
