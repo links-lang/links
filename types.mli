@@ -180,8 +180,6 @@ val lookup : string -> environment -> assumption
 
 (* mailboxes *)
 val show_mailbox_annotations : bool Settings.setting
-val using_mailbox_typing : unit -> bool
-val with_mailbox_typing : bool -> (unit -> 'a) -> 'a
 
 (* pretty printing *)
 val string_of_datatype : datatype -> string

@@ -621,34 +621,6 @@ let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", tru
 (* pretty-print type vars as raw numbers rather than letters *)
 let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
 
-(*
-  [HACK]
-  used to temporarily disable mailbox typing for two-pass type-checking
-*)
-let use_mailbox_typing = ref true
-
-(* return true if mailbox typing is currently switched on *)
-let using_mailbox_typing () = !use_mailbox_typing
-
-(* call f()
-   with mailbox typing switched on or off according to
-   the value of b
-   (guarantees that the state of mailbox typing is
-   restored afterwards)
-*)
-let with_mailbox_typing b f =
-  let oldb = using_mailbox_typing ()
-  in
-    try
-      use_mailbox_typing := b;
-      let result = f() in
-	use_mailbox_typing := oldb;
-	result
-    with e ->
-      use_mailbox_typing := oldb;
-      raise e
-
-
 (* Type printers *)
 
 exception Not_tuple
@@ -723,7 +695,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
                         string_of_datatype' (TypeVarSet.add var rec_vars) vars body
                 | t -> sd t
             end
-        | `Function (f, mailbox_type, t) when using_mailbox_typing () ->
+        | `Function (f, mailbox_type, t) ->
 	    let arrow =
 	      match concrete_type mailbox_type with
 	        | `Application ("Mailbox", [t]) ->
@@ -737,12 +709,6 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
 	         | _ ->
 		     "(" ^ sd f ^ ") "^ arrow ^
 		       " " ^ sd t)
-        | `Function (f, _, t) ->
-	    (match concrete_type f with
-	       | `Record _ ->
-	           sd f ^ " -> " ^ sd t
-	       | _ ->
-	           "(" ^ sd f ^ ") -> " ^ sd t)
         | `Record row      ->
             let row = unwrap row in
               (if is_tuple row then string_of_tuple row

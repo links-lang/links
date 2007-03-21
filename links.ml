@@ -138,9 +138,7 @@ let run_tests () =
 let print_result rtype result = 
   print_string (Result.string_of_result result);
   print_endline (if Settings.get_value(printing_types) then
-		   Types.with_mailbox_typing (Settings.get_value(Types.show_mailbox_annotations))
-		     (fun () -> 
-			" : "^ Types.string_of_datatype rtype)
+		   " : "^ Types.string_of_datatype rtype
                  else "")
 
 (** type, optimise and evaluate a list of expressions *)
@@ -236,7 +234,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\ | |  V  /|. `-.
  | |___| | |\\ \\  |     \\ _`.  |
  |_____|_|_| \\___|__|\\__|____/
-Welcome to Links version 0.3.7 (Gogarloch)", `System)
+Welcome to Links version 0.4 (Crostorfyn)", `System)
 
 (** main *)
 let _ =

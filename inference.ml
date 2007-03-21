@@ -402,14 +402,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		          Unionfind.change point t;
 		       *)
 	         | t' -> unify' rec_env (t, t'))
-          | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto)
-	      when Types.using_mailbox_typing () ->
+          | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
               (unify' rec_env (lm, rm);
                unify' rec_env (lfrom, rfrom);
                unify' rec_env (lto, rto))
-          | `Function (lfrom, _, lto), `Function (rfrom, _, rto) ->
-              unify' rec_env (lfrom, rfrom);
-              unify' rec_env (lto, rto)
           | `Record l, `Record r -> unify_rows' rec_env (l, r)
           | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
           | `Table (lr, lw), `Table (rr, rw) ->
@@ -990,10 +986,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let _ =
 	try unify (`Function(p_type, mb_type, return_type), f_type)
 	with Unify_failure _ ->
-          if Types.using_mailbox_typing () then
-            mistyped_application pos (f, f_type) (p, type_of_expression p) (Some (m, mb_type))
-          else
-            mistyped_application pos (f, f_type) (p, type_of_expression p) None
+          mistyped_application pos (f, f_type) (p, type_of_expression p) (Some (m, mb_type))
       in
 	Apply (f, p, `T (pos, return_type, None))
   | Condition (if_, then_, else_, `U pos) ->
@@ -1225,10 +1218,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
            could use instead. 
            (FIXME: What does this mean? --eekc 1/07)*)
       let mailboxtype = 
-	if Types.using_mailbox_typing () then
-          instantiate env "_MAILBOX_" 
-        else
-          ITO.fresh_type_variable () in
+          instantiate env "_MAILBOX_" in
       let conttype =
         `Function (contrettype, mailboxtype, anytype) in
       let argtype = `Function (conttype, mailboxtype, contrettype) in
@@ -1433,30 +1423,12 @@ let check_for_duplicate_defs
 (* two pass typing: yuck! *)
 let type_program typing_env expressions = 
   check_for_duplicate_defs typing_env expressions;
-  let _ =
-    (* without mailbox parameters *)
-    Debug.if_set (show_typechecking) (fun () -> "Typechecking program without mailbox parameters");
-    Types.with_mailbox_typing false
-      (fun () ->
-	 type_program typing_env expressions)
-  in
-    (* with mailbox parameters *)
-    Debug.if_set (show_typechecking) (fun () -> "Typechecking program with mailbox parameters");
-    Types.with_mailbox_typing true
-      (fun () ->
-	 type_program typing_env expressions)
+  (* with mailbox parameters *)
+  Debug.if_set (show_typechecking) (fun () -> "Typechecking program...");
+  type_program typing_env expressions
 
 let type_expression typing_env expression =
   check_for_duplicate_defs typing_env [expression];
-  let _ =
-    (* without mailbox parameters *)	
-    Debug.if_set (show_typechecking) (fun () -> "Typechecking expression without mailbox parameters");
-    Types.with_mailbox_typing false
-      (fun () ->
-	 type_expression typing_env expression)
-  in
-    (* with mailbox parameters *)
-    Debug.if_set (show_typechecking) (fun () -> "Typechecking expression with mailbox parameters");
-    Types.with_mailbox_typing true
-      (fun () ->
-	 type_expression typing_env expression)
+  (* with mailbox parameters *)
+  Debug.if_set (show_typechecking) (fun () -> "Typechecking expression...");
+  type_expression typing_env expression
