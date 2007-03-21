@@ -539,11 +539,9 @@ table. This feature will be expanded in a future release.
 
 =head2 Tables
 
-As of version 0.3 tables and databases are first-class. Databases must
-only be declared in server-side contexts; otherwise a run-time error
-will result. To declare a database called C<factorials> using the
-C<mysql> driver, connecting to the default port as the user C<web>
-write:
+As of version 0.3 tables and databases are first-class. To assign to
+the variable C<db> a database called "factorials" using the C<mysql>
+driver, connecting to the default port as the user C<web> write:
 
   var db = database "factorials" "mysql" ":3306:web:";
 
@@ -558,33 +556,53 @@ the form:
 
   host:port:user:password
 
-To declare the table C<factorials> with fields C<i> and C<f> both of type
-C<Int> associated with the database C<db> write:
+When a database is evaluated on the server a connection is
+automatically opened if one is not already open.
+
+To assign to the variable C<factorials> the table "factorials" with
+fields C<i> and C<f> both of type C<Int> associated with the database
+C<db> write:
 
   var factorials = table "factorials" with (i : Int, f : Int) from db;
 
-The variable C<factorials> has type C<TableHandle(i:Int, f:Int)>. A table
-can be coerced to a list using the C<asList> function:
+The variable C<factorials> has type C<TableHandle((i:Int,
+f:Int),(i:Int, f:Int))>.  The first argument to C<TableHandle> is the
+type for reading from the table and the second is the type for
+writing. In this instance they are the same.
 
-  asList : ((TableHandle(|a)) -> [(|a)]
+A table can be coerced to a list using the C<asList> function:
+
+  asList : TableHandle(r, w) -> [r]
 
 (Special note: the argument to C<asList> must be an expression of
 concrete table type--that is, the compiler must be able to determine
 the type of the table as declared by a C<table> keyword, at compile
 time. For example, the expression C<fun (t) { asList(t) }> does not
 meet this restriction because the compiler cannot determine the fields
-of C<t> at compile time.)
+of C<t> at compile time. This is a limitation that will be fixed in
+the next release of Links.)
 
 To avoid writing C<asList> in a C<for> comprehension, you may use the
 special C<E<lt>--> shorthand. Inside the generator of a comprehension,
-C<r <-- t> is syntactic sugar for C<r <- asList(t)>. So with the above
+C<z <-- t> is syntactic sugar for C<z <- asList(t)>. So with the above
 declarations you may write
 
-  for (r <-- factorials)
+  for (z <-- factorials)
    where (i <= 20)
-    [r]
+    [z]
 
 to extract rows from the C<factorials> table.
+
+Tables now have preliminary support for constraints. Currently the
+only constraint that can be applied is to define some fields as
+readonly. To assign to the variable C<t> the table "people" with
+fields C<id> of type Int and C<name> of type String where C<id> is
+readonly, write:
+
+  var t = table "people" with (id:Int, name:String) where id readonly from db;
+
+The variable C<t> has type C<TableHandle((id:Int, name:String),
+(name:String))>, as the C<id> field is C<readonly>.
 
 =head2 Database modifications
 
