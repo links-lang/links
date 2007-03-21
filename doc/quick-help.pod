@@ -251,10 +251,13 @@ Here we assume that nothing other than a camel has humps.
 
 =head2 XML Quasiquotes
 
-Also called "quasis." Introduced by an XML start-tag such as
-C<E<lt>fooE<gt>>. Inside a quasi, Links code enclosed within braces 
-{ } will be evaluated to an XML forest which is included when the quasi
-is evaluated.
+Also called "quasis," these are the principal way to embed XML values
+within your program. A quasi is introduced by an XML start-tag such as
+C<E<lt>fooE<gt>>. Inside a quasi, you may escape from the XML mode
+back into Links syntax, by enclosing the Links code within braces { }.
+When the quasi is evaluated, all its escaped expressions will be
+evaluated, and their values will be embedded within the constructed
+XML value. For example:
 
     <html>
       <ul>
@@ -267,28 +270,26 @@ Within an XML quasi, a variety of special features can be used to
 handle browser events. See L<Handling User Actions>, below, for more
 information on these features.
 
-To introduce a forest of XML nodes that have no mutually enclosing XML
-element, use the special C<E<lt>#E<gt>...E<lt>/#E<gt>> syntax:
+To introduce a I<forest> of XML nodes that have no mutually enclosing
+XML element, use the special C<E<lt>#E<gt>...E<lt>/#E<gt>> syntax:
 
     <#>
       Name: <b>{name}</b>
     </#>
 
-Here a sequence of an XML text node and a B element are included as a
-single expression. This value can be included directly in other XML
-quasis:
+Here, a I<sequence> of nodes (first, an XML text node, and then a <b>
+element) becomes as a single expression. This value can be included
+directly in other XML quasis:
 
-    var nameLine = <#>
-      Name: <b>{name}</b>
-    </#>;
+    var nameLine = <#> Name: <b>{name}</b> </#>;
     <div>
       {nameLine} <br />
-      (c) 2006 Links Team, University of Edinburgh
+      &copy; 2005-2007 Links Team, University of Edinburgh
     </div>
 
 =head2 Forms
 
-Links provides two special attributes for programming with HTML forms,
+Links provides two special attributes for programming with HTML forms:
 C<l:name>, which binds the value of an input field to a variable, and
 C<l:onsubmit>, with which you can supply an expression to be evaluated
 when the form is submitted.
@@ -298,7 +299,7 @@ when the form is submitted.
       <input l:name="{personName}"/>
    </form>
 
-The "personName" variable bound by the C<l:name> attribute is in scope in
+The "C<personName>" variable bound by the C<l:name> attribute is in scope in
 the C<l:onsubmit> expression, which may also contain references to
 other variables in the enclosing scope.  The values of these variables
 are passed from form to form automatically.
@@ -567,12 +568,23 @@ can be coerced to a list using the C<asList> function:
 
   asList : ((TableHandle(|a)) -> [(|a)]
 
-Inside the generator of a C<for> comprehension C<r <-- t> is syntactic
-sugar for C<r <- asList(t)>. So you can write:
+(Special note: the argument to C<asList> must be an expression of
+concrete table type--that is, the compiler must be able to determine
+the type of the table as declared by a C<table> keyword, at compile
+time. For example, the expression C<fun (t) { asList(t) }> does not
+meet this restriction because the compiler cannot determine the fields
+of C<t> at compile time.)
+
+To avoid writing C<asList> in a C<for> comprehension, you may use the
+special C<E<lt>--> shorthand. Inside the generator of a comprehension,
+C<r <-- t> is syntactic sugar for C<r <- asList(t)>. So with the above
+declarations you may write
 
   for (r <-- factorials)
    where (i <= 20)
-   [r]
+    [r]
+
+to extract rows from the C<factorials> table.
 
 =head2 Database modifications
 
@@ -665,22 +677,27 @@ with the types of various values. For example:
 
     links> 1 + 1;;
     2 : Int
+
     links> { var name = "Gallileo"; "Hi, " ++ name };;
     "Hi, Gallileo" : String
+
     links> (42, "The answer");;
     (42, "The answer") : (Int, String)
+
     links> [2, 4, 6, 8];;
     [2, 4, 6, 8] : [Int]
+
     links> (  price = 1.95, drinkName = "Latte" );;
     (price=1.95,drinkName="Latte") : (drinkName:String,price:Float)
+
     links> Red(7);;
     Red(7) : [|Red:Int | a|]
+
     links> Blue(7);;
     Blue(7) : [|Blue:Int | a|]
-    links> [(42, "The answer"),
-            (7, "The number of wonders of the world")];;
-    [(42, "The answer"), (7, "The number of wonders of the world")]
-      : [(Int, String)]
+
+    links> [(42, "The answer"), (7, "The number of wonders of the world")];;
+    [(42, "The answer"), (7, "The number of wonders of the world")] : [(Int, String)]
 
 Note that the type of an integer sum is Int, and the type of a string
 is String. The I<pair> C<(42, "The answer")> has a type that indicates
@@ -692,7 +709,7 @@ elements. Note that I<all elements of a list must be of the same
 type>. This allows you to apply an operation to an arbitary element of
 the list and to know what type it is. If you need to mix different
 types within a list, you can do so by assigning variant tags to
-each. There are a variety of tricks for getting what you want out of a
+each. There is a variety of tricks for getting what you want out of a
 strong type system. See L</"TBD"> for some ideas.
 
 By constrast, elements of a tuple can be of the same or of different
@@ -710,6 +727,16 @@ you a type error:
     links> [2, 4, 6, 8, "Who do we appreciate?"];;
     <stdin>:1: Type error: Couldn't match Int against String
     In expression: [2, 4, 6, 8, "Who do we appreciate?"]
+
+=head2 Base types
+
+The base types offered by Links are
+
+  Bool  Int  Char  Float  Xml  Database
+
+The type C<String> is not really a base type, but rather an alias for
+C<[Char]> (the type for lists of characters). This means that any
+general list operation will work on a C<String>.
 
 =head2 Type annotations
 
