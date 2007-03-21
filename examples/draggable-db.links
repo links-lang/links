@@ -74,8 +74,8 @@ fun main() client {
         case msg -> switch (msg) {
           case Items(items) ->
             save(items);
-            for (var request <- pending)
-              {self()!request; []};
+            ignore(for (var request <- pending)
+                     {self()!request; []})
           case (_:[|Load|Save|]) -> saveItems(msg :: pending)
         }
       }

@@ -73,10 +73,11 @@ fun iterate(colour) client {
   var id = getfreshid(colour);
   var c = canvas (80, 80, colour, id);
   for (var y <- range(-39, 39)) {
+    ignore(
     for (var x <- range(-39,39)) {
       (if (mandelbrot(intToFloat(x)/.40.0, intToFloat(y)/.40.0) == 0) (c ! Point (x+39,y+39))
        else ()); []
-    }; []
+    }); []
   }
 }
 

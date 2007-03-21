@@ -1,12 +1,12 @@
+fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value))}
+
 fun dragging(offsetLeft, offsetTop, left, top, width, height, 
              mdownX, mdownY) client {
   receive {
     case MouseMove(x, y) -> {
       var frame = getNodeById("cropping-frame");
-      domSetStyleAttrFromRef(frame, "left",
-                             intToString(x - mdownX + left));
-      domSetStyleAttrFromRef(frame, "top",
-                             intToString(y - mdownY + top));
+      setStyle(frame, "left", intToString(x - mdownX + left));
+      setStyle(frame, "top", intToString(y - mdownY + top));
 
       var pictureFrame = getNodeById("picture-frame");
 
@@ -16,10 +16,8 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
       var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
 
       var preview = getNodeById("crop-preview");
-      domSetStyleAttrFromRef(preview, "marginTop",
-                             intToString(-(y - mdownY + top - offsetTop)));
-      domSetStyleAttrFromRef(preview, "marginLeft",
-                             intToString(-(x - mdownX + left - offsetLeft)));
+      setStyle(preview, "marginTop", intToString(-(y - mdownY + top - offsetTop)));
+      setStyle(preview, "marginLeft", intToString(-(x - mdownX + left - offsetLeft)));
 
       dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
     }
@@ -49,21 +47,17 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
           case SW -> (x, top, width - (x - left), y-top)
           case SE -> (left, top, x-left, y-top)
         };
-      domSetStyleAttrFromRef(frame, "left", intToString(l-offsetLeft));
-      domSetStyleAttrFromRef(frame, "top", intToString(t));
-      domSetStyleAttrFromRef(frameSizer, "width", intToString(w));
-      domSetStyleAttrFromRef(frameSizer, "height", intToString(h));
+      setStyle(frame, "left", intToString(l-offsetLeft));
+      setStyle(frame, "top", intToString(t));
+      setStyle(frameSizer, "width", intToString(w));
+      setStyle(frameSizer, "height", intToString(h));
 
       var previewFrame = getNodeById("crop-preview-frame");
-      domSetStyleAttrFromRef(previewFrame, "width",
-                             intToString(w));
-      domSetStyleAttrFromRef(previewFrame, "height",
-                             intToString(h));
+      setStyle(previewFrame, "width", intToString(w));
+      setStyle(previewFrame, "height", intToString(h));
       var preview = getNodeById("crop-preview");
-      domSetStyleAttrFromRef(preview, "marginTop",
-                             intToString(-t+offsetTop));
-      domSetStyleAttrFromRef(preview, "marginLeft",
-                             intToString(-l+offsetLeft));
+      setStyle(preview, "marginTop", intToString(-t+offsetTop));
+      setStyle(preview, "marginLeft", intToString(-l+offsetLeft));
 
       resizing(offsetLeft, offsetTop, l, t, w, h, corner)
     }
