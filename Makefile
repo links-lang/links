@@ -126,6 +126,9 @@ fixmes:
 docs:
 	cd doc && make
 
+quick-help:
+	cd doc && make quick-help.html
+
 docs-clean:
 	cd doc && make clean
 
