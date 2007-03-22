@@ -1724,6 +1724,8 @@ This can be used after doing a destructive action (such as updating
 the database) which should not be automatically repeated on a
 subsequent reload.
 
+Currently only works for server-only Links programs.
+
 =item *
 sendSuspend : ((a -> ()) -> Xml) -> a
 
