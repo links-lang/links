@@ -4,9 +4,11 @@ open Utility
 open List
 
 let load_file filename =
+  try 
   let typingenv, exprs = Loader.read_file_cache filename in
 (*   let exprs = map Syntax.labelize exprs in *)
     typingenv, exprs
+  with e -> failwith ("load_file failed with " ^ Errors.format_exception e)
 
 (**
  Whether to run the interactive loop
@@ -169,18 +171,27 @@ let just_optimise parse (_valenv, typingenv) input =
     (lazy (Optimiser.optimise_program (typingenv, exprs))) in
     print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
 
+let make_dotter ps1 = 
+  let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+    fun _ -> 
+      print_string dots;
+      flush stdout
+
 (* Interactive loop *)
-let rec interact envs =
-  let evaluate_replitem parse envs input = 
-    Errors.display ~default:(fun _ -> envs)
-      (lazy
-         (match measure "parse" parse input with 
-           | Left exprs      -> fst (process_one envs exprs)
-           | Right directive -> execute_directive directive envs)
-      )
-  in
-    print_string ps1; flush stdout; 
-    interact (evaluate_replitem (Parse.parse_channel Parse.interactive) envs (stdin, "<stdin>"))
+let interact envs =
+  let rec interact envs =
+    let evaluate_replitem parse envs input = 
+      Errors.display ~default:(fun _ -> envs)
+        (lazy
+           (match measure "parse" parse input with 
+              | Left exprs      -> fst (process_one envs exprs)
+              | Right directive -> execute_directive directive envs))
+    in
+      print_string ps1; flush stdout; 
+      interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
+  in 
+    Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
+    interact envs
 
 let concat_envs (valenv1, typingenv1) (valenv2, typingenv2) =
   (valenv1 @ valenv2, Types.concat_environment typingenv1 typingenv2)

@@ -125,6 +125,7 @@ let rec format_exception = function
 			             (String.concat "\n  " (List.map show_pos (List.rev positions)))) duplicates "")
   | NoMainExpr -> "Syntax Error: No \"main\" expression at end of file"
   | ManyMainExprs _ -> "Syntax Error: More than one \"main\" expression at end of file"
+  | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
 

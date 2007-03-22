@@ -11,6 +11,6 @@ val program       : (Syntax.untyped_expression list, Sugartypes.phrase list) gra
 
 val parse_string  : ('a,'b) grammar -> string -> 'a
 val parse_file    : ('a,'b) grammar -> string -> 'a
-val parse_channel : ('a,'b) grammar -> (in_channel * string) -> 'a
+val parse_channel : ?interactive:(unit -> unit) -> ('a,'b) grammar -> (in_channel * string) -> 'a
 
             

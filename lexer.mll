@@ -218,12 +218,12 @@ let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' 
    table and the stack.
 *)
 
-rule lex optable lexers = parse
-  | '#' ([^ '\n'] *)                    { lex optable lexers lexbuf }
+rule lex optable lexers nl = parse
+  | '#' ([^ '\n'] *)                    { lex optable lexers nl lexbuf }
   | eof | ";;"                          { END }
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}
-  | '\n'                                { bump_lines lexbuf 1; lex optable lexers lexbuf }
+  | '\n'                                { nl (); bump_lines lexbuf 1; lex optable lexers nl lexbuf }
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
@@ -233,12 +233,12 @@ rule lex optable lexers = parse
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
-  | '{'                                 { Stack.push (lex optable lexers) lexers; LBRACE }
+  | '{'                                 { Stack.push (lex optable lexers nl) lexers; LBRACE }
   | '}'                                 { Stack.pop lexers (* fall back *); RBRACE }
   | "<-"                                { LARROW }
   | "<--"                               { LLARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
-                                          Stack.push (starttag optable lexers) lexers; LXML id }
+                                          Stack.push (starttag optable lexers nl) lexers; LXML id }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
@@ -246,7 +246,7 @@ rule lex optable lexers = parse
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
-  | '~'                                 { Stack.push (regex' optable lexers) lexers; TILDE }
+  | '~'                                 { Stack.push (regex' optable lexers nl) lexers; TILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | "::"                                { COLONCOLON }
@@ -273,22 +273,22 @@ rule lex optable lexers = parse
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | "'" def_id as var                   { QUOTEDVAR var }
-  | def_blank                           { lex optable lexers lexbuf }
+  | def_blank                           { lex optable lexers nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and starttag optable lexers = parse
+and starttag optable lexers nl = parse
   | def_qname as var                    { VARIABLE var }
   | '='                                 { EQ }
-  | '#' ([^ '\n'] *)                    { starttag optable lexers lexbuf }
+  | '#' ([^ '\n'] *)                    { starttag optable lexers nl lexbuf }
   | '>'                                 { (* Switch to `xmllex' *)
-                                          Stack.pop lexers;  Stack.push (xmllex optable lexers) lexers; RXML }
+                                          Stack.pop lexers;  Stack.push (xmllex optable lexers nl) lexers; RXML }
   | '"'                                 { (* Come back here after scanning the attr value *)
-                                          Stack.push (attrlex optable lexers) lexers; LQUOTE }
+                                          Stack.push (attrlex optable lexers nl) lexers; LQUOTE }
   | "/>"                                { Stack.pop lexers (* fall back *); SLASHRXML }
-  | '\n'                                { bump_lines lexbuf 1; starttag optable lexers lexbuf }
-  | def_blank                           { starttag optable lexers lexbuf }
+  | '\n'                                { nl () ; bump_lines lexbuf 1; starttag optable lexers nl lexbuf }
+  | def_blank                           { starttag optable lexers nl lexbuf }
   | eof                                 { END }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and xmllex optable lexers = parse
+and xmllex optable lexers nl = parse
   | "{{"                                { CDATA "{" }
   | "}}"                                { CDATA "}" }
   | "}"                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
@@ -297,26 +297,26 @@ and xmllex optable lexers = parse
   | "&lt;"                              { CDATA "<" } 
   | "&gt;"                              { CDATA ">" } 
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex optable lexers) lexers; LBRACE }
+                                          Stack.push (lex optable lexers nl) lexers; LBRACE }
   | "</" (def_qname as var) '>'         { (* fall back *)
                                           Stack.pop lexers; ENDTAG var }
   | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
-                                          Stack.push (starttag optable lexers) lexers; LXML var }
+                                          Stack.push (starttag optable lexers nl) lexers; LXML var }
   | eof                                 { END }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and attrlex optable lexers = parse
+and attrlex optable lexers nl = parse
   | '"'                                 { (* fall back *)
                                           Stack.pop lexers; RQUOTE }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex optable lexers) lexers; LBRACE }
+                                          Stack.push (lex optable lexers nl) lexers; LBRACE }
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and regex' optable lexers = parse
-  | '/'                                 { Stack.push (regex optable lexers) lexers; SLASH }
-  | '#' ([^ '\n'] *)                    { regex' optable lexers lexbuf }
-  | '\n'                                { bump_lines lexbuf 1; regex' optable lexers lexbuf }
-  | def_blank                           { regex' optable lexers lexbuf }
-and regex optable lexers = parse
+and regex' optable lexers nl = parse
+  | '/'                                 { Stack.push (regex optable lexers nl) lexers; SLASH }
+  | '#' ([^ '\n'] *)                    { regex' optable lexers nl lexbuf }
+  | '\n'                                { nl () ; bump_lines lexbuf 1; regex' optable lexers nl lexbuf }
+  | def_blank                           { regex' optable lexers nl lexbuf }
+and regex optable lexers nl = parse
   | '/'                                 { Stack.pop lexers; Stack.pop lexers; SLASH }
   | '.'                                 { DOT }
   | '[' (_ as f) '-' (_ as t) ']'       { RANGE (f,t) }
@@ -326,22 +326,13 @@ and regex optable lexers = parse
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex optable lexers) lexers; LBRACE }
+                                          Stack.push (lex optable lexers nl) lexers; LBRACE }
   | '\\' (_ as c)                       
   | (_ as c)                            { STRING (String.make 1 c) }
 
 {
-
-let lexer () = 
-  let lexers = (Stack.create () : (Lexing.lexbuf -> Parser.token) Stack.t) in
-    Stack.push (lex optable lexers) lexers;
-    (* This flag, which records when we should insert an extra
-    SEMICOLON token before the END, is a workaround for an
-    end-of-stream conflict in the parser.  I wish it'd go away. *)
-    let atend = ref false in
-      fun lexbuf -> 
-        if !atend then END
-        else match Stack.top lexers lexbuf with
-          | END -> atend := true; SEMICOLON
-          | t   -> t
+ let lexer nlhook = 
+  let lexers = Stack.create () in
+    Stack.push (lex optable lexers nlhook) lexers;
+    fun lexbuf -> Stack.top lexers lexbuf
 }

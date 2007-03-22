@@ -100,13 +100,14 @@ let read : parse:('intermediate parser_)
         -> desugarer:('intermediate, 'result) desugarer
         -> infun:(string -> int -> int)
         -> name:string
+        -> ?nlhook:(unit -> unit)
         -> 'result =
-fun ~parse ~desugarer ~infun ~name ->
+fun ~parse ~desugarer ~infun ~name ?nlhook ->
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      desugarer code (parse (Lexer.lexer ()) lexbuf)
+      desugarer code (parse (Lexer.lexer (fromOption identity nlhook)) lexbuf)
     with 
       | Parsing.Parse_error -> 
           let line, column = find_line code lexbuf.lex_curr_p in
@@ -169,12 +170,12 @@ let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = {
     (fun code s -> match s with 
       | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
       | Right directive -> Right directive);
-    parse =  Parser.sentence
+    parse =  Parser.interactive
   }
   
 let program : (Syntax.untyped_expression list, Sugartypes.phrase list) grammar = {
     desugar = (fun code -> List.map (Sugar.desugar (lookup code)));
-    parse = Parser.parse_links
+    parse = Parser.file
   }
 
 let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
@@ -191,10 +192,10 @@ let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
     better error messages).
 **)
 let parse_string grammar string =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>"
+  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>" ?nlhook:None
 
-let parse_channel grammar (channel, name) =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name
+let parse_channel ?interactive grammar (channel, name) =
+  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name ?nlhook:interactive
 
 let parse_file grammar filename =
   parse_channel grammar (open_in filename, filename)

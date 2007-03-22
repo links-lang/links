@@ -26,18 +26,18 @@ stderr : @.*Type error.*
 exit : 1
 
 Basic send/receive test.
-spawn { recv() ! "The end" } ! self(); recv()
+var p = spawn { recv() ! "The end" } ! self(); recv()
 stdout : @"The end" : .*
 
 Mailboxes are not polymorphic [1]
-spawn { recv() ! "The end" } ! self(); recv()
+var p = spawn { recv() ! "The end" } ! self(); recv()
 stdout : "The end" : String
 
 Mailboxes are not polymorphic [2]
-var pid = spawn { recv() ++ [] }; pid ! "one"; pid ! [2]
+var pid = spawn { recv() ++ [] }; { pid ! "one"; pid ! [2] }
 stderr : @.*Type error.*
 exit : 1
 
 Built-in functions are polymorphic in their mailbox types
-fun f() {var x = recv(); intToString(x)}; fun g(x) {var () = recv(); intToString(x)}; (f, g)
+fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)
 stdout : (fun, fun) : (() -{Int}-> String, (Int) -{()}-> String)

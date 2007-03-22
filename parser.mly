@@ -13,6 +13,15 @@ let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 let default_fixity = Num.num_of_int 9
 
+let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
+  if signame <> name then 
+    raise (Sugar.ConcreteSyntaxError
+             ("Signature for `" ^ signame ^ "' should precede definition of `"
+              ^ signame ^ "', not `"^ name ^"'.",
+              pos ()));
+  TypeAnnotation ((Definition defbit, dpos),datatype), pos()
+
+
 %}
 
 %token END
@@ -59,24 +68,30 @@ let default_fixity = Num.num_of_int 9
 %token <string> INFIX8 INFIXL8 INFIXR8
 %token <string> INFIX9 INFIXL9 INFIXR9
 
-%start parse_links
 %start just_datatype
-%start sentence
+%start interactive
+%start file
 
-%type <Sugartypes.phrase list> parse_links
-%type <Sugartypes.phrase> xml_tree
+%type <Sugartypes.phrase list> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
-%type <Sugartypes.sentence> sentence
+%type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
 
 %%
 
-sentence:
-| parse_links                                                  { Left $1 }
+interactive:
+| nofun_declaration                                            { Left [$1] }
+| fun_declarations SEMICOLON                                   { Left $1 }
+| exp SEMICOLON                                                { Left [$1] }
 | directive                                                    { Right $1 }
-| SEMICOLON END                                                { Right ("quit", []) (* rather hackish *) }
+| END                                                          { Right ("quit", []) (* rather hackish *) }
+
+file:
+| declarations exp END                                          { $1 @ [$2] }
+| exp END                                                       { [$1] }
+| declarations END                                              { $1 }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -94,45 +109,43 @@ arg:
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 
-parse_links:
-| toplevel_seq END                                             { $1 }
+declarations:
+| declarations declaration                                     { $1 @ [$2] }
+| declaration                                                  { [$1] }
 
-toplevel_seq:
-| toplevel toplevel_seq                                        { $1 :: $2 }
-| toplevel                                                     { [$1] }
+declaration:
+| fun_declaration { $1 }
+| nofun_declaration { $1 }
 
-toplevel:
-| exp SEMICOLON                                                { $1 }
+nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
                                                                    (InfixDecl, pos()) }
-| annotated_binding                                            { $1 }
+| tlvarbinding SEMICOLON                                       { let d, pos = $1 in Definition d, pos }
+| signature tlvarbinding SEMICOLON                             { annotate $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
+
+fun_declarations:
+| fun_declarations fun_declaration { $1 @ [$2] }
+| fun_declaration { [$1] }
 
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
 
+fun_declaration:
+| tlfunbinding                                                 { let d, pos = $1 in Definition d, pos }
+| signature tlfunbinding                                       { annotate $1 $2 }
 
-annotated_binding:
-| tlbinding { let d, pos = $1 in Definition d, pos }
-| signature tlbinding                                          { let signame, datatype = $1
-                                                                 and (name, _, _) as defbit, dpos = $2 in
-                                                                   if signame <> name then 
-                                                                   raise (Sugar.ConcreteSyntaxError
-                                                                            ("Signature for `" ^ signame ^ "' should precede definition of `"
-                                                                             ^ signame ^ "', not `"^ name ^"'.",
-                                                                             pos ()));
-                                                                   TypeAnnotation ((Definition defbit, dpos),datatype), pos() }
+tlfunbinding:
+| FUN VARIABLE arg_list perhaps_location block                 { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| FUN pattern op pattern perhaps_location block                { ($3, (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
+| FUN PREFIXOP pattern perhaps_location block                  { ($2, (FunLit (Some $2, [$3], $5), pos()), $4), pos() }
+| FUN pattern POSTFIXOP perhaps_location block                 { ($3, (FunLit (Some $3, [$2], $5), pos()), $4), pos() }
 
-tlbinding:
-| VAR VARIABLE perhaps_location EQ exp SEMICOLON               { ($2, $5, $3), pos() }
-| FUN VARIABLE arg_list perhaps_location block perhaps_semi    { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| FUN pattern op pattern perhaps_location block perhaps_semi   { ($3, (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
-| FUN PREFIXOP pattern perhaps_location block perhaps_semi     { ($2, (FunLit (Some $2, [$3], $5), pos()), $4), pos() }
-| FUN pattern POSTFIXOP perhaps_location block perhaps_semi    { ($3, (FunLit (Some $3, [$2], $5), pos()), $4), pos() }
-
+tlvarbinding:
+| VAR VARIABLE perhaps_location EQ exp                         { ($2, $5, $3), pos() }
 
 signature: 
 | SIG VARIABLE COLON datatype                                  { $2, $4 }
@@ -535,7 +548,7 @@ labeled_exps:
  * Datatype grammar
  */
 just_datatype:
-| datatype SEMICOLON                                           { $1 }
+| datatype END                                                 { $1 }
 
 datatype:
 | mu_datatype                                                  { $1 }
@@ -571,10 +584,8 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
-                                                                (*   | "Xml"     -> ListType (PrimitiveType `XmlItem) *)
                                                                    | "Database"-> DBType
-                                                                (*   | "String"  -> ListType (PrimitiveType `Char) *)
-                                                                   | t         -> TypeApplication ($1, [])
+                                                                   | t         -> TypeApplication (t, [])
                                                                }
 
 | CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }

@@ -21,16 +21,18 @@ Trailing semicolon means "ignore the final value" [1]
 stdout : 2 : Int
 
 Trailing semicolon means "ignore the final value" [2]
-{ ignore(2); }
-stdout : () : ()
+{ 2; }
+stderr : @.*
+exit : 1
 
 Trailing semicolon means "ignore the final value" [3]
 fun () { 2 }
 stdout : fun : () -> Int
 
 Trailing semicolon means "ignore the final value" [4]
-fun () { ignore(2); }
-stdout : fun : () -> ()
+fun () { 2; }
+stderr : @.*
+exit : 1
 
 Type annotations
 fun (x:Int) {x:Int}
@@ -50,11 +52,11 @@ stderr : @.*
 exit : 1
 
 Typename [1]
-typename Foo = Int; fun f(x:Foo) {x}; f(1)
+typename Foo = Int; fun f(x:Foo) {x} f(1)
 stdout : 1 : Foo
 
 Typename [2]
-typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x}; f(false, 1, "two")
+typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f(false, 1, "two")
 stdout : (false, 1, "two") : Bar (Bool,Int,String)
 
 Typename [3]
