@@ -767,6 +767,9 @@ and string_of_row_var' sep rec_vars vars = function
   | `MetaRowVar point ->
       begin
         match Unionfind.find point with
+          | (field_env, `RowVar (None)) ->
+              assert(not (contains_present_fields field_env));
+              None
           | (field_env, `RowVar (Some var))
           | (field_env, `RigidRowVar var) ->
               assert(not (contains_present_fields field_env));
