@@ -114,8 +114,11 @@ cp lib/js/yahoo/event.js $libdir/yahoo
 cp lib/js/jslib.js $libdir/
 cp lib/js/json.js $libdir/
 cp lib/js/regex.js $libdir/
-cp prelude.links $libdir/
+
 
 echo "Creating configuration file..."
 echo " $configfile"
-echo -e "jsliburl=$liburl\nprelude=$libdir/prelude.links\n" > $configfile
+echo -e "jsliburl=$liburl\nprelude=$PWD/prelude.links\n" > $configfile
+
+echo "To run the database examples you will need to specify"
+echo "database_driver and database_args in the configuration file."

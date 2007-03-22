@@ -245,7 +245,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\ | |  |/ /|. `-.
  | |___| | |\\ \\  |     \\ _`.  |
  |_____|_|_| \\___|__|\\__|____/
-Welcome to Links version 0.4 (Crostorfyn)", `System)
+Welcome to Links version 0.4 (crostorfyn)", `System)
 
 (** main *)
 let _ =
