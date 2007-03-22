@@ -1735,8 +1735,8 @@ C<sendSuspend> captures the current continuation when it is called and
 passes this as the argument to C<xmlFunc>. Thus, C<xmlFunc> can use
 its argument to resume computation at the point where C<sendSuspend>.
 
-See C<examples/login-flow.links> and C<examples/wine.links> for examples of
-the use of C<sendSuspend>.
+See C<examples/login-flow.links> for an example of the use of
+C<sendSuspend>.
 
 =back
 
