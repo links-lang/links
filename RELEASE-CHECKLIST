@@ -6,4 +6,6 @@ Do these things before making a release:
  * Make tarball with release script.
  * Upload to ISDD.
  * Tag the release in SVN.
+ * Update the Links homepage.
  * Announce to links-users.
+ * Update the wiki: http://frege/wiki/LinksReleases
