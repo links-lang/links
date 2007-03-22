@@ -1777,7 +1777,7 @@ The following options are supported in all modes:
 
 The interactive shell allows server-side code to be entered
 dynamically. In order to evaluate an expression it must be terminated
-with a double semi-colon followed by a new line:
+with a semi-colon followed by a new line:
 
   ./links
   links> 1+2;
