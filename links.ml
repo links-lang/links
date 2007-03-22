@@ -242,7 +242,7 @@ let options : opt list =
 let welcome_note = Settings.add_string ("welcome_note", 
 "  _    __ __   __ __   __ ____
  | |   | |  \\  | |  | / // .__|
- | |   | | , \\ | |  V  /|. `-.
+ | |   | | , \\ | |  |/ /|. `-.
  | |___| | |\\ \\  |     \\ _`.  |
  |_____|_|_| \\___|__|\\__|____/
 Welcome to Links version 0.4 (Crostorfyn)", `System)
