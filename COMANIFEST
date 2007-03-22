@@ -41,6 +41,7 @@ examples/varrec.links
 examples/xml_typing.links
 
 links.el
+links.el-gilles
 
 checkfiles
 make_release
