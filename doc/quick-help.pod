@@ -1813,6 +1813,22 @@ list builtin functions and values
 
 exit the interpreter  
 
+=item C<@typeenv>
+
+display the current type environment
+
+=item C<@env>
+
+display the current value environment
+
+=item C<@load>
+
+load in a Links source file, replacing the current environment
+
+=item C<@withtype>
+
+search for functions that match the given type
+
 =back
 
 
