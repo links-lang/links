@@ -82,11 +82,12 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %%
 
 interactive:
-| nofun_declaration                                            { Left [$1] }
-| fun_declarations SEMICOLON                                   { Left $1 }
-| exp SEMICOLON                                                { Left [$1] }
-| directive                                                    { Right $1 }
-| END                                                          { Right ("quit", []) (* rather hackish *) }
+| nofun_declaration                                            { `Definitions [$1] }
+| fun_declarations SEMICOLON                                   { `Definitions $1 }
+| SEMICOLON                                                    { `Definitions [] }
+| exp SEMICOLON                                                { `Expression $1 }
+| directive                                                    { `Directive $1 }
+| END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
 | declarations exp END                                          { $1 @ [$2] }

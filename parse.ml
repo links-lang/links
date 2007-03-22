@@ -168,8 +168,9 @@ type ('result, 'intermediate) grammar = {
 let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = { 
     desugar = 
     (fun code s -> match s with 
-      | Left  phrases   -> Left (List.map (Sugar.desugar (lookup code)) phrases)
-      | Right directive -> Right directive);
+       | `Definitions phrases -> `Definitions (List.map (Sugar.desugar (lookup code)) phrases)
+       | `Expression phrase   -> `Expression (Sugar.desugar (lookup code) phrase)
+       | `Directive directive -> `Directive directive);
     parse =  Parser.interactive
   }
   

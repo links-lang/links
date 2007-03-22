@@ -110,5 +110,14 @@ and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphra
 and fieldconstraint = [ `Readonly ]
 
 type directive = string * string list
-type sentence = (phrase list, directive) Utility.either
-type sentence' = (Syntax.untyped_expression list, directive) Utility.either
+type sentence =
+[ `Definitions of phrase list
+| `Expression of phrase
+| `Directive of directive
+]
+
+type sentence' = 
+[ `Definitions of Syntax.untyped_expression list
+| `Expression of Syntax.untyped_expression
+| `Directive of directive
+]

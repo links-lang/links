@@ -3,13 +3,6 @@ open Getopt
 open Utility
 open List
 
-let load_file filename =
-  try 
-  let typingenv, exprs = Loader.read_file_cache filename in
-(*   let exprs = map Syntax.labelize exprs in *)
-    typingenv, exprs
-  with e -> failwith ("load_file failed with " ^ Errors.format_exception e)
-
 (**
  Whether to run the interactive loop
  (default is true)
@@ -28,13 +21,23 @@ let prelude_file = Settings.add_string ("prelude", "prelude.links", `System)
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 
-(* Types of built-in primitives *)
+(** The banner *)
+let welcome_note = Settings.add_string ("welcome_note", 
+"  _    __ __   __ __   __ ____
+ | |   | |  \\  | |  | / // .__|
+ | |   | | , \\ | |  |/ /|. `-.
+ | |___| | |\\ \\  |     \\ _`.  |
+ |_____|_|_| \\___|__|\\__|____/
+Welcome to Links version 0.4 (Crostorfyn)", `System)
+
+(* Types of built-in primitives.  TODO: purge. *)
 let stdenvs = ref([], Library.typing_env)
 
-let ignore_envs fn envs arg = let _ = fn arg in envs
 (** Definition of the various repl directives *)
-let rec directives = lazy (* lazy so we can have applications on the rhs *)
-  [
+let rec directives = 
+  let ignore_envs fn envs arg = let _ = fn arg in envs in lazy
+  (* lazy so we can have applications on the rhs *)
+[
     "directives", 
     (ignore_envs 
        (fun _ -> 
@@ -88,7 +91,7 @@ let rec directives = lazy (* lazy so we can have applications on the rhs *)
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_fatal load_file (Settings.get_value prelude_file)) in 
+                (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
               let typingenv, exprs = Inference.type_program library_types program in
@@ -128,14 +131,6 @@ let execute_directive (name, args) (valenv, typingenv) =
     flush stderr;
     envs
     
-
-(** Run unit tests; FIXME: fallen into disrepair. *)
-let run_tests () = 
-  Settings.set_value interacting false;
-(*   Optimiser.test () ; *)
-(*   Js.test () *)
-  Js.run_tests ()
-
 (** Print a result (including its type if `printing_types' is [true]). *)
 let print_result rtype result = 
   print_string (Result.string_of_result result);
@@ -144,7 +139,7 @@ let print_result rtype result =
                  else "")
 
 (** type, optimise and evaluate a list of expressions *)
-let process_one (valenv, typingenv) exprs = 
+let process_one ?(printer=print_result) (valenv, typingenv) exprs = 
   let typingenv, exprs = lazy (Inference.type_program typingenv exprs) 
     <|measure_as|> "type_program" in
   let exprs = lazy (Optimiser.optimise_program (typingenv, exprs))
@@ -153,39 +148,41 @@ let process_one (valenv, typingenv) exprs =
   let valenv, result = lazy (Interpreter.run_program valenv [] exprs)
     <|measure_as|> "run_program" 
   in
-    print_result (Syntax.node_datatype (last exprs)) result;
-    (valenv, typingenv), result
+    printer (Syntax.node_datatype (last exprs)) result;
+    (valenv, typingenv), result, exprs
 
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse envs = 
   handle_errors (measure "parse" parse ->- process_one envs)
 
-(* Read Links source code, then type and optimize it. *)
-let just_optimise parse (_valenv, typingenv) input = 
-  Settings.set_value interacting false;
-  let parse = parse Parse.program in
-  let exprs = measure "parse" parse input in 
-  let typingenv, exprs = measure_l "type_program"
-    (lazy (Inference.type_program typingenv exprs)) in
-  let exprs = measure_l "optimise_program"
-    (lazy (Optimiser.optimise_program (typingenv, exprs))) in
-    print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
-
-let make_dotter ps1 = 
-  let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-    fun _ -> 
-      print_string dots;
-      flush stdout
-
 (* Interactive loop *)
 let interact envs =
+  let make_dotter ps1 = 
+    let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+      fun _ -> 
+        print_string dots;
+        flush stdout in
   let rec interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
            (match measure "parse" parse input with 
-              | Left exprs      -> fst (process_one envs exprs)
-              | Right directive -> execute_directive directive envs))
+              | `Definitions [] -> envs
+              | `Definitions defs -> 
+                  let (valenv, _ as envs), _, exprs = process_one ~printer:(fun _ _ -> ()) envs defs  
+                  in ListLabels.iter exprs
+                       ~f:(function
+                             | Syntax.Define (name, _, _, _) as d -> 
+                                 prerr_endline (name
+                                                ^" = "^
+                                                Result.string_of_result (List.assoc name valenv)
+                                                ^" : "^ 
+                                                Types.string_of_datatype (Syntax.node_datatype d))
+                             | _ -> assert false);
+                    envs
+              | `Expression expr -> 
+                  let envs, _, _ = process_one envs [expr] in envs
+              | `Directive directive -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
       interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
@@ -193,9 +190,6 @@ let interact envs =
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
 
-let concat_envs (valenv1, typingenv1) (valenv2, typingenv2) =
-  (valenv1 @ valenv2, Types.concat_environment typingenv1 typingenv2)
-      
 let run_file prelude envs filename = 
   Settings.set_value interacting false;
   match Utility.getenv "REQUEST_METHOD" with 
@@ -205,25 +199,14 @@ let run_file prelude envs filename =
     | None ->
         ignore (evaluate (Parse.parse_file Parse.program) envs filename)
 
-(** Note: We have this notion of "stdenvs" (a global mutable list), but
-    later on we ignore it when running the repl or loading a file.  We
-    need to have a coherent policy for what is "the loaded environment," 
-    what modifies it and which environments apply at a given time.
-*)
-
-let evaluate_string_in_stdenvs v =
+let evaluate_string_in envs v =
   (Settings.set_value interacting false;
-   ignore(evaluate (Parse.parse_string Parse.program) (!stdenvs) v))
-
-let set setting value = Some (fun () -> Settings.set_value setting value)
-
-type action = 
-    [ `Evaluate of string
-    | `LoadFile of string ]
+   ignore(evaluate (Parse.parse_string Parse.program) envs v))
 
 let cmd_line_actions = ref []
 
 let options : opt list = 
+  let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('O',     "optimize",            set Optimiser.optimising true,    None);
@@ -232,28 +215,14 @@ let options : opt list =
     ('e',     "evaluate",            None,                             Some (fun str -> push cmd_line_actions (`Evaluate str)));
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
-
-    (* Modes to just optimise a program and print the result. I'm
-       not crazy about these option letters *)
-      ('o',     "print-optimize",      None,                             Some (just_optimise Parse.parse_file (!stdenvs)));
-      ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string (!stdenvs)));
     ]
 
-let welcome_note = Settings.add_string ("welcome_note", 
-"  _    __ __   __ __   __ ____
- | |   | |  \\  | |  | / // .__|
- | |   | | , \\ | |  |/ /|. `-.
- | |___| | |\\ \\  |     \\ _`.  |
- |_____|_|_| \\___|__|\\__|____/
-Welcome to Links version 0.4 (crostorfyn)", `System)
-
-(** main *)
-let _ =
+let main () =
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
   (* load prelude: *)
   let prelude_types, prelude =
-    (Errors.display_fatal load_file (Settings.get_value prelude_file)) in
+    (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
   let (prelude_compiled, _) = Interpreter.run_program [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
@@ -261,7 +230,7 @@ let _ =
          (stdvalenv @ prelude_compiled,
           Types.concat_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
-      (function `Evaluate str -> evaluate_string_in_stdenvs str);
+      (function `Evaluate str -> evaluate_string_in !stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)
   ListLabels.iter ~f:(run_file prelude (prelude_compiled, prelude_types)) !file_list;
   if Settings.get_value(interacting) then
@@ -270,3 +239,4 @@ let _ =
       interact (prelude_compiled, prelude_types)
     end
 
+let _ = main ()
