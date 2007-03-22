@@ -209,7 +209,7 @@ In Links, I<a variant tag always begins with a capital letter>. Any
 string beginning with a capital letter, used in a value context,
 denotes a variant label.
 
-To inspect a variant value, use pattern matching. Pattern matching is
+To inspect a variant value, use I<pattern matching>. Pattern matching is
 accomplished using the C<switch> form, which has a target expression
 and a case for each variant label. The following expression determines
 the effective number of humps of a transport (autos have no humps):
@@ -630,7 +630,7 @@ field C<fi> to C<vi>.
 
 deletes the rows of table C<t> that satisfy C<condition>.
 
-=head2 General pattern matching
+=head2 Structural pattern matching
 
 As well as lists and variants, pattern matching can also be performed
 on constants.
@@ -676,6 +676,72 @@ local variables.
   }
 
 This example returns C<"Links">.
+
+=head2 Regular expressions
+
+Rudimentary regular-expression (regex) handling is provided for
+matching string against regex patterns.
+
+A regular expression is written between slashes, as
+C</this.is.a.regex/>.
+
+The operator C<~> tests the string on its left-hand side against the
+regular expression on its right-hand side. For example:
+
+    if ("haystack" ~ /ne+dle/)
+      print("Found needle in haystack.")
+    else
+      print("No needle found in haystack.")
+
+Presently the regex support is somewhat limited; only the following
+constructions are supported (C<e> standing for any regex):
+
+    a         (an unadorned character) match exactly that character
+    [a-z0-9-] match any single character in the given range
+    .         match any single characer
+    e*        match e zero or more times
+    e+        match e one or more times
+    e?        match an empty string, or e exactly once.
+    (e)       matches whatever e matches
+
+Any of the special characters, C<*> C<+> C<?> C<(> C<)> C<[> and C<]>,
+can be escaped with a backslash, in which case they match precisely
+that character, instead of having a special meaning.
+
+Unlike most other regex systems, Links regexes are anchored on both
+ends. So, to match a substring, you need to add C<.*> at both ends.
+For example:
+
+    links> "Portobello" ~ /bell/
+    false : Bool
+
+    links> "Portobello" ~ /.*bell.*/
+    true : Bool
+
+=head4 Special features: database compilation
+
+Certain forms of regex can be compiled into an SQL test using the
+C<LIKE> operator. For example, the expression
+
+    for (var x <-- t)
+    where (x.name ~ /.*edinburgh.*/)
+      [x.id]
+
+should compile to an SQL query that selects all those C<id>s from the
+table pointed to by C<t> having C<edinburgh> as a substring of their
+C<name> column. The query would look like this:
+
+    select id from t where t.name like '%edinburgh%'
+
+=head4 Limitations
+
+Currently, a regex in Links cannot be treated as a first-class value:
+a regex can only appear I<lexically> as the right-hand side of a use
+of the C<~> operator. The left-hand side may be any expression of
+C<String> type.
+
+There is presently no way to perform regex-based substitutions or to
+capture parts of a regex match for later use.
 
 =head1 Typing
 
