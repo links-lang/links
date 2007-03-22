@@ -1443,6 +1443,280 @@ server's error log.
 
 Wait for the specified number of seconds.
 
+ exit             : a -> b
+
+Exits the program, using the argument to exit as the program's return value.
+
+(FIXME: this can be ill-typed.)
+
+=head1 Standard library (prelude)
+
+A set of standard Links functions is defined in the file
+C<prelude.links>. This file is loaded automatically whenever Links
+runs a program. The functions it defines are explained below.
+
+=head2 List utilities
+
+=over 4
+
+=item *
+all : (a->Bool, [a]) -> Bool
+
+Returns C<true> if all elements of the list satisfy the predicate,
+C<false> otherwise. (All elements of the empty list satisfy any
+predicate).
+
+=item *
+and : ([a]) -> Bool
+
+Returns C<true> if all elements of the list are C<true>.
+
+=item *
+any : (a -> Bool, [a]) -> Bool
+
+Returns C<true> if any element of the list satisfies the predicate,
+C<false> otherwise. (No element of the empty list satisfies any
+predicate).
+
+=item *
+or : ([a]) -> Bool
+
+Returns C<true> if any element of the list is C<true>.
+
+=item *
+odd : (Int) -> Bool
+even : (Int) -> Bool
+
+Returns C<true> if the argument is, respectively, odd or even.
+
+=item *
+select : ([a], Int) -> a
+
+C<select(list, i)> returns the C<i>th element of the list, the first
+element being 0 (and throws an error if the list has fewer than C<i>+1
+elements).
+
+=item *
+swap : ([a], a, a) -> [a]
+
+C<swap(xs, a, b)> takes each instance of C<a> in C<xs> and replaces it
+with C<b>, and vice-versa, performing the two substitutions simultaneously.
+
+=item *
+fold_left : ((b, a) -> b, b, [a]) -> b
+fold_right : ((a, b) -> b, b, [a]) -> b
+
+=item *
+fold_left1 : ((a, a) -> a, [a]) -> a
+fold_right1 : ((a, a) -> b, [a]) -> a
+
+=item *
+unzip : ([(a, b)]) -> ([a], [b])
+
+=item *
+zip : ([a], [b]) -> ([(a, b)])
+
+=item *
+replicate : (Int, a) -> [a]
+
+C<replicate(n, item)> returns a list containing just C<n> copies of C<item>.
+
+=item *
+filter : (a -> Bool, [a]) -> [a]
+
+Returns just those elements from the list that satisfy the given predicate.
+
+=item *
+compose : (b -> a, c -> b) -> c -> a
+
+Given a function C<f> and a function C<g>, returns a function that
+applies C<g> to its argument and C<f> to the result of that.
+
+=item *
+id : (a) -> a
+
+Returns its argument
+
+
+=item *
+map : (a -> b, [a]) -> [b]
+
+Transforms a list by applying the function to each element of the list.
+
+More precisely, it returns a list whose I<i>th element is the result
+of applying the given function to the I<i>th element of the given
+list.
+
+=item *
+concatMap : (a -> [b], [a]) -> [b]
+
+Applies the function to each element of the list, and concatenates the
+resulting lists, thus returning a "flat" list. Works much like a
+C<for> loop in Links.
+
+=item *
+first, second, third, fourth, fifth, sixth, sevent, eighth, ninth, tenth
+
+These functions each take a tuple of any (sufficiently large) size and
+return the first, second, etc. element of that tuple. For example:
+
+    links> third(4, 5, 6, 7, 8, 9)
+    6
+
+An attempt to apply one of these functions to a tuple that doesn't
+have enough elements will result in a type error.
+
+=item *
+sum : ([Int]) -> Int
+
+Returns the numerical sum of a list of integers.
+
+=item *
+product : ([Int]) -> Int
+
+Returns the numerical produce of a list of integers.
+
+=item *
+reverse : ([a]) -> [a]
+
+C<reverse(list)> returns a list of the elements in C<list>, but in the
+reverse order.
+
+=item *
+concat : ([[a]]) -> [a]
+
+Given a list of lists, this concatenates all of those lists together. E.g.:
+
+    links> concat([1], [2, 3, 4], [], [5, 6])
+    [1, 2, 3, 4, 5, 6]
+
+=item *
+join : ([a], [[a]]) -> [a]
+
+C<join(glue, list)> returns a list formed by interspersing the "glue"
+in between each element of C<list> and concatenating them. E.g.:
+
+    links> join("/", ["milk", "butter", "eggs", "bread"])
+    "milk/butter/eggs/bread"
+
+(Note the use of an ordinary C<String> as a list of C<Char>s.)
+
+=item *
+takeWhile : (a -> Bool, [a]) -> [a]
+
+Returns the initial segment of the given list which satisfies the
+given predicate.
+
+=item *
+dropWhile : (a -> Bool, [a]) -> [a]
+
+Returns all of the given list I<but> the initial segment satisfying
+the given predicate. C<takeWhile(p,l) ++ dropWhile(p,l)> is equal to
+C<l> for any predicate C<p>.
+
+=item *
+ignore : a -> ()
+
+Throws away its argument and returns unit, the empty tuple C<()>.
+
+=item *
+isJust : Maybe (a) -> Bool
+
+Returns C<true> if its argument is C<Just >I<x> for some I<x>, that
+is, if it is not C<Nothing>.
+
+(TBD: document C<Maybe> types)
+
+=item *
+search : ((a) -> Bool, [a]) -> Maybe (a)
+
+=item *
+find : ((a) -> Bool, [a]) -> a
+
+=item *
+fromJust : Maybe (a) -> a
+
+Given an argument C<Just >I<x>, returns I<x>. Otherwise, raises an
+error.
+
+=item *
+memassoc : (a,[(a,b)]) -> Bool
+
+Given a key and an association list, returns C<true> if the key is 
+in the domain of the association list.
+
+=item *
+lookup : (a,[(a,b)]) -> Maybe (b)
+
+=item *
+assoc : (String,[(String,b)]) -> b
+
+=item *
+assocAll : (String,[(String,b)]) -> [b]
+
+=item *
+sortBy : ((a) -> b, [a]) -> [a]
+
+=back
+
+=head2 Web-related features
+
+These functions only make sense in the context of web programs.
+
+=over 4
+
+=item *
+freshResource : () -> ()
+
+Redirects the client to a new page and continues from the call-point.
+
+The effect is that, after a call to C<freshResource>, if the user hits
+reload in the browser, she will only cause the program to re-execute
+code from the call to freshResource onward.
+
+This can be used after doing a destructive action (such as updating
+the database) which should not be automatically repeated on a
+subsequent reload.
+
+=item *
+sendSuspend : ((() -> ()) -> Xml) -> ()
+
+C<sendSuspend(xmlFunc)> calls the function C<xmlFunc> to generate an
+XML document and exits the program using that XML document as the
+output.
+
+C<sendSuspend> captures the current continuation when it is called and
+passes this as the argument to C<xmlFunc>. Thus, C<xmlFunc> can use
+its argument to resume computation at the point where C<sendSuspend>.
+
+See C<examples/login-flow.links> and C<examples/wine.links> for examples of
+the use of C<sendSuspend>.
+
+xml : Xml -> Formlet (())
+text : String -> Formlet (())
+plug : (Xml -> Xml) -> Formlet (a) -> Formlet (a)
+input : Formlet (String)
+inputValue : String -> Formlet (String)
+hidden : String -> Formlet (String)
+inputFile : Formlet (String)
+render : (Formlet (a), a -> Xml) -> Xml
+renderMultipart : (Formlet (a), a -> Xml) -> Xml
+inputInt : Formlet(Int)
+inputIntValue : Int -> Formlet(Int)
+inputFloat : Formlet(Float)
+textarea : String -> Formlet (String)
+button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
+submitButton : (String,a) -> Formlet (Maybe(a))
+resetButton : (String,a) -> Formlet (Maybe(a))
+pushButton : (String,a) -> Formlet (Maybe(a))
+checkbox : Formlet (Bool)
+inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Formlet (String) 
+choice : [(a,String)] -> Formlet (a)
+choiceDefault : ([(a,String)], a) -> Formlet (a)
+choices : [(a,String)] -> Formlet ([a])
+
+=back
+
 =head1 Running links
 
 Links can be run either as a CGI script through a web server such as Apache, or from the command line.
