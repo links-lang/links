@@ -12,7 +12,7 @@ examples/document-replace.links
 examples/draw.links
 examples/extensible-case.links
 examples/funtests.links
-examples/login-flow.cgi
+examples/login-flow.links
 examples/mandelopt.links
 examples/mandelopt.html
 examples/mandeltest.links
