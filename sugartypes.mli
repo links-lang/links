@@ -95,7 +95,7 @@ and phrasenode =
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)
-  | Form of (phrase * phrase)
+  | Formlet of (phrase * phrase)
   | FormBinding of (phrase * ppattern)
 and phrase = phrasenode * pposition
 and binder = ppattern * phrase

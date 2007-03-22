@@ -1,7 +1,7 @@
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(forms(replicate(n, inputInt)), sum)}
+    {render(formlets(replicate(n, inputInt)), sum)}
   </html> 
 }
 

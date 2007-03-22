@@ -7,8 +7,8 @@ fun radioGroupVertical(items) {
     </label> <br/>
 }
 
-var theForm = 
- form
+var theFormlet = 
+ formlet
    <#>
      <div>
        <label>Style of bike: { choice([(1, "Road bike"),
@@ -60,4 +60,4 @@ fun renderer (formData) {
    <#> Order Cancelled. Thanks for visiting! </#>
 }
 
-renderMultipart(theForm, renderer)
+renderMultipart(theFormlet, renderer)

@@ -844,7 +844,7 @@ module Desugarer =
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
              | XmlForest es -> etvs es
              | TextNode _ -> empty
-             | Form (e1, e2) -> flatten [etv e1; etv e2]
+             | Formlet (e1, e2) -> flatten [etv e1; etv e2]
              | FormBinding (e, p) -> flatten [etv e; ptv p]
      and get_pattern_type_vars (p, _) = (* fold *)
        match p with 
@@ -1271,7 +1271,7 @@ module Desugarer =
            | XmlForest [x] -> HasType(desugar x, Types.xml_type, pos)
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
 
-           | Form (formExpr, formHandler) ->
+           | Formlet (formExpr, formHandler) ->
                let formHandlerSyntax = desugar formHandler in
                let XmlForest trees, trees_ppos = formExpr in
                let result, _ = forest_to_form_expr trees (Some formHandler) pos trees_ppos in

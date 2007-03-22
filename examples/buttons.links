@@ -3,7 +3,7 @@ fun firstButton(buttons) {
 }
 
 var f = 
-  form 
+  formlet 
    <#>
      {inputInt -> l}
      {inputInt -> r}

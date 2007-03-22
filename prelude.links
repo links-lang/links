@@ -376,7 +376,7 @@ typename Env = [(String,String)];
 typename Names = Int;
 typename State (d,a) = [|State:(d) ->(a,d)|];
 typename Collector (a) = Env -> a;
-typename Form (a) = State (Names, (Xml,Collector(a)));
+typename Formlet (a) = State (Names, (Xml,Collector(a)));
 typename Combiner (a,b,c) = Collector (a) -> Collector (b) -> Collector (c);
 
 infixr 0 $;
@@ -425,31 +425,31 @@ fun lift2(f)(x,y) {
   x >>= (fun (x) { y >>= fun (y) { retern(f(x,y)) } })
 }
 
-sig pure : a -> Form(a)
+sig pure : a -> Formlet(a)
 fun pure(v) {
   retern([], fun (_) { v })
 }
 
 infixr 1 @@@;
-sig @@@ : Form (a) -> Form (((a)-> b)) -> Form (b)
+sig @@@ : Formlet (a) -> Formlet (((a)-> b)) -> Formlet (b)
 fun m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
   retern((x++y, fun(e){ f(e)(c(e)) }))}}
 }
 
-sig @@=> : Form(a) -> (a -> b) -> Form(b)
+sig @@=> : Formlet(a) -> (a -> b) -> Formlet(b)
 fun m @@=> f {
   m @@@ pure(f)
 }
 
-sig xml : Xml -> Form (())
+sig xml : Xml -> Formlet (())
 fun xml(x) { retern ( (x, fun (e) { () })) }
 
-sig text : String -> Form (())
+sig text : String -> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : (Xml -> Xml) -> Form (a) -> Form (a)
+sig plug : (Xml -> Xml) -> Formlet (a) -> Formlet (a)
 fun f `plug` m {
   m >>= fun((x,v)){ retern((f(x),v)) }
 }
@@ -477,25 +477,25 @@ var nextName =
 #   image
 #   button
 
-# A one element form can be constructed using the input function.
-sig input : Form (String)
+# A one element formlet can be constructed using the input function.
+sig input : Formlet (String)
 var input = 
    nextName >>= fun (name) {
    (retern (<input name="{name}"/>,
             fun (env) { assoc(name, env)}))};
 
-fun emptyForm(_) { pure([]) }
+fun emptyFormlet(_) { pure([]) }
 
-# A one-element form with an initial value
-sig inputValue : String -> Form (String)
+# A one-element formlet with an initial value
+sig inputValue : String -> Formlet (String)
 fun inputValue(v) { 
    nextName >>= fun (name) {
    (retern (<input name="{name}" value="{v}"/>,
             fun (env) { assoc(name, env)}))}
 }
 
-# A hidden form element
-sig hidden : String -> Form (String)
+# A hidden formlet
+sig hidden : String -> Formlet (String)
 fun hidden(v) { 
    nextName >>= fun (name) {
    (retern (<input name="{name}" value="{v}" type="hidden" />,
@@ -503,20 +503,20 @@ fun hidden(v) {
 }
 
 fun hiddenInt(val) {
-  form <#>{ hidden(intToString(val)) -> rslt }</#>
+  formlet <#>{ hidden(intToString(val)) -> rslt }</#>
   yields { stringToInt(rslt) }
 }
 
 
 # A "file" type input.
-sig inputFile : Form (String)
+sig inputFile : Formlet (String)
 var inputFile = 
    nextName >>= fun (name) {
    (retern (<input name="{name}" type="file" />,
             fun (env) { assoc(name, env)}))};
 
-# A form is rendered to Xml, and a handler applied, using the render function
-sig render : (Form (a), a -> Xml) -> Xml
+# A formlet is rendered to a form, and a handler applied, using the render function
+sig render : (Formlet (a), a -> Xml) -> Xml
 fun render(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
    <form enctype="application/x-www-form-urlencoded"
@@ -526,8 +526,8 @@ fun render(frm, continuation) {
 
 }
 
-# Render a multipart form
-sig renderMultipart : (Form (a), a -> Xml) -> Xml
+# Render formlet to a multipart form
+sig renderMultipart : (Formlet (a), a -> Xml) -> Xml
 fun renderMultipart(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
    <form enctype="multipart/form-data" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
@@ -537,33 +537,33 @@ fun renderMultipart(frm, continuation) {
 }
 
 
-#sig sequenceFormlets : ([Form (a)]) -> Form ([a])
-fun sequenceFormlets(fs) { 
+#sig formlets : ([Formlet (a)]) -> Formlet ([a])
+fun formlets(fs) { 
   switch (fs) {
     case [] -> pure ([])
-    case (x::xs) -> x @@@ (sequenceFormlets(xs) @@@ pure (fun(ls)(l) { l::ls}))
+    case (x::xs) -> x @@@ (formlets(xs) @@@ pure (fun(ls)(l) { l::ls}))
   }
 }
 
-sig inputInt : Form(Int)
+sig inputInt : Formlet(Int)
 var inputInt = input @@@ pure(stringToInt);
 
-sig inputIntValue : Int -> Form(Int)
+sig inputIntValue : Int -> Formlet(Int)
 var inputIntValue = fun (value) { 
   inputValue(intToString(value)) @@@ pure(stringToInt)
 };
 
-sig inputFloat : Form(Float)
+sig inputFloat : Formlet(Float)
 var inputFloat = input @@@ pure(stringToFloat);
 
-sig textarea : String -> Form (String)
+sig textarea : String -> Formlet (String)
 fun textarea(value) {
    nextName >>= fun (name) {
     retern (<textarea name="{name}">{stringToXml(value)}</textarea>,
             fun (env) { assoc(name, env) })}
 }
 
-sig button : (String,[|Submit|Reset|Button|],a) -> Form (Maybe(a))
+sig button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
 fun button(text, behaviour, v) {
   nextName >>= fun (name) {
     var behaviour = switch (behaviour) {
@@ -576,22 +576,22 @@ fun button(text, behaviour, v) {
   }
 }
 
-sig submitButton : (String,a) -> Form (Maybe(a))
+sig submitButton : (String,a) -> Formlet (Maybe(a))
 fun submitButton(text, v) {
   button(text, Submit, v)
 }
 
-sig resetButton : (String,a) -> Form (Maybe(a))
+sig resetButton : (String,a) -> Formlet (Maybe(a))
 fun resetButton(text, v) {
   button(text, Reset, v)
 }
 
-sig pushButton : (String,a) -> Form (Maybe(a))
+sig pushButton : (String,a) -> Formlet (Maybe(a))
 fun pushButton(text, v) {
   button(text, Button, v)
 }
 
-sig checkbox : Form (Bool)
+sig checkbox : Formlet (Bool)
 var checkbox =
   nextName >>= fun (name) {
   retern (<input type="checkbox" name="{name}" value="yes" />,
@@ -611,7 +611,7 @@ var checkbox =
 #
 # The data components are useful for attaching extra data such as labels to
 # the radio buttons.
-sig inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Form (String) 
+sig inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Formlet (String) 
 fun inputRadiogroup(before, selected, after, layout) {
   nextName >>= fun (name) {
     var before = for (var (value, data) <- before)
@@ -643,7 +643,7 @@ fun preludeOptions(items, default) {
   }
 }
 
-sig choice : [(a,String)] -> Form (a)
+sig choice : [(a,String)] -> Formlet (a)
 fun choice (items) {
   var (default, _) = hd(items);
   nextName >>= fun (name) {
@@ -654,7 +654,7 @@ fun choice (items) {
   }
 }
 
-sig choiceDefault : ([(a,String)], a) -> Form (a)
+sig choiceDefault : ([(a,String)], a) -> Formlet (a)
 fun choiceDefault (items, default) {
   nextName >>= fun (name) {
      preludeOptions(items, default) >>= fun (xml, retrieve) {
@@ -664,7 +664,7 @@ fun choiceDefault (items, default) {
   }
 }
 
-sig choices : [(a,String)] -> Form ([a])
+sig choices : [(a,String)] -> Formlet ([a])
 fun choices (items) {
   var default = first(hd(items));
   nextName >>= fun (name) {

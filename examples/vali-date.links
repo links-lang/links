@@ -1,4 +1,4 @@
-# Date form components with validation
+# Date formlets with validation
 
 typename Date = [|Date:(Int,Int)|];
 
@@ -33,9 +33,9 @@ fun intValueInRange(s, label, frm, to) {
   }
 }
 
-sig inputPerson : String -> Form(Value(String, String))
+sig inputPerson : String -> Formlet(Value(String, String))
 fun inputPerson(person) {
-  form
+  formlet
     <#>{ inputValue(person) -> person }</#>
   yields
     switch (person) {
@@ -44,9 +44,9 @@ fun inputPerson(person) {
     }
 }
 
-sig inputAge : String -> Form(Value(Int, String))
+sig inputAge : String -> Formlet(Value(Int, String))
 fun inputAge(age) {
-  form
+  formlet
     <#>{ inputValue(age) -> age }</#>
   yields {
     if(isInt(age))
@@ -56,9 +56,9 @@ fun inputAge(age) {
   }
 }
  
-sig inputDate : RawDate -> Form(Value(Date, RawDate))
+sig inputDate : RawDate -> Formlet(Value(Date, RawDate))
 fun inputDate(Date(day, month)) {
-  form
+  formlet
     <#>{ inputValue(day) -> day } / { inputValue(month) -> month }</#>
   yields {
     switch(intValueInRange(day, "Day", 1, 31)) {
@@ -72,7 +72,7 @@ fun inputDate(Date(day, month)) {
   }
 }
 
-sig labelledInput : (String, b -> Form(Value(a,b)), a -> b, Value(a,b)) -> Form (Value(a,b))  
+sig labelledInput : (String, b -> Formlet(Value(a,b)), a -> b, Value(a,b)) -> Formlet (Value(a,b))  
 fun labelledInput(label, inputter, outputter, initialValue) {
   var (initialValue, err) =
     switch (initialValue) {
@@ -80,7 +80,7 @@ fun labelledInput(label, inputter, outputter, initialValue) {
       case Error(s, err) -> (s, <td><div style="color:red">{stringToXml(err)}</div></td>)
     };
 
-  form
+  formlet
     <tr>
       <td>{stringToXml(label)}:</td>
       <td>{inputter(initialValue) -> v}</td>
@@ -94,9 +94,9 @@ typename TravelRecord = (person:Value(String,String),
                          arrival:Value(Date,RawDate),
                          departure:Value(Date,RawDate));
 
-sig travelForm : TravelRecord -> Form(TravelRecord)
+sig travelForm : TravelRecord -> Formlet(TravelRecord)
 fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
-  form
+  formlet
     <table>
        { labelledInput("Person", inputPerson, id, p) -> person }
        { labelledInput("Age", inputAge, intToString, a) -> age }

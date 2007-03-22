@@ -162,7 +162,7 @@ let keywords = [
  "from"     , FROM; 
  "fun"      , FUN; 
  "handle"   , HANDLE; 
- "form"     , FORM;
+ "formlet"  , FORMLET;
  "if"       , IF; 
  "in"       , IN; 
  "yields"   , YIELDS; 

@@ -33,7 +33,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %token LPAREN RPAREN
 %token LBRACE RBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW HANDLE WHERE FORM
+%token FOR LARROW LLARROW HANDLE WHERE FORMLET
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
@@ -477,7 +477,7 @@ escape_expression:
 handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
-| FORM xml YIELDS exp                                          { Form($2, $4), pos() }
+| FORMLET xml YIELDS exp                                       { Formlet($2, $4), pos() }
 
 table_expression:
 | handlewith_expression                                        { $1 }

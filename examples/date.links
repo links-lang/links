@@ -1,9 +1,9 @@
 typename Date = [|Date:(Int,Int)|];
 typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 
-sig date : Form(Date)
+sig date : Formlet(Date)
 var date = 
-  form
+  formlet
     <#>
       { inputInt -> day } / { inputInt -> mo } 
     </#>
@@ -11,9 +11,9 @@ var date =
 
 fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
 
-sig travelForm : Form(BookingInfo)
+sig travelForm : Formlet(BookingInfo)
 var travelForm =
-  form
+  formlet
     <table>
      <tr>
            <td>Person:</td> <td> { input -> person } </td>
