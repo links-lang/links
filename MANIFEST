@@ -91,6 +91,8 @@ rewriteexamples.ml
 rewriterules.ml
 webif.mli
 
+prelude.links
+
 deriving/
 deriving/lib
 deriving/lib/bounded.ml

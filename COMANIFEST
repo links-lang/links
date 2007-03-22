@@ -50,7 +50,6 @@ monadic_pickle.mli
 monadic_pickle.ml
 sort.ml
 
-prelude.links
 tests.links
 
 tests/selenium-tests
