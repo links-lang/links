@@ -86,9 +86,9 @@ fun zip(l, r) {
   }
 }
 
-fun replicate(n, l) {
+fun replicate(n, item) {
   if (n == 0) []
-  else l :: replicate(n-1, l)
+  else item :: replicate(n-1, item)
 }
 
 fun filter(p, l) {
@@ -351,6 +351,7 @@ fun sortBy (f, l) {
 # action (e.g. database updates) then reloading and the back button 
 # are made "safe": the visible URL does not refer to the action, but 
 # only to what follows the freshResource call.
+sig freshResource : () -> ()
 fun freshResource() {
   escape esc in {
     exit(redirect("?_cont=" ++ reifyK(esc)))
@@ -362,6 +363,7 @@ fun freshResource() {
 # of the sendSuspend call. This continuation can be used in l:handler
 # for example, to pass the form values through as the return value
 # of sendSuspend.
+sig sendSuspend : ((a -> ()) -> Xml) -> a
 fun sendSuspend(xmlf) {
   escape returnf in {
     exit(xmlf(returnf))

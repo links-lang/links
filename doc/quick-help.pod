@@ -1725,7 +1725,7 @@ the database) which should not be automatically repeated on a
 subsequent reload.
 
 =item *
-sendSuspend : ((() -> ()) -> Xml) -> ()
+sendSuspend : ((a -> ()) -> Xml) -> a
 
 C<sendSuspend(xmlFunc)> calls the function C<xmlFunc> to generate an
 XML document and exits the program using that XML document as the
