@@ -220,7 +220,7 @@ let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' 
 
 rule lex optable lexers nl = parse
   | '#' ([^ '\n'] *)                    { lex optable lexers nl lexbuf }
-  | eof | ";;"                          { END }
+  | eof                                 { END }
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}
   | '\n'                                { nl (); bump_lines lexbuf 1; lex optable lexers nl lexbuf }
