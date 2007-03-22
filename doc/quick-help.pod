@@ -304,6 +304,10 @@ the C<l:onsubmit> expression, which may also contain references to
 other variables in the enclosing scope.  The values of these variables
 are passed from form to form automatically.
 
+Unfortunately, the C<l:> mechanism breaks abstraction. To address this
+issue Links version 0.4 has introduced L</"Formlets">, a mechanism for
+abstracting fragments of forms.
+
 =head2 Comparisons and Boolean Expressions
 
 Comparisons are binary operations that yield a true/false value. 
@@ -792,33 +796,33 @@ type you expect.
 
 =head1 Features
 
-=head2 Form-Fragments
+=head2 Formlets
 
-Links allows the I<abstraction> of small fragments of an HTML form, so
-that the submitted data can be packaged into more meaningful
-components, and the submitted data can be abstracted from its
-HTML-level representation.
+Links allows the I<abstraction> of small fragments of an HTML form,
+called I<formlets>, so that the submitted data can be packaged into
+more meaningful components, and the submitted data can be abstracted
+from its HTML-level representation.
 
-As an example, you may wish to create a I<fragment> to abstract the
+As an example, you may wish to create a I<formlet> to abstract the
 notion of a "date entry field." Concretely, in HTML, this might take a
 variety of forms; it might use just one input field, or a field for
 each component (day, month, and year), or it might present a graphical
-control for the user to select a date. 
+control for the user to select a date.
 
-The I<client code> of the fragment wants to receive the date value in
+The I<client code> of the formlet wants to receive the date value in
 one lump, not as individual fields; furthermore the format of the data
 received by the client need not be the same as the format sent by the
-browser. As a result, the designer of the date fragment may change the 
+browser. As a result, the designer of the date formlet may change the
 HTML representation without changing the date representation that is
-returned to the client code. We say that the fragment is I<abstracted> 
-from its HTML representation.
+returned to the client code. We say that the formlet is I<abstracted>
+from the HTML representation of a form.
 
 This abstraction is achieved in Links using a syntactic construct
-known as C<form>/C<yields>. An example date fragment might look like
+known as C<formlet>/C<yields>. An example date formlet might look like
 this:
 
-  fun dateFragment(msg) {
-    form <#>
+  fun dateFormlet(msg) {
+    formlet <#>
       {stringToXml(msg)} <br />
       Day:   {inputInt -> day}
       Month: {inputInt -> month}
@@ -832,12 +836,12 @@ this:
 This function takes a string C<msg> from the caller (a bit of text to
 include before the input fields) and constructs an XML value including
 three input fields with the C<msg> above them. The inputs are
-introduced using the I<form binding> construct, which looks like this:
+introduced using the I<formlet binding> construct, which looks like this:
 
    { body -> x }
 
 The expresion C<body> (in the above example, C<inputInt>) is itself a
-form fragment; it has a concrete realization (C<inputInt> is realized
+formlet; it has a concrete realization (C<inputInt> is realized
 simply as an HTML C<E<lt>inputE<gt>> field) but will later (when the
 web user submits the form) produce a value, which will be bound to
 C<x>. C<x> is in scope throughout the C<yields> expression.
@@ -845,42 +849,44 @@ C<x>. C<x> is in scope throughout the C<yields> expression.
 The C<yields> expression is where the data is packaged for the
 client. It is evaluated only when the form is submitted. The value
 emitted by the yields expression can further be bound by yet another
-form binding. 
+formlet binding. 
 
 Thus, to continue the example, another piece of code can make use of
-the dateFragment as follows:
+the dateFormlet as follows:
 
-  form
+  formlet
     <table>
     <tr><td>
-      {dateFragment("Arrival") -> arrival}
+      {dateFormlet("Arrival") -> arrival}
     </td><td>
-      {dateFragment("Departure") -> departure}
+      {dateFormlet("Departure") -> departure}
     </td></tr>
     </table>
   yields
     Itinerary(arrival, departure)
 
 Here the values bound to C<arrival> and C<departure> are the values
-emitted by the respective C<yields> bodies of the Form structures
-returned by calls to C<dateFragment>; in this case they will be
-C<Date>-tagged values such as C<Date(28, 2, 2007)>.
+emitted by the respective C<yields> bodies of the formlets returned by
+calls to C<dateFormlet>; in this case they will be C<Date>-tagged
+values such as C<Date(28, 2, 2007)>.
 
-The type of a C<form>/C<yields> expression is C<Form(>I<a>C<)>, where I<a>
-is the type returned by the C<yields> body. The function C<dateFragment>
-thus has type C<String -E<gt> Form([|Date:(Int, Int, Int)|])>.
+The type of a C<formlet>/C<yields> expression is C<Formlet(>I<a>C<)>,
+where I<a> is the type returned by the C<yields> body. The function
+C<dateFormlet> thus has type C<String -E<gt> Formlet([|Date:(Int, Int,
+Int)|])>.
 
-A C<Form(>I<a>C<)> value cannot be embedded in HTML until it has been
+A C<Formlet(>I<a>C<)> value cannot be embedded in HTML until it has been
 "rendered". To render such a value, use the render function:
 
-    render(form <#> {input -> x} </#> yields { x })(handler)
+    render(formlet <#> {input -> x} </#> yields { x }, handler)
 
-C<render> has type C<(a -E<gt> XML) -E<gt> Form a -E<gt> XML>.
+C<render> has type C<(Formlet (a), (a -E<gt> XML)) -E<gt> XML>.
 
-Having C<render>ed a form, the resulting XML can be returned to the
-top-level, and thence served to the browser. When the user submits the
-form, all the submitted data will be processed by all the intermediate
-C<yields> bodies, and finally the function C<handler> will be called.
+Having C<render>ed a formlet as a form, the resulting XML can be
+returned to the top-level, and thence served to the browser. When the
+user submits the form, all the submitted data will be processed by all
+the intermediate C<yields> bodies, and finally the function C<handler>
+will be called.
 
 =head2 Concurrency
 
