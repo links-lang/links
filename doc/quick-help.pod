@@ -248,7 +248,6 @@ C<other> case will not by selected unless the previous cases do not
 match.
 
 Here we assume that nothing other than a camel has humps.
-
 =head2 XML Quasiquotes
 
 Also called "quasis," these are the principal way to embed XML values
@@ -655,7 +654,7 @@ such as ML and Haskell, Links supports deep pattern matching.
 
 This function takes a labelled binary tree, and returns the id of the
 first child of the root, if it exists. The wildcard pattern C<_>
-matches any value. The type annotation is necessary if we want to
+matches any value. The type annotation is necessary if you want to
 constrain the function to only operate on labelled binary trees.
 
 Using C<switch> it is possible to dispatch according to the structure
@@ -859,6 +858,42 @@ type-correct; but elsewhere in the program, you may get a confusing
 type error involving C<h>. Providing an annotation for C<h>, like
 this, will force the compiler to tell you if C<h> does not have the
 type you expect.
+
+=head2 Type aliases
+
+Sometimes it is convenient to define an alias for a type in order to
+avoid having to write out the whole type every time it is used. For
+instance, suppose you want a type for representing colours:
+
+  [|Red | Orange | Yellow | Green | Blue | Indigo | Violet|]
+
+Then you can write:
+
+  typename Colour = [|Red | Orange | Yellow | Green | Blue | Indigo | Violet|];
+
+and following this declaration you can use C<Colour> in place of
+C<[|Red | Orange | Yellow | Green | Blue | Indigo | Violet|]>. For
+instance, you can now define functions with the following signatures:
+
+  sig showColour : Colour -> String
+  sig invertColour : Colour -> Colour
+  sig combineColours : (Colour, Colour) -> Colour
+
+It is also possible to define parameterised type aliases.
+
+  typename T(a,b) = ((a -> b), [a]) -> [b]
+
+defines the parameterised type alias T(a), and you can write:
+
+  sig map : T(a,b)
+  fun map(f,xs) {
+    switch (xs) {
+      case [] -> []
+      case (x::xs) -> f(x) :: (map (f, xs))
+    }
+  }
+
+Currently type aliases are only allowed at the top-level.
 
 =head1 Features
 
