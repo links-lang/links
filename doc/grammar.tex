@@ -63,6 +63,7 @@ labeled-patterns &::=& record-label = pattern < , labeled-patterns > \\
 
 \begin{grammar}
 datatype &::=& mu-datatype < '->' datatype > \\
+&&             mu-datatype < '-{' datatype '}->' datatype > \\
 \\
 mu-datatype &::=& 'mu' 'VARIABLE' '.' mu-datatype \\
 &&                primary-datatype \\
@@ -71,10 +72,11 @@ primary-datatype &::=& '(' datatype ')' \\
 &&                     '(' < datatype , datatypes > ')' \\
 &&                     '(' fields ')' \\
 &&                     '{' 'VARIABLE' '}' \\
-&&                     TableHandle '(' tfields ')' \\
+&&                     TableHandle '(' datatype ',' datatype ')' \\
 &&                     '[[' < vfields > ']]' \\
 &&                     '[' datatype ']' \\
 &&                     'VARIABLE' \\
+&&                     'QUOTE' 'VARIABLE' \\
 &&                     'CONSTRUCTOR' '('< primary-datatype-list >')' \\
 \\
 primary-datatype-list &::=& primary-datatype < ',' primary-datatype-list > \\
@@ -143,6 +145,7 @@ constructor-expression &::=& 'CONSTRUCTOR' < parenthesized-expression > \\
 parenthesized-expression &::=&  '(' binop ')' \\
 &&                              '(' '.' record-label ')' \\
 &&                              '(' exps ')' \\
+&&                              '(' exp 'with' labeled-exps ')' \\
 &&                              '(' labeled-exps < ! exp > ')' \\
 \\
 binop &::=& '-' \\
@@ -199,6 +202,7 @@ xml-contents-list &::=& xml-contents < xml-contents-list > \\
 \\
 xml-contents &::=& block \\
 &&                 'CDATA' \\
+&&                 '{' logical-expression '->' pattern '}' \\
 &&                 xml-tree \\
 \\
 conditional-expression &::=& db-expression \\
@@ -224,9 +228,12 @@ escape-expression &::=& iteration-expression \\
 \\
 handle-with-expression &::=& escape-expression \\
 &&                          'handle' exp 'with' 'VARIABLE' '->' exp \\
+&&                          'formlet' xml-forest 'yields' exp \\
 \\
 table-expression &::=&  handle-with-expression \\
-&&                      'table' exp 'with' datatype 'from' exp \\
+&&                      'table' exp 'with' datatype < 'where' constraints > 'from' exp \\
+\\
+constraints &::=& record-label 'readonly' < ',' constraints > \\
 \\
 arg-list &::=& parenthesized-pattern < arg-list >  \\
 \\
@@ -246,12 +253,18 @@ exp &::=& table-expression \\
 &&        'database' atomic-expression < atomic-expression > < atomic-expression >  \\
 \end{grammar} 
 
-\section{Grammar for top-level declarations}
+\section{Grammar for files and declarations}
 
 \begin{grammar}
-toplevel &::=& exp ';' \\
-&&             fixity 'UINTEGER' infix-op ';' \\
-&&             < signature > toplevel-binding \\
+file &::=& < declarations > < exp > \\
+\\
+declarations &::=& < declarations > declaration \\
+\\
+declaration &::=& fixity 'UINTEGER' infix-op ';' \\
+&&               'typename' 'CONSTRUCTOR' < '(' typevars ')' > '=' datatype ';' \\
+&&                < signature > toplevel-binding \\
+\\
+typevars &::=& 'VARIABLE' < ',' typevars > \\
 \\
 toplevel-binding &::=& 'var' pattern perhaps-location '=' exp ';' \\
 &&                     'fun' 'VARIABLE' arg-list < location > block < ';' > \\
@@ -260,8 +273,13 @@ toplevel-binding &::=& 'var' pattern perhaps-location '=' exp ';' \\
 fixity &::=& 'infix' \\
 &&           'infixl' \\
 &&           'infixr' \\
+\\
+signature &::=& 'sig' 'VARIABLE' ':' datatype \\
+&&              'sig' infix-op ':' datatype \\
 \end{grammar} 
- 
+
+% prefix and postfix operators, alien not documented
+
 \section{Terminals} 
  
 \MakeShortVerb{\'} 
@@ -269,18 +287,20 @@ fixity &::=& 'infix' \\
 The meaning of non-literal terminals, which occur in uppercase in the 
 grammar, is as follows: 
  
-Identifier character an uppercase or lowercase letter, a digit, or 
-underscore (\texttt{\_}).  Then a 'CONSTRUCTOR' is a non-empty sequence of 
-identifiers starting with an uppercase letter and a 'VARIABLE' is a 
-non-empty sequence of identifiers starting with a lowercase letter.  A 
-'UINTEGER' is either '0' or a non-empty sequence of digits starting with 
-a non-zero digit.  A 'SYMBOL' is a non-empty sequence of non-identifier 
-characters (e.g. '++' or \texttt{\$@}).  A 'REGEXCHAR' is a character not otherwise 
-employed in the grammar for regular expressions.  A 'QNAME' is a 
-non-empty sequence of identifier characters and colons; the first 
-character may not be a colon.  A 'UFLOAT' consists of a 'UINTEGER', a dot 
-('.'), a possibly-empty sequence of digits and an optional exponent part 
-consisting of the letter 'e', an optional minus ('-'), and a 'UINTEGER'. 
+Identifier character an uppercase or lowercase letter, a digit, or
+underscore (\texttt{\_}).  Then a 'CONSTRUCTOR' is a non-empty
+sequence of identifiers starting with an uppercase letter and a
+'VARIABLE' is a non-empty sequence of identifiers starting with a
+lowercase letter.  A 'UINTEGER' is either '0' or a non-empty sequence
+of digits starting with a non-zero digit.  A 'SYMBOL' is a non-empty
+sequence of non-identifier characters (e.g. '++' or \texttt{\$@}).  A
+'REGEXCHAR' is a character not otherwise employed in the grammar for
+regular expressions.  A 'QNAME' is a non-empty sequence of identifier
+characters and colons; the first character may not be a colon.  A
+'UFLOAT' consists of a 'UINTEGER', a dot ('.'), a possibly-empty
+sequence of digits and an optional exponent part consisting of the
+letter 'e', an optional minus ('-'), and a 'UINTEGER'.  'QUOTE'
+represents the single quote character, \verb$'$.
  
 An escape character is a backslash ('\') followed by three octal 
 digits, or by an uppercase or lowercase 'x' followed by two 
