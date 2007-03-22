@@ -1539,17 +1539,29 @@ with C<b>, and vice-versa, performing the two substitutions simultaneously.
 
 =item *
 fold_left : ((b, a) -> b, b, [a]) -> b
+
+=item *
 fold_right : ((a, b) -> b, b, [a]) -> b
 
 =item *
 fold_left1 : ((a, a) -> a, [a]) -> a
+
+=item *
 fold_right1 : ((a, a) -> b, [a]) -> a
+
+Functions for arbitrary list manipulation. (Documentation TBD.)
 
 =item *
 unzip : ([(a, b)]) -> ([a], [b])
 
+Split apart a list of paired elements into two parallel lists.
+
 =item *
 zip : ([a], [b]) -> ([(a, b)])
+
+Given two parallel lists, combine them into a single list of pairs,
+pairing the I<i>the element of the first list with the I<i>th element
+of the second list.
 
 =item *
 replicate : (Int, a) -> [a]
@@ -1570,8 +1582,7 @@ applies C<g> to its argument and C<f> to the result of that.
 =item *
 id : (a) -> a
 
-Returns its argument
-
+Returns its argument.
 
 =item *
 map : (a -> b, [a]) -> [b]
@@ -1727,28 +1738,151 @@ its argument to resume computation at the point where C<sendSuspend>.
 See C<examples/login-flow.links> and C<examples/wine.links> for examples of
 the use of C<sendSuspend>.
 
-xml : Xml -> Formlet (())
+=back
+
+=head2 Formlet library
+
+hese routines can be used with the C<formlet>/C<yields> syntax
+described in L</"Formlets">. Familiarize yourself with that mechanism
+before trying to read about these functions.
+
+=over 4
+
+=item *
+xml : (Xml) -> Formlet (())
+
+Given some XML, returns the formlet which displays that XML and
+yields the unit value.
+
+=item *
 text : String -> Formlet (())
+
+Given a string, makes an XML text node out of it, and returns the
+formlet which displays that XML and yields the unit value.
+
+=item *
 plug : (Xml -> Xml) -> Formlet (a) -> Formlet (a)
+
+Transforms the visible (XML) part of a formlet by applying the given
+XML function.
+
+=item *
 input : Formlet (String)
+
+Constructs a formlet containing just a simple C<input> field, yielding
+the value entered as a C<String>.
+
+=item *
 inputValue : String -> Formlet (String)
+
+Constructs a formlet containing just a simple C<inpute> field; its
+initial text contents are given by the argument.
+
+=item *
 hidden : String -> Formlet (String)
+
+Constructs a formlet containing a hidden field whose value is given in
+the argument.
+
+=item *
 inputFile : Formlet (String)
-render : (Formlet (a), a -> Xml) -> Xml
-renderMultipart : (Formlet (a), a -> Xml) -> Xml
+
+Constructs a formlet containing a simple C<input> field of file-upload type.
+
+=item *
 inputInt : Formlet(Int)
+
+Constructs a formlet containing a simple inut field whose submission will
+be treated as an C<Int>.
+
+=item *
 inputIntValue : Int -> Formlet(Int)
+
+Constructs a formlet containing a simple input field whose submission
+will be treated as an C<Int> and whose default value is given in the
+argument.
+
+=item *
 inputFloat : Formlet(Float)
+
+Constructs a formlet containing a simple input field whose submission
+will be treated as a C<Float>.
+
+=item *
 textarea : String -> Formlet (String)
-button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
+
+Constructs a formlet containing a simple textarea (multi-line text
+input) field whose contents default to the argument.
+
+=item *
 submitButton : (String,a) -> Formlet (Maybe(a))
+
+=item *
 resetButton : (String,a) -> Formlet (Maybe(a))
+
+=item *
 pushButton : (String,a) -> Formlet (Maybe(a))
+
+=item *
+button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
+
+C<button("Text", behavior, key)> constructs a simple button element
+that will yield C<Just key> if this button is the one that submits the
+form and C<Nothing> otherwise. C<behavior> choose whether the button
+is an HTML submit button, a reset button, or an undistinguished button
+(see the HTML spec).
+
+The other forms are shortcuts for corresponding choices of C<behavior>.
+
+=item *
 checkbox : Formlet (Bool)
+
+Constructs a formlet containing a simple checkbox field; yields
+C<true> if the checkbox is checked at submit time, and C<false> if
+not.
+
+=item *
 inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Formlet (String) 
-choice : [(a,String)] -> Formlet (a)
+
+Documentation TBD.
+
+=item *
+choice : ([(a,String)]) -> Formlet (a)
+
+Constructs a formlet that contains a pop-up menu (C<select> element)
+whose options are given by the list. The argument is a list of pairs,
+whose second element is the human-readable text of the option, and
+whose first element is the unique key that will be used to identify
+the choice on submission. The value yielded by the formlet will be 
+one of these keys.
+
+=item *
 choiceDefault : ([(a,String)], a) -> Formlet (a)
+
+Like C<choice>, this constructs a formlet containing a pop-up menu
+(C<select> element). The second parameter is the key of a choice that
+should be selected by default.
+
+(FIXME: This function currently doesn't work.)
+
+=item *
 choices : [(a,String)] -> Formlet ([a])
+
+Constructs a formlet containing a multiple-select scrollbox containing
+the options listed in the argument, as per L<choice> above.
+
+=item *
+render : (Formlet (a), a -> Xml) -> Xml
+
+Given a formlet and a submission-handler function, returns the XML
+that realizes the formlet (a C<E<lt>formE<gt>> element) and whose
+C<action> will trigger the handler function. The handler function
+will be invoked at the server and will represent a page-transition.
+
+=item *
+renderMultipart : (Formlet (a), a -> Xml) -> Xml
+
+(Documentation TBD.)
 
 =back
 
