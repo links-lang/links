@@ -90,6 +90,7 @@ sig
   val fresh_type_variable : unit -> datatype
   val fresh_rigid_type_variable : unit -> datatype
   val fresh_row_variable : unit -> row_var
+  val fresh_rigid_row_variable : unit -> row_var
 
   (* empty row constructors *)
   val make_empty_closed_row : unit -> row
@@ -202,3 +203,5 @@ val is_positive_field_env : int -> field_spec_map -> bool
 val is_positive_row_var : int -> row_var -> bool
 
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
+val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
+val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t

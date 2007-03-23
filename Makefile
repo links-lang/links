@@ -51,7 +51,7 @@ OCAMLDOCFLAGS=-pp deriving
 TRASH=*.tmp *.output
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml getopt.ml getopt.mli
+OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli
 
 SOURCES = $(OPC)                		\
           utility.ml            		\
@@ -90,6 +90,7 @@ SOURCES = $(OPC)                		\
           loader.ml                             \
           webif.mli webif.ml           		\
           test.ml                               \
+          tests.ml                              \
           links.ml              		\
 
 LIBS    = unix nums str $(DB_LIBS) deriving

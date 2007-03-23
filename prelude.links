@@ -626,7 +626,7 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-sig preludeOption : ((a,String), a) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
+#sig preludeOption : ((a,String), a) -> State(Names,(Xml, (((String) -> [a]) -> String -> [a])))
 fun preludeOption ((a,b), default) {
    var selectedAttr = if (default == a) "SELECTED" else "";
    nextName >>= fun (name) {
@@ -635,7 +635,7 @@ fun preludeOption ((a,b), default) {
 }}
 
 
-sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
+#sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
   switch (items) {
      case [] -> retern (<#/>, fun (_) { [] })
@@ -649,11 +649,9 @@ sig choice : [(a,String)] -> Formlet (a)
 fun choice (items) {
   var (default, _) = hd(items);
   nextName >>= fun (name) {
-     preludeOptions(items, default) >>= fun (xml, retrieve) {
-        retern (<select name="{name}">{xml}</select>,
-                fun (env) { hd(retrieve(assoc(name, env))) })
-     }
-  }
+  preludeOptions(items, default) >>= fun (xml, retrieve) {
+  retern (<select name="{name}">{xml}</select>,
+          fun (env) { hd(retrieve(assoc(name, env))) })}}
 }
 
 sig choiceDefault : ([(a,String)], a) -> Formlet (a)

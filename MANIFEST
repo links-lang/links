@@ -25,6 +25,7 @@ cgi.ml
 netencoding.ml
 netencoding.mli
 unionfind.ml
+unionfind.mli
 getopt.ml
 getopt.mli
 

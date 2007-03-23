@@ -11,9 +11,9 @@ type type_var_set = TypeVarSet.t
 
 
 (* points *)
-type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve)
+type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
 
-module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end)
+(* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
 module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
 
 
@@ -113,6 +113,7 @@ sig
   val fresh_type_variable : unit -> datatype
   val fresh_rigid_type_variable : unit -> datatype
   val fresh_row_variable : unit -> row_var
+  val fresh_rigid_row_variable : unit -> row_var
 
   (* empty row constructors *)
   val make_empty_closed_row : unit -> row
@@ -148,6 +149,7 @@ struct
   let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
   let make_rigid_type_variable var = `MetaTypeVar (Unionfind.fresh (`RigidTypeVar var))
   let make_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
+  let make_rigid_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RigidRowVar var))
 
   let is_closed_row =
     let rec is_closed rec_vars =
@@ -186,6 +188,7 @@ struct
   let fresh_type_variable = make_type_variable -<- fresh_raw_variable
   let fresh_rigid_type_variable = make_rigid_type_variable -<- fresh_raw_variable
   let fresh_row_variable = make_row_variable -<- fresh_raw_variable
+  let fresh_rigid_row_variable = make_rigid_row_variable -<- fresh_raw_variable
 
   let make_empty_closed_row () = empty_field_env, closed_row_var
   let make_empty_open_row () = empty_field_env, fresh_row_variable ()
@@ -1144,7 +1147,6 @@ let is_positive_row = is_positive_row TypeVarSet.empty
 let is_positive_field_env = is_positive_field_env TypeVarSet.empty
 let is_positive_row_var = is_positive_row_var TypeVarSet.empty
 
-
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in
   let empties = M.empty, M.empty in
@@ -1174,7 +1176,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
                          | `Absent -> envs) field_env empties
     and row_vars = 
       match row_var with
-        | `RigidRowVar var
+        | `RigidRowVar var -> let l, r = empties in
+            (l, M.add var (InferenceTypeOps.fresh_rigid_row_variable ()) r)
         | `RowVar (Some var) -> let l, r = empties in
             (l, M.add var (InferenceTypeOps.fresh_row_variable ()) r)
         | `RowVar None -> empties
@@ -1183,3 +1186,13 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
         | `MetaRowVar point -> makeEnvR recvars (Unionfind.find point)
     in union [field_vars; row_vars]
   in makeEnv []
+
+let make_rigid_envs datatype : datatype IntMap.t * row_var IntMap.t =
+  let tenv, renv = make_fresh_envs datatype in
+    (IntMap.map (fun _ -> InferenceTypeOps.fresh_rigid_type_variable ()) tenv,
+     IntMap.map (fun _ -> InferenceTypeOps.fresh_rigid_row_variable ()) renv)
+
+let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
+  let tenv, renv = make_fresh_envs datatype in
+    (IntMap.map (fun _ -> InferenceTypeOps.fresh_type_variable ()) tenv,
+     IntMap.map (fun _ -> InferenceTypeOps.fresh_row_variable ()) renv)

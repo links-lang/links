@@ -36,7 +36,6 @@ type dummy_type_to_pull_names_into_scope = int
 type 'a point = {
   mutable link: 'a link
 } 
-
 and 'a link =
   | Info of 'a info
   | Link of 'a point

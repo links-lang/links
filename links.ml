@@ -205,6 +205,12 @@ let evaluate_string_in envs v =
 
 let cmd_line_actions = ref []
 
+let run_tests tests () = 
+  begin
+    Test.run tests;
+    exit 0
+  end
+
 let options : opt list = 
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
@@ -215,6 +221,9 @@ let options : opt list =
     ('e',     "evaluate",            None,                             Some (fun str -> push cmd_line_actions (`Evaluate str)));
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
+    (noshort, "working-tests",               Some (run_tests Tests.working_tests),                   None);
+    (noshort, "broken-tests",               Some (run_tests Tests.broken_tests),                   None);
+    (noshort, "failing-tests",               Some (run_tests Tests.known_failures),                   None);
     ]
 
 let main () =
