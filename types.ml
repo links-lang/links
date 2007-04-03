@@ -49,11 +49,7 @@ and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
-(* [NOTE]
-   this is the datatype I want to use, but it doesn't work with
-   the deriving library (row_var's require a redundant `MetaRowVar tag)
-*)
-(*    deriving (Eq, Show, Pickle, Typeable, Shelve) *)
+    deriving (Eq, Show, Pickle, Typeable, Shelve) 
 end
 
 type datatype =

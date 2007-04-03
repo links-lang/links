@@ -48,18 +48,16 @@ let gen_instance tdl ((loc, tname), params, ctyp, constraints) =
   let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in
   let ltype = gen_type_l tname params in
   let struct_expr = gen_instance {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params; currents=currents} in
-    <:str_item< declare
-        open Typeable; 
-        open Primitives; 
-        module $uid:"Typeable_"^ tname$ = $gen_functor loc "Typeable" params struct_expr$; 
-     end >> 
-
-
+    ("Typeable_"^ tname,
+     (let rhs = <:module_type< (Typeable with type a = $atype$) >> in
+        Sig_utils.gen_functor_type loc "Typeable" params rhs),
+     gen_functor loc "Typeable" params struct_expr)
+      
 let gen_instances loc : instantiator = 
   begin
     fun tdl ->
       let mods = List.map (gen_instance tdl) tdl in
-        <:str_item< declare $list:mods$ end >>
+        <:str_item< declare open Typeable; open Primitives; module rec $list:mods$; end >>
   end
 
 let _ = 
