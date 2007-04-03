@@ -36,12 +36,7 @@ type 't meta_type_var_basis =
 
 (* this is what we should replace meta row vars with *)
 type 't meta_row_var_basis =
-(*     [ 't meta_type_var *)
-    [ `Flexible of int
-    | `Rigid of int
-    | `Recursive of (int * 't)
-    | `Body of 't
-    | `Closed ]
+     [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type datatype =

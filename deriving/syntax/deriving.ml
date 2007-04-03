@@ -228,7 +228,46 @@ struct
            end
       | _ -> assert false
 
-  let cast_pattern loc t ?(param="x") = 
+  (* replace each type variable `v' with the result of `lookup v' *)
+  let instantiate lookup t = 
+    let rec inst = function
+      | MLast.TyAny _
+      | MLast.TyCls _
+      | MLast.TyLid _
+      | MLast.TyUid _ as m -> m
+      | MLast.TyPrv (loc, ctyp) -> MLast.TyPrv (loc, inst ctyp)
+      | MLast.TyAcc (loc, c1, c2) -> MLast.TyAcc (loc, inst c1, inst c2)
+      | MLast.TyAli (loc, c1, c2) -> MLast.TyAli (loc, inst c1, inst c2)
+      | MLast.TyApp (loc, c1, c2) -> MLast.TyApp (loc, inst c1, inst c2)
+      | MLast.TyArr (loc, c1, c2) -> MLast.TyArr (loc, inst c1, inst c2)
+      | MLast.TyMan (loc, c1, c2) -> MLast.TyMan (loc, inst c1, inst c2)
+      | MLast.TyLab (loc, string, ctyp) -> MLast.TyLab (loc, string, inst ctyp)
+      | MLast.TyOlb (loc, string, ctyp) -> MLast.TyOlb (loc, string, inst ctyp)
+      | MLast.TyTup (loc, x) -> MLast.TyTup (loc, List.map inst x)
+      | MLast.TyRec (loc, x) -> MLast.TyRec (loc, List.map (fun (loc,s,b,c) -> loc,s,b,inst c) x)
+      | MLast.TySum (loc, x) -> MLast.TySum (loc, List.map (fun (l,s,c) -> l,s,List.map inst c) x)
+      | MLast.TyObj (loc, x, bool) -> MLast.TyObj (loc, List.map (fun (s,c) -> s,inst c) x, bool)
+      | MLast.TyPol (loc, x, ctyp) -> MLast.TyPol (loc, x, inst ctyp)
+      | MLast.TyVrn (loc, x, y) -> MLast.TyVrn (loc,List.map inst_row x, y)
+
+      (* type var *)
+      | MLast.TyQuo (loc, string) -> lookup string
+
+    and inst_row = function
+      | MLast.RfTag (string, bool, (x:MLast.ctyp list)) -> MLast.RfTag (string, bool, List.map inst x)
+      | MLast.RfInh (ctyp) -> MLast.RfInh (inst ctyp)
+    in inst t
+
+  let instantiate_modargs ({loc=loc} as ti) t : MLast.ctyp = 
+    let lookup var = 
+      try
+        <:ctyp< $uid:snd (List.assoc var ti.argmap)$.a >>
+      with Not_found ->
+        failwith ("Unbound type parameter '" ^ var)
+    in instantiate lookup t
+
+  let cast_pattern ({loc=loc} as ti) t ?(param="x") = 
+    let t = instantiate_modargs ti t in
     (<:patt< $lid:param$ >>,
      Some <:expr<
             let module M = 

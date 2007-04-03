@@ -91,8 +91,8 @@ let gen_polycase ({loc=loc} as ti) = function
     (<:expr< let module M = $gen_printer ti ctyp$ in M.eq l r>>)
 
 | MLast.RfInh ctyp -> 
-    let lvar, Some lguard, lexpr = cast_pattern loc ctyp ~param:"l" 
-    and rvar, Some rguard, rexpr = cast_pattern loc ctyp ~param:"r" in
+    let lvar, Some lguard, lexpr = cast_pattern ti ctyp ~param:"l" 
+    and rvar, Some rguard, rexpr = cast_pattern ti ctyp ~param:"r" in
       (<:patt< ($lvar$, $rvar$) >>,
        Some <:expr< $lguard$ && $rguard$ >>,
        <:expr< let module M = $gen_printer ti ctyp$ in

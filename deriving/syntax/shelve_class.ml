@@ -116,7 +116,7 @@ let gen_shelve_polycase ({loc=loc} as ti) = function
                                               Comp.eq
                                               (make_repr ~constructor:$int:string_of_int n$ [id])]) >>)
   | (MLast.RfInh ctyp, n) ->
-      let var, guard, expr = cast_pattern loc ctyp ~param:"x" in
+      let var, guard, expr = cast_pattern ti ctyp ~param:"x" in
         (<:patt< ($var$ as obj)>>, guard, 
          <:expr< let module S = $gen_printer ti ctyp$ in
               $lid:bindop$ (S.shelve $expr$)

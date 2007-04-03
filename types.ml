@@ -29,15 +29,7 @@ type 't meta_type_var_basis =
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type 'r meta_row_var_basis =
-(* [NOTE]
-   this abbreviation doesn't work with the deriving library
-*)
-(*     [ 't meta_type_var *)
-    [ `Flexible of int
-    | `Rigid of int
-    | `Recursive of (int * 'r)
-    | `Body of 'r
-    | `Closed ]
+    [ 'r meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 module M =
