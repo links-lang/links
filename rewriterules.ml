@@ -234,9 +234,7 @@ struct
   exception Uncompilable of expression
   let uncompilable e = raise (Uncompilable e)
 
-  let resolve_type = function
-    | `MetaTypeVar point -> Unionfind.find point
-    | t -> t
+  let resolve_type = Types.concrete_type
 
   let present_fields fields = 
     StringMap.fold (fun name spec fields ->

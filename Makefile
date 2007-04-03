@@ -56,11 +56,12 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml
 SOURCES = $(OPC)                		\
           utility.ml            		\
           settings.mli settings.ml 		\
+          basicsettings.ml                      \
           debug.mli debug.ml    		\
           rewrite.ml            		\
           performance.ml        		\
           graph.ml              		\
-          types.mli types.ml 	\
+          types.mli types.ml 	                \
           query.mli query.ml          		\
           sql.mli sql.ml               		\
           syntax.mli syntax.ml        		\

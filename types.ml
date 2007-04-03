@@ -21,39 +21,68 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract ]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
-(* this is what we should replace meta type vars with *)
-type 't meta_type_var =
+type 't meta_type_var_basis =
     [ `Flexible of int
     | `Rigid of int
     | `Recursive of (int * 't)
     | `Body of 't ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-(* this is what we should replace meta row vars with *)
-type 't meta_row_var =
-    [ 't meta_type_var
+type 'r meta_row_var_basis =
+(* [NOTE]
+   this abbreviation doesn't work with the deriving library
+*)
+(*     [ 't meta_type_var *)
+    [ `Flexible of int
+    | `Rigid of int
+    | `Recursive of (int * 'r)
+    | `Body of 'r
     | `Closed ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+module M =
+struct
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
-    | `TypeVar of int
-    | `RigidTypeVar of int
     | `Function of (datatype * datatype * datatype)
     | `Record of row
     | `Variant of row
     | `Table of datatype * datatype
-    | `Recursive of (int * datatype)
-    | `Application of (string * datatype list)
-    | `MetaTypeVar of datatype point ]
+    | `Application of (string * (datatype) list)
+    | `MetaTypeVar of meta_type_var ]
 and field_spec = [ `Present of datatype | `Absent ]
-and field_spec_map = (field_spec) field_env
-and row_var =
-    [ `RowVar of int option
-    | `RecRowVar of int * row
-    | `MetaRowVar of row point
-    | `RigidRowVar of int ]
+and field_spec_map = field_spec field_env
+and row_var = meta_row_var
 and row = field_spec_map * row_var
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+and meta_type_var = (datatype meta_type_var_basis) point
+and meta_row_var = (row meta_row_var_basis) point
+(* [NOTE]
+   this is the datatype I want to use, but it doesn't work with
+   the deriving library (row_var's require a redundant `MetaRowVar tag)
+*)
+(*    deriving (Eq, Show, Pickle, Typeable, Shelve) *)
+end
+
+type datatype =
+    [ `Not_typed
+    | `Primitive of primitive
+    | `Function of (datatype * datatype * datatype)
+    | `Record of row
+    | `Variant of row
+    | `Table of datatype * datatype
+    | `Application of (string * (datatype) list)
+    | `MetaTypeVar of meta_type_var ]
+and field_spec = [ `Present of datatype | `Absent ]
+and field_spec_map = field_spec field_env
+and row_var = [ `MetaRowVar of meta_row_var ]
+and row = field_spec_map * row_var
+and meta_type_var = (datatype meta_type_var_basis) point
+and meta_row_var = (row meta_row_var_basis) point
+    deriving (Eq, Show, Pickle, Typeable, Shelve)
+
+let destruct_row_var (`MetaRowVar row_var) = Unionfind.find row_var
+let construct_row_var r = `MetaRowVar (Unionfind.fresh r)
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
@@ -144,46 +173,45 @@ module InferenceTypeOps : TYPEOPS
 =
 struct
   let empty_field_env = FieldEnv.empty
-  let closed_row_var = `RowVar None
+  let closed_row_var = construct_row_var `Closed
 
-  let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`TypeVar var))
-  let make_rigid_type_variable var = `MetaTypeVar (Unionfind.fresh (`RigidTypeVar var))
-  let make_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RowVar (Some var)))
-  let make_rigid_row_variable var = `MetaRowVar (Unionfind.fresh (empty_field_env, `RigidRowVar var))
+  let make_type_variable var = `MetaTypeVar (Unionfind.fresh (`Flexible var))
+  let make_rigid_type_variable var = `MetaTypeVar (Unionfind.fresh (`Rigid var))
+  let make_row_variable var = construct_row_var (`Flexible var)
+  let make_rigid_row_variable var = construct_row_var (`Rigid var)
 
   let is_closed_row =
     let rec is_closed rec_vars =
       function
-        | (_, `RowVar None) -> true
-        | (_, `MetaRowVar point) ->
+        | (_, row_var) ->
             begin
-              match Unionfind.find point with
-                | (_, `RowVar None) -> true
-                | (_, `RigidRowVar _)
-                | (_, `RowVar (Some _)) -> false
-                | (_, `RecRowVar (var, row)) ->
+              match destruct_row_var row_var with
+                | `Closed -> true
+                | `Rigid _
+                | `Flexible _ -> false
+                | `Recursive (var, row) ->
                     ((TypeVarSet.mem var rec_vars) or (is_closed (TypeVarSet.add var rec_vars) row))
-                | (_, `MetaRowVar _) as row ->
+                | `Body row ->
                     is_closed rec_vars row
             end
         | _ -> assert false
     in
       is_closed TypeVarSet.empty
 
-  let get_row_var = fun (_, row_var) ->
+  let get_row_var : row -> int option = fun (_, row_var) ->
     let rec get_row_var' = fun rec_vars -> function
-      | `RowVar None -> None
-      | `RowVar (Some r)
-      | `RigidRowVar r -> Some r
-      | `RecRowVar (var, (_, row_var')) ->
+      | `Closed -> None
+      | `Flexible var
+      | `Rigid var -> Some var
+      | `Recursive (var, (_, row_var')) ->
           if TypeVarSet.mem var rec_vars then
             None
           else
-            get_row_var' (TypeVarSet.add var rec_vars) row_var'
-      | `MetaRowVar point ->
-          get_row_var' rec_vars (snd (Unionfind.find point))
+            get_row_var' (TypeVarSet.add var rec_vars) (destruct_row_var row_var')
+      | `Body (_, row_var') ->
+          get_row_var' rec_vars (destruct_row_var row_var')
     in
-      get_row_var' TypeVarSet.empty row_var
+      get_row_var' TypeVarSet.empty (destruct_row_var row_var)
 
   let fresh_type_variable = make_type_variable -<- fresh_raw_variable
   let fresh_rigid_type_variable = make_rigid_type_variable -<- fresh_raw_variable
@@ -217,10 +245,15 @@ end
 
 
 (* remove any top-level `MetaTypeVars from a type *)
-let rec concrete_type = function
-  | `MetaTypeVar point ->
-      concrete_type (Unionfind.find point)
-  | t -> t
+let rec concrete_type t =
+  match t with
+    | `MetaTypeVar point ->
+        begin
+          match Unionfind.find point with
+            | `Body t -> concrete_type t
+            | _ -> t
+        end
+    | _ -> t
 
 (* [TODO]
       change the return type of these functions to be TypeVarSet.t
@@ -231,20 +264,25 @@ let
     function
       | `Not_typed               -> []
       | `Primitive _             -> []
-      | `RigidTypeVar var        -> [var]
-      | `TypeVar var             -> [var]
       | `Function (f, m, t)      ->
           free_type_vars' rec_vars f @ free_type_vars' rec_vars m @ free_type_vars' rec_vars t
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
       | `Table (r, w)            -> free_type_vars' rec_vars r @ free_type_vars' rec_vars w
-      | `Recursive (var, body)   ->
-          if TypeVarSet.mem var rec_vars then
-            []
-          else
-            free_type_vars' (TypeVarSet.add var rec_vars) body
       | `Application (_, datatypes) -> Utility.concat_map (free_type_vars' rec_vars) datatypes
-      | `MetaTypeVar point       -> free_type_vars' rec_vars (Unionfind.find point)
+      | `MetaTypeVar point       ->
+          begin
+            match Unionfind.find point with
+              | `Flexible var
+              | `Rigid var -> [var]
+              | `Recursive (var, body) ->
+                  if TypeVarSet.mem var rec_vars then
+                    []
+                  else
+                    free_type_vars' (TypeVarSet.add var rec_vars) body
+              | `Body t ->
+                  free_type_vars' rec_vars t
+          end
   and free_row_type_vars' : type_var_set -> row -> int list = 
     fun rec_vars (field_env, row_var) ->
       let field_vars =
@@ -255,15 +293,17 @@ let
                            | `Absent ->
                                field_vars) field_env [] in
       let row_vars =
-        match row_var with
-          | `RigidRowVar var
-          | `RowVar (Some var) -> [var]
-          | `RowVar None -> []
-          | `RecRowVar (var, row) -> if TypeVarSet.mem var rec_vars then
-              []
-            else
-              (free_row_type_vars' (TypeVarSet.add var rec_vars) row)
-          | `MetaRowVar point -> free_row_type_vars' rec_vars (Unionfind.find point)
+        match destruct_row_var row_var with
+          | `Flexible var
+          | `Rigid var -> [var]
+          | `Recursive (var, body) ->
+              if TypeVarSet.mem var rec_vars then
+                []
+              else
+                free_row_type_vars' (TypeVarSet.add var rec_vars) body
+          | `Body row ->
+              free_row_type_vars' rec_vars row
+          | `Closed -> []
       in
         field_vars @ row_vars
   in
@@ -288,38 +328,24 @@ let contains_present_fields field_env =
          | `Absent -> present
     ) field_env false
 
-let is_canonical_row_var =
-  function
-    | `RowVar None -> true
-    | `MetaRowVar point ->
-        begin
-          match snd (Unionfind.find point) with
-            | `RigidRowVar _
-            | `RowVar (Some _) -> true
-            | `RowVar None
-            | `RecRowVar _
-            | `MetaRowVar _ -> false
-        end
-    | `RowVar (Some _)
-    | `RigidRowVar _
-    | `RecRowVar _ -> assert false
+let is_canonical_row_var row_var =
+  match destruct_row_var row_var with
+    | `Closed
+    | `Flexible _
+    | `Rigid _ -> true
+    | `Recursive _
+    | `Body _ -> false
 
 let is_rigid_row : row -> bool =
-  let rec is_rigid rec_vars =
-    function
-      | (_, `RowVar None) -> true
-      | (_, `MetaRowVar point) ->
-          begin
-            match Unionfind.find point with
-              | (_, `RowVar (Some _)) -> false
-              | (_, `RowVar None)
-              | (_, `RigidRowVar _)  -> true
-              | (_, `RecRowVar (var, row)) ->
-                  ((TypeVarSet.mem var rec_vars) or (is_rigid (TypeVarSet.add var rec_vars) row))
-              | (_, `MetaRowVar _) as row ->
-                  is_rigid rec_vars row
-          end
-      | _ -> assert false
+  let rec is_rigid rec_vars (_, row_var) =
+    match destruct_row_var row_var with
+      | `Closed
+      | `Rigid _ -> true
+      | `Flexible _ -> false
+      | `Recursive (var, row) ->
+          ((TypeVarSet.mem var rec_vars) or (is_rigid (TypeVarSet.add var rec_vars) row))
+      | `Body row ->
+          is_rigid rec_vars row
   in
     is_rigid TypeVarSet.empty
 
@@ -328,42 +354,30 @@ let is_rigid_row : row -> bool =
  *)
 let is_rigid_row_with_var : int -> row -> bool =
   fun var ->
-    let rec is_rigid var rec_vars =
-      function
-        | (_, `RowVar None) -> false
-        | (_, `MetaRowVar point) ->
-            begin
-              match Unionfind.find point with
-                | (_, `RowVar None)
-                | (_, `RowVar (Some _)) -> false
-                | (_, `RigidRowVar var') -> var=var'
-                | (_, `RecRowVar (var, row)) ->
-                    ((TypeVarSet.mem var rec_vars) or (is_rigid var (TypeVarSet.add var rec_vars) row))
-                | (_, `MetaRowVar _) as row ->
-                    is_rigid var rec_vars row
-            end
-        | _ -> assert false
+    let rec is_rigid rec_vars (_, row_var) =
+      match destruct_row_var row_var with
+        | `Closed
+        | `Flexible _ -> false
+        | `Rigid var' -> var=var'
+        | `Recursive (var', row) ->
+            ((TypeVarSet.mem var' rec_vars) or (is_rigid (TypeVarSet.add var' rec_vars) row))
+        | `Body row ->
+            is_rigid rec_vars row
     in
-      is_rigid var TypeVarSet.empty
+      is_rigid TypeVarSet.empty
 
 
 let is_flattened_row : row -> bool =
-  let rec is_flattened = fun rec_vars -> function
-    | (_, `MetaRowVar point) ->
-        (match Unionfind.find point with 
-           | (_, `RowVar None) -> false
-           | (field_env', `RigidRowVar _)
-           | (field_env', `RowVar (Some _)) ->
-               assert(not (contains_present_fields field_env')); true
-           | (field_env', `RecRowVar (var, rec_row)) ->
-               assert(not (contains_present_fields field_env'));
-               if TypeVarSet.mem var rec_vars then true
-               else is_flattened (TypeVarSet.add var rec_vars) rec_row
-           | (_ , `MetaRowVar _) -> false)
-    | (_, `RigidRowVar _)
-    | (_, `RowVar None) -> true
-    | (_, `RowVar (Some _ ))
-    | (_, `RecRowVar (_, _)) -> assert false
+  let rec is_flattened =
+    fun rec_vars (_, row_var) ->
+      match destruct_row_var row_var with
+        | `Closed
+        | `Flexible _
+        | `Rigid _ -> true
+        | `Body _ -> false
+        | `Recursive (var, rec_row) ->
+            if TypeVarSet.mem var rec_vars then true
+            else is_flattened (TypeVarSet.add var rec_vars) rec_row
   in
     is_flattened TypeVarSet.empty
 
@@ -371,23 +385,13 @@ let is_empty_row : row -> bool =
   let rec is_empty = fun rec_vars -> fun (field_env, row_var) ->
     FieldEnv.is_empty field_env &&
       begin
-        match row_var with
-          | `MetaRowVar point ->
-              let (field_env, row_var) = Unionfind.find point
-              in
-                FieldEnv.is_empty field_env &&
-                  begin
-                    match row_var with
-                      | `RigidRowVar _
-                      | `RowVar _ -> true
-                      | `RecRowVar (var, _) when TypeVarSet.mem var rec_vars -> true
-                      | `RecRowVar (var, rec_row) -> is_empty (TypeVarSet.add var rec_vars) rec_row
-                      | `MetaRowVar point -> is_empty rec_vars (Unionfind.find point)
-                  end
-          | `RowVar None -> true
-          | `RigidRowVar _
-          | `RowVar (Some _)
-          | `RecRowVar (_, _) -> assert false
+        match destruct_row_var row_var with
+          | `Closed
+          | `Rigid _
+          | `Flexible _ -> true
+          | `Recursive (var, _) when TypeVarSet.mem var rec_vars -> true
+          | `Recursive (var, rec_row) -> is_empty (TypeVarSet.add var rec_vars) rec_row
+          | `Body row -> is_empty rec_vars row
       end
   in
     is_empty TypeVarSet.empty
@@ -401,35 +405,26 @@ let is_empty_row : row -> bool =
   | `MetaRowVar (empty, `RecRowVar (var, rec_row))
  *)
 let flatten_row : row -> row =
-  let rec flatten_row' : (row Unionfind.point) IntMap.t -> row -> row =
-    fun rec_env row ->
+  let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
+    fun rec_env ((field_env, row_var) as row) ->
       let row' =
-        match row with
-          | (field_env, `MetaRowVar point) ->
-              let row' = Unionfind.find point in
-                (match row' with
-                     (field_env', `RowVar (Some _))
-                   | (field_env', `RigidRowVar _)
-                   | (field_env', `RecRowVar _) when (contains_present_fields field_env')
-                       -> assert false
-                   | (field_env', (`RowVar None as r)) ->
-                       field_env_union (field_env, field_env'), r
-                   | (_, `RigidRowVar _)
-                   | (_, `RowVar (Some _)) -> row
-                   | (_, `RecRowVar (var, rec_row)) ->
-                       if IntMap.mem var rec_env then
-                         field_env, `MetaRowVar (IntMap.find var rec_env)
-                       else
-                         (let point' = Unionfind.fresh (FieldEnv.empty, `RecRowVar (var, (FieldEnv.empty, `RowVar (Some var)))) in
-                          let rec_row' = flatten_row' (IntMap.add var point' rec_env) rec_row in
-                            Unionfind.change point' (FieldEnv.empty, `RecRowVar (var, rec_row'));
-                            field_env, `MetaRowVar point')
-                   | (_, `MetaRowVar _) ->
-                       let field_env', row_var' = flatten_row' rec_env row' in
-                         field_env_union (field_env, field_env'), row_var')
-
-          | (_, `RowVar None) -> row
-          | _ -> assert false
+        match destruct_row_var row_var with
+          | `Closed
+          | `Flexible _
+          | `Rigid _ -> row
+          | `Recursive (var, rec_row) ->
+              if IntMap.mem var rec_env then
+                row
+              else
+                (let row_var' =
+                   Unionfind.fresh (`Recursive (var, (FieldEnv.empty,
+                                                      construct_row_var (`Flexible var)))) in
+                 let rec_row' = flatten_row' (IntMap.add var row_var' rec_env) rec_row in
+                   Unionfind.change row_var' (`Recursive (var, rec_row'));
+                    field_env, `MetaRowVar row_var')                 
+          | `Body row' ->
+              let field_env', row_var' = flatten_row' rec_env row' in
+                field_env_union (field_env, field_env'), row_var'
       in
         assert (is_flattened_row row');
         row'
@@ -445,40 +440,34 @@ let flatten_row : row -> row =
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
-let unwrap_row : row -> (row * (int * row) option) =
-  let rec unwrap_row' : (row Unionfind.point) IntMap.t -> row -> (row * (int * row) option) =
-    fun rec_env -> function
-      | (field_env, `MetaRowVar point) as row ->
-          (match Unionfind.find point with
-             | (field_env', `RowVar (Some _))
-             | (field_env', `RigidRowVar _)
-             | (field_env', `RecRowVar _) when (contains_present_fields field_env')
-                 -> assert false
-             | (field_env', `RowVar None) ->
-                 (field_env_union (field_env, field_env'), `RowVar None), None
-             | (_, `RowVar (Some _))
-             | (_, `RigidRowVar _) ->
-                 row, None
-             | (_, `RecRowVar ((var, body) as rec_row)) ->
-                 if IntMap.mem var rec_env then
-                   (field_env, `MetaRowVar (IntMap.find var rec_env)), Some rec_row
-                 else
-                   (let point' = Unionfind.fresh (FieldEnv.empty, `RecRowVar (var, (FieldEnv.empty, `RowVar (Some var)))) in
-                    let unwrapped_body, _ = unwrap_row' (IntMap.add var point' rec_env) body in
-                      Unionfind.change point' (FieldEnv.empty, `RecRowVar (var, unwrapped_body));
-                      let field_env', row_var' = unwrapped_body in
-                        (field_env_union (field_env, field_env'), row_var')), Some rec_row
-             | (_, `MetaRowVar _) as row' ->
-                 let (field_env', row_var'), rec_row = unwrap_row' rec_env row' in
-                   (field_env_union (field_env, field_env'), row_var'), rec_row)
-      | (_, `RowVar None) as row -> row, None
-      | _ -> assert false
-  in
-    fun row ->
-      let unwrapped_row, rec_row = unwrap_row' IntMap.empty row
+let unwrap_row : row -> (row * row_var option) =
+  let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
+    fun rec_env ((field_env, row_var) as row) ->
+      let row' =
+        match destruct_row_var row_var with
+          | `Closed
+          | `Flexible _
+          | `Rigid _ -> row, None
+          | `Recursive (var, body) ->
+              if IntMap.mem var rec_env then
+                row, Some row_var
+              else
+                begin
+                  let point =
+                    Unionfind.fresh (`Recursive (var, body)) in
+                  let unwrapped_body, _ = unwrap_row' (IntMap.add var point rec_env) body in
+                    Unionfind.change point (`Recursive (var, unwrapped_body));
+                    let field_env', row_var' = unwrapped_body in
+                      (field_env_union (field_env, field_env'), row_var'), Some (`MetaRowVar point)
+                end
+          | `Body row' ->
+              let (field_env', row_var'), rec_row = unwrap_row' rec_env row' in
+                (field_env_union (field_env, field_env'), row_var'), rec_row
       in
-        assert (is_flattened_row unwrapped_row);
-        unwrapped_row, rec_row  
+        assert (is_flattened_row (fst row'));
+        row'
+  in
+    unwrap_row' IntMap.empty
 
 (* useful types *)
 let unit_type = `Record (InferenceTypeOps.make_empty_closed_row ())
@@ -505,19 +494,17 @@ let rec datatype_skeleton :  type_var_set -> datatype -> datatype = fun rec_vars
     | `Table (r, w) -> `Table (datatype_skeleton rec_vars r, datatype_skeleton rec_vars w)
     | `Application (s, ts) -> `Application (s, List.map (datatype_skeleton rec_vars) ts)
     | `MetaTypeVar point ->
-        (match Unionfind.find point with
-           | `RigidTypeVar var -> `RigidTypeVar var
-           | `TypeVar var -> `TypeVar var
-           | `Recursive (var, t) ->
-               if TypeVarSet.mem var rec_vars then
-                 `Recursive (var, t)
-               else
-                 `Recursive (var, datatype_skeleton (TypeVarSet.add var rec_vars) t)
-           | `MetaTypeVar _ -> assert false
-           | t -> `MetaTypeVar (Unionfind.fresh (datatype_skeleton rec_vars t)))
-    | `Recursive _
-    | `RigidTypeVar _
-    | `TypeVar _ -> assert false
+        `MetaTypeVar
+          (Unionfind.fresh
+             (match Unionfind.find point with
+                | `Flexible var -> `Flexible var
+                | `Rigid var -> `Rigid var
+                | `Recursive (var, t) ->
+                    if TypeVarSet.mem var rec_vars then
+                      `Recursive (var, t)
+                    else
+                      `Recursive (var, datatype_skeleton (TypeVarSet.add var rec_vars) t)
+                | `Body t -> `Body (datatype_skeleton rec_vars t)))
 and field_spec_skeleton = fun rec_vars ->
   function
     | `Present t -> `Present (datatype_skeleton rec_vars t)
@@ -528,24 +515,19 @@ and row_skeleton = fun rec_vars row ->
   let field_env, row_var = row in (*flatten_row row in*)
   let field_env' = field_spec_map_skeleton rec_vars field_env in
   let row_var' =
-    match row_var with
-      | `RowVar None -> `RowVar None
-      | `MetaRowVar point ->
-          let (field_env, row_var) = Unionfind.find point in
-            assert(not (contains_present_fields field_env));
-            (match row_var with
-               | `RowVar None -> `RowVar None
-               | `RowVar (Some var)
-               | `RigidRowVar var -> `RowVar (Some var)
-               | `RecRowVar (var, rec_row) ->
-                   if TypeVarSet.mem var rec_vars then
-                     `RowVar (Some var)
-                   else
-                     `RecRowVar (var, row_skeleton (TypeVarSet.add var rec_vars) rec_row)
-               | `MetaRowVar _ -> assert false)
-      | `RigidRowVar _
-      | `RowVar (Some _)
-      | `RecRowVar (_, _) -> assert false
+    `MetaRowVar
+      (Unionfind.fresh
+         (match destruct_row_var row_var with
+            | `Closed -> `Closed
+            | `Flexible var -> `Flexible var
+            | `Rigid var -> `Rigid var
+            | `Recursive (var, rec_row) ->
+                if TypeVarSet.mem var rec_vars then
+                  `Recursive (var, rec_row)
+                else
+                  `Recursive (var, row_skeleton (TypeVarSet.add var rec_vars) rec_row)
+            | `Body row ->
+                `Body (row_skeleton rec_vars row)))
   in
     field_env', row_var'
 
@@ -568,19 +550,17 @@ let rec free_alias_check alias_env = fun rec_vars ->
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
       | `MetaTypeVar point ->
-          (match Unionfind.find point with
-             | `RigidTypeVar var
-             | `TypeVar var -> ()
-             | `Recursive (var, t) ->
-                 if TypeVarSet.mem var rec_vars then
-                   ()
-                 else
-                   fac (TypeVarSet.add var rec_vars) t
-             | `MetaTypeVar _ -> assert false
-             | t -> fac rec_vars t)
-      | `Recursive _
-      | `RigidTypeVar _
-      | `TypeVar _ -> assert false
+          begin
+            match Unionfind.find point with
+              | `Flexible var
+              | `Rigid var -> ()
+              | `Recursive (var, t) ->
+                  if TypeVarSet.mem var rec_vars then
+                    ()
+                  else
+                    fac (TypeVarSet.add var rec_vars) t
+              | `Body t -> fac rec_vars t
+          end
 and free_alias_check_field_spec alias_env = fun rec_vars ->
   function
     | `Present t -> free_alias_check alias_env rec_vars t
@@ -591,24 +571,17 @@ and free_alias_check_row alias_env = fun rec_vars row ->
   let field_env, row_var = row
   in
     free_alias_check_field_spec_map alias_env rec_vars field_env;
-    match row_var with
-      | `RowVar None -> ()
-      | `MetaRowVar point ->
-          let (field_env, row_var) = Unionfind.find point in
-            assert(not (contains_present_fields field_env));
-            (match row_var with
-               | `RowVar None -> ()
-               | `RowVar (Some var)
-               | `RigidRowVar var -> ()
-               | `RecRowVar (var, rec_row) ->
-                   if TypeVarSet.mem var rec_vars then
-                     ()
-                   else
-                     free_alias_check_row alias_env (TypeVarSet.add var rec_vars) rec_row
-               | `MetaRowVar _ -> assert false)
-      | `RigidRowVar _
-      | `RowVar (Some _)
-      | `RecRowVar (_, _) -> assert false
+    match destruct_row_var row_var with
+      | `Closed
+      | `Flexible _
+      | `Rigid _ -> ()
+      | `Recursive (var, rec_row) ->
+          if TypeVarSet.mem var rec_vars then
+            ()
+          else
+            free_alias_check_row alias_env (TypeVarSet.add var rec_vars) rec_row
+      | `Body row ->
+          free_alias_check_row alias_env rec_vars row
 
 (* interface *)
 let free_alias_check alias_env = free_alias_check alias_env TypeVarSet.empty
@@ -661,19 +634,16 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
     (* precondition: the row is unwrapped *)
     let string_of_tuple (field_env, row_var) =
       let row_var_string =
-        match row_var with
-          | `RowVar None -> ""
-          | `MetaRowVar point ->
-              begin
-                let _, row_var = Unionfind.find point in
-                  match row_var with 
-                    | `RowVar (Some var)
-                    | `RigidRowVar var -> " | "
-                    | `RowVar None
-                    | `RecRowVar _
-                    | `MetaRowVar _ -> assert false
-              end
-          | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false in
+        match string_of_row_var' "|" rec_vars vars row_var with
+          | None -> ""
+          | Some s -> "|"^s in
+
+(*         match destruct_row_var row_var with *)
+(*           | `Closed -> "" *)
+(*           | `Flexible _ *)
+(*           | `Rigid _ -> "|" *)
+(*           | `Recursive _ *)
+(*           | `Body _ -> assert false in *)
       let ss = List.rev
         (FieldEnv.fold (fun _ t ss ->
                           match t with
@@ -688,15 +658,15 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
         | `MetaTypeVar point ->
             begin
               match Unionfind.find point with
-                | `TypeVar var
-                | `RigidTypeVar var -> IntMap.find var vars
+                | `Flexible var
+                | `Rigid var -> IntMap.find var vars
                 | `Recursive (var, body) ->
                     if TypeVarSet.mem var rec_vars then
                       IntMap.find var vars
                     else
 	              "mu " ^ IntMap.find var vars ^ " . " ^
                         string_of_datatype' (TypeVarSet.add var rec_vars) vars body
-                | t -> sd t
+                | `Body t -> sd t
             end
         | `Function (f, mailbox_type, t) ->
 	    let arrow =
@@ -716,7 +686,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
             let row = unwrap row in
               (if is_tuple row then string_of_tuple row
 	       else "(" ^ string_of_row' "," rec_vars vars row ^ ")")
-        | `Variant row    -> "[|" ^ string_of_row' " | " rec_vars vars row ^ "|]"
+        | `Variant row    -> "[|" ^ string_of_row' "|" rec_vars vars row ^ "|]"
         | `Table (r, w)   ->
             "TableHandle(" ^
               string_of_datatype' rec_vars vars r ^ "," ^
@@ -748,9 +718,6 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
         | `Application ("List", [elems])              ->  "["^ sd elems ^"]"
         | `Application (s, []) -> s
         | `Application (s, ts) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
-        | `TypeVar _
-        | `RigidTypeVar _
-        | `Recursive _ -> assert false
 
 and string_of_row' sep rec_vars vars (field_env, row_var) =
   let present_strings, absent_strings =
@@ -764,29 +731,20 @@ and string_of_row' sep rec_vars vars (field_env, row_var) =
     (String.concat sep (List.rev (present_strings) @ List.rev (absent_strings))) ^
       (match row_var_string with
 	 | None -> ""
-	 | Some s -> "|"^s)
-and string_of_row_var' sep rec_vars vars = function
-  | `RowVar None -> None
-  | `MetaRowVar point ->
-      begin
-        match Unionfind.find point with
-          | (field_env, `RowVar (None)) ->
-              assert(not (contains_present_fields field_env));
-              None
-          | (field_env, `RowVar (Some var))
-          | (field_env, `RigidRowVar var) ->
-              assert(not (contains_present_fields field_env));
-              Some (IntMap.find var vars)
-          | (field_env, `RecRowVar (var, row)) ->
-              assert(not (contains_present_fields field_env));
-              if TypeVarSet.mem var rec_vars then
-                Some (IntMap.find var vars)
-              else
-                Some ("(mu " ^ IntMap.find var vars ^ " . " ^
-                        string_of_row' sep (TypeVarSet.add var rec_vars) vars row ^ ")")
-          | row -> Some (string_of_row' sep rec_vars vars row)
-      end
-  | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false
+	 | Some s -> sep^s)
+and string_of_row_var' sep rec_vars vars row_var =
+  match destruct_row_var row_var with
+    | `Closed -> None
+    | `Flexible var
+    | `Rigid var ->
+        Some (IntMap.find var vars)
+    | `Recursive (var, row) ->
+        if TypeVarSet.mem var rec_vars then
+          Some (IntMap.find var vars)
+        else
+          Some ("(mu " ^ IntMap.find var vars ^ " . " ^
+                  string_of_row' sep (TypeVarSet.add var rec_vars) vars row ^ ")")
+    | `Body row -> Some (string_of_row' sep rec_vars vars row)
 
 let make_names vars =
   if Settings.get_value show_raw_type_vars then
@@ -825,14 +783,16 @@ let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars 
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `TypeVar _
-              | `RigidTypeVar _ -> t
+              | `Flexible _
+              | `Rigid _ -> t
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var rec_vars then
                     t
                   else
-                    freshen_mailboxes (TypeVarSet.add var rec_vars) body
-              | t -> fmb t
+                    `MetaTypeVar
+                      (Unionfind.fresh
+                         (`Recursive (var, freshen_mailboxes (TypeVarSet.add var rec_vars) body)))
+              | `Body t -> fmb t
           end
       | `Function (f, m, t) ->
           `Function (
@@ -842,7 +802,7 @@ let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars 
                 | `MetaTypeVar point ->
                     begin
                       match Unionfind.find point with
-                        | `TypeVar var ->
+                        | `Flexible var ->
                             InferenceTypeOps.fresh_type_variable ()
                         | _ -> fmb m
                     end
@@ -853,9 +813,6 @@ let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars 
       | `Variant row -> `Variant (row_freshen_mailboxes rec_vars row)
       | `Table (r, w) -> `Table (freshen_mailboxes rec_vars r, freshen_mailboxes rec_vars w)
       | `Application (name, datatypes) -> `Application (name, List.map fmb datatypes)
-      | `TypeVar _
-      | `RigidTypeVar _
-      | `Recursive _ -> assert false
 and row_freshen_mailboxes rec_vars (field_env, row_var) =
   (FieldEnv.map (fun t ->
                    match t with
@@ -865,31 +822,22 @@ and row_freshen_mailboxes rec_vars (field_env, row_var) =
                          `Absent) field_env,
    row_var_freshen_mailboxes rec_vars row_var)
 and row_var_freshen_mailboxes rec_vars row_var = 
-  match row_var with
-    | `RowVar None -> row_var
-    | `MetaRowVar point ->
-        begin
-          match Unionfind.find point with
-            | (field_env, `RowVar (Some var))
-            | (field_env, `RigidRowVar var)  ->
-                assert(not (contains_present_fields field_env));
-                row_var
-            | (field_env, `RecRowVar (var, row)) ->
-                assert(not (contains_present_fields field_env));
-                if TypeVarSet.mem var rec_vars then
-                  row_var
-                else
-                  `MetaRowVar
-                    (Unionfind.fresh
-                       (field_env,
-                        `RecRowVar (var,
-                                     row_freshen_mailboxes (TypeVarSet.add var rec_vars) row)))
-            | row ->
-                `MetaRowVar
-                  (Unionfind.fresh
-                     (row_freshen_mailboxes rec_vars row))
-        end
-    | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false
+  match destruct_row_var row_var with
+    | `Closed
+    | `Flexible _
+    | `Rigid _ -> row_var
+    | `Recursive (var, row) ->
+        if TypeVarSet.mem var rec_vars then
+          row_var
+        else
+          `MetaRowVar
+            (Unionfind.fresh
+               (`Recursive (var,
+                            row_freshen_mailboxes (TypeVarSet.add var rec_vars) row)))
+    | `Body row ->
+       `MetaRowVar
+         (Unionfind.fresh
+            (`Body (row_freshen_mailboxes rec_vars row)))
 
 let freshen_mailboxes = freshen_mailboxes TypeVarSet.empty
 let row_freshen_mailboxes = row_freshen_mailboxes TypeVarSet.empty
@@ -903,14 +851,14 @@ let rec free_bound_type_vars : type_var_set -> datatype -> TypeVarSet.t = fun re
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `TypeVar var
-              | `RigidTypeVar var -> TypeVarSet.singleton var
+              | `Flexible var
+              | `Rigid var -> TypeVarSet.singleton var
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var rec_vars then
                     TypeVarSet.empty
                   else
                     TypeVarSet.add var (free_bound_type_vars (TypeVarSet.add var rec_vars) body)
-              | t -> fbtv t
+              | `Body t -> fbtv t
           end
       | `Function (f, m, t)      ->
           TypeVarSet.union
@@ -920,9 +868,6 @@ let rec free_bound_type_vars : type_var_set -> datatype -> TypeVarSet.t = fun re
       | `Variant row -> free_bound_row_type_vars rec_vars row
       | `Table (r, w) -> TypeVarSet.union (fbtv r) (fbtv w)
       | `Application (_, datatypes) -> List.fold_right TypeVarSet.union (List.map fbtv datatypes) TypeVarSet.empty
-      | `TypeVar _
-      | `RigidTypeVar _
-      | `Recursive _ -> assert false
 and free_bound_row_type_vars rec_vars (field_env, row_var) =
   let field_type_vars =
     FieldEnv.fold (fun _ t tvs ->
@@ -934,25 +879,18 @@ and free_bound_row_type_vars rec_vars (field_env, row_var) =
   let row_var = free_bound_row_var_vars rec_vars row_var in
     TypeVarSet.union field_type_vars row_var  
 and free_bound_row_var_vars rec_vars row_var = 
-  match row_var with
-    | `RowVar None -> TypeVarSet.empty
-    | `MetaRowVar point ->
-        begin
-          match Unionfind.find point with
-            | (field_env, `RowVar (Some var))
-            | (field_env, `RigidRowVar var)  ->
-                assert(not (contains_present_fields field_env));
-                TypeVarSet.singleton var
-            | (field_env, `RecRowVar (var, row)) ->
-                assert(not (contains_present_fields field_env));
-                if TypeVarSet.mem var rec_vars then
-                  TypeVarSet.empty
-                else
-                  TypeVarSet.add var
-                    (free_bound_row_type_vars (TypeVarSet.add var rec_vars) row)
-            | row -> free_bound_row_type_vars rec_vars row
-        end
-    | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false
+  match destruct_row_var row_var with
+    | `Closed -> TypeVarSet.empty
+    | `Flexible var
+    | `Rigid var ->
+        TypeVarSet.singleton var
+    | `Recursive (var, row) ->
+        if TypeVarSet.mem var rec_vars then
+          TypeVarSet.empty
+        else
+          TypeVarSet.add var
+            (free_bound_row_type_vars (TypeVarSet.add var rec_vars) row)
+    | `Body row -> free_bound_row_type_vars rec_vars row
 
 let free_bound_type_vars = free_bound_type_vars TypeVarSet.empty
 let free_bound_row_type_vars = free_bound_row_type_vars TypeVarSet.empty
@@ -966,17 +904,15 @@ let rec type_aliases : type_var_set -> datatype -> StringSet.t = fun rec_vars t 
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `TypeVar var
-              | `RigidTypeVar var -> StringSet.empty
+              | `Flexible var
+              | `Rigid var -> StringSet.empty
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var rec_vars then
                     StringSet.empty
                   else
                     type_aliases (TypeVarSet.add var rec_vars) body
-              | t -> tas t
+              | `Body t -> tas t
           end
-      | `TypeVar _
-      | `RigidTypeVar _ -> StringSet.empty
       | `Function (f, m, t) ->
           StringSet.union
             (StringSet.union (tas f) (tas t))
@@ -985,7 +921,6 @@ let rec type_aliases : type_var_set -> datatype -> StringSet.t = fun rec_vars t 
       | `Variant row -> row_type_aliases rec_vars row
       | `Table (r, w) -> StringSet.union (tas r) (tas w)
       | `Application (alias, datatypes) -> List.fold_right StringSet.union (List.map tas datatypes) (StringSet.singleton alias)
-      | `TypeVar _ | `RigidTypeVar _ | `Recursive _ -> assert false
 and row_type_aliases rec_vars (field_env, row_var) =
   let field_type_aliases = 
     FieldEnv.fold (fun _ t ftas ->
@@ -997,25 +932,16 @@ and row_type_aliases rec_vars (field_env, row_var) =
   let row_var = row_var_type_aliases rec_vars row_var in
     StringSet.union field_type_aliases row_var  
 and row_var_type_aliases rec_vars row_var = 
-  match row_var with
-    | `RowVar None -> StringSet.empty
-    | `MetaRowVar point ->
-        begin
-          match Unionfind.find point with
-            | (field_env, `RowVar _)
-            | (field_env, `RigidRowVar _) ->
-                assert(not (contains_present_fields field_env));
-                StringSet.empty
-            | (field_env, `RecRowVar (var, row)) ->
-                assert(not (contains_present_fields field_env));
-                if TypeVarSet.mem var rec_vars then
-                  StringSet.empty
-                else
-                  row_type_aliases (TypeVarSet.add var rec_vars) row
-            | row -> row_type_aliases rec_vars row
-        end
-    | `RowVar (Some _) | `RigidRowVar _ | `RecRowVar _ -> assert false
-
+  match destruct_row_var row_var with
+    | `Closed
+    | `Flexible _
+    | `Rigid _ -> StringSet.empty
+    | `Recursive (var, row) ->
+        if TypeVarSet.mem var rec_vars then
+          StringSet.empty
+        else
+          row_type_aliases (TypeVarSet.add var rec_vars) row
+    | `Body row -> row_type_aliases rec_vars row
 
 (* type aliases *)
 type type_alias_set = Utility.StringSet.t
@@ -1062,19 +988,22 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
       match t with
         | `Not_typed -> false
         | `Primitive _ -> false
-        | `RigidTypeVar _
-        | `TypeVar _ -> false
         | `MetaTypeVar point ->
-            isn (Unionfind.find point)
+            begin
+              match Unionfind.find point with
+                | `Flexible _
+                | `Rigid _ -> false
+                | `Recursive (var', t) ->
+                    not (TypeVarSet.mem var' rec_vars) &&
+                      is_negative (TypeVarSet.add var' rec_vars) var t
+                | `Body t -> isn t
+            end
         | `Function (f, m, t) ->
             isp f || isp m || isn t
         | `Record row -> isnr row
         | `Variant row -> isnr row
         | `Table (r, w) -> isn r || isn w
         | `Application (_, ts) -> List.exists isn ts (* is this right? -jdy *)
-        | `Recursive (var', t) ->
-            not (TypeVarSet.mem var' rec_vars) &&
-              is_negative (TypeVarSet.add var' rec_vars) var t
 and is_negative_row : TypeVarSet.t -> int -> row -> bool =
   fun rec_vars var (field_env, row_var) ->
     is_negative_field_env rec_vars var field_env || is_negative_row_var rec_vars var row_var
@@ -1086,14 +1015,16 @@ and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
                         | `Present t -> result || is_negative rec_vars var t
                    ) field_env false
 and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
-  fun rec_vars var -> function
-    | `RigidRowVar _
-    | `RowVar _ -> false
-    | `RecRowVar (var', row) ->
-        not (TypeVarSet.mem var' rec_vars) &&
-          is_negative_row (TypeVarSet.add var' rec_vars) var row
-    | `MetaRowVar point ->
-        is_negative_row rec_vars var (Unionfind.find point)
+  fun rec_vars var row_var ->
+    match destruct_row_var row_var with
+      | `Closed
+      | `Flexible _
+      | `Rigid _ -> false
+      | `Recursive (var', row) ->
+          not (TypeVarSet.mem var' rec_vars) &&
+            is_negative_row (TypeVarSet.add var' rec_vars) var row
+      | `Body row ->
+          is_negative_row rec_vars var row
 
 and is_positive : TypeVarSet.t -> int -> datatype -> bool =
   fun rec_vars var t ->
@@ -1103,19 +1034,22 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
       match t with
         | `Not_typed -> false
         | `Primitive _ -> false
-        | `RigidTypeVar var'
-        | `TypeVar var' -> var = var'
         | `MetaTypeVar point ->
-            isp (Unionfind.find point)
+            begin
+              match Unionfind.find point with
+                | `Flexible _
+                | `Rigid _ -> false
+                | `Recursive (var', t) ->
+                    not (TypeVarSet.mem var' rec_vars) &&
+                      is_positive (TypeVarSet.add var' rec_vars) var t
+                | `Body t -> isp t
+            end
         | `Function (f, m, t) ->
             isn f || isn m || isp t
         | `Record row -> ispr row
         | `Variant row -> ispr row
         | `Table (r, w) -> isp r || isp w
         | `Application (_,ts) -> List.exists isp ts (* is this right? -jdy *)
-        | `Recursive (var', t) ->
-            not (TypeVarSet.mem var' rec_vars) &&
-              is_positive (TypeVarSet.add var' rec_vars) var t
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
   fun rec_vars var (field_env, row_var) ->
     is_positive_field_env rec_vars var field_env || is_positive_row_var rec_vars var row_var
@@ -1127,15 +1061,16 @@ and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
                         | `Present t -> result || is_positive rec_vars var t
                    ) field_env false
 and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
-  fun rec_vars var -> function
-    | `RowVar None -> false
-    | `RigidRowVar var'
-    | `RowVar (Some var') -> var = var'
-    | `RecRowVar (var', row) ->
-        not (TypeVarSet.mem var' rec_vars) &&
-          is_positive_row (TypeVarSet.add var' rec_vars) var row
-    | `MetaRowVar point ->
-        is_positive_row rec_vars var (Unionfind.find point)
+  fun rec_vars var row_var ->
+    match destruct_row_var row_var with
+      | `Closed -> false
+      | `Flexible var'
+      | `Rigid var' -> var=var;
+      | `Recursive (var', row) ->
+          not (TypeVarSet.mem var' rec_vars) &&
+            is_positive_row (TypeVarSet.add var' rec_vars) var row
+      | `Body row ->
+          is_positive_row rec_vars var row
 
 let is_negative = is_negative TypeVarSet.empty
 let is_negative_row = is_negative_row TypeVarSet.empty
@@ -1156,18 +1091,22 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let rec makeEnv recvars = function
       | `Not_typed
       | `Primitive _             -> empties
-      | `RigidTypeVar var        -> let l,r = empties in
-          (M.add var (InferenceTypeOps.fresh_rigid_type_variable ()) l, r)
-      | `TypeVar var             -> let l, r = empties in
-          (M.add var (InferenceTypeOps.fresh_type_variable ()) l, r)
       | `Function (f, m, t)      -> union [makeEnv recvars f; makeEnv recvars m; makeEnv recvars t]
       | `Record row              
       | `Variant row             -> makeEnvR recvars row
       | `Table (l,r)             -> union [makeEnv recvars l; makeEnv recvars r]
-      | `Recursive (l, _) when List.mem l recvars -> empties
-      | `Recursive (l, b)        -> makeEnv (l::recvars) b
       | `Application (_, ds)     -> union (List.map (makeEnv recvars) ds)
-      | `MetaTypeVar point       -> makeEnv recvars (Unionfind.find point)
+      | `MetaTypeVar point       ->
+          begin
+            match Unionfind.find point with
+              | `Rigid var -> let l,r = empties in
+                  (M.add var (InferenceTypeOps.fresh_rigid_type_variable ()) l, r)
+              | `Flexible var -> let l, r = empties in
+                  (M.add var (InferenceTypeOps.fresh_type_variable ()) l, r)
+              | `Recursive (l, _) when List.mem l recvars -> empties
+              | `Recursive (l, b) -> makeEnv (l::recvars) b
+              | `Body t -> makeEnv recvars t
+          end
   and makeEnvR recvars ((field_env, row_var):row) =
     let field_vars = 
       FieldEnv.fold (fun _ t envs ->
@@ -1175,15 +1114,15 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
                            `Present t -> union [envs; makeEnv recvars t]
                          | `Absent -> envs) field_env empties
     and row_vars = 
-      match row_var with
-        | `RigidRowVar var -> let l, r = empties in
-            (l, M.add var (InferenceTypeOps.fresh_rigid_row_variable ()) r)
-        | `RowVar (Some var) -> let l, r = empties in
+      match destruct_row_var row_var with
+        | `Closed -> empties
+        | `Flexible var -> let l, r = empties in
             (l, M.add var (InferenceTypeOps.fresh_row_variable ()) r)
-        | `RowVar None -> empties
-        | `RecRowVar (l, _) when List.mem l recvars -> empties
-        | `RecRowVar (l, row) -> makeEnvR (l::recvars) row
-        | `MetaRowVar point -> makeEnvR recvars (Unionfind.find point)
+        | `Rigid var -> let l, r = empties in
+            (l, M.add var (InferenceTypeOps.fresh_rigid_row_variable ()) r)
+        | `Recursive (l, _) when List.mem l recvars -> empties
+        | `Recursive (l, row) -> makeEnvR (l::recvars) row
+        | `Body row -> makeEnvR recvars row
     in union [field_vars; row_vars]
   in makeEnv []
 

@@ -10,7 +10,7 @@
 (* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
 
 type 'a stringmap = 'a Utility.stringmap
-type 'a field_env = 'a stringmap
+type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 
 (* type var sets *)
 (*module TypeVarSet : Set.S with type elt = int*)
@@ -27,28 +27,45 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract ]
     deriving (Typeable, Show, Pickle)
 
+type 't meta_type_var_basis =
+    [ `Flexible of int
+    | `Rigid of int
+    | `Recursive of (int * 't)
+    | `Body of 't ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+
+(* this is what we should replace meta row vars with *)
+type 't meta_row_var_basis =
+(*     [ 't meta_type_var *)
+    [ `Flexible of int
+    | `Rigid of int
+    | `Recursive of (int * 't)
+    | `Body of 't
+    | `Closed ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
-    | `TypeVar of int
-    | `RigidTypeVar of int
     | `Function of (datatype * datatype * datatype)
     | `Record of row
     | `Variant of row
     | `Table of datatype * datatype
-    | `Recursive of (int * datatype)
-    | `Application of (string * datatype list)
-    | `MetaTypeVar of datatype point ]
+    | `Application of (string * (datatype) list)
+    | `MetaTypeVar of meta_type_var ]
 and field_spec = [ `Present of datatype | `Absent ]
 and field_spec_map = field_spec field_env
+and row_var = [ `MetaRowVar of meta_row_var ]
 and row = field_spec_map * row_var
-and row_var =
-    [ `RowVar of int option
-    | `RecRowVar of int * row
-    | `MetaRowVar of row point
-    | `RigidRowVar of int ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+and meta_type_var = (datatype meta_type_var_basis) point
+and meta_row_var = (row meta_row_var_basis) point
+    deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+
+val destruct_row_var : row_var -> row meta_row_var_basis
+val construct_row_var : row meta_row_var_basis -> row_var
+
+val concrete_type : datatype -> datatype
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
     deriving (Typeable, Show, Pickle)
@@ -152,7 +169,7 @@ in field_env.
 Also returns the outermost RecRowVar that was unwrapped if it exists,
 or None otherwise.
 *)
-val unwrap_row : row -> (row * (int * row) option)
+val unwrap_row : row -> (row * row_var option)
 
 (* check for free aliases *)
 exception UndefinedAlias of string

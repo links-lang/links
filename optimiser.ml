@@ -355,24 +355,33 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
     let rec visitor (var:string) default : expression -> fieldset = function
         | Variable (name, _) when name = var -> All
         | Apply (apply, Variable (name, _), _) when name = var ->
-            (match (
-               match apply with
-                 | Variable (name, _) -> snd (assoc name env)
-                 | Abstr _ ->
-                     (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
-                        | Abstr (_, _, `T (_, datatype, _)) -> datatype
-                        | _ -> failwith "OP442")
-                 | _ -> failwith "OP437"
-             ) with
-               | `Function (`Record (field_env, _), _, _) ->
-		   let fields = StringMap.fold (fun label field_spec labels ->
-						  match field_spec with
-						    | `Present _ -> label :: labels
-						    | `Absent -> labels) field_env []
-		   in
-		     merge_needed [Fields fields]
-               | `TypeVar _ -> All
-               | _ -> failwith "OP448")
+            (* [BUG]
+               This code is most probably broken.
+               In particular the `MetaTypeVar case does not distinguish different kinds of
+               `MetaTypeVar.
+            *)
+            let t =
+              Types.concrete_type
+                (match apply with
+                   | Variable (name, _) -> snd (assoc name env)
+                   | Abstr _ ->
+                       (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
+                          | Abstr (_, _, `T (_, datatype, _)) -> datatype
+                          | _ -> failwith "OP442")
+                   | _ -> failwith "OP437")
+            in
+              begin
+                match t with
+                  | `Function (`Record (field_env, _), _, _) ->
+		      let fields = StringMap.fold (fun label field_spec labels ->
+						     match field_spec with
+						       | `Present _ -> label :: labels
+						       | `Absent -> labels) field_env []
+		      in
+		        merge_needed [Fields fields]
+                  | `MetaTypeVar _ -> All
+                  | _ -> failwith "OP448"
+              end
         | Record_selection (label, _, variable, Variable (name, _), body, _) when name = var ->
             (* Note change of variable *)
             merge_needed (Fields [label] :: (visitor var default body) :: [visitor variable default body])
@@ -460,12 +469,8 @@ let rec sql_sort = function
 let sql_aslist : RewriteSyntax.rewriter =
   function 
     | Apply(Variable("asList", _), th, (`T (pos,_,_) as data)) ->
-        let th_type = node_datatype th in
+        let th_type = Types.concrete_type (node_datatype th) in
         let th_row = match th_type with
-          | `MetaTypeVar point ->
-              (match Unionfind.find point with
-                 | `Table (`Record th_row, _) -> th_row
-                 | _ -> failwith "Internal Error: tables must have table type")
           |  `Table (`Record th_row, _) -> th_row
           | _ -> failwith "Internal Error: tables must have table type"
         in

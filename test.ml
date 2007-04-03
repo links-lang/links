@@ -27,9 +27,9 @@ open Utility.EitherMonad
 let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
 let parse = attempt (Parse.parse_string Parse.program)
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
-let run = attempt (let _, prelude = Loader.read_file_cache ("prelude.links") in
-                   let prelude, _ = Interpreter.run_program [] [] prelude in
-                     Interpreter.run_program prelude [] ->- snd)
+let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_value Basicsettings.prelude_file) in
+                         let prelude, _ = Interpreter.run_program [] [] prelude in
+                           Interpreter.run_program prelude [] ->- snd) tests
 let show = attempt Result.string_of_result
 
 let type_matches ~inferred ~expected = 

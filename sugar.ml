@@ -701,8 +701,8 @@ module Desugarer =
      typevars k, k
 
    type var_env =
-       (Types.datatype Unionfind.point) StringMap.t *
-         (Types.row Unionfind.point) StringMap.t 
+       Types.meta_type_var StringMap.t *
+         Types.meta_row_var StringMap.t 
 
    let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) =
      fun vars ->
@@ -713,15 +713,15 @@ module Desugarer =
                 | `TypeVar name ->
                     (`TypeVar var::vars,
                      (StringMap.add name
-                        (Unionfind.fresh (`TypeVar var)) tenv, renv))
+                        (Unionfind.fresh (`Flexible var)) tenv, renv))
                 | `RigidTypeVar name ->
                     (`RigidTypeVar var::vars,
                      (StringMap.add name
-                        (Unionfind.fresh (`RigidTypeVar var)) tenv, renv))
+                        (Unionfind.fresh (`Rigid var)) tenv, renv))
                 | `RowVar name ->
                     (`RowVar var::vars,
                      (tenv, StringMap.add name
-                        (Unionfind.fresh (StringMap.empty, `RowVar (Some var))) renv))) vars ([], (StringMap.empty, StringMap.empty))
+                        (Unionfind.fresh (`Flexible var)) renv))) vars ([], (StringMap.empty, StringMap.empty))
 
    let desugar_datatype, desugar_row =
      let rec desugar ((tenv, renv) as var_env) =
@@ -736,7 +736,7 @@ module Desugarer =
                `Function (desugar var_env f, desugar var_env m, desugar var_env t)
            | MuType (name, t) ->
                let var = Types.fresh_raw_variable () in
-               let point = Unionfind.fresh (`TypeVar var) in
+               let point = Unionfind.fresh (`Flexible var) in
                let tenv = StringMap.add name point tenv in
                let _ = Unionfind.change point (`Recursive (var, desugar (tenv, renv) t)) in
                  `MetaTypeVar point
@@ -1161,7 +1161,7 @@ module Desugarer =
            | TypeDeclaration (name, args, rhs) ->
                let get_var arg =
                  match (Unionfind.find (StringMap.find arg tenv)) with
-                   | `TypeVar var | `RigidTypeVar var -> var
+                   | `Flexible var | `Rigid var -> var
                    | _ -> assert false
                in
                  if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
