@@ -78,7 +78,7 @@ and eq_field_envs (lfield_env, rfield_env) =
       | _, _ -> false
   in
     StringMap.equal compare_specs lfield_env rfield_env
-and eq_row_vars (`MetaRowVar lpoint, `MetaRowVar rpoint) =
+and eq_row_vars (lpoint, rpoint) =
   (* [QUESTION]
      Do we need to deal with closed rows specially?
   *)
@@ -137,7 +137,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
       let field_env, row_var = flatten_row row in
 	
       let is_closed =
-        match destruct_row_var row_var with
+        match Unionfind.find row_var with
           | `Closed -> true
           | _ -> false in
 
@@ -155,7 +155,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
           (* precondition: row_var has been flattened *)
     and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
       match row_var with
-	| `MetaRowVar point ->
+	| point ->
 	    begin
               match Unionfind.find point with
 	        | `Closed -> row_var
@@ -167,14 +167,14 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 		      row_var
 	        | `Recursive (var, rec_row) ->
 		    if IntMap.mem var rec_row_env then
-		      `MetaRowVar (IntMap.find var rec_row_env)
+		      IntMap.find var rec_row_env
 		    else
 		      begin
 		        let var' = Types.fresh_raw_variable () in
 		        let point' = Unionfind.fresh (`Flexible var') in
 		        let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
 		        let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
-			  `MetaRowVar point'
+			  point'
 		      end
 	        | `Body _ -> assert(false)
             end
@@ -478,7 +478,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let is_unguarded_recursive row =
       let rec is_unguarded rec_rows (field_env, row_var) =
         StringMap.is_empty field_env &&
-          (match destruct_row_var row_var with
+          (match Unionfind.find row_var with
              | `Closed
              | `Flexible _
              | `Rigid _ -> false
@@ -550,7 +550,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let unify_row_var_with_row : unify_env -> row_var * row -> unit =
       fun rec_env (row_var, ((extension_field_env, extension_row_var) as extension_row)) ->
         (* unify row_var with `RowVar None *)
-        let close_empty_row_var : row_var -> unit = fun (`MetaRowVar point) ->
+        let close_empty_row_var : row_var -> unit = fun point ->
           match Unionfind.find point with
             | `Closed -> ()
             | `Flexible _ ->
@@ -560,7 +560,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | _ -> assert false in
 
         (* unify row_var with `RigidRowVar var *)
-        let rigidify_empty_row_var var : row_var -> unit = fun (`MetaRowVar point) ->
+        let rigidify_empty_row_var var : row_var -> unit = fun point ->
           match Unionfind.find point with
             | `Closed ->
 	        raise (Unify_failure ("Rigid row var cannot be unified with empty closed row\n"))
@@ -572,7 +572,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | _ -> assert false in
 
 	let rec extend = function
-	  | `MetaRowVar point ->
+	  | point ->
 	      (* point should be a row variable *)
 	      let row_var = Unionfind.find point in
 		match row_var with
@@ -593,12 +593,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			rec_row_intro point (var, extension_row)
 		      else if StringMap.is_empty extension_field_env then
 			match extension_row_var with
-			  | `MetaRowVar point' ->
+			  | point' ->
 			      Unionfind.union point point'
 		      else
 			Unionfind.change point (`Body extension_row)
 		  | `Recursive _ ->
-		      unify_rows' rec_env ((StringMap.empty, `MetaRowVar point), extension_row)
+		      unify_rows' rec_env ((StringMap.empty, point), extension_row)
 		  | `Body row ->
 		      unify_rows' rec_env (row, extension_row)
 	in
@@ -637,7 +637,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let register_rec_row (wrapped_field_env, unwrapped_field_env, rec_row, unwrapped_row') : unify_env -> unify_env option =
       fun ((rec_types, rec_rows, alias_env) as rec_env) ->
 	match rec_row with
-          | Some (`MetaRowVar row_var) ->
+          | Some row_var ->
               begin
                 match Unionfind.find row_var with
                   | `Recursive (var, _) ->
@@ -646,7 +646,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		        if IntMap.mem var rec_rows then
 		          IntMap.find var rec_rows
 		        else
-		          [(StringMap.empty, `MetaRowVar row_var)]
+		          [(StringMap.empty, row_var)]
 	              in
 		        if List.exists (fun r ->
                                           eq_rows (r, restricted_row)) rs then
@@ -677,7 +677,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 				| `Absent -> labels) field_env StringSet.empty
 	  in
 	    StringSet.union top_level_labels 
-	      (match destruct_row_var row_var with
+	      (match Unionfind.find row_var with
 		 | `Recursive (var, body) when (not (IntSet.mem var rec_vars)) ->
 		     get_present' (IntSet.add var rec_vars) body
 		 | _ -> StringSet.empty) in
@@ -692,7 +692,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
  	  fail_on_absent_fields lfield_env;
 	  fail_on_absent_fields rfield_env;
         *)
-        match destruct_row_var lrow_var', destruct_row_var rrow_var' with
+        match Unionfind.find lrow_var', Unionfind.find rrow_var' with
           | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
               raise (Unify_failure ("Rigid rows\n "^ string_of_row lrow
 				    ^"\nand\n "^ string_of_row lrow
@@ -763,8 +763,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	  | None -> ()
 	  | Some rec_env ->
 	      if (ITO.get_row_var lrow = ITO.get_row_var rrow) then     
-                 unify_both_rigid_with_rec_env rec_env ((lfield_env', construct_row_var `Closed),
-                                                        (rfield_env', construct_row_var `Closed))
+                 unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
+                                                        (rfield_env', Unionfind.fresh `Closed))
 	      else
 		begin
 		  let fresh_row_var = ITO.fresh_row_variable() in	      
@@ -883,7 +883,7 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
 
 and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
   fun bound_vars row_var ->
-    match destruct_row_var row_var with
+    match Unionfind.find row_var with
       | `Closed -> []
       | `Flexible var
       | `Rigid var when IntSet.mem var bound_vars -> []
@@ -1056,7 +1056,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         begin
           match r with
             | None ->
-                Record_intro (bs, None, `T (pos, `Record (field_env, construct_row_var `Closed), None))
+                Record_intro (bs, None, `T (pos, `Record (field_env, Unionfind.fresh `Closed), None))
             | Some r ->
                 let r = type_check typing_env r in
                 let rtype = type_of_expression r in
@@ -1081,8 +1081,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                                               failwith ("Could not extend record "^string_of_expression r^" (of type "^
                                                           string_of_datatype rtype^") with "^
                                                           string_of_expression
-                                                          (Record_intro (bs, None, `T (pos, `Record (field_env, construct_row_var `Closed), None)))^
-                                                          " (of type"^string_of_datatype (`Record (field_env, construct_row_var `Closed))^
+                                                          (Record_intro (bs, None, `T (pos, `Record (field_env, Unionfind.fresh `Closed), None)))^
+                                                          " (of type"^string_of_datatype (`Record (field_env, Unionfind.fresh `Closed))^
                                                           ") because the labels overlap")
                                             else
                                               StringMap.add label t field_env') rfield_env field_env in
@@ -1211,7 +1211,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
               match col with 
                 | Left col -> StringMap.add col.Query.name (`Present col.Query.col_type) env
                 | Right _ -> env)
-	   query.Query.result_cols StringMap.empty, construct_row_var `Closed) in
+	   query.Query.result_cols StringMap.empty, Unionfind.fresh `Closed) in
       let datatype =  `Application ("List", [`Record row]) in
       let rrow = ITO.make_empty_open_row () in
       let wrow = ITO.make_empty_open_row () in

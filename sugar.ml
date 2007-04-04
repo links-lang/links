@@ -758,8 +758,7 @@ module Desugarer =
        let seed = match rv with
          | None    -> Types.InferenceTypeOps.make_empty_closed_row ()
          | Some rv ->
-             (StringMap.empty, `MetaRowVar (lookup_row rv))
-(*             Types.InferenceTypeOps.make_empty_open_row_with_var (lookup rv)*)
+             (StringMap.empty, lookup_row rv)
        and fields = map (fun (k, v) -> match v with
                            | `Absent -> (k, `Absent)
                            | `Present v -> (k, `Present (desugar var_env v))) fields 

@@ -50,15 +50,11 @@ type datatype =
     | `MetaTypeVar of meta_type_var ]
 and field_spec = [ `Present of datatype | `Absent ]
 and field_spec_map = field_spec field_env
-and row_var = [ `MetaRowVar of meta_row_var ]
+and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
-
-
-val destruct_row_var : row_var -> row meta_row_var_basis
-val construct_row_var : row meta_row_var_basis -> row_var
 
 val concrete_type : datatype -> datatype
 
