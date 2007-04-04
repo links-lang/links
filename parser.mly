@@ -571,7 +571,6 @@ primary_datatype:
 | LPAREN datatype COMMA datatypes RPAREN                       { TupleType ($2 :: $4) }
 
 | LPAREN fields RPAREN                                         { RecordType $2 }
-| LBRACE VARIABLE RBRACE                                       { RecordType ([], Some $2) }
 
 | TABLEHANDLE LPAREN datatype COMMA datatype RPAREN            { TableType ($3, $5) }
 
@@ -597,7 +596,7 @@ primary_datatype_list:
 
 vrow:
 | vfields                                                      { $1 }
-| /* empty */                                                  { [], None }
+| /* empty */                                                  { [], `Closed }
 
 datatypes:
 | datatype                                                     { [$1] }
@@ -609,28 +608,33 @@ datatypes:
   parenthesized regular type variable?).
 */
 fields:
-| field                                                        { [$1], None }
-| field VBAR VARIABLE                                         { [$1], Some $3 }
+| field                                                        { [$1], `Closed }
+| field VBAR row_variable                                      { [$1], $3 }
+| VBAR row_variable                                            { [], $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 vfields:
-| vfield                                                       { [$1], None }
-| VARIABLE                                                     { [], Some $1 }
+| vfield                                                       { [$1], `Closed }
+| row_variable                                                 { [], $1 }
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
 | CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
-| CONSTRUCTOR COLON MINUS                                      { $1, `Absent     }
+| CONSTRUCTOR MINUS                                            { $1, `Absent }
 | CONSTRUCTOR                                                  { $1, `Present UnitType }
 
 field:
 | record_label COLON datatype                                  { $1, `Present $3 }
-| record_label COLON MINUS                                     { $1, `Absent }
+| record_label MINUS                                           { $1, `Absent }
 
 record_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
+
+row_variable:
+| VARIABLE                                                     { `Open $1 }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 /*
  * Regular expression grammar

@@ -493,6 +493,10 @@ let working_tests = [
   "switch (1) {case 1 as x -> x}",
   result "1" ~with_type: "Int";
 
+  "Absence typing in variant patterns",
+  "fun f(x) {switch (x) {case A(B) -> B case A(y) -> A(f(y))}}",
+  is_function ~with_type:"([|A:[|B:()|(mu d . A:[|B:()|d|])|]|]) -> mu c . [|A:c | B:()|b|]";
+
   "Type-based redundant pattern",
   "fun (x) {switch (x) { case(true) -> 0 case(false) -> 1 case(y) -> 2}}",
   result "fun" ~with_type: "(Bool) -> Int";
@@ -733,9 +737,36 @@ let working_tests = [
   "fun (f) { switch (f) { case A (a) -> a case B (b) -> b case c -> false } }",
   is_function ~with_type: "([|A:Bool|B:Bool|b|]) -> Bool";
 
+  "Recursive variant types [1]",
+  "fun (x) { switch (x) { case A(a) -> a case y -> x } }",
+  is_function ~with_type: "(mu b . [|A:b|c|]) -> mu b . [|A:b|c|]";
+
+
+  "Recursive variant types [2]",
+  "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }}",
+  is_function ~with_type: "(mu d . [|Succ:d | Zero:()|]) -> [|Zero:()|(mu c . Succ:[|Zero:()|c|]|a)|]";
+  
+  "Recursive variant types [3]",
+  "fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }}",
+  is_function ~with_type: "(mu e . [|Cons:(a, e) | Empty:()|], mu f . [|Cons:(a, f)|b|]) -> mu d . [|Cons:(a, d)|b|]";
+
   "Recursive variant types [4]",
   "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} fun (x) {switch (increment(x)) { case Foo -> 0 case Zero -> 1 case Succ (n) -> 2 }}",
   is_function ~with_type: "(mu b . [|Succ:b | Zero:()|]) -> Int";
+
+  "Recursive variant types [5]",
+  "fun increment(x) {
+      switch (x) {
+         case Zero -> Succ (Zero)
+         case Succ (n) -> Succ (increment(n))
+      }
+    }
+    increment(increment(Zero))",
+  result "Succ(Succ(Zero()))" ~with_type: "[|Zero:()|(mu a . Succ:[|Zero:()|a|]|b)|]";
+
+  "Rows preserved across functions",
+  "fun f(x) { switch (x) { case Foo -> Bar case s -> s } }",
+  is_function ~with_type: "([|Bar:() | Foo:()|b|]) -> [|Bar:() | Foo- |b|]";
 
   "Nullary variants with cases",
   "switch (None) { case None -> None case Some (x) -> Some (x) }",
@@ -900,6 +931,9 @@ let working_tests = [
     }",
   is_function ~with_type: "(a) -> Int";
 
+  "Polymorphic row recursion",
+  "sig h : (|a) ->  Int fun h(x) {h((x,x))}",
+  is_function ~with_type: "(|a) -> Int";
 
   "Range [1]",
   "\"3\" ~ /[0-9]/",
@@ -1093,54 +1127,4 @@ let broken_tests = [
   "handle <html>{handler; <body/>}</html> with r -> r",
   failwith "regex: @<html>.*</html> : Xml";
 *)
-(*
-Problem: parser can't handle this sort of type yet
-  "Absence typing in variant patterns",
-  "fun f(x) {switch (x) {case A(B) -> B case A(y) -> A(f(y))}}",
-  is_function ~with_type:"([|A:[|B:()|(mu d . A:[|B:()|d|])|]|]) -> mu c . [|A:c | B:()|b|]";
-*)
-
-(*
-  Parser can't handle this sort of type yet.
-  "Polymorphic row recursion",
-  "sig h : ({a}) ->  Int fun h(x) {h((x,x))}",
-  is_function ~with_type: "(|a) -> Int";
-*)
-
-
-(* "Recursive variant types [1]",
-  "fun (x) { switch (x) { case A(a) -> a case y -> x } }",
-  is_function ~with_type: "(mu b . [|A:b|c|]) -> mu b . [|A:b|c|]";
-*)
-
-(* "Recursive variant types [2]",
-  "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }}",
-  is_function ~with_type: "(mu d . [|Succ:d | Zero:()|]) -> [|Zero:()|(mu c . Succ:[|Zero:()|c|]|a)|]";
-*)
-
-(*
-  "Recursive variant types [3]",
-  "fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }}",
-  is_function ~with_type: "(mu e . [|Cons:(a, e) | Empty:()|], mu f . [|Cons:(a, f)|b|]) -> mu d . [|Cons:(a, d)|b|]";
-*)
-
-(* Failing because parser can't parse the type *)
-(*
-  "Recursive variant types [5]",
-  "fun increment(x) {
-      switch (x) {
-         case Zero -> Succ (Zero)
-         case Succ (n) -> Succ (increment(n))
-      }
-    }
-    increment(increment(Zero))",
-  result "Succ(Succ(Zero()))" ~with_type: "[|Zero:()|(mu a . Succ:[|Zero:()|a|]|b)|]";
-*)
-(*
-  "Rows preserved across functions",
-  "fun f(x) { switch (x) { case Foo -> Bar case s -> s } }",
-  is_function ~with_type: "([|Bar:() | Foo:()|b|]) -> [|Bar:() | Foo -|b|]";
-*)
 ]
-
-

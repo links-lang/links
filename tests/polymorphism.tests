@@ -43,7 +43,7 @@ stderr : @..*
 exit : 1
 
 Polymorphic row recursion
-sig h : ({a}) ->  Int fun h(x) {h((x,x))}
+sig h : (|a) ->  Int fun h(x) {h((x,x))}
 stdout : @fun : \(|[a-z]+\) -> Int
 
 Polymorphic functions

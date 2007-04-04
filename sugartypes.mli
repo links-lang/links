@@ -37,7 +37,8 @@ type datatype =
   | TypeApplication of (string * datatype list)
   | PrimitiveType of Types.primitive
   | DBType
-and row = (string * [`Present of datatype | `Absent]) list * string option
+and row = (string * [`Present of datatype | `Absent]) list * row_var
+and row_var = [ `Closed | `Open of string | `Recursive of string * row ]
 
 type pattern = [
   | `Any

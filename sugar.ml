@@ -639,10 +639,13 @@ module Desugarer =
 
 
    let rec typevars : datatype -> quantifier list = 
-     let rvars (fields, rv) =
+     let rec rvars (fields, rv) =
        let rowvars = match rv with
-         | None   -> []
-         | Some s -> [`RowVar s] in
+         | `Closed   -> []
+         | `Open s -> [`RowVar s]
+         | `Recursive (s, r) ->
+             snd (partition ((=)(`RowVar s)) (rvars r))
+       in
          (Utility.concat_map 
             (function (_, `Present k) -> typevars k
                | _ -> [])
@@ -692,8 +695,10 @@ module Desugarer =
      && row_var_alias_is_closed vars rv
    and row_var_alias_is_closed vars =
      function
-       | None -> true
-       | Some var -> StringSet.mem var vars
+       | `Closed -> true
+       | `Open var -> StringSet.mem var vars
+       | `Recursive (v, r) ->
+           row_alias_is_closed (StringSet.add v vars) r
 
    type assumption = quantifier list * datatype
 
@@ -753,12 +758,18 @@ module Desugarer =
            | TypeApplication (t, k) -> `Application (t, List.map (desugar var_env) k)
            | PrimitiveType k -> `Primitive k
            | DBType -> `Primitive `DB
-     and desugar_row ((_, renv) as var_env) (fields, rv) =
+     and desugar_row ((tenv, renv) as var_env) (fields, rv) =
        let lookup_row = flip StringMap.find renv in
        let seed = match rv with
-         | None    -> Types.InferenceTypeOps.make_empty_closed_row ()
-         | Some rv ->
+         | `Closed    -> Types.InferenceTypeOps.make_empty_closed_row ()
+         | `Open rv ->
              (StringMap.empty, lookup_row rv)
+         | `Recursive (name, r) ->
+             let var = Types.fresh_raw_variable () in
+             let point = Unionfind.fresh (`Flexible var) in
+             let renv = StringMap.add name point renv in
+             let _ = Unionfind.change point (`Recursive (var, desugar_row (tenv, renv) r)) in
+               (StringMap.empty, point)
        and fields = map (fun (k, v) -> match v with
                            | `Absent -> (k, `Absent)
                            | `Present v -> (k, `Present (desugar var_env v))) fields 
