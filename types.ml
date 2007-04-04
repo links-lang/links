@@ -690,12 +690,12 @@ and string_of_row' sep rec_vars vars (field_env, row_var) =
                        | `Present t ->
                            (label ^ ":" ^ string_of_datatype' rec_vars vars t) :: present_strings, absent_strings
                        | `Absent ->
-                           present_strings, (label ^ " -") :: absent_strings) field_env ([], [])  in
+                           present_strings, (label ^ "- ") :: absent_strings) field_env ([], [])  in
   let row_var_string = string_of_row_var' sep rec_vars vars row_var in
     (String.concat sep (List.rev (present_strings) @ List.rev (absent_strings))) ^
       (match row_var_string with
 	 | None -> ""
-	 | Some s -> sep^s)
+	 | Some s -> "|"^s)
 and string_of_row_var' sep rec_vars vars row_var =
   match Unionfind.find row_var with
     | `Closed -> None

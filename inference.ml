@@ -1046,12 +1046,14 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         (* could just tack these on up there --^ *)
         add_attrs special_attrs trimmed_node
   | Record_intro (bs, r, `U pos) ->
-      let bs, field_env =
-        StringMap.fold (fun label e (bs, field_env)  ->
+      let bs, field_env, absent_field_env =
+        StringMap.fold (fun label e (bs, field_env, absent_field_env)  ->
                           let e = type_check typing_env e in
                           let t = type_of_expression e in
-                            StringMap.add label e bs, StringMap.add label (`Present t) field_env)
-          bs (StringMap.empty, StringMap.empty)
+                            (StringMap.add label e bs,
+                             StringMap.add label (`Present t) field_env,
+                             StringMap.add label `Absent absent_field_env))
+          bs (StringMap.empty, StringMap.empty, StringMap.empty)
       in
         begin
           match r with
@@ -1061,7 +1063,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                 let r = type_check typing_env r in
                 let rtype = type_of_expression r in
                   (* make sure rtype is a record type! *)
-                  unify(rtype, `Record (ITO.make_empty_open_row ()));
+                  
+                  unify(rtype, `Record (absent_field_env, ITO.fresh_row_variable()));
                   
                   let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
                     

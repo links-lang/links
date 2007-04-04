@@ -602,11 +602,6 @@ datatypes:
 | datatype                                                     { [$1] }
 | datatype COMMA datatypes                                     { $1 :: $3 }
 
-/* this assumes that the type (a) is invalid.  Is that a reasonable assumption? 
-  (i.e. that records cannot be open rows?)  The only reason to make such an
-  assumption is that "(a)" is ambiguous (is it an empty open record or a 
-  parenthesized regular type variable?).
-*/
 fields:
 | field                                                        { [$1], `Closed }
 | field VBAR row_variable                                      { [$1], $3 }
