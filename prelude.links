@@ -215,10 +215,38 @@ fun ignore (_) { }
 # subtract :: Int -> Int -> Int
 # quot :: Int -> Int -> Int
 # signum :: Int -> Int
+sig signum : Int -> Int
+fun signum(i) {
+  if (i>0) 1
+  else if (i < 0) -1
+  else 0
+}
+
 # abs :: Int -> Int
+sig abs : Int -> Int
+fun abs(i) {
+  if (i < 0) -i else i
+}
 
 # init :: [a] -> [a]
+sig init : [a] -> [a]
+fun init(list) {
+  switch (list) {
+    case [y] -> []
+    case (h::t) -> h::init(t)
+  }
+}
+
+fun butlast(list) { init(list) }
+
 # last :: [a] -> a
+sig last : [a] -> a
+fun last(list) {
+  switch (list) {
+    case [x] -> x
+    case (h::t) -> last(t)
+  }
+}
 
 # lines :: String -> [String]
 # unlines :: [String] -> String
@@ -390,14 +418,12 @@ sig runState : State (d,a) -> (d) -> (a,d)
 fun runState(State (s)) { s }
 
 infixl 1 >>=;
-
 sig >>= : State (d,a) -> (a -> State(d,b)) -> State (d,b)
 fun (State (x)) >>= f {
    State (fun (s1) { var (v,s2) = x (s1); runState (f (v)) (s2) })
 }
 
 infixl 1 >>;
-
 sig >> : State(a,b) -> State (a,c) -> State (a,c)
 fun m >> k {
    m >>= fun (_) { k }
@@ -486,6 +512,7 @@ var input =
    (retern (<input name="{name}"/>,
             fun (env) { assoc(name, env)}))};
 
+sig emptyFormlet : (a) -> Formlet ([b])
 fun emptyFormlet(_) { pure([]) }
 
 # A one-element formlet with an initial value
