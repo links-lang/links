@@ -155,7 +155,7 @@ let interact envs =
                                                 Result.string_of_result (List.assoc name valenv)
                                                 ^" : "^ 
                                                 Types.string_of_datatype (Syntax.node_datatype d))
-                             | _ -> assert false);
+                             | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
               | `Expression expr -> 
                   let envs, _, _ = process_one envs [expr] in envs
