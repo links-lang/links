@@ -197,3 +197,23 @@ ShowDefaults(
       Format.pp_close_box formatter ();
       
   end)
+
+module Show_set
+  (O : Set.OrderedType) 
+  (K : Show with type a = O.t)
+  : Show with type a = Set.Make(O).t =
+ShowDefaults(
+  struct
+    module S = Set.Make(O)
+    type a = S.t
+    let format formatter set = 
+      Format.pp_open_box formatter 0;
+      Format.pp_print_string formatter "{";
+      S.iter (fun elt -> 
+                Format.pp_open_box formatter 0;
+                K.format formatter elt;
+                Format.pp_close_box formatter ();
+             ) set;
+      Format.pp_print_string formatter "}";
+      Format.pp_close_box formatter ();
+  end)

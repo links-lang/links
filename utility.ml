@@ -88,6 +88,7 @@ let superimpose a b =
   StringMap.fold StringMap.add b a
 
 module StringSet = Set.Make(String)
+module Show_stringset = Show.Show_set(String)(Primitives.Show_string)
 
 (*** int environments ***)
 module OrderedInt =
@@ -97,6 +98,8 @@ struct
 end
 module IntMap = Map.Make(OrderedInt)
 module IntSet = Set.Make(OrderedInt)
+
+module Show_intset = Show.Show_set(OrderedInt)(Primitives.Show_int)
 
 let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
 

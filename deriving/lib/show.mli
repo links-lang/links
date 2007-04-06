@@ -50,3 +50,8 @@ module Show_map
   (V : Show)
   : Show with type a = V.a Map.Make(O).t
 
+module Show_set
+  (O : Set.OrderedType) 
+  (K : Show with type a = O.t)
+  : Show with type a = Set.Make(O).t
+
