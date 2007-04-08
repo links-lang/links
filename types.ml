@@ -684,13 +684,20 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
         | `Application (s, ts) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
 
 and string_of_row' sep rec_vars vars (field_env, row_var) =
+  let show_absent =
+    if InferenceTypeOps.is_closed_row (field_env, row_var) then
+      (fun _ x -> x) (* don't show absent fields in closed rows *)
+    else
+      (fun label (present_strings, absent_strings) -> present_strings, (label ^ "- ") :: absent_strings) in
+   
   let present_strings, absent_strings =
     FieldEnv.fold (fun label t (present_strings, absent_strings) ->
                      match t with
                        | `Present t ->
                            (label ^ ":" ^ string_of_datatype' rec_vars vars t) :: present_strings, absent_strings
                        | `Absent ->
-                           present_strings, (label ^ "- ") :: absent_strings) field_env ([], [])  in
+                           show_absent label (present_strings, absent_strings)) field_env ([], []) in
+
   let row_var_string = string_of_row_var' sep rec_vars vars row_var in
     (String.concat sep (List.rev (present_strings) @ List.rev (absent_strings))) ^
       (match row_var_string with
