@@ -17,7 +17,7 @@ type expression = Syntax.expression
 val mistyped_application : Syntax.position ->
   (expression * Types.datatype) ->
   (expression * Types.datatype) ->
-  (expression * Types.datatype) option ->
+  Types.datatype option ->
   'a
                
 val mistyped_union : Syntax.position ->

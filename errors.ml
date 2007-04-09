@@ -16,23 +16,18 @@ exception RichSyntaxError of synerrspec
 exception WrongArgumentTypeError of (Syntax.position *
 				       string * Types.datatype * 
                                        string * Types.datatype *
-				       (string * Types.datatype) option)
+				       Types.datatype option)
 
 exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype * 
 					string * Types.datatype *
-					(string * Types.datatype) option)
+					Types.datatype option)
 
 type expression = Syntax.expression
 (*type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
 
 let mistyped_application pos (fn, fntype) (param, paramtype) mb =
   let `T ((_, _, fexpr),_,_) = expression_data fn in
-  let `T ((_, _, pexpr),_,_) = expression_data param in
-  let mb = match mb with
-    | None -> None
-    | Some (exp, mbtype) ->
-	let `T ((_, _, mbexpr),_,_) = expression_data exp in
-	  Some (mbexpr, mbtype)
+  let `T ((_, _, pexpr),_,_) = expression_data param
   in  
     match fntype with 
       | `Function _ -> 
@@ -77,9 +72,8 @@ let get_mailbox_msg add_code_tags =
   in
     function
       | None -> ""
-      | Some (mbexpr, mbtype) ->
-	  " (mailbox parameter `"^(wrap mbexpr)^"' of type "^
-	    string_of_datatype mbtype ^ ") "
+      | Some mbtype ->
+	  " (mailbox type "^ string_of_datatype mbtype ^ ") "
   
 let rec format_exception = function
   | RichSyntaxError s ->

@@ -954,7 +954,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let f = type_check typing_env f in
       let p = type_check typing_env p in
       let mb_type = instantiate env "_MAILBOX_" in
-      let m = Variable ("_MAILBOX_", `T (pos, mb_type, None)) in
+
       let f_type = type_of_expression f in
       let p_type = type_of_expression p in
       let return_type = ITO.fresh_type_variable () in
@@ -962,7 +962,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let _ =
 	try unify (`Function(p_type, mb_type, return_type), f_type)
 	with Unify_failure _ ->
-          mistyped_application pos (f, f_type) (p, type_of_expression p) (Some (m, mb_type))
+          mistyped_application pos (f, f_type) (p, type_of_expression p) (Some mb_type)
       in
 	Apply (f, p, `T (pos, return_type, None))
   | Condition (if_, then_, else_, `U pos) ->
