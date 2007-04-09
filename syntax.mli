@@ -59,6 +59,8 @@ val list_expr : 'a -> 'a expression' list -> 'a expression'
 val is_define : 'a expression' -> bool
 val is_value : 'a expression' -> bool
 
+val defined_names : 'a expression' list -> string list
+
 val string_of_expression : 'a expression' -> string
 val labelled_string_of_expression : expression -> string
 val as_string : 'a expression' -> string
@@ -93,7 +95,10 @@ val labelize : expression -> expression
 val dummy_position : position
 val no_expr_data : typed_data
 
-(* Which variables are l:name-bound? *)
+val is_closed : expression -> bool
+val is_closed_wrt : expression -> string list -> bool
+
+(** Which variables are l:name-bound? *)
 val lname_bound_vars : 'data expression' -> string list
 
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression

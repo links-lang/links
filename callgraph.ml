@@ -77,15 +77,15 @@ struct
     defs : expression list
   }
 
-  let elim_dead_defs globals env expr =
+  let elim_dead_defs globals env root_names =
     let filter_globals = filter (fun name -> not (mem name globals)) in
-    let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) env in
+    let defs, other = either_partition (function Define _ as d -> Left d | e -> Right e) env in
     let groupings = refine_def_groups [defs] in
     let clique_info = map (fun exprs ->
                              {free_names = filter_globals (concat_map freevars exprs);
                               exposed_names = map fst (defs_to_bindings exprs);
                               defs = exprs}) groupings 
-    and expr_info = { free_names =  filter_globals (freevars expr);
+    and expr_info = { free_names =  filter_globals root_names;
                       exposed_names = [];
                       defs = [] } in
 
@@ -94,15 +94,24 @@ struct
           | [] -> env
           | names -> 
               let defines name {exposed_names = names} = List.mem name names in
-              let defining_cliques =  List.map (fun name -> List.find (defines name) clique_info) names in
-                close (List.fold_right (fun clique env ->
-                                          let exposed_names = env.exposed_names @ clique.exposed_names in
-                                            { free_names = List.filter (fun name -> not (List.mem name exposed_names)) 
-                                                (env.free_names @ clique.free_names);
-                                              exposed_names = exposed_names;
-                                              defs = clique.defs @ env.defs}) defining_cliques env)
-    in
-      other @ (close expr_info).defs @ [expr]
+              let defining_cliques = 
+                List.map (fun name -> List.find (defines name) clique_info) names
+              in
+                close (List.fold_right
+                         (fun clique env ->
+                            let exposed_names = env.exposed_names @ clique.exposed_names in
+                              { free_names = List.filter (fun name -> not (List.mem name exposed_names)) 
+                                  (env.free_names @ clique.free_names);
+                                exposed_names = exposed_names;
+                                defs = clique.defs @ env.defs})
+                         defining_cliques env)
+  in
+    try
+      other @ (close expr_info).defs
+    with Not_found -> failwith("Not_found in elim_dead_defs")
+
+  let elim_dead_defs_for_expr globals env expr =
+    elim_dead_defs globals env (freevars expr) @ [expr]
 
 end
 

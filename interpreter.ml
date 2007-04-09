@@ -212,7 +212,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                          interpret globals locals body cont
 		           
                    | `PFunction (name, pargs) ->
-		       Library.apply_pfun (apply_cont globals) cont name (pargs @ [value])
+		       Library.apply_pfun(apply_cont globals) cont name (pargs @ [value])
 	           | `Continuation (cont) ->
 		       (* Here we throw out the other continuation. *)
 		       apply_cont globals cont value
@@ -410,7 +410,8 @@ fun globals locals expr cont ->
   | Syntax.Comparison (l, oper, r, _) ->
       eval l (BinopRight(locals, (oper :> Result.binop), r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
-      eval value (LetCont(locals, variable, body) :: cont)
+      (* interesting: not stripping to the freevars made continuations huge *)
+      eval value (LetCont(retain (freevars body) locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
       let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
         interpret globals new_env body cont
@@ -460,7 +461,7 @@ fun globals locals expr cont ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-	(* FIXME: the datatype should be explicit in the type-erased TableHandle *)
+      (* FIXME: the datatype should be explicit in the type-erased TableHandle *)
 (*   | Syntax.Table (database, s, query, _) -> *)
 (*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
 
@@ -474,8 +475,8 @@ fun globals locals expr cont ->
       end
 
   | Syntax.TableQuery (ths, query, d) ->
-      (* [ths] is an alist mapping table aliases to expressions that
-         provide the corresponding TableHandles. We evaluate those
+      (* [ths] is an alist mapping table aliases to expressions
+         providing the corresponding TableHandles. We evaluate those
          expressions and rely on them coming through to the continuation
          in the same order. That way we can stash the aliases in the
          continuation frame & match them up later. *)
@@ -513,7 +514,8 @@ and interpret_safe globals locals expr cont =
 
 let run_program (globals : environment) locals exprs : (environment * result)= 
   try (
-    ignore (interpret globals locals (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
+    ignore(interpret globals locals (hd exprs)
+             (map (fun expr -> Ignore([], expr)) (tl exprs)));
     failwith "boom"
   ) with
     | TopLevel s -> s

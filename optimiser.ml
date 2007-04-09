@@ -51,7 +51,9 @@ let pure : expression -> bool =
 (* Number of nodes in a syntax tree *)
 let countNodes e = 
   let count = ref 0 in 
-    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
+    Syntax.reduce_expression
+      (fun recurse e -> incr count; recurse e)
+      (fun _ -> ()) e; 
     !count;;
 
 (* Inline small, non-recursive functions *)
@@ -150,14 +152,14 @@ let reduce_recursion : RewriteSyntax.rewriter = function
 
 
 
-(** [uniquify_expression]
+(** [uniquify_names]
 
     Give unique names to all local bindings.  Local names should be
     distinct from each other and from toplevel names
 
     After this, we can be much less careful about scope.
 *)
-let uniquify_expression : RewriteSyntax.rewriter = 
+let uniquify_names : RewriteSyntax.rewriter = 
   let rewrite_node = function
     | Abstr (v, b, data) -> 
         let name = gensym ~prefix:v () in
@@ -166,9 +168,12 @@ let uniquify_expression : RewriteSyntax.rewriter =
         let name = gensym ~prefix:v () in
           Some (Let (name, e, Syntax.rename_fast v name b, data))
     | Rec (vs, b, data) -> 
-        let bindings = List.map (fun (name, _, _) -> (name, gensym ~prefix:name ())) vs in
-        let rename = List.fold_right (fun (x, r) expr -> Syntax.rename_fast x r expr) bindings in
-          Some(Rec(List.map (fun (n, v, t) -> (List.assoc n bindings, rename v, t)) vs,
+        let bindings = List.map (fun (name, _, _) -> 
+                                   (name, gensym ~prefix:name ())) vs in
+        let rename = List.fold_right (fun (x, r) expr ->
+                                        Syntax.rename_fast x r expr) bindings in
+          Some(Rec(List.map (fun (n, v, t) ->
+                               (List.assoc n bindings, rename v, t)) vs,
                    rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym ~prefix:lvar ()

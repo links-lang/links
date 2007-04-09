@@ -73,17 +73,17 @@ SOURCES = $(OPC)                		\
           sql_transform.mli sql_transform.ml	\
           parser.mly            		\
           $(DB_CODE)            		\
-          json.ml               		\
           forms.mli forms.ml    		\
           database.mli database.ml 		\
           lexer.mll             		\
           parse.mli parse.ml    		\
           jsonparse.mly         		\
+          jsonlex.mll           		\
+          json.ml               		\
           callgraph.ml                          \
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\
-          jsonlex.mll           		\
           interpreter.mli interpreter.ml 	\
           optimiser.mli optimiser.ml    	\
           rewriterules.ml                       \
