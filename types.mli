@@ -200,6 +200,9 @@ val string_of_row_var : row_var -> string
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
+val is_guarded : int -> datatype -> bool
+val is_guarded_row : int -> row -> bool
+
 val is_negative : int -> datatype -> bool
 val is_negative_row : int -> row -> bool
 val is_negative_field_env : int -> field_spec_map -> bool

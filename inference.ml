@@ -19,8 +19,27 @@ let show_recursion = Settings.add_bool("show_recursion", false, `User)
 
 let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, `User)
 
-(* whether to allow negative recursive types to be inferred *)
-let infer_negative_types = Settings.add_bool("infer_negative_types", true, `User)
+(*
+  what kind of recursive types to allow
+  "all"      - allow all recursive types
+  "guarded"  - only allow guarded recursive types
+  "positive" - only allow positive recursive types
+ *)
+let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
+
+let occurs_check var t =
+  match Settings.get_value infer_recursive_types with
+    | "all" -> true
+    | "guarded" -> is_guarded var t
+    | "positive" -> not (is_negative var t)
+    | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
+
+let occurs_check_row var row =
+  match Settings.get_value infer_recursive_types with
+    | "all" -> true
+    | "guarded" -> is_guarded_row var row
+    | "positive" -> not (is_negative_row var row)
+    | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
 
 exception Unify_failure of string
 exception UndefinedVariable of string
@@ -250,25 +269,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
      - var is free in t
   *)
   let rec_intro point (var, t) =
-    if Settings.get_value infer_negative_types || not (is_negative var (`MetaTypeVar point)) then
-      (* 
-         Using instantiate_datatype here is overkill
-         but at least it's correct!
-
-         The only tricky case is where t is `Recursive (var', t'). In this case
-         we need to make sure var' is given a new point inside t', but we don't
-         actually have to give new points to any of the other recursive types inside t'
-         (which is one of the side-effects of instantiation).
-
-         Note that we cannot just pass t to instantiate_datatype as it may not be
-         a valid datatype (e.g. `Recursive (var, t) is not a type, but
-         `MetaTypeVar point where Unionfind.point = `Recursive (var, t) is). This is
-         an annoying consequence of deriving Types.datatype and Types.datatype
-         from a common basis.
-      *)
-      Unionfind.change point (`Recursive (var,
-                                          instantiate_datatype
-                                            (IntMap.add var (`MetaTypeVar point) (IntMap.empty), IntMap.empty) (`MetaTypeVar point)))
+    if occurs_check var t then
+      Unionfind.change point (`Recursive (var, t))
     else
       failwith "non-well-founded type inferred!" in
 
@@ -526,15 +528,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
        give an error if it is non-well-founded and
        non-well-founded type inference is switched off
     *)
-    (*
-      [BUG]
-      need to do the same instantiation trick here that we do for rec_intro
-      [TODO]
-      * expose instantiate_row
-      * use it here!
-    *) 
     let rec_row_intro point (var, row) =
-      if Settings.get_value infer_negative_types || not (is_negative_row var row) then
+      if occurs_check_row var row then
 	Unionfind.change point (`Recursive (var, row))
       else
 	failwith "non-well-founded row type inferred!" in

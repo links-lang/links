@@ -948,6 +948,45 @@ let string_of_environment env =
 
 (** check for well-foundedness **)
 
+(* return true if all free occurrences of a variable are guarded in a type *)
+let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
+  fun rec_vars var t ->
+    let isg = is_guarded rec_vars var in
+    let isgr = is_guarded_row rec_vars var in
+      match t with
+        | `Not_typed -> true
+        | `Primitive _ -> true
+        | `MetaTypeVar point ->
+            begin
+              match Unionfind.find point with
+                | `Flexible var'
+                | `Rigid var' -> (var <> var')
+                | `Recursive (var', t) ->
+                    (var=var' || TypeVarSet.mem var' rec_vars) ||
+                      is_guarded (TypeVarSet.add var' rec_vars) var t
+                | `Body t -> isg t
+            end
+        | `Function (f, m, t) ->
+            isg f && isg m && isg t
+        | `Record row -> isgr row
+        | `Variant row -> isgr row
+        | `Table (r, w) -> isg r && isg w
+        | `Application (_, ts) -> List.exists isg ts
+and is_guarded_row : TypeVarSet.t -> int -> row -> bool =
+  fun rec_vars var (field_env, row_var) ->
+    is_guarded_row_var rec_vars var row_var
+and is_guarded_row_var : TypeVarSet.t -> int -> row_var -> bool =
+  fun rec_vars var row_var ->
+    match Unionfind.find row_var with
+      | `Closed -> true
+      | `Flexible var'
+      | `Rigid var' -> var <> var'
+      | `Recursive (var', row) ->
+          (var=var' || TypeVarSet.mem var' rec_vars) ||
+            is_guarded_row (TypeVarSet.add var' rec_vars) var row
+      | `Body row ->
+          is_guarded_row rec_vars var row
+
 (* return true if a variable occurs negatively in a type *)
 let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
   fun rec_vars var t ->
@@ -1040,6 +1079,9 @@ and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
             is_positive_row (TypeVarSet.add var' rec_vars) var row
       | `Body row ->
           is_positive_row rec_vars var row
+
+let is_guarded = is_guarded TypeVarSet.empty
+let is_guarded_row = is_guarded_row TypeVarSet.empty
 
 let is_negative = is_negative TypeVarSet.empty
 let is_negative_row = is_negative_row TypeVarSet.empty
