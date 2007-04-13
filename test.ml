@@ -36,9 +36,9 @@ let type_matches ~inferred ~expected =
   let nfreevars = 
     List.length -<- Types.free_type_vars 
   and inferred = 
-    Inference.instantiate_datatype (Types.make_fresh_envs inferred) inferred
+    Instantiate.instantiate_datatype (Types.make_fresh_envs inferred) inferred
   and expected = 
-    Inference.instantiate_datatype (Types.make_rigid_envs expected) expected
+    Instantiate.instantiate_datatype (Types.make_rigid_envs expected) expected
   in try
       (* Check for unification without instantiation.  Perhaps we
          could just count freevars on both sides instead of all this
@@ -56,9 +56,9 @@ let type_matches ~inferred ~expected =
   *)
   let check_rhs_unchanged l r =
     let l =  
-      Inference.instantiate_datatype (Types.make_wobbly_envs l) l 
+      Instantiate.instantiate_datatype (Types.make_wobbly_envs l) l 
     and r =  
-     Inference.instantiate_datatype (Types.make_rigid_envs r) r 
+     Instantiate.instantiate_datatype (Types.make_rigid_envs r) r 
     in try
         let c = Types.free_type_vars r in
         Inference.unify Library.alias_env (l, r);

@@ -102,7 +102,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->result) =
   let box = (box :> 'a -> primitive) in
     fun x -> (box (conv (unbox x)))
 
-let make_type_variable = Types.InferenceTypeOps.make_type_variable
+let make_type_variable = Types.TypeOps.make_type_variable
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
   (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
@@ -288,7 +288,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "_MAILBOX_",
   (`Int (num_of_int 0),
-   let u = InferenceTypeOps.fresh_type_variable () in
+   let u = TypeOps.fresh_type_variable () in
      (* Deliberately non-quantified type.  Mailboxes are
         non-polymorphic, so this is a so-called "weak type
         variable". *)

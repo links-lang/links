@@ -9,7 +9,6 @@ type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 module TypeVarSet = Utility.IntSet
 type type_var_set = TypeVarSet.t
 
-
 (* points *)
 type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
 
@@ -134,7 +133,7 @@ sig
   val closed_row_var : row_var
 end
 
-module InferenceTypeOps : TYPEOPS
+module TypeOps : TYPEOPS
 =
 struct
   let empty_field_env = FieldEnv.empty
@@ -435,7 +434,7 @@ let unwrap_row : row -> (row * row_var option) =
     unwrap_row' IntMap.empty
 
 (* useful types *)
-let unit_type = `Record (InferenceTypeOps.make_empty_closed_row ())
+let unit_type = `Record (TypeOps.make_empty_closed_row ())
 let string_type = `Application ("String", [])
 let xml_type = `Application ("Xml", [])
 
@@ -685,7 +684,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
 
 and string_of_row' sep rec_vars vars (field_env, row_var) =
   let show_absent =
-    if InferenceTypeOps.is_closed_row (field_env, row_var) then
+    if TypeOps.is_closed_row (field_env, row_var) then
       (fun _ x -> x) (* don't show absent fields in closed rows *)
     else
       (fun label (present_strings, absent_strings) -> present_strings, (label ^ "- ") :: absent_strings) in
@@ -774,7 +773,7 @@ let rec freshen_mailboxes : type_var_set -> datatype -> datatype = fun rec_vars 
                     begin
                       match Unionfind.find point with
                         | `Flexible var ->
-                            InferenceTypeOps.fresh_type_variable ()
+                            TypeOps.fresh_type_variable ()
                         | _ -> fmb m
                     end
                 | _ -> fmb m
@@ -946,153 +945,6 @@ let string_of_assumption = function
 let string_of_environment env =
   "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
 
-(** check for well-foundedness **)
-
-(* return true if all free occurrences of a variable are guarded in a type *)
-let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
-  fun rec_vars var t ->
-    let isg = is_guarded rec_vars var in
-    let isgr = is_guarded_row rec_vars var in
-      match t with
-        | `Not_typed -> true
-        | `Primitive _ -> true
-        | `MetaTypeVar point ->
-            begin
-              match Unionfind.find point with
-                | `Flexible var'
-                | `Rigid var' -> (var <> var')
-                | `Recursive (var', t) ->
-                    (var=var' || TypeVarSet.mem var' rec_vars) ||
-                      is_guarded (TypeVarSet.add var' rec_vars) var t
-                | `Body t -> isg t
-            end
-        | `Function (f, m, t) ->
-            isg f && isg m && isg t
-        | `Record row -> isgr row
-        | `Variant row -> isgr row
-        | `Table (r, w) -> isg r && isg w
-        | `Application (_, ts) -> List.exists isg ts
-and is_guarded_row : TypeVarSet.t -> int -> row -> bool =
-  fun rec_vars var (field_env, row_var) ->
-    is_guarded_row_var rec_vars var row_var
-and is_guarded_row_var : TypeVarSet.t -> int -> row_var -> bool =
-  fun rec_vars var row_var ->
-    match Unionfind.find row_var with
-      | `Closed -> true
-      | `Flexible var'
-      | `Rigid var' -> var <> var'
-      | `Recursive (var', row) ->
-          (var=var' || TypeVarSet.mem var' rec_vars) ||
-            is_guarded_row (TypeVarSet.add var' rec_vars) var row
-      | `Body row ->
-          is_guarded_row rec_vars var row
-
-(* return true if a variable occurs negatively in a type *)
-let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
-  fun rec_vars var t ->
-    let isp = is_positive rec_vars var in
-    let isn = is_negative rec_vars var in
-    let isnr = is_negative_row rec_vars var in
-      match t with
-        | `Not_typed -> false
-        | `Primitive _ -> false
-        | `MetaTypeVar point ->
-            begin
-              match Unionfind.find point with
-                | `Flexible _
-                | `Rigid _ -> false
-                | `Recursive (var', t) ->
-                    not (TypeVarSet.mem var' rec_vars) &&
-                      is_negative (TypeVarSet.add var' rec_vars) var t
-                | `Body t -> isn t
-            end
-        | `Function (f, m, t) ->
-            isp f || isp m || isn t
-        | `Record row -> isnr row
-        | `Variant row -> isnr row
-        | `Table (r, w) -> isn r || isn w
-        | `Application (_, ts) -> List.exists isn ts (* is this right? -jdy *)
-and is_negative_row : TypeVarSet.t -> int -> row -> bool =
-  fun rec_vars var (field_env, row_var) ->
-    is_negative_field_env rec_vars var field_env || is_negative_row_var rec_vars var row_var
-and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
-  fun rec_vars var field_env ->
-    FieldEnv.fold (fun _ spec result ->
-                      match spec with
-                        | `Absent -> result
-                        | `Present t -> result || is_negative rec_vars var t
-                   ) field_env false
-and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
-  fun rec_vars var row_var ->
-    match Unionfind.find row_var with
-      | `Closed
-      | `Flexible _
-      | `Rigid _ -> false
-      | `Recursive (var', row) ->
-          not (TypeVarSet.mem var' rec_vars) &&
-            is_negative_row (TypeVarSet.add var' rec_vars) var row
-      | `Body row ->
-          is_negative_row rec_vars var row
-
-and is_positive : TypeVarSet.t -> int -> datatype -> bool =
-  fun rec_vars var t ->
-    let isp = is_positive rec_vars var in
-    let isn = is_negative rec_vars var in
-    let ispr = is_positive_row rec_vars var in
-      match t with
-        | `Not_typed -> false
-        | `Primitive _ -> false
-        | `MetaTypeVar point ->
-            begin
-              match Unionfind.find point with
-                | `Flexible _
-                | `Rigid _ -> false
-                | `Recursive (var', t) ->
-                    not (TypeVarSet.mem var' rec_vars) &&
-                      is_positive (TypeVarSet.add var' rec_vars) var t
-                | `Body t -> isp t
-            end
-        | `Function (f, m, t) ->
-            isn f || isn m || isp t
-        | `Record row -> ispr row
-        | `Variant row -> ispr row
-        | `Table (r, w) -> isp r || isp w
-        | `Application (_,ts) -> List.exists isp ts (* is this right? -jdy *)
-and is_positive_row : TypeVarSet.t -> int -> row -> bool =
-  fun rec_vars var (field_env, row_var) ->
-    is_positive_field_env rec_vars var field_env || is_positive_row_var rec_vars var row_var
-and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
-  fun rec_vars var field_env ->
-    FieldEnv.fold (fun _ spec result ->
-                      match spec with
-                        | `Absent -> result
-                        | `Present t -> result || is_positive rec_vars var t
-                   ) field_env false
-and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
-  fun rec_vars var row_var ->
-    match Unionfind.find row_var with
-      | `Closed -> false
-      | `Flexible var'
-      | `Rigid var' -> var=var;
-      | `Recursive (var', row) ->
-          not (TypeVarSet.mem var' rec_vars) &&
-            is_positive_row (TypeVarSet.add var' rec_vars) var row
-      | `Body row ->
-          is_positive_row rec_vars var row
-
-let is_guarded = is_guarded TypeVarSet.empty
-let is_guarded_row = is_guarded_row TypeVarSet.empty
-
-let is_negative = is_negative TypeVarSet.empty
-let is_negative_row = is_negative_row TypeVarSet.empty
-let is_negative_field_env = is_negative_field_env TypeVarSet.empty
-let is_negative_row_var = is_negative_row_var TypeVarSet.empty
-
-let is_positive = is_positive TypeVarSet.empty
-let is_positive_row = is_positive_row TypeVarSet.empty
-let is_positive_field_env = is_positive_field_env TypeVarSet.empty
-let is_positive_row_var = is_positive_row_var TypeVarSet.empty
-
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in
   let empties = M.empty, M.empty in
@@ -1111,9 +963,9 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
           begin
             match Unionfind.find point with
               | `Rigid var -> let l,r = empties in
-                  (M.add var (InferenceTypeOps.fresh_rigid_type_variable ()) l, r)
+                  (M.add var (TypeOps.fresh_rigid_type_variable ()) l, r)
               | `Flexible var -> let l, r = empties in
-                  (M.add var (InferenceTypeOps.fresh_type_variable ()) l, r)
+                  (M.add var (TypeOps.fresh_type_variable ()) l, r)
               | `Recursive (l, _) when List.mem l recvars -> empties
               | `Recursive (l, b) -> makeEnv (l::recvars) b
               | `Body t -> makeEnv recvars t
@@ -1128,9 +980,9 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       match Unionfind.find row_var with
         | `Closed -> empties
         | `Flexible var -> let l, r = empties in
-            (l, M.add var (InferenceTypeOps.fresh_row_variable ()) r)
+            (l, M.add var (TypeOps.fresh_row_variable ()) r)
         | `Rigid var -> let l, r = empties in
-            (l, M.add var (InferenceTypeOps.fresh_rigid_row_variable ()) r)
+            (l, M.add var (TypeOps.fresh_rigid_row_variable ()) r)
         | `Recursive (l, _) when List.mem l recvars -> empties
         | `Recursive (l, row) -> makeEnvR (l::recvars) row
         | `Body row -> makeEnvR recvars row
@@ -1139,10 +991,28 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
 
 let make_rigid_envs datatype : datatype IntMap.t * row_var IntMap.t =
   let tenv, renv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> InferenceTypeOps.fresh_rigid_type_variable ()) tenv,
-     IntMap.map (fun _ -> InferenceTypeOps.fresh_rigid_row_variable ()) renv)
+    (IntMap.map (fun _ -> TypeOps.fresh_rigid_type_variable ()) tenv,
+     IntMap.map (fun _ -> TypeOps.fresh_rigid_row_variable ()) renv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
   let tenv, renv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> InferenceTypeOps.fresh_type_variable ()) tenv,
-     IntMap.map (fun _ -> InferenceTypeOps.fresh_row_variable ()) renv)
+    (IntMap.map (fun _ -> TypeOps.fresh_type_variable ()) tenv,
+     IntMap.map (fun _ -> TypeOps.fresh_row_variable ()) renv)
+
+(* alias lookup *)
+exception AliasMismatch of string
+
+let lookup_alias (s, ts) alias_env =
+  let vars, alias =
+    if StringMap.mem s alias_env then
+      StringMap.find s alias_env
+    else
+      raise (AliasMismatch ("Unbound typename "^s))
+  in
+    if List.length vars <> List.length ts then
+      raise (AliasMismatch
+               ("Alias '"^s^"' takes "^string_of_int(List.length vars)^" arguments but is applied to "^
+                  string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
+    else
+      vars, alias
+

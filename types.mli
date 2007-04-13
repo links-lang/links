@@ -9,11 +9,11 @@
 (* module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap *)
 (* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
 
-type 'a stringmap = 'a Utility.stringmap
+type 'a stringmap = 'a Utility.StringMap.t
 type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 
 (* type var sets *)
-(*module TypeVarSet : Set.S with type elt = int*)
+module TypeVarSet : Set.S with type elt = int
 type type_var_set = Utility.IntSet.t
 
 (* points *)
@@ -125,7 +125,7 @@ sig
   val closed_row_var : row_var
 end
 
-module InferenceTypeOps : TYPEOPS
+module TypeOps : TYPEOPS
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
@@ -200,19 +200,10 @@ val string_of_row_var : row_var -> string
 val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
-val is_guarded : int -> datatype -> bool
-val is_guarded_row : int -> row -> bool
-
-val is_negative : int -> datatype -> bool
-val is_negative_row : int -> row -> bool
-val is_negative_field_env : int -> field_spec_map -> bool
-val is_negative_row_var : int -> row_var -> bool
-
-val is_positive : int -> datatype -> bool
-val is_positive_row : int -> row -> bool
-val is_positive_field_env : int -> field_spec_map -> bool
-val is_positive_row_var : int -> row_var -> bool
-
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
+
+(* alias lookup *)
+exception AliasMismatch of string
+val lookup_alias : string * datatype list -> alias_environment -> assumption

@@ -81,6 +81,8 @@ SOURCES = $(OPC)                		\
           jsonlex.mll           		\
           json.ml               		\
           callgraph.ml                          \
+          instantiate.mli instantiate.ml        \
+          typevarcheck.mli typevarcheck.ml      \
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\

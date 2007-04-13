@@ -6,6 +6,8 @@ open Syntax
 open Types
 open Forms
 open Errors
+open Instantiate
+open Typevarcheck
 
 (* debug flags *)
 let show_unification = Settings.add_bool("show_unification", false, `User)
@@ -15,7 +17,7 @@ let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
 let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
 
 let show_typechecking = Settings.add_bool("show_typechecking", false, `User)
-let show_recursion = Settings.add_bool("show_recursion", false, `User)
+let show_recursion = Instantiate.show_recursion
 
 let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, `User)
 
@@ -27,24 +29,24 @@ let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, `User
  *)
 let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
 
-let occurs_check var t =
+let occurs_check alias_env var t =
   match Settings.get_value infer_recursive_types with
     | "all" -> true
-    | "guarded" -> is_guarded var t
-    | "positive" -> not (is_negative var t)
+    | "guarded" -> is_guarded alias_env var t
+    | "positive" -> not (is_negative alias_env var t)
     | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
 
-let occurs_check_row var row =
+let occurs_check_row alias_env var row =
   match Settings.get_value infer_recursive_types with
     | "all" -> true
-    | "guarded" -> is_guarded_row var row
-    | "positive" -> not (is_negative_row var row)
+    | "guarded" -> is_guarded_row alias_env var row
+    | "positive" -> not (is_negative_row alias_env var row)
     | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
 
 exception Unify_failure of string
 exception UndefinedVariable of string
 
-module ITO = InferenceTypeOps
+module ITO = TypeOps
 
 let db_descriptor_type =
   snd (Parse.parse_string Parse.datatype "(driver:String, name:String, args:String)")
@@ -107,98 +109,6 @@ and eq_row_vars (lpoint, rpoint) =
     | `Rigid var, `Rigid var'
     | `Recursive (var, _), `Recursive (var', _) -> var=var'
     | _, _ -> Unionfind.equivalent lpoint rpoint
-
-(*
-  instantiation environment:
-    for stopping cycles during instantiation
-*)
-type inst_type_env = meta_type_var IntMap.t
-type inst_row_env = meta_row_var IntMap.t
-type inst_env = inst_type_env * inst_row_env
-
-let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype -> datatype =
-  fun (tenv, renv) ->
-    let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
-      let rec_type_env, rec_row_env = rec_env in
-	match datatype with
-	  | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-	  | `Primitive _  -> datatype
-	  | `MetaTypeVar point ->
-	      let t = Unionfind.find point in
-		(match t with
-		   | `Flexible var
-		   | `Rigid var ->
-		       if IntMap.mem var tenv then
-			 IntMap.find var tenv
-		       else
-			 datatype
-		   | `Recursive (var, t) ->
-		       Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
-
-		       if IntMap.mem var rec_type_env then
-			 (`MetaTypeVar (IntMap.find var rec_type_env))
-		       else
-			 (
-			   let var' = Types.fresh_raw_variable () in
-			   let point' = Unionfind.fresh (`Flexible var') in
-			   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-			   let _ = Unionfind.change point' (`Recursive (var', t')) in
-			     `MetaTypeVar point'
-			 )
-		   | `Body t -> inst rec_env t)
-	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
-	  | `Record row -> `Record (inst_row rec_env row)
-	  | `Variant row ->  `Variant (inst_row rec_env row)
-	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
-	  | `Application (n, elem_type) ->
-	      `Application (n, List.map (inst rec_env) elem_type)
-    and inst_row : inst_env -> row -> row = fun rec_env row ->
-      let field_env, row_var = flatten_row row in
-	
-      let is_closed =
-        match Unionfind.find row_var with
-          | `Closed -> true
-          | _ -> false in
-
-      let field_env' = StringMap.fold
-	(fun label field_spec field_env' ->
-	   match field_spec with
-	     | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-	     | `Absent ->
-		 if is_closed then field_env'
-		 else StringMap.add label `Absent field_env'
-	) field_env StringMap.empty in
-      let row_var' = inst_row_var rec_env row_var
-      in
-	field_env', row_var'
-          (* precondition: row_var has been flattened *)
-    and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
-      match row_var with
-	| point ->
-	    begin
-              match Unionfind.find point with
-	        | `Closed -> row_var
-                | `Flexible var
-                | `Rigid var ->
-		    if IntMap.mem var renv then
-		      IntMap.find var renv
-		    else
-		      row_var
-	        | `Recursive (var, rec_row) ->
-		    if IntMap.mem var rec_row_env then
-		      IntMap.find var rec_row_env
-		    else
-		      begin
-		        let var' = Types.fresh_raw_variable () in
-		        let point' = Unionfind.fresh (`Flexible var') in
-		        let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
-		        let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
-			  point'
-		      end
-	        | `Body _ -> assert(false)
-            end
-    in
-      inst (IntMap.empty, IntMap.empty)
 
 (*
   unification environment:
@@ -269,34 +179,20 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
      - var is free in t
   *)
   let rec_intro point (var, t) =
-    if occurs_check var t then
+    if occurs_check alias_env var t then
       Unionfind.change point (`Recursive (var, t))
     else
-      failwith "non-well-founded type inferred!" in
-
+      raise (Unify_failure ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
+                            " because "^
+                            match Settings.get_value infer_recursive_types with
+                              | "guarded" -> "the type variable occurs unguarded inside the datatype"
+                              | "positive" -> "the type variable occurs in a negative position inside the datatype"
+                              | _ -> assert false)) in
+    
   let lookup_alias (s, ts) alias_env =
-    let vars, alias =
-      if StringMap.mem s alias_env then
-        StringMap.find s alias_env
-      else
-        raise (Unify_failure ("Unbound typename "^s))
-    in
-      if List.length vars <> List.length ts then
-        raise (Unify_failure
-                 ("Alias '"^s^"' takes "^string_of_int(List.length vars)^" arguments but is applied to "^
-                    string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
-      else
-        vars, alias in
-
-  let instantiate_alias (vars, alias) ts =
-    let _, tenv =
-      List.fold_left (fun (ts, tenv) tv ->
-                        match ts, tv with
-                          | (t::ts), `TypeVar var ->
-                              ts, IntMap.add var t tenv
-                          | _ -> assert false) (ts, IntMap.empty) vars
-    in
-      instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias) in
+    try lookup_alias (s, ts) alias_env
+    with
+        AliasMismatch msg -> raise (Unify_failure msg) in
 
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -453,7 +349,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       )
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
-  fun rec_env (lrow, rrow) ->
+  fun ((_, _, alias_env) as rec_env) (lrow, rrow) ->
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
     (* 
@@ -529,11 +425,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
        non-well-founded type inference is switched off
     *)
     let rec_row_intro point (var, row) =
-      if occurs_check_row var row then
+      if occurs_check_row alias_env var row then
 	Unionfind.change point (`Recursive (var, row))
       else
-	failwith "non-well-founded row type inferred!" in
-
+        raise (Unify_failure ("Cannot unify row variable "^string_of_int var^" with row "^string_of_row row^
+                                " because "^
+                                match Settings.get_value infer_recursive_types with
+                                  | "guarded" -> "the row variable occurs unguarded inside the row"
+                                  | "positive" -> "the row variable occurs in a negative position inside the row"
+                                  | _ -> assert false)) in
 
     (*
       unify_row_var_with_row rec_env (row_var, row)
