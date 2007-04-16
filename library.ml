@@ -140,7 +140,7 @@ let unpack_args = function
                          List.assoc (Printf.sprintf "%d" (n+1)) args :: outargs)
         (Utility.fromTo 0 (List.length args))
         []                           
-  | _ -> failwith "Internal error: arguments not passed as tuple"
+  | _ -> failwith "Internal error: args to internal func not passed as tuple"
 
 let one_arg = function
   | [a] -> a
@@ -237,6 +237,25 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      (* Return type must be free so that it unifies with things that
         might be used alternatively. E.g.: 
 	    if (test) exit(1) else 42 *)
+  );
+
+  "displayPage", (* sendPage? *)
+  (`Continuation [],
+   (datatype "Xml -> b") (* Never returns. *)
+  );
+
+  "resultToString",
+  (p1 (fun result ->
+         string_as_charlist(string_of_result result)
+      ),
+   (datatype "a -> String")
+  );
+
+  "resultToXml",
+  (p1 (fun result ->
+         string_to_xml (string_as_charlist(string_of_result result))
+      ),
+   (datatype "a -> Xml")
   );
 
   "send",
@@ -605,6 +624,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun url ->
          let url = charlist_as_string url in
            (* This is all quite hackish, just testing an idea. --ez *)
+           Debug.print("redirecting to: " ^ url);
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
            `Record []
@@ -612,8 +632,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                                         I think not --ez*)
 
   (** reifyK: I choose an obscure name, for an obscure function, until
-      a better one can be though up. It just turns a continuation into its
-      string representation *)
+      a better one can be thought up. It just turns a continuation
+      into its string representation *)
   "reifyK",
   (p1 (function
            `Continuation k -> 
@@ -683,6 +703,18 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                                          ^ " where " ^ single_match db (links_fst row)
                                        in
                                          prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
+                                         (* TBD: If we are going to
+                                            use the "single_match" idea
+                                            above, we should assert here
+                                            that the result was exactly
+                                            one match. This would catch
+                                            errors in SQL compilation
+                                            that are presently silently
+                                            discarded. On the other hand,
+                                            why not just go straight from
+                                            the criteria to the update,
+                                            skipping the SELECT step?
+                                         *)
                                          ignore (Database.execute_command query_string db))
                             rows;
                           `Record []

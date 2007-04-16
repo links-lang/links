@@ -208,7 +208,7 @@ let rec show t : 'a expression' -> string = function
       ^ "; " ^ show t body ^ "}" ^ t data
   | Call_cc (Abstr(var, body, _), data) -> 
       "escape " ^ var ^ " in " ^ show t body ^ t data
-  | Call_cc (f, data) -> "callCC " ^ show t f ^ t data
+  | Call_cc (f, data) -> "callCC(" ^ show t f ^ ")" ^ t data
   | Xml_node (tag, attrs, elems, data) ->  
       let attrs = 
         let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ show t v ^ "\"") attrs) in
@@ -271,6 +271,20 @@ let strip_data : 'a expression' -> stripped_expression =
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
 
+let rec oneToN = function 
+    1 -> [1]
+  | n -> oneToN (n-1) @ [n]
+
+let links_tuple exprs data = 
+  let numd_exprs = combine (map string_of_int (oneToN (length exprs))) exprs in
+    Record_intro (fold_right (fun (i, expr) ->
+                                (StringMap.add i expr))
+                    numd_exprs StringMap.empty,
+                  None, data)
+
+let links_call func args argsData callData = 
+  Apply(func, links_tuple args argsData, callData)
+   
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)
@@ -683,4 +697,3 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
-

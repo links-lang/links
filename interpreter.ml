@@ -410,7 +410,6 @@ fun globals locals expr cont ->
   | Syntax.Comparison (l, oper, r, _) ->
       eval l (BinopRight(locals, (oper :> Result.binop), r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
-      (* interesting: not stripping to the freevars made continuations huge *)
       eval value (LetCont(retain (freevars body) locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
       let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
@@ -445,7 +444,7 @@ fun globals locals expr cont ->
   | Syntax.Erase (expr, label, _) ->
       eval expr (UnopApply (locals, Result.Erase label) :: cont)
   | Syntax.Variant_injection (label, value, _) ->
-       eval value (UnopApply(locals, MkVariant(label)) :: cont)
+      eval value (UnopApply(locals, MkVariant(label)) :: cont)
   | Syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
       eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, Some variable, Some body)) :: cont)
   | Syntax.Variant_selection_empty (_) ->
@@ -475,11 +474,11 @@ fun globals locals expr cont ->
       end
 
   | Syntax.TableQuery (ths, query, d) ->
-      (* [ths] is an alist mapping table aliases to expressions
-         providing the corresponding TableHandles. We evaluate those
-         expressions and rely on them coming through to the continuation
-         in the same order. That way we can stash the aliases in the
-         continuation frame & match them up later. *)
+      (* [ths] is an alist mapping table aliases to expressions that
+         provide the corresponding TableHandles. We evaluate those
+         expressions and rely on them coming through to the
+         continuation in the same order. That way we can stash the
+         aliases in the continuation frame & match them up later. *)
       let aliases, th_exprs = split ths in
         eval (Syntax.list_expr d th_exprs)
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
@@ -495,7 +494,6 @@ fun globals locals expr cont ->
                       None,
                       d),
                    d)) cont
-        (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->

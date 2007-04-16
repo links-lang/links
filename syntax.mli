@@ -101,6 +101,9 @@ val is_closed_wrt : expression -> string list -> bool
 (** Which variables are l:name-bound? *)
 val lname_bound_vars : 'data expression' -> string list
 
+val links_tuple : 'a expression' list -> 'a -> 'a expression'
+val links_call : 'a expression' -> 'a expression' list -> 'a -> 'a -> 'a expression'
+
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 

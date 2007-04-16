@@ -1131,7 +1131,8 @@ module Desugarer =
                let generator =
                  `Table ((`As (r, pattern), pos'), tv) in
                let ignorefields = 
-                 List.map (fun (name, value) -> name, ((`Variable (unique_name ())), pos')) row in
+                 List.map (fun (name, value) -> 
+                             name, ((`Variable (unique_name ())), pos')) row in
                let body = 
                  (ListLit
                     [(TupleLit

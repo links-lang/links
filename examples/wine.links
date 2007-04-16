@@ -10,16 +10,20 @@ var orderTable = table "orders"
                   with (cust_id : Int, order_id : Int, date : String,
                         instructions : String, creditcard : String,
                         expirydate : String)
-                   from db;
+                  from db;
 
 var shortOrderTable = table "orders"
                        with (cust_id : Int, order_id : Int)
-                   from db;
+                       from db;
 
 var cartItemsTable = table "items"
                       with (item_id : Int, cust_id : Int, order_id : Int, 
                             price : Float, qty : Int,
                             wine_id : Int)
+                      from db;
+
+var shortCartItemsTable = table "items"
+                      with (cust_id : Int, order_id : Int)
                       from db;
 
 var wineTable = table "wine" 
@@ -41,7 +45,7 @@ var inventoryTable = table "inventory" with
 
 var wineryTable = table "winery" with 
                   (winery_id : Int, winery_name : String,
-                  region_id : Int)
+                   region_id : Int)
                   from db;
 
 fun snd(pair) {
@@ -114,32 +118,47 @@ fun wineTypeName(wine_type_id) {
     stringToXml(wineType.wine_type)
 }
 
+fun wine_name(wine_id) {
+  var matches = 
+      for (var wine <-- wineTable)
+      where (wine.wine_id == wine_id)
+        [wine.wine_name];
+  hd(matches)
+}
+
+fun get_region_name(region_id) {
+  for (var region <-- regionTable)
+  where (region_id == region.region_id)
+    region.region_name
+}
+
+fun get_wine_price(wine_id) {
+  hd(for (var cost_rec <-- inventoryTable)
+     where (wine_id == cost_rec.wine_id) 
+       [cost_rec.cost])
+}
+
 fun cust_id_next() {  # WARNING: race condition here
   var ids = for (var u <-- usersTable)
               [u.cust_id];
   maximum(0, ids) + 1
 }
 
-fun claimCart(order_id, cust_id) {
-  # Should we guard this to only claim carts with cust_id = -1?
-  update (var x <-- cartItemsTable)
-   where (x.order_id == order_id)
-     set (item_id = x.item_id,
-          cust_id = cust_id,
-          order_id = x.order_id,
-          price = x.price,
-          qty = x.qty,
-          wine_id = x.wine_id);
-#     set (cust_id = cust_id);
-  update (var x <-- orderTable)
-   where (x.order_id == order_id)
-     set (cust_id = cust_id,
-          order_id = x.order_id,
-          date = x.date,
-          instructions = x.instructions,
-          creditcard = x.creditcard,
-          expirydate = x.expirydate)
-#     set (cust_id = cust_id)
+fun claimCart(order_id, to_cust_id) {
+ # FIXME: This normally fails to do an update, because Links is 
+ # trying to select NULL-valued rows by checking against ''.
+ update (var x <-- shortOrderTable)
+  where (x.order_id == order_id && x.cust_id == -1)
+    set (cust_id = to_cust_id,
+         order_id = x.order_id);
+  update (var x <-- shortCartItemsTable)
+   where (x.order_id == order_id && x.cust_id == -1)
+    set (cust_id = to_cust_id,
+         order_id = x.order_id);
+}
+
+fun htmlHead() {
+  <head> <link href="wine.css" rel="StyleSheet"/> </head>
 }
 
 sig sign_up : (Int, String, String) -> Xml
@@ -158,7 +177,7 @@ fun sign_up(order_id, username, password)  {
 }
 
 fun sign_up_form(order_id) {
-  <html>
+  <html> {htmlHead()}
     <form l:action="{sign_up(order_id, username, password)}">
       <table>
         <tr><td>
@@ -194,18 +213,19 @@ fun sign_in(order_id, username, password) {
 }
 
 fun sign_in_form(order_id) {
-  <html>
+  <html> {htmlHead()}
+    <h1>Log In</h1>
     <form l:action="{sign_in(order_id, username, password)}">
-      Enter your username and password here:
-      <table>
-        <tr><td>
-          Username:</td><td> <input type="text" l:name="username" />
+      <p class="instructions">Enter your username and password here:</p>
+      <table class="data-entry">
+        <tr><td class="label">
+          Username:</td><td>   <input type="text" l:name="username" />
+        </td></tr>
+        <tr><td class="label">
+          Password:</td><td>   <input type="password" l:name="password" />
         </td></tr>
         <tr><td>
-          Password:</td><td> <input type="password" l:name="password" />
-        </td></tr>
-        <tr><td>
-        </td> <td> <input type="submit" value="Sign in" />
+        </td> <td>             <input type="submit" value="Sign in" />
         </td></tr>
       </table>
     </form>
@@ -217,7 +237,7 @@ fun logout() {
 }
 
 fun errorPage(msg) {
-  <h1>Sorry, an error occured</h1>
+  <h1>Sorry, an error occured:</h1>
   <p>{stringToXml(msg)}</p>
 }
 
@@ -251,43 +271,49 @@ fun valid_cc_details(card_no, expiry) {
 fun purchase_confirmation(cust_id, order_id, total) {
   debug("arrived at purchase confirmation with " ++ intToString(cust_id)
         ++ " " ++ intToString(order_id) ++ " " ++ floatToString(total));
-  <html>
+  <html> {htmlHead()}
     <h1>Success!</h1>
-    <p>Thanks, {if (cust_id <> -1) customerName(cust_id) else []},
-    your order has been dispatched. Your order reference number is
-    {intToXml(cust_id)} - {intToXml(order_id)}.
-    Please quote this number in any correspondence.</p>
+    <p class="instructions">
+     Thanks, {if (cust_id <> -1) customerName(cust_id) else []},
+     your order has been dispatched. Your order reference number is
+     {intToXml(cust_id)} - {intToXml(order_id)}.
+     Please quote this number in any correspondence.</p>
 
-    <p>If it existed, the order would have been shipped to:
-    <blockquote>(Insert shipping details)</blockquote></p>
+    <p class="instructions">If it existed, the order would have been
+      shipped to:
+    <blockquote>(TBD: Insert shipping details)</blockquote></p>
 
-    We have billed your fictional credit card.
-    <table width="100%">
+    <p class="instructions">We have billed your fictional credit card.</p>
+
+    <table class="data-entry">
       <tr>
-        <td> Quantity </td>
-        <td> Wine </td>
-        <td> Unit Price </td>
-        <td> Total </td>
+        <th class="quantity-col"> Quantity </th>
+        <th class="wine-name-col"> Wine </th>
+        <th class="price-col"> Unit Price </th>
+        <th class="total-col"> Total </th>
       </tr>
       {
         for (var item <-- cartItemsTable)
           for (var wine <-- wineTable)
             where (item.wine_id == wine.wine_id && item.order_id == order_id)
               <tr>
-                <td> {intToXml(item.qty)} </td>
-                <td> {stringToXml(wine.wine_name)} </td>
-                <td> {floatToXml(item.price)} </td>
-                <td> {floatToXml(item.price *. intToFloat(item.qty))} </td>
+                <td class="quantity-col"> {intToXml(item.qty)} </td>
+                <td class="wine-name-col"> {stringToXml(wine.wine_name)} </td>
+                <td class="price-col"> ${floatToXml(item.price)} </td>
+                <td class="total-col"> ${floatToXml(item.price *. intToFloat(item.qty))} </td>
               </tr>
       }
     <tr>
-     <td colspan="3">Total of this order</td> 	<td>{floatToXml(total)}</td>
+     <td colspan="3">Total of this order:</td>
+         <td class="total-col"> ${floatToXml(total)} </td>
     </tr>
     </table>
 
-    <p>An email confirmation has NOT been sent to you. Thank you for shopping 
-    with Linkswine.</p>
-    Return to <a l:href="{search_results(cust_id, -1, 1, 1, 0)}">main page</a>.
+    <p class="instructions">An email confirmation has <em>NOT</em> been sent to you.
+       Thank you for shopping with Linkswine.</p>
+    <p class="navigation">
+      Return to <a l:href="{search_results(cust_id, -1, 1, 1, 0)}">main page</a>.
+    </p>
   </html>
 }
 
@@ -296,7 +322,7 @@ fun order_total(cust_id, order_id) {
   sum_float(
     for (var item <-- cartItemsTable)
     where (item.cust_id == cust_id && item.order_id == order_id)
-      [item.price]
+      [item.price *. intToFloat(item.qty)]
   )
 }
 
@@ -319,7 +345,8 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
     if (valid_cc_details(card_no, expiry)) {
       var the_order = getOrder(cust_id, order_id);
       switch (the_order) {
-        case None -> errorPage("Internal error: You have no shopping cart")
+        case None -> errorPage("Internal error: You have no shopping cart. (**This may be due to a bug with claiming your cart; try signing in before adding items to your cart**) (" 
+               ++ intToString(cust_id) ++ ", " ++ intToString(order_id) ++ ")")
         case Some(order) -> {
           update (var x <-- orderTable)
            where (x.order_id == order_id && cust_id == x.cust_id)
@@ -340,35 +367,63 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
 }
 
 fun begin_checkout(cust_id, order_id) {
-  <html>
+  <html> {htmlHead()}
     <h1>Finalize Your Order</h1>
 
-      <div>Please enter your SurchargeCard details (Try: 8000000000001001 )
-        and delivery instructions. Fields shown in red are mandatory.</div>
+      <p class="instructions">
+        Please enter your SurchargeCard details (Try: 8000000000001001 )
+        and delivery instructions. Fields shown in red are mandatory.</p>
       <form method="POST" l:action="{checkout(cust_id, order_id, card_no, expiry, instr)}">
-      <table>
-        <tr><td align="right">
-          SurchargeCard: 	
+      <table class="data-entry">
+        <tr><td class="label mandatory">
+          <label for="card_no"> SurchargeCard: 	</label>
         </td><td>
-          <input type="text" l:name="card_no" value="" />
+          <input id="card_no" type="text" l:name="card_no" value="" />
         </td></tr>
-        <tr><td align="right">
+        <tr><td class="label mandatory">
           Expiry Date (mm/yy): 	
         </td><td>
           <input type="text" l:name="expiry" value="" />
         </td></tr>
-        <tr><td align="right">
+        <tr><td class="label">
           Delivery Instructions: 	
         </td><td>
           <input type="text" l:name="instr" value="" />
         </td></tr>
-        <tr><td align="right">
+        <tr><td class="label">
         </td><td>
           <input type="submit" value="Purchase" />
         </td></tr>
       </table>
       </form>
   </html>
+}
+
+fun withButton(label, val, frm) {
+  formlet <#>
+    {frm -> result}
+    {submitButton(label, val) -> btn}
+  </#>
+  yields
+    result
+}
+
+sig update_cart : (Int, Int, [(Int,Int)]) -> ()
+fun update_cart(cust_id, order_id, qtys) {
+  # Gosh, here's an ugly idiom:
+  ignore(for (var (item_id, newQty) <- qtys) {
+    update (var item <-- cartItemsTable)
+     where (item.cust_id == cust_id && item.order_id == order_id 
+             && item.item_id == item_id)
+       set (qty = newQty,
+            item_id = item.item_id,
+            cust_id = item.cust_id,
+            order_id = item.order_id,
+            price = item.price,
+            wine_id = item.wine_id);
+    []
+  });
+  freshResource(); 
 }
 
 fun cart_itemlist(cust_id, order_id) {
@@ -384,71 +439,75 @@ fun cart_itemlist(cust_id, order_id) {
         {
             for (var cost_rec <-- inventoryTable)
             where (cost_rec.wine_id == wine.wine_id)
-              [(wine.wine_name, cost_rec.cost)]
+              [(id=cart_item.item_id, qty=cart_item.qty,
+                name=wine.wine_name, cost=cost_rec.cost)]
         }
     };
     debug("got results in cart_items");
     if (length(cart_items) == 0)
       <p>Your cart is empty.</p>
     else {
-      var total_cost = floatToString(sum_float(map(snd, cart_items)));
+      var total_cost = floatToString(sum_float(map(fun (i){i.cost *. intToFloat(i.qty)}, cart_items)));
       var total_items = intToString(length(cart_items));
-      <table width="100%">
-           <tr>
-             <th> Quantity </th>
-             <th> Wine </th>
-             <th align="right"> Unit Price </th>
-             <th align="right"> Total </th>
-           </tr>
-        {for (var item <- cart_items)
-           <tr>
-             <td> 1 </td>
-             <td> {stringToXml(item.1)} </td>
-             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-             <td align="right"> ${stringToXml(floatToString(item.2))} </td>
-           </tr>
-        }
-        <tr>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td align="right"> ${stringToXml(total_cost)} </td>
-        </tr>
-      </table> ++
+      render(
+        withButton("Update Cart", 1, 
+          formlet
+            <table width="100%">
+              <tr>
+                <th class="quantity-col"> Quantity </th>
+                <th class="wine-name-col"> Wine </th>
+                <th class="price-col"> Unit Price </th>
+                <th class="total-col"> Total </th>
+              </tr>
+              {
+                  formlets(for (var cartItem <- cart_items) {
+                      [formlet
+                         <tr>
+                           <td>{inputIntValue(cartItem.qty) -> qty}
+                               {hiddenInt(cartItem.id) -> itemId}
+                           </td>
+                           <td>{stringToXml(cartItem.name)}
+                           </td>
+                           <td align="right">${floatToXml(cartItem.cost)}
+                           </td>
+                           <td></td>
+                         </tr>
+                       yields
+                         (itemId, qty)
+                      ]})
+                 -> item_qtys
+              }
+              <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td class="total-col"> ${stringToXml(total_cost)} </td>
+              </tr>
+            </table> 
+          yields
+            item_qtys),
+        # handler
+        fun (qtys) { update_cart(cust_id,order_id,qtys);
+                     #resultToXml(qtys)
+                     show_cart(cust_id, order_id,
+                               "Your cart has been updated.")
+                   }
+)
+      ++
       {if (cust_id <> -1)
         <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
           <input type="submit" value="Check out" />
         </form>
        else {<div>To make a purchase, you must be a member. 
                You may <a l:href="{sign_in_form(order_id)}">sign in</a> or
-                 <a l:href="{sign_up_form(order_id)}">create an account</a> 
-                  </div>}
+               <a l:href="{sign_up_form(order_id)}">create an account</a>.
+             </div>}
       }
     }
 }
 
-fun wine_name(wine_id) {
-  var matches = 
-      for (var wine <-- wineTable)
-      where (wine.wine_id == wine_id)
-        [wine.wine_name];
-  hd(matches)
-}
-
-fun get_region_name(region_id) {
-  for (var region <-- regionTable)
-  where (region_id == region.region_id)
-    region.region_name
-}
-
-fun get_wine_price(wine_id) {
-  hd(for (var cost_rec <-- inventoryTable)
-     where (wine_id == cost_rec.wine_id) 
-       [cost_rec.cost])
-}
-
 fun show_cart(cust_id, order_id, msg) {
-  <html>
+  <html> {htmlHead()}
     <h1>Your Shopping Cart</h1>
     <div>
       {stringToXml(msg)}
@@ -518,22 +577,21 @@ fun create_cart(cust_id) {
 }
 
 fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
-  var negone = -1;
   var result = 
     take(page_size, drop(page * page_size,
-    for (var wine <-- wineTable )
-    where (wine_type == 1 || wine.wine_type == wine_type)
-    {
-      for (var winery <-- wineryTable)
-         where (winery.winery_id == wine.winery_id
-                && (region_id == 1 || winery.region_id == region_id))
-         { 
-             for (var cost_rec <-- inventoryTable)
-             where (wine.wine_id == cost_rec.wine_id)
-               [(wine.wine_id, wine.wine_name, cost_rec.cost,
-                 wine.year, winery.winery_name)]
-         }
-    }));
+      for (var wine <-- wineTable )
+      where (wine_type == 1 || wine.wine_type == wine_type)
+      {
+        for (var winery <-- wineryTable)
+           where (winery.winery_id == wine.winery_id
+                  && (region_id == 1 || winery.region_id == region_id))
+           { 
+               for (var cost_rec <-- inventoryTable)
+               where (wine.wine_id == cost_rec.wine_id)
+                 [(wine.wine_id, wine.wine_name, cost_rec.cost,
+                   wine.year, winery.winery_name)]
+           }
+      }));
 
   var (order_id, cust_id) = 
     if (order_id <> -1) (order_id, cust_id)
@@ -543,9 +601,15 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
 
   for (var (id, name, cost, year, winery) <- result)
   {
-      <li>{stringToXml(intToString(year))} {stringToXml(winery)} {stringToXml(name)} <br/>
-          <b>Our price</b>: ${floatToXml(cost)} (${floatToXml(cost *. 12.)} a dozen)
-          <a l:href="{add_to_cart(cust_id, order_id, id)}">Add to cart</a>
+      <li>
+        {stringToXml(intToString(year))}
+        {stringToXml(winery)}
+        <span class="wine-name">{stringToXml(name)}</span>
+        <br/>
+        <span class="price-label">Our price</span>: 
+          <span class="bottle-price">${floatToXml(cost)}</span>
+          (${floatToXml(cost *. 12.)} a dozen)
+        <a l:href="{add_to_cart(cust_id, order_id, id)}">Add to cart</a>
       </li>
   }
 }
@@ -585,21 +649,22 @@ fun cartSummary(cust_id, order_id) {
 }
 
 sig search_results : (Int, Int, Int, Int, Int) -> Xml
-
 fun search_results(cust_id, order_id, region_id, wine_type, page) {
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
   var winesOnThisPage = minimum(page_size, [numWines - (page) * page_size]);
-  <html>
+  <html> {htmlHead()}
     {header(cust_id, order_id)}
     {cartSummary(cust_id, order_id)}
-    <form method="POST" l:action="{search_results(cust_id, order_id,
-                                                  stringToInt(search_region_id),
-                                                  stringToInt(search_wine_type),
-                                                  page)}">
-      <h2>Filter wines by </h2>
+    <form method="POST"
+          l:action="{search_results(cust_id, order_id,
+                                    stringToInt(search_region_id),
+                                    stringToInt(search_wine_type),
+                                    page)}">
+      <div class="filter-box">
+      <h2>Filter wines by:</h2>
       <table>
-        <tr><td>Region:</td>
+        <tr><td class="label">Region:</td>
           <td><select l:name="search_region_id">
                 {for (var region <-- regionTable)
                    # (boutrosed)
@@ -612,7 +677,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
                 }
               </select>
           </td></tr>
-        <tr><td>Wine type:</td>
+        <tr><td class="label">Wine type:</td>
            <td><select l:name="search_wine_type">
                 {for (var type <-- wineTypeTable)
                    # (boutrosed)
@@ -625,13 +690,18 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
                 }
                </select>
           </td></tr>
+          <tr>
+            <td></td>
+            <td>  <input type="submit" value="Show wines" />
+            </td>
+          </tr>
        </table>
-       <input type="submit" value="Show wines" />
+       </div>
     </form>
     <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
     Page {intToXml(page+1)} of {intToXml(numPages)}
-    <ul>
+    <ul class="wine-listing">
       {wine_listing(cust_id, order_id, region_id, wine_type, page)}
     </ul>
     Showing wines {intToXml(page_size*page+1)} thru {intToXml(page_size*page+winesOnThisPage)}.<br />
@@ -651,7 +721,6 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
 }
 
 sig main : () -> Xml
-
 fun main() {
   search_results(-1, -1, 1, 1, 0)
 }
