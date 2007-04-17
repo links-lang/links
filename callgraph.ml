@@ -45,16 +45,17 @@ let rec defn_of symbol = function
   | Define(n, _, _, _) as expr :: _ when n = symbol -> expr
   | _ :: defns -> defn_of symbol defns
 
-let find_defn_in x y = defn_of y x
+let find_defn_in defs name = defn_of name defs
 
-(** order_exprs_by_callgraph takes a list of groupings of functions
-    and returns a new, possibly finer, list of groupings of functions.
+(** [refine_def_groups] takes a list of groupings of functions
+    and returns a new, possibly finer, list of groupings.
     Each of the new groupings should truly be mutually recursive and
     the groupings should be ordered in callgraph-order (but note that
     bindings are only determined within the original groupings; how
     does this work with redefined function names that are part of
     mut-rec call groups? )*)
-let refine_def_groups (expr_lists : 'a expression' list list) : 'a expression' list list = 
+let refine_def_groups (expr_lists : 'a expression' list list)
+    : 'a expression' list list = 
   let regroup_defs defs = 
     let bindings = defs_to_bindings defs in
     let cliques = group_and_order_bindings_by_callgraph bindings in
@@ -65,10 +66,10 @@ let refine_def_groups (expr_lists : 'a expression' list list) : 'a expression' l
        concat_map to bring them together *)
     concat_map (function
                   | Define _ :: _ as defs -> regroup_defs defs
-                  | e                     -> [e]) expr_lists
+                  | e                     -> [e])
+      expr_lists
       
 
-(** Removes defs from [env] that aren't used by [expr]. *)
 module DeadCode =
 struct
   type clique = {
@@ -77,42 +78,49 @@ struct
     defs : expression list
   }
 
+  (** [elim_dead_defs globals env root_names] Removes defs from [env]
+      that aren't used by functions named in [root_names]. *)
   let elim_dead_defs globals env root_names =
+    (* Q: Why do we filter globals from the initial free_names but not
+          thereafter? *)
     let filter_globals = filter (fun name -> not (mem name globals)) in
-    let defs, other = either_partition (function Define _ as d -> Left d | e -> Right e) env in
+    let defs, other = either_partition (function Define _ as d -> Left d
+                                          | e -> Right e) env in
     let groupings = refine_def_groups [defs] in
     let clique_info = map (fun exprs ->
                              {free_names = filter_globals (concat_map freevars exprs);
                               exposed_names = map fst (defs_to_bindings exprs);
                               defs = exprs}) groupings 
-    and expr_info = { free_names =  filter_globals root_names;
+    and root_info = { free_names = filter_globals root_names;
                       exposed_names = [];
                       defs = [] } in
 
     let rec close env = 
-        match env.free_names with 
-          | [] -> env
-          | names -> 
-              let defines name {exposed_names = names} = List.mem name names in
-              let defining_cliques = 
-                List.map (fun name -> List.find (defines name) clique_info) names
-              in
-                close (List.fold_right
-                         (fun clique env ->
-                            let exposed_names = env.exposed_names @ clique.exposed_names in
-                              { free_names = List.filter (fun name -> not (List.mem name exposed_names)) 
-                                  (env.free_names @ clique.free_names);
-                                exposed_names = exposed_names;
-                                defs = clique.defs @ env.defs})
-                         defining_cliques env)
-  in
-    try
-      other @ (close expr_info).defs
-    with Not_found -> failwith("Not_found in elim_dead_defs")
-
+      match env.free_names with 
+        | [] -> env
+        | names -> 
+            let defines name {exposed_names = names} = List.mem name names in
+            let defining_cliques = 
+              List.map (fun name -> List.find (defines name) clique_info) names
+            in
+            let new_env = 
+              (List.fold_right
+                 (fun clique env ->
+                    let exposed_names = env.exposed_names @ clique.exposed_names in
+                      { free_names = List.filter (fun name -> not (List.mem name exposed_names)) 
+                          (env.free_names @ clique.free_names);
+                        exposed_names = exposed_names;
+                        defs = clique.defs @ env.defs })
+                 defining_cliques env) in
+              close new_env
+    in
+      try
+        other @ (close root_info).defs
+      with Not_found -> failwith("Not_found in elim_dead_defs")
+        
   let elim_dead_defs_for_expr globals env expr =
     elim_dead_defs globals env (freevars expr) @ [expr]
-
+      
 end
 
 let elim_dead_defs = DeadCode.elim_dead_defs

@@ -40,15 +40,16 @@ let lookup globals locals name =
           | Some v -> v
           | None -> Library.primitive_stub name)
   with Not_found -> 
-    raise(RuntimeUndefVar name) (* ("Internal error: variable \"" ^ name ^ "\" not in environment")*)
+    raise(RuntimeUndefVar name)
+    (* failwith("Internal error: variable \"" ^ name ^ "\" not in environment")*)
 
 let bind_rec locals defs =
   (* create bindings for these functions, with no local variables for now *)
-  let make_placeholder = (fun env (variable, value) ->
-                            (match value with
-                               | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, locals, () (*globals*), body))
-                               | _ -> raise (Runtime_error "TF146"))) in
+  let make_placeholder env (variable, value) =
+    match value with
+      | Syntax.Abstr (var, body, _) ->
+          bind env variable (`Function (var, locals, () (*globals*), body))
+      | _ -> raise (Runtime_error "TF146") in
   let rec_env = trim_env (fold_left make_placeholder [] defs) in
     (* fill in the local variables *)
   let fill_placeholder value =
