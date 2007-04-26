@@ -77,12 +77,10 @@ type 'data expression' =
   | Comparison of ('data expression' * comparison * 'data expression' * 'data)
   | Abstr of (string * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * 'data expression' * Types.datatype option) list 
-            * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_intro of (('data expression') stringmap * ('data expression') option 
-                     * 'data)
+  | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Project of ('data expression' * string * 'data)
@@ -97,14 +95,12 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | TableQuery of
-      ((* the tables: *) (string * 'data expression') list *
-       (* the query: *) Query.query *
-        'data)
+  | TableQuery of ((* the tables: *) (string * 'data expression') list
+      * (* the query: *) Query.query 
+      * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table name: *) 'data expression'
-      * (* the read / write (record) types of a table row: *) 
-        (Types.datatype * Types.datatype)
+      * (* the read / write (record) types of a table row: *) (Types.datatype * Types.datatype)
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
@@ -124,9 +120,6 @@ let is_define =
     | TypeDecl _
     | Alien _ -> true
     | _ -> false
-
-let defined_names exprs = 
-  concat_map (function Define(f, _, _, _) -> [f] | _ -> []) exprs
 
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
@@ -208,7 +201,7 @@ let rec show t : 'a expression' -> string = function
       ^ "; " ^ show t body ^ "}" ^ t data
   | Call_cc (Abstr(var, body, _), data) -> 
       "escape " ^ var ^ " in " ^ show t body ^ t data
-  | Call_cc (f, data) -> "callCC(" ^ show t f ^ ")" ^ t data
+  | Call_cc (f, data) -> "callCC " ^ show t f ^ t data
   | Xml_node (tag, attrs, elems, data) ->  
       let attrs = 
         let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ show t v ^ "\"") attrs) in
@@ -271,20 +264,6 @@ let strip_data : 'a expression' -> stripped_expression =
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
 
-let rec oneToN = function 
-    1 -> [1]
-  | n -> oneToN (n-1) @ [n]
-
-let links_tuple exprs data = 
-  let numd_exprs = combine (map string_of_int (oneToN (length exprs))) exprs in
-    Record_intro (fold_right (fun (i, expr) ->
-                                (StringMap.add i expr))
-                    numd_exprs StringMap.empty,
-                  None, data)
-
-let links_call func args argsData callData = 
-  Apply(func, links_tuple args argsData, callData)
-   
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)
@@ -430,7 +409,9 @@ let lname_bound_vars : 'a expression' -> string list =
         
 
 let freevars (expression : 'a expression') : string list = 
-  let combine = unduplicate (=) -<-List.concat in
+  let remove x = List.filter ((<>)x)
+  and remove_all xs = List.filter (not -<- flip List.mem xs) 
+  and combine = unduplicate (=) -<-List.concat in
   let rec aux default = function
     | Variable (name, _) -> [name]
     | For (body, var, generator, _) -> aux default generator @ remove var (aux default body)
@@ -606,11 +587,6 @@ let rename_fast name replacement expr =
   in
     fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
-(** {0 Sanity Checks} *)
-
-let is_closed expr = freevars expr == []
-
-let is_closed_wrt expr freebies = freevars expr <|subset|> freebies
 
 (** {0 Labelizing} *)
 
@@ -623,14 +599,15 @@ let has_label expr =
       (_,_,None) -> false
     | (_,_,Some _) -> true
 
-let label_for_expr expr =
-  (Digest.string -<- string_of_expression) expr
+let label_for_expr =
+  (Digest.string -<- string_of_expression)
 
 let labelize expr =
   (function None -> expr
      | Some x -> x)
     (RewriteSyntax.topdown 
        (fun expr -> 
+          Debug.if_set print_digest_junk (fun _-> Utility.base64encode(label_for_expr expr));
           Some(set_label expr (Some(label_for_expr expr))))
        expr)
 

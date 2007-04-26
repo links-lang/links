@@ -114,17 +114,15 @@ val float : 'a -> [> `Float of 'a ]
 val char : 'a -> [> `Char of 'a ]
 val listval : 'a -> [> `List of 'a ]
 val xmlnodeval : string * xml -> [> `XML of xmlitem ]
-val is_string : result -> bool
 val recfields : result -> (string * result) list
 val string_as_charlist : string -> result
-val links_fst : [> `Record of (string * 'b) list ] -> 'b
-val links_snd : [> `Record of (string * 'b) list ] -> 'b
+val links_fst : [> `Record of ('a * 'b) list ] -> 'b
+val links_snd : [> `Record of ('a * 'b) list ] -> 'b
 val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
 val delay_expr : 'a -> [> `Function of string * 'b list * unit * 'a ]
 val charlist_as_string : result -> string
 val string_of_result : result -> string
-val string_of_cont : continuation -> string
 val string_of_environment : binding list -> string
 val string_of_primitive : primitive_value -> string
 val box_bool : 'a -> [> `Bool of 'a ]

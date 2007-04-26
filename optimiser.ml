@@ -51,9 +51,7 @@ let pure : expression -> bool =
 (* Number of nodes in a syntax tree *)
 let countNodes e = 
   let count = ref 0 in 
-    Syntax.reduce_expression
-      (fun recurse e -> incr count; recurse e)
-      (fun _ -> ()) e; 
+    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
     !count;;
 
 (* Inline small, non-recursive functions *)
@@ -152,14 +150,14 @@ let reduce_recursion : RewriteSyntax.rewriter = function
 
 
 
-(** [uniquify_names]
+(** [uniquify_expression]
 
     Give unique names to all local bindings.  Local names should be
     distinct from each other and from toplevel names
 
     After this, we can be much less careful about scope.
 *)
-let uniquify_names : RewriteSyntax.rewriter = 
+let uniquify_expression : RewriteSyntax.rewriter = 
   let rewrite_node = function
     | Abstr (v, b, data) -> 
         let name = gensym ~prefix:v () in
@@ -168,12 +166,9 @@ let uniquify_names : RewriteSyntax.rewriter =
         let name = gensym ~prefix:v () in
           Some (Let (name, e, Syntax.rename_fast v name b, data))
     | Rec (vs, b, data) -> 
-        let bindings = List.map (fun (name, _, _) -> 
-                                   (name, gensym ~prefix:name ())) vs in
-        let rename = List.fold_right (fun (x, r) expr ->
-                                        Syntax.rename_fast x r expr) bindings in
-          Some(Rec(List.map (fun (n, v, t) ->
-                               (List.assoc n bindings, rename v, t)) vs,
+        let bindings = List.map (fun (name, _, _) -> (name, gensym ~prefix:name ())) vs in
+        let rename = List.fold_right (fun (x, r) expr -> Syntax.rename_fast x r expr) bindings in
+          Some(Rec(List.map (fun (n, v, t) -> (List.assoc n bindings, rename v, t)) vs,
                    rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym ~prefix:lvar ()
@@ -631,14 +626,6 @@ let is_atom = function
   | Variable _ | Integer _ -> true
   | _ -> false
 
-let sqlable_functions = ["*"; "/"; "+"; "-"]
-
-(* return true if the argument is a numeric expression on atoms *)
-let rec is_simple_expr = function
-  | Apply(Apply(Variable(f, _), a, _), b, _) when mem f sqlable_functions
-      -> is_simple_expr a && is_simple_expr b
-  | expr -> is_atom expr
-
 (* if e is not an atom then bind it to a variable by extending the
    continuation k return the new continuation and an atomic expression
    representing e
@@ -674,7 +661,7 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
         begin
           match f, StringMap.find "2" fields1 with
             | "take", Apply (Variable ("drop", d4),
-                             Record_intro(fields2, None, d5), d6) ->
+                             Record_intro(fields2, None, d5), d6) ->                
                 let k, e2 = lift_let d3 (StringMap.find "1" fields2) k
                 in
                   Some(k(Apply (Variable ("take", d1),
@@ -709,53 +696,50 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Integer  (n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
   function
-    | Apply (Variable ("take", _) as takef,
-             Record_intro(take_args, None, takeargsd), calltaked) ->
-        let take_args1 = StringMap.find "1" take_args in
-          if is_simple_expr take_args1 then
+    | Apply (Variable ("take", _) as f,
+             Record_intro(fields1, None, d1), d2) ->
+        let e1 = StringMap.find "1" fields1 in
+          if is_atom e1 then
             begin
-              match StringMap.find "2" take_args with
+              match StringMap.find "2" fields1 with
                 | TableQuery (e2, q, d) ->
-	            Some (TableQuery (e2, {q with Query.max_rows = Some (queryize take_args1)}, d))
-                | Apply (Variable ("drop", _) as dropf,
-                         Record_intro (drop_args, None, dropargsd), calldropd) ->
-                    let drop_args1 = StringMap.find "1" drop_args in
-                      if is_simple_expr drop_args1 then
+	            Some (TableQuery (e2, {q with Query.max_rows = Some (queryize e1)}, d))
+                | Apply (Variable ("drop", _),
+                         Record_intro (fields2, None, _), _) ->
+                    let e2 = StringMap.find "1" fields2 in
+                      if is_atom e2 then
                         begin
-                          match StringMap.find "2" drop_args with
-                            | TableQuery(ths, q, d) ->
-                                Some(TableQuery(ths,
-                                                {q with
-                                                   Query.max_rows = Some (queryize take_args1);
-                                                   Query.offset   = queryize drop_args1}, d))
+                          match StringMap.find "2" fields2 with
+                            | TableQuery(e3, q, d) ->
+                                Some (TableQuery (e3, {q with
+                                                         Query.max_rows = Some (queryize e1);
+                                                         Query.offset   = queryize e2}, d))
                             | _ -> None
                         end
                       else None
-                | For(List_of(expr, ldata) as body, var, src, ford) 
-                    when pure(expr) ->
+                | For(List_of(expr, ldata) as body, var, src, fordata) when pure(expr) ->
                     Some (For(body, var,
-                              Apply (takef,
-                                     Syntax.links_tuple [take_args1; src] takeargsd,
-                                     calltaked), 
-                              ford))
+                              Apply (f,
+                                     Record_intro (
+                                       ((StringMap.add "1" e1) ->-
+                                          (StringMap.add "2" src)) StringMap.empty, None, d1), d2), fordata))
                 | _ -> None
             end
           else None
-    | Apply (Variable ("drop", _) as dropf,
+    | Apply (Variable ("drop", _) as f,
              Record_intro(fields, None, d1), d2) ->
-        let drop_arg1 = StringMap.find "1" fields in
-          if is_simple_expr drop_arg1 then
+        let e1 = StringMap.find "1" fields in
+          if is_atom e1 then
             begin
               match StringMap.find "2" fields with
-                | TableQuery (ths, q, d) ->
-  	            Some (TableQuery(ths, {q with Query.offset = queryize drop_arg1}, d))
-                | For(List_of(expr, ldata) as body, var, src, fordata) 
-                    when pure(expr) ->
-                      Some (For(body, var,
-                                Apply (dropf,
-                                       links_tuple [drop_arg1; src] d1, 
-                                       d2), 
-                                fordata))
+                | TableQuery (e2, q, d) ->
+  	            Some (TableQuery (e2, {q with Query.offset = queryize e1}, d))
+                | For(List_of(expr, ldata) as body, var, src, fordata) when pure(expr) ->
+                    Some (For(body, var,
+                              Apply (f,
+                                     Record_intro (
+                                       ((StringMap.add "1" e1) ->-
+                                          (StringMap.add "2" src)) StringMap.empty, None, d1), d2), fordata))
                 | _ -> None
             end
           else None

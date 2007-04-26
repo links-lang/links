@@ -131,18 +131,7 @@ let process_one ?(printer=print_result) (valenv, typingenv) exprs =
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse envs = 
   handle_errors (measure "parse" parse ->- process_one envs)
- 
-(* Read Links source code, then type and optimize it. *)
-let just_optimise parse (_valenv, typingenv) input = 
-  Settings.set_value interacting false;
-  let parse = parse Parse.program in
-  let exprs = measure "parse" parse input in 
-  let typingenv, exprs = measure_l "type_program"
-    (lazy (Inference.type_program typingenv exprs)) in
-  let exprs = measure_l "optimise_program"
-    (lazy (Optimiser.optimise_program (typingenv, exprs))) in
-    print_endline (mapstrcat "\n" Syntax.string_of_expression exprs)
-      
+
 (* Interactive loop *)
 let interact envs =
   let make_dotter ps1 = 
@@ -210,10 +199,8 @@ let options : opt list =
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "working-tests",               Some (run_tests Tests.working_tests),                   None);
-    (noshort, "broken-tests",                Some (run_tests Tests.broken_tests),                   None);
+    (noshort, "broken-tests",               Some (run_tests Tests.broken_tests),                   None);
     (noshort, "failing-tests",               Some (run_tests Tests.known_failures),                   None);
-    ('q',     "print-optimize-expr", None,                             Some (just_optimise Parse.parse_string (!stdenvs)));
-
     ]
 
 let main () =
@@ -239,4 +226,3 @@ let main () =
     end
 
 let _ = main ()
-

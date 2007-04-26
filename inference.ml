@@ -1254,8 +1254,7 @@ let type_program
           let defparts = map (fun (Define x) -> x) xs in
           let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
                                  name, expr, t) defparts in
-          let (typing_env : Types.typing_environment), defs 
-            = mutually_type_defs typing_env defbodies in
+          let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
           let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
                               Define(name, expr, location, expression_data expr))
 			defparts defs) in
