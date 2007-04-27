@@ -22,15 +22,20 @@ val less : Result.result -> Result.result -> bool
 val less_or_equal : Result.result -> Result.result -> bool
 
 (* Primitive functions and values *)
-type continuationized_val = [
+(*type continuationized_val = [
   result
-| `PFun of (continuation -> result -> result) * continuation * result -> continuationized_val
+| `PFun of (continuation -> result -> result) * continuation * result list -> continuationized_val
+]*)
+
+type primitive = [
+  result
+| `PFun of result list -> result
 ]
-val value_env : (string * continuationized_val) list ref
+val is_primitive : string -> bool
 val type_env : Types.environment
 val alias_env : Types.alias_environment
 val typing_env : Types.typing_environment
-val apply_pfun : (continuation -> result -> result) -> continuation -> string -> result list -> result
+val apply_pfun : string -> result list -> result
 val primitive_stub : string -> result
 
 val primitive_location : string -> Syntax.location

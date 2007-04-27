@@ -87,7 +87,26 @@ module StringMapUtils = MapUtils(StringMap)
 let superimpose a b = 
   StringMap.fold StringMap.add b a
 
-module StringSet = Set.Make(String)
+module Set (Ord : Set.OrderedType) :
+sig
+  include Set.S with type elt = Ord.t 
+                and type t = Set.Make(Ord).t
+  
+  val singleton : elt -> t
+  val union_all : t list -> t
+  val from_list : elt list -> t
+end =
+struct
+  include Set.Make(Ord)
+  let singleton s = add s empty
+  let union_all sets = List.fold_right union sets empty
+  let from_list l = List.fold_right add l empty
+end
+
+
+
+
+module StringSet = Set(String)
 module Show_stringset = Show.Show_set(String)(Primitives.Show_string)
 
 (*** int environments ***)
@@ -97,7 +116,7 @@ struct
   let compare : int -> int -> int = compare
 end
 module IntMap = Map.Make(OrderedInt)
-module IntSet = Set.Make(OrderedInt)
+module IntSet = Set(OrderedInt)
 
 module Show_intset = Show.Show_set(OrderedInt)(Primitives.Show_int)
 
@@ -171,18 +190,16 @@ struct
       | []   -> raise (Invalid_argument "unsnoc")
           
   (** [last list]: Return the last element of a list *)
-  let last l = snd (unsnoc l)
+  let last l = 
+    try 
+      snd (unsnoc l)
+    with Invalid_argument _ -> invalid_arg "last"
     
   (** [butlast list]: Return a copy of the list with the last element removed. *)
-  let butlast l = fst (unsnoc l)
-    
-  let difference list1 list2 = 
-    List.filter (fun x -> not (List.mem x list2)) list1
-
-  let remove_all list1 list2 = difference list2 list1
-
-  let subset list1 list2 : bool= 
-    List.for_all (fun x -> List.mem x list2) list1
+  let butlast l = 
+    try
+      fst (unsnoc l)
+    with Invalid_argument _ -> invalid_arg "butlast"
 
   (** Convert a (bivalent) less-than function into a (three-valued)
       comparison function. *)
@@ -212,8 +229,6 @@ struct
     | _, [] -> []
     | _, h :: t -> h :: take (n - 1) t
         
-  let remove x = List.filter ((<>)x)
-
   let concat_map f l = 
     let rec aux = function
       | _, [] -> []
@@ -243,18 +258,14 @@ struct
   let rassoc i l = rassoc_eq (=) i l
   and rassq i l = rassoc_eq (==) i l
     
-  let rec rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
-    fun value ->
-      function
-        | (_, v) :: rest when eq v value -> rest
-        | other :: rest -> other :: rremove_assoc_eq eq value rest
-        | [] -> []
+  let rec rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = fun value ->
+    function
+      | (_, v) :: rest when eq v value -> rest
+      | other :: rest -> other :: rremove_assoc_eq eq value rest
+      | [] -> []
           
   let rremove_assoc i l = rremove_assoc_eq (=) i l
   and rremove_assq i l = rremove_assoc_eq (==) i l
-
-  let remove_keys alist keys =
-    List.filter (fun (x,_) -> not (List.mem x keys)) alist
     
   (** alistmap maps f on the contents-parts of the entries, producing a
       new alist *)
@@ -276,7 +287,6 @@ struct
   let graph_func = map2alist
 
   let rng alist = List.map snd alist
-  let dom alist = List.map fst alist
 
 end
 include AList
@@ -495,7 +505,7 @@ let read_hex c =
    confused by all the backslashes and quotes and refuses to translate
    the file.
 *)
-let escape_regexp = Str.regexp "\\\\n\\|\\\\r\\|\\\\t\\|\\\\\"\\|\\\\\\\\\\|\\\\[0-3][0-7][0-7]\\|\\\\[xX][0-9a-fA-F][0-9a-fA-F]" 
+let escape_regexp = Str.regexp "\\\\\"\\|\\\\\\\\\\|\\\\[0-3][0-7][0-7]\\|\\\\[xX][0-9a-fA-F][0-9a-fA-F]" 
 let decode_escapes s =
   let unquoter s = 
     (* Yes, the Str interface is stateful.  A pretty poor show.  PCRE
@@ -505,9 +515,6 @@ let decode_escapes s =
       match s with
         | "\\\"" -> "\""
         | "\\\\" -> "\\"
-        | "\\n" -> "\n"
-        | "\\r" -> "\r"
-        | "\\t" -> "\t"
         | other when other.[1] = 'x' || other.[1] = 'X' -> String.make 1 (read_hex (String.sub other 2 2)) 
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Str.global_substitute escape_regexp unquoter s
@@ -564,11 +571,12 @@ let gensym =
         pref ^ "_g" ^ string_of_int !counter
       end
 
+
 (** gensyms a new symbol for each item in the list and returns the
     pairs of each item with its new name.
     The "graph" of the gensym function, if you will.
 *)
-let pair_fresh_names ?prefix:pfx list = 
+let assign_fresh_names ?prefix:pfx list = 
   graph_func
     (match pfx with
        | Some pfx -> (fun _ -> gensym ~prefix:pfx ())

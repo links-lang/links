@@ -11,24 +11,22 @@ exception MultiplyDefinedToplevelNames of
 exception Type_error of (Syntax.position * string)
 exception RichSyntaxError of synerrspec
 
-type expression = Syntax.expression
-(*(Syntax.position * Types.datatype * Syntax.label option) Syntax.expression'*)
 
 val mistyped_application : Syntax.position ->
-  (expression * Types.datatype) ->
-  (expression * Types.datatype) ->
+  (Syntax.expression * Types.datatype) ->
+  (Syntax.expression list * Types.datatype list) ->
   Types.datatype option ->
   'a
                
 val mistyped_union : Syntax.position ->
-  expression ->
+  Syntax.expression ->
   Types.datatype ->
-  expression ->
+  Syntax.expression ->
   Types.datatype ->
   'a
 
 val mistype : Syntax.position ->
-  expression * Types.datatype ->
+  Syntax.expression * Types.datatype ->
   Types.datatype ->
   'a              
 
@@ -36,7 +34,7 @@ val nested_def : Syntax.position -> string -> 'a
   
   
 val letrec_nonfunction : Syntax.position -> 
-  (expression * Types.datatype) ->
+  (Syntax.expression * Types.datatype) ->
   'a
 
 val invalid_name : Syntax.position -> string -> string -> 'a
@@ -44,7 +42,6 @@ val invalid_name : Syntax.position -> string -> string -> 'a
 val format_exception : exn -> string
 val format_exception_html : exn -> string
 
-(* val display_errors : out_channel -> (unit -> 'a) -> ('b -> 'a) -> ('b -> 'a) *)
 val display_fatal : ?stream:out_channel -> ('a -> 'b) -> ('a -> 'b)
 val display_fatal_l : ?stream:out_channel -> ('b lazy_t) -> 'b
 val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a

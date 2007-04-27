@@ -7,6 +7,14 @@ open Result
 open Query
 open Syntax
 
+(* call client function and exit *)
+let invoke_client_function name continuation args =
+  let call = Json.jsonize_call continuation name args in
+    print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode call);
+    exit 0
+      
+
+
 (** {0 Environment handling} *)
 
 (** bind env var value 
@@ -40,16 +48,15 @@ let lookup globals locals name =
           | Some v -> v
           | None -> Library.primitive_stub name)
   with Not_found -> 
-    raise(RuntimeUndefVar name)
-    (* failwith("Internal error: variable \"" ^ name ^ "\" not in environment")*)
+    raise(RuntimeUndefVar name) (* ("Internal error: variable \"" ^ name ^ "\" not in environment")*)
 
 let bind_rec locals defs =
   (* create bindings for these functions, with no local variables for now *)
-  let make_placeholder env (variable, value) =
-    match value with
-      | Syntax.Abstr (var, body, _) ->
-          bind env variable (`Function (var, locals, () (*globals*), body))
-      | _ -> raise (Runtime_error "TF146") in
+  let make_placeholder = (fun env (variable, value) ->
+                            (match value with
+                               | Syntax.Abstr (var, body, _) ->
+                                   bind env variable (`Function (var, locals, () (*globals*), body))
+                               | _ -> raise (Runtime_error "TF146"))) in
   let rec_env = trim_env (fold_left make_placeholder [] defs) in
     (* fill in the local variables *)
   let fill_placeholder value =
@@ -162,7 +169,6 @@ and scheduler globals state stepf =
     end
   else
     stepf()
-
 and apply_cont (globals : environment) : continuation -> result -> result = 
   fun cont value ->
     let stepf() = 
@@ -189,36 +195,57 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                         ((Recv locals::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | (FuncArg(param, locals)) ->
-	        (* Just evaluate [param]; "value" is in fact a function
+            | FuncArg([], locals) -> assert false
+            | FuncArg(param::params, locals) ->
+	        (* Just evaluate the first parameter; "value" is in fact a function
 	           value which will later be applied *)
-                interpret globals locals param
-	          (FuncApply(value, locals) :: cont)
+                interpret globals locals param (FuncApply (locals, value, params, [])::cont)
             | (FuncApplyFlipped(locals, arg)) ->
-                apply_cont globals (FuncApply(value, locals) :: cont) arg
-            | (FuncApply(func, locals)) ->  
-               (match func with
-                    (* FIXME: functional abstractions no longer capture
-                       global variables; remove the fnglobals element here. *)
-                   | `Function (var, fnlocals, fnglobals, body) ->
-		       (* Interpret the body in the following environments:
-		          locals are augmented with function locals and
-		          function binding (binding takes precedence)
-		          toplevel environment in which the function
-		          was defined takes precedence over the real current
-                          globals. Is there a semanticist in the house? *)
-                       (*let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
-                       let locals = trim_env (fnlocals @ locals) in 
-                       let locals = bind locals var value in
-                         interpret globals locals body cont
-		           
-                   | `PFunction (name, pargs) ->
-		       Library.apply_pfun(apply_cont globals) cont name (pargs @ [value])
-	           | `Continuation (cont) ->
-		       (* Here we throw out the other continuation. *)
-		       apply_cont globals cont value
-                   | _ -> raise (Runtime_error ("Applied non-function value: "^
-                                                    string_of_result func)))
+                apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
+            | ThunkApply locals ->
+                begin match value with
+                  | `Function (vars, fnlocals, (), body) -> 
+                      interpret globals (trim_env (fnlocals @ locals)) body cont
+                  | `PrimitiveFunction name ->
+                      apply_cont globals cont (Library.apply_pfun name [])
+                  | `ClientFunction name ->
+                      invoke_client_function name cont []
+                  | _ -> raise (Runtime_error ("error applying zero-argument function "^
+                                                 string_of_result value))
+                end
+            | FuncApply(locals, func, unevaluated_args, evaluated_args) ->  
+                begin match func, unevaluated_args with
+                  | _, arg::args -> 
+                      interpret globals locals arg
+                        (FuncApply (locals, func, args, value::evaluated_args)::cont)
+                  | `Function (vars, fnlocals, (), body), [] ->
+                      (* FIXME: functional abstractions no longer capture
+                         global variables; remove the fnglobals element here. *)
+                      
+		      (* Interpret the body in the following
+		         environments: locals are augmented with
+		         function locals and function binding (binding
+		         takes precedence) toplevel environment in
+		         which the function was defined takes
+		         precedence over the real current globals. Is
+		         there a semanticist in the house? *)
+                      
+                      let locals = trim_env (fnlocals @ locals) in
+                      let locals = fold_left2 bind locals vars (List.rev (value::evaluated_args))
+                      in
+                        interpret globals locals body cont
+
+                  | `PrimitiveFunction name, [] ->
+                      apply_cont globals cont (Library.apply_pfun name  (List.rev (value::evaluated_args)))
+
+                  | `ClientFunction name, [] ->
+                      invoke_client_function name cont (List.rev (value::evaluated_args))
+	          | `Continuation (cont), [] ->
+		      (* Here we throw out the other continuation. *)
+                      apply_cont globals cont value
+                  | _ -> raise (Runtime_error ("Applied non-function value: "^
+                                                 string_of_result func))
+                end
             | (LetCont(locals, variable, body)) ->
 	        interpret globals (bind locals variable value) body cont
             | (BranchCont(locals, true_branch, false_branch)) ->
@@ -402,16 +429,18 @@ fun globals locals expr cont ->
 	apply_cont globals cont value
   | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
-  | Syntax.Apply (Variable ("recv", _), Record_intro (fields, None, _), _) when StringMap.is_empty fields ->
+  | Syntax.Apply (Variable ("recv", _), [], _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
-  | Syntax.Apply (fn, param, _) ->
-      eval fn (FuncArg(param, locals) :: cont)
+  | Syntax.Apply (fn, [], _) ->
+      eval fn (ThunkApply locals::cont)
+  | Syntax.Apply (fn, params, _) ->
+      eval fn (FuncArg (params, locals)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
       eval l (BinopRight(locals, (oper :> Result.binop), r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
-      eval value (LetCont(retain (freevars body) locals, variable, body) :: cont)
+      eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
       let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
         interpret globals new_env body cont
@@ -445,7 +474,7 @@ fun globals locals expr cont ->
   | Syntax.Erase (expr, label, _) ->
       eval expr (UnopApply (locals, Result.Erase label) :: cont)
   | Syntax.Variant_injection (label, value, _) ->
-      eval value (UnopApply(locals, MkVariant(label)) :: cont)
+       eval value (UnopApply(locals, MkVariant(label)) :: cont)
   | Syntax.Variant_selection (value, case_label, case_variable, case_body, variable, body, _) ->
       eval value (UnopApply(locals, VrntSelect(case_label, case_variable, case_body, Some variable, Some body)) :: cont)
   | Syntax.Variant_selection_empty (_) ->
@@ -461,7 +490,7 @@ fun globals locals expr cont ->
       eval value (StartCollExtn(locals, var, expr) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
-      (* FIXME: the datatype should be explicit in the type-erased TableHandle *)
+	(* FIXME: the datatype should be explicit in the type-erased TableHandle *)
 (*   | Syntax.Table (database, s, query, _) -> *)
 (*       eval database (UnopApply(locals, QueryOp(query)) :: cont) *)
 
@@ -477,9 +506,9 @@ fun globals locals expr cont ->
   | Syntax.TableQuery (ths, query, d) ->
       (* [ths] is an alist mapping table aliases to expressions that
          provide the corresponding TableHandles. We evaluate those
-         expressions and rely on them coming through to the
-         continuation in the same order. That way we can stash the
-         aliases in the continuation frame & match them up later. *)
+         expressions and rely on them coming through to the continuation
+         in the same order. That way we can stash the aliases in the
+         continuation frame & match them up later. *)
       let aliases, th_exprs = split ths in
         eval (Syntax.list_expr d th_exprs)
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
@@ -487,14 +516,8 @@ fun globals locals expr cont ->
       let cc = `Continuation cont in
         eval arg (FuncApplyFlipped(locals, cc) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->
-      eval (Apply (Variable ("sortBy", d), 
-                   Record_intro
-                     ((StringMap.add "1" byExpr
-                         (StringMap.add "2" list
-                            StringMap.empty)),
-                      None,
-                      d),
-                   d)) cont
+      eval (Apply (Variable ("sortBy", d), [byExpr; list], d)) cont
+        (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->
@@ -513,8 +536,7 @@ and interpret_safe globals locals expr cont =
 
 let run_program (globals : environment) locals exprs : (environment * result)= 
   try (
-    ignore(interpret globals locals (hd exprs)
-             (map (fun expr -> Ignore([], expr)) (tl exprs)));
+    ignore (interpret globals locals (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
     failwith "boom"
   ) with
     | TopLevel s -> s

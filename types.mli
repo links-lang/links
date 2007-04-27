@@ -127,6 +127,8 @@ end
 
 module TypeOps : TYPEOPS
 
+val make_tuple_type : datatype list -> datatype
+
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
 val contains_present_fields : field_spec_map -> bool

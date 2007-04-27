@@ -26,7 +26,7 @@ type location = Syntax.location
 type datatype = 
   | TypeVar of string
   | RigidTypeVar of string
-  | FunctionType of datatype * datatype * datatype
+  | FunctionType of datatype list * datatype * datatype
   | MuType of string * datatype
   | UnitType
   | TupleType of (datatype list)
@@ -61,7 +61,7 @@ and phrasenode =
   | BoolLit of (bool)
   | CharLit of (char)
   | Var of (name)
-  | FunLit of (name option * ppattern list * phrase)
+  | FunLit of (name option * ppattern list list * phrase)
   | Spawn of phrase
   | ListLit of (phrase list)
   | Definition of (name * phrase * location)

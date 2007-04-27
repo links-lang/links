@@ -20,26 +20,9 @@ module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
 module Show_lexpos = Show_unprintable (LexposType)
 (*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
 
-module Pickle_lexpos : Pickle with type a = lexpos = Pickle.Pickle_defaults(
-  struct
-    type a = lexpos
-    let pickle buffer e = ()
-    and unpickle stream = Lexing.dummy_pos 
-  end)
-
-open Shelve
-module Shelve_lexpos : Shelve with type a = lexpos = Shelve.Shelve_defaults(
-  struct
-    type a = lexpos
-    module Eq = Eq_lexpos
-    module Typeable = Typeable_lexpos
-    let shelve _ = failwith "lexpos shelve nyi"
-  end
-)
-
 type position = lexpos *  (* source line: *) string 
                   * (* expression source: *) string
-    deriving (Typeable, Show, Pickle, Shelve, Eq)
+    deriving (Typeable, Show, Eq)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
@@ -71,18 +54,16 @@ type 'data expression' =
   | Float of (float * 'data)
   | Variable of (string * 'data)
 
-  | Apply of ('data expression' * 'data expression' * 'data)
+  | Apply of ('data expression' * 'data expression' list * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
   | Comparison of ('data expression' * comparison * 'data expression' * 'data)
-  | Abstr of (string * 'data expression' * 'data)
+  | Abstr of (string list * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * 'data expression' * Types.datatype option) list 
-            * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_intro of (('data expression') stringmap * ('data expression') option 
-                     * 'data)
+  | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Project of ('data expression' * string * 'data)
@@ -97,14 +78,12 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | TableQuery of
-      ((* the tables: *) (string * 'data expression') list *
-       (* the query: *) Query.query *
-        'data)
+  | TableQuery of ((* the tables: *) (string * 'data expression') list
+      * (* the query: *) Query.query 
+      * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table name: *) 'data expression'
-      * (* the read / write (record) types of a table row: *) 
-        (Types.datatype * Types.datatype)
+      * (* the read / write (record) types of a table row: *) (Types.datatype * Types.datatype)
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
@@ -124,9 +103,6 @@ let is_define =
     | TypeDecl _
     | Alien _ -> true
     | _ -> false
-
-let defined_names exprs = 
-  concat_map (function Define(f, _, _, _) -> [f] | _ -> []) exprs
 
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
@@ -160,14 +136,14 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
-type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show, Pickle, Shelve)
-type untyped_data = [`U of position] deriving (Eq, Typeable, Show, Pickle, Shelve)
-type data = [untyped_data | typed_data] deriving (Typeable, Show, Pickle)
+type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show)
+type untyped_data = [`U of position] deriving (Eq, Typeable, Show)
+type data = [untyped_data | typed_data] deriving (Typeable, Show)
 
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
-  deriving (Eq, Typeable, Show, Pickle, Shelve)
+  deriving (Eq, Typeable, Show)
 
 let data_position = function
   | `T (pos, _, _)
@@ -194,21 +170,21 @@ let rec show t : 'a expression' -> string = function
   | Float (value, data)   -> string_of_float value ^ t data
   | Variable (name, data) when is_symbolic_ident name -> "(" ^ name ^ ")" ^ t data
   | Variable (name, data) -> name ^ t data
-  | Apply (f, p, data)    -> show t f ^ "(" ^ show t p ^ ")" ^ t data
+  | Apply (f, ps, data)    -> show t f ^ "(" ^ String.concat "," (List.map (show t) ps) ^ ")" ^ t data
   | Condition (cond, if_true, if_false, data) ->
       "if (" ^ show t cond ^ ") " ^ show t if_true ^ " else " ^ show t if_false ^ t data
   | Comparison (left_value, oper, right_value, data) ->
       show t left_value ^ " " ^ string_of_comparison oper ^ " " ^ show t right_value ^ t data
-  | Abstr (variable, body, data) ->
-      "fun (" ^ variable ^ ") { " ^ show t body ^ " }" ^ t data
+  | Abstr (variables, body, data) ->
+      "fun (" ^ String.concat ", " variables ^ ") { " ^ show t body ^ " }" ^ t data
   | Let (variable, value, body, data) ->
       "{ var " ^ variable ^ "=" ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Rec (variables, body, data) ->
       "{" ^ (String.concat " ; " (map (function (label, expr, _) -> " " ^ label ^ "=" ^ show t expr) variables))
       ^ "; " ^ show t body ^ "}" ^ t data
-  | Call_cc (Abstr(var, body, _), data) -> 
+  | Call_cc (Abstr([var], body, _), data) -> 
       "escape " ^ var ^ " in " ^ show t body ^ t data
-  | Call_cc (f, data) -> "callCC(" ^ show t f ^ ")" ^ t data
+  | Call_cc (f, data) -> "callCC " ^ show t f ^ t data
   | Xml_node (tag, attrs, elems, data) ->  
       let attrs = 
         let attrs = String.concat " " (map (fun (k, v) -> k ^ "=\"" ^ show t v ^ "\"") attrs) in
@@ -271,20 +247,6 @@ let strip_data : 'a expression' -> stripped_expression =
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
 
-let rec oneToN = function 
-    1 -> [1]
-  | n -> oneToN (n-1) @ [n]
-
-let links_tuple exprs data = 
-  let numd_exprs = combine (map string_of_int (oneToN (length exprs))) exprs in
-    Record_intro (fold_right (fun (i, expr) ->
-                                (StringMap.add i expr))
-                    numd_exprs StringMap.empty,
-                  None, data)
-
-let links_call func args argsData callData = 
-  Apply(func, links_tuple args argsData, callData)
-   
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)
@@ -316,7 +278,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
 
                | TableHandle (e1, e2, _, _)
-               | Apply (e1, e2, _)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
                | Concat (e1, e2, _)
@@ -331,6 +292,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Record_intro (bs, r, _) ->
                    (StringMapUtils.zip_with (fun _ e -> visitor visit_children e) bs) @
                      (opt_app (fun e -> [visitor visit_children e]) [] r)
+               | Apply (e, es, _) -> visitor visit_children e :: map (visitor visit_children) es
                | Rec (b, e, _) -> map (fun (_, e, _) -> visitor visit_children e) b @ [visitor visit_children e]
                | Xml_node (_, es1, es2, _)          -> map (fun (_,v) -> visitor visit_children v) es1 @ map (visitor visit_children) es2)
   in
@@ -365,7 +327,6 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | HasType (_, t, d)              , [e] -> HasType (e, t, d)
 
     (* 2 subnodes *)
-    | Apply (_, _, d)                        , [e1;e2] -> Apply (e1, e2, d)
     | Comparison (_, c, _, d)                , [e1;e2] -> Comparison (e1, c, e2, d)
     | Let (s, _, _, d)                       , [e1;e2] -> Let (s, e1, e2, d)
     | Record_selection (s1, s2, s3, _, _, d) , [e1;e2] -> Record_selection (s1, s2, s3, e1, e2, d)
@@ -379,6 +340,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | Variant_selection (_, s1, s2, _, s3, _, d), [e1;e2;e3] -> Variant_selection (e1, s1, s2, e2, s3, e3, d)
 
     (* n subnodes *)
+    | Apply (_, _, d), e::es -> Apply (e, es, d)
     | Rec (bindings, _, d), (_::_ as nodes) ->
         let others, body = unsnoc nodes in 
           Rec (List.map2 (fun (a,_,c) b -> (a,b,c)) bindings others, body, d)
@@ -428,28 +390,41 @@ let lname_bound_vars : 'a expression' -> string list =
         concat (map lnames contents)
     | Xml_node (_, _, _, _)  -> []
         
+let freevarSet (expression : 'a expression') : StringSet.t =
+  let module S = StringSet in
+  let fromList l = List.fold_right S.add l S.empty in
+  let rec aux' default v = 
+    let aux = aux' default in match v with
+      | Variable (name, _) -> S.add name S.empty
+      | For (body, var, generator, _) -> S.union (aux generator) (S.remove var (aux body))
+      | Let (var, value, body, _) -> S.union (aux value) (S.remove var (aux body))
+      | Abstr (vars, body, _) -> S.diff (aux body) (fromList vars)
+      | Record_selection (_, labvar, var, value, body, _) ->
+          S.union (aux value) (S.diff (aux body) (fromList [var;labvar]))
+      | Variant_selection (value, _, cvar, cbody, var, body, _) ->
+          S.union (aux value)
+            (S.union (S.remove cvar (aux cbody))
+               (S.remove var (aux body)))
+      | Rec (bindings, body, _) ->
+          let vars, vals = List.split (map (fun (n,v,_) -> (n,v)) bindings) in
+            S.diff
+              (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
+              (fromList vars)
+      | TableQuery (_, query, _) -> fromList (Query.freevars query)
+      | Xml_node (_, attrs, children, _) as x -> 
+          S.diff 
+            (S.union
+               (List.fold_right (fun (_,attrval) -> S.union (aux attrval)) attrs S.empty)
+               (List.fold_right (fun elem -> S.union (aux elem)) children S.empty))
+            (fromList (lname_bound_vars x))
+      | other -> default other
+  in 
+  let unionAll sets = List.fold_right S.union sets S.empty in
+    reduce_expression aux' (unionAll -<- snd) expression
+
 
 let freevars (expression : 'a expression') : string list = 
-  let combine = unduplicate (=) -<-List.concat in
-  let rec aux default = function
-    | Variable (name, _) -> [name]
-    | For (body, var, generator, _) -> aux default generator @ remove var (aux default body)
-    | Let (var, value, body, _) -> aux default value @ (remove var (aux default body))
-    | Abstr (var, body, _) -> remove var (aux default body)
-    | Record_selection (_, labvar, var, value, body, _) ->
-        aux default value @ (remove_all [var;labvar] (aux default body))
-    | Variant_selection (value, _, cvar, cbody, var, body, _) ->
-        aux default value @ (remove cvar (aux default cbody)) @ (remove var (aux default body))
-    | Rec (bindings, body, _) ->
-        let vars, vals = List.split (map (fun (n,v,_) -> (n,v)) bindings) in
-          remove_all vars (concat_map (aux default) (body::vals))
-    | TableQuery (_, query, _) -> Query.freevars query
-    | Xml_node (_, attrs, children, _) as x -> 
-        remove_all (lname_bound_vars x) 
-          (concat_map (snd ->- aux default) attrs @ concat_map (aux default) children)
-    | other -> default other
-  in 
-    unduplicate (=) (reduce_expression aux (combine -<- snd) expression)
+  StringSet.elements (freevarSet expression)
           
 let rec list_expr data = function
     [] -> Nil(data)
@@ -547,7 +522,7 @@ let rec map_free_occ u f expr =
   let recurse = map_free_occ u f in
   let rec rewrite = function
     | Variable(x, _) as node when x = u -> Some (f node)
-    | Abstr(x, body, d) when x <> u -> Some (Abstr(x, recurse body, d))
+    | Abstr(xs, body, d) when not (List.mem u xs) -> Some (Abstr(xs, recurse body, d))
     | Abstr _ -> None
     | Let(letvar, letval, body, d) ->
         Some(Let(letvar, recurse letval, 
@@ -606,11 +581,6 @@ let rename_fast name replacement expr =
   in
     fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
-(** {0 Sanity Checks} *)
-
-let is_closed expr = freevars expr == []
-
-let is_closed_wrt expr freebies = freevars expr <|subset|> freebies
 
 (** {0 Labelizing} *)
 
@@ -623,14 +593,15 @@ let has_label expr =
       (_,_,None) -> false
     | (_,_,Some _) -> true
 
-let label_for_expr expr =
-  (Digest.string -<- string_of_expression) expr
+let label_for_expr =
+  (Digest.string -<- string_of_expression)
 
 let labelize expr =
   (function None -> expr
      | Some x -> x)
     (RewriteSyntax.topdown 
        (fun expr -> 
+          Debug.if_set print_digest_junk (fun _-> Utility.base64encode(label_for_expr expr));
           Some(set_label expr (Some(label_for_expr expr))))
        expr)
 

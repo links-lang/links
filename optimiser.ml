@@ -37,7 +37,7 @@ let pure : expression -> bool =
   let rec pure default = function 
       (* TBD: annotate ALL prim funcs as to pureness *)
     | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
-      -> pure default arg
+      -> for_all (pure default) arg
     | Apply _    -> false
     | TableQuery _ -> false
         (* Is callCC pure? *)
@@ -51,9 +51,7 @@ let pure : expression -> bool =
 (* Number of nodes in a syntax tree *)
 let countNodes e = 
   let count = ref 0 in 
-    Syntax.reduce_expression
-      (fun recurse e -> incr count; recurse e)
-      (fun _ -> ()) e; 
+    Syntax.reduce_expression (fun default e -> incr count; default e) (fun _ -> ()) e; 
     !count;;
 
 (* Inline small, non-recursive functions *)
@@ -92,7 +90,9 @@ let perform_value_inlining location name rhs =
       exp)
 
 let replaceApplication name var body : RewriteSyntax.rewriter = function
-  | Apply (Variable (n, _), p, d) when n = name -> Some (Let (var, p, body, d))
+  | Apply (Variable (n, _), [p], d) when n = name -> 
+      (* FIXME: inlining only implemented for single-argument functions! *)
+      Some (Let (var, p, body, d))
   | _ -> None
 
 let perform_function_inlining location name var rhs = 
@@ -121,8 +121,10 @@ let inline program =
     List.fold_left 
       (fun program (_, rhs, location)  ->
          match rhs with
-           | Rec ([(name, Abstr (v, body, _), _)], _, _) ->
-	       perform_function_inlining location name v body program)
+           | Rec ([(name, Abstr ([v], body, _), _)], _, _) ->
+	       perform_function_inlining location name v body program
+           | Rec _ ->
+                program)
       program'
       fn_candidates
   in program''
@@ -152,28 +154,29 @@ let reduce_recursion : RewriteSyntax.rewriter = function
 
 
 
-(** [uniquify_names]
+(** [uniquify_expression]
 
     Give unique names to all local bindings.  Local names should be
     distinct from each other and from toplevel names
 
     After this, we can be much less careful about scope.
 *)
-let uniquify_names : RewriteSyntax.rewriter = 
+let uniquify_expression : RewriteSyntax.rewriter = 
   let rewrite_node = function
-    | Abstr (v, b, data) -> 
-        let name = gensym ~prefix:v () in
-          Some (Abstr (name, Syntax.rename_fast v name b, data))
+    | Abstr (vs, b, data) -> 
+        let names = List.map (fun v -> (v, gensym ~prefix:v ())) vs in
+          Some (Abstr (List.map snd names, 
+                       List.fold_right 
+                         (uncurry Syntax.rename_fast)
+                         names
+                         b, data))
     | Let (v, e, b, data) -> 
         let name = gensym ~prefix:v () in
           Some (Let (name, e, Syntax.rename_fast v name b, data))
     | Rec (vs, b, data) -> 
-        let bindings = List.map (fun (name, _, _) -> 
-                                   (name, gensym ~prefix:name ())) vs in
-        let rename = List.fold_right (fun (x, r) expr ->
-                                        Syntax.rename_fast x r expr) bindings in
-          Some(Rec(List.map (fun (n, v, t) ->
-                               (List.assoc n bindings, rename v, t)) vs,
+        let bindings = List.map (fun (name, _, _) -> (name, gensym ~prefix:name ())) vs in
+        let rename = List.fold_right (fun (x, r) expr -> Syntax.rename_fast x r expr) bindings in
+          Some(Rec(List.map (fun (n, v, t) -> (List.assoc n bindings, rename v, t)) vs,
                    rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym ~prefix:lvar ()
@@ -220,9 +223,9 @@ let renaming : RewriteSyntax.rewriter =
     (* Is a particular name bound inside an expression? *)
     let binds default = function
       | Let (v, _, _, _)
-      | Abstr (v, _, _)
       | Define (v, _, _, _)
           when v = var -> true
+      | Abstr (vs, _, _) when mem var vs -> true
       | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
       | Rec (bindings, _, _) when List.exists (fun (v,_,_) -> v = var) bindings -> true
@@ -274,8 +277,8 @@ let unused_variables : RewriteSyntax.rewriter = function
 *)
 
 let simplify_regex : RewriteSyntax.rewriter = function
-  | Apply (Apply (Variable ("~", _), lhs, _) as a, Let (v, e, rhs, d1), d2)  ->
-      Some (Let (v, e, Apply (a, rhs, d1), d2))
+  | Apply (Variable ("~", _) as tilde, [lhs; Let (v, e, rhs, d1)], d2)  ->
+      Some (Let (v, e, Apply (tilde, [lhs;rhs], d1), d2))
   | _ -> None
 
 (** {3 SQL utility values} These values are provided to ease the writing of SQL optimisers. *)
@@ -359,7 +362,7 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
   let needed_fields (var:string) : expression -> fieldset =
     let rec visitor (var:string) default : expression -> fieldset = function
         | Variable (name, _) when name = var -> All
-        | Apply (apply, Variable (name, _), _) when name = var ->
+        | Apply (apply, [Variable (name, _)], _) when name = var ->
             (* [BUG]
                This code is most probably broken.
                In particular the `MetaTypeVar case does not distinguish different kinds of
@@ -461,7 +464,7 @@ let read_proj = function
 
 let rec sql_sort = function
   | SortBy(TableQuery(th, query, data1), 
-           Abstr(loopVar, sortByExpr, _), _) ->
+           Abstr([loopVar], sortByExpr, _), _) ->
       (match read_proj sortByExpr with
            Some (Variable(sortByRecVar, _), sortByFld)
              when sortByRecVar = loopVar
@@ -473,7 +476,7 @@ let rec sql_sort = function
 
 let sql_aslist : RewriteSyntax.rewriter =
   function 
-    | Apply(Variable("asList", _), th, (`T (pos,_,_) as data)) ->
+    | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
         let th_type = Types.concrete_type (node_datatype th) in
         let th_row = match th_type with
           |  `Table (`Record th_row, _) -> th_row
@@ -618,9 +621,9 @@ let lift_lets : RewriteSyntax.rewriter = function
         -> Some(Let(letvar, letval, Condition(cond, t, letbody, data), letdata))
   | Apply(Let(letvar, letval, letbody, letdata), ap_arg, data)
         -> Some(Let(letvar, letval, Apply(letbody, ap_arg, data), letdata))
-  | Apply(ap_func, Let(letvar, letval, letbody, letdata), data)
+  | Apply(ap_func, [Let(letvar, letval, letbody, letdata)], data)
       when pure ap_func
-        -> Some(Let(letvar, letval, Apply(ap_func, letbody, data), letdata))
+        -> Some(Let(letvar, letval, Apply(ap_func, [letbody], data), letdata))
   | SortBy(Let(letvar, letval, letbody, letdata), byExpr, data) ->
       Some (Let(letvar, letval, SortBy(letbody, byExpr, data), letdata))
   | _ -> None
@@ -630,14 +633,6 @@ let lift_lets : RewriteSyntax.rewriter = function
 let is_atom = function
   | Variable _ | Integer _ -> true
   | _ -> false
-
-let sqlable_functions = ["*"; "/"; "+"; "-"]
-
-(* return true if the argument is a numeric expression on atoms *)
-let rec is_simple_expr = function
-  | Apply(Apply(Variable(f, _), a, _), b, _) when mem f sqlable_functions
-      -> is_simple_expr a && is_simple_expr b
-  | expr -> is_atom expr
 
 (* if e is not an atom then bind it to a variable by extending the
    continuation k return the new continuation and an atomic expression
@@ -668,29 +663,16 @@ let lift_let data e k =
     (Not performed if e1 is a variable or integer literal)
 *)
 let simplify_takedrop : RewriteSyntax.rewriter = function
-  | Apply (Variable ("take"|"drop" as f, d1),
-           Record_intro (fields1, None, d2), d3) ->
-      let k, e1 = lift_let d3 (StringMap.find "1" fields1) (fun x -> x) in
+  | Apply (Variable ("take"|"drop" as f, d1), [e1; e2]
+             (*Record_intro (fields1, None, d2)*), d3) ->
+      let k, e1 = lift_let d3 e1 identity in
         begin
-          match f, StringMap.find "2" fields1 with
-            | "take", Apply (Variable ("drop", d4),
-                             Record_intro(fields2, None, d5), d6) ->
-                let k, e2 = lift_let d3 (StringMap.find "1" fields2) k
-                in
-                  Some(k(Apply (Variable ("take", d1),
-                                Record_intro (
-                                  ((StringMap.add "1" e1) ->-
-                                     (StringMap.add "2"
-                                        (Apply (Variable ("drop", d4),
-                                                Record_intro (
-                                                  ((StringMap.add "1" e2) ->-
-                                                     StringMap.add "2" (StringMap.find "2" fields2)) StringMap.empty,
-                                                  None, d5), d6)))) StringMap.empty, None, d2), d3)))
-            | _ ->
-                Some (k (Apply (Variable (f, d1),
-                                Record_intro (
-                                  ((StringMap.add "1" e1) ->-
-                                     (StringMap.add "2" (StringMap.find "2" fields1))) StringMap.empty, None, d2), d3)))
+          match f, e2 with
+            | "take", Apply (Variable ("drop", d4), [e2; e3] (* Record_intro(fields2, None, d5) *), d6) ->
+                let k, e2 = lift_let d3 e2 k in
+                  Some(k (Apply (Variable ("take", d1),
+                                 [e1; Apply (Variable ("drop", d4), [e2; e3], d6)], d3)))
+            | _ -> Some (k (Apply (Variable (f, d1), [e1; e2], d3)))
         end
   | _ -> None
 
@@ -709,56 +691,50 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Integer  (n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
   function
-    | Apply (Variable ("take", _) as takef,
-             Record_intro(take_args, None, takeargsd), calltaked) ->
-        let take_args1 = StringMap.find "1" take_args in
-          if is_simple_expr take_args1 then
-            begin
-              match StringMap.find "2" take_args with
-                | TableQuery (e2, q, d) ->
-	            Some (TableQuery (e2, {q with Query.max_rows = Some (queryize take_args1)}, d))
-                | Apply (Variable ("drop", _) as dropf,
-                         Record_intro (drop_args, None, dropargsd), calldropd) ->
-                    let drop_args1 = StringMap.find "1" drop_args in
-                      if is_simple_expr drop_args1 then
-                        begin
-                          match StringMap.find "2" drop_args with
-                            | TableQuery(ths, q, d) ->
-                                Some(TableQuery(ths,
-                                                {q with
-                                                   Query.max_rows = Some (queryize take_args1);
-                                                   Query.offset   = queryize drop_args1}, d))
-                            | _ -> None
-                        end
-                      else None
-                | For(List_of(expr, ldata) as body, var, src, ford) 
-                    when pure(expr) ->
-                    Some (For(body, var,
-                              Apply (takef,
-                                     Syntax.links_tuple [take_args1; src] takeargsd,
-                                     calltaked), 
-                              ford))
-                | _ -> None
-            end
-          else None
-    | Apply (Variable ("drop", _) as dropf,
-             Record_intro(fields, None, d1), d2) ->
-        let drop_arg1 = StringMap.find "1" fields in
-          if is_simple_expr drop_arg1 then
-            begin
-              match StringMap.find "2" fields with
-                | TableQuery (ths, q, d) ->
-  	            Some (TableQuery(ths, {q with Query.offset = queryize drop_arg1}, d))
-                | For(List_of(expr, ldata) as body, var, src, fordata) 
-                    when pure(expr) ->
-                      Some (For(body, var,
-                                Apply (dropf,
-                                       links_tuple [drop_arg1; src] d1, 
-                                       d2), 
-                                fordata))
-                | _ -> None
-            end
-          else None
+    | Apply (Variable ("take", _) as takef, [take_args1; take_args2], calltaked) ->
+        if is_atom take_args1 then
+          begin
+            match take_args2 with
+              | TableQuery (e2, q, d) ->
+	          Some (TableQuery (e2, {q with Query.max_rows = Some (queryize take_args1)}, d))
+              | Apply (Variable ("drop", _) as dropf, [drop_args1; drop_args2], calldropd) ->
+                  if is_atom drop_args1 then
+                    begin
+                      match drop_args2 with
+                        | TableQuery(ths, q, d) ->
+                            Some(TableQuery(ths,
+                                            {q with
+                                               Query.max_rows = Some (queryize take_args1);
+                                               Query.offset   = queryize drop_args1}, d))
+                        | _ -> None
+                    end
+                  else None
+              | For(List_of(expr, ldata) as body, var, src, ford) 
+                  when pure(expr) ->
+                  Some (For(body, var,
+                            Apply (takef,
+                                   [take_args1; src],
+                                   calltaked), 
+                            ford))
+              | _ -> None
+          end
+        else None
+    | Apply (Variable ("drop", _) as dropf, [drop_arg1; drop_arg2], d2) ->
+        if is_atom drop_arg1 then
+          begin
+            match drop_arg2 with
+              | TableQuery (ths, q, d) ->
+  	          Some (TableQuery(ths, {q with Query.offset = queryize drop_arg1}, d))
+              | For(List_of(expr, ldata) as body, var, src, fordata) 
+                  when pure(expr) ->
+                  Some (For(body, var,
+                            Apply (dropf,
+                                   [drop_arg1; src], 
+                                   d2), 
+                            fordata))
+              | _ -> None
+          end
+        else None
     | _ -> None
 
 let remove_trivial_extensions : RewriteSyntax.rewriter = function

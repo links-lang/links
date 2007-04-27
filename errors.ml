@@ -15,25 +15,26 @@ exception RichSyntaxError of synerrspec
 
 exception WrongArgumentTypeError of (Syntax.position *
 				       string * Types.datatype * 
-                                       string * Types.datatype *
+                                       string list * Types.datatype list *
 				       Types.datatype option)
 
 exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype * 
-					string * Types.datatype *
+					string list * Types.datatype list *
 					Types.datatype option)
 
 type expression = Syntax.expression
 (*type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
 
-let mistyped_application pos (fn, fntype) (param, paramtype) mb =
+let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
   let `T ((_, _, fexpr),_,_) = expression_data fn in
-  let `T ((_, _, pexpr),_,_) = expression_data param
+  let pexprs = List.map (fun param -> 
+                           let `T ((_, _, pexpr),_,_) = expression_data param in
+                             pexpr) params 
   in  
     match fntype with 
       | `Function _ -> 
-          raise (WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb))
-      | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb))
-          
+          raise (WrongArgumentTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
+      | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
           
 let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
     = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_datatype ltype 
@@ -86,16 +87,16 @@ let rec format_exception = function
       Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression `" ^ pexpr ^ "' has type \n    " ^ 
-        string_of_datatype paramtype ^ (get_mailbox_msg false mb) ^
+      let msg = "The expressions `" ^ String.concat ", " pexpr ^ "' have types \n    " ^ 
+        String.concat ", " (List.map string_of_datatype paramtype) ^ (get_mailbox_msg false mb) ^
         "\nand cannot be passed to function `"^ fexpr ^
         "', which has type \n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression `"^ fexpr ^"', which has type\n    "^ 
         string_of_datatype fntype ^
-        ", cannot be applied to `"^ pexpr ^"'of type\n    " ^ 
-        string_of_datatype paramtype ^ (get_mailbox_msg false mb)
+        ", cannot be applied to `"^ String.concat ", " pexpr ^"'of types\n    " ^ 
+        String.concat ", " (List.map string_of_datatype paramtype) ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
   | Result.Runtime_error s -> "*** Runtime error: " ^ s
   | ASTSyntaxError ((pos,_,expr), s) -> 
@@ -134,8 +135,8 @@ let rec format_exception_html = function
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression <code class=\"typeError\">" ^ Utility.xml_escape pexpr ^ (get_mailbox_msg true mb) ^
-        "</code> has type <code class=\"typeError\">" ^ Utility.xml_escape(string_of_datatype paramtype) ^
+      let msg = "The expressions <code class=\"typeError\">" ^ String.concat ", " (List.map Utility.xml_escape pexpr) ^ (get_mailbox_msg true mb) ^
+        "</code> have type <code class=\"typeError\">" ^ Utility.xml_escape (String.concat ", " (List.map string_of_datatype paramtype)) ^
         "</code> and cannot be passed to function <code class=\"typeError\">"^ Utility.xml_escape(fexpr) ^
         "</code>which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
@@ -145,8 +146,8 @@ let rec format_exception_html = function
         Utility.xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
         string_of_datatype fntype ^
         "</code> cannot be applied to <code class=\"typeError\">"^ 
-        Utility.xml_escape pexpr ^"</code>, of type <code class=\"typeError\">" ^ 
-        string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
+        Utility.xml_escape (String.concat ", " pexpr) ^"</code>, of types <code class=\"typeError\">" ^ 
+        String.concat ", " (List.map string_of_datatype paramtype) ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
    

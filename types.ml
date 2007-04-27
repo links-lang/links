@@ -583,37 +583,30 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
     let unwrap = fst -<- unwrap_row in
 
     (* precondition: the row is unwrapped *)
-    let is_tuple (field_env, _) =
-      let b, i =
-        FieldEnv.fold (fun label t (b, i) ->
-                         match t with
-                           | `Present _ ->
-	                       (* check that the labels are numbers 1..n *)
-                               b && (String.compare (string_of_int i) label)=0, i+1
-                           | `Absent -> false, i+1) field_env (true, 1)
-      in
-	(* 0/1-tuples are displayed as records *)
-        b && i > 2 in
+    let is_tuple (field_env, rowvar) =
+      match Unionfind.find rowvar with
+        | `Closed ->
+            let b, i =
+              FieldEnv.fold (fun label t (b, i) ->
+                               match t with
+                                 | `Present _ ->
+	                             (* check that the labels are numbers 1..n *)
+                                     b && (String.compare (string_of_int i) label)=0, i+1
+                                 | `Absent -> false, i+1) field_env (true, 1)
+            in
+	      (* 0/1-tuples are displayed as records *)
+              b && i > 2 
+        | _ -> false
+    in
     (* precondition: the row is unwrapped *)
     let string_of_tuple (field_env, row_var) =
-      let row_var_string =
-        match string_of_row_var' "|" rec_vars vars row_var with
-          | None -> ""
-          | Some s -> "|"^s in
-
-(*         match Unionfind.find row_var with *)
-(*           | `Closed -> "" *)
-(*           | `Flexible _ *)
-(*           | `Rigid _ -> "|" *)
-(*           | `Recursive _ *)
-(*           | `Body _ -> assert false in *)
       let ss = List.rev
         (FieldEnv.fold (fun _ t ss ->
                           match t with
                             | `Present t -> (sd t) :: ss
                             | `Absent -> assert false) field_env [])
       in
-          "(" ^ (String.concat ", " ss) ^ row_var_string ^ ")"
+          "(" ^ String.concat ", " ss ^  ")"
     in
       match datatype with
         | `Not_typed       -> "not typed"
@@ -631,20 +624,23 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
                         string_of_datatype' (TypeVarSet.add var rec_vars) vars body
                 | `Body t -> sd t
             end
-        | `Function (f, mailbox_type, t) ->
+        | `Function (args, mailbox_type, t) ->
 	    let arrow =
 	      match concrete_type mailbox_type with
 	        | `Application ("Mailbox", [t]) ->
 		    string_of_mailbox_arrow (t)
 	        | _ -> "->"
 	    in
-	      (match concrete_type f with
-	         | `Record _ as f ->
-		     sd f ^ " " ^arrow ^
-		       " " ^ sd t
-	         | _ ->
-		     "(" ^ sd f ^ ") "^ arrow ^
-		       " " ^ sd t)
+	      (match concrete_type args with
+	         | `Record (fields, _) -> 
+                     let argstring =
+                       String.concat "," 
+                         (FieldEnv.fold (fun _ t ss -> match t with
+                                           | `Present t -> ss @ [sd t]
+                                           | `Absent -> assert false) fields [])
+                     in
+                       "(" ^ argstring ^ ") " ^arrow ^ " " ^ sd t
+	         | _ -> "(*" ^ sd args ^ ") "^ arrow ^ " " ^ sd t)
         | `Record row      ->
             let row = unwrap row in
               (if is_tuple row then string_of_tuple row
@@ -1016,3 +1012,10 @@ let lookup_alias (s, ts) alias_env =
     else
       vars, alias
 
+let make_tuple_type (ts : datatype list) : datatype =
+  `Record 
+    (snd 
+       (List.fold_left
+          (fun (n, row) t -> n+1, TypeOps.set_field (string_of_int n, `Present t) row)
+          (1, TypeOps.make_empty_closed_row ())
+          ts))

@@ -37,12 +37,8 @@ Unary negation [2]
 stdout : @true .*
 
 Prefix arithmetic operators
-{var plus = (+); plus(1)((+)(2)(3))}
+{var plus = (+); plus(1, (+)(2,3))}
 stdout : 6 : Int
-
-Partial application of arithmetic operators
-{var plus1 = (+)(1); plus1(plus1(10)) + plus1(12)}
-stdout : 25 : Int
 
 Operator precedence [1]
 (2 + 3 * 4 == 14) && (2 * 3 + 4 == 10)
