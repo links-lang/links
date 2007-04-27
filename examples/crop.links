@@ -1,23 +1,12 @@
 fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value))}
 
-fun debugInt(x) {
-  debugObj(x);
-  x
-}
-
-fun iToS(msg, x) {
-  var r = intToString(x);
-  debug(msg ++ " intToString " ++ r);
-  r
-}
-
 fun dragging(offsetLeft, offsetTop, left, top, width, height, 
              mdownX, mdownY) client {
   receive {
-    case MouseMove(x, y) -> { 
+    case MouseMove(x, y) -> {
       var frame = getNodeById("cropping-frame");
-      setStyle(frame, "left", iToS("dragging 1", x - mdownX + left));
-      setStyle(frame, "top", iToS("dragging 2", y - mdownY + top));
+      setStyle(frame, "left", intToString(x - mdownX + left));
+      setStyle(frame, "top", intToString(y - mdownY + top));
 
       var pictureFrame = getNodeById("picture-frame");
 
@@ -27,8 +16,8 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
       var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
 
       var preview = getNodeById("crop-preview");
-      setStyle(preview, "marginTop", iToS("dragging 3", -(y - mdownY + top - offsetTop)));
-      setStyle(preview, "marginLeft", iToS("dragging 4", -(x - mdownX + left - offsetLeft)));
+      setStyle(preview, "marginTop", intToString(-(y - mdownY + top - offsetTop)));
+      setStyle(preview, "marginLeft", intToString(-(x - mdownX + left - offsetLeft)));
 
       dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
     }
@@ -58,17 +47,17 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
           case SW -> (x, top, width - (x - left), y-top)
           case SE -> (left, top, x-left, y-top)
         };
-      setStyle(frame, "left", iToS("resizing", l-offsetLeft));
-      setStyle(frame, "top", iToS("resizing", t));
-      setStyle(frameSizer, "width", iToS("resizing", w));
-      setStyle(frameSizer, "height", iToS("resizing", h));
+      setStyle(frame, "left", intToString(l-offsetLeft));
+      setStyle(frame, "top", intToString(t));
+      setStyle(frameSizer, "width", intToString(w));
+      setStyle(frameSizer, "height", intToString(h));
 
       var previewFrame = getNodeById("crop-preview-frame");
-      setStyle(previewFrame, "width", iToS("resizing", w));
-      setStyle(previewFrame, "height", iToS("resizing", h));
+      setStyle(previewFrame, "width", intToString(w));
+      setStyle(previewFrame, "height", intToString(h));
       var preview = getNodeById("crop-preview");
-      setStyle(preview, "marginTop", iToS("resizing", -t+offsetTop));
-      setStyle(preview, "marginLeft", iToS("resizing", -l+offsetLeft));
+      setStyle(preview, "marginTop", intToString(-t+offsetTop));
+      setStyle(preview, "marginLeft", intToString(-l+offsetLeft));
 
       resizing(offsetLeft, offsetTop, l, t, w, h, corner)
     }
@@ -82,7 +71,6 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
 }
 
 fun frameMgr(offsetLeft, offsetTop, left, top, width, height) client {
-#  debug("frameMgr("++intToString(offsetLeft)++", "++intToString(offsetTop)++", "++intToString(left)++", "++intToString(top)++", "++intToString(width)++", "++intToString(height)++")");
   receive {
     case MouseDown(x, y) ->
       dragging(offsetLeft, offsetTop, left, top, width, height, x, y)
@@ -98,8 +86,8 @@ fun makeCroppingFrame(left, top, width, height) client{
   <div id="cropping-frame"    # need a gensym of sorts here
     style="position: absolute;
            display: block;
-           left: {iToS("makeCroppingFrame", left)}px;
-           top: {iToS("makeCroppingFrame", top)}px; 
+           left: {intToString(left)}px;
+           top: {intToString(top)}px; 
            z-index: 1000; 
            cursor: pointer"
     l:onmousedown="{frameMgr ! MouseDown(getPageX(event),
@@ -113,8 +101,8 @@ fun makeCroppingFrame(left, top, width, height) client{
       style="border: 1px solid black; ">
       <div id="white-border" 
         style="position: relative; border: 1px dashed white;
-               width: {iToS("makeCroppingFrame", width)}px; 
-               height: {iToS("makeCroppingFrame", height)}px; " />
+               width: {intToString(width)}px; 
+               height: {intToString(height)}px; " />
     </div>
     <div id="nw-resize"
       l:onmousedown="{frameMgr ! StartResize(NW)}"
