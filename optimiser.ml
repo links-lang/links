@@ -623,7 +623,7 @@ let lift_lets : RewriteSyntax.rewriter = function
 
 (* return true if the argument is an atom *)
 let is_atom = function
-  | Variable _ | Integer _ -> true
+  | Variable _ | Constant(Integer _, _) -> true
   | _ -> false
 
 (* if e is not an atom then bind it to a variable by extending the
@@ -693,7 +693,7 @@ let simplify_takedrop : RewriteSyntax.rewriter = function
 let push_takedrop : RewriteSyntax.rewriter = 
   let queryize = function
     | Variable (v, _) -> Query.Variable v
-    | Integer  (n, _) -> Query.Integer n
+    | Constant(Integer  n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
   function
     | Apply (Variable ("take", _) as f,
@@ -755,18 +755,17 @@ let remove_trivial_extensions : RewriteSyntax.rewriter = function
 let fold_constant : RewriteSyntax.rewriter = 
   (* TODO: Also arithmetic, etc. *)
   let constantp = function
-    | Boolean _ | Integer _ | Char _ | String _ 
-    | Float _ | Nil _ -> true
+    | Constant _ | Nil _ -> true
     | Record_intro (fields, None, _) when StringMap.is_empty fields -> true
     | _ -> false 
   in function 
 	(* Is this safe without unboxing? *)
 (*    | Comparison (l, op, r, data) when constantp l && constantp r -> Some (Boolean ((assoc op ops) l r, data)) *)
-    | Condition (Boolean (true, _), t, _, _)  -> Some t
-    | Condition (Boolean (false, _), _, e, _) -> Some e
+    | Condition (Constant (Boolean true, _), t, _, _)  -> Some t
+    | Condition (Constant (Boolean false, _), _, e, _) -> Some e
     | Concat (Nil _, c, _) 
     | Concat (c, Nil _, _) -> Some c
-    | Concat (String (l, _), String (r, _), data) -> Some (String (l ^ r, data))
+    | Concat (Constant(String l, _), Constant(String r, _), data) -> Some (Constant(String (l ^ r), data))
     | _ -> None 
 
 (** Useful for printing the program at specific points of the

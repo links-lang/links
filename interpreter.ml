@@ -387,15 +387,17 @@ and
       : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
   let eval = interpret globals locals in
+  let box_constant = function
+    | Boolean b -> bool b
+    | Integer i -> int i
+    | String s -> string_as_charlist s
+    | Float f -> float f
+    | Char ch -> char ch in
   match expr with
   | Syntax.Define (name, expr, _, _) -> 
       interpret globals [] expr (Definition (globals, name) :: cont)
   | Syntax.Alien _ -> apply_cont globals cont (`Record [])
-  | Syntax.Boolean (value, _) -> apply_cont globals cont (bool value)
-  | Syntax.Integer (value, _) -> apply_cont globals cont (int value)
-  | Syntax.String (value, _) -> apply_cont globals cont (string_as_charlist value)
-  | Syntax.Float (value, _) -> apply_cont globals cont (float value)
-  | Syntax.Char (value, _) -> apply_cont globals cont (char value)
+  | Syntax.Constant (c, _) -> apply_cont globals cont (box_constant c)
   | Syntax.Variable(name, _) -> 
       let value = (lookup globals locals name) in
 	apply_cont globals cont value

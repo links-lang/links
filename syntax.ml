@@ -61,14 +61,18 @@ let string_of_comparison = function
   | `Equal  -> "=="
   | `NotEq  -> "<>"
 
+type constant =
+  | Boolean of bool
+  | Integer of num
+  | Char of char
+  | String of string
+  | Float of float
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type 'data expression' =
   | Define of (string * 'data expression' * location * 'data)
   | TypeDecl of (string * int list * Types.datatype * 'data)
-  | Boolean of (bool * 'data)
-  | Integer of (num * 'data)
-  | Char of (char * 'data)
-  | String of (string * 'data)
-  | Float of (float * 'data)
+  | Constant of (constant * 'data)
   | Variable of (string * 'data)
 
   | Apply of ('data expression' * 'data expression' * 'data)
@@ -124,11 +128,7 @@ let is_define =
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
 let rec is_value : 'a expression' -> bool = function
-  | Boolean _
-  | Integer _
-  | Char _
-  | String _
-  | Float _
+  | Constant _
   | Variable _
   | Xml_node _ (* ? *)
   | Nil _
@@ -180,11 +180,15 @@ let rec show t : 'a expression' -> string = function
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
   | TypeDecl (typename, quantifiers, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
-  | Boolean (value, data) -> string_of_bool value ^ t data
-  | Integer (value, data) -> string_of_num value ^ t data
-  | Char (c, data) -> "'"^ Char.escaped c ^"'" ^ t data
-  | String (s, data) -> "\"" ^ s ^ "\"" ^ t data
-  | Float (value, data)   -> string_of_float value ^ t data
+  | Constant(c, data) ->
+      begin
+        match c with
+          | Boolean value -> string_of_bool value ^ t data
+          | Integer value -> string_of_num value ^ t data
+          | Char c -> "'"^ Char.escaped c ^"'" ^ t data
+          | String s -> "\"" ^ s ^ "\"" ^ t data
+          | Float value   -> string_of_float value ^ t data
+      end
   | Variable (name, data) when is_symbolic_ident name -> "(" ^ name ^ ")" ^ t data
   | Variable (name, data) -> name ^ t data
   | Apply (f, p, data)    -> show t f ^ "(" ^ show t p ^ ")" ^ t data
@@ -269,11 +273,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
   (* The "default" action: do nothing, just process subnodes *)
   let rec visit_children expr = 
     combine (expr, match expr with
-               | Boolean _
-               | Integer _
-               | Char _
-               | String _
-               | Float _
+               | Constant _
                | Nil _
                | Alien _
                | Placeholder _ 
@@ -320,11 +320,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
   match exp, exps with
       (* 0 subnodes *)
     | TypeDecl _, []
-    | Boolean _, []
-    | Integer _, []
-    | Char _, []
-    | String _, []
-    | Float _, []
+    | Constant _, []
     | Variable _, []
     | Nil _, [] 
     | Placeholder _, []
@@ -381,7 +377,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
         
 let rec stringlit_value = function
   | HasType (e, _, _) -> stringlit_value e
-  | String (name, _) -> name
+  | Constant(String name, _) -> name
   | _ -> assert false
 
 (* Walk the XML tree, looking for <input l:name> bindings that are
@@ -440,11 +436,7 @@ let expression_data : ('a expression' -> 'a) = function
         | Define (_, _, _, data) -> data
         | TypeDecl (_, _, _, data) -> data
         | HasType (_, _, data) -> data
-        | Boolean (_, data) -> data
-        | Integer (_, data) -> data
-        | Float (_, data) -> data
-        | Char (_, data) -> data
-        | String (_, data) -> data
+        | Constant (_, data) -> data
         | Variable (_, data) -> data
         | Apply (_, _, data) -> data
         | Condition (_, _, _, data) -> data
@@ -481,11 +473,7 @@ let rec set_data : ('b -> 'a expression' -> 'b expression') =
       Define (a, b, c, data)
   | TypeDecl (a, b, c, _) -> TypeDecl (a, b, c, data)
   | HasType (a, b,_) ->  HasType (a, b,data) 
-  | Boolean (a, _) -> Boolean (a, data)
-  | Integer (a, _) -> Integer (a, data)
-  | Float (a, _) ->  Float (a, data)
-  | Char (a, _) -> Char (a, data)
-  | String (a, _) -> String (a, data)
+  | Constant (a, _) -> Constant (a, data)
   | Variable (a, _) -> Variable (a, data)
   | Apply (a, b,_) -> Apply (a, b,data)
   | Condition (a, b, c, _) -> Condition (a, b, c, data)
@@ -620,11 +608,7 @@ let skeleton = function
     (* Zero sub-expressions *)
   | Nil d -> Nil d
   | Wrong d -> Wrong d
-  | Boolean(value, d) -> Boolean(value, d)
-  | Integer(value, d) -> Integer(value, d)
-  | Char(value, d) -> Char(value, d)
-  | String(value, d) -> String(value, d)
-  | Float(value, d) -> Float(value, d)
+  | Constant (value, d) -> Constant (value, d)
   | Variable(x, d) -> Variable(x, d)
   | Apply(f, a, d) -> Apply(f, a, d)
   | TypeDecl(typename, quantifiers, datatype, d) ->

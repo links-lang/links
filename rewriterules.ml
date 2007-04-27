@@ -276,7 +276,7 @@ struct
              | Some [Variant_injection ("Star", _, _); 
                      Variant_injection ("Any", _, _)] -> `Percent
              | _ -> uncompilable e)
-      | Variant_injection ("Simply", String (s, _), _) -> `Str (quote s)
+      | Variant_injection ("Simply", Constant(String s, _), _) -> `Str (quote s)
       | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> `Var name
       | Variant_injection ("Seq", rs, _) -> `Seq (map compile (unlist rs))
       | e -> uncompilable e
@@ -302,16 +302,16 @@ struct
     | Record_intro (fields, None, _) ->
         `Rec (StringMap.fold (fun label expr output ->
                           (label, (trycompile "B" compileB) env expr)::output) fields [])
-    | Boolean (true, _)      -> `True
-    | Boolean (false, _)     -> `False
-    | Integer (n, _)         -> `N n
-    | String  (s, _)         -> `Str s
+    | Constant(Boolean true, _)      -> `True
+    | Constant(Boolean false, _)     -> `False
+    | Constant(Integer n, _)         -> `N n
+    | Constant(String  s, _)       -> `Str s
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "B" compileB) env s)
     | Comparison (l, c, r,_) -> 
         `Op ((c:>op), (trycompile "B" compileB) env l, (trycompile "B" compileB) env r)
-    | Condition (c,s,Boolean (false, _),_) ->
+    | Condition (c,s,Constant(Boolean false, _),_) ->
         `Op (`And, (trycompile "B" compileB) env c, (trycompile "B" compileB) env s)
-    | Condition (c, Boolean (true, _), b, _) ->
+    | Condition (c, Constant(Boolean true, _), b, _) ->
         `Op (`Or, (trycompile "B" compileB) env c, (trycompile "B" compileB) env b)
     | e                      -> uncompilable e
 
@@ -374,8 +374,8 @@ struct
   let rec compileE env : expression -> expr = function
     | Apply (Variable ("take"|"drop" as f,_), Record_intro (args, None, _), _) as e -> 
         begin match Prepare.unpack args, f with
-          | Some [Integer (n,_); e], "take" -> `Take (n, (trycompile "E" compileE) env e)
-          | Some [Integer (n,_); e], "drop" -> `Drop (n, (trycompile "E" compileE) env e)
+          | Some [Constant(Integer n, _); e], "take" -> `Take (n, (trycompile "E" compileE) env e)
+          | Some [Constant(Integer n, _); e], "drop" -> `Drop (n, (trycompile "E" compileE) env e)
           | _ -> uncompilable e end
     | e -> ((trycompile "S" compileS) env e :> expr)
 

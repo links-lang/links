@@ -56,7 +56,7 @@ let is_pfunc = function
   | _ -> false
 
 let string s = 
-  String (s, (`T (Syntax.dummy_position, Types.string_type, None)))
+  Constant(String s, (`T (Syntax.dummy_position, Types.string_type, None)))
 
 let hidden_input name value = 
   Xml_node ("input", [("type", string "hidden");
@@ -98,7 +98,6 @@ let rec list_of_appln = function
     Variable _ as v -> [v]
   | Apply(e, arg, _) -> list_of_appln e @ [arg]
 
-
 let rec simplify lookup = function
   | Variable (x, _) as expr -> 
       (try
@@ -111,17 +110,9 @@ let rec simplify lookup = function
   | Apply(f, a, d) -> Apply(simplify lookup f, simplify lookup a, d)
   | expr -> expr
 
-let is_constant _ = false
-
-(** val_of_const_expr
-    Given an expression with a constant value, reduce it to that value.
-*)
-let val_of_const_expr _ = `Bool false
-
 let rec value_of_simple_expr lookup = function
-  | expr when is_constant(expr) -> Some (val_of_const_expr expr)
   | Variable(x, _) -> Some (lookup x)
-  | Boolean _ | Integer _ | Char _ | Float _ as expr -> prim_val_of_expr expr
+  | Constant _ as expr -> prim_val_of_expr expr
   | expr -> Some(delay_expr expr)
 
 exception UnplainResult
@@ -166,7 +157,7 @@ let xml_transform env lookup eval : expression -> expression =
     | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
          let rec extract = function
            | HasType (e, _, _) -> extract e
-           | String (name, _) -> 
+           | Constant(String name, _) -> 
                let attrs = (("name", string name) :: 
                               filter (attrname ->- (=) "l:name" ->- not) attrs) in
                Xml_node (tag, attrs, contents, data)

@@ -387,11 +387,15 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
 let rec generate : 'a expression' -> code = 
     function
   | HasType (e, _, _)                  -> generate e
-  | Integer (v, _)                     -> trivial_cps (Lit (string_of_num v))
-  | Float (v, _)                       -> trivial_cps (Lit (string_of_float v))
-  | Boolean (v, _)                     -> trivial_cps (Lit (string_of_bool v))
-  | Char (v, _)                        -> trivial_cps (chrlit v)
-  | String (v, _)                      -> trivial_cps (chrlistlit v)
+  | Constant (c, _)                    ->
+      begin
+        match c with
+          | Integer v  -> trivial_cps (Lit (string_of_num v))
+          | Float v    -> trivial_cps (Lit (string_of_float v))
+          | Boolean v  -> trivial_cps (Lit (string_of_bool v))
+          | Char v     -> trivial_cps (chrlit v)
+          | String v   -> trivial_cps (chrlistlit v)
+      end
   | Condition (i, t, e, _)             -> 
       let i_cps = generate i in
       let t_cps = generate t in
@@ -714,7 +718,7 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
    *)
   let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
   let attrs = 
-    ("onfocus", Syntax.String ("_focused = this.id", Syntax.no_expr_data))
+    ("onfocus", Syntax.Constant (Syntax.String "_focused = this.id", Syntax.no_expr_data))
     :: ("id", name)
     :: ("name", name)
     :: attrs in
@@ -732,11 +736,15 @@ and generate_direct_style : 'a expression' -> code =
   let gd = generate_direct_style
   in
     function
-  | Integer (v, _)                     -> Lit (string_of_num v)
-  | Float (v, _)                       -> Lit (string_of_float v)
-  | Boolean (v, _)                     -> Lit (string_of_bool v)
-  | Char (v, _)                        -> chrlit v
-  | String (v, _)                      -> chrlistlit v
+  | Constant (c, _)                    ->
+      begin
+        match c with
+          | Integer v  -> Lit (string_of_num v)
+          | Float v    -> Lit (string_of_float v)
+          | Boolean v  -> Lit (string_of_bool v)
+          | Char v     -> chrlit v
+          | String v   -> chrlistlit v
+      end
   | Condition (i, t, e, _)             ->
       Cond (gd i, gd t, gd e)
   | Let (v, e, b, _)                   ->

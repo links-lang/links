@@ -830,6 +830,13 @@ let generalise : environment -> datatype -> assumption =
 
 type typing_environment = environment * alias_environment
 
+let constant_type = function
+  | Boolean _ -> `Primitive `Bool
+  | Integer _ -> `Primitive `Int
+  | Float _ -> `Primitive `Float
+  | Char _ -> `Primitive `Char
+  | String _ -> string_type
+
 let rec type_check : typing_environment -> untyped_expression -> expression =
   fun ((env, alias_env) as typing_env) expression ->
     let unify = unify alias_env
@@ -838,11 +845,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match (expression : Syntax.untyped_expression) with
   | (Define (variable, _, _, `U pos) : Syntax.untyped_expression) -> nested_def pos variable
-  | Boolean (value, `U pos) -> Boolean (value, `T (pos, `Primitive `Bool, None))
-  | Integer (value, `U pos) -> Integer (value, `T (pos, `Primitive `Int, None))
-  | Float (value, `U pos) -> Float (value, `T (pos, `Primitive `Float, None))
-  | String (value, `U pos) -> String (value, `T (pos, string_type, None))
-  | Char (value, `U pos) -> Char (value, `T (pos, `Primitive `Char, None))
+  | Constant (value, `U pos) -> Constant (value, `T (pos, constant_type value, None))
   | Variable (name, `U pos) ->
       Variable (name, `T (pos, instantiate env name, None))
   | Apply (f, p, `U pos) ->

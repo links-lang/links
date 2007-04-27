@@ -3,14 +3,17 @@ type location = [ `Client | `Native | `Server | `Unknown ]
 type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle, Eq, Shelve)
 type label deriving (Typeable, Show, Pickle)
 
+type constant =
+  | Boolean of bool
+  | Integer of Num.num
+  | Char of char
+  | String of string
+  | Float of float
+
 type 'a expression' =
     Define of (string * 'a expression' * location * 'a)
   | TypeDecl of (string * int list * Types.datatype * 'a)
-  | Boolean of (bool * 'a)
-  | Integer of (Num.num * 'a)
-  | Char of (char * 'a)
-  | String of (string * 'a)
-  | Float of (float * 'a)
+  | Constant of (constant * 'a)
   | Variable of (string * 'a)
   | Apply of ('a expression' * 'a expression' * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)

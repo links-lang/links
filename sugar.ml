@@ -129,13 +129,17 @@ module PatternCompiler =
      let get_equations_pattern_type : equation list -> pattern_type =
        fun (((_, pattern)::_, _)::_) -> get_pattern_type pattern
 
-     let string_of_constant = function
-       | Syntax.Boolean (v, _) -> string_of_bool v
-       | Syntax.Integer (v, _) -> string_of_num v
-       | Syntax.Char (v, _) -> string_of_char v
-       | Syntax.String (v, _) -> v
-       | Syntax.Float (v, _) -> string_of_float v
-       | Syntax.Record_intro (fields, None, _) when StringMap.is_empty fields -> "()"
+     let string_of_constant =
+       let soc = function    
+         | Syntax.Boolean v -> string_of_bool v
+         | Syntax.Integer v -> string_of_num v
+         | Syntax.Char v -> string_of_char v
+         | Syntax.String v -> v
+         | Syntax.Float v -> string_of_float v
+       in
+         function
+           | Syntax.Constant (c, _) -> soc c
+           | Syntax.Record_intro (fields, None, _) when StringMap.is_empty fields -> "()"
 
      (* compile away top-level As and HasType patterns *)
      let rec reduce_pattern : simple_pattern -> annotated_pattern = function
@@ -1009,11 +1013,11 @@ module Desugarer =
            | TypeAnnotation ((Definition (name, rhs, loc), _), t)  -> 
                Define (name, HasType(desugar rhs, desugar_datatype var_env t, pos),loc, pos)
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
-           | FloatLit f  -> Float (f, pos)
-           | IntLit i    -> Integer (i, pos)
-           | StringLit s -> HasType(String (s, pos), Types.string_type, pos)
-           | BoolLit b   -> Boolean (b, pos)
-           | CharLit c   -> Char (c, pos)
+           | FloatLit f  -> Constant(Float f, pos)
+           | IntLit i    -> Constant(Integer i, pos)
+           | StringLit s -> HasType(Constant(String  s, pos), Types.string_type, pos)
+           | BoolLit b   -> Constant(Boolean b, pos)
+           | CharLit c   -> Constant(Char c, pos)
            | Var v       -> Variable (v, pos)
            | InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
            | InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, `LessEq, desugar e1, pos)
@@ -1030,8 +1034,8 @@ module Desugarer =
            | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | InfixAppl (`FloatMinus, e1, e2)  -> Apply (Apply (Variable ("-.", pos), desugar e1, pos), desugar e2, pos) 
            | InfixAppl (`Minus, e1, e2)  -> Apply (Apply (Variable ("-", pos), desugar e1, pos), desugar e2, pos) 
-           | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Boolean (false, pos), pos)
-           | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Boolean (true, pos), desugar e2, pos)
+           | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
+           | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(Boolean true, pos), desugar e2, pos)
            | ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
            | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | Escape (name, e) -> 
@@ -1258,12 +1262,12 @@ module Desugarer =
                CDATA.
                Where's a good place to do so? 
            *)
-           | TextNode s -> Apply (Variable ("stringToXml", pos), String (s, pos), pos)
+           | TextNode s -> Apply (Variable ("stringToXml", pos), Constant(String s, pos), pos)
            | Xml (tag, attrs, subnodes) -> 
                let concat a b = 
                  Concat (desugar a, b, pos) in
                let desugar_attr = function
-                 | [] -> String ("", pos)
+                 | [] -> Constant(String "", pos)
                  | [x] -> desugar x
                  | xs  -> (fold_right concat xs (Nil (pos))) in
                  if (tag = "#") then
@@ -1371,7 +1375,7 @@ module Desugarer =
                let pos = `U(lookup_pos pos') in 
                  Apply(Variable("xml", pos),
                        Apply(Variable("stringToXml", pos),
-                             String(text, pos), pos), pos), [[]]
+                             Constant(String text, pos), pos), pos), [[]]
        else
          let _, pos' = formExpr in 
          let pos = (`U(lookup_pos pos')) in 
@@ -1425,11 +1429,11 @@ module Desugarer =
          | `Any -> `Variable (unique_name ()), pos
          | `Constant (p,_) ->
              `Constant (match p with
-                          | IntLit v    -> Integer (v, pos)
-                          | FloatLit v  -> Float (v, pos)
-                          | StringLit v -> String (v, pos)
-                          | BoolLit v   -> Boolean (v, pos)
-                          | CharLit v   -> Char (v,  pos)
+                          | IntLit v    -> Constant(Integer v, pos)
+                          | FloatLit v  -> Constant(Float v, pos)
+                          | StringLit v -> Constant(String v, pos)
+                          | BoolLit v   -> Constant(Boolean v, pos)
+                          | CharLit v   -> Constant(Char v,  pos)
                           | _ -> assert false),
              pos
          | `Cons (l,r) -> `Cons (desugar l, desugar r), pos

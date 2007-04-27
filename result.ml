@@ -232,17 +232,21 @@ and environment = (binding list)
     deriving (Typeable, Eq, Show, Pickle, Shelve)
 
 let expr_of_prim_val : result -> expression option = function
-    `Bool b -> Some(Boolean(b, Syntax.no_expr_data))
-  | `Int i -> Some(Integer(i, Syntax.no_expr_data))
-  | `Char ch -> Some(Char(ch, Syntax.no_expr_data))
-  | `Float f -> Some(Float(f, Syntax.no_expr_data))
+    `Bool b -> Some(Constant(Boolean b, Syntax.no_expr_data))
+  | `Int i -> Some(Constant(Integer i, Syntax.no_expr_data))
+  | `Char ch -> Some(Constant(Char ch, Syntax.no_expr_data))
+  | `Float f -> Some(Constant(Float f, Syntax.no_expr_data))
   | _ -> None
 
 let prim_val_of_expr : expression -> result option = function
-    Boolean(b, _) -> Some( `Bool b)
-  | Integer(i, _) -> Some(`Int i)
-  | Char(ch, _) -> Some(`Char ch)
-  | Float(f, _) -> Some(`Float f)
+  | Constant(c, _) ->
+      begin
+        match c with
+          | Boolean b -> Some( `Bool b)
+          | Integer i -> Some(`Int i)
+          | Char ch -> Some(`Char ch)
+          | Float f -> Some(`Float f)
+      end
   | _ -> None
 
 let (toplevel: continuation) = [] 

@@ -199,7 +199,7 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
            | Some (Variant_injection ("Star", _, _), Variant_injection ("Any", _, _)) ->  
 	       Some (`percent, [])
            | _ -> None)
-    | Variant_injection ("Simply", String (s, _), _) -> 
+    | Variant_injection ("Simply", Constant(String s, _), _) -> 
 	Some (`string (quote s), [])
     | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> 
 	(match trace_variable name bindings with
@@ -229,10 +229,10 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
 
 let make_sql bindings expr =
   match expr with
-    | Syntax.Boolean (value, _) -> Some (Boolean value, [])
-    | Syntax.Integer (value, _) -> Some (Integer value, [])
-    | Syntax.Float (value, _) -> Some (Float value, [])
-    | Syntax.String (value, _) -> Some (Text value, [])
+    | Syntax.Constant(Syntax.Boolean value, _) -> Some (Boolean value, [])
+    | Syntax.Constant(Syntax.Integer value, _) -> Some (Integer value, [])
+    | Syntax.Constant(Syntax.Float value, _) -> Some (Float value, [])
+    | Syntax.Constant(Syntax.String value, _) -> Some (Text value, [])
     | Syntax.Variable (name, _) ->
 	(match (trace_variable name bindings) with
 	   | `Table_field (table, field) ->
@@ -281,8 +281,8 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
     : (Query.expression * projection_source list) option =
   let (bindings, expr) = (sep_assgmts bindings expr) in
     match expr with
-      | Syntax.Boolean(true, _) -> Some (Boolean true, [])
-      | Syntax.Boolean(false, _) -> Some (Boolean false, [])
+      | Syntax.Constant(Syntax.Boolean true, _) -> Some (Boolean true, [])
+      | Syntax.Constant(Syntax.Boolean false, _) -> Some (Boolean false, [])
       | Syntax.Condition(c, t, e, _) ->
           (* perhaps this is just an AST-traversal with state?? *)
           let csql = condition_to_sql c bindings in
