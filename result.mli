@@ -48,8 +48,6 @@ val reconstruct_db_string : string * string -> string
 type unop = | MkColl
             | MkVariant of string
             | MkDatabase
-(* 	    | MkTableHandle of ( (\* table name: *\) Syntax.expression * *)
-(* 		                 (\* field spec: *\) Types.row) *)
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
                    Syntax.expression option)
@@ -57,7 +55,7 @@ type unop = | MkColl
             | Project of string
             | QueryOp of (Query.query * (* the table aliases: *) string list)
 type binop = 
-    [Syntax.comparison
+    [ Syntax.comparison
     | `Union
     | `RecExt of string
     | `MkTableHandle of Types.row]
@@ -77,9 +75,10 @@ type primitive_value =
     | `XML of xmlitem ]
 type contin_frame =
     | Definition of (environment * string)
-    | FuncArg of (Syntax.expression * environment)
-    | FuncApply of (result * environment)
+    | FuncArg of (Syntax.expression list * environment)
+    | FuncApply of (environment * result * Syntax.expression list * result list)
     | FuncApplyFlipped of (environment * result)
+    | ThunkApply of environment
     | LetCont of (environment * string * Syntax.expression)
     | BranchCont of (environment * Syntax.expression * Syntax.expression)
     | BinopRight of (environment * binop * Syntax.expression)
@@ -97,9 +96,10 @@ type contin_frame =
     | Recv of environment
 and result = [ primitive_value
 | `Continuation of continuation
-| `Function of string * environment * unit * Syntax.expression
+| `Function of string list * environment * unit * Syntax.expression
+| `PrimitiveFunction of string
+| `ClientFunction of string
 | `List of result list
-| `PFunction of string * result list
 | `Record of (string * result) list
 | `Variant of string * result ]
 and continuation = contin_frame list
@@ -120,7 +120,7 @@ val links_fst : [> `Record of ('a * 'b) list ] -> 'b
 val links_snd : [> `Record of ('a * 'b) list ] -> 'b
 val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
-val delay_expr : 'a -> [> `Function of string * 'b list * unit * 'a ]
+val delay_expr : 'a -> [> `Function of string list * 'b list * unit * 'a ]
 val charlist_as_string : result -> string
 val string_of_result : result -> string
 val string_of_environment : binding list -> string

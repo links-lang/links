@@ -8,15 +8,15 @@ let working_tests = [
   is_function ~with_type: "(a) -> a";
 
   "Too-general type annotation",
-  "fun (x) {x+1} : a -> a",
+  "fun (x) {x+1} : (a) -> a",
   has_typeerror;
 
   "Annotations inside functions [1]",
-  "fun (x:a) { x:a } : a -> a",
+  "fun (x:a) { x:a } : (a) -> a",
   is_function ~with_type: "(a) -> a";
 
   "Annotations inside functions [2]",
-  "fun (x:a) { x:a } : b -> b",
+  "fun (x:a) { x:a } : (b) -> b",
   has_typeerror;
 
   "Annotations inside functions [3]",
@@ -60,7 +60,7 @@ let working_tests = [
   result "[1, 2, 3]" ~with_type:"[Int]";
 
   "Check that recursive bindings don't destroy the local environments of values in the local environment (see bug report from Thierry, 2006-09-17 on links-users)",
-  "fun (z) { fun s() {} z() }(fun (aa)() { aa() }(fun (x){x}))",
+  "fun (z) { fun s() {} z()}(fun (aa)() { aa(()) }(fun (x){x}))",
   result "()" ~with_type:"()";
 
   "Bug in interaction between pattern-matching and anonymous functions",
@@ -177,7 +177,7 @@ let working_tests = [
 
   "Case-patterns (redundancy) [10]",
   "fun (x) { switch (x) { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}",
-  is_function ~with_type: "([a],[b]) -> Int";
+  is_function ~with_type: "(([a],[b])) -> Int";
 
   "Case-patterns (singleton list pattern)",
   "switch ([1]) { case [x] -> 2 case x -> 1 }",
@@ -278,15 +278,15 @@ let working_tests = [
   has_typeerror;
 
   "Type annotations on functions",
-  "fun (x) { x } : String -> String",
+  "fun (x) { x } : (String) -> String",
   result "fun" ~with_type: "(String) -> String";
 
   "Incorrect type annotations rejected",
-  "fun (x) { x + 1 } : Float -> String",
+  "fun (x) { x + 1 } : (Float) -> String",
   has_typeerror;
 
   "Loose type annotations on functions",
-  "fun (x) { x } : b -> b",
+  "fun (x) { x } : (b) -> b",
   is_function ~with_type: "(a) -> a";
 
   "Trailing semicolon means \"ignore the final value\" [1]",
@@ -326,11 +326,11 @@ let working_tests = [
   result "1" ~with_type: "Foo";
 
   "Typename [2]",
-  "typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f(false, 1, \"two\")",
+  "typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, \"two\"))",
   result "(false, 1, \"two\")" ~with_type: "Bar (Bool,Int,String)";
 
   "Typename [3]",
-  "typename F(a) = a -> a; sig f : F(Int) fun f(x) {recv() + x} sig g : F(Int) fun g(x) {stringToInt(recv()) + x} g",
+  "typename F(a) = (a) -> a; sig f : F(Int) fun f(x) {recv() + x} sig g : F(Int) fun g(x) {stringToInt(recv()) + x} g",
   result "fun" ~with_type: "(Int) -{String}-> Int";
 
   "Correct message type sent to a process",
@@ -412,12 +412,8 @@ let working_tests = [
   result "true" ~with_type:"Bool";
 
   "Prefix arithmetic operators",
-  "{var plus = (+); plus(1)((+)(2)(3))}",
+  "{var plus = (+); plus(1, (+)(2,3))}",
   result "6" ~with_type: "Int";
-
-  "Partial application of arithmetic operators",
-  "{var plus1 = (+)(1); plus1(plus1(10)) + plus1(12)}",
-  result "25" ~with_type: "Int";
 
   "Operator precedence [1]",
   "(2 + 3 * 4 == 14) && (2 * 3 + 4 == 10)",
@@ -872,7 +868,7 @@ let working_tests = [
   has_typeerror;
 
   "Polymorphic recursion with signatures",
-  "sig f : a -> Int
+  "sig f : (a) -> Int
    fun f(x) {
       var x = f(\"a\");
       var y = f(1);
@@ -881,13 +877,13 @@ let working_tests = [
   is_function ~with_type:"(a) -> Int";
 
   "Polymorphic mutual recursion [1]",
-  "sig f : a -> Int 
+  "sig f : (a) -> Int 
    fun f(x) {
       var x = g(\"a\");
       var y = g(1); 1
    }
 
-   sig g : a -> Int
+   sig g : (a) -> Int
    fun g(x) { 
       var x = f(\"a\");
       var y = f(1);
@@ -896,14 +892,14 @@ let working_tests = [
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic mutual recursion [2]",
-  "sig f : a -> Int
+  "sig f : (a) -> Int
    fun f(x) {
      var x = f(\"a\");
      var y = g(1);
      1
    }
 
-   sig g : a -> Int
+   sig g : (a) -> Int
    fun g(x) {
      var x = g(\"a\");
      var y = f(1);
@@ -912,7 +908,7 @@ let working_tests = [
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic mutual recursion [3]",
-  "sig f : a -> Int
+  "sig f : (a) -> Int
    fun f(x) {
       var w = f(\"a\");
       var x = f(1);
@@ -921,7 +917,7 @@ let working_tests = [
       1
    }
 
-   sig g : a -> Int
+   sig g : (a) -> Int
    fun g(x) {
       var w = f(\"a\");
       var y = f(1);
@@ -932,7 +928,7 @@ let working_tests = [
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic row recursion",
-  "sig h : (|a) ->  Int fun h(x) {h((x,x))}",
+  "sig h : ((|a)) ->  Int fun h(x) {h((x,x))}",
   is_function ~with_type: "(|a) -> Int";
 
   "Range [1]",
@@ -1116,7 +1112,7 @@ let known_failures = [
   result "fun" ~with_type: "((a) -> c, [a]) -> [c]";
 
   "Map function",
-  "map((+)(1), [1,2,3])",
+  "map(curry((+))(1), [1,2,3])",
   result "[2, 3, 4]" ~with_type: "[Int]";
 
 ]

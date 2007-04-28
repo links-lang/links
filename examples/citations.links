@@ -16,7 +16,7 @@ var paperId = "paper";
 var authorLabel = "Author";
 var paperLabel = "Paper";
 
-sig header : String -> Xml
+sig header : (String) -> Xml
 fun header(title) {
   <head>
    <title>{stringToXml(title)}</title>
@@ -41,19 +41,19 @@ fun suggest(authorPrefix, paperPrefix) client {
   )
 }
 
-sig formatAuthorList : [Author] -> Xml
+sig formatAuthorList : ([Author]) -> Xml
 fun formatAuthorList(authors) server {
   for (var a <- authors)
     <a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/>
 }
 
-sig formatPaperList : [Paper] -> Xml
+sig formatPaperList : ([Paper]) -> Xml
 fun formatPaperList(papers) server {
   for (var p <- papers)
     <a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/>
 }
 
-sig getPapersAndCollaborators : Author -> ([Paper], [Author])
+sig getPapersAndCollaborators : (Author) -> ([Paper], [Author])
 fun getPapersAndCollaborators(author) server {
   var papers =
    for (var r <-- paperauthorTable)
@@ -99,7 +99,7 @@ fun showAuthorInfo(author) server {
 #    <div class="suggestions">{formatAuthorList(collaborators)}</div>
 }
 
-sig getAuthors : Paper -> [Author]
+sig getAuthors : (Paper) -> [Author]
 fun getAuthors(paper) server {
   for (var r <-- paperauthorTable)
   where (paper.id == r.paperid)
@@ -189,7 +189,7 @@ fun completions(authorPrefix, paperPrefix) server {
   (formatAuthorList(authors), formatPaperList(papers))
 }
 
-sig distinct : [(id:Int|r)] -> [(id:Int|r)]
+sig distinct : ([(id:Int|r)]) -> [(id:Int|r)]
 fun distinct(xs) {
   fold_left(
     fun (ys, x) {

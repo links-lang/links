@@ -44,15 +44,9 @@ var wineryTable = table "winery" with
                   region_id : Int)
                   from db;
 
-fun snd(pair) {
-  var (a, b) = pair;
-  b
-}
+fun snd((a,b)) { b }
 
-fun fst(pair) {
-  var (a, b) = pair;
-  a
-}
+fun fst((a,_)) { a }
 
 fun map_comprehension(f, l) {
   for (var x <- l) [f(x)]
@@ -512,8 +506,8 @@ fun create_cart(cust_id) {
   var order_id = 1 + maximum(0, orders);
   insert (shortOrderTable) values 
          [(cust_id = cust_id, order_id = order_id)];
-  setCookie("order_id")(intToString(order_id));
-  setCookie("cust_id")(intToString(cust_id));
+  setCookie("order_id", intToString(order_id));
+  setCookie("cust_id", intToString(cust_id));
   (order_id, cust_id)
 }
 

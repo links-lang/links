@@ -98,7 +98,7 @@ stdout : 2 : Int
 
 Case-patterns (redundancy) [10]
 fun (x) { switch (x) { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}
-stdout : @fun : \(\[[a-z]+\], \[[a-z]+\]\) -> Int
+stdout : @fun : \(\(\[[a-z]+\], \[[a-z]+\]\)\) -> Int
 
 Case-patterns (singleton list pattern)
 switch ([1]) { case [x] -> 2 case x -> 1 }
@@ -117,7 +117,7 @@ fun len (l) { switch (l) { case [] -> 0 case x::xs -> 1 + len(xs) } } len ([1,2,
 stdout : 3 : Int
 
 Map function
-map((+)(1), [1,2,3])
+map(curry((+))(1), [1,2,3])
 stdout : [2, 3, 4] : [Int]
 
 Sorting:

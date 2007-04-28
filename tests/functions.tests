@@ -4,16 +4,16 @@ stderr : @..*
 exit : 1
 
 Type annotations on functions
-fun (x) { x } : String -> String
+fun (x) { x } : (String) -> String
 stdout : fun : (String) -> String
 
 Incorrect type annotations rejected
-fun (x) { x + 1 } : Float -> String
+fun (x) { x + 1 } : (Float) -> String
 stderr : @..*
 exit : 1
 
 Loose type annotations on functions
-fun (x) { x } : b -> b
+fun (x) { x } : (b) -> b
 stdout : @fun : \(([a-z])\) -> \1
 
 Trailing semicolon means "ignore the final value" [1]
@@ -44,7 +44,7 @@ stdout : @fun : \(([a-z]+)\) -> \1
 
 Type annotation scope
 fun (x:a, y:a) {(x, y)}
-stdout : @fun : \(([a-z]+), \1\) -> \(\1, \1\)
+stdout : @fun : \(([a-z]+),\1\) -> \(\1, \1\)
 
 Negative recursive type
 fun (x) {x:a} : a
@@ -56,9 +56,9 @@ typename Foo = Int; fun f(x:Foo) {x} f(1)
 stdout : 1 : Foo
 
 Typename [2]
-typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f(false, 1, "two")
+typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
 stdout : (false, 1, "two") : Bar (Bool,Int,String)
 
 Typename [3]
-typename F(a) = a -> a; sig f : F(Int) fun f(x) {recv() + x} sig g : F(Int) fun g(x) {stringToInt(recv()) + x} g
+typename F(a) = (a) -> a; sig f : F(Int) fun f(x) {recv() + x} sig g : F(Int) fun g(x) {stringToInt(recv()) + x} g
 stdout : fun : (Int) -{String}-> Int

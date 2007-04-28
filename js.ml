@@ -31,7 +31,6 @@ type code = | Var   of string
             | Bind  of (string * code * code)
             | Seq   of (code * code)
             | Die   of (string)
-            | Ret   of code
             | Nothing
  deriving (Show, Rewriter)
 module RewriteCode = Rewrite_code
@@ -52,7 +51,6 @@ let code_freevars : code -> string list =
     | Dict (fs) -> concat_map (aux bound -<- snd) fs
     | Lst elems -> concat_map (aux bound) elems
     | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
-    | Ret e -> aux bound e
   in aux []
 
 (* "Blind" (non-capture-avoiding) renaming.  By the time this is run
@@ -83,7 +81,6 @@ let rec rename' renamer = function
                                    rename' renamer body)
   | Seq(first, second) -> Seq(rename' renamer first,
                               rename' renamer second)
-  | Ret e -> Ret (rename' renamer e)
   | simple_expr -> simple_expr
 and rename renamer body = rename' renamer body
 
@@ -187,7 +184,6 @@ let rec local_names : code -> string list = function
   | Seq (l, r) -> local_names l @ local_names r
   | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
   | Defs (bs) -> map fst bs
-  | Ret (e) -> local_names e
 
 (* Generate code from intermediate language *) 
 let rec show : code -> string = 
@@ -233,7 +229,14 @@ let rec show : code -> string =
       | Seq (l, r) -> "(" ^ show l ^", "^ show r ^ ")"
       | Nothing -> ""
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
-      | Ret e -> "return (" ^ show e ^ ")"
+
+let rec format_seq sep fmt writer = function
+  | [] -> ()
+  | [x] -> writer fmt x
+  | x::xs -> 
+      writer fmt x;
+      Format.pp_print_string sep;
+      format_seq sep fmt writer xs
 
 (* create a string literal, quoting special characters *)
 let string_js_quote s =
@@ -245,9 +248,6 @@ let strlit s = Lit (string_js_quote s)
 let chrlit ch = Lit(string_js_quote(string_of_char ch))
 (** [chrlistlit] produces a JS literal for the representation of a Links string. *)
 let chrlistlit s  = Lst(map chrlit (explode s))
-(* let chrlit s = Lit (string_quote (string_of_char s)) *)
-
-    
 
 (* Specialness:
 
@@ -329,9 +329,8 @@ let strip_lcolon evName =
 
 (* Generate a server stub that calls the corresponding server function *)
 let generate_server_stub = function
-  | Define (n, Abstr (arg,_,_), `Server, _)
-  | Define (n, Rec ([_, (Abstr (arg,_,_)), _], Variable _, _), `Server, _) ->
-      let arglist = [arg] in
+  | Define (n, Abstr (arglist,_,_), `Server, _)
+  | Define (n, Rec ([_, (Abstr (arglist,_,_)), _], Variable _, _), `Server, _) ->
         Defs [n, Fn (arglist @ ["__kappa"], 
                  Call(Call (Var "_remoteCall", [Var "__kappa"]),
                       [strlit n; Dict (
@@ -452,20 +451,20 @@ let rec generate : 'a expression' -> code =
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn(["__kappa"], 
-         callk_yielding (Fn ([arglist; "__kappa"], Call(generate body, [Var "__kappa"]))))
-        
-  | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
+         callk_yielding (Fn (arglist@ ["__kappa"], Call(generate body, [Var "__kappa"]))))
+
+  | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
       let l_cps = generate l in
       let r_cps = generate r in
         Fn(["__kappa"], 
            Call(l_cps, [Fn(["__l"],
                 Call(r_cps, [Fn(["__r"],
                      callk_yielding (Binop (Var "__l", binop_name op, Var "__r")))]))]))
-  | Apply (f, p, _  ) -> 
+   | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
       let f_cps = generate f in
       let f_name = gensym ~prefix:"__f" () in
-      let arglist = [p] in
+      let arglist = p in
       let cps_args = map generate arglist in
       let arg_names = map (fun _ -> gensym ~prefix:"__f" ()) arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
@@ -480,11 +479,11 @@ let rec generate : 'a expression' -> code =
               Call(Var f_name,
                    (map (fun name -> Var name) arg_names) @ [kappa])
           | _ ->
-              apply_yielding (f_name, (map (fun name -> Var name) arg_names) @ [kappa])
+              apply_yielding (f_name, [Lst (map (fun name -> Var name) arg_names); kappa])
       in
-      let arg_tower = fold_right wrap_cps_terms 
-        (combine cps_args arg_names)
-        innermost_call in
+      let arg_tower = 
+        fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call
+      in
         Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
 
   (* Binding *)
@@ -764,13 +763,13 @@ and generate_direct_style : 'a expression' -> code =
   | Xml_node _ -> failwith "not implemented handling of XML in native functions yet"
   (* Functions *)
   | Abstr (arglist, body, _) ->
-      Fn ([arglist], gd body)
+      Fn (arglist, gd body)
         
-  | Apply (Apply (Variable (op, _), l, _), r, _) when mem_assoc op builtins -> 
+  | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
       Binop(gd l, binop_name op, gd r)
 
-  | Apply (f, p, _  ) ->
-      Call(gd f, [gd p])
+  | Apply (f, ps, _  ) ->
+      Call(gd f, map gd ps)
 
   (* Binding *)
   | Define _ as d -> gcps d (* surely this isn't right! *)
@@ -842,38 +841,36 @@ and generate_direct_style : 'a expression' -> code =
 (* Generate a native stub that calls the corresponding native function *)
 and generate_native_stub = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
-      let arglist = [arg] in
+      let arglist = arg in
         Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style body))]
   | e -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
       
-module StringSet = Set.Make(String)
-
-let set_from_list l =
-  fold_left StringSet.union StringSet.empty (map (StringSet.singleton) l)
-
-let rec freevars = function
-  | Var x -> StringSet.singleton x
-  | Defs _ -> StringSet.empty
-  | Fn(args, body) -> StringSet.diff (freevars body) (set_from_list args)
-  | Call(func, args) -> 
-      (fold_left StringSet.union  (freevars func) (map freevars args))
-  | Binop (lhs, _, rhs) -> StringSet.union (freevars lhs) (freevars rhs)
-  | Cond(a, b, c) -> StringSet.union (StringSet.union (freevars a) (freevars b)) (freevars c)
-  | Dict(terms) -> fold_left StringSet.union StringSet.empty (map snd (alistmap freevars terms))
-  | Lst(terms) ->  fold_left StringSet.union StringSet.empty (map freevars terms)
-  | Bind(var, src, body) -> StringSet.union (freevars src) (StringSet.remove var (freevars body))
-  | Seq(first, rest) -> StringSet.union (freevars first) (freevars rest)
-  | Ret(e) -> freevars e
-  | _ -> StringSet.empty
+let rec freevars = 
+  let fv = freevars in
+  let module S = StringSet in function
+  | Var x               -> S.singleton x
+  | Defs _              -> S.empty
+  | Fn (args, body)     -> S.diff (fv body) (S.from_list args)
+  | Call (func, args)   -> S.union (fv func) (S.union_all (map fv args))
+  | Binop (l, _, r)     -> S.union (fv l) (fv r)
+  | Cond (a, b, c)      -> S.union (S.union (fv a) (fv b)) (fv c)
+  | Dict terms          -> S.union_all (map (snd ->- fv) terms)
+  | Lst terms           -> S.union_all (map fv terms)
+  | Bind (var, e, body) -> S.union (fv e) (S.remove var (fv body))
+  | Seq (l, r)          -> S.union (fv l) (fv r)
+  | Lit _ 
+  | Die _ 
+  | Nothing             -> S.empty
+  | _ -> assert false
 
 (* FIXME: There is some problem with this whereby variables are captured *)
 let rec replace' var replcmt fvs = function
   | Var x when x = var -> replcmt
   | Defs defs -> Defs(alistmap (replace' var replcmt (freevars replcmt)) defs)
-  | Fn(args, body) when not(mem var args) -> 
+  | Fn(args, body) when not (mem var args) -> 
       (* this may be unnecessary, if whole expr. is uniquified previously *)
      let args, body =
-        if StringSet.is_empty (StringSet.inter (set_from_list args) fvs)
+        if StringSet.is_empty (StringSet.inter (StringSet.from_list args) fvs)
         then (args, body) else
           uniquify_args(args, body)
      in
@@ -893,7 +890,6 @@ let rec replace' var replcmt fvs = function
                                    else body)
   | Seq(first, second) -> Seq(replace' var replcmt fvs first,
                               replace' var replcmt fvs second)
-  | Ret(e) -> Ret(replace' var replcmt fvs e)
   | simple_expr -> simple_expr
 and replace var expr body = replace' var expr (freevars expr) body
 and uniquify_args = function
@@ -905,41 +901,31 @@ and uniquify_args = function
            subst body)
 
 (* reduce administrative redexes *)
-let rec simplify = function
+let rec simplify : Rewrite_code.rewriter = function
   (* beta reduction *)
   | Call(Fn([formal_arg], body), [actual_arg])
   | Call(Var "_yieldCont", [Fn([formal_arg], body); actual_arg])
-      when Str.string_match (Str.regexp "^__") formal_arg 0
-    ->
-      replace formal_arg actual_arg body
-
-  | Call(Var "_idy", [arg]) -> arg
+      when Str.string_match (Str.regexp "^__") formal_arg 0 ->
+      Some (replace formal_arg actual_arg body)
+  | Call(Var "_idy", [arg]) -> Some arg
 
   (* eta reduction *)
   | Fn([arg], Call(f, [Var arg']))
       when arg = arg' && Str.string_match (Str.regexp "^__") arg 0
     ->
-      f
+      Some f
+  | _ -> None
 
-      (* The other cases are just compatible closure *)
-  | Call(f, args) -> Call(simplify f, map (simplify) args )
-  | Defs defs -> Defs(alistmap (simplify) defs)
-  | Fn(args, body) -> Fn(args, simplify body)
-  | Binop(lhs, op, rhs) -> Binop(simplify lhs, op, simplify rhs)
-  | Cond(test, yes, no) ->  Cond(simplify test, simplify yes, simplify no)
-  | Dict(terms) -> Dict(alistmap (simplify) terms)
-  | Lst(terms) -> Lst(map (simplify) terms)
-  | Bind(name, expr, body) -> Bind(name, simplify expr, simplify body)
-  | Seq(first, second) -> Seq(simplify first, simplify second)
-  | Ret(e) -> Ret(simplify e)
-  | simple_expr -> simple_expr
+let simplify_throughout code =
+  fromOption code (Rewrite_code.bottomup simplify code)
 
 let rec iterate_to_fixedpoint f x =
   let x' = f x in
     if x = x' then x
     else iterate_to_fixedpoint f x'
 
-let simplify_completely = iterate_to_fixedpoint simplify
+
+let simplify_completely = iterate_to_fixedpoint simplify_throughout
 
 let rec eliminate_admin_redexes = 
   simplify_completely (* ->-
@@ -981,7 +967,7 @@ let wordify x =
 let symbolp name =
   List.for_all (flip List.mem symbols) (explode name) &&
     (if Settings.get_value js_rename_builtins then true
-     else (not (List.mem_assoc name !Library.value_env)))
+     else (not (Library.is_primitive name)))
 
 let wordify_rewrite : RewriteSyntax.rewriter = function
   | Define (name, b,l,t) when symbolp name -> Some (Define (wordify name, b, l, t))

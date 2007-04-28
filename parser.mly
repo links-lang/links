@@ -26,7 +26,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 
 %token END
 %token EQ IN 
-%token FUN RARROW RARROWMBL RARROWMBR VAR
+%token FUN RARROW MINUSLBRACE RBRACERARROW VAR OP
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN
@@ -140,10 +140,10 @@ fun_declaration:
 | signature tlfunbinding                                       { annotate $1 $2 }
 
 tlfunbinding:
-| FUN VARIABLE arg_list perhaps_location block                 { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| FUN pattern op pattern perhaps_location block                { ($3, (FunLit (Some $3, [$2; $4], $6), pos()), $5), pos() }
-| FUN PREFIXOP pattern perhaps_location block                  { ($2, (FunLit (Some $2, [$3], $5), pos()), $4), pos() }
-| FUN pattern POSTFIXOP perhaps_location block                 { ($3, (FunLit (Some $3, [$2], $5), pos()), $4), pos() }
+| FUN VARIABLE arg_lists perhaps_location block                { ($2, (FunLit (Some $2, $3, $5), pos()), $4), pos() }
+| OP pattern op pattern perhaps_location block                 { ($3, (FunLit (Some $3, [[$2; $4]], $6), pos()), $5), pos() }
+| OP PREFIXOP pattern perhaps_location block                   { ($2, (FunLit (Some $2, [[$3]], $5), pos()), $4), pos() }
+| OP pattern POSTFIXOP perhaps_location block                  { ($3, (FunLit (Some $3, [[$2]], $5), pos()), $4), pos() }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { ($2, $5, $3), pos() }
@@ -190,11 +190,11 @@ atomic_expression:
 | parenthesized_thing                                          { $1 }
 
 primary_expression:
-| atomic_expression                                           { $1 }
+| atomic_expression                                            { $1 }
 | LBRACKET RBRACKET                                            { ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { ListLit $2, pos() } 
 | xml                                                          { $1 }
-| FUN arg_list block                                           { FunLit (None, $2, $3), pos() }
+| FUN arg_lists block                                          { FunLit (None, $2, $3), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { ConstructorLit($1, None), pos() }
@@ -511,14 +511,10 @@ database_expression:
 | table_expression                                             { $1 }
 | DATABASE atomic_expression perhaps_db_driver                 { DatabaseLit ($2, $3), pos() }
 
-arg_list:
-| parenthesized_pattern                                        { [$1] }
-| parenthesized_pattern arg_list                               { $1 :: $2 }
-
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { Binding ($2, $4), pos() }
 | exp SEMICOLON                                                { $1 }
-| FUN VARIABLE arg_list block                                  { FunLit (Some $2, $3, $4), pos() }
+| FUN VARIABLE arg_lists block                                 { FunLit (Some $2, $3, $4), pos() }
 
 bindings:
 | binding                                                      { [$1] }
@@ -553,23 +549,27 @@ just_datatype:
 
 datatype:
 | mu_datatype                                                  { $1 }
-| mu_datatype RARROW datatype                                  { FunctionType ($1,
+| parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
                                                                                Sugar.fresh_type_variable (),
                                                                                $3) }
-| mu_datatype RARROWMBL datatype RARROWMBR datatype            { FunctionType ($1,
+| parenthesized_datatypes 
+       MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
                                                                                TypeApplication ("Mailbox", [$3]),
                                                                                $5) }
-
-
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
 | primary_datatype                                             { $1 }
 
-primary_datatype:
-| LPAREN RPAREN                                                { UnitType }
-| LPAREN datatype RPAREN                                       { $2 }
-| LPAREN datatype COMMA datatypes RPAREN                       { TupleType ($2 :: $4) }
+parenthesized_datatypes:
+| LPAREN RPAREN                                                { [] }
+| LPAREN datatypes RPAREN                                      { $2 }
 
+
+primary_datatype:
+| parenthesized_datatypes                                      { match $1 with
+                                                                   | [] -> UnitType
+                                                                   | [t] -> t
+                                                                   | ts  -> TupleType ts }
 | LPAREN fields RPAREN                                         { RecordType $2 }
 
 | TABLEHANDLE LPAREN datatype COMMA datatype RPAREN            { TableType ($3, $5) }
@@ -695,3 +695,11 @@ patterns:
 labeled_patterns:
 | record_label EQ pattern                                   { [($1, $3)] }
 | record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
+
+multi_args:
+| LPAREN patterns RPAREN                                    { $2 }
+| LPAREN RPAREN                                             { [] }
+
+arg_lists:
+| multi_args { [$1] }
+| multi_args arg_lists { $1 :: $2 }

@@ -87,7 +87,26 @@ module StringMapUtils = MapUtils(StringMap)
 let superimpose a b = 
   StringMap.fold StringMap.add b a
 
-module StringSet = Set.Make(String)
+module Set (Ord : Set.OrderedType) :
+sig
+  include Set.S with type elt = Ord.t 
+                and type t = Set.Make(Ord).t
+  
+  val singleton : elt -> t
+  val union_all : t list -> t
+  val from_list : elt list -> t
+end =
+struct
+  include Set.Make(Ord)
+  let singleton s = add s empty
+  let union_all sets = List.fold_right union sets empty
+  let from_list l = List.fold_right add l empty
+end
+
+
+
+
+module StringSet = Set(String)
 module Show_stringset = Show.Show_set(String)(Primitives.Show_string)
 
 (*** int environments ***)
@@ -97,7 +116,7 @@ struct
   let compare : int -> int -> int = compare
 end
 module IntMap = Map.Make(OrderedInt)
-module IntSet = Set.Make(OrderedInt)
+module IntSet = Set(OrderedInt)
 
 module Show_intset = Show.Show_set(OrderedInt)(Primitives.Show_int)
 
@@ -171,11 +190,17 @@ struct
       | []   -> raise (Invalid_argument "unsnoc")
           
   (** [last list]: Return the last element of a list *)
-  let last l = snd (unsnoc l)
+  let last l = 
+    try 
+      snd (unsnoc l)
+    with Invalid_argument _ -> invalid_arg "last"
     
   (** [butlast list]: Return a copy of the list with the last element removed. *)
-  let butlast l = fst (unsnoc l)
-    
+  let butlast l = 
+    try
+      fst (unsnoc l)
+    with Invalid_argument _ -> invalid_arg "butlast"
+
   (** Convert a (bivalent) less-than function into a (three-valued)
       comparison function. *)
   let less_to_cmp less l r = 

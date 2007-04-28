@@ -7,6 +7,14 @@ open Result
 open Query
 open Syntax
 
+(* call client function and exit *)
+let invoke_client_function name continuation args =
+  let call = Json.jsonize_call continuation name args in
+    print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode call);
+    exit 0
+      
+
+
 (** {0 Environment handling} *)
 
 (** bind env var value 
@@ -161,7 +169,6 @@ and scheduler globals state stepf =
     end
   else
     stepf()
-
 and apply_cont (globals : environment) : continuation -> result -> result = 
   fun cont value ->
     let stepf() = 
@@ -188,36 +195,57 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                         ((Recv locals::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | (FuncArg(param, locals)) ->
-	        (* Just evaluate [param]; "value" is in fact a function
+            | FuncArg([], locals) -> assert false
+            | FuncArg(param::params, locals) ->
+	        (* Just evaluate the first parameter; "value" is in fact a function
 	           value which will later be applied *)
-                interpret globals locals param
-	          (FuncApply(value, locals) :: cont)
+                interpret globals locals param (FuncApply (locals, value, params, [])::cont)
             | (FuncApplyFlipped(locals, arg)) ->
-                apply_cont globals (FuncApply(value, locals) :: cont) arg
-            | (FuncApply(func, locals)) ->  
-               (match func with
-                    (* FIXME: functional abstractions no longer capture
-                       global variables; remove the fnglobals element here. *)
-                   | `Function (var, fnlocals, fnglobals, body) ->
-		       (* Interpret the body in the following environments:
-		          locals are augmented with function locals and
-		          function binding (binding takes precedence)
-		          toplevel environment in which the function
-		          was defined takes precedence over the real current
-                          globals. Is there a semanticist in the house? *)
-                       (*let locals = bind (trim_env (fnlocals @ locals @ fnglobals)) var value in*)
-                       let locals = trim_env (fnlocals @ locals) in 
-                       let locals = bind locals var value in
-                         interpret globals locals body cont
-		           
-                   | `PFunction (name, pargs) ->
-		       Library.apply_pfun (apply_cont globals) cont name (pargs @ [value])
-	           | `Continuation (cont) ->
-		       (* Here we throw out the other continuation. *)
-		       apply_cont globals cont value
-                   | _ -> raise (Runtime_error ("Applied non-function value: "^
-                                                    string_of_result func)))
+                apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
+            | ThunkApply locals ->
+                begin match value with
+                  | `Function (vars, fnlocals, (), body) -> 
+                      interpret globals (trim_env (fnlocals @ locals)) body cont
+                  | `PrimitiveFunction name ->
+                      apply_cont globals cont (Library.apply_pfun name [])
+                  | `ClientFunction name ->
+                      invoke_client_function name cont []
+                  | _ -> raise (Runtime_error ("error applying zero-argument function "^
+                                                 string_of_result value))
+                end
+            | FuncApply(locals, func, unevaluated_args, evaluated_args) ->  
+                begin match func, unevaluated_args with
+                  | _, arg::args -> 
+                      interpret globals locals arg
+                        (FuncApply (locals, func, args, value::evaluated_args)::cont)
+                  | `Function (vars, fnlocals, (), body), [] ->
+                      (* FIXME: functional abstractions no longer capture
+                         global variables; remove the fnglobals element here. *)
+                      
+		      (* Interpret the body in the following
+		         environments: locals are augmented with
+		         function locals and function binding (binding
+		         takes precedence) toplevel environment in
+		         which the function was defined takes
+		         precedence over the real current globals. Is
+		         there a semanticist in the house? *)
+                      
+                      let locals = trim_env (fnlocals @ locals) in
+                      let locals = fold_left2 bind locals vars (List.rev (value::evaluated_args))
+                      in
+                        interpret globals locals body cont
+
+                  | `PrimitiveFunction name, [] ->
+                      apply_cont globals cont (Library.apply_pfun name  (List.rev (value::evaluated_args)))
+
+                  | `ClientFunction name, [] ->
+                      invoke_client_function name cont (List.rev (value::evaluated_args))
+	          | `Continuation (cont), [] ->
+		      (* Here we throw out the other continuation. *)
+                      apply_cont globals cont value
+                  | _ -> raise (Runtime_error ("Applied non-function value: "^
+                                                 string_of_result func))
+                end
             | (LetCont(locals, variable, body)) ->
 	        interpret globals (bind locals variable value) body cont
             | (BranchCont(locals, true_branch, false_branch)) ->
@@ -403,10 +431,12 @@ fun globals locals expr cont ->
 	apply_cont globals cont value
   | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
-  | Syntax.Apply (Variable ("recv", _), Record_intro (fields, None, _), _) when StringMap.is_empty fields ->
+  | Syntax.Apply (Variable ("recv", _), [], _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
-  | Syntax.Apply (fn, param, _) ->
-      eval fn (FuncArg(param, locals) :: cont)
+  | Syntax.Apply (fn, [], _) ->
+      eval fn (ThunkApply locals::cont)
+  | Syntax.Apply (fn, params, _) ->
+      eval fn (FuncArg (params, locals)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
@@ -488,14 +518,8 @@ fun globals locals expr cont ->
       let cc = `Continuation cont in
         eval arg (FuncApplyFlipped(locals, cc) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->
-      eval (Apply (Variable ("sortBy", d), 
-                   Record_intro
-                     ((StringMap.add "1" byExpr
-                         (StringMap.add "2" list
-                            StringMap.empty)),
-                      None,
-                      d),
-                   d)) cont
+      eval (Apply (Variable ("sortBy", d), [byExpr; list], d)) cont
+        (* FIXME: does nothing; perhaps assert(false) here ? *)
         (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")

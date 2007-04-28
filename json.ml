@@ -54,7 +54,8 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `XML xmlitem -> json_of_xmlitem xmlitem
 
 let rec jsonize_result : Result.result -> string = function
-  | `PFunction _
+  | `PrimitiveFunction _
+  | `ClientFunction _
   | `Continuation _
   | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | #Result.primitive_value as p -> jsonize_primitive p
@@ -67,8 +68,11 @@ let rec jsonize_result : Result.result -> string = function
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
-let rec jsonize_call continuation name arg = 
-  Printf.sprintf "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__arg\":%s}" (encode_continuation continuation) name (jsonize_result arg)
+let rec jsonize_call continuation name args = 
+  Printf.sprintf 
+    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
+    (encode_continuation continuation) name 
+    (String.concat ", " (List.map jsonize_result args))
 
 let jsonize_result result = 
   Debug.if_set show_json

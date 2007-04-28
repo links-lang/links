@@ -298,7 +298,7 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
           (match make_sql bindings expr with
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))
-      | Syntax.Apply (Syntax.Apply (Syntax.Variable ("~", _), lhs, _), rhs, _)  ->
+      | Syntax.Apply (Syntax.Variable ("~", _), [lhs; rhs], _)  ->
           let left_binds, lhs = sep_assgmts bindings lhs in
           let right_binds, rhs = sep_assgmts bindings rhs in
             (match make_sql left_binds lhs, likify_regex right_binds rhs with

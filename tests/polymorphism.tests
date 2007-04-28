@@ -17,33 +17,33 @@ stderr : @..*
 exit : 1
 
 Polymorphic recursion with signatures
-sig f : a -> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 }
+sig f : (a) -> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 }
 stdout : @fun : \([a-z]\) -> Int
 
 Invalid "polymorphic recursion"
-sig f : a -> Int fun f(x) { x == 1; f("a"); f(1); 1 }
+sig f : (a) -> Int fun f(x) { x == 1; f("a"); f(1); 1 }
 stderr : @..*
 exit : 1
 
 Polymorphic mutual recursion [1]
-sig f : a -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : a -> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 }
+sig f : (a) -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 }
 stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic mutual recursion [2]
-sig f : a -> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : a -> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 }
+sig f : (a) -> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 }
 stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic mutual recursion [3]
-sig f : a -> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : a -> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } 
+sig f : (a) -> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } 
 stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic mutual recursion [4]
-sig f : a -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : a -> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 }
+sig f : (a) -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 }
 stderr : @..*
 exit : 1
 
 Polymorphic row recursion
-sig h : (|a) ->  Int fun h(x) {h((x,x))}
+sig h : ((|a)) ->  Int fun h(x) {h((x,x))}
 stdout : @fun : \(|[a-z]+\) -> Int
 
 Polymorphic functions

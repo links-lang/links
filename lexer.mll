@@ -173,6 +173,7 @@ let keywords = [
  "mu"       , MU; 
  "native"   , NATIVE;
  "orderby"  , ORDERBY;
+ "op"       , OP; 
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "server"   , SERVER; 
@@ -227,8 +228,8 @@ rule lex optable lexers nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
-  | "-{"                                { RARROWMBL }
-  | "}->"                               { RARROWMBR }
+  | "-{"                                { MINUSLBRACE }
+  | "}->"                               { RBRACERARROW }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }

@@ -15,7 +15,7 @@ deriving (Show)
 type web_request = ContInvoke of continuation * query_params
                    | ExprEval of Syntax.expression * environment
                    | ClientReturn of continuation * result
-                   | RemoteCall of result * result
+                   | RemoteCall of result * result list
                    | CallMain
                        deriving (Show)
 (*
@@ -87,14 +87,17 @@ let read_and_optimise_program prelude env arg
   else
     read_and_optimise_program prelude env arg
 
-let serialize_call_to_client (continuation, name, arg) = 
-  Json.jsonize_call continuation name arg
-
 let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string
 
-let untuple_single = function
-  | `Record ["1",arg] -> arg
-  | r -> r
+let untuple r =
+  let rec un n accum list = 
+    match List.partition (fst ->- (=) (string_of_int n)) list with
+      | [_,item], rest -> un (n+1) (item::accum) rest
+      | [], [] -> List.rev accum
+      | _ -> assert false
+  in match r with
+    | `Record args -> un 1 [] args
+    | _ -> assert false
 
 let stubify_client_funcs globals env : Result.environment = 
   let is_server_fun = function
@@ -105,27 +108,22 @@ let stubify_client_funcs globals env : Result.environment =
     | e  -> failwith ("Unexpected non-definition in environment : " 
 		      ^ Syntax.Show_expression.show e)
   in 
-  let server_env, client_env = List.partition is_server_fun env in
-    List.iter (function
+  let server_defs, client_defs = List.partition is_server_fun env in
+  let client_env =
+    List.map (function
                  | Syntax.Define (name, _, _, _)
                  | Syntax.Alien (_, name, _, _) -> 
-		      let f (_, cont, arg) =
-			let call = serialize_call_to_client (cont, name, arg) in
-			  (print_endline ("Content-type: text/plain\n\n" ^ 
-					    Utility.base64encode call);
-			   exit 0)
-		      in 
-                        Library.value_env := (name,`PFun f):: !Library.value_env)
-      client_env;
-    match server_env with 
+                     (name, `ClientFunction name)) client_defs in
+    match server_defs with 
         [] -> []
       | server_env -> (* evaluate the definitions to get Result.result values. *)
           fst (Interpreter.run_program globals [] server_env)
+            @ client_env
 
 let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
-  let args = untuple_single (parse_json args) in
+  let args = untuple (parse_json args) in
     RemoteCall(List.assoc fname env, args)
 
 let decode_continuation (cont : string) : Result.continuation =
@@ -177,7 +175,7 @@ let client_return_req cgi_args =
   let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
   let parse_json_b64 = parse_json -<- Utility.base64decode in
   let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
-    ClientReturn(continuation, untuple_single arg)
+    ClientReturn(continuation, arg)
 
 let error_page_stylesheet = 
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block; padding:1em;}</style>"
@@ -210,12 +208,16 @@ let perform_request
           (Utility.base64encode 
              (Json.jsonize_result 
                 (Interpreter.apply_cont_safe globals cont value)))
-    | RemoteCall(func, arg) ->
-        let cont = [Result.FuncApply (func, [])] in
+    | RemoteCall(func, args) ->
+        let cont, value = 
+          match args with
+            | [] -> [Result.ThunkApply []], func
+            | _::_ -> [Result.FuncApply ([], func, [], (butlast args))], (last args)
+        in
 	  print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode
                (Json.jsonize_result 
-                  (Interpreter.apply_cont_safe globals cont arg)))
+                  (Interpreter.apply_cont_safe globals cont value)))
     | CallMain -> 
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
@@ -236,7 +238,7 @@ let serve_request prelude (valenv, typenv) filename =
       (lazy (stubify_client_funcs valenv defs)) in
     let cgi_args =
       if is_multipart () then
-        List.map (fun (name, {Cgi.filename=_; Cgi.content_type=_; Cgi.value=value}) ->
+        List.map (fun (name, {Cgi.value=value}) ->
                     (name, value)) (Cgi.parse_multipart_args ())
       else
         Cgi.parse_args () in

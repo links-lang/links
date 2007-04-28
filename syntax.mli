@@ -15,10 +15,10 @@ type 'a expression' =
   | TypeDecl of (string * int list * Types.datatype * 'a)
   | Constant of (constant * 'a)
   | Variable of (string * 'a)
-  | Apply of ('a expression' * 'a expression' * 'a)
+  | Apply of ('a expression' * 'a expression' list * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)
   | Comparison of ('a expression' * comparison * 'a expression' * 'a)
-  | Abstr of (string * 'a expression' * 'a)
+  | Abstr of (string list * 'a expression' * 'a)
   | Let of (string * 'a expression' * 'a expression' * 'a)
   | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
@@ -48,7 +48,7 @@ type position = Lexing.position * string * string
 type untyped_data = [`U of position]
 
 type typed_data = [`T of (position * Types.datatype * label option)]
-type expression = [`T of (position * Types.datatype * label option)] expression' deriving (Typeable, Show, Pickle, Eq, Shelve)
+type expression = [`T of (position * Types.datatype * label option)] expression' deriving (Typeable, Show, Eq)
 
 type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression' deriving (Show)

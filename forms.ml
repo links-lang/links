@@ -73,7 +73,7 @@ let serialise_exprenv expr env : string =
 
 let rec is_trivial_apply_aux = function
     Variable(_, _) -> true
-  | Apply(e, Variable(_, _), _) -> is_trivial_apply_aux e
+  | Apply(e, [Variable(_, _)], _) -> is_trivial_apply_aux e
   | _ -> false
 
 let is_trivial_apply = function
@@ -87,7 +87,7 @@ let rec is_variable = function
 
 let rec is_simple_apply_aux = function
     Variable(_, _) -> true
-  | Apply(e, a, _) -> is_simple_apply_aux e && (is_variable a(*  || is_tuple a *))
+  | Apply(e, [a], _) -> is_simple_apply_aux e && (is_variable a(*  || is_tuple a *))
   | _ -> false
 
 let is_simple_apply = function
@@ -96,7 +96,7 @@ let is_simple_apply = function
 
 let rec list_of_appln = function
     Variable _ as v -> [v]
-  | Apply(e, arg, _) -> list_of_appln e @ [arg]
+  | Apply(e, args, _) -> list_of_appln e @ args
 
 let rec simplify lookup = function
   | Variable (x, _) as expr -> 
@@ -107,7 +107,7 @@ let rec simplify lookup = function
        with
            Not_found -> failwith("at runtime, " ^ x ^ 
                                    " was not declared."))
-  | Apply(f, a, d) -> Apply(simplify lookup f, simplify lookup a, d)
+  | Apply(f, a, d) -> Apply(simplify lookup f, List.map (simplify lookup) a, d)
   | expr -> expr
 
 let rec value_of_simple_expr lookup = function

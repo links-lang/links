@@ -59,7 +59,7 @@ let rec directives =
         iter (fun (v, k) ->
                      Printf.fprintf stderr " %-16s : %s\n"
                        v (Result.string_of_result k))
-          (filter (not -<- (flip mem_assoc !Library.value_env) -<- fst)  valenv);
+          (filter (not -<- Library.is_primitive -<- fst)  valenv);
      envs),
      "display the current value environment");
 

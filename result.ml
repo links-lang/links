@@ -138,8 +138,7 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type comparison = Syntax.comparison deriving (Typeable, Show, Pickle, Eq, Shelve)
-type binop = [ `Union | `RecExt of string | `MkTableHandle of Types.row | comparison]
+type binop = [ `Union | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string
@@ -188,9 +187,10 @@ type primitive_value = [
 
 type contin_frame = 
   | Definition of (environment * string)
-  | FuncArg of (rexpr * environment) (* FIXME: This is twiddled *)
-  | FuncApply of (result * environment )  (* FIXME: This is twiddled *)
+  | FuncArg of (rexpr list * environment) (* FIXME: This is twiddled *)
+  | FuncApply of (environment * result * rexpr list * result list)
   | FuncApplyFlipped of (environment * result)
+  | ThunkApply of environment
   | LetCont of (environment * 
 		  string * rexpr)
   | BranchCont of (environment * 
@@ -217,8 +217,9 @@ type contin_frame =
 
   | Recv of (environment)
 and result = [
-  | `PFunction of (string * result list)
-  | `Function of  (string * environment (*locals*) * unit (*globals*) * rexpr)
+  | `PrimitiveFunction of string
+  | `ClientFunction of string
+  | `Function of  (string list * environment (*locals*) * unit (*globals*) * rexpr)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `List of (result list)
@@ -291,7 +292,7 @@ let links_project name = function
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let delay_expr expr = `Function(gensym (), [], (), expr)
+let delay_expr expr = `Function([], [], (), expr)
 
 let pp_continuation = Show_continuation.show
   
@@ -311,7 +312,8 @@ and charlist_as_string chlist =
     
 and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
-  | `PFunction (name, _) -> name
+  | `PrimitiveFunction (name) -> name
+  | `ClientFunction (name) -> name
   | `Function (_, _, _, Placeholder (str, _)) -> 
       "fun [" ^ Show_label.show str ^ "]"
     (* Choose from fancy or simple printing of functions: *)
@@ -365,9 +367,10 @@ and string_of_xresult = function
 
 let rec map_result result_f expr_f contframe_f : result -> result = function
   | #primitive_value as x -> result_f x
-  | `PFunction (str, pargs) ->
-      result_f(`PFunction(str, map (map_result result_f expr_f contframe_f) pargs))
-
+  | `PrimitiveFunction (str) ->
+      result_f (`PrimitiveFunction str)
+  | `ClientFunction (str) ->
+      result_f (`ClientFunction str)
   | `Function (str, locals, _globals, body) ->
       result_f(`Function(str, 
                          map_env result_f expr_f contframe_f locals,
@@ -378,15 +381,21 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
-and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = 
-  function
-    | Recv (env) -> contframe_f(Recv(map_env result_f expr_f contframe_f env))
-    | Definition (env, s) ->
-        contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
-  | FuncArg(arg, env) -> 
-      contframe_f(FuncArg((map_expr result_f expr_f contframe_f) arg, (map_env result_f expr_f contframe_f) env))
-  | FuncApply(f, env) -> 
-      contframe_f(FuncApply((map_result result_f expr_f contframe_f) f, (map_env result_f expr_f contframe_f) env))
+and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
+  | Recv (env) -> contframe_f(Recv(map_env result_f expr_f contframe_f env))
+  | Definition (env, s) ->
+      contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
+  | FuncArg(args, env) -> 
+      contframe_f 
+        (FuncArg (map (map_expr result_f expr_f contframe_f) args,
+                  map_env result_f expr_f contframe_f env))
+  | ThunkApply env ->
+      contframe_f (ThunkApply (map_env result_f expr_f contframe_f env))
+  | FuncApply(env, f, args, eargs) ->
+      contframe_f( FuncApply(map_env result_f expr_f contframe_f env,
+                             map_result result_f expr_f contframe_f f,
+                             map (map_expr result_f expr_f contframe_f) args,
+                             map (map_result result_f expr_f contframe_f) eargs))
   | FuncApplyFlipped(env, a) -> 
       contframe_f(FuncApplyFlipped((map_env result_f expr_f contframe_f) env,
                   (map_result result_f expr_f contframe_f) a))
@@ -423,11 +432,11 @@ and map_cont result_f expr_f contframe_f kappa =
 
 (** return a list of all the core-syntax expressions hidden within
     a result. A bit hackish. *)
-let rec extract_code_from_result = 
+let rec extract_code_from_result : result -> 'a expression' list = 
   function
     | #primitive_value -> []
-    | `PFunction (str, pargs) ->
-        concat_map (extract_code_from_result) pargs
+    | `PrimitiveFunction _ -> []
+    | `ClientFunction _ -> []
     | `Function (str, locals, _globals, body) ->
         extract_code_from_env locals @ [body]
     | `Record fields -> concat_map (snd ->- extract_code_from_result) fields
@@ -443,10 +452,14 @@ and extract_code_from_contframe =
     | Recv (env) -> extract_code_from_env env
     | Definition (env, s) ->
         extract_code_from_env env
-    | FuncArg(arg, env) ->
-        arg :: extract_code_from_env env
-    | FuncApply(f, env) -> 
-        extract_code_from_result f @ extract_code_from_env env
+    | FuncArg(args, env) ->
+        args @ extract_code_from_env env
+    | FuncApply(env, f, args, eargs) -> 
+        extract_code_from_env env
+        @ extract_code_from_result f
+        @ args
+        @ concat_map extract_code_from_result eargs
+    | ThunkApply env -> extract_code_from_env env
     | FuncApplyFlipped(env, a) -> 
         extract_code_from_result a @ extract_code_from_env env
     | LetCont(env, var, body) ->

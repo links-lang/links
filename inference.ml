@@ -848,54 +848,50 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   | Constant (value, `U pos) -> Constant (value, `T (pos, constant_type value, None))
   | Variable (name, `U pos) ->
       Variable (name, `T (pos, instantiate env name, None))
-  | Apply (f, p, `U pos) ->
+  | Apply (f, ps, `U pos) ->
       let f = type_check typing_env f in
-      let p = type_check typing_env p in
+      let ps = List.map (type_check typing_env) ps in
       let mb_type = instantiate env "_MAILBOX_" in
-
       let f_type = type_of_expression f in
-      let p_type = type_of_expression p in
+      let arg_type = make_tuple_type (List.map type_of_expression ps) in
       let return_type = ITO.fresh_type_variable () in
-
-      let _ =
-	try unify (`Function(p_type, mb_type, return_type), f_type)
-	with Unify_failure _ ->
-          mistyped_application pos (f, f_type) (p, type_of_expression p) (Some mb_type)
-      in
-	Apply (f, p, `T (pos, return_type, None))
+        begin
+          try
+            unify (`Function(arg_type, mb_type, return_type), f_type);
+            Apply (f, ps, `T (pos, return_type, None))
+          with Unify_failure _ ->
+            mistyped_application pos (f, f_type) (ps, List.map type_of_expression ps) (Some mb_type)
+        end
   | Condition (if_, then_, else_, `U pos) ->
       let if_ = type_check typing_env if_ in
-      let _ = (try unify (type_of_expression if_, `Primitive `Bool)
-               with Unify_failure _ -> mistype (pos_of_expression if_) (if_, type_of_expression if_) (`Primitive `Bool)) in
-      let then_expr = type_check typing_env then_ in
-      let else_expr = type_check typing_env else_ in
-      let _ = try 
-        unify (type_of_expression then_expr, type_of_expression else_expr)
-          (* FIXME: This can't be right!*)
-      with _ ->         
-        unify (type_of_expression else_expr, type_of_expression then_expr) in
-      let node' = Condition (if_, 
-                             then_expr,
-                             else_expr,
-                             `T (pos, 
-                               type_of_expression then_expr,
-                               None
-                             )) in
-        node'
+      let _ = 
+        try unify (type_of_expression if_, `Primitive `Bool)
+        with Unify_failure _ -> 
+          mistype
+            (pos_of_expression if_)
+            (if_, type_of_expression if_)
+            (`Primitive `Bool) in
+      let then_ = type_check typing_env then_ in
+      let else_ = type_check typing_env else_ in
+        unify (type_of_expression then_, type_of_expression else_);
+        Condition (if_, then_, else_, `T (pos, type_of_expression then_, None)) 
   | Comparison (l, oper, r, `U pos) ->
       let l = type_check typing_env l in
       let r = type_check typing_env r in
 	unify (type_of_expression l, type_of_expression r);
         Comparison (l, oper, r, `T (pos, `Primitive `Bool, None))
-  | Abstr (variable, body, `U pos) ->
-      begin
-	let variable_type = ITO.fresh_type_variable () in
-        let mb_type = ITO.fresh_type_variable () in
-	let body_env = (variable, ([], variable_type)) :: ("_MAILBOX_", ([], mb_type)) :: env in
-	let body = type_check (body_env, alias_env) body in
-	let type' = `Function (variable_type, mb_type, type_of_expression body) in
-	  Abstr (variable, body, `T (pos, type', None))
-      end
+  | Abstr (variables, body, `U pos) ->
+      let mb_type = ITO.fresh_type_variable () in
+      let mapping = map2 (fun n v -> (string_of_int n, v, ITO.fresh_type_variable ())) (fromTo 1 (1 + List.length variables)) variables in
+      let body_env = 
+        fold_right
+          (fun (_,v, vtype) env -> (v, ([], vtype)) :: env)
+          mapping
+          (("_MAILBOX_", ([], mb_type)) :: env) in          
+      let body = type_check (body_env, alias_env) body in
+      let tuple = make_tuple_type (List.map thd3 mapping) in
+      let type' = `Function (tuple, mb_type, type_of_expression body) in
+	Abstr (variables, body, `T (pos, type', None))
   | Let (variable, value, body, `U pos) ->
       let value = type_check typing_env value in
       let vtype = (if is_value value then (generalise env (type_of_expression value))
@@ -1090,15 +1086,11 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let arg = type_check typing_env arg in
       let contrettype = ITO.fresh_type_variable () in
       let anytype = ITO.fresh_type_variable () in
-        (* It'd be better if this mailbox didn't intrude here.
-           Perhaps there's some rewrite rule for `escape' that we
-           could use instead. 
-           (FIXME: What does this mean? --eekc 1/07)*)
       let mailboxtype = 
           instantiate env "_MAILBOX_" in
       let conttype =
-        `Function (contrettype, mailboxtype, anytype) in
-      let argtype = `Function (conttype, mailboxtype, contrettype) in
+        `Function (make_tuple_type [contrettype], mailboxtype, anytype) in
+      let argtype = `Function (make_tuple_type [conttype], mailboxtype, contrettype) in
         unify (argtype, type_of_expression arg);
         Call_cc(arg, `T (pos, contrettype, None))
   | Database (params, `U pos) ->

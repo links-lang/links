@@ -284,8 +284,8 @@ struct
 
 
   let rec compileB (env : Env.t) : expression -> baseexpr = function
-    | Apply (Variable ("not", _), b, _)  -> `Not ((trycompile "B" compileB) env b)
-    | Apply (Apply (Variable ("~", _), b, _), regex, _)  -> `Like ((trycompile "B" compileB) env b,
+    | Apply (Variable ("not", _), [b], _)  -> `Not ((trycompile "B" compileB) env b)
+    | Apply (Variable ("~", _), [b; regex], _)  -> `Like ((trycompile "B" compileB) env b,
                                                                    compileRegex regex)
     | Variable (v, _)                    -> 
         begin match Env.lookupv v env with
@@ -372,10 +372,10 @@ struct
     | e -> uncompilable e
 
   let rec compileE env : expression -> expr = function
-    | Apply (Variable ("take"|"drop" as f,_), Record_intro (args, None, _), _) as e -> 
-        begin match Prepare.unpack args, f with
-          | Some [Constant(Integer n, _); e], "take" -> `Take (n, (trycompile "E" compileE) env e)
-          | Some [Constant(Integer n, _); e], "drop" -> `Drop (n, (trycompile "E" compileE) env e)
+    | Apply (Variable ("take"|"drop" as f,_), [arg1; arg2], _) as e -> 
+        begin match (arg1, arg2), f with
+          | (Constant (Integer n,_), e), "take" -> `Take (n, (trycompile "E" compileE) env e)
+          | (Constant (Integer n,_), e), "drop" -> `Drop (n, (trycompile "E" compileE) env e)
           | _ -> uncompilable e end
     | e -> ((trycompile "S" compileS) env e :> expr)
 
