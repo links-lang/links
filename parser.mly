@@ -72,7 +72,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %start interactive
 %start file
 
-%type <Sugartypes.phrase list> file
+%type <Sugartypes.phrase list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
@@ -90,9 +90,9 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| declarations exp END                                          { $1 @ [$2] }
-| exp END                                                       { [$1] }
-| declarations END                                              { $1 }
+| declarations exp END                                          { $1, Some $2 }
+| exp END                                                       { [], Some $1 }
+| declarations END                                              { $1, None }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }

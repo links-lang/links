@@ -34,7 +34,6 @@ type 't meta_type_var_basis =
     | `Body of 't ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-(* this is what we should replace meta row vars with *)
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)

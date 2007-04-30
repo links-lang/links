@@ -126,6 +126,12 @@ module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults
 
 module Shelve_rexpr = Shelve.Shelve_primtype(Pickle_rexpr)(Eq_rexpr)(Typeable_rexpr)
 
+type rdef = definition
+    deriving (Show, Eq, Typeable)
+
+module Pickle_rdef = Pickle.Pickle_unpicklable (struct type a = rdef let tname = "rdef"  end)
+module Shelve_rdef = Shelve.Shelve_primtype(Pickle_rdef)(Eq_rdef)(Typeable_rdef)
+
 type unop = MkColl
             | MkVariant of string
             | MkDatabase
@@ -214,7 +220,7 @@ type contin_frame =
                 * rexpr list            (* unevaluated elements *)
                 )
   | Ignore of (environment * rexpr )
-
+  | IgnoreDef of (environment * rdef)
   | Recv of (environment)
 and result = [
   | `PrimitiveFunction of string
@@ -423,8 +429,12 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = f
                           alistmap (map_expr result_f expr_f contframe_f) attr_exprs, map (map_expr result_f expr_f contframe_f) elem_exprs))
   | Ignore(env, next) -> 
       contframe_f(Ignore((map_env result_f expr_f contframe_f) env, (map_expr result_f expr_f contframe_f) next))
+  | IgnoreDef(env, next) -> 
+      contframe_f(IgnoreDef((map_env result_f expr_f contframe_f) env, (map_def result_f expr_f contframe_f) next))
 and map_expr _ expr_f _ expr =
   expr_f expr
+and map_def _ expr_f _ = 
+  transform_def expr_f
 and map_env result_f expr_f contframe_f env =
   alistmap (map_result result_f expr_f contframe_f) env
 and map_cont result_f expr_f contframe_f kappa =
@@ -498,9 +508,25 @@ let expr_label_table (expr : Syntax.expression) =
 			     visit_children expr
 		    ) (fun (_, lists) -> concat lists) expr 
 
+let program_label_table program =
+  reduce_program 
+    (fun visit_children expr ->
+       match expression_data expr with
+	 | `T(_, _, Some label) ->
+             (label, expr) :: visit_children expr
+ 	 | `T(_, _, None) ->
+	     visit_children expr)
+    (fun (_, lists) -> concat lists)
+    (fun (_, lists) -> concat lists)
+    (fun (xs, x) -> concat (xs @ [x]))
+    program
+  
+
 let val_label_table value =
   let exprs = extract_code_from_result value in
     concat_map expr_label_table exprs
+
+
 
 (** resolve_label
     Given a label and a label table, return the expression having the
@@ -581,15 +607,16 @@ let unmarshal_continuation valenv program : string -> continuation
   = 
   (* a bit hackish: we need to extract all the core-syntax expressions
   from the valenv, since placeholders may make reference to them. *)
-  let table = (concat_map expr_label_table program
+  let table = (program_label_table program
                  @ concat_map val_label_table valenv) in
     Netencoding.Base64.decode
     ->- Pickle_continuation.unpickleS
     ->- resolve_placeholders_cont table 
+
 let unmarshal_exprenv valenv program : string -> (expression * environment)
   = let resolve (expr, env) =     
     try
-      let table = (concat_map expr_label_table program
+      let table = (program_label_table program
                    @ concat_map val_label_table valenv) in
         (resolve_placeholders_expr table expr, 
          resolve_placeholders_env table env) 

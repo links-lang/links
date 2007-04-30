@@ -713,7 +713,6 @@ module Desugarer =
    let desugar_datatype, desugar_row =
      let rec desugar ((tenv, renv) as var_env) =
        let lookup_type = flip StringMap.find tenv in
-(*       let extend = fun (name, value) -> StringMap.add name value varmap in*)
          function
            | TypeVar s -> (try `MetaTypeVar (lookup_type s)
                            with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
@@ -959,21 +958,13 @@ module Desugarer =
      | `List (p, e) -> p, e
      | `Table (p, e) -> p, (FnAppl ((Var ("asList"), pos), ([e], pos)), pos)
 
-   let desugar lookup_pos (e : phrase) : untyped_expression =
-     let _, ((tenv, renv) as var_env) = (generate_var_mapping -<- get_type_vars) e in
+   let desugar_expression' env lookup_pos (e : phrase) : untyped_expression =
+     let _, ((tenv, renv) as var_env) = env in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
-       let pos = `U (lookup_pos pos') in
-       let desugar = desugar' lookup_pos
-       and patternize : Sugartypes.ppattern -> simple_pattern = simple_pattern_of_pattern var_env lookup_pos in
- match s with
-           | TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
-               Define (name,
-                       Rec ([name, desugar (FunLit (None, patterns, body), pos'), Some (desugar_datatype var_env t)],
-                            Variable (name, pos),
-                            pos),
-                       loc,pos)
-           | TypeAnnotation ((Definition (name, rhs, loc), _), t)  -> 
-               Define (name, HasType(desugar rhs, desugar_datatype var_env t, pos),loc, pos)
+       let pos = `U (lookup_pos pos')
+       and patternize = simple_pattern_of_pattern var_env lookup_pos in
+       let desugar = desugar' lookup_pos in
+         match s with
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
            | FloatLit f  -> Constant(Float f, pos)
            | IntLit i    -> Constant(Integer i, pos)
@@ -1126,19 +1117,6 @@ module Desugarer =
                          RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos'
                in
                  Database (desugar e, pos)
-           | Definition (name, e, loc) -> Define (name, desugar e, loc, pos)
-           | TypeDeclaration (name, args, rhs) ->
-               let get_var arg =
-                 match (Unionfind.find (StringMap.find arg tenv)) with
-                   | `Flexible var | `Rigid var -> var
-                   | _ -> assert false
-               in
-                 if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
-                   TypeDecl (name,
-                             List.map get_var args,
-                             desugar_datatype var_env rhs, pos)
-                 else
-                   failwith ("Free variable(s) in alias")
            | RecordLit (fields, r) ->
                Record_intro (StringMapUtils.from_alist (alistmap desugar fields),
                              opt_map desugar r,
@@ -1194,9 +1172,6 @@ module Desugarer =
                                desugar (expr, epos),
                                `U (lookup_pos epos), false) es in
                polylets es (desugar exp)
-           | Foreign (language, name, datatype) -> 
-               Alien (language, name, desugar_assumption (generalize datatype), pos)
-           | InfixDecl -> unit_expression pos
            | SortBy_Conc(patt, expr, sort_expr) ->
                (match patternize patt with
                   | `Variable var, _ -> 
@@ -1265,9 +1240,10 @@ module Desugarer =
                let XmlForest trees, trees_ppos = formExpr in
                let result, _ = forest_to_form_expr trees (Some formHandler) pos trees_ppos in
                  result
+           | Definition _
+           | TypeDeclaration _
+           | Foreign _ -> assert false
 
-     (* TBD: Need to move the Links functions xml, pure, plug, (@@@)
-        into a Prelude of some kind. *)
      and forest_to_form_expr trees yieldsClause (pos:Syntax.untyped_data) 
          (trees_ppos) = 
        (* (TBD: could have a pass-through case for when there are no
@@ -1485,29 +1461,69 @@ module Desugarer =
                   `Record (string_of_int n, desugar patt, base), pos)
                ps
                (Utility.fromTo 1 (1 + List.length ps))
-               ((`Constant (unit_expression pos)), pos)
-       in let p = aux pat in
+               ((`Constant (unit_expression pos)), pos) in
+       let p = aux pat in
          begin
            check_for_duplicate_names p;
            p
          end
      in
-(*        (Debug.if_set show_sugared (Show_phrase.show e); *)
      let result = desugar' lookup_pos e in
        (Debug.if_set show_desugared (fun()-> string_of_expression result);
-       result)
+        result)
+
+   let desugar_expression lookup_pos e = desugar_expression' ((generate_var_mapping -<- get_type_vars) e) lookup_pos e
+
+   let desugar_definition lookup_pos ((s, pos') : phrase) : untyped_definition =
+     let _, ((tenv, _) as var_env) = (generate_var_mapping -<- get_type_vars) (s, pos') in
+     let pos = `U (lookup_pos pos') in
+     let desugar_expression = desugar_expression lookup_pos in
+     let ds = function
+       | TypeAnnotation ((Definition (name, (FunLit (Some _, patterns, body),_), loc), _), t)  -> 
+           Define (name,
+                   Rec ([name, desugar_expression (FunLit (None, patterns, body), pos'), Some (desugar_datatype var_env t)],
+                        Variable (name, pos),
+                        pos),
+                   loc,pos)
+       | TypeAnnotation ((Definition (name, rhs, loc), _), t)  -> 
+           Define (name, HasType(desugar_expression rhs, desugar_datatype var_env t, pos),loc, pos)
+       | Definition (name, e, loc) -> Define (name, desugar_expression e, loc, pos)
+       | TypeDeclaration (name, args, rhs) ->
+           let get_var arg =
+             match (Unionfind.find (StringMap.find arg tenv)) with
+               | `Flexible var | `Rigid var -> var
+               | _ -> assert false
+           in
+             if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
+               Alias (name,
+                      List.map get_var args,
+                      desugar_datatype var_env rhs, pos)
+             else
+               failwith ("Free variable(s) in alias")
+       | Foreign (language, name, datatype) -> 
+           Alien (language, name, desugar_assumption (generalize datatype), pos) in
+     let result = ds s
+     in
+       (Debug.if_set show_desugared (fun ()-> string_of_definition result);
+        result)
+
+   let desugar_definitions lookup_pos =
+     let rec desugar = function
+       | [] -> []
+       | (InfixDecl, _) :: phrases -> desugar phrases
+       | phrase :: phrases ->
+           desugar_definition lookup_pos phrase :: desugar phrases
+     in
+       desugar
 
    let desugar_datatype = generalize ->- desugar_assumption
 
  end : 
   sig 
-    val desugar : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
+    val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
+    val desugar_definitions : (pposition -> Syntax.position) -> phrase list -> Syntax.untyped_definition list
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
     val fresh_type_variable : unit -> Sugartypes.datatype
   end)
 
 include Desugarer
-
-type directive = string * string list
-type sentence = (phrase list, directive) either
-type sentence' = (untyped_expression list, directive) either

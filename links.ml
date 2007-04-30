@@ -71,10 +71,10 @@ let rec directives =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
-              let typingenv, exprs = Inference.type_program library_types program in
-              let exprs = Optimiser.optimise_program (typingenv, exprs) in
-              let exprs = map Syntax.labelize exprs in
-                (fst ((Interpreter.run_program libraries []) exprs), typingenv)
+              let typingenv, program = Inference.type_program library_types program in
+              let program = Optimiser.optimise_program (typingenv, program) in
+              let program = Syntax.labelize program in
+                (fst ((Interpreter.run_program libraries []) program), typingenv)
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
 
@@ -115,22 +115,22 @@ let print_result rtype result =
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
-(** type, optimise and evaluate a list of expressions *)
-let process_one ?(printer=print_result) (valenv, typingenv) exprs = 
-  let typingenv, exprs = lazy (Inference.type_program typingenv exprs) 
+(** type, optimise and evaluate a program *)
+let process_program ?(printer=print_result) (valenv, typingenv) program = 
+  let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
-  let exprs = lazy (Optimiser.optimise_program (typingenv, exprs))
+  let program = lazy (Optimiser.optimise_program (typingenv, program))
     <|measure_as|> "optimise_program" in
-  let exprs = map Syntax.labelize exprs in
-  let valenv, result = lazy (Interpreter.run_program valenv [] exprs)
+  let Syntax.Program (_, body) as program = Syntax.labelize program in
+  let valenv, result = lazy (Interpreter.run_program valenv [] program)
     <|measure_as|> "run_program" 
   in
-    printer (Syntax.node_datatype (last exprs)) result;
-    (valenv, typingenv), result, exprs
+    printer (Syntax.node_datatype body) result;
+    (valenv, typingenv), result, program
 
 (* Read Links source code, then type, optimize and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse envs = 
-  handle_errors (measure "parse" parse ->- process_one envs)
+let evaluate ?(handle_errors=Errors.display_fatal) parse program = 
+  handle_errors (measure "parse" parse ->- process_program program)
 
 (* Interactive loop *)
 let interact envs =
@@ -146,19 +146,24 @@ let interact envs =
            (match measure "parse" parse input with 
               | `Definitions [] -> envs
               | `Definitions defs -> 
-                  let (valenv, _ as envs), _, exprs = process_one ~printer:(fun _ _ -> ()) envs defs  
-                  in ListLabels.iter exprs
+                  let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =
+                    process_program
+                      ~printer:(fun _ _ -> ())
+                      envs
+                      (Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position)))
+                  in
+                    ListLabels.iter defs'
                        ~f:(function
                              | Syntax.Define (name, _, _, _) as d -> 
                                  prerr_endline (name
                                                 ^" = "^
                                                 Result.string_of_result (List.assoc name valenv)
                                                 ^" : "^ 
-                                                Types.string_of_datatype (Syntax.node_datatype d))
+                                                Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
               | `Expression expr -> 
-                  let envs, _, _ = process_one envs [expr] in envs
+                  let envs, _, _ = process_program envs (Syntax.Program ([], expr)) in envs
               | `Directive directive -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
@@ -207,10 +212,10 @@ let main () =
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
   (* load prelude: *)
-  let prelude_types, prelude =
+  let prelude_types, (Syntax.Program (prelude, _)) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
-  let (prelude_compiled, _) = Interpreter.run_program [] [] prelude in
+  let prelude_compiled = Interpreter.run_defs [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 
          (stdvalenv @ prelude_compiled,

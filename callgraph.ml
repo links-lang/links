@@ -54,7 +54,7 @@ let find_defn_in x y = defn_of y x
     bindings are only determined within the original groupings; how
     does this work with redefined function names that are part of
     mut-rec call groups? )*)
-let refine_def_groups (expr_lists : 'a expression' list list) : 'a expression' list list = 
+let refine_def_groups (def_lists : 'a definition' list list) : 'a definition' list list = 
   let regroup_defs defs = 
     let bindings = defs_to_bindings defs in
     let cliques = group_and_order_bindings_by_callgraph bindings in
@@ -65,7 +65,7 @@ let refine_def_groups (expr_lists : 'a expression' list list) : 'a expression' l
        concat_map to bring them together *)
     concat_map (function
                   | Define _ :: _ as defs -> regroup_defs defs
-                  | e                     -> [e]) expr_lists
+                  | e                     -> [e]) def_lists
       
 
 (** Removes defs from [env] that aren't used by [expr]. *)
@@ -74,35 +74,35 @@ struct
   type clique = {
     free_names : string list;
     exposed_names : string list;
-    defs : expression list
+    defs : definition list
   }
 
-  let elim_dead_defs globals env expr =
+  let elim_dead_defs globals (Syntax.Program (defs, expr)) =
     let filter_globals = filter (fun name -> not (mem name globals)) in
-    let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) env in
+    let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) defs in
     let groupings = refine_def_groups [defs] in
-    let clique_info = map (fun exprs ->
-                             {free_names = filter_globals (concat_map freevars exprs);
-                              exposed_names = map fst (defs_to_bindings exprs);
-                              defs = exprs}) groupings 
+    let clique_info = map (fun defs ->
+                             {free_names = filter_globals (concat_map freevars_def defs);
+                              exposed_names = map fst (defs_to_bindings defs);
+                              defs = defs}) groupings
     and expr_info = { free_names =  filter_globals (freevars expr);
                       exposed_names = [];
                       defs = [] } in
 
-    let rec close env = 
-        match env.free_names with 
+    let rec close env =
+        match env.free_names with
           | [] -> env
-          | names -> 
+          | names ->
               let defines name {exposed_names = names} = List.mem name names in
               let defining_cliques =  List.map (fun name -> List.find (defines name) clique_info) names in
                 close (List.fold_right (fun clique env ->
                                           let exposed_names = env.exposed_names @ clique.exposed_names in
-                                            { free_names = List.filter (fun name -> not (List.mem name exposed_names)) 
+                                            { free_names = List.filter (fun name -> not (List.mem name exposed_names))
                                                 (env.free_names @ clique.free_names);
                                               exposed_names = exposed_names;
                                               defs = clique.defs @ env.defs}) defining_cliques env)
     in
-      other @ (close expr_info).defs @ [expr]
+      other @ (close expr_info).defs
 
 end
 

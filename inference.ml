@@ -837,6 +837,16 @@ let constant_type = function
   | Char _ -> `Primitive `Char
   | String _ -> string_type
 
+(* let type_check_definition : typing_environment -> untyped_definition -> definition = *)
+(*   fun ((env, alias_env) as typing_env) expression -> *)
+(*     let unify = unify alias_env *)
+(*     and unify_rows = unify_rows alias_env in *)
+(*   try *)
+(*     Debug.if_set (show_typechecking) (fun () -> "Typechecking definition: " ^ (string_of_definition definition)); *)
+(*     match (definition : Syntax.untyped_definition) with *)
+(*   | (Define (variable, _, _, `U pos) : Syntax.untyped_definition) -> nested_def pos variable *)
+
+
 let rec type_check : typing_environment -> untyped_expression -> expression =
   fun ((env, alias_env) as typing_env) expression ->
     let unify = unify alias_env
@@ -844,7 +854,6 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   try
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match (expression : Syntax.untyped_expression) with
-  | (Define (variable, _, _, `U pos) : Syntax.untyped_expression) -> nested_def pos variable
   | Constant (value, `U pos) -> Constant (value, `T (pos, constant_type value, None))
   | Variable (name, `U pos) ->
       Variable (name, `T (pos, instantiate env name, None))
@@ -1147,11 +1156,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
               ~pos:pos msg
         end;
 	HasType(expr, datatype, `T (pos, inference_datatype, None))
-  | TypeDecl _ ->
-      failwith "Type declarations only supported at top-level"
-  | Placeholder _ 
-  | Alien _ ->
-      assert(false)
+  | Placeholder _ -> assert false
  with 
      Unify_failure msg
    | UndefinedVariable msg
@@ -1214,9 +1219,13 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
       StringMap.add typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
 
 let type_expression : Types.typing_environment -> untyped_expression -> (Types.typing_environment * expression) =
-  fun (env, alias_env) untyped_expression ->
-    let (env', alias_env'), exp' =
-      match untyped_expression with
+  fun typing_env exp ->
+    typing_env, type_check typing_env exp
+
+let type_definition : Types.typing_environment -> untyped_definition -> (Types.typing_environment * definition) =
+  fun (env, alias_env) def ->
+    let (env', alias_env'), def' =
+      match def with
 	| Define (variable, value, loc, `U pos) ->
 	    let value = type_check (env, alias_env) value in
 	    let value_type = if is_value value then 
@@ -1224,44 +1233,45 @@ let type_expression : Types.typing_environment -> untyped_expression -> (Types.t
             else [], type_of_expression value in
               (((variable, value_type) :: env), alias_env),
     	       Define (variable, value, loc, `T (pos, type_of_expression value, None))
-        | TypeDecl (typename, vars, datatype, `U pos) ->
+        | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),
-            TypeDecl (typename, vars, datatype, `T (pos, `Record (ITO.make_empty_closed_row ()), None))
+            Alias (typename, vars, datatype, `T (pos, `Record (ITO.make_empty_closed_row ()), None))
         | Alien (language, name, assumption, `U pos)  ->
             let (qs, k) = assumption
             in
               (((name, (qs, k)) :: env), alias_env), Alien (language, name, assumption, `T (pos, k, None))
-	| expr -> let value = type_check (env, alias_env) expr in (env, alias_env), value
     in
-      (env', alias_env'), exp'
+      (env', alias_env'), def'
 
-let type_program
-    (typing_env : Types.typing_environment)
-    (exprs : untyped_expression list) :
-    Types.typing_environment * expression list =
-  let type_group (typing_env, typed_exprs) : untyped_expression list ->
-    Types.typing_environment * expression list = function
-      | [x] -> (* A single node *)
-	  let typing_env, expression = type_expression typing_env x in 
-            typing_env, typed_exprs @ [expression]
-      | xs  -> (* A group of potentially mutually-recursive definitions *)
-          let defparts = map (fun (Define x) -> x) xs in
-          let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
-                                 name, expr, t) defparts in
-          let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
-          let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
-                              Define(name, expr, location, expression_data expr))
-			defparts defs) in
-            typing_env, typed_exprs @ defs
+
+let type_program : Types.typing_environment -> untyped_program -> (Types.typing_environment * program) =
+  fun typing_env (Program (defs, body)) ->
+    let type_group (typing_env, typed_defs) : untyped_definition list ->
+      Types.typing_environment * definition list = function
+        | [x] -> (* A single node *)
+	    let typing_env, def = type_definition typing_env x in 
+              typing_env, typed_defs @ [def]
+        | xs  -> (* A group of potentially mutually-recursive definitions *)
+            let defparts = map (fun (Define x) -> x) xs in
+            let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
+                                   name, expr, t) defparts in
+            let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
+            let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
+                                Define(name, expr, location, expression_data expr))
+			  defparts defs) in
+              typing_env, typed_defs @ defs
 
     and bothdefs l r = match l, r with
       | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
       | _ ->  false
     in
-    let def_seqs = groupBy bothdefs exprs in
+    let def_seqs = groupBy bothdefs defs in
     let mutrec_groups = (Callgraph.refine_def_groups def_seqs) in
-      fold_left type_group (typing_env, []) mutrec_groups
+    let typing_env, defs =
+      fold_left type_group (typing_env, []) mutrec_groups in
+    let typing_env, body = type_expression typing_env body in
+      typing_env, (Program (defs, body))
 
 (* Check for duplicate top-level definitions.  This probably shouldn't
    appear in the type inference module.
@@ -1273,7 +1283,7 @@ let type_program
 *)
 let check_for_duplicate_defs 
     (type_env, _)
-    (expressions :  untyped_expression list) =
+    (defs :  untyped_definition list) =
   let check (env, defined) = function
     | Define (name, _, _, `U position) when StringMap.mem name defined ->
         (env, StringMap.add name (position :: StringMap.find name defined) defined)
@@ -1284,20 +1294,17 @@ let check_for_duplicate_defs
     | _ -> 
         (env, defined) in 
   let env = List.fold_right (fst ->- StringSet.add) type_env StringSet.empty in
-  let _, duplicates = List.fold_left check (env,StringMap.empty) expressions in
+  let _, duplicates = List.fold_left check (env,StringMap.empty) defs in
     if not (StringMap.is_empty duplicates) then
       raise (Errors.MultiplyDefinedToplevelNames duplicates)
 
 (* [HACKS] *)
 (* two pass typing: yuck! *)
-let type_program typing_env expressions = 
-  check_for_duplicate_defs typing_env expressions;
-  (* with mailbox parameters *)
+let type_program typing_env (Program (defs, _) as program) =
+  check_for_duplicate_defs typing_env defs;
   Debug.if_set (show_typechecking) (fun () -> "Typechecking program...");
-  type_program typing_env expressions
+  type_program typing_env program
 
 let type_expression typing_env expression =
-  check_for_duplicate_defs typing_env [expression];
-  (* with mailbox parameters *)
   Debug.if_set (show_typechecking) (fun () -> "Typechecking expression...");
   type_expression typing_env expression

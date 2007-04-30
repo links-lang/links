@@ -45,7 +45,7 @@ let print_http_response headers body =
     print_string body
       
 (* Does at least one of the functions have to run on the client? *)
-let is_client_program defs =
+let is_client_program (Syntax.Program (defs, _) as program) =
   let is_client_def = function
     | Syntax.Define (_, _, `Client, _) -> true
     | _ -> false 
@@ -65,22 +65,26 @@ let is_client_program defs =
       (Library.primitive_location ->- (=) `Client) p
     with Not_found ->  false
   in
-  let freevars = Utility.concat_map Syntax.freevars defs in
+  let freevars = Syntax.freevars_program program in
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
     List.exists is_client_def defs || List.exists is_client_prim prims
 
+let with_prelude prelude (Syntax.Program (defs, body)) =
+  Syntax.Program (prelude @ defs, body)
+
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude typenv filename = 
-  (fun (env, exprs) ->
-     (env, 
-      measure "optimise" Optimiser.optimise_program (env, prelude @ exprs)))
-    ((fun (env, exprs) -> env, List.map Syntax.labelize exprs)
+  (fun (env, program) ->
+     (env,
+      measure "optimise" Optimiser.optimise_program (env, with_prelude prelude program)))
+    ((fun (env, program) ->
+        env, Syntax.labelize program)
        ((measure "type" (Inference.type_program typenv))
           ((measure "parse" (Parse.parse_file Parse.program)) filename)))
               
 let read_and_optimise_program prelude env arg 
-    : Types.typing_environment * Syntax.expression list 
+    : Types.typing_environment * Syntax.program
   = 
   if Settings.get_value cache_programs then
     Loader.read_file_cache arg
@@ -99,16 +103,15 @@ let untuple r =
     | `Record args -> un 1 [] args
     | _ -> assert false
 
-let stubify_client_funcs globals env : Result.environment = 
+let stubify_client_funcs globals defs : Result.environment = 
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
-    | Syntax.TypeDecl _ -> true
-    | e  -> failwith ("Unexpected non-definition in environment : " 
-		      ^ Syntax.Show_expression.show e)
+    | Syntax.Alias _ -> true
   in 
-  let server_defs, client_defs = List.partition is_server_fun env in
+
+  let server_defs, client_defs = List.partition is_server_fun defs in
   let client_env =
     List.map (function
                  | Syntax.Define (name, _, _, _)
@@ -116,8 +119,8 @@ let stubify_client_funcs globals env : Result.environment =
                      (name, `ClientFunction name)) client_defs in
     match server_defs with 
         [] -> []
-      | server_env -> (* evaluate the definitions to get Result.result values. *)
-          fst (Interpreter.run_program globals [] server_env)
+      | server_defs -> (* evaluate the definitions to get Result.result values. *)
+          Interpreter.run_defs globals [] server_defs
             @ client_env
 
 let get_remote_call_args env cgi_args = 
@@ -202,7 +205,7 @@ let perform_request
     | ExprEval(expr, env) ->
         print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
-             (snd (Interpreter.run_program globals env [expr])))
+             (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
     | ClientReturn(cont, value) ->
         print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode 
@@ -222,18 +225,16 @@ let perform_request
         print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              catch_notfound_l "generate_program"
-               (lazy(Js.generate_program program main))
+               (lazy(Js.generate_program program))
            else 
-             let _env, rslt = Interpreter.run_program globals [] [main] in
+             let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
                Result.string_of_result rslt)
 
 let serve_request prelude (valenv, typenv) filename = 
   try 
-    let _, program = Utility.catch_notfound_l "reading and optimising"
+    let _, (Syntax.Program (defs, main) as program) = Utility.catch_notfound_l "reading and optimising"
       (lazy (read_and_optimise_program prelude typenv filename)) in
-    let defs, main = List.partition Syntax.is_define program in
-    if (List.length main < 1) then raise Errors.NoMainExpr else
-    let main = last main in
+(*    if (List.length main < 1) then raise Errors.NoMainExpr else*)
     let defs = Utility.catch_notfound_l "stubifying" 
       (lazy (stubify_client_funcs valenv defs)) in
     let cgi_args =

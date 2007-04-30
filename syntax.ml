@@ -22,7 +22,7 @@ module Show_lexpos = Show_unprintable (LexposType)
 
 type position = lexpos *  (* source line: *) string 
                   * (* expression source: *) string
-    deriving (Typeable, Show, Eq)
+    deriving (Typeable, Show,  Eq)
 
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
     
@@ -53,8 +53,6 @@ type constant =
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type 'data expression' =
-  | Define of (string * 'data expression' * location * 'data)
-  | TypeDecl of (string * int list * Types.datatype * 'data)
   | Constant of (constant * 'data)
   | Variable of (string * 'data)
 
@@ -86,7 +84,7 @@ type 'data expression' =
       * (* the query: *) Query.query 
       * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
-      * (* the table name: *) 'data expression'
+      * (* the table: *) 'data expression'
       * (* the read / write (record) types of a table row: *) (Types.datatype * Types.datatype)
       * 'data)
      
@@ -94,19 +92,38 @@ type 'data expression' =
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
-  | Alien of (string * string * Types.assumption * 'data)
   | Placeholder of (label * 'data)
       deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
       (* Q: Should syntax exprs be picklable or not? *)
 
-let unit_expression data = Record_intro (StringMap.empty, None, data)
+type 'a definition' =
+  | Define of (string * 'a expression' * location * 'a)
+  | Alias of (string * int list * Types.datatype * 'a)
+  | Alien of (string * string * Types.assumption * 'a)
+      deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
 
-let is_define = 
-  function
-    | Define _
-    | TypeDecl _
-    | Alien _ -> true
-    | _ -> false
+(* [HACK]
+   programs derive Functor and Rewriter
+   but they don't work yet for tuple types!
+
+   hence the redundant 'Program' tag.
+
+   [REMARK]
+
+   Perhaps the tag isn't such a bad thing after all... it helps with
+   documenting the code.
+*)
+
+let visit_def unit visitor def =
+  match def with
+    | Define(name, expr, loc_annotation, d) -> visitor expr
+    | Alias _
+    | Alien _ -> unit
+
+type 'a program' = Program of ('a definition' list * 'a expression')
+  deriving (Eq, Typeable, Show, Pickle, Shelve, Functor, Rewriter)
+
+let unit_expression data = Record_intro (StringMap.empty, None, data)
 
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
@@ -145,6 +162,16 @@ and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
   deriving (Eq, Typeable, Show)
 
+type definition = typed_data definition'
+and untyped_definition = untyped_data definition'
+and stripped_definition = unit definition'
+  deriving (Eq, Typeable, Show)
+
+type program = typed_data program'
+and untyped_program = untyped_data program'
+and stripped_program = unit program'
+  deriving (Eq, Typeable, Show)
+
 let data_position = function
   | `T (pos, _, _)
   | `U pos -> pos
@@ -157,12 +184,6 @@ let is_alphanumeric_ident name =
 
 let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
-  | Define (variable, value, location, data) -> 
-      (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
-      ^ "=" ^ show t value
-      ^ "[" ^ Show_location.show location ^ "]; " ^ t data
-  | TypeDecl (typename, quantifiers, datatype, data) ->
-      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Constant(c, data) ->
       begin
         match c with
@@ -234,23 +255,37 @@ let rec show t : 'a expression' -> string = function
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ Utility.base64encode s ^ t data
+and show_definition t : 'a definition' -> string = function
+  | Define (variable, value, location, data) -> 
+      (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
+      ^ "=" ^ show t value
+      ^ "[" ^ Show_location.show location ^ "]; " ^ t data
+  | Alias (typename, quantifiers, datatype, data) ->
+      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_assumption k) ^ t data
+and show_program t : 'a program' -> string =
+  fun (Program (ds, body)) ->
+    (String.concat "" (List.map (show_definition t) ds)) ^ show t body
 
 let string_of_expression s = show (fun _ -> "") s
+let string_of_definition d = show_definition (fun _ -> "") d
+let string_of_program p = show_program (fun _ -> "") p
 
-let as_string = string_of_expression
+let show_label =
+  function
+    | `T (_,_,Some lbl) -> "(label:" ^ Utility.base64encode(lbl) ^ ")"
+    | _ -> "(NO LABEL)"
 
-let labelled_string_of_expression s = 
-  show (function
-            `T (_,_,Some lbl) -> "(label:" ^ Utility.base64encode(lbl) ^ ")"
-          | _ -> "(NO LABEL)") s
+let labelled_string_of_expression s = show show_label s
+let labelled_string_of_definition d = show_definition show_label d
+let labelled_string_of_program p = show_program show_label p
 
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
 let erase : expression -> untyped_expression = 
   Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
-
+     
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)
@@ -258,14 +293,11 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     combine (expr, match expr with
                | Constant _
                | Nil _
-               | Alien _
                | Placeholder _ 
                | Wrong _
-               | TypeDecl _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
-               | Define (_, e, _, _)
                | Abstr (_, e, _)
                | Database (e, _)
                | Variant_injection (_, e, _)
@@ -298,20 +330,33 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
   in
     visitor visit_children
 
+let reduce_definition visitor combine combine_def def =
+  combine_def(def,
+              match def with
+                | Define(name, expr, loc_annotation, d) ->
+                    [reduce_expression visitor combine expr]
+                | Alias _
+                | Alien _ -> [])
+
+let reduce_program visitor combine combine_def combine_program (Program (defs, body)) =
+  let def_values = List.map (reduce_definition visitor combine combine_def) defs in
+  let body_values = reduce_expression visitor combine body in
+    combine_program (def_values, body_values)
+
 (* This is a candidate for `deriving', I think, perhaps in conjunction with a fold *)
 let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expression' =
   match exp, exps with
       (* 0 subnodes *)
-    | TypeDecl _, []
+(*     | Alias _, [] *)
     | Constant _, []
     | Variable _, []
     | Nil _, [] 
     | Placeholder _, []
-    | Wrong _, []
-    | Alien _, [] -> exp
+(*     | Alien _, [] *)
+    | Wrong _, [] -> exp
         
     (* 1 subnodes *)
-    | Define (a, _, l, d)            , [e] -> Define (a, e, l, d)
+(*     | Define (a, _, l, d)            , [e] -> Define (a, e, l, d) *)
     | Abstr (s, _, d)                , [e] -> Abstr (s, e, d)
     | Project (_, s, d)              , [e] -> Project (e, s, d)
     | Erase (_, s, d)                , [e] -> Erase (e, s, d)
@@ -420,83 +465,95 @@ let freevarSet (expression : 'a expression') : StringSet.t =
 
 let freevars (expression : 'a expression') : string list = 
   StringSet.elements (freevarSet expression)
-          
+
+let freevars_def def = visit_def [] freevars def
+
+let freevars_program (Program (defs, body)) =
+  Utility.concat_map freevars_def defs @ freevars body
+
 let rec list_expr data = function
     [] -> Nil(data)
   | expr::etc -> Concat(List_of(expr, data), list_expr data etc, data)
 
 let expression_data : ('a expression' -> 'a) = function 
-        | Define (_, _, _, data) -> data
-        | TypeDecl (_, _, _, data) -> data
-        | HasType (_, _, data) -> data
-        | Constant (_, data) -> data
-        | Variable (_, data) -> data
-        | Apply (_, _, data) -> data
-        | Condition (_, _, _, data) -> data
-        | Comparison (_, _, _, data) -> data
-        | Abstr (_, _, data) -> data
-        | Let (_, _, _, data) -> data
-        | Rec (_, _, data) -> data
-        | Xml_node (_, _, _, data) -> data
-        | Record_intro (_, _, data) -> data
-        | Record_selection (_, _, _, _, _, data) -> data
-        | Project (_,_,data) -> data
-        | Erase (_,_,data) -> data
-        | Variant_injection (_, _, data) -> data
-        | Variant_selection (_, _, _, _, _, _, data) -> data
-        | Variant_selection_empty (_, data) -> data
-        | Nil (data) -> data
-        | List_of (_, data) -> data
-        | Concat (_, _, data) -> data
-        | For (_, _, _, data) -> data
-        | Database (_, data) -> data
-        | TableQuery (_, _, data) -> data
-        | TableHandle (_, _, _, data) -> data
-        | SortBy (_, _, data) -> data
-        | Call_cc (_, data) -> data
-        | Wrong data -> data
-        | Alien (_,_,_,data) -> data
-        | Placeholder (_,data) -> data
-
+  | HasType (_, _, data) -> data
+  | Constant (_, data) -> data
+  | Variable (_, data) -> data
+  | Apply (_, _, data) -> data
+  | Condition (_, _, _, data) -> data
+  | Comparison (_, _, _, data) -> data
+  | Abstr (_, _, data) -> data
+  | Let (_, _, _, data) -> data
+  | Rec (_, _, data) -> data
+  | Xml_node (_, _, _, data) -> data
+  | Record_intro (_, _, data) -> data
+  | Record_selection (_, _, _, _, _, data) -> data
+  | Project (_,_,data) -> data
+  | Erase (_,_,data) -> data
+  | Variant_injection (_, _, data) -> data
+  | Variant_selection (_, _, _, _, _, _, data) -> data
+  | Variant_selection_empty (_, data) -> data
+  | Nil (data) -> data
+  | List_of (_, data) -> data
+  | Concat (_, _, data) -> data
+  | For (_, _, _, data) -> data
+  | Database (_, data) -> data
+  | TableQuery (_, _, data) -> data
+  | TableHandle (_, _, _, data) -> data
+  | SortBy (_, _, data) -> data
+  | Call_cc (_, data) -> data
+  | Wrong data -> data
+  | Placeholder (_,data) -> data
+let definition_data : ('a definition' -> 'a) = function 
+  | Define (_, _, _, data) -> data
+  | Alias (_, _, _, data) -> data
+  | Alien (_,_,_,data) -> data
+let program_data : ('a program' -> 'a) =
+  fun (Program (_, body)) -> expression_data body
+  
 (** [set_data] sets the data member of an expression to a given value;
  *)
-let rec set_data : ('b -> 'a expression' -> 'b expression') =
+let set_data : ('b -> 'a expression' -> 'b expression') =
   fun data -> function
-  | Define (a, b, c, _) -> 
-      Define (a, b, c, data)
-  | TypeDecl (a, b, c, _) -> TypeDecl (a, b, c, data)
-  | HasType (a, b,_) ->  HasType (a, b,data) 
-  | Constant (a, _) -> Constant (a, data)
-  | Variable (a, _) -> Variable (a, data)
-  | Apply (a, b,_) -> Apply (a, b,data)
-  | Condition (a, b, c, _) -> Condition (a, b, c, data)
-  | Comparison (a, b, c, _) -> Comparison (a, b, c, data)
-  | Abstr (a, b,_) -> Abstr (a, b,data)
-  | Let (a, b, c, _) -> Let (a, b, c, data) 
-  | Rec (a, b,_) -> Rec (a, b,data)
-  | Xml_node (a, b, c, data) ->  Xml_node (a, b, c, data)
-  | Record_intro (a, b,_) -> Record_intro (a, b,data)
-  | Record_selection (a, b, c, d, e, _) -> 
-      Record_selection (a, b, c, d, e,data)
-  | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
-  | Variant_selection (a, b, c, d, e, f, _) ->
-      Variant_selection (a, b, c, d, e, f, data)
-  | Variant_selection_empty (a, _) -> Variant_selection_empty (a, data)
-  | Nil (_) -> Nil (data)
-  | List_of (a, _) -> List_of (a, data)
-  | Concat (a, b,_) -> Concat (a, b,data)
-  | For (a, b, c, _) -> For (a, b, c, data)
-  | Database (a, _) ->  Database (a, data)
-  | TableQuery (a, b,_) ->  TableQuery (a, b,data)
-  | TableHandle (a, b, c, _) -> TableHandle (a, b, c, data)
-  | SortBy (a, b,_) -> SortBy (a, b,data)
-  | Call_cc (a, _) -> Call_cc (a, data)
-  | Wrong _ -> Wrong data
-  | Alien (a, b, c,_) ->  Alien (a, b, c,data)
-  | Placeholder (a,_) -> Placeholder (a,data) 
+    | HasType (a, b,_) ->  HasType (a, b,data) 
+    | Constant (a, _) -> Constant (a, data)
+    | Variable (a, _) -> Variable (a, data)
+    | Apply (a, b,_) -> Apply (a, b,data)
+    | Condition (a, b, c, _) -> Condition (a, b, c, data)
+    | Comparison (a, b, c, _) -> Comparison (a, b, c, data)
+    | Abstr (a, b,_) -> Abstr (a, b,data)
+    | Let (a, b, c, _) -> Let (a, b, c, data) 
+    | Rec (a, b,_) -> Rec (a, b,data)
+    | Xml_node (a, b, c, data) ->  Xml_node (a, b, c, data)
+    | Record_intro (a, b,_) -> Record_intro (a, b,data)
+    | Record_selection (a, b, c, d, e, _) -> 
+        Record_selection (a, b, c, d, e,data)
+    | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
+    | Variant_selection (a, b, c, d, e, f, _) ->
+        Variant_selection (a, b, c, d, e, f, data)
+    | Variant_selection_empty (a, _) -> Variant_selection_empty (a, data)
+    | Nil (_) -> Nil (data)
+    | List_of (a, _) -> List_of (a, data)
+    | Concat (a, b,_) -> Concat (a, b,data)
+    | For (a, b, c, _) -> For (a, b, c, data)
+    | Database (a, _) ->  Database (a, data)
+    | TableQuery (a, b,_) ->  TableQuery (a, b,data)
+    | TableHandle (a, b, c, _) -> TableHandle (a, b, c, data)
+    | SortBy (a, b,_) -> SortBy (a, b,data)
+    | Call_cc (a, _) -> Call_cc (a, data)
+    | Wrong _ -> Wrong data
+    | Placeholder (a,_) -> Placeholder (a,data) 
+let set_definition_data : ('b -> 'a definition' -> 'b definition') =
+  fun data -> function
+    | Define (a, b, c, _) ->  Define (a, b, c, data)
+    | Alias (a, b, c, _) -> Alias (a, b, c, data)
+    | Alien (a, b, c,_) -> Alien (a, b, c,data)
+let set_program_data : ('b -> 'a program' -> 'b program') =
+  fun data (Program (ds, body)) -> Program (ds, set_data data body)
       
 
 let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
+let def_datatype : (definition -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- definition_data
 
 let position e = data_position (expression_data e)
 
@@ -504,7 +561,26 @@ let no_expr_data = `T(dummy_position, `Not_typed, None)
 
 module RewriteSyntax = Rewrite_expression'(struct type a = typed_data end)
 module RewriteUntypedExpression = Rewrite_expression'(struct type a = untyped_data end)
-  
+
+(* apply a transformer (map) on expressions to a definition *)
+let transform_def transformer def =
+  match def with
+    | Define(name, expr, loc_annotation, d) ->
+        Define (name, transformer expr, loc_annotation, d)
+    | Alias _
+    | Alien _ -> def
+
+let transform_program transformer (Program (defs, body)) =
+  Program (List.map (transform_def transformer) defs,
+           transformer body)
+
+(* apply a rewriter on expressions to a definition *)
+let rewrite_def rewriter =
+  transform_def (fun expr -> fromOption expr (rewriter expr))
+
+let rewrite_program rewriter =
+  transform_program (fun expr -> fromOption expr (rewriter expr))
+
 let rec map_free_occ u f expr =
   let recurse = map_free_occ u f in
   let rec rewrite = function
@@ -550,13 +626,16 @@ let subst_free u r expr =
 let rename_free u v e =
   map_free_occ u (fun (Variable(x, d)) -> Variable(v, d)) e
 
-
-let subst_fast name replacement expr =
-  let replacer name replacement : RewriteSyntax.rewriter = function
+let subst_fast_replacer name replacement : RewriteSyntax.rewriter =
+  function
     | Variable (n, _) when n = name -> Some replacement
     | _ -> None
-  in
-    fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
+
+let subst_fast name replacement expr =
+  fromOption expr (RewriteSyntax.bottomup (subst_fast_replacer name replacement) expr)
+
+let subst_fast_def name replacement =
+  rewrite_def (RewriteSyntax.bottomup (subst_fast_replacer name replacement))
 
 let rename_fast name replacement expr = 
   let replacer name replacement : RewriteSyntax.rewriter = function
@@ -583,14 +662,12 @@ let has_label expr =
 let label_for_expr =
   (Digest.string -<- string_of_expression)
 
-let labelize expr =
-  (function None -> expr
-     | Some x -> x)
+let labelize =
+  rewrite_program
     (RewriteSyntax.topdown 
        (fun expr -> 
           Debug.if_set print_digest_junk (fun _-> Utility.base64encode(label_for_expr expr));
-          Some(set_label expr (Some(label_for_expr expr))))
-       expr)
+          Some(set_label expr (Some(label_for_expr expr)))))
 
 (** {0 Skeleton} *)
 
@@ -604,15 +681,9 @@ let skeleton = function
   | Constant (value, d) -> Constant (value, d)
   | Variable(x, d) -> Variable(x, d)
   | Apply(f, a, d) -> Apply(f, a, d)
-  | TypeDecl(typename, quantifiers, datatype, d) ->
-      TypeDecl(typename, quantifiers, datatype, d)
   | Placeholder(label, d) -> Placeholder(label, d)
-  | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
-  | TypeDecl(typename, quantifiers, datatype, d) -> TypeDecl(typename, quantifiers, datatype, d)
 
   (* One sub-expression *)
-  | Define(name, expr, loc_annotation, d) ->
-      Define(name, expr, loc_annotation, d)
   | Abstr(var, body, d) -> Abstr(var, body, d)
   | Variant_injection(label, value_expr, d) -> 
       Variant_injection(label, value_expr, d)
@@ -651,3 +722,11 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
+let definition_skeleton = function
+  | Define(name, expr, loc_annotation, d) ->
+      Define(name, expr, loc_annotation, d)
+  | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
+  | Alias(typename, quantifiers, datatype, d) -> Alias(typename, quantifiers, datatype, d)
+let program_skeleton =
+  fun (ds, body) ->
+    (List.map definition_skeleton ds, skeleton body)

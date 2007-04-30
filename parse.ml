@@ -168,16 +168,21 @@ type ('result, 'intermediate) grammar = {
 let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = { 
     desugar = 
     (fun code s -> match s with 
-       | `Definitions phrases -> `Definitions (List.map (Sugar.desugar (lookup code)) phrases)
-       | `Expression phrase   -> `Expression (Sugar.desugar (lookup code) phrase)
+       | `Definitions phrases -> `Definitions (Sugar.desugar_definitions (lookup code) phrases)
+       | `Expression phrase   -> `Expression (Sugar.desugar_expression (lookup code) phrase)
        | `Directive directive -> `Directive directive);
     parse =  Parser.interactive
   }
   
-let program : (Syntax.untyped_expression list, Sugartypes.phrase list) grammar = {
-    desugar = (fun code -> List.map (Sugar.desugar (lookup code)));
-    parse = Parser.file
-  }
+let program : (Syntax.untyped_program,
+               (Sugartypes.phrase list * Sugartypes.phrase option)) grammar = {
+  desugar = (fun code (defs, body) ->
+               let pos = lookup code in
+                 Syntax.Program
+                   (Sugar.desugar_definitions pos defs,
+                    opt_app (Sugar.desugar_expression pos) (Syntax.unit_expression (`U Syntax.dummy_position)) body));
+  parse = Parser.file
+}
 
 let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
     desugar =  (fun _ -> Sugar.desugar_datatype);

@@ -93,6 +93,7 @@ type contin_frame =
         (environment * string * string option * xml *
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
+    | IgnoreDef of (environment * Syntax.definition)
     | Recv of environment
 and result = [ primitive_value
 | `Continuation of continuation
@@ -145,6 +146,6 @@ val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
 
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
-val unmarshal_continuation : result list -> Syntax.expression list -> string -> continuation
-val unmarshal_exprenv : result list -> Syntax.expression list -> string -> (Syntax.expression * environment)
+val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
+val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
 

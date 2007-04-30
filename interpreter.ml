@@ -405,14 +405,22 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                          interpret globals locals elem
                            (XMLCont (locals, tag, None, children, attrs, elems) :: cont)
                 )
+            | IgnoreDef (locals, def) ->
+	        interpret_definition globals locals def cont
             | Ignore (locals, expr) ->
 	        interpret globals locals expr cont
     in
       scheduler globals (cont, value) stepf
 
-and
-    interpret
-      : environment -> environment -> expression -> continuation -> result =
+and interpret_definition : environment -> environment -> definition -> continuation -> result =
+  fun globals locals def cont ->
+    match def with
+      | Syntax.Define (name, expr, _, _) -> 
+          interpret globals [] expr (Definition (globals, name) :: cont)
+      | Syntax.Alien _ ->
+          apply_cont globals cont (`Record [])
+      | Syntax.Alias _ -> apply_cont globals cont (`Record [])
+and interpret : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
   let eval = interpret globals locals in
   let box_constant = function
@@ -422,9 +430,6 @@ fun globals locals expr cont ->
     | Float f -> float f
     | Char ch -> char ch in
   match expr with
-  | Syntax.Define (name, expr, _, _) -> 
-      interpret globals [] expr (Definition (globals, name) :: cont)
-  | Syntax.Alien _ -> apply_cont globals cont (`Record [])
   | Syntax.Constant (c, _) -> apply_cont globals cont (box_constant c)
   | Syntax.Variable(name, _) -> 
       let value = (lookup globals locals name) in
@@ -525,7 +530,6 @@ fun globals locals expr cont ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->
       eval expr cont
-  | Syntax.TypeDecl _ -> apply_cont globals cont (`Record [])
   | Syntax.Placeholder (_, _) -> 
       failwith("Internal error: Placeholder at runtime")
 
@@ -537,13 +541,25 @@ and interpret_safe globals locals expr cont =
     | TopLevel s -> snd s
     | Not_found -> failwith "Internal error: Not_found while interpreting."
 
-let run_program (globals : environment) locals exprs : (environment * result)= 
+let run_program (globals : environment) locals (Program (defs, body)) : (environment * result)= 
   try (
-    ignore (interpret globals locals (hd exprs) (map (fun expr -> Ignore([], expr)) (tl exprs)));
+    (match defs with
+       | [] ->
+           interpret globals locals body []
+       | def :: defs ->
+           interpret_definition globals locals def
+             (map (fun def -> IgnoreDef([], def)) defs @ [Ignore([], body)]));
     failwith "boom"
   ) with
     | TopLevel s -> s
     | Not_found -> failwith "Internal error: Not_found while interpreting."
+
+let run_defs (globals : environment) locals defs : environment =
+  let env, _ =
+    run_program globals locals
+      (Program (defs, (Syntax.unit_expression (Syntax.no_expr_data))))
+  in
+    env
 
 let apply_cont_safe x y z = 
   try apply_cont x y z

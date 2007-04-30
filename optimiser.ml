@@ -82,33 +82,37 @@ let location_matches location = function
   | Define (_, _, location', _) -> location=location'
   | _ -> false
 
-let perform_value_inlining location name rhs =
-  List.map (fun exp ->
-    if location_matches location exp then
-      Syntax.subst_fast name rhs exp
-    else
-      exp)
+let perform_value_inlining location name rhs (Program (defs, body)) =
+  Program (
+    List.map (fun def ->
+                if location_matches location def then
+                  Syntax.subst_fast_def name rhs def
+                else
+                  def) defs,
+    Syntax.subst_fast name rhs body)
 
-let replaceApplication name var body : RewriteSyntax.rewriter = function
-  | Apply (Variable (n, _), [p], d) when n = name -> 
-      (* FIXME: inlining only implemented for single-argument functions! *)
-      Some (Let (var, p, body, d))
-  | _ -> None
+let perform_function_inlining location name var rhs (Program (defs, body)) =
+  let replace_application : RewriteSyntax.rewriter = function
+    | Apply (Variable (n, _), [p], d) when n = name -> 
+        (* FIXME: inlining only implemented for single-argument functions! *)
+        Some (Let (var, p, rhs, d))
+    | _ -> None
+  in
+    Program (
+      List.map
+        (fun def ->
+           if location_matches location def then
+             Syntax.rewrite_def (RewriteSyntax.bottomup replace_application) def
+           else
+             def) defs,
+      fromOption body (RewriteSyntax.bottomup replace_application body))
 
-let perform_function_inlining location name var rhs = 
-  List.map
-    (fun exp -> fromOption exp (
-       if location_matches location exp then
-	 RewriteSyntax.bottomup (replaceApplication name var rhs) exp
-       else
-	 None))
-
-let inline program = 
+let inline (Program (defs, body) as program) = 
   let valuedefp = function
     | _, Rec _, _ -> false
     | _        -> true
   in
-  let candidates = find_inline_candidates program in
+  let candidates = find_inline_candidates defs in
   let value_candidates, fn_candidates = List.partition valuedefp candidates in
   let program' = 
     List.fold_right 
@@ -223,7 +227,6 @@ let renaming : RewriteSyntax.rewriter =
     (* Is a particular name bound inside an expression? *)
     let binds default = function
       | Let (v, _, _, _)
-      | Define (v, _, _, _)
           when v = var -> true
       | Abstr (vs, _, _) when mem var vs -> true
       | Record_selection (_, v1, v2, _, _, _)
@@ -300,7 +303,7 @@ let rec extract_tests (bindings:bindings) (expr:expression)
     : (Query.expression list * expression * projection_source list) =
   match expr with
     | Let (_, Variable (_, _), _, _) ->
-        failwith "TR115 (renaming declarations should have been removed by earlier optimisations)"
+        failwith "Internal error: renaming declarations should have been removed by earlier optimisations"
     | Let (variable, value, body, data) ->
         let (condns, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
           (condns, Let (variable, value, body, data), origin)
@@ -769,11 +772,11 @@ let print_expression msg expr =
 
 (** Useful for checking a specific definition at specific points of the
     optimisation pipeline.*)
-let print_definition of_name ?msg:msg expr = 
- (match expr with
+let print_definition of_name ?msg:msg def = 
+ (match def with
     | Define (name, value, locn, _) when name = of_name 
         -> Debug.if_set show_optimisation
-        (fun () -> fromOption "" msg ^ string_of_expression expr)
+        (fun () -> fromOption "" msg ^ string_of_definition def)
     | _ -> ());
   None
 
@@ -802,22 +805,28 @@ let rewriters env = [
 let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
-let optimise env expr =
+let optimise' env expr =
   if Settings.get_value optimising then 
-    match run_optimisers env expr with
-        None -> Debug.if_set show_optimisation (fun () -> "Optimization had no effect"); expr
-      | Some expr' -> (Debug.if_set show_optimisation
-                         (fun () -> 
-                            (if (Settings.get_value show_opt_verbose) then 
-                               "Before optimization : " ^ 
-                                 Show_stripped_expression.show (strip_data expr) 
-                             else "") ^ 
-			      "\nAfter optimization  : " ^
-                              Show_stripped_expression.show (strip_data expr') 
-                         );
-	                expr')
-  else expr
+    let expr' = run_optimisers env expr in
+    let _ =
+        match expr' with
+            None -> Debug.if_set show_optimisation (fun () -> "Optimization had no effect")
+          | Some expr' -> Debug.if_set show_optimisation
+              (fun () ->
+                 (if (Settings.get_value show_opt_verbose) then 
+                    "Before optimization : " ^ 
+                      Show_stripped_expression.show (strip_data expr) 
+                  else "") ^ 
+		   "\nAfter optimization  : " ^
+                   Show_stripped_expression.show (strip_data expr'))
+    in
+      expr'
+  else
+    None
     
-let optimise_program (env, exprs) = 
-  map (optimise env) (exprs)
+let optimise env expr = fromOption expr (optimise' env expr)
 
+let optimise_program (env, (Program (defs, body))) =
+  Program (
+    List.map (rewrite_def (optimise' env)) defs,
+    optimise env body)

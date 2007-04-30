@@ -67,17 +67,16 @@ let type_matches ~inferred ~expected =
   in check_rhs_unchanged inferred expected
   && check_rhs_unchanged expected inferred 
 
-(* Check that the last expression of `es' has a type equivalent to `t' *)
-let has_type ((_, t) : Types.assumption) (es : Syntax.expression list) = 
-  let e = Utility.last es in
-  let etype = Syntax.node_datatype e in
-    if type_matches ~expected:t ~inferred:etype then Right es
+(* Check that the body of the program has a type equivalent to `t' *)
+let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
+  let body_type = Syntax.node_datatype body in
+    if type_matches ~expected:t ~inferred:body_type then Right program
     else Left (Printf.sprintf
                  "Types not equivalent : expected %s\n%s\ngot %s\n%s" 
                  (Types.string_of_datatype t)
                  (Types.Show_datatype.show t)
-                 (Types.string_of_datatype etype)
-                 (Types.Show_datatype.show etype)
+                 (Types.string_of_datatype body_type)
+                 (Types.Show_datatype.show body_type)
 )
 
 let datatype = Parse.parse_string Parse.datatype
@@ -131,5 +130,6 @@ let run tests =
        Printf.printf "%s %s\n" 
          (match run test with
             | None -> "SUCCESS:"
-            | Some msg -> "FAILURE (" ^ msg ^ "):\n   ") name)
+            | Some msg -> "FAILURE (" ^ msg ^ "):\n   ") name;
+    flush stdout)
     

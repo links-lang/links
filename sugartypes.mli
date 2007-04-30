@@ -118,7 +118,7 @@ type sentence =
 ]
 
 type sentence' = 
-[ `Definitions of Syntax.untyped_expression list
+[ `Definitions of Syntax.untyped_definition list
 | `Expression of Syntax.untyped_expression
 | `Directive of directive
 ]

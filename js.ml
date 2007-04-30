@@ -339,8 +339,8 @@ let generate_server_stub = function
                            (Utility.fromTo 1 (1 + List.length arglist))
                            arglist
                        )]))]
-  | e
-    -> failwith ("Cannot generate server stub for " ^Syntax.Show_expression.show e)
+  | def
+    -> failwith ("Cannot generate server stub for " ^Syntax.Show_definition.show def)
 
  let apply_no_yield (f, args) =
   Call (Var f, args)
@@ -485,20 +485,6 @@ let rec generate : 'a expression' -> code =
         fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call
       in
         Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
-
-  (* Binding *)
-  | Define (_, _, `Server, _) as d -> generate_server_stub d
-  | Define (_, _, `Native, _) as d -> generate_native_stub d
-  | Define (n, e, (`Client|`Unknown), _)-> 
-(* [NOTE]
-     Passing in _idy doesn't work because we are not in traditional CPS.
-     Traditional CPS terms return a value, but ours don't (because JavaScript
-     requires you to write an explicit return). To get round this problem, we
-     capture the return value by imperative assignment. An alternative would be
-     to modify our CPS transform to produce CPS terms that explicitly return
-     values.
-*)
-      Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
@@ -603,8 +589,6 @@ let rec generate : 'a expression' -> code =
 	 Call (Call(generate e, [Var "__kappa"]), 
 	       [Fn (["__ignore"],Var "__kappa")]))
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
-  | Alien _ 
-  | TypeDecl _ -> Nothing
   | Database (e, _) ->
       let db_cps = generate e in
         Fn(["__kappa"],
@@ -643,6 +627,24 @@ and generate_concat : 'a expression' -> code =
       | e ->          
           (* failwith "unimpl"; *)
           generate e
+
+and generate_def : 'a definition' -> code = 
+  function
+      (* Binding *)
+    | Define (_, _, `Server, _) as d -> generate_server_stub d
+    | Define (_, _, `Native, _) as d -> generate_native_stub d
+    | Define (n, e, (`Client|`Unknown), _) -> 
+(* [NOTE]
+     Passing in _idy doesn't work because we are not in traditional CPS.
+     Traditional CPS terms return a value, but ours don't (because JavaScript
+     requires you to write an explicit return). To get round this problem, we
+     capture the return value by imperative assignment. An alternative would be
+     to modify our CPS transform to produce CPS terms that explicitly return
+     values.
+*)
+        Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
+    | Alias _ 
+    | Alien _ -> Nothing
 
 (* Specialness: 
    * Modify the l:action to pass the continuation to the top-level boilerplate
@@ -772,7 +774,6 @@ and generate_direct_style : 'a expression' -> code =
       Call(gd f, map gd ps)
 
   (* Binding *)
-  | Define _ as d -> gcps d (* surely this isn't right! *)
   | Rec (bindings, body, _) ->
       List.fold_right
 	(fun (v, e,_) body ->
@@ -827,7 +828,6 @@ and generate_direct_style : 'a expression' -> code =
   | Call_cc _ -> 
       failwith "escape cannot be used in native code"
   | Wrong _ -> Nothing (* FIXME: should be a js `throw' *)
-  | Alien _ -> Nothing
   | HasType (e, _, _) -> gd e
 
   (* Unimplemented stuff *)
@@ -835,15 +835,21 @@ and generate_direct_style : 'a expression' -> code =
   | TableHandle _
   | Placeholder _
   | SortBy _
-  | TypeDecl _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
+
+and generate_direct_style_def : 'a definition' -> code = 
+  function
+      (* Binding *)
+    | Define _ as d -> generate_def d (* surely this isn't right! *)
+    | Alias _ 
+    | Alien _ -> Nothing
 
 (* Generate a native stub that calls the corresponding native function *)
 and generate_native_stub = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = arg in
         Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style body))]
-  | e -> failwith ("Cannot generate native stub for " ^ string_of_expression e)
+  | def -> failwith ("Cannot generate native stub for " ^ string_of_definition def)
       
 let rec freevars = 
   let fv = freevars in
@@ -931,9 +937,9 @@ let rec eliminate_admin_redexes =
   simplify_completely (* ->-
      rename (Str.global_replace (Str.regexp "\*\(.*\\)\*") "\1") *)
 
-let gen = 
-  Utility.perhaps_apply Optimiser.uniquify_expression
-  ->- generate 
+let gen_def = 
+  (rewrite_def Optimiser.uniquify_expression)
+  ->- generate_def
   ->- eliminate_admin_redexes
   ->- optimise
   ->- show
@@ -970,7 +976,6 @@ let symbolp name =
      else (not (Library.is_primitive name)))
 
 let wordify_rewrite : RewriteSyntax.rewriter = function
-  | Define (name, b,l,t) when symbolp name -> Some (Define (wordify name, b, l, t))
   | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
   | Let (name, rhs, body, d) when symbolp name -> Some (Let (wordify name, rhs, body, d))
   | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
@@ -980,10 +985,13 @@ let wordify_rewrite : RewriteSyntax.rewriter = function
         Some (Rec (List.map rename bindings, body, d))
   | _ -> None
 
-let rename_symbol_operators program = 
-  fromOption 
-    program
-    (RewriteSyntax.bottomup wordify_rewrite program)
+let rename_symbol_operators exp = 
+  fromOption exp (RewriteSyntax.bottomup wordify_rewrite exp)
+
+let rename_symbol_operators_def def =
+  match def with
+    | Define (name, b,l,t) when symbolp name -> Define (wordify name, rename_symbol_operators b, l, t)
+    | _ -> def
 
 (* Remove "units" that get inserted into the environment as a result
    of declarations.  This doesn't really belong here.  It should
@@ -994,30 +1002,37 @@ let remove_nulls = filter
      | _ -> true)
 
  (* TODO: imports *)
-let generate_program env expr =
-  let env = List.map rename_symbol_operators env
-  and expr = rename_symbol_operators expr in
-  let env =
+let generate_program (Program (defs, body)) =
+  let defs = List.map rename_symbol_operators_def defs
+  and body = rename_symbol_operators body in
+  let (Program (defs, body)) =
     if Settings.get_value optimising then
-      Optimiser.inline (Optimiser.inline (Optimiser.inline env)) 
-    else env
+      Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
+    else Program (defs, body)
   in
-  let env = 
+  let defs =
     catch_notfound_l "elim_dead_defs call in js.ml"
-      (lazy (if Settings.get_value elim_dead_defs 
-             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) env expr
-             else env)) in
+      (lazy (if Settings.get_value elim_dead_defs
+             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) (Program (defs, body))
+             else defs)) in
     catch_notfound_l "JS code generation"
       (lazy(  boiler_1 ()
 	    ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
 	    ^ boiler_2 ()
-	    ^ String.concat "\n" (map gen (remove_nulls (butlast env)))
-	    ^ boiler_3 ()
-	    ^ ((generate ->-
-		  (fun expr -> Call(expr, [Var "_start"])) ->- 
-		    eliminate_admin_redexes ->- 
-		      show) expr)
-	    ^ boiler_4 ()))
+            (* [WARNING]
+               disabled remove_nulls
+
+               It looks like remove_nulls never did anything anyway, as it doesn't
+               do anything to definitions.
+
+               ^ String.concat "\n" (map gen_def (remove_nulls (butlast defs))) *)
+	      ^ String.concat "\n" (map gen_def defs)
+	      ^ boiler_3 ()
+	      ^ ((generate ->-
+		    (fun expr -> Call(expr, [Var "_start"])) ->- 
+		      eliminate_admin_redexes ->- 
+		        show) body)
+	      ^ boiler_4 ()))
 
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
@@ -1031,11 +1046,13 @@ let generate_program env expr =
 (*                 fun(p) -> false/true    *)
 (* p is the gen'd javascript (type `code') *)
 
-let links2js = (Parse.parse_string Parse.program
-                ->- Inference.type_program Library.typing_env ->- snd
-                  ->- map ((Utility.perhaps_apply Optimiser.uniquify_expression)
-                           ->- generate 
-                             ->- simplify_completely))
+let links2js s = 
+  let Program (defs, body) =
+    (Parse.parse_string Parse.program
+     ->- Inference.type_program Library.typing_env ->- snd) s in
+  let defs = map ((rewrite_def (Optimiser.uniquify_expression)) ->- generate_def) defs in
+  let body = ((Utility.perhaps_apply Optimiser.uniquify_expression) ->- generate) body in
+    map simplify_completely (defs @ [body])
   
 let test_list = ref []
 let add_test test = test_list := test :: !test_list
@@ -1083,11 +1100,16 @@ let _ = add_qtest("fun f(x) { x+1 } f(1)",
 
 let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 
-let rhino_output linkscode = 
-  let gen = show
-    -<- generate
-    -<- (Utility.perhaps_apply Optimiser.uniquify_expression)
-    -<- List.hd -<- snd -<- Inference.type_program Library.typing_env -<- Parse.parse_string Parse.program in
+let rhino_output linkscode =  
+  let gen s =
+    let Program (defs, body) =
+      (Parse.parse_string Parse.program
+       ->- Inference.type_program Library.typing_env ->- snd) s
+    in
+      ((Utility.perhaps_apply Optimiser.uniquify_expression)
+       ->- generate
+         ->- show) body in
+  
   let tempfile = Filename.temp_file "linkstest" ".js" in
   let cleanup () = (try Sys.remove tempfile with _ -> ()) in
     try

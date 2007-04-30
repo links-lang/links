@@ -20,7 +20,7 @@ let working_tests = [
   has_typeerror;
 
   "Annotations inside functions [3]",
-  "fun (x:a) { error(\"boo\") } : a -> b",
+  "fun (x:a) { error(\"boo\") } : (a) -> b",
   is_function ~with_type: "(a) -> b";
 
   "Nested scopes",
@@ -490,7 +490,7 @@ let working_tests = [
   result "1" ~with_type: "Int";
 
   "Absence typing in variant patterns",
-  "fun f(x) {switch (x) {case A(B) -> B case A(y) -> A(f(y))}}",
+  "fun f(x) {switch (x) {case A(B) -> B case A(y) -> A(f(y))}} f",
   is_function ~with_type:"([|A:[|B:()|(mu d . A:[|B:()|d|])|]|]) -> mu c . [|A:c | B:()|b|]";
 
   "Type-based redundant pattern",
@@ -516,15 +516,15 @@ let working_tests = [
   has_typeerror;
 
   "No polymorphic recursion without signatures",
-  "fun f(x) { f(\"a\"); f(1); 1}",
+  "fun f(x) { f(\"a\"); f(1); 1} f",
   has_typeerror;
 
   "Invalid \"polymorphic recursion\"",
-  "sig f : a -> Int fun f(x) { x == 1; f(\"a\"); f(1); 1 }",
+  "sig f : (a) -> Int fun f(x) { x == 1; f(\"a\"); f(1); 1 } f",
   has_typeerror;
 
   "Polymorphic mutual recursion [4]",
-  "sig f : a -> Int fun f(x) { g(\"a\"); g(1); 1 } sig g : a -> Int fun g(x) { x == 1; f(\"a\"); f(1); 1 }",
+  "sig f : (a) -> Int fun f(x) { g(\"a\"); g(1); 1 } sig g : (a) -> Int fun g(x) { x == 1; f(\"a\"); f(1); 1 } f",
   has_typeerror;
 
   "Polymorphic functions",
@@ -739,11 +739,11 @@ let working_tests = [
 
 
   "Recursive variant types [2]",
-  "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }}",
+  "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment",
   is_function ~with_type: "(mu d . [|Succ:d | Zero:()|]) -> [|Zero:()|(mu c . Succ:[|Zero:()|c|]|a)|]";
   
   "Recursive variant types [3]",
-  "fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }}",
+  "fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev",
   is_function ~with_type: "(mu e . [|Cons:(a, e) | Empty:()|], mu f . [|Cons:(a, f)|b|]) -> mu d . [|Cons:(a, d)|b|]";
 
   "Recursive variant types [4]",
@@ -761,7 +761,7 @@ let working_tests = [
   result "Succ(Succ(Zero()))" ~with_type: "[|Zero:()|(mu a . Succ:[|Zero:()|a|]|b)|]";
 
   "Rows preserved across functions",
-  "fun f(x) { switch (x) { case Foo -> Bar case s -> s } }",
+  "fun f(x) { switch (x) { case Foo -> Bar case s -> s } } f",
   is_function ~with_type: "([|Bar:() | Foo:()|b|]) -> [|Bar:() | Foo- |b|]";
 
   "Nullary variants with cases",
@@ -773,7 +773,7 @@ let working_tests = [
   result "[C(A()), C(B())]" ~with_type: "[[|C:[|A:()|B:()|b|]|a|]]";
 
   "Type annotations",
-  "fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])}",
+  "fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])} increment",
   is_function ~with_type: "(mu c . [|Succ:c | Zero:()|]) -> [|Succ:mu b . [|Succ:b | Zero:()|]|]";
 
   (* xml *)
@@ -859,7 +859,7 @@ let working_tests = [
   result "foo<a/><b>bar</b>fubar" ~with_type: "Xml";
 
   "Signatures on top-level variables",
-  "sig x : Int var x = 3;",
+  "sig x : Int var x = 3; x",
   result "3" ~with_type: "Int";
 
 
@@ -873,7 +873,7 @@ let working_tests = [
       var x = f(\"a\");
       var y = f(1);
       1
-   }",
+   } f",
   is_function ~with_type:"(a) -> Int";
 
   "Polymorphic mutual recursion [1]",
@@ -888,7 +888,9 @@ let working_tests = [
       var x = f(\"a\");
       var y = f(1);
       1
-   }",
+   }
+
+   f",
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic mutual recursion [2]",
@@ -904,7 +906,9 @@ let working_tests = [
      var x = g(\"a\");
      var y = f(1);
      1
-   }",
+   }
+
+   f",
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic mutual recursion [3]",
@@ -924,12 +928,14 @@ let working_tests = [
       var w = g(\"a\");
       var z = g(1);
       1
-    }",
+    }
+   
+   f",
   is_function ~with_type: "(a) -> Int";
 
   "Polymorphic row recursion",
-  "sig h : ((|a)) ->  Int fun h(x) {h((x,x))}",
-  is_function ~with_type: "(|a) -> Int";
+  "sig h : ((|a)) -> Int fun h(x) {h((x,x))} h",
+  is_function ~with_type: "((|a)) -> Int";
 
   "Range [1]",
   "\"3\" ~ /[0-9]/",
