@@ -595,7 +595,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
                                  | `Absent -> false, i+1) field_env (true, 1)
             in
 	      (* 0/1-tuples are displayed as records *)
-              b && (allow_onetuples || i <> 1)
+              b && (allow_onetuples || i <> 2)
         | _ -> false
     in
     (* precondition: the row is unwrapped *)
