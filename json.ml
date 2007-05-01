@@ -56,6 +56,7 @@ let jsonize_primitive : Result.primitive_value -> string = function
 let rec jsonize_result : Result.result -> string = function
   | `PrimitiveFunction _
   | `ClientFunction _
+  | `Abs _
   | `Continuation _
   | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | #Result.primitive_value as p -> jsonize_primitive p

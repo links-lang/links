@@ -134,6 +134,7 @@ module Shelve_rdef = Shelve.Shelve_primtype(Pickle_rdef)(Eq_rdef)(Typeable_rdef)
 
 type unop = MkColl
             | MkVariant of string
+            | Abs
             | MkDatabase
             | VrntSelect of (string * string * rexpr * string option * 
                                rexpr option)
@@ -144,7 +145,7 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type binop = [ `Union | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
+type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string
@@ -228,6 +229,7 @@ and result = [
   | `Function of  (string list * environment (*locals*) * unit (*globals*) * rexpr)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
+  | `Abs of result
   | `List of (result list)
   | `Continuation of continuation
   |  primitive_value
@@ -320,6 +322,7 @@ and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `PrimitiveFunction (name) -> name
   | `ClientFunction (name) -> name
+  | `Abs result -> "abs " ^ string_of_result result
   | `Function (_, _, _, Placeholder (str, _)) -> 
       "fun [" ^ Show_label.show str ^ "]"
     (* Choose from fancy or simple printing of functions: *)
@@ -375,6 +378,8 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | #primitive_value as x -> result_f x
   | `PrimitiveFunction (str) ->
       result_f (`PrimitiveFunction str)
+  | `Abs (result) ->
+      result_f (`Abs (map_result result_f expr_f contframe_f result))
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
   | `Function (str, locals, _globals, body) ->
@@ -447,6 +452,7 @@ let rec extract_code_from_result : result -> 'a expression' list =
     | #primitive_value -> []
     | `PrimitiveFunction _ -> []
     | `ClientFunction _ -> []
+    | `Abs result -> extract_code_from_result result
     | `Function (str, locals, _globals, body) ->
         extract_code_from_env locals @ [body]
     | `Record fields -> concat_map (snd ->- extract_code_from_result) fields

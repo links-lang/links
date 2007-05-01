@@ -583,7 +583,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
     let unwrap = fst -<- unwrap_row in
 
     (* precondition: the row is unwrapped *)
-    let is_tuple (field_env, rowvar) =
+    let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
       match Unionfind.find rowvar with
         | `Closed ->
             let b, i =
@@ -595,7 +595,7 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
                                  | `Absent -> false, i+1) field_env (true, 1)
             in
 	      (* 0/1-tuples are displayed as records *)
-              b && i > 2 
+              b && (allow_onetuples || i <> 1)
         | _ -> false
     in
     (* precondition: the row is unwrapped *)
@@ -630,17 +630,11 @@ let rec string_of_datatype' : type_var_set -> string IntMap.t -> datatype -> str
 	        | `Application ("Mailbox", [t]) ->
 		    string_of_mailbox_arrow (t)
 	        | _ -> "->"
-	    in
-	      (match concrete_type args with
-	         | `Record (fields, _) -> 
-                     let argstring =
-                       String.concat "," 
-                         (FieldEnv.fold (fun _ t ss -> match t with
-                                           | `Present t -> ss @ [sd t]
-                                           | `Absent -> assert false) fields [])
-                     in
-                       "(" ^ argstring ^ ") " ^arrow ^ " " ^ sd t
-	         | _ -> "(*" ^ sd args ^ ") "^ arrow ^ " " ^ sd t)
+	    in begin match concrete_type args with
+              | `Record row when is_tuple ~allow_onetuples:true row ->
+                  string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
+              | t ->      "*" ^ sd t  ^ " " ^arrow ^ " " ^ sd t
+              end
         | `Record row      ->
             let row = unwrap row in
               (if is_tuple row then string_of_tuple row

@@ -75,6 +75,18 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
             let selected, remaining = crack_row ref_label fields in
               (selected, field :: remaining)
 
+let untuple : result -> result list = 
+  let rec aux n output = function
+    | [] -> List.rev output
+    | fields ->
+        match partition (fst ->- (=)(string_of_int n)) fields with
+          | [_,r], rest -> aux (n+1) (r::output) rest
+          | _ -> assert false
+  in function
+    | `Record fields -> aux 1 [] fields
+    | _ -> assert false
+    
+
 (** [normalise_query] substitutes values for the variables in a query,
     and performs interpolation in LIKE expressions.  *)
 let rec normalise_query (globals:environment) (env:environment) (db:database) (qry:query) : query =
@@ -195,7 +207,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                         ((Recv locals::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | FuncArg([], locals) -> assert false
+            | FuncArg([], _) -> assert false
             | FuncArg(param::params, locals) ->
 	        (* Just evaluate the first parameter; "value" is in fact a function
 	           value which will later be applied *)
@@ -204,12 +216,14 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
             | ThunkApply locals ->
                 begin match value with
-                  | `Function (vars, fnlocals, (), body) -> 
+                  | `Function ([], fnlocals, (), body) -> 
                       interpret globals (trim_env (fnlocals @ locals)) body cont
                   | `PrimitiveFunction name ->
                       apply_cont globals cont (Library.apply_pfun name [])
                   | `ClientFunction name ->
                       invoke_client_function name cont []
+                  | `Abs f ->
+                      apply_cont globals (FuncApply (locals, f, [], [])::cont) (`Record [])
                   | _ -> raise (Runtime_error ("error applying zero-argument function "^
                                                  string_of_result value))
                 end
@@ -243,6 +257,16 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	          | `Continuation (cont), [] ->
 		      (* Here we throw out the other continuation. *)
                       apply_cont globals cont value
+                  | `Abs f, [] -> 
+                      apply_cont globals (FuncApply (locals, f, [], [])::cont) 
+                        (`Record
+                           (snd 
+                              (List.fold_right
+                                 (fun field (n,tuple) ->
+                                    (n+1,
+                                     (string_of_int n, field)::tuple))
+                                 (value::evaluated_args)
+                                 (1, []))))
                   | _ -> raise (Runtime_error ("Applied non-function value: "^
                                                  string_of_result func))
                 end
@@ -262,31 +286,41 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                   (* FIXME: locals aren't needed here *)
             | (BinopApply(locals, op, lhsVal)) ->
 	        let result = 
-                  (match op with
-                     | `Equal -> bool (Library.equal lhsVal value)
-                     | `NotEq -> bool (not (Library.equal lhsVal value))
-                     | `LessEq -> bool (Library.less_or_equal lhsVal value)
-                     | `Less -> bool (Library.less lhsVal value)
-	             | `Union -> 
-                         (match lhsVal, value with
-	                    | `List (l), `List (r) -> `List (l @ r)
-	                    | _ -> raise(Runtime_error
-                                           ("Type error: Concatenation of non-list values: "
-					    ^ string_of_result lhsVal ^ " and "
-					    ^ string_of_result value))
-			 )
-	             | `RecExt label -> 
-		         (match lhsVal with
-		            | `Record fields -> 
-		                `Record ((label, value) :: fields)
-		            | _ -> assert false)
+                  begin match op with
+                    | `Equal -> bool (Library.equal lhsVal value)
+                    | `NotEq -> bool (not (Library.equal lhsVal value))
+                    | `LessEq -> bool (Library.less_or_equal lhsVal value)
+                    | `Less -> bool (Library.less lhsVal value)
+	            | `Union -> 
+                        begin match lhsVal, value with
+	                  | `List (l), `List (r) -> `List (l @ r)
+	                  | _ -> raise(Runtime_error
+                                         ("Type error: Concatenation of non-list values: "
+					  ^ string_of_result lhsVal ^ " and "
+					  ^ string_of_result value))
+                        end
+	            | `RecExt label -> 
+		        begin match lhsVal with
+		          | `Record fields -> 
+		              `Record ((label, value) :: fields)
+		          | _ -> assert false
+                        end
 	             | `MkTableHandle row ->
-			 (match lhsVal with
-			    | `Database (db, params) ->
-				apply_cont globals cont 
-                                  (`Table((db, params), charlist_as_string value, row))
-			    | _ -> failwith("Runtime type error: argument to table was not a database."))
-	          )
+			 begin match lhsVal with
+			   | `Database (db, params) ->
+			       apply_cont globals cont 
+                                 (`Table((db, params), charlist_as_string value, row))
+			   | _ -> failwith("Runtime type error: argument to table was not a database.")
+                         end
+                     | `App -> 
+                         begin match untuple value with
+                           | [] -> 
+                               apply_cont globals (ThunkApply locals ::cont) lhsVal
+                           | _::_ as v -> 
+                               let firsts, last = unsnoc v in
+                                 apply_cont globals (FuncApply (locals, lhsVal, [], firsts)::cont) last
+                         end
+                  end
 	        in
 	          apply_cont globals cont result
             | UnopApply (locals, op) ->
@@ -294,6 +328,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      MkColl -> apply_cont globals cont (`List [(value)])
 	           | MkVariant(label) -> 
 	               apply_cont globals cont (`Variant (label, value))
+                   | Result.Abs ->
+                       apply_cont globals cont (`Abs value)
                    | VrntSelect(case_label, case_variable, case_body, variable, body) ->
 	               (match value with
                           | `Variant (label, value) when label = case_label ->
@@ -434,6 +470,10 @@ fun globals locals expr cont ->
   | Syntax.Variable(name, _) -> 
       let value = (lookup globals locals name) in
 	apply_cont globals cont value
+  | Syntax.Abs (f, _) ->
+      eval f (UnopApply (locals, Result.Abs)::cont)
+  | Syntax.App (f, p, _) ->
+      eval f (BinopRight (locals, `App, p)::cont)
   | Syntax.Abstr (variable, body, _) ->
       apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
   | Syntax.Apply (Variable ("recv", _), [], _) ->

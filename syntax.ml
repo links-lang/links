@@ -56,6 +56,9 @@ type 'data expression' =
   | Constant of (constant * 'data)
   | Variable of (string * 'data)
 
+  | Abs of ('data expression' * 'data)
+  | App of ('data expression' * 'data expression' * 'data)
+
   | Apply of ('data expression' * 'data expression' list * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
@@ -196,6 +199,8 @@ let rec show t : 'a expression' -> string = function
   | Variable (name, data) when is_symbolic_ident name -> "(" ^ name ^ ")" ^ t data
   | Variable (name, data) -> name ^ t data
   | Apply (f, ps, data)    -> show t f ^ "(" ^ String.concat "," (List.map (show t) ps) ^ ")" ^ t data
+  | Abs (f, data) -> "abs " ^ show t f ^ t data
+  | App (e1, e2, data) -> show t e1 ^ " app " ^ show t e2 ^ t data
   | Condition (cond, if_true, if_false, data) ->
       "if (" ^ show t cond ^ ") " ^ show t if_true ^ " else " ^ show t if_false ^ t data
   | Comparison (left_value, oper, right_value, data) ->
@@ -305,6 +310,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Erase (e, _, _)
                | List_of (e, _)
                | Call_cc(e, _)
+               | Abs (e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
 
                | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
@@ -315,6 +321,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Concat (e1, e2, _)
                | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _)
+               | App (e1, e2, _)
                | SortBy (e1, e2, _) ->
                    [visitor visit_children e1; visitor visit_children e2]
                    
@@ -347,16 +354,13 @@ let reduce_program visitor combine combine_def combine_program (Program (defs, b
 let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expression' =
   match exp, exps with
       (* 0 subnodes *)
-(*     | Alias _, [] *)
     | Constant _, []
     | Variable _, []
     | Nil _, [] 
     | Placeholder _, []
-(*     | Alien _, [] *)
     | Wrong _, [] -> exp
         
     (* 1 subnodes *)
-(*     | Define (a, _, l, d)            , [e] -> Define (a, e, l, d) *)
     | Abstr (s, _, d)                , [e] -> Abstr (s, e, d)
     | Project (_, s, d)              , [e] -> Project (e, s, d)
     | Erase (_, s, d)                , [e] -> Erase (e, s, d)
@@ -366,6 +370,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | Database (_, d)                , [e] -> Database (e, d)
     | Call_cc (_, d)                 , [e] -> Call_cc (e, d)
     | HasType (_, t, d)              , [e] -> HasType (e, t, d)
+    | Abs (_, d)                     , [e] -> Abs (e, d)
 
     (* 2 subnodes *)
     | Comparison (_, c, _, d)                , [e1;e2] -> Comparison (e1, c, e2, d)
@@ -375,6 +380,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | For (_, s, _, d)                       , [e1;e2] -> For (e1, s, e2, d)
     | TableHandle (_, _, t, d)               , [e1;e2] -> TableHandle (e1, e2, t, d)
     | SortBy (_, _, d)                       , [e1;e2] -> SortBy (e1, e2, d)
+    | App (_, _, d)                          , [e1;e2] -> App (e1, e2, d)
 
     (* 3 subnodes *)
     | Condition (_, _, _, d), [e1;e2;e3] -> Condition (e1, e2, e3, d)
@@ -479,6 +485,8 @@ let expression_data : ('a expression' -> 'a) = function
   | HasType (_, _, data) -> data
   | Constant (_, data) -> data
   | Variable (_, data) -> data
+  | Abs (_, data) -> data
+  | App (_, _, data) -> data
   | Apply (_, _, data) -> data
   | Condition (_, _, _, data) -> data
   | Comparison (_, _, _, data) -> data
@@ -518,6 +526,8 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | HasType (a, b,_) ->  HasType (a, b,data) 
     | Constant (a, _) -> Constant (a, data)
     | Variable (a, _) -> Variable (a, data)
+    | Abs (a,_) -> Abs (a, data)
+    | App (a, b,_) -> App (a, b,data)
     | Apply (a, b,_) -> Apply (a, b,data)
     | Condition (a, b, c, _) -> Condition (a, b, c, data)
     | Comparison (a, b, c, _) -> Comparison (a, b, c, data)
@@ -680,6 +690,8 @@ let skeleton = function
   | Wrong d -> Wrong d
   | Constant (value, d) -> Constant (value, d)
   | Variable(x, d) -> Variable(x, d)
+  | Abs (f, d) -> Abs (f, d)
+  | App (f, p, d) -> App (f, p, d)
   | Apply(f, a, d) -> Apply(f, a, d)
   | Placeholder(label, d) -> Placeholder(label, d)
 

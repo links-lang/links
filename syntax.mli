@@ -13,6 +13,8 @@ type constant =
 type 'a expression' =
   | Constant of (constant * 'a)
   | Variable of (string * 'a)
+  | Abs of ('a expression' * 'a)
+  | App of ('a expression' * 'a expression' * 'a)
   | Apply of ('a expression' * 'a expression' list * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)
   | Comparison of ('a expression' * comparison * 'a expression' * 'a)
@@ -131,7 +133,7 @@ val dummy_position : position
 val no_expr_data : typed_data
 
 (* Which variables are l:name-bound? *)
-val lname_bound_vars : 'data expression' -> string list
+val lname_bound_vars : 'a expression' -> string list
 
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression

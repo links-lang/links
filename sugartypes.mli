@@ -14,9 +14,10 @@ type unary_op = [
 | `Minus
 | `FloatMinus
 | `Name of name
+| `Abs
 ]
-type logical_binop = [`And | `Or]
-type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name]
+type logical_binop = [`And | `Or ]
+type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name | `App ]
 
 type operator = [ unary_op | binop | `Project of name ]
 

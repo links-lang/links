@@ -134,7 +134,7 @@ let p1 fn =
 and p2 fn = 
   `PFun (fun [a;b] -> fn a b)
 and p3 fn = 
-  `PFun (fun (a) -> `PFun (fun b -> `PFun (fun c -> (fn a b c :> primitive))))
+  `PFun (fun [a;b;c] -> fn a b c)
 
 let client_only_1 fn = 
   p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))

@@ -47,6 +47,7 @@ val reconstruct_db_string : string * string -> string
 
 type unop = | MkColl
             | MkVariant of string
+            | Abs
             | MkDatabase
             | VrntSelect of
                 (string * string * Syntax.expression * string option *
@@ -57,6 +58,7 @@ type unop = | MkColl
 type binop = 
     [ Syntax.comparison
     | `Union
+    | `App
     | `RecExt of string
     | `MkTableHandle of Types.row]
 type xmlitem =
@@ -102,6 +104,7 @@ and result = [ primitive_value
 | `ClientFunction of string
 | `List of result list
 | `Record of (string * result) list
+| `Abs of result
 | `Variant of string * result ]
 and continuation = contin_frame list
 and binding = string * result

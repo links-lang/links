@@ -39,6 +39,7 @@ let pure : expression -> bool =
     | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
       -> for_all (pure default) arg
     | Apply _    -> false
+    | App _       -> false
     | TableQuery _ -> false
         (* Is callCC pure? *)
     | e       -> default e

@@ -282,7 +282,7 @@ and boiler_3 () =    "\n--> </script>
  </head>
  <!-- $Id$ -->
   <body><script type='text/javascript'>
-   _startTimer();" 
+   _startTimer();\n" 
 and  boiler_4 () = ";
   </script></body>
 </html>"
@@ -453,6 +453,27 @@ let rec generate : 'a expression' -> code =
       Fn(["__kappa"], 
          callk_yielding (Fn (arglist@ ["__kappa"], Call(generate body, [Var "__kappa"]))))
 
+  | Abs (p, d) ->
+      Fn(["__kappa"], 
+         Call(generate p, 
+              [Fn(["__content"],
+                  callk_yielding
+                    (Call (Var "abs",
+                           [Var "__content"])))]))
+  | App (f, p, _) -> 
+      let f_name    = gensym ~prefix:"__f" () 
+      and arg_name  = gensym ~prefix:"__f" () in
+        Fn (["__kappa"],
+            Call(generate f,
+                 [Fn ([f_name], 
+                      (Call(generate p,
+                            [Fn ([arg_name], 
+                                 (Call (Var "_yield", 
+                                        Call (Var "app", 
+                                              [Var f_name])
+                                        :: [Lst ([Var arg_name]); 
+                                            Var ("__kappa")])))])))]))
+
   | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
       let l_cps = generate l in
       let r_cps = generate r in
@@ -485,6 +506,8 @@ let rec generate : 'a expression' -> code =
         fold_right wrap_cps_terms (combine cps_args arg_names) innermost_call
       in
         Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)]))
+
+
   | Rec (bindings, body, _) ->
       Fn(["__kappa"],
 	 (fold_right 
@@ -767,6 +790,11 @@ and generate_direct_style : 'a expression' -> code =
   | Abstr (arglist, body, _) ->
       Fn (arglist, gd body)
         
+  | Abs (f,_) ->
+      failwith "nyi js gen direct_style abs"
+  | App _ -> 
+      failwith "nyi js gen direct_style app"
+
   | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
       Binop(gd l, binop_name op, gd r)
 

@@ -149,6 +149,8 @@ let count_newlines str =
 let isupper = function 'A'..'Z' -> true | _ -> false
 
 let keywords = [
+ "abs"      , ABS;
+ "app"      , APP;
  "alien"    , ALIEN;
  "as"       , AS;
  "case"     , CASE;

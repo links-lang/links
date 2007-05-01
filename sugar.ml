@@ -990,6 +990,7 @@ module Desugarer =
            | InfixAppl (`Minus, e1, e2)  -> Apply (Variable ("-", pos), [desugar e1; desugar e2], pos)
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
            | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(Boolean true, pos), desugar e2, pos)
+           | InfixAppl (`App, e1, e2) -> App (desugar e1, desugar e2, pos)
            | ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
            | ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | Escape (name, e) -> 
@@ -1052,6 +1053,7 @@ module Desugarer =
            | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), [desugar e], pos)
            | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), [desugar e], pos)
            | UnaryAppl (`Name n, e) -> Apply (Variable (n,  pos), [desugar e], pos)
+           | UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
            | ListLit  [] -> Nil (pos)
            | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
            | DBDelete ((pattern, table), condition) ->
