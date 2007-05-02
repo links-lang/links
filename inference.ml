@@ -46,8 +46,6 @@ let occurs_check_row alias_env var row =
 exception Unify_failure of string
 exception UndefinedVariable of string
 
-module ITO = TypeOps
-
 let db_descriptor_type =
   snd (Parse.parse_string Parse.datatype "(driver:String, name:String, args:String)")
 
@@ -71,7 +69,7 @@ let rec extract_row : datatype -> row = fun t ->
     | _ -> failwith
         ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
-let var_is_free_in_type var datatype = mem var (free_type_vars datatype)
+let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars datatype)
 
 (* a special kind of structural equality on types that doesn't look
 inside points *)
@@ -484,7 +482,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			raise (Unify_failure ("Rigid row variable cannot be unified with non-empty row\n"
 					      ^string_of_row extension_row))
 		  | `Flexible var ->
-		      if mem var (free_row_type_vars extension_row) then
+		      if TypeVarSet.mem var (free_row_type_vars extension_row) then
 			rec_row_intro point (var, extension_row)
 		      else if StringMap.is_empty extension_field_env then
 			match extension_row_var with
@@ -657,12 +655,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         match rec_env' with
 	  | None -> ()
 	  | Some rec_env ->
-	      if (ITO.get_row_var lrow = ITO.get_row_var rrow) then     
+	      if (get_row_var lrow = get_row_var rrow) then     
                  unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
                                                         (rfield_env', Unionfind.fresh `Closed))
 	      else
 		begin
-		  let fresh_row_var = ITO.fresh_row_variable() in	      
+		  let fresh_row_var = fresh_row_variable() in	      
 		    (* each row can contain fields missing from the other; 
 		       thus we call extend_field_env once in each direction *)
 		  let rextension =
@@ -728,9 +726,9 @@ let instantiate : environment -> string -> datatype = fun env var ->
 
 	  let tenv, renv = List.fold_left
 	    (fun (tenv, renv) -> function
-	       | `TypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv
-	       | `RigidTypeVar var -> IntMap.add var (ITO.fresh_type_variable ()) tenv, renv
-	       | `RowVar var -> tenv, IntMap.add var (ITO.fresh_row_variable ()) renv
+	       | `TypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
+	       | `RigidTypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
+	       | `RowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
 	    ) (IntMap.empty, IntMap.empty) quantifiers
 	  in
 	    instantiate_datatype (tenv, renv) t)
@@ -744,7 +742,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
  
  (the first argument specifies type variables that should remain free)
 *)
-let rec get_quantifiers : type_var_set -> datatype -> quantifier list = 
+let rec get_quantifiers : TypeVarSet.t -> datatype -> quantifier list = 
   fun bound_vars -> 
     function
       | `Not_typed -> failwith "Internal error: Not_typed encountered in get_quantifiers"
@@ -752,15 +750,15 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
       | `MetaTypeVar point ->
 	  (match Unionfind.find point with
 	     | `Flexible var
-	     | `Rigid var when IntSet.mem var bound_vars -> []
+	     | `Rigid var when TypeVarSet.mem var bound_vars -> []
 	     | `Flexible var -> [`TypeVar var]
 	     | `Rigid var -> [`RigidTypeVar var]
 	     | `Recursive (var, body) ->
 		 Debug.if_set (show_recursion) (fun () -> "rec (get_quantifiers): " ^(string_of_int var));
-		 if IntSet.mem var bound_vars then
+		 if TypeVarSet.mem var bound_vars then
 		   []
 		 else
-		   get_quantifiers (IntSet.add var bound_vars) body
+		   get_quantifiers (TypeVarSet.add var bound_vars) body
 	     | `Body t -> get_quantifiers bound_vars t)
       | `Function (f, m, t) ->
           let from_gens = get_quantifiers bound_vars f
@@ -773,29 +771,29 @@ let rec get_quantifiers : type_var_set -> datatype -> quantifier list =
       | `Application (_, args) ->
           unduplicate (=) (Utility.concat_map (get_quantifiers bound_vars) args)
 
-and get_row_var_quantifiers : type_var_set -> row_var -> quantifier list =
+and get_row_var_quantifiers : TypeVarSet.t -> row_var -> quantifier list =
   fun bound_vars row_var ->
     match Unionfind.find row_var with
       | `Closed -> []
       | `Flexible var
-      | `Rigid var when IntSet.mem var bound_vars -> []
+      | `Rigid var when TypeVarSet.mem var bound_vars -> []
       | `Flexible var
       | `Rigid var -> [`RowVar var]
       | `Recursive (var, rec_row) ->
 	  Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_quantifiers): " ^(string_of_int var));
-	  (if IntSet.mem var bound_vars then
+	  (if TypeVarSet.mem var bound_vars then
 	     []
 	   else
-	     get_row_quantifiers (IntSet.add var bound_vars) rec_row)
+	     get_row_quantifiers (TypeVarSet.add var bound_vars) rec_row)
       | `Body row -> get_row_quantifiers bound_vars row
 
-and get_field_spec_quantifiers : type_var_set -> field_spec -> quantifier list =
+and get_field_spec_quantifiers : TypeVarSet.t -> field_spec -> quantifier list =
     fun bound_vars ->
       function
 	| `Present t -> get_quantifiers bound_vars t
 	| `Absent -> []
 
-and get_row_quantifiers : type_var_set -> row -> quantifier list =
+and get_row_quantifiers : TypeVarSet.t -> row -> quantifier list =
     fun bound_vars (field_env, row_var) ->
       let field_vars = StringMap.fold
 	(fun _ field_spec vars ->
@@ -806,7 +804,7 @@ and get_row_quantifiers : type_var_set -> row -> quantifier list =
 	field_vars @ row_vars
 
 let env_type_vars env =
-  concat_map (free_type_vars -<- snd) (Types.environment_values env)
+  TypeVarSet.union_all (List.map (free_type_vars -<- snd) (Types.environment_values env))
 
 let type_mismatch ~expected ~inferred ~pos ~src msg =
   raise (Type_error (pos, 
@@ -820,7 +818,7 @@ let type_mismatch ~expected ~inferred ~pos ~src msg =
 *)
 let generalise : environment -> datatype -> assumption = 
   fun env t ->
-    let vars_in_env = intset_of_list (env_type_vars env) in
+    let vars_in_env = env_type_vars env in
     let quantifiers = get_quantifiers vars_in_env t in
       Debug.if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t) 
@@ -834,16 +832,6 @@ let constant_type = function
   | Char _ -> `Primitive `Char
   | String _ -> string_type
 
-(* let type_check_definition : typing_environment -> untyped_definition -> definition = *)
-(*   fun ((env, alias_env) as typing_env) expression -> *)
-(*     let unify = unify alias_env *)
-(*     and unify_rows = unify_rows alias_env in *)
-(*   try *)
-(*     Debug.if_set (show_typechecking) (fun () -> "Typechecking definition: " ^ (string_of_definition definition)); *)
-(*     match (definition : Syntax.untyped_definition) with *)
-(*   | (Define (variable, _, _, `U pos) : Syntax.untyped_definition) -> nested_def pos variable *)
-
-
 let rec type_check : typing_environment -> untyped_expression -> expression =
   fun ((env, alias_env) as typing_env) expression ->
     let unify = unify alias_env
@@ -856,9 +844,9 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       Variable (name, `T (pos, instantiate env name, None))
   | Abs (f, `U pos) ->
       let f = type_check typing_env f
-      and arg_type = `Record (ITO.make_empty_open_row ()) 
-      and result_type = ITO.fresh_type_variable ()
-      and mb_type = ITO.fresh_type_variable () in
+      and arg_type = `Record (make_empty_open_row ()) 
+      and result_type = fresh_type_variable ()
+      and mb_type = fresh_type_variable () in
         unify (type_of_expression f, 
                `Function (make_tuple_type [arg_type], 
                           mb_type, 
@@ -868,11 +856,11 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   | App (f, p, `U pos) ->
       let f = type_check typing_env f
       and p = type_check typing_env p 
-      and result_type = ITO.fresh_type_variable ()
+      and result_type = fresh_type_variable ()
       and mb_type = instantiate env "_MAILBOX_" 
       in
         (* not really necessary, but might catch some errors *) 
-        unify (type_of_expression p, `Record (ITO.make_empty_open_row ())); 
+        unify (type_of_expression p, `Record (make_empty_open_row ())); 
         unify (type_of_expression f,
                `Function (type_of_expression p, mb_type, result_type));
         App (f, p, `T (pos, result_type, None))
@@ -882,7 +870,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let mb_type = instantiate env "_MAILBOX_" in
       let f_type = type_of_expression f in
       let arg_type = make_tuple_type (List.map type_of_expression ps) in
-      let return_type = ITO.fresh_type_variable () in
+      let return_type = fresh_type_variable () in
         begin
           try
             unify (`Function(arg_type, mb_type, return_type), f_type);
@@ -909,8 +897,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	unify (type_of_expression l, type_of_expression r);
         Comparison (l, oper, r, `T (pos, `Primitive `Bool, None))
   | Abstr (variables, body, `U pos) ->
-      let mb_type = ITO.fresh_type_variable () in
-      let mapping = map2 (fun n v -> (string_of_int n, v, ITO.fresh_type_variable ())) (fromTo 1 (1 + List.length variables)) variables in
+      let mb_type = fresh_type_variable () in
+      let mapping = map2 (fun n v -> (string_of_int n, v, fresh_type_variable ())) (fromTo 1 (1 + List.length variables)) variables in
       let body_env = 
         fold_right
           (fun (_,v, vtype) env -> (v, ([], vtype)) :: env)
@@ -942,16 +930,16 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Application ("Event", []))) :: env in
 (* should now use alien javascript jslib : ... to import library functions *)
-(*      let attr_env = ("jslib", ([], `Record(ITO.make_empty_open_row()))) :: attr_env in *)
+(*      let attr_env = ("jslib", ([], `Record(make_empty_open_row()))) :: attr_env in *)
         (* extend the env with each l:name bound variable *)
       let attr_env = 
-	("_MAILBOX_", ([], ITO.fresh_type_variable ())) ::
+	("_MAILBOX_", ([], fresh_type_variable ())) ::
           fold_right (fun s env -> (s, ([], string_type)) :: env) bindings attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check (attr_env, alias_env) expr)) special_attrs in
         (* Check that the bound expressions have type 
            <strike>XML</strike> unit. *)
 (*      let _ =
-	List.iter (fun (_, expr) -> unify(type_of_expression expr, ITO.fresh_type_variable ()(*Types.xml*))) special_attrs in*)
+	List.iter (fun (_, expr) -> unify(type_of_expression expr, fresh_type_variable ()(*Types.xml*))) special_attrs in*)
       let contents = map (type_check typing_env) cs in
       let nonspecial_attrs = map (fun (k,v) -> k, type_check typing_env v) nonspecial_attrs in
 (*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
@@ -986,7 +974,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                 let rtype = type_of_expression r in
                   (* make sure rtype is a record type! *)
                   
-                  unify(rtype, `Record (absent_field_env, ITO.fresh_row_variable()));
+                  unify(rtype, `Record (absent_field_env, fresh_row_variable()));
                   
                   let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
                     
@@ -1015,12 +1003,12 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         end           
   | Record_selection (label, label_variable, variable, value, body, `U pos) ->
       let value = type_check typing_env value in
-      let label_variable_type = ITO.fresh_type_variable () in
-	unify (type_of_expression value, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type))));
+      let label_variable_type = fresh_type_variable () in
+	unify (type_of_expression value, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
 
 	let value_row = extract_row (type_of_expression value) in
 	let label_var_equiv = label_variable, ([], label_variable_type) in
-	let var_equiv = variable, ([], `Record (ITO.set_field (label, `Absent) value_row)) in
+	let var_equiv = variable, ([], `Record (row_with (label, `Absent) value_row)) in
 	  
 	let body_env = label_var_equiv :: var_equiv :: env in
 	let body = type_check (body_env, alias_env) body in
@@ -1028,24 +1016,24 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	  Record_selection (label, label_variable, variable, value, body, `T (pos, body_type, None))
   | Project (expr, label, `U pos) ->
       let expr = type_check typing_env expr in
-      let label_variable_type = ITO.fresh_type_variable () in
-	unify (type_of_expression expr, `Record (ITO.make_singleton_open_row (label, `Present (label_variable_type))));
+      let label_variable_type = fresh_type_variable () in
+	unify (type_of_expression expr, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
         Project (expr, label, `T (pos, label_variable_type, None))
   | Erase (value, label, `U pos) ->
       let value = type_check typing_env value in
       let value_row = extract_row (type_of_expression value) in
-        Erase (value, label, `T (pos, `Record (ITO.set_field (label, `Absent) value_row), None))
+        Erase (value, label, `T (pos, `Record (row_with (label, `Absent) value_row), None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
-      let type' = `Variant (ITO.make_singleton_open_row (label, `Present (type_of_expression value))) in
+      let type' = `Variant (make_singleton_open_row (label, `Present (type_of_expression value))) in
         Variant_injection (label, value, `T (pos, type', None))
   | Variant_selection (value, case_label, case_variable, case_body, variable, body, `U pos) ->
       let value = type_check typing_env value in
       let value_type = type_of_expression value in
       
-      let case_var_type = ITO.fresh_type_variable() in
-      let body_row = ITO.make_empty_open_row () in
-      let variant_type = `Variant (ITO.set_field (case_label, `Present case_var_type) body_row) in
+      let case_var_type = fresh_type_variable() in
+      let body_row = make_empty_open_row () in
+      let variant_type = `Variant (row_with (case_label, `Present case_var_type) body_row) in
 	unify (variant_type, value_type);
 
 	let case_body = type_check (((case_variable, ([], case_var_type)) :: env), alias_env) case_body in
@@ -1072,7 +1060,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
              [|B:() | c|]
            which clearly doesn't!
         *)
-	let body_var_type = `Variant (ITO.set_field (case_label, `Absent) body_row) in
+	let body_var_type = `Variant (row_with (case_label, `Absent) body_row) in
 	let body = type_check (((variable, ([], body_var_type)) :: env), alias_env) body in
 
 	let case_type = type_of_expression case_body in
@@ -1081,17 +1069,17 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	  Variant_selection (value, case_label, case_variable, case_body, variable, body, `T (pos, body_type, None))
   | Variant_selection_empty (value, `U pos) ->
       let value = type_check typing_env value in
-      let new_row_type = `Variant (ITO.make_empty_closed_row()) in
+      let new_row_type = `Variant (make_empty_closed_row()) in
         unify(new_row_type, type_of_expression value);
-        Variant_selection_empty (value, `T (pos, ITO.fresh_type_variable (), None))
+        Variant_selection_empty (value, `T (pos, fresh_type_variable (), None))
   | Nil (`U pos) ->
-      Nil (`T (pos, `Application ("List", [ITO.fresh_type_variable ()]), None))
+      Nil (`T (pos, `Application ("List", [fresh_type_variable ()]), None))
   | List_of (elem, `U pos) ->
       let elem = type_check typing_env elem in
 	List_of (elem,
 		 `T (pos, `Application ("List", [type_of_expression elem]), None))
   | Concat (l, r, `U pos) ->
-      let tvar = ITO.fresh_type_variable () in
+      let tvar = fresh_type_variable () in
       let l = type_check typing_env l in
 	unify (type_of_expression l, `Application ("List", [tvar]));
 	let r = type_check typing_env r in
@@ -1099,8 +1087,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	  let type' = `Application ("List", [tvar]) in
 	    Concat (l, r, `T (pos, type', None))
   | For (expr, var, value, `U pos) ->
-      let value_tvar = ITO.fresh_type_variable () in
-      let expr_tvar = ITO.fresh_type_variable () in
+      let value_tvar = fresh_type_variable () in
+      let expr_tvar = fresh_type_variable () in
       let value = type_check typing_env value in
 	unify (type_of_expression value, `Application ("List", [value_tvar]));
 	let expr_env = (var, ([], value_tvar)) :: env in
@@ -1111,8 +1099,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   | Call_cc(arg, `U pos) -> 
       (* TBD: Make this a primitive function (need to pass c.c. to prims). *)
       let arg = type_check typing_env arg in
-      let contrettype = ITO.fresh_type_variable () in
-      let anytype = ITO.fresh_type_variable () in
+      let contrettype = fresh_type_variable () in
+      let anytype = fresh_type_variable () in
       let mailboxtype = 
           instantiate env "_MAILBOX_" in
       let conttype =
@@ -1133,8 +1121,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                 | Right _ -> env)
 	   query.Query.result_cols StringMap.empty, Unionfind.fresh `Closed) in
       let datatype =  `Application ("List", [`Record row]) in
-      let rrow = ITO.make_empty_open_row () in
-      let wrow = ITO.make_empty_open_row () in
+      let rrow = make_empty_open_row () in
+      let wrow = make_empty_open_row () in
       let ths = alistmap (type_check typing_env) ths
       in
         Utility.for_each ths 
@@ -1157,7 +1145,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let expr = type_check typing_env expr in
         SortBy(expr, byExpr, `T (pos, type_of_expression expr, None))
   | Wrong (`U pos) ->
-      Wrong(`T (pos, ITO.fresh_type_variable(), None))
+      Wrong(`T (pos, fresh_type_variable(), None))
   | HasType(expr, datatype, `U pos) ->
       let expr = type_check typing_env expr in
       let expr_type = type_of_expression expr in
@@ -1195,7 +1183,7 @@ and
                             match t with
                               | Some t ->
                                   (name, generalise env t)
-                              | None -> (name, ([], ITO.fresh_type_variable ())))
+                              | None -> (name, ([], fresh_type_variable ())))
 		       defns) in
       let inner_env = var_env @ env in
       let type_check result (name, expr, t) =
@@ -1254,7 +1242,7 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),
-            Alias (typename, vars, datatype, `T (pos, `Record (ITO.make_empty_closed_row ()), None))
+            Alias (typename, vars, datatype, `T (pos, `Record (make_empty_closed_row ()), None))
         | Alien (language, name, assumption, `U pos)  ->
             let (qs, k) = assumption
             in

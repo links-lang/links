@@ -13,15 +13,13 @@ type 'a stringmap = 'a Utility.StringMap.t
 type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 
 (* type var sets *)
-module TypeVarSet : Set.S with type elt = int
-type type_var_set = Utility.IntSet.t
+module TypeVarSet : Utility.INTSET
 
 (* points *)
 type 'a point = 'a Unionfind.point 
 
 module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
 module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
-
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract ]
@@ -76,55 +74,55 @@ val unit_type : datatype
 val string_type : datatype
 val xml_type : datatype
 
-(* [TODO]
-      change the return type of these functions to be IntSet.t
-*)
-val free_type_vars : datatype -> int list
-val free_row_type_vars : row -> int list
+(* get type variables *)
+val free_type_vars : datatype -> TypeVarSet.t
+val free_row_type_vars : row -> TypeVarSet.t
+
+val free_bound_type_vars : datatype -> TypeVarSet.t
+val free_bound_row_type_vars : row -> TypeVarSet.t
 
 (* used to freshen mailboxes in typename aliases *)
 val freshen_mailboxes : datatype -> datatype
 
-(* type operations *)
-module type TYPEOPS =
-sig
-  (* type variable construction *)
-  val make_type_variable : int -> datatype
-  val make_rigid_type_variable : int -> datatype
-  val make_row_variable : int -> row_var
+(** Fresh type variables *)
+val fresh_raw_variable : unit -> int
 
-  (* fresh type variable generation *)
-  val fresh_type_variable : unit -> datatype
-  val fresh_rigid_type_variable : unit -> datatype
-  val fresh_row_variable : unit -> row_var
-  val fresh_rigid_row_variable : unit -> row_var
+val bump_variable_counter : int -> unit
 
-  (* empty row constructors *)
-  val make_empty_closed_row : unit -> row
-  val make_empty_open_row : unit -> row
-  val make_empty_open_row_with_var : int -> row
+(* type variable construction *)
+val make_type_variable : int -> datatype
+val make_rigid_type_variable : int -> datatype
+val make_row_variable : int -> row_var
+  
+(* fresh type variable generation *)
+val fresh_type_variable : unit -> datatype
+val fresh_rigid_type_variable : unit -> datatype
 
-  (* singleton row constructors *)
-  val make_singleton_closed_row : (string * field_spec) -> row
-  val make_singleton_open_row : (string * field_spec) -> row
-  val make_singleton_open_row_with_var : (string * field_spec) -> int -> row
+val fresh_row_variable : unit -> row_var
+val fresh_rigid_row_variable : unit -> row_var
 
-  (* row predicates *)
-  val is_closed_row : row -> bool
-  val is_absent_from_row : string -> row -> bool
+(** rows *)
+(* empty row constructors *)
+val make_empty_closed_row : unit -> row
+val make_empty_open_row : unit -> row
 
-  (* row_var retrieval *)
-  val get_row_var : row -> int option
+(* singleton row constructors *)
+val make_singleton_closed_row : (string * field_spec) -> row
+val make_singleton_open_row : (string * field_spec) -> row
 
-  (* row update *)
-  val set_field : (string * field_spec) -> row -> row
+(* row predicates *)
+val is_closed_row : row -> bool
+val is_absent_from_row : string -> row -> bool
 
-  (* constants *)
-  val empty_field_env : field_spec_map
-  val closed_row_var : row_var
-end
+(* row_var retrieval *)
+val get_row_var : row -> int option
 
-module TypeOps : TYPEOPS
+(* row update *)
+val row_with : (string * field_spec) -> row -> row
+
+(* constants *)
+val empty_field_env : field_spec_map
+val closed_row_var : row_var
 
 val make_tuple_type : datatype list -> datatype
 
@@ -142,23 +140,23 @@ val is_empty_row : row -> bool
 
 (** Convert a row to the form (field_env, row_var)
     where row_var is of the form:
-{[
-    `RowVar None
-  | `MetaRowVar (`RowVar (Some var))
-  | `MetaRowVar (`RecRowVar (var, rec_row))
-]}
+      [ `Closed
+      | `Flexible var
+      | `Rigid var
+      | `Recursive
+      ]
 *)
 val flatten_row : row -> row
 
 (**
  As flatten_row except if the flattened row_var is of the form:
 
-   `MetaRowVar (`RecRowVar (var, rec_row))
+   `Recursive (var, rec_row)
 
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
 
-Also returns the outermost RecRowVar that was unwrapped if it exists,
+Also returns the outermost `Recursive that was unwrapped if it exists,
 or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
@@ -179,9 +177,6 @@ type inference_type_map =
        (row Unionfind.point) Utility.IntMap.t ref)
 
 (*type context = environment * inference_type_map*)
-
-(** Generate a fresh type variable *)
-val fresh_raw_variable : unit -> int
 
 (* environments *)
 val concat_environment : typing_environment -> typing_environment -> typing_environment

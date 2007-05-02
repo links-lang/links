@@ -466,8 +466,7 @@ let freevarSet (expression : 'a expression') : StringSet.t =
             (fromList (lname_bound_vars x))
       | other -> default other
   in 
-  let unionAll sets = List.fold_right S.union sets S.empty in
-    reduce_expression aux' (unionAll -<- snd) expression
+    reduce_expression aux' (S.union_all -<- snd) expression
 
 let freevars (expression : 'a expression') : string list = 
   StringSet.elements (freevarSet expression)
@@ -476,6 +475,43 @@ let freevars_def def = visit_def [] freevars def
 
 let freevars_program (Program (defs, body)) =
   Utility.concat_map freevars_def defs @ freevars body
+
+let free_bound_type_vars expression =
+  let module S = Types.TypeVarSet in
+  let fbtv = Types.free_bound_type_vars in
+  let fb default = function
+    | HasType (_, t, _) -> fbtv t
+    | Rec (defs, _, _) ->
+        List.fold_right (fun (_, _, t) xs ->
+                           S.union
+                             (opt_app fbtv S.empty t)
+                             xs) defs S.empty
+    | TableHandle (_, _, (r, w), _) ->
+        S.union (fbtv r) (fbtv w)
+    | other -> default other
+  in
+    reduce_expression fb (S.union_all -<- snd) expression
+
+let free_bound_type_vars_def def =
+  let module S = Types.TypeVarSet in
+  let fbtv = Types.free_bound_type_vars in
+    match def with
+      | Define (_, e, _, _) -> free_bound_type_vars e
+      | Alias (_, vars, t, _) ->
+          S.union (S.from_list vars) (fbtv t)
+      | Alien (_, _, (vars, t), _) ->
+          S.union
+            (S.from_list
+               (List.map (function
+                            | `TypeVar var | `RigidTypeVar var | `RowVar var -> var) vars))
+            (fbtv t)
+
+let free_bound_type_vars_program (Program (defs, body))=
+  let module S = Types.TypeVarSet in
+  let fbtv = Types.free_bound_type_vars in
+    S.union
+      (S.union_all (List.map free_bound_type_vars_def defs))
+      (free_bound_type_vars body)
 
 let rec list_expr data = function
     [] -> Nil(data)

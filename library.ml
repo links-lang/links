@@ -106,7 +106,7 @@ let float_op impl : located_primitive * Types.assumption =
 let conversion_op' ~unbox ~conv ~(box :'a->result) : result list -> result =
   fun [x] -> (box (conv (unbox x)))
 
-let make_type_variable = Types.TypeOps.make_type_variable
+let make_type_variable = Types.make_type_variable
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
   (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
@@ -273,7 +273,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 
   "_MAILBOX_",
   (`Int (num_of_int 0),
-   let u = TypeOps.fresh_type_variable () in
+   let u = fresh_type_variable () in
      (* Deliberately non-quantified type.  Mailboxes are
         non-polymorphic, so this is a so-called "weak type
         variable". *)
@@ -707,9 +707,9 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             box_bool (Str.string_match regex string 0)),
     let qs, regex = datatype Linksregex.Regex.datatype in
     let mb = Types.fresh_raw_variable () in
-    let arg_type = `Record (Types.TypeOps.set_field ("1", `Present string_type)
-                              (Types.TypeOps.set_field ("2", `Present regex)
-                                 (Types.TypeOps.make_empty_closed_row ()))) in
+    let arg_type = `Record (Types.row_with ("1", `Present string_type)
+                              (Types.row_with ("2", `Present regex)
+                                 (Types.make_empty_closed_row ()))) in
       ((`TypeVar mb) :: qs,
        `Function (arg_type, make_type_variable mb, `Primitive `Bool))));
 

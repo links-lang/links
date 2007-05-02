@@ -33,8 +33,8 @@ let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_v
 let show = attempt Result.string_of_result
 
 let type_matches ~inferred ~expected = 
-  let nfreevars = 
-    List.length -<- Types.free_type_vars 
+  let nfreevars =  
+    Types.TypeVarSet.cardinal -<- Types.free_type_vars 
   and inferred = 
     Instantiate.instantiate_datatype (Types.make_fresh_envs inferred) inferred
   and expected = 
@@ -62,7 +62,7 @@ let type_matches ~inferred ~expected =
     in try
         let c = Types.free_type_vars r in
         Inference.unify Library.alias_env (l, r);
-          List.sort compare c = List.sort compare (Types.free_type_vars r);
+          Types.TypeVarSet.equal c (Types.free_type_vars r);
     with _ -> false
   in check_rhs_unchanged inferred expected
   && check_rhs_unchanged expected inferred 

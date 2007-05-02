@@ -731,9 +731,9 @@ module Desugarer =
            | UnitType -> Types.unit_type
            | TupleType ks -> 
                let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
-               and unit = Types.TypeOps.make_empty_closed_row ()
+               and unit = Types.make_empty_closed_row ()
                and present (s, x) = (s, `Present x)
-               in `Record (fold_right2 (curry (Types.TypeOps.set_field -<- present)) labels (map (desugar var_env) ks) unit)
+               in `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (desugar var_env) ks) unit)
            | RecordType row -> `Record (desugar_row var_env row)
            | VariantType row -> `Variant (desugar_row var_env row)
            | TableType (r, w) -> `Table (desugar var_env r, desugar var_env w)
@@ -744,7 +744,7 @@ module Desugarer =
      and desugar_row ((tenv, renv) as var_env) (fields, rv) =
        let lookup_row = flip StringMap.find renv in
        let seed = match rv with
-         | `Closed    -> Types.TypeOps.make_empty_closed_row ()
+         | `Closed    -> Types.make_empty_closed_row ()
          | `Open rv ->
              (StringMap.empty, lookup_row rv)
          | `Recursive (name, r) ->
@@ -756,7 +756,7 @@ module Desugarer =
        and fields = map (fun (k, v) -> match v with
                            | `Absent -> (k, `Absent)
                            | `Present v -> (k, `Present (desugar var_env v))) fields 
-       in fold_right Types.TypeOps.set_field fields seed
+       in fold_right Types.row_with fields seed
      in desugar, desugar_row
 
    let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 

@@ -24,6 +24,7 @@ end
 include Functional
 
 (*** string environments ***)
+module type STRINGMAP = Map.S with type key = string
 module StringMap = Map.Make(String)
 
 type 'a stringmap = 'a StringMap.t
@@ -87,15 +88,17 @@ module StringMapUtils = MapUtils(StringMap)
 let superimpose a b = 
   StringMap.fold StringMap.add b a
 
-module Set (Ord : Set.OrderedType) :
+module type SET =
 sig
-  include Set.S with type elt = Ord.t 
-                and type t = Set.Make(Ord).t
+  include Set.S
   
   val singleton : elt -> t
   val union_all : t list -> t
   val from_list : elt list -> t
-end =
+end
+
+module Set (Ord : Set.OrderedType) :
+SET with type elt = Ord.t =
 struct
   include Set.Make(Ord)
   let singleton s = add s empty
@@ -103,10 +106,8 @@ struct
   let from_list l = List.fold_right add l empty
 end
 
-
-
-
-module StringSet = Set(String)
+module type STRINGSET = SET with type elt = string
+module StringSet : STRINGSET = Set(String)
 module Show_stringset = Show.Show_set(String)(Primitives.Show_string)
 
 (*** int environments ***)
@@ -116,8 +117,9 @@ struct
   let compare : int -> int -> int = compare
 end
 module IntMap = Map.Make(OrderedInt)
-module IntSet = Set(OrderedInt)
 
+module type INTSET = SET with type elt = int
+module IntSet : INTSET = Set(OrderedInt)
 module Show_intset = Show.Show_set(OrderedInt)(Primitives.Show_int)
 
 let intset_of_list l = List.fold_right IntSet.add l IntSet.empty

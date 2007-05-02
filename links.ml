@@ -212,9 +212,20 @@ let main () =
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
   (* load prelude: *)
-  let prelude_types, (Syntax.Program (prelude, _)) =
+  let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
+  (* make sure the fresh type variable counter does not clash with any type variables from
+     the prelude
+
+     [BUG]
+     
+     we should really do something similar for term variables
+  *)
+  let _ =
+    Types.bump_variable_counter
+      (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+    
   let prelude_compiled = Interpreter.run_defs [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 

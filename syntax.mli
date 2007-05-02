@@ -90,6 +90,10 @@ val freevars : 'a expression' -> string list
 val freevars_def : 'a definition' -> string list
 val freevars_program : 'a program' -> string list
 
+val free_bound_type_vars : 'a expression' -> Types.TypeVarSet.t
+val free_bound_type_vars_def : 'a definition' -> Types.TypeVarSet.t
+val free_bound_type_vars_program : 'a program' -> Types.TypeVarSet.t
+
 (** {0 Variable-substitution functions} 
     TBD: gen'ize these for typed & other exprs as well *)
 val subst_free : string -> untyped_expression -> untyped_expression -> untyped_expression
