@@ -1294,7 +1294,11 @@ module Desugarer =
          (* Note: trees_ppos will become the position for each tuple;
             the position of the tuple is what's reported when duplicate
             bindings are present within one form. *)
-       let handlerFunc = fold_left (fun result ps -> FunLit(None, [ps], result), trees_ppos) handlerBody bindings in
+       let handlerFunc =  FunLit (None,
+                                  List.map (function
+                                              | [b] -> [b]
+                                              | bs -> [`Tuple bs, trees_ppos]) (List.rev bindings),
+                                  handlerBody), trees_ppos in
          ctxt (Apply(Variable("pure", pos), [desugar' lookup_pos handlerFunc], pos)), returning_bindings
            
      and desugar_form_expr formExpr : untyped_expression * ppattern list list =
