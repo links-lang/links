@@ -479,15 +479,16 @@ let freevars_program (Program (defs, body)) =
 let free_bound_type_vars expression =
   let module S = Types.TypeVarSet in
   let fbtv = Types.free_bound_type_vars in
-  let fb default = function
-    | HasType (_, t, _) -> fbtv t
-    | Rec (defs, _, _) ->
-        List.fold_right (fun (_, _, t) xs ->
-                           S.union
-                             (opt_app fbtv S.empty t)
-                             xs) defs S.empty
-    | TableHandle (_, _, (r, w), _) ->
-        S.union (fbtv r) (fbtv w)
+  let rec fb default = function
+    | HasType (e, t, _) -> S.union (fb default e) (fbtv t)
+    | Rec (defs, e, _) ->
+        S.union
+          (List.fold_right (fun (_, e, t) xs ->
+                              S.union_all
+                                [fb default e; opt_app fbtv S.empty t; xs]) defs S.empty)
+          (fb default e)
+    | TableHandle (e1, e2, (r, w), _) ->
+        S.union_all [fb default e1; fb default e2; fbtv r; fbtv w]
     | other -> default other
   in
     reduce_expression fb (S.union_all -<- snd) expression
