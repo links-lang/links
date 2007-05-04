@@ -25,6 +25,10 @@ type 'r a_pattern = [
   | `HasType of ('r * Types.datatype)
 ]
 
+let appPrim pos name args = 
+ Apply (Variable (name, pos), args, pos)
+
+
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
 (** Construct a Links list out of a list of Links expressions; all
@@ -39,9 +43,6 @@ let make_links_list pos elems =
 let make_xml_context tag (attrs:(string * untyped_expression) list) pos = 
   let hole = gensym() in
     Abstr([hole], Xml_node(tag, attrs, [Variable(hole, pos)], pos), pos)
-
-let apply2 pos f x y = 
-  Apply(f, [x; y], pos)
 
 (* Various specializations of [gensym] *)
 let unique_name () = Utility.gensym ()
@@ -766,7 +767,6 @@ module Desugarer =
    let rec get_type_vars : phrase -> quantifier list =
      let empty = [] in
      let union = (unduplicate (=)) -<- List.concat in
-     let flatten = List.concat in
      let rec get_type_vars =
        fun (s, _) ->
          let tv datatype = [typevars datatype] in
@@ -963,6 +963,7 @@ module Desugarer =
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
        let pos = `U (lookup_pos pos')
        and patternize = simple_pattern_of_pattern var_env lookup_pos in
+       let appPrim = appPrim pos in
        let desugar = desugar' lookup_pos in
          match s with
            | TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
@@ -979,15 +980,16 @@ module Desugarer =
            | InfixAppl (`Name "<=", e1, e2)  -> Comparison (desugar e1, `LessEq, desugar e2, pos)
            | InfixAppl (`Name "<>", e1, e2)  -> Comparison (desugar e1, `NotEq, desugar e2, pos)
            | InfixAppl (`Name "++", e1, e2)  -> Concat (desugar e1, desugar e2, pos)
-           | InfixAppl (`Name "!", e1, e2)  -> Apply (Variable ("send", pos), [desugar e1; desugar e2], pos) 
+           | InfixAppl (`Name "!", e1, e2)  -> appPrim "send" [desugar e1; desugar e2]
            | InfixAppl (`Name n, e1, e2)  -> 
                let `U (a,b,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> Apply (Variable ("~", pos), [desugar e1; desugar (desugar_regex desugar pos' r, pos')], pos)
+           | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> (appPrim "~" 
+                                                             [desugar e1; desugar (desugar_regex desugar pos' r, pos')])
            | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
-           | InfixAppl (`FloatMinus, e1, e2)  -> Apply (Variable ("-.", pos), [desugar e1; desugar e2], pos)
-           | InfixAppl (`Minus, e1, e2)  -> Apply (Variable ("-", pos), [desugar e1; desugar e2], pos)
+           | InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
+           | InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
            | InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
            | InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(Boolean true, pos), desugar e2, pos)
            | InfixAppl (`App, e1, e2) -> App (desugar e1, desugar e2, pos)
@@ -1050,9 +1052,9 @@ module Desugarer =
                let readtype = `Record (desugar_row var_env row) in
                let writetype = `Record (desugar_row var_env write_row) in
                  TableHandle (desugar db, desugar name, (readtype, writetype), pos)
-           | UnaryAppl (`Minus, e)      -> Apply (Variable ("negate",   pos), [desugar e], pos)
-           | UnaryAppl (`FloatMinus, e) -> Apply (Variable ("negatef",  pos), [desugar e], pos)
-           | UnaryAppl (`Name n, e) -> Apply (Variable (n,  pos), [desugar e], pos)
+           | UnaryAppl (`Minus, e)      -> appPrim "negate" [desugar e]
+           | UnaryAppl (`FloatMinus, e) -> appPrim "negatef" [desugar e]
+           | UnaryAppl (`Name n, e) -> appPrim n [desugar e]
            | UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
            | ListLit  [] -> Nil (pos)
            | ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (ListLit (es), pos'), pos)
@@ -1214,7 +1216,7 @@ module Desugarer =
                CDATA.
                Where's a good place to do so? 
            *)
-           | TextNode s -> Apply (Variable ("stringToXml", pos), [Constant(String s, pos)], pos)
+           | TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
            | Xml (tag, attrs, subnodes) -> 
                let concat a b = 
                  Concat (desugar a, b, pos) in
@@ -1246,11 +1248,10 @@ module Desugarer =
            | TypeDeclaration _
            | Foreign _ -> assert false
 
-     and forest_to_form_expr trees yieldsClause (pos:Syntax.untyped_data) 
-         (trees_ppos) = 
-       (* (TBD: could have a pass-through case for when there are no
-          bindings in the forest.) *)
-
+     and forest_to_form_expr trees yieldsClause 
+         (pos:Syntax.untyped_data) 
+         (trees_ppos:Sugartypes.pposition)
+         : (Syntax.untyped_expression * Sugartypes.ppattern list list) = 
        (* We pass over the forest finding the bindings and construct a
           term-context representing all of the form/yields expression
           except the `yields' part (the handler). Here bindings
@@ -1259,14 +1260,12 @@ module Desugarer =
           singleton, a single value as bound by a binder.  *)
        let ctxt, bindings =
          fold_right
-           (fun (_, lpos as l) (ctxt, bs) -> 
+           (fun l (ctxt, bs) -> 
               let l_unsugared, bindings = desugar_form_expr l in
-                ((fun r -> (apply2 pos
-                              (Variable("@@@", pos)) 
-                              l_unsugared
-                              (ctxt(r)))),
-                 bindings @ bs)
-           ) trees ((fun r -> r), []) in
+                (fun r -> appPrim pos "@@@"  [l_unsugared; ctxt r]),
+              bindings @ bs) 
+           trees
+           (identity, []) in
          (* Next we construct the handler body from the yieldsClause,
             if any.  The yieldsClause is the user's handler; if it is
             None then we construct a default handler that just bundles
@@ -1276,14 +1275,12 @@ module Desugarer =
             representing a list of tuples of values.  *)
        let handlerBody, bindings, returning_bindings = 
          match yieldsClause with
-             Some formHandler -> formHandler, bindings, []
+             Some formHandler -> 
+               formHandler, bindings, ([]:Sugartypes.ppattern list list)
            | None ->
-               let fresh_bindings = map (fun bs ->
-                                           map (fun (_, ppos) ->
-                                                  `Variable (unique_name ()), ppos) bs) bindings
-               in
-                 ((TupleLit (map (fun (`Variable x, ppos) -> Var x, ppos) (flatten fresh_bindings)),
-                   (Lexing.dummy_pos, Lexing.dummy_pos)),
+               let fresh_bindings = map (map (fun (_, ppos) -> `Variable (unique_name ()), ppos)) bindings in
+               let variables = map (fun (`Variable x, ppos) -> Var x, ppos) (flatten fresh_bindings) in
+                 ((TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos)),
                   fresh_bindings,
                   [flatten bindings])
        in
@@ -1295,55 +1292,39 @@ module Desugarer =
             the position of the tuple is what's reported when duplicate
             bindings are present within one form. *)
        let handlerFunc =  FunLit (None,
-                                  List.map (function
-                                              | [b] -> [b]
-                                              | bs -> [`Tuple bs, trees_ppos]) (List.rev bindings),
+                                  map (function
+                                         | [b] -> [b]
+                                         | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
                                   handlerBody), trees_ppos in
          ctxt (Apply(Variable("pure", pos), [desugar' lookup_pos handlerFunc], pos)), returning_bindings
            
-     and desugar_form_expr formExpr : untyped_expression * ppattern list list =
-       if (xml_tree_has_form_binding formExpr) then
-         match formExpr with
-           | XmlForest trees, trees_ppos -> forest_to_form_expr trees None (`U(lookup_pos trees_ppos)) trees_ppos
-               (* re: FormBinding; we ought to pass this pos' to such
-                  a place where a duplicate binding could be pinned down
-                  to this binding; but the nature of the duplicate-name
-                  checking for patterns is that it finds the error in the
-                  whole tuple (the tuple argument that's used by the
-                  handler function we later construct.) *)
-           | FormBinding ((expr, pos), ppattern), pos' ->
-               desugar' lookup_pos (expr, pos), [[ppattern]]
-           | Xml("#", [], contents), pos' -> forest_to_form_expr contents None (`U(lookup_pos pos')) pos'
-           | Xml("#", _, contents), pos' -> raise(ASTSyntaxError(Syntax.data_position (`U(lookup_pos pos')),
-                                                                 "XML forest literals cannot have attributes"))
-           | Xml(tag, attrs, contents), pos' ->
-               let form_expr, bindings = forest_to_form_expr contents None (`U(lookup_pos pos')) pos' in
-               let attrs' = (alistmap 
-                               (fun attr_phrases -> 
-                                  make_links_list (`U(lookup_pos pos')) (map (desugar' lookup_pos) attr_phrases))
-                               attrs) in
-               let pos = (`U(lookup_pos pos')) in 
-                 (apply2 pos
-                    (Variable("plug", pos))
-                    (make_xml_context tag attrs' pos)
-                    form_expr,
-                  bindings)
-           | TextNode text, pos' -> 
-               let pos = `U(lookup_pos pos') in 
-                 Apply(Variable("xml", pos),
-                       [Apply(Variable("stringToXml", pos),
-                              [Constant(String text, pos)], pos)], pos), [[]]
+     and desugar_form_expr (formExpr, ppos) : untyped_expression * ppattern list list =
+       let pos = `U(lookup_pos ppos) 
+       and desugar = desugar' lookup_pos in
+       let appPrim = appPrim pos in
+       if not (has_form_binding (formExpr,ppos)) then
+         Apply (Variable("xml", pos), [desugar (formExpr,ppos)], pos), [[]]
        else
-         let _, pos' = formExpr in 
-         let pos = (`U(lookup_pos pos')) in 
-         Apply(Variable("xml", pos), [desugar' lookup_pos formExpr], pos), [[]]
+         match formExpr with
+           | XmlForest trees -> forest_to_form_expr trees None pos ppos
+           | FormBinding (phrase, ppattern) -> desugar phrase, [[ppattern]]
+           | Xml ("#", [], contents) -> forest_to_form_expr contents None pos ppos
+           | Xml ("#", _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
+                                                      "XML forest literals cannot have attributes"))
+           | Xml(tag, attrs, contents) ->
+               let form, bindings = forest_to_form_expr contents None pos ppos in
+               let attrs' = alistmap (map desugar ->- make_links_list pos) attrs in
+                 (appPrim "plug" [make_xml_context tag attrs' pos; form],
+                  bindings)
+                   
+           | TextNode text -> 
+               appPrim "xml" [appPrim "stringToXml" [Constant (String text, pos)]], [[]]
 
-     and xml_tree_has_form_binding = function
-       | Xml(tag, attrs, contents), _ ->
-           List.exists xml_tree_has_form_binding contents
-       | XmlForest(trees), _ ->  List.exists xml_tree_has_form_binding trees
-       | FormBinding(expr, var), _ -> true
-       |  _, _ -> false
+     and has_form_binding = function
+       | Xml (_, _, subnodes),_
+       | XmlForest subnodes,_ -> exists has_form_binding subnodes
+       | FormBinding _,_      -> true
+       |  _                   -> false
 
      and desugar_repeat _ : Regex.repeat -> phrasenode = function
        | Regex.Star      -> ConstructorLit ("Star", None)
@@ -1365,8 +1346,7 @@ module Desugarer =
            | Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
            | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
            | Any             -> ConstructorLit ("Any", None)
-           | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> aux s, pos) 
-                                                                        rs), pos))
+           | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (map (fun s -> aux s, pos) rs), pos))
            | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
                                                                           aux r, pos], pos))
            | Splice e        -> ConstructorLit ("Simply", Some (expr e))
