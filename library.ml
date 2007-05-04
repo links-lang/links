@@ -714,10 +714,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
        `Function (arg_type, make_type_variable mb, `Primitive `Bool))));
 
   ("environment",
-   (p1 (fun _ -> 
-          let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
-          let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-            `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+   (`PFun (fun [] -> 
+             let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
+             let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
+               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
     datatype "() -> [(String,String)]"));
 ]
 
