@@ -95,20 +95,25 @@ sig
   val singleton : elt -> t
   val union_all : t list -> t
   val from_list : elt list -> t
+
+
+  module Show : Show.Show
+    with type a = t
 end
 
-module Set (Ord : Set.OrderedType) :
+module Set (Ord : sig include Set.OrderedType 
+                      module Show : Show.Show with type a = t end) :
 SET with type elt = Ord.t =
 struct
   include Set.Make(Ord)
   let singleton s = add s empty
   let union_all sets = List.fold_right union sets empty
   let from_list l = List.fold_right add l empty
+  module Show = Show.Show_set(Ord)(Ord.Show)
 end
 
 module type STRINGSET = SET with type elt = string
-module StringSet : STRINGSET = Set(String)
-module Show_stringset = Show.Show_set(String)(Primitives.Show_string)
+module StringSet : STRINGSET = Set(struct include String module Show = Primitives.Show_string end)
 
 (*** int environments ***)
 module OrderedInt =
@@ -119,8 +124,7 @@ end
 module IntMap = Map.Make(OrderedInt)
 
 module type INTSET = SET with type elt = int
-module IntSet : INTSET = Set(OrderedInt)
-module Show_intset = Show.Show_set(OrderedInt)(Primitives.Show_int)
+module IntSet : INTSET = Set(struct include OrderedInt module Show = Primitives.Show_int end)
 
 let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
 
@@ -391,15 +395,7 @@ let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
 
-(*** option types ***)
-let opt_map f = function
-  | None -> None
-  | Some x -> Some (f x)
-
-let opt_app f def = function
-  | None -> def
-  | Some a -> f a
-
+(*** either type ***)
 type ('a, 'b) either = Left of 'a | Right of 'b
   deriving (Show, Eq, Typeable, Pickle, Shelve)
 
@@ -437,6 +433,7 @@ module EitherMonad = Monad.MonadPlusUtils(
       | Left _ -> r
       | m      -> m
   end)
+
     
 module OptionUtils = 
 struct
@@ -449,12 +446,36 @@ struct
     | None -> false
     | Some _ -> true
         
+  let opt_app f default = function
+    | None -> default
+    | Some a -> f a
+
+  let opt_map f = function
+    | None -> None
+    | Some x -> Some (f x)
+
   let fromOption default = function
-    | Some value -> value
-    | None       -> default 
-        
-  let perhaps_apply f p = fromOption p (f p)
-    
+    | None -> default
+    | Some x -> x
+
+  let perhaps_apply f p =
+    match f p with
+      | None -> p
+      | Some x -> x  
+(*
+  [NOTE][SL]
+  
+  The following equations hold
+
+            opt_map f = opt_app (fun x -> Some (f x)) None
+           fromOption = opt_app (fun x -> x)
+    perhaps_apply f p = fromOption p (f p)
+                      = opt_app (fun x -> x) p (f p)
+
+  I've left the explicit definitions because they are more perspicuous
+  than the derived versions and hardly verbose.
+*)
+
   let opt_sequence e =  (* sequence *)
     let rec aux accum = function
       | []             -> Some (List.rev accum)
