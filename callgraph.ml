@@ -77,7 +77,7 @@ struct
     defs : definition list
   }
 
-  let elim_dead_defs globals (Syntax.Program (defs, expr)) =
+  let elim_dead_defs globals defs root_names =
     let filter_globals = filter (fun name -> not (mem name globals)) in
     let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) defs in
     let groupings = refine_def_groups [defs] in
@@ -85,7 +85,7 @@ struct
                              {free_names = filter_globals (concat_map freevars_def defs);
                               exposed_names = map fst (defs_to_bindings defs);
                               defs = defs}) groupings
-    and expr_info = { free_names =  filter_globals (freevars expr);
+    and expr_info = { free_names =  filter_globals root_names;
                       exposed_names = [];
                       defs = [] } in
 
@@ -102,7 +102,9 @@ struct
                                               exposed_names = exposed_names;
                                               defs = clique.defs @ env.defs}) defining_cliques env)
     in
+    try
       other @ (close expr_info).defs
+    with Not_found -> failwith("Not_found in elim_dead_defs")
 
 end
 

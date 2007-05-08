@@ -31,11 +31,12 @@ type code = | Var   of string
             | Bind  of (string * code * code)
             | Seq   of (code * code)
             | Die   of (string)
+            | Ret   of code
             | Nothing
  deriving (Show, Rewriter)
 module RewriteCode = Rewrite_code
 
-let code_freevars : code -> string list = 
+let freevars_list : code -> string list = 
   let rec aux bound = function
     | Var x when List.mem x bound -> []
     | Var x -> [x]
@@ -51,16 +52,15 @@ let code_freevars : code -> string list =
     | Dict (fs) -> concat_map (aux bound -<- snd) fs
     | Lst elems -> concat_map (aux bound) elems
     | Bind (name, e, body) -> aux bound e @ aux (name::bound) body
+    | Ret e -> aux bound e
   in aux []
 
-(* "Blind" (non-capture-avoiding) renaming.  By the time this is run
-   all variables have unique names so we can just blithely replace one
-   name with another under appropriate bindings.
+(* "Blind" (non-capture-avoiding) renaming.  
 
    This is used in the following optimisation:
 
        let x1 = x2 in e     -- x2 not free in e
-    => e[x1->x2]
+    => e[x2:=x1]
 
    i.e. to eliminate bindings that simply rename.
 *)
@@ -81,10 +81,11 @@ let rec rename' renamer = function
                                    rename' renamer body)
   | Seq(first, second) -> Seq(rename' renamer first,
                               rename' renamer second)
+  | Ret e -> Ret (rename' renamer e)
   | simple_expr -> simple_expr
 and rename renamer body = rename' renamer body
 
-let freein name expr = List.mem name (code_freevars expr)
+let freein name expr = List.mem name (freevars_list expr)
 
 let replace var repl : RewriteCode.rewriter =
   function
@@ -260,31 +261,33 @@ let chrlistlit s  = Lst(map chrlit (explode s))
      (e.g. int_of_string, xml)
  *)
 
-let script_header base_url file =
-  "  <script type='text/javascript' src=\""^base_url^file^"\"></script>"
+let script_tag ?(base=get_js_lib_url()) file =
+    "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
 let boiler_1 () = "<html>
- <head>
- "^script_header (get_js_lib_url()) "json.js"^"
- "^script_header (get_js_lib_url()) "regex.js"^"
- "^script_header (get_js_lib_url()) "yahoo/YAHOO.js"^"
- "^script_header (get_js_lib_url()) "yahoo/event.js"^"
-   <script type='text/javascript'>var DEBUGGING="
+  <head>
+  "^script_tag "json.js"^"
+  "^script_tag "regex.js"^"
+  "^script_tag "yahoo/YAHOO.js"^"
+  "^script_tag "yahoo/event.js"^"
+    <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>
- "^script_header (get_js_lib_url()) "jslib.js"^"
-   <script type='text/javascript'><!-- "^"
+  "^script_tag "jslib.js"^"
+    <script type='text/javascript'><!-- "^"
     function _getDatabaseConfig() {
       return {driver:'" ^ Settings.get_value Library.database_driver ^
  "', args:'" ^ Settings.get_value Library.database_args ^"'}
     }
     var getDatabaseConfig = _continuationize(_getDatabaseConfig, 0);\n"
-and boiler_3 () =    "\n--> </script>
- </head>
- <!-- $Id$ -->
-  <body><script type='text/javascript'>
-   _startTimer();\n" 
+and boiler_3 onload =    "\n--> </script>
+  <!-- $Id$ -->
+  </head>
+  <body onload=\'" ^ onload ^ "\'>
+    <script type='text/javascript'>
+     _startTimer();" 
 and  boiler_4 () = ";
-  </script></body>
+    </script>
+  </body>
 </html>"
 
 (* Operators are represented as functions in the interpreter, but
@@ -359,7 +362,8 @@ let trivial_cps expr =
 
 let idy_js = Var("_idy")
 let thread_end_k = idy_js
-          
+let end_thread expr = Call(expr, [idy_js])
+
 let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
   let innermost_expr = 
     Call(Var "_XML",
@@ -377,15 +381,17 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
                          ) attrs_cps tower in
     Fn(["__kappa"], tower)       
 
+(** {0 Code generation} *)
 
 (** generate
     Generate javascript code for a Links expression
     
     With CPS transform, result of generate is always : (a -> w) -> b
 *)
-let rec generate : 'a expression' -> code = 
+let rec generate global_names : 'a expression' -> code = 
+  let generate' expr =  generate global_names expr in
     function
-  | HasType (e, _, _)                  -> generate e
+  | HasType (e, _, _)                  -> generate' e
   | Constant (c, _)                    ->
       begin
         match c with
@@ -396,17 +402,17 @@ let rec generate : 'a expression' -> code =
           | String v   -> trivial_cps (chrlistlit v)
       end
   | Condition (i, t, e, _)             -> 
-      let i_cps = generate i in
-      let t_cps = generate t in
-      let e_cps = generate e in
+      let i_cps = generate' i in
+      let t_cps = generate' t in
+      let e_cps = generate' e in
         Fn(["__kappa"], 
            Call(i_cps, [Fn(["__i"], Cond (Var "__i",
                                         Call(t_cps, [Var "__kappa"]),
                                         Call(e_cps, [Var "__kappa"])))]))
                           
   | Let (v, e, b, _)                   -> 
-      let e' = generate e in
-      let b' = generate b in
+      let e' = generate' e in
+      let b' = generate' b in
       let x = gensym ~prefix:("__" ^ v) () in
         Fn(["__kappa"], 
            Call(e', [Fn([x], 
@@ -415,15 +421,15 @@ let rec generate : 'a expression' -> code =
   | Variable ("~", _)                  -> trivial_cps (Var "tilde")
   | Variable (v, _)                    -> trivial_cps (Var v)
   | Comparison (l, `Equal, r, _)         -> 
-      let l_cps = generate l in
-      let r_cps = generate r in
+      let l_cps = generate' l in
+      let r_cps = generate' r in
         Fn(["__kappa"],
            Call(l_cps, [Fn(["__l"],
               Call(r_cps, [Fn(["__r"],
                  callk_yielding (Call(Var "_eq", [Var "__l"; Var "__r"])))]))]))
   | Comparison (l, op, r, _)           -> 
-      let l_cps = generate l in
-      let r_cps = generate r in
+      let l_cps = generate' l in
+      let r_cps = generate' r in
         Fn(["__kappa"],
            Call(l_cps, [Fn(["__l"], 
                 Call(r_cps, [Fn(["__r"],
@@ -431,31 +437,31 @@ let rec generate : 'a expression' -> code =
       (* Should strings be handled differently at this level? *)
   | Nil _                 -> trivial_cps (Lst [])
   | List_of (e, _)        -> 
-      let content_cps = generate e in
+      let content_cps = generate' e in
         Fn(["__kappa"],
            (Call(content_cps, [Fn(["__x"], callk_yielding (Lst [Var "__x"]))])))
   | (Concat _) as c          -> 
-      generate_concat c
-(*  | Concat (l, r, _)         -> Call (Var "_concat", [generate l; generate r])*)
+      generate_concat global_names c
+(*  | Concat (l, r, _)         -> Call (Var "_concat", [generate' l; generate' r])*)
   | For (e, v, b, _)  -> 
-      let b_cps = generate b in
-      let e_cps = generate e in
+      let b_cps = generate' b in
+      let e_cps = generate' e in
         Fn(["__kappa"],
            Call(b_cps, [Fn(["__b"], Call (Var "_accum",
                                           [Fn([v; "__kappa"], Call(e_cps, [Var "__kappa"]));
                                            Var "__b";
                                            Var "__kappa"]))]))
-  | Xml_node _ as xml when isinput xml -> lname_transformation xml
-  | Xml_node _ as xml -> laction_transformation xml
+  | Xml_node _ as xml when isinput xml -> lname_transformation global_names xml
+  | Xml_node _ as xml -> laction_transformation global_names xml
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn(["__kappa"], 
-         callk_yielding (Fn (arglist@ ["__kappa"], Call(generate body, [Var "__kappa"]))))
+         callk_yielding (Fn (arglist@ ["__kappa"], Call(generate' body, [Var "__kappa"]))))
 
   | Abs (p, d) ->
       Fn(["__kappa"], 
-         Call(generate p, 
+         Call(generate' p, 
               [Fn(["__content"],
                   callk_yielding
                     (Call (Var "abs",
@@ -464,9 +470,9 @@ let rec generate : 'a expression' -> code =
       let f_name    = gensym ~prefix:"__f" () 
       and arg_name  = gensym ~prefix:"__f" () in
         Fn (["__kappa"],
-            Call(generate f,
+            Call(generate' f,
                  [Fn ([f_name], 
-                      (Call(generate p,
+                      (Call(generate' p,
                             [Fn ([arg_name], 
                                  (Call (Var "_yield", 
                                         Call (Var "app", 
@@ -475,18 +481,18 @@ let rec generate : 'a expression' -> code =
                                             Var ("__kappa")])))])))]))
 
   | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
-      let l_cps = generate l in
-      let r_cps = generate r in
+      let l_cps = generate' l in
+      let r_cps = generate' r in
         Fn(["__kappa"], 
            Call(l_cps, [Fn(["__l"],
                 Call(r_cps, [Fn(["__r"],
                      callk_yielding (Binop (Var "__l", binop_name op, Var "__r")))]))]))
    | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
-      let f_cps = generate f in
+      let f_cps = generate' f in
       let f_name = gensym ~prefix:"__f" () in
       let arglist = p in
-      let cps_args = map generate arglist in
+      let cps_args = map generate' arglist in
       let arg_names = map (fun _ -> gensym ~prefix:"__f" ()) arglist in
       let wrap_cps_terms (arg_cps, arg_name) expr = 
         Call(arg_cps, [Fn ([arg_name], expr)])
@@ -512,17 +518,17 @@ let rec generate : 'a expression' -> code =
       Fn(["__kappa"],
 	 (fold_right 
             (fun (v, e,_) body ->
-	       Call(generate e, [Fn(["__e"],
+	       Call(generate' e, [Fn(["__e"],
 				    Bind (v, Var "__e", body))]))
             bindings
-            (Call (generate body, [Var "__kappa"]))))
+            (Call (generate' body, [Var "__kappa"]))))
         
   (* Records *)
   | Record_intro (bs, r, _) ->
       let c, dict =
         StringMap.fold (fun label e (c, dict) ->
                           let name = gensym ~prefix:"__e" () in
-                            ((fun body -> c (Call(generate e, [Fn([name], body)]))),
+                            ((fun body -> c (Call(generate' e, [Fn([name], body)]))),
                              (label, Var name) :: dict)
                        ) bs ((fun x -> x), [])
       in
@@ -533,14 +539,14 @@ let rec generate : 'a expression' -> code =
             | Some r ->
                 Fn(["__kappa"], c (
                      let name = gensym ~prefix:"__r" () in
-                       Call(generate r,
+                       Call(generate' r,
                             [Fn([name],
                                 callk_yielding (
                                   Call (Var "_union", [Var name; Dict dict])))])))
         end
-  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
-      let r_cps = generate r in
-      let b_cps = generate b in
+  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (Syntax.freevars b) ->
+      let r_cps = generate' r in
+      let b_cps = generate' b in
       let name = gensym ~prefix:"__r" () in
         Fn(["__kappa"],
            Call(r_cps, [Fn (["__r"], 
@@ -554,14 +560,14 @@ let rec generate : 'a expression' -> code =
 
   | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
       (* Could use dot-notation instead of [project] call *)
-      let v_cps = generate v in
+      let v_cps = generate' v in
         Fn(["__kappa"],
            Call(v_cps, [Fn(["__v"],
                 callk_yielding
                      (Call (Var "_project", [strlit l; Var "__v"])))]))
   | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      let v_cps = generate v in
-      let b_cps = generate b in
+      let v_cps = generate' v in
+      let b_cps = generate' b in
         Fn(["__kappa"],
            Call(v_cps, [Fn(["__v"], 
                 Bind (lv,
@@ -569,18 +575,18 @@ let rec generate : 'a expression' -> code =
                       Call(b_cps, [Var "__kappa"])))]))
 
   | Project (expr, label, _) -> 
-      let expr_cps = generate expr in
+      let expr_cps = generate' expr in
          Fn(["__kappa"],
            (Call(expr_cps, 
                  [Fn(["__v"], callk_yielding (Call (Var "_project", [strlit label; Var "__v"])))])))
   | Erase (expr, label, _) -> 
       (* should we do something here? *)
-      generate expr
+      generate' expr
 
 
   (* Variants *)
   | Variant_injection (l, e, _) -> 
-      let content_cps = generate e in
+      let content_cps = generate' e in
         Fn(["__kappa"], 
            Call(content_cps, [Fn(["__content"],
                                  callk_yielding
@@ -591,9 +597,9 @@ let rec generate : 'a expression' -> code =
                          [strlit "closed switch got value out of range"]))
   | Variant_selection (src, case_label, case_var, case_body, 
                        else_var, else_body, _) ->
-      let src_cps = generate src in
-      let case_body_cps = generate case_body in
-      let else_body_cps = generate else_body in
+      let src_cps = generate' src in
+      let case_body_cps = generate' case_body in
+      let else_body_cps = generate' else_body in
         Fn(["__kappa"],
           Call(src_cps, [Fn(["__src"],
                             Cond(Binop(Call(Var "_vrntLbl", [Var "__src"]),
@@ -609,19 +615,18 @@ let rec generate : 'a expression' -> code =
                            )]))
   | Call_cc (e, _) -> 
       Fn(["__kappa"], 
-	 Call (Call(generate e, [Var "__kappa"]), 
+	 Call (Call(generate' e, [Var "__kappa"]), 
 	       [Fn (["__ignore"],Var "__kappa")]))
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
   | Database (e, _) ->
-      let db_cps = generate e in
+      let db_cps = generate' e in
         Fn(["__kappa"],
            Call(db_cps, [Fn(["__db"],
                                  callk_yielding
                                       (Dict [("_db", Var "__db")]))]))
-  (* Unimplemented stuff *)
   | TableHandle (db, name, (readtype, writetype), _) ->
-      let db_cps = generate db in
-      let name_cps = generate name in
+      let db_cps = generate' db in
+      let name_cps = generate' name in
         Fn(["__kappa"],
            Call(db_cps,
                 [Fn(["__db"],
@@ -633,29 +638,30 @@ let rec generate : 'a expression' -> code =
                                              ("name", Var "__name");
                                              ("row",
                                               strlit (Types.string_of_datatype (readtype)))])]))]))]))
+  (* Unimplemented stuff *)
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
-and generate_concat : 'a expression' -> code = 
+and generate_concat global_names : 'a expression' -> code = 
     function
       | Concat (c, Nil _, _) -> 
-          generate_concat c
+          generate_concat global_names c
       | Concat (l, r, _) ->
-          let l_cps = generate l in
-          let r_cps = generate r in
+          let l_cps = generate global_names l in
+          let r_cps = generate global_names r in
             Fn(["__kappa"],
                Call(l_cps, [Fn(["__l"],
                    Call(r_cps, [Fn(["__r"],
                         callk_yielding (Call (Var "_concat", [Var "__l"; Var "__r"])))]))]))
       | e ->          
           (* failwith "unimpl"; *)
-          generate e
+          generate global_names e
 
-and generate_def : 'a definition' -> code = 
+and generate_def global_names : 'a definition' -> code = 
   function
       (* Binding *)
     | Define (_, _, `Server, _) as d -> generate_server_stub d
-    | Define (_, _, `Native, _) as d -> generate_native_stub d
+    | Define (_, _, `Native, _) as d -> generate_native_stub global_names d
     | Define (n, e, (`Client|`Unknown), _) -> 
 (* [NOTE]
      Passing in _idy doesn't work because we are not in traditional CPS.
@@ -665,7 +671,7 @@ and generate_def : 'a definition' -> code =
      to modify our CPS transform to produce CPS terms that explicitly return
      values.
 *)
-        Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
+        Defs ([n, Call (generate global_names e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
     | Alias _ 
     | Alien _ -> Nothing
 
@@ -689,22 +695,15 @@ and generate_def : 'a definition' -> code =
    scope is broken.  (This will need more care for less simple cases,
    e.g. where there are let bindings)
 *)
-and laction_transformation (Xml_node (tag, attrs, children, _) as xml) = 
-  (* 1. Remove l:action from the attrs 
-     2. name the form if not named (TODO; not needed for simple example)
-     3. Add an appropriate onSubmit to the attrs
-     4. Add an appropriate action to the attrs
-     5. return a pair of comma-separated expressions that set up the
-        continuation and return the mangled form
-     6. Replace l:name-bindings within the action with val("name")
-     7. need to add the continuation function name to the top level
-        (actually not, JavaScript's odd scoping, but it would be nice) 
+and laction_transformation global_names (Xml_node (tag, attrs, children, _) as xml) = 
+  (*
+     laction_transformation needs the global names in order to strip them
+     out of any environment that it captures.
   *)
   let essentialAttrs = 
     match tag with
         "form" -> ["action", chrlistlit "#";
                    "method", chrlistlit "post"]
-      | "a" -> ["href", chrlistlit "#"]
       | _ -> []
   in
     
@@ -713,29 +712,50 @@ and laction_transformation (Xml_node (tag, attrs, children, _) as xml) =
 
   let make_code_for_handler (evName, code) = 
     strip_lcolon evName, (fold_left
-                            (fun expr var -> Bind (var, Call (Var "_val", [strlit var]), expr))
-                            (end_thread(generate code))
+                            (fun expr var ->
+                               Bind (var, Call (Var "_val", [strlit var]), expr))
+                            (end_thread(generate global_names code))
                             vars) in
+  let handlers_ast = handlers in
   let handlers = map make_code_for_handler handlers in
-  let attrs_cps = alistmap generate attrs in 
-  let attrs_cps = assign_fresh_names attrs_cps in
-  let children_cps = assign_fresh_names (map generate children) in
-  let keyattr = 
+  let attrs_cps = alistmap (generate global_names) attrs in 
+  let attrs_cps = pair_fresh_names attrs_cps in
+  let children_cps = pair_fresh_names (map (generate global_names) children) in
+  let key_attr = 
     match handlers with
       | [] -> []
-      | handlers -> ["key", 
-                     Call(Var "_registerFormEventHandlers",
-                          [Lst (map (fun (evName, code) -> 
-                                       Dict(["evName", strlit evName;
-                                             "handler", 
-                                             Fn (["event"], code)]))
-                                  handlers)]);
-                    ] in
-    make_xml_cps attrs_cps ( keyattr
+      | handlers -> let handlers = remove_assoc "href" handlers in
+            ["key", 
+             Call(Var "_registerFormEventHandlers",
+                  [Lst (map (fun (evName, code) -> 
+                               Dict(["evName", strlit evName;
+                                     "handler", Fn (["event"], code)]))
+                          handlers)]);
+            ] in
+
+    (* make_var_list pairs each variable name (as a string) with the
+       variable its self. At runtime this is like pairing the variable
+       names with their values, effectively capturing the environment. *)
+  let make_var_list = map (fun v -> Lst [chrlistlit v ; Var v]) in
+  let href_attr =
+    if (tag <> "a") then [] else
+    try 
+      let href_hdlr_ast = (assoc "l:href" handlers_ast) in
+      let code_ptr = Result.marshal_exprenv (href_hdlr_ast, []) in
+      let href_hdlr = (assoc "href" handlers) in
+      let local_vars = difference (Syntax.freevars href_hdlr_ast) global_names in
+        ["href", Call(Var "_stringToCharlist",
+                      [Call(Var "_jsStrConcat",
+                            [strlit("?_k=" ^ code_ptr ^ "&_jsonArgs=");
+                             Call(Var "JSON.stringifyB64",
+                                  [Lst(make_var_list local_vars)])])])]
+    with Not_found -> ["href", chrlistlit "#"] in
+    
+    make_xml_cps attrs_cps (key_attr @ href_attr
                             @ essentialAttrs)
       children_cps [] tag
-
-and lname_transformation (Xml_node (tag, attrs, children, d)) = 
+      
+and lname_transformation global_names (Xml_node (tag, attrs, children, d)) = 
   (* 1. Remove l:name from the attrs
      2. Add appropriate id and name to the attrs
      3. Add onFocus handlers
@@ -746,18 +766,12 @@ and lname_transformation (Xml_node (tag, attrs, children, d)) =
     :: ("id", name)
     :: ("name", name)
     :: attrs in
-    generate (Xml_node (tag, attrs, children, Syntax.no_expr_data))
-
-
-(* generate_noncps: generates CPS code for expr and immediately 
-  gives idy as the cont. *)
-and generate_noncps expr = Call(generate expr, [idy_js])
-and end_thread expr = Call(expr, [idy_js])
-
+    generate global_names (Xml_node (tag, attrs, children, Syntax.no_expr_data))
+      
 (* generate direct style code *)
-and generate_direct_style : 'a expression' -> code =
-  let gcps = generate in
-  let gd = generate_direct_style
+and generate_direct_style global_names : 'a expression' -> code =
+  let gcps = generate global_names in
+  let gd = generate_direct_style global_names
   in
     function
   | Constant (c, _)                    ->
@@ -784,8 +798,8 @@ and generate_direct_style : 'a expression' -> code =
   | List_of (e, _)        ->
       Lst [gd e]   
   | Concat (l, r, _)      -> Call (Var "_concat", [gd l; gd r])
-  | For _ -> failwith "not implemented native comprehensions yet"
-  | Xml_node _ -> failwith "not implemented handling of XML in native functions yet"
+  | For _ -> failwith "not implemented: native comprehensions"
+  | Xml_node _ -> failwith "not implemented: handling of XML in native functions"
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn (arglist, gd body)
@@ -812,15 +826,16 @@ and generate_direct_style : 'a expression' -> code =
   (* Records *)
   | Record_intro (bs, r, _) ->
       let dict =
-        Dict (StringMapUtils.zip_with (fun label e -> label, generate e) bs)
+        Dict (StringMapUtils.zip_with (fun label e -> label, 
+                                         generate global_names e) bs)
       in
         begin
           match r with
             | None -> dict
             | Some r ->
-                Call (Var "_union", [dict; generate r])
+                Call (Var "_union", [dict; generate global_names r])
         end
-  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (freevars b) ->
+  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (Syntax.freevars b) ->
       let name = gensym ~prefix:"_r" () in
 	Bind(name, gd r,
 	     Bind(lv, Call(Var "_project", [strlit l; Var name]),
@@ -865,18 +880,18 @@ and generate_direct_style : 'a expression' -> code =
   | SortBy _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
 
-and generate_direct_style_def : 'a definition' -> code = 
+and generate_direct_style_def global_names : 'a definition' -> code = 
   function
       (* Binding *)
-    | Define _ as d -> generate_def d (* surely this isn't right! *)
+    | Define _ as d -> generate_def global_names d
     | Alias _ 
     | Alien _ -> Nothing
 
 (* Generate a native stub that calls the corresponding native function *)
-and generate_native_stub = function
+and generate_native_stub global_names = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = arg in
-        Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style body))]
+        Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style global_names body))]
   | def -> failwith ("Cannot generate native stub for " ^ string_of_definition def)
       
 let rec freevars = 
@@ -924,6 +939,7 @@ let rec replace' var replcmt fvs = function
                                    else body)
   | Seq(first, second) -> Seq(replace' var replcmt fvs first,
                               replace' var replcmt fvs second)
+  | Ret(e) -> Ret(replace' var replcmt fvs e)
   | simple_expr -> simple_expr
 and replace var expr body = replace' var expr (freevars expr) body
 and uniquify_args = function
@@ -962,20 +978,26 @@ let rec iterate_to_fixedpoint f x =
 let simplify_completely = iterate_to_fixedpoint simplify_throughout
 
 let rec eliminate_admin_redexes = 
-  simplify_completely (* ->-
-     rename (Str.global_replace (Str.regexp "\*\(.*\\)\*") "\1") *)
+  simplify_completely
 
-let gen_def = 
-  (rewrite_def Optimiser.uniquify_expression)
-  ->- generate_def
+let gen_def ?(pre_opt=identity) global_names =
+  (rewrite_def Optimiser.uniquify_names)
+  ->- generate_def global_names
   ->- eliminate_admin_redexes
+  ->- pre_opt
   ->- optimise
-  ->- show
+
+let gen ?(pre_opt=identity) global_names =
+  (perhaps_apply Optimiser.uniquify_names)
+  ->- generate global_names
+  ->- eliminate_admin_redexes
+  ->- pre_opt
+  ->- optimise
 
 let words = 
   [ '!', "bang";
-    '$', "usd";
-    '%', "oo";
+    '$', "dollar";
+    '%', "percent";
     '&', "and";
     '*', "star";
     '+', "plus";
@@ -986,7 +1008,7 @@ let words =
     '?', "huh";
     '@', "monkey";
     '\\', "backslash";
-    '^', "carrot";
+    '^', "caret";
     '-', "hyphen";
     '.', "fullstop";
     '|', "pipe";
@@ -1029,8 +1051,17 @@ let remove_nulls = filter
      | Record_intro (fields, None, _) when fields = StringMap.empty -> false
      | _ -> true)
 
- (* TODO: imports *)
-let generate_program (Program (defs, body)) =
+let make_boiler_page ?(onload="") ?(body="") defs =
+  boiler_1 ()
+  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
+  ^ boiler_2 ()
+  ^ String.concat "\n" defs
+  ^ boiler_3 onload
+  ^ body
+  ^ boiler_4 ()
+    
+(* Note: the body is not really used here. *)
+let generate_program_defs (Program(defs,body)) root_names =
   let defs = List.map rename_symbol_operators_def defs
   and body = rename_symbol_operators body in
   let (Program (defs, body)) =
@@ -1038,30 +1069,28 @@ let generate_program (Program (defs, body)) =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body)
   in
+  let library_names = List.map fst (fst Library.typing_env) in
   let defs =
-    catch_notfound_l "elim_dead_defs call in js.ml"
-      (lazy (if Settings.get_value elim_dead_defs
-             then Callgraph.elim_dead_defs (List.map fst (fst Library.typing_env)) (Program (defs, body))
-             else defs)) in
-    catch_notfound_l "JS code generation"
-      (lazy(  boiler_1 ()
-	    ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
-	    ^ boiler_2 ()
-            (* [WARNING]
-               disabled remove_nulls
+    (if Settings.get_value elim_dead_defs then
+       Callgraph.elim_dead_defs library_names defs root_names
+     else defs) in
+(*   let defs = remove_nulls defs in *)
+  let global_names = Syntax.defined_names defs @ library_names in
+    map (gen_def global_names ->- show) defs
 
-               It looks like remove_nulls never did anything anyway, as it doesn't
-               do anything to definitions.
-
-               ^ String.concat "\n" (map gen_def (remove_nulls (butlast defs))) *)
-	      ^ String.concat "\n" (map gen_def defs)
-	      ^ boiler_3 ()
-	      ^ ((generate ->-
-		    (fun expr -> Call(expr, [Var "_start"])) ->- 
-		      eliminate_admin_redexes ->- 
-		        show) body)
-	      ^ boiler_4 ()))
-
+let generate_program ?(onload = "") (Program(defs,expr)) =
+  let js_defs = generate_program_defs (Program(defs,expr)) (Syntax.freevars expr) in
+  let expr = rename_symbol_operators expr in
+  let library_names = List.map fst (fst Library.typing_env) in
+(*   let env = remove_nulls (butlast env) in *)
+  let global_names = Syntax.defined_names defs @ library_names in
+  let js_root_expr = 
+    (gen
+       ~pre_opt:(fun expr -> Call(expr, [Var "_start"]))
+       global_names expr)
+  in
+    (make_boiler_page ~body:(show js_root_expr) js_defs)
+     
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
    move the tests into a different module?
@@ -1078,8 +1107,8 @@ let links2js s =
   let Program (defs, body) =
     (Parse.parse_string Parse.program
      ->- Inference.type_program Library.typing_env ->- snd) s in
-  let defs = map ((rewrite_def (Optimiser.uniquify_expression)) ->- generate_def) defs in
-  let body = ((Utility.perhaps_apply Optimiser.uniquify_expression) ->- generate) body in
+  let defs = map ((rewrite_def (Optimiser.uniquify_names)) ->- generate_def []) defs in
+  let body = ((Utility.perhaps_apply Optimiser.uniquify_names) ->- (generate [])) body in
     map simplify_completely (defs @ [body])
   
 let test_list = ref []
@@ -1134,8 +1163,8 @@ let rhino_output linkscode =
       (Parse.parse_string Parse.program
        ->- Inference.type_program Library.typing_env ->- snd) s
     in
-      ((Utility.perhaps_apply Optimiser.uniquify_expression)
-       ->- generate
+      ((Utility.perhaps_apply Optimiser.uniquify_names)
+       ->- generate []
          ->- show) body in
   
   let tempfile = Filename.temp_file "linkstest" ".js" in

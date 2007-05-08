@@ -32,6 +32,7 @@ type primitive = [
 | `PFun of result list -> result
 ]
 val is_primitive : string -> bool
+val value_env : primitive Utility.StringMap.t ref
 val type_env : Types.environment
 val alias_env : Types.alias_environment
 val typing_env : Types.typing_environment
@@ -40,3 +41,5 @@ val primitive_stub : string -> result
 
 val primitive_location : string -> Syntax.location
 val cgi_parameters : (string * string) list ref 
+
+val print_http_response : (string * string) list -> string -> unit

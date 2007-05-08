@@ -65,10 +65,12 @@ type 'data expression' =
   | Comparison of ('data expression' * comparison * 'data expression' * 'data)
   | Abstr of (string list * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
-  | Rec of ((string * 'data expression' * Types.datatype option) list * 'data expression' * 'data)
+  | Rec of ((string * 'data expression' * Types.datatype option) list 
+            * 'data expression' * 'data)
   | Xml_node of (string * ((string * 'data expression') list) * 
                    ('data expression' list) * 'data)
-  | Record_intro of (('data expression') stringmap * ('data expression') option * 'data)
+  | Record_intro of (('data expression') stringmap * ('data expression') option 
+                     * 'data)
   | Record_selection of (string * string * string * 'data expression' * 
                            'data expression' * 'data)
   | Project of ('data expression' * string * 'data)
@@ -83,12 +85,14 @@ type 'data expression' =
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
   | Database of ('data expression' * 'data)
-  | TableQuery of ((* the tables: *) (string * 'data expression') list
-      * (* the query: *) Query.query 
-      * 'data)
+  | TableQuery of
+      ((* the tables: *) (string * 'data expression') list *
+       (* the query: *) Query.query *
+        'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table: *) 'data expression'
-      * (* the read / write (record) types of a table row: *) (Types.datatype * Types.datatype)
+      * (* the read / write (record) types of a table row: *) 
+        (Types.datatype * Types.datatype)
       * 'data)
      
   | SortBy of ('data expression' * 'data expression' * 'data)
@@ -96,14 +100,14 @@ type 'data expression' =
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
   | Placeholder of (label * 'data)
-      deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
+      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve)
       (* Q: Should syntax exprs be picklable or not? *)
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
-      deriving (Eq, Typeable, Show, Pickle, Functor, Rewriter, Shelve)
+      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve)
 
 (* [HACK]
    programs derive Functor and Rewriter
@@ -124,9 +128,12 @@ let visit_def unit visitor def =
     | Alien _ -> unit
 
 type 'a program' = Program of ('a definition' list * 'a expression')
-  deriving (Eq, Typeable, Show, Pickle, Shelve, Functor, Rewriter)
+  deriving (Eq, Typeable, Pickle, Shelve, Functor, Rewriter)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
+
+let defined_names exprs = 
+  concat_map (function Define(f, _, _, _) -> [f] | _ -> []) exprs
 
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
@@ -159,21 +166,6 @@ let rec is_value : 'a expression' -> bool = function
 type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show)
 type untyped_data = [`U of position] deriving (Eq, Typeable, Show)
 type data = [untyped_data | typed_data] deriving (Typeable, Show)
-
-type expression = typed_data  expression'
-and untyped_expression = untyped_data expression'
-and stripped_expression = unit expression'
-  deriving (Eq, Typeable, Show)
-
-type definition = typed_data definition'
-and untyped_definition = untyped_data definition'
-and stripped_definition = unit definition'
-  deriving (Eq, Typeable, Show)
-
-type program = typed_data program'
-and untyped_program = untyped_data program'
-and stripped_program = unit program'
-  deriving (Eq, Typeable, Show)
 
 let data_position = function
   | `T (pos, _, _)
@@ -260,7 +252,8 @@ let rec show t : 'a expression' -> string = function
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
   | Placeholder (s, data) -> "PLACEHOLDER : " ^ Utility.base64encode s ^ t data
-and show_definition t : 'a definition' -> string = function
+
+let show_definition t : 'a definition' -> string = function
   | Define (variable, value, location, data) -> 
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
@@ -268,13 +261,41 @@ and show_definition t : 'a definition' -> string = function
   | Alias (typename, quantifiers, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_assumption k) ^ t data
-and show_program t : 'a program' -> string =
+
+let show_program t : 'a program' -> string =
   fun (Program (ds, body)) ->
     (String.concat "" (List.map (show_definition t) ds)) ^ show t body
 
 let string_of_expression s = show (fun _ -> "") s
 let string_of_definition d = show_definition (fun _ -> "") d
 let string_of_program p = show_program (fun _ -> "") p
+
+module Show_expression' (A : Show) = (*Show_unprintable (struct type a = A.a expression' end)*)
+  ShowDefaults (struct
+                  type a = A.a expression'
+                  let format formatter e = Format.pp_print_string formatter (string_of_expression e)
+                end)
+
+module Show_definition' (A : Show) =
+  ShowDefaults (struct
+                  type a = A.a definition'
+                  let format formatter e = Format.pp_print_string formatter (string_of_definition e)
+                end)
+
+type expression = typed_data  expression'
+and untyped_expression = untyped_data expression'
+and stripped_expression = unit expression'
+  deriving (Eq, Typeable, Show)
+
+type definition = typed_data definition'
+and untyped_definition = untyped_data definition'
+and stripped_definition = unit definition'
+  deriving (Eq, Typeable, Show)
+
+type program = typed_data program'
+and untyped_program = untyped_data program'
+and stripped_program = unit program'
+  deriving (Eq, Typeable)
 
 let show_label =
   function
@@ -694,6 +715,11 @@ let rename_fast name replacement expr =
   in
     fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
+(** {0 Sanity Checks} *)
+
+let is_closed expr = freevars expr == []
+
+let is_closed_wrt expr freebies = freevars expr <|subset|> freebies
 
 (** {0 Labelizing} *)
 
@@ -706,14 +732,13 @@ let has_label expr =
       (_,_,None) -> false
     | (_,_,Some _) -> true
 
-let label_for_expr =
-  (Digest.string -<- string_of_expression)
+let label_for_expr expr =
+  (Digest.string -<- string_of_expression) expr
 
 let labelize =
   rewrite_program
     (RewriteSyntax.topdown 
        (fun expr -> 
-          Debug.if_set print_digest_junk (fun _-> Utility.base64encode(label_for_expr expr));
           Some(set_label expr (Some(label_for_expr expr)))))
 
 (** {0 Skeleton} *)
@@ -771,6 +796,7 @@ let skeleton = function
   | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
       (* note: besides the alist, [query] can also contain
          expressions, in the [query.ml] sublanguage *)
+
 let definition_skeleton = function
   | Define(name, expr, loc_annotation, d) ->
       Define(name, expr, loc_annotation, d)

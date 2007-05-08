@@ -192,6 +192,17 @@ type primitive_value = [
                 ]
     deriving (Typeable, Show, Pickle, Eq, Shelve)
 
+let type_of_primitive : primitive_value -> datatype = function
+  | `Bool _ -> `Primitive `Bool
+  | `Int _ -> `Primitive `Int
+  | `Float _ -> `Primitive `Float
+  | `Char _ -> `Primitive `Char
+  | `XML _ -> `Primitive `XmlItem
+  | `Database _ -> `Primitive `DB
+  | `Table _ -> `Primitive `Abstract
+
+let string_of_primitive_type = type_of_primitive ->- string_of_datatype
+
 type contin_frame = 
   | Definition of (environment * string)
   | FuncArg of (rexpr list * environment) (* FIXME: This is twiddled *)
@@ -225,7 +236,7 @@ type contin_frame =
   | Recv of (environment)
 and result = [
   | `PrimitiveFunction of string
-  | `ClientFunction of string
+  | `ClientFunction of (string)
   | `Function of  (string list * environment (*locals*) * unit (*globals*) * rexpr)
   | `Record of ((string * result) list)
   | `Variant of (string * result)
@@ -233,12 +244,18 @@ and result = [
   | `List of (result list)
   | `Continuation of continuation
   |  primitive_value
-
 ]
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
     deriving (Typeable, Eq, Show, Pickle, Shelve)
+
+let rec string_of_value_type = function
+  | #primitive_value as p -> string_of_primitive_type p
+  | `List items -> "["^ string_of_value_type (hd items) ^"]"
+(*   | `Application(ctor, args) -> ctor ^ "(" ^  *)
+(*       mapstrcat ", " string_of_value_type args ^ ")" *)
+  | _ -> "type unknown" (* FIXME *)
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Constant(Boolean b, Syntax.no_expr_data))
@@ -271,6 +288,13 @@ and char c = `Char c
 and listval es = `List es
 and xmlnodeval contents = `XML (Node contents)
 
+let is_char = function
+  | `Char _ -> true | _ -> false
+
+let is_string = function
+  | `List elems -> for_all is_char elems
+  | _ -> false
+
 let make_tuple fields = 
   `Record(List.map2 (fun exp n -> string_of_int n, exp) fields 
             (fromTo 1 (1 + length fields)))
@@ -302,7 +326,7 @@ let escape =
 
 let delay_expr expr = `Function([], [], (), expr)
 
-let pp_continuation = Show_continuation.show
+let string_of_cont = Show_continuation.show
   
 exception Not_tuple
 
@@ -316,7 +340,6 @@ and charlist_as_string chlist =
         Utility.implode (map char_of_primchar elems)
     | _ -> raise (Match("Non-string " ^ string_of_result chlist
                         ^ " used as string."))
-
     
 and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
@@ -340,7 +363,7 @@ and string_of_result : result -> string = function
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_xresult elems
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
-  | `Continuation cont -> pp_continuation cont
+  | `Continuation cont -> string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
@@ -572,7 +595,8 @@ and unbox_bool : result -> bool   = function
   | `Bool b  -> b | _ -> failwith "Type error unboxing bool"
 and box_int i = `Int i      
 and unbox_int  : result -> num    = function
-  | `Int i   -> i | _ -> failwith "Type error unboxing int"
+  | `Int i   -> i
+  | other -> failwith("Type error unboxing int (got "^ string_of_result other ^" : " ^ string_of_value_type other ^ ")")
 and box_float f = `Float f  
 and unbox_float : result -> float = function
   | `Float f -> f | _ -> failwith "Type error unboxing float"
@@ -602,8 +626,14 @@ let retain names env = filter (fun (x, _) -> mem x names) env
 module Shelve_ExprEnv = Shelve.Shelve_2(Shelve_rexpr)(Shelve_environment)
 module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
 
-let marshal_continuation : continuation -> string
-  = Pickle_continuation.pickleS ->- Netencoding.Base64.encode
+let marshal_continuation (c : continuation) : string
+  = (* Debug.print("marshaling:"^ string_of_cont c); *)
+  let pickle = Pickle_continuation.pickleS c in
+    Debug.print("marshalled continuation size: " ^ 
+                  string_of_int(String.length pickle));
+    let result = Netencoding.Base64.encode pickle in
+      result
+    
 let marshal_exprenv : (expression * environment) -> string
   = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
 
@@ -612,7 +642,7 @@ exception UnrealizableContinuation
 let unmarshal_continuation valenv program : string -> continuation
   = 
   (* a bit hackish: we need to extract all the core-syntax expressions
-  from the valenv, since placeholders may make reference to them. *)
+     from the valenv, since placeholders may make reference to them. *)
   let table = (program_label_table program
                  @ concat_map val_label_table valenv) in
     Netencoding.Base64.decode

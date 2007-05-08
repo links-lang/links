@@ -18,32 +18,7 @@ type web_request = ContInvoke of continuation * query_params
                    | RemoteCall of result * result list
                    | CallMain
                        deriving (Show)
-(*
-  [REMARKS (sl)]
-   - Currently print_http_response outputs the headers and body in
-     one go.
-   - At some point in the future we may want to consider implementing
-     some form of incremental output.
-   - Flushing the output stream prematurely (e.g. after outputting
-     the headers and newline) appears to break client calls.
-  [FURTHER REMARKS (eekc)]
-   - Generally, many of the HTTP response headers will only be
-     determined by running the program. It's fairly standard for a
-     web app to wait until it knows there are no more headers coming
-     (e.g., the program is finished) before printing the headers.
-*)
 
-(* output the headers and content to stdout *)
-let print_http_response headers body =
-  let headers = headers @ !Library.http_response_headers @
-    if (!Library.http_response_code <> 200) then
-      [("Status", string_of_int !Library.http_response_code)] else []
-  in
-    for_each headers
-      (fun (name, value) -> print_endline(name ^ ": " ^ value));
-    print_endline "";
-    print_string body
-      
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program (Syntax.Program (defs, _) as program) =
   let is_client_def = function
@@ -75,13 +50,15 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude typenv filename = 
-  (fun (env, program) ->
-     (env,
-      measure "optimise" Optimiser.optimise_program (env, with_prelude prelude program)))
-    ((fun (env, program) ->
-        env, Syntax.labelize program)
-       ((measure "type" (Inference.type_program typenv))
-          ((measure "parse" (Parse.parse_file Parse.program)) filename)))
+  let program = lazy(Parse.parse_file Parse.program filename)
+    <|measure_as|> "parse" in
+  let tenv, program = lazy(Inference.type_program typenv program)
+    <|measure_as|> "type" in
+  let tenv, program = 
+    tenv, lazy ((Optimiser.optimise_program (tenv, with_prelude prelude program)))
+      <|measure_as|> "optimise" in
+  let tenv, program = tenv, Syntax.labelize program in
+    tenv, program
               
 let read_and_optimise_program prelude env arg 
     : Types.typing_environment * Syntax.program
@@ -91,7 +68,8 @@ let read_and_optimise_program prelude env arg
   else
     read_and_optimise_program prelude env arg
 
-let parse_json = Jsonparse.parse_json Jsonlex.jsonlex -<- Lexing.from_string
+let serialize_call_to_client (continuation, name, arg) = 
+  Json.jsonize_call continuation name arg
 
 let untuple r =
   let rec un n accum list = 
@@ -103,20 +81,28 @@ let untuple r =
     | `Record args -> un 1 [] args
     | _ -> assert false
 
-let stubify_client_funcs globals defs : Result.environment = 
+let stubify_client_funcs globals (Syntax.Program(defs,body) as program) : Result.environment = 
+  Interpreter.program_source := program;
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
     | Syntax.Alias _ -> true
   in 
-
   let server_defs, client_defs = List.partition is_server_fun defs in
   let client_env =
     List.map (function
                  | Syntax.Define (name, _, _, _)
                  | Syntax.Alien (_, name, _, _) -> 
-                     (name, `ClientFunction name)) client_defs in
+(*                      Library.value_env := StringMap.add *)
+(*                        name (`PFun (fun [cont; args] ->  *)
+(*                                       match cont, args with *)
+(*                                           `Continuation cont, `List args ->  *)
+(*                                             (client_call_impl program name cont args) *)
+(*                                         | _ -> assert false)) *)
+(*                        (!Library.value_env); *)
+                     (name, `ClientFunction name))
+      client_defs in
     match server_defs with 
         [] -> []
       | server_defs -> (* evaluate the definitions to get Result.result values. *)
@@ -126,7 +112,7 @@ let stubify_client_funcs globals defs : Result.environment =
 let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
-  let args = untuple (parse_json args) in
+  let args = untuple (Json.parse_json args) in
     RemoteCall(List.assoc fname env, args)
 
 let decode_continuation (cont : string) : Result.continuation =
@@ -137,7 +123,7 @@ let decode_continuation (cont : string) : Result.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let is_special_param (k, _) =
-  List.mem k ["_cont"; "_k"]
+  List.mem k ["_cont"; "_k"; "_jsonArgs"]
 
 let string_dict_to_charlist_dict =
   alistmap Result.string_as_charlist
@@ -153,12 +139,26 @@ let contin_invoke_req valenv program params =
   let params = string_dict_to_charlist_dict params in
     ContInvoke(unmarshal_continuation valenv program pickled_continuation, params)
 
+let unpack_links_list = function
+  | `List items -> items
+  | _ -> assert false
+
+let unpack_links_alist = function
+  | `List items -> List.map (function `List [k;v] -> assert(Result.is_string k);
+                               (charlist_as_string k,v)
+                               | _ -> assert false) items
+  | _ -> assert false
+
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req valenv program params =
-  let expression, environment = unmarshal_exprenv valenv program (List.assoc "_k" params) in
+  let expr, env = unmarshal_exprenv (rng valenv) program (List.assoc "_k" params) in
+  let jsonArgs = (try
+            unpack_links_alist (Json.parse_json_b64 (List.assoc "_jsonArgs" params))
+          with Not_found -> [])
+  in
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
-    ExprEval(expression, params @ environment)
+    ExprEval(expr, params @ env @ jsonArgs)
 
 let is_remote_call params =
   List.mem_assoc "__name" params && List.mem_assoc "__args" params
@@ -175,9 +175,12 @@ let is_contin_invocation params =
 let is_expr_request = List.exists is_special_param
         
 let client_return_req cgi_args = 
-  let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
-  let parse_json_b64 = parse_json -<- Utility.base64decode in
-  let arg = parse_json_b64 (List.assoc "__result" cgi_args) in
+  let continuation = decode_continuation(List.assoc "__continuation" cgi_args) in
+(*   Debug.print("Got web request to apply continuation " ^ *)
+(*                 string_of_cont continuation); *)
+  let arg = Json.parse_json_b64 (List.assoc "__result" cgi_args) in
+(*   Debug.print("Continuation argument: " ^ *)
+(*                 string_of_result (untuple_single arg)); *)
     ClientReturn(continuation, arg)
 
 let error_page_stylesheet = 
@@ -195,34 +198,56 @@ let is_multipart () =
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
 let perform_request 
-    (program (* orig. src.: only used for gen'ing js*))
+    program (* orig. src.: only used for gen'ing js *)
     globals main req =
+(*   Debug.print("free variables of main: " ^  *)
+(*                 String.concat ", " ((Syntax.freevars main) *)
+(*                                     <|difference|> (dom globals))); *)
+(*   assert(Syntax.is_closed_wrt main (dom globals)); *)
   match req with
     | ContInvoke (cont, params) ->
-        print_http_response [("Content-type", "text/html")]
+        Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        print_http_response [("Content-type", "text/html")]
+(*         Debug.print("Web request to evaluate:\n" ^ *)
+(*                       Syntax.string_of_expression expr); *)
+(*         Debug.print("Given env:\n" ^ Result.string_of_environment env); *)
+(*         Debug.print("undef'd variables: " ^ *)
+(*                       String.concat "," (difference (Syntax.freevars expr) *)
+(*                                            (dom globals @ dom env @ dom (fst Library.typing_env))) *)
+(*                    ); *)
+        assert(Syntax.is_closed_wrt expr 
+                 (dom globals @ dom env @ dom (fst Library.typing_env)));
+        Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
     | ClientReturn(cont, value) ->
-        print_http_response [("Content-type", "text/plain")]
+        Interpreter.has_client_context := true;
+(*         Debug.print("Web request to continue with: " ^ Result.string_of_cont cont *)
+(*                        ^ " given value " ^ string_of_result value); *)
+        let result_json = (Json.jsonize_result 
+                             (Interpreter.apply_cont_safe globals cont value)) in
+(*            Debug.print("sending back result of client->server call: " ^  *)
+(*                          result_json); *)
+        Library.print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode 
-             (Json.jsonize_result 
-                (Interpreter.apply_cont_safe globals cont value)))
+             result_json)
     | RemoteCall(func, args) ->
+(*        Debug.print("Entering program for remote call.");*)
+        Interpreter.has_client_context := true;
         let cont, value = 
           match args with
             | [] -> [Result.ThunkApply []], func
             | _::_ -> [Result.FuncApply ([], func, [], (butlast args))], (last args)
         in
-	  print_http_response [("Content-type", "text/plain")]
+	  Library.print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode
-               (Json.jsonize_result 
+               (Json.jsonize_result
                   (Interpreter.apply_cont_safe globals cont value)))
     | CallMain -> 
-        print_http_response [("Content-type", "text/html")] 
+(*        Debug.print("Entering program through Main");*)
+        Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              catch_notfound_l "generate_program"
                (lazy(Js.generate_program program))
@@ -236,7 +261,7 @@ let serve_request prelude (valenv, typenv) filename =
       (lazy (read_and_optimise_program prelude typenv filename)) in
 (*    if (List.length main < 1) then raise Errors.NoMainExpr else*)
     let defs = Utility.catch_notfound_l "stubifying" 
-      (lazy (stubify_client_funcs valenv defs)) in
+      (lazy (stubify_client_funcs valenv program)) in
     let cgi_args =
       if is_multipart () then
         List.map (fun (name, {Cgi.value=value}) ->
@@ -252,7 +277,7 @@ let serve_request prelude (valenv, typenv) filename =
       else if (is_contin_invocation cgi_args) then
         contin_invoke_req (rng valenv) program cgi_args
       else if (is_expr_request cgi_args) then
-        expr_eval_req (rng valenv) program cgi_args
+        expr_eval_req valenv program cgi_args
       else
         CallMain
     in
@@ -262,10 +287,11 @@ let serve_request prelude (valenv, typenv) filename =
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)
       Failure msg -> prerr_endline msg;
-        print_http_response [("Content-type", "text/html; charset=utf-8")] 
+        Library.print_http_response [("Content-type", "text/html; charset=utf-8")] 
         (error_page (Errors.format_exception_html (Failure msg)))
-    | exc -> print_http_response [("Content-type", "text/html; charset=utf-8")]
+    | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
 let serve_request envs filename =
   Errors.display (lazy (serve_request envs filename))
+

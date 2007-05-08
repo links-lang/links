@@ -204,7 +204,7 @@ let def_qname = ('#' | def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
-let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
+let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
 
 let directive_prefix = ['' '@' '$' '%']
 

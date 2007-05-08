@@ -204,7 +204,7 @@ let options : opt list =
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "working-tests",               Some (run_tests Tests.working_tests),                   None);
-    (noshort, "broken-tests",               Some (run_tests Tests.broken_tests),                   None);
+    (noshort, "broken-tests",                Some (run_tests Tests.broken_tests),                   None);
     (noshort, "failing-tests",               Some (run_tests Tests.known_failures),                   None);
     ]
 
@@ -242,3 +242,4 @@ let main () =
     end
 
 let _ = main ()
+

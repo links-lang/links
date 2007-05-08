@@ -12,7 +12,6 @@ let json_of_db (db, params) =
   let (name, args) = Result.parse_db_string params in
     "{_db:{driver:\"" ^ driver ^ "\",name:\"" ^ name ^ "\", args:\"" ^ args ^ "\"}}"
 
-
 (*
 [WARNING]
   May need to be careful about free type variables / aliases in row
@@ -21,14 +20,29 @@ let json_of_table ((db, params), name, row) =
   "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
   "\",row:\"" ^ Types.string_of_datatype (`Record row) ^ "\"}}"
 
-let escape_string = String.escaped
+let js_dq_escape_string str = 
+  (* escape for placement in double-quoted string *)
+  Str.global_replace (Str.regexp_string "\"") "\\\""
+    (Str.global_replace (Str.regexp_string "\n") "\\n"
+       (Str.global_replace (Str.regexp_string "\\") "\\\\"
+          str))
+
+let js_dq_escape_char = (* escape for placement in double-quoted string *)
+  function
+    '"' -> "\\\""
+  | '\\' -> "\\\\"
+  | ch -> String.make 1 ch
 
 let jscharlist_of_string s =
-  "["^String.concat ", " (List.map (fun c -> "\"" ^ Char.escaped c ^ "\"") (Utility.StringUtils.explode s))^"]"
+  "["^ 
+    Utility.mapstrcat ", "
+      (fun c -> "\"" ^ js_dq_escape_char c ^ "\"")
+      (Utility.StringUtils.explode s) 
+  ^"]"
 
 let rec json_of_xmlitem = function
   | Result.Text s ->
-      "[\"TEXT\",\"" ^ escape_string (s) ^ "\"]"
+      "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
   | Result.Node (tag, xml) ->
       let attrs, body =
         List.fold_right (fun xmlitem (attrs, body) ->
@@ -45,7 +59,7 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
-  | `Char c -> "\"" ^ escape_string (String.make 1 c) ^"\""
+  | `Char c -> "\"" ^ js_dq_escape_string (String.make 1 c) ^"\""
 (* [Q] what does Char.escape do?
    [A] the wrong things!
 *)
@@ -82,3 +96,7 @@ let jsonize_result result =
     Debug.if_set show_json
       (fun () -> "jsonize_result <= " ^ rv);
     rv
+
+let parse_json str = Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
+
+let parse_json_b64 str = parse_json(Utility.base64decode str)

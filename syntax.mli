@@ -63,7 +63,7 @@ type definition = typed_data definition' deriving (Typeable, Show, Eq)
 type untyped_definition = untyped_data definition'
 type stripped_definition = unit definition'
 
-type program = typed_data program' deriving (Typeable, Show, Eq)
+type program = typed_data program' deriving (Typeable, Eq)
 type untyped_program = untyped_data program'
 type stripped_program = unit program'
 
@@ -74,6 +74,8 @@ val unit_expression : 'a -> 'a expression'
 val list_expr : 'a -> 'a expression' list -> 'a expression'
 
 val is_value : 'a expression' -> bool
+
+val defined_names : 'a definition' list -> string list
 
 val string_of_expression : 'a expression' -> string
 val labelled_string_of_expression : expression -> string
@@ -136,7 +138,10 @@ val labelize : program -> program
 val dummy_position : position
 val no_expr_data : typed_data
 
-(* Which variables are l:name-bound? *)
+val is_closed : expression -> bool
+val is_closed_wrt : expression -> string list -> bool
+
+(** Which variables are l:name-bound? *)
 val lname_bound_vars : 'a expression' -> string list
 
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression

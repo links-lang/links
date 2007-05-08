@@ -47,7 +47,7 @@ let fresh_pid =
       end
 
 (*
-[5~  assumption:
+  assumption:
     the only kind of lists that are allowed to be inserted into databases
     are strings
 *)
@@ -727,13 +727,13 @@ let impl : located_primitive -> primitive option = function
   | (#primitive as p) -> Some p
 
 let value_env = 
-  List.fold_right
+  ref (List.fold_right
     (fun (name, (p,_)) env -> 
        match impl p with
          | None -> env
          | Some p -> StringMap.add name p env)
     env
-    StringMap.empty
+    StringMap.empty)
 
 let primitive_location (name:string) = match fst (assoc name env) with
   | `Client ->  `Client
@@ -741,12 +741,12 @@ let primitive_location (name:string) = match fst (assoc name env) with
   | #primitive -> `Unknown
 
 let primitive_stub (name : string): result =
-  match StringMap.find name value_env with
+  match StringMap.find name (!value_env) with
     | #result as r -> r
     | _ -> `PrimitiveFunction name
 
 let apply_pfun name args = 
-  match StringMap.find name value_env with
+  match StringMap.find name (!value_env) with
     | #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
     | `PFun p -> p args
         
@@ -768,3 +768,14 @@ and alias_env : Types.alias_environment =
 let typing_env = (type_env, alias_env)
 
 let is_primitive name = List.mem_assoc name env
+
+(** Output the headers and content to stdout *)
+let print_http_response headers body =
+  let headers = headers @ !http_response_headers @
+    if (!http_response_code <> 200) then
+      [("Status", string_of_int !http_response_code)] else []
+  in
+    for_each headers
+      (fun (name, value) -> print_endline(name ^ ": " ^ value));
+    print_endline "";
+    print_string body

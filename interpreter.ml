@@ -7,14 +7,6 @@ open Result
 open Query
 open Syntax
 
-(* call client function and exit *)
-let invoke_client_function name continuation args =
-  let call = Json.jsonize_call continuation name args in
-    print_endline ("Content-type: text/plain\n\n" ^ Utility.base64encode call);
-    exit 0
-      
-
-
 (** {0 Environment handling} *)
 
 (** bind env var value 
@@ -156,6 +148,30 @@ let query_result_types (query : query) (table_defs : (string * Types.row) list)
                                      " was not found in tables " ^ 
                                      mapstrcat "," fst table_defs ^ ".")
 
+(** 0 Web-related stuff *)
+let has_client_context = ref false
+
+let serialize_call_to_client (continuation, name, arg) = 
+  Json.jsonize_call continuation name arg
+
+let program_source = ref(Program([], Syntax.unit_expression no_expr_data))
+
+let client_call_impl name cont (args:Result.result list) =
+  let callPkg = Utility.base64encode(serialize_call_to_client(cont, name, args)) 
+  in
+    if (not !has_client_context) then 
+      begin
+        let start_script = "_invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
+          Library.print_http_response ["Content-type", "text/html"]
+            (Js.make_boiler_page ~onload:start_script
+               (Js.generate_program_defs (!program_source) [name]))
+          ; exit 0
+      end
+    else begin
+      Library.print_http_response ["Content-type", "text/plain"] callPkg;
+      exit 0
+    end
+
 exception TopLevel of (Result.environment * Result.result)
 
 (* could bundle these together with globals to get a global
@@ -221,7 +237,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                   | `PrimitiveFunction name ->
                       apply_cont globals cont (Library.apply_pfun name [])
                   | `ClientFunction name ->
-                      invoke_client_function name cont []
+                      client_call_impl name cont []
                   | `Abs f ->
                       apply_cont globals (FuncApply (locals, f, [], [])::cont) (`Record [])
                   | _ -> raise (Runtime_error ("error applying zero-argument function "^
@@ -253,9 +269,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                       apply_cont globals cont (Library.apply_pfun name  (List.rev (value::evaluated_args)))
 
                   | `ClientFunction name, [] ->
-                      invoke_client_function name cont (List.rev (value::evaluated_args))
+                     client_call_impl name cont (List.rev (value::evaluated_args))
 	          | `Continuation (cont), [] ->
-		      (* Here we throw out the other continuation. *)
                       apply_cont globals cont value
                   | `Abs f, [] -> 
                       apply_cont globals (FuncApply (locals, f, [], [])::cont) 

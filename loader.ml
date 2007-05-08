@@ -43,7 +43,7 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
                 Marshal.to_channel cachefile 
                   (env, expunge_all_source_pos program)
                   [Marshal.Closures])
-	 with _ -> ()) (* Ignore errors writing the cache file*);
+	 with _ -> ()) (* Ignore errors writing the cache file *);
         env, program
   
 let dump_cached filename =
