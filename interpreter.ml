@@ -225,8 +225,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                     end
             | FuncArg([], _) -> assert false
             | FuncArg(param::params, locals) ->
-	        (* Just evaluate the first parameter; "value" is in fact a function
-	           value which will later be applied *)
+	        (* Just evaluate the first parameter; "value" is in
+	           fact a function value which will later be applied
+	        *)
                 interpret globals locals param (FuncApply (locals, value, params, [])::cont)
             | (FuncApplyFlipped(locals, arg)) ->
                 apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
@@ -579,8 +580,6 @@ fun globals locals expr cont ->
         eval arg (FuncApplyFlipped(locals, cc) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->
       eval (Apply (Variable ("sortBy", d), [byExpr; list], d)) cont
-        (* FIXME: does nothing; perhaps assert(false) here ? *)
-        (* FIXME: does nothing; perhaps assert(false) here ? *)
   | Syntax.Wrong (_) ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->
