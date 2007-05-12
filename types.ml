@@ -535,27 +535,34 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
     let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
       match Unionfind.find rowvar with
         | `Closed ->
-            let b, i =
-              FieldEnv.fold (fun label t (b, i) ->
-                               match t with
-                                 | `Present _ ->
-	                             (* check that the labels are numbers 1..n *)
-                                     b && (String.compare (string_of_int i) label)=0, i+1
-                                 | `Absent -> false, i+1) field_env (true, 1)
+            let n = StringMapUtils.size field_env in
+            let b =
+              n = 0
+              ||
+              (List.for_all
+                 (fun i ->
+                    let name = string_of_int i in
+                      FieldEnv.mem name field_env
+                      && (match FieldEnv.find (string_of_int i) field_env with
+                            | `Present _ -> true
+                            | `Absent -> false))
+                 (fromTo 1 n))
             in
-	      (* 0/1-tuples are displayed as records *)
-              b && (allow_onetuples || i <> 2)
+              (* 0/1-tuples are displayed as records *)
+              b && (allow_onetuples || n <> 1)
         | _ -> false
     in
     (* precondition: the row is unwrapped *)
     let string_of_tuple (field_env, row_var) =
-      let ss = List.rev
-        (FieldEnv.fold (fun _ t ss ->
-                          match t with
-                            | `Present t -> (sd t) :: ss
-                            | `Absent -> assert false) field_env [])
+      let tuple_env =
+        FieldEnv.fold
+          (fun i t tuple_env ->
+             match t with
+               | `Present t -> IntMap.add (int_of_string i) t tuple_env
+               | `Absent -> assert false) field_env IntMap.empty in
+      let ss = List.rev (IntMap.fold (fun _ t ss -> (sd t) :: ss) tuple_env [])
       in
-          "(" ^ String.concat ", " ss ^  ")"
+        "(" ^ String.concat ", " ss ^  ")"
     in
       match datatype with
         | `Not_typed       -> "not typed"
