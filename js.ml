@@ -405,10 +405,18 @@ let rec generate global_names : 'a expression' -> code =
       let i_cps = generate' i in
       let t_cps = generate' t in
       let e_cps = generate' e in
-        Fn(["__kappa"], 
+      let k = gensym ~prefix:("_if") ()
+        (*
+          [NOTE]
+
+          need to make sure this abstraction isn't treated as
+          part of an administrative redex as the continuation is duplicated
+        *)
+      in
+        Fn([k], 
            Call(i_cps, [Fn(["__i"], Cond (Var "__i",
-                                        Call(t_cps, [Var "__kappa"]),
-                                        Call(e_cps, [Var "__kappa"])))]))
+                                        Call(t_cps, [Var k]),
+                                        Call(e_cps, [Var k])))]))
                           
   | Let (v, e, b, _)                   -> 
       let e' = generate' e in
@@ -600,23 +608,39 @@ let rec generate global_names : 'a expression' -> code =
       let src_cps = generate' src in
       let case_body_cps = generate' case_body in
       let else_body_cps = generate' else_body in
-        Fn(["__kappa"],
+      let k = gensym ~prefix:("_case") ()
+        (*
+          [NOTE]
+
+          need to make sure this abstraction isn't treated as
+          part of an administrative redex as the continuation is duplicated
+        *)
+      in
+        Fn([k],
           Call(src_cps, [Fn(["__src"],
                             Cond(Binop(Call(Var "_vrntLbl", [Var "__src"]),
                                        "==",
                                        strlit case_label),
                                  Bind(case_var,
                                       Call(Var "_vrntVal", [Var "__src"]),
-                                      Call(case_body_cps, [Var "__kappa"])),
+                                      Call(case_body_cps, [Var k])),
                                  Bind(else_var,
                                       Var "__src",
-                                      Call(else_body_cps, [Var "__kappa"]))
+                                      Call(else_body_cps, [Var k]))
                                 )
                            )]))
   | Call_cc (e, _) -> 
-      Fn(["__kappa"], 
-	 Call (Call(generate' e, [Var "__kappa"]), 
-	       [Fn (["__ignore"],Var "__kappa")]))
+      let k = gensym ~prefix:("_callcc") ()
+        (*
+          [NOTE]
+
+          need to make sure this abstraction isn't treated as
+          part of an administrative redex as the continuation is duplicated
+        *)
+      in
+        Fn([k], 
+	   Call (Call(generate' e, [Var k]), 
+	         [Fn (["__ignore"],Var k)]))
   | Wrong _ -> Fn(["__kappa"], Die "Internal Error: Pattern matching failed")
   | Database (e, _) ->
       let db_cps = generate' e in
