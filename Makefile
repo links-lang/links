@@ -95,6 +95,8 @@ SOURCES = $(OPC)                		\
           test.ml                               \
           tests.ml                              \
           links.ml              		\
+          ir.mli                                \
+          compileir.ml                          \
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

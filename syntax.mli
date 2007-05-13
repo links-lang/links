@@ -10,6 +10,19 @@ type constant =
   | String of string
   | Float of float
 
+(*
+  [TODO]
+
+    - get rid of Comparison (move to library.ml?)
+    - get rid of Record_selection
+    - change variant_selection to be n-ary
+    - get rid of variant_selection_empty
+    - replace List_of and Concat with Cons
+    - get rid of Placeholder (use computed labels instead)
+    - get rid of SortBy (move to library.ml)
+    - add polymorphic tuples
+    - (eventually) get rid of Syntax module and replace with Ir
+*)
 type 'a expression' =
   | Constant of (constant * 'a)
   | Variable of (string * 'a)
