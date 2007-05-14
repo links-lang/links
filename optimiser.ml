@@ -788,6 +788,7 @@ let print_definition of_name ?msg:msg def =
 
 
 let rewriters env = [
+  uniquify_names; 
   RewriteSyntax.bottomup no_project_erase;  
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;

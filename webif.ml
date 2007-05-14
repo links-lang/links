@@ -55,7 +55,7 @@ let read_and_optimise_program prelude typenv filename =
   let tenv, program = lazy(Inference.type_program typenv program)
     <|measure_as|> "type" in
   let tenv, program = 
-    tenv, lazy ((Optimiser.optimise_program (tenv, with_prelude prelude program)))
+    tenv, lazy((Optimiser.optimise_program(tenv, with_prelude prelude program)))
       <|measure_as|> "optimise" in
   let tenv, program = tenv, Syntax.labelize program in
     tenv, program
@@ -217,6 +217,8 @@ let perform_request
 (*                       String.concat "," (difference (Syntax.freevars expr) *)
 (*                                            (dom globals @ dom env @ dom (fst Library.typing_env))) *)
 (*                    ); *)
+        (* This assertion failing indicates that not everything needed
+           was serialized into the link: *)
         assert(Syntax.is_closed_wrt expr 
                  (dom globals @ dom env @ dom (fst Library.typing_env)));
         Library.print_http_response [("Content-type", "text/html")]

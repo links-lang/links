@@ -758,7 +758,7 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
             ] in
 
     (* make_var_list pairs each variable name (as a string) with the
-       variable its self. At runtime this is like pairing the variable
+       variable itself. At runtime this is like pairing the variable
        names with their values, effectively capturing the environment. *)
   let make_var_list = map (fun v -> Lst [chrlistlit v ; Var v]) in
   let href_attr =
@@ -1005,15 +1005,13 @@ let rec eliminate_admin_redexes =
   simplify_completely
 
 let gen_def ?(pre_opt=identity) global_names =
-  (rewrite_def Optimiser.uniquify_names)
-  ->- generate_def global_names
+  generate_def global_names
   ->- eliminate_admin_redexes
   ->- pre_opt
   ->- optimise
 
 let gen ?(pre_opt=identity) global_names =
-  (perhaps_apply Optimiser.uniquify_names)
-  ->- generate global_names
+  generate global_names
   ->- eliminate_admin_redexes
   ->- pre_opt
   ->- optimise
