@@ -99,7 +99,6 @@ type 'data expression' =
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
-  | Placeholder of (label * 'data)
       deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve)
       (* Q: Should syntax exprs be picklable or not? *)
 
@@ -251,7 +250,6 @@ let rec show t : 'a expression' -> string = function
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
-  | Placeholder (s, data) -> "PLACEHOLDER : " ^ Utility.base64encode s ^ t data
 
 let show_definition t : 'a definition' -> string = function
   | Define (variable, value, location, data) -> 
@@ -319,7 +317,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     combine (expr, match expr with
                | Constant _
                | Nil _
-               | Placeholder _ 
                | Wrong _
                | Variable _ -> []
 
@@ -378,7 +375,6 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     | Constant _, []
     | Variable _, []
     | Nil _, [] 
-    | Placeholder _, []
     | Wrong _, [] -> exp
         
     (* 1 subnodes *)
@@ -569,7 +565,6 @@ let expression_data : ('a expression' -> 'a) = function
   | SortBy (_, _, data) -> data
   | Call_cc (_, data) -> data
   | Wrong data -> data
-  | Placeholder (_,data) -> data
 let definition_data : ('a definition' -> 'a) = function 
   | Define (_, _, _, data) -> data
   | Alias (_, _, _, data) -> data
@@ -610,7 +605,6 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | SortBy (a, b,_) -> SortBy (a, b,data)
     | Call_cc (a, _) -> Call_cc (a, data)
     | Wrong _ -> Wrong data
-    | Placeholder (a,_) -> Placeholder (a,data) 
 let set_definition_data : ('b -> 'a definition' -> 'b definition') =
   fun data -> function
     | Define (a, b, c, _) ->  Define (a, b, c, data)
@@ -755,7 +749,6 @@ let skeleton = function
   | Abs (f, d) -> Abs (f, d)
   | App (f, p, d) -> App (f, p, d)
   | Apply(f, a, d) -> Apply(f, a, d)
-  | Placeholder(label, d) -> Placeholder(label, d)
 
   (* One sub-expression *)
   | Abstr(var, body, d) -> Abstr(var, body, d)

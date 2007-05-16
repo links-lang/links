@@ -584,9 +584,6 @@ fun globals locals expr cont ->
       failwith("Went wrong (pattern matching failed?)")
   | Syntax.HasType(expr, _, _) ->
       eval expr cont
-  | Syntax.Placeholder (_, _) -> 
-      failwith("Internal error: Placeholder at runtime")
-
 
 and interpret_safe globals locals expr cont =
   try 

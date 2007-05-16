@@ -107,7 +107,6 @@ sig
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem
   val wrong : datatype -> tail_computation sem
-(* placeholder? *)
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -192,9 +191,9 @@ struct
         (lift []) ss
 
     (*
-      [BUG]
+      [WARNING]
 
-      Using StringMaps instead of assoc lists changes the order of
+      Using StringMaps instead of assoc lists affects the order of
       evaluation.
 
       e.g.
@@ -202,7 +201,7 @@ struct
       but
       (a=print("0"),b=print("1")) == (b=print("1"),a=print("0"))
 
-      Of course this isn't a problem once we're in MNF as only values
+      Of course this isn't an issue once we're in MNF as only values
       can occur inside the StringMaps, but it is a problem in our old
       IR. (One of the important features of A-NF/MNF/CPS is that it
       makes control flow explicit.)
@@ -499,8 +498,6 @@ struct
             I.wrong (node_datatype e)
         | HasType (e, _, _) ->
             ec e
-        | Placeholder (s, _) ->
-            failwith "eval (Placeholder _) not implemented yet"
   and evalv env e =
     I.value_of_comp (eval env e)
 

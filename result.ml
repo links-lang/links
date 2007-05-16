@@ -121,7 +121,7 @@ module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults
       let label = Syntax.Pickle_label.unpickle stream in
         (* sadly, we can't do resolution here at present because there's
            no way to pass in the table *)
-        Syntax.Placeholder (label, (`T(Syntax.dummy_position, `Not_typed, Some label)))
+        Syntax.Wrong (`T(Syntax.dummy_position, `Not_typed, Some label))
   end)
 
 module Shelve_rexpr = Shelve.Shelve_primtype(Pickle_rexpr)(Eq_rexpr)(Typeable_rexpr)
@@ -346,8 +346,6 @@ and string_of_result : result -> string = function
   | `PrimitiveFunction (name) -> name
   | `ClientFunction (name) -> name
   | `Abs result -> "abs " ^ string_of_result result
-  | `Function (_, _, _, Placeholder (str, _)) -> 
-      "fun [" ^ Show_label.show str ^ "]"
     (* Choose from fancy or simple printing of functions: *)
 (*   | `Function(formal,env,_,body) -> "fun (" ^ formal ^ ") {" ^ Syntax.string_of_expression body ^ "}[" ^ string_of_environment env ^ "]" *)
   | `Function(formal,env,_,body) -> "fun"
@@ -566,12 +564,13 @@ let resolve_label table label : 'a expression' =
   try
     assoc label table
   with
-      Not_found -> (Debug.print("Placeholder not found: ");
+      Not_found -> (Debug.print("label not found: ");
                     raise Not_found)
 
-let resolve_placeholder table = function
-    Placeholder(s,_) -> resolve_label table s
-  | x -> x
+let resolve_placeholder table e =
+  match expression_data e with
+    | `T(_, _, Some l) -> resolve_label table l
+    | _ -> e
       
 let resolve_placeholders_result table rslt = 
   map_result identity (resolve_placeholder table) identity rslt
@@ -657,7 +656,7 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
         (resolve_placeholders_expr table expr, 
          resolve_placeholders_env table env) 
     with Not_found ->
-      Debug.print("\nPlaceholder didn't match code: " ^
+      Debug.print("\nlabel didn't match code: " ^
                     labelled_string_of_expression expr);
       raise UnrealizableContinuation
  in

@@ -1162,7 +1162,6 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
               ~pos:pos msg
         end;
 	HasType(expr, datatype, `T (pos, inference_datatype, None))
-  | Placeholder _ -> assert false
  with 
      Unify_failure msg
    | UndefinedVariable msg

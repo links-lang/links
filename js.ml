@@ -900,7 +900,6 @@ and generate_direct_style global_names : 'a expression' -> code =
   (* Unimplemented stuff *)
   | Database _
   | TableHandle _
-  | Placeholder _
   | SortBy _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
 

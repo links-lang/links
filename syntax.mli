@@ -18,7 +18,6 @@ type constant =
     - change variant_selection to be n-ary
     - get rid of variant_selection_empty
     - replace List_of and Concat with Cons
-    - get rid of Placeholder (use computed labels instead)
     - get rid of SortBy (move to library.ml)
     - add polymorphic tuples
     - (eventually) get rid of Syntax module and replace with Ir
@@ -54,7 +53,6 @@ type 'a expression' =
   | Call_cc of ('a expression' * 'a)
   | Wrong of 'a
   | HasType of ('a expression' * Types.datatype * 'a)
-  | Placeholder of (label * 'a)
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
