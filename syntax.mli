@@ -74,9 +74,9 @@ type definition = typed_data definition' deriving (Typeable, Show, Eq)
 type untyped_definition = untyped_data definition'
 type stripped_definition = unit definition'
 
-type program = typed_data program' deriving (Typeable, Eq)
-type untyped_program = untyped_data program'
-type stripped_program = unit program'
+type program = typed_data program' deriving (Typeable, Eq, Show)
+type untyped_program = untyped_data program' deriving (Show)
+type stripped_program = unit program' deriving (Show)
 
 exception ASTSyntaxError of position * string
 
@@ -99,9 +99,9 @@ val labelled_string_of_program : program -> string
 
 val stringlit_value : 'a expression' -> string
 
-val freevars : 'a expression' -> string list
-val freevars_def : 'a definition' -> string list
-val freevars_program : 'a program' -> string list
+val freevars : 'a expression' -> Utility.StringSet.t
+val freevars_def : 'a definition' -> Utility.StringSet.t
+val freevars_program : 'a program' -> Utility.StringSet.t
 
 val free_bound_type_vars : 'a expression' -> Types.TypeVarSet.t
 val free_bound_type_vars_def : 'a definition' -> Types.TypeVarSet.t
@@ -150,7 +150,7 @@ val dummy_position : position
 val no_expr_data : typed_data
 
 val is_closed : expression -> bool
-val is_closed_wrt : expression -> string list -> bool
+val is_closed_wrt : expression -> Utility.StringSet.t -> bool
 
 (** Which variables are l:name-bound? *)
 val lname_bound_vars : 'a expression' -> string list

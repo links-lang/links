@@ -147,10 +147,9 @@ val box_list : result list -> result
 val unbox_list : result -> result list
 val box_unit : unit -> result 
 val unbox_unit : result -> unit
-val retain : 'a list -> ('a * 'b) list -> ('a * 'b) list
+val retain : Utility.StringSet.t -> (string * 'b) list -> (string * 'b) list
 
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
 val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
 val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
-

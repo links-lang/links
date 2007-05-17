@@ -552,7 +552,7 @@ let rec generate global_names : 'a expression' -> code =
                                 callk_yielding (
                                   Call (Var "_union", [Var name; Dict dict])))])))
         end
-  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (Syntax.freevars b) ->
+  | Record_selection (l, lv, etcv, r, b, _) when StringSet.mem etcv (Syntax.freevars b) ->
       let r_cps = generate' r in
       let b_cps = generate' b in
       let name = gensym ~prefix:"__r" () in
@@ -767,12 +767,12 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
       let href_hdlr_ast = (assoc "l:href" handlers_ast) in
       let code_ptr = Result.marshal_exprenv (href_hdlr_ast, []) in
       let href_hdlr = (assoc "href" handlers) in
-      let local_vars = difference (Syntax.freevars href_hdlr_ast) global_names in
+      let local_vars = StringSet.diff (Syntax.freevars href_hdlr_ast) (StringSet.from_list global_names) in
         ["href", Call(Var "_stringToCharlist",
                       [Call(Var "_jsStrConcat",
                             [strlit("?_k=" ^ code_ptr ^ "&_jsonArgs=");
                              Call(Var "JSON.stringifyB64",
-                                  [Lst(make_var_list local_vars)])])])]
+                                  [Lst(make_var_list (StringSet.elements local_vars))])])])]
     with Not_found -> ["href", chrlistlit "#"] in
     
     make_xml_cps attrs_cps (key_attr @ href_attr
@@ -859,7 +859,7 @@ and generate_direct_style global_names : 'a expression' -> code =
             | Some r ->
                 Call (Var "_union", [dict; generate global_names r])
         end
-  | Record_selection (l, lv, etcv, r, b, _) when mem etcv (Syntax.freevars b) ->
+  | Record_selection (l, lv, etcv, r, b, _) when StringSet.mem etcv (Syntax.freevars b) ->
       let name = gensym ~prefix:"_r" () in
 	Bind(name, gd r,
 	     Bind(lv, Call(Var "_project", [strlit l; Var name]),

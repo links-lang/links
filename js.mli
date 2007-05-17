@@ -1,7 +1,7 @@
 (* JavaScript code generation *)
 
 val generate_program_defs : 
-  Syntax.program -> string list -> string list
+  Syntax.program -> Utility.StringSet.t -> string list
 
 val generate_program : ?onload:string -> 
   Syntax.program -> string

@@ -99,14 +99,14 @@ type 'data expression' =
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve)
+      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
       (* Q: Should syntax exprs be picklable or not? *)
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve)
+      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
 
 (* [HACK]
    programs derive Functor and Rewriter
@@ -127,7 +127,7 @@ let visit_def unit visitor def =
     | Alien _ -> unit
 
 type 'a program' = Program of ('a definition' list * 'a expression')
-  deriving (Eq, Typeable, Pickle, Shelve, Functor, Rewriter)
+  deriving (Eq, Typeable, Pickle, Shelve, Functor, Rewriter, Show)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
@@ -268,18 +268,6 @@ let string_of_expression s = show (fun _ -> "") s
 let string_of_definition d = show_definition (fun _ -> "") d
 let string_of_program p = show_program (fun _ -> "") p
 
-module Show_expression' (A : Show) = (*Show_unprintable (struct type a = A.a expression' end)*)
-  ShowDefaults (struct
-                  type a = A.a expression'
-                  let format formatter e = Format.pp_print_string formatter (string_of_expression e)
-                end)
-
-module Show_definition' (A : Show) =
-  ShowDefaults (struct
-                  type a = A.a definition'
-                  let format formatter e = Format.pp_print_string formatter (string_of_definition e)
-                end)
-
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
@@ -293,7 +281,7 @@ and stripped_definition = unit definition'
 type program = typed_data program'
 and untyped_program = untyped_data program'
 and stripped_program = unit program'
-  deriving (Eq, Typeable)
+  deriving (Eq, Typeable, Show)
 
 let show_label =
   function
@@ -454,7 +442,7 @@ let lname_bound_vars : 'a expression' -> string list =
         concat (map lnames contents)
     | Xml_node (_, _, _, _)  -> []
         
-let freevarSet (expression : 'a expression') : StringSet.t =
+let freevars (expression : 'a expression') : StringSet.t =
   let module S = StringSet in
   let fromList l = List.fold_right S.add l S.empty in
   let rec aux' default v = 
@@ -485,13 +473,10 @@ let freevarSet (expression : 'a expression') : StringSet.t =
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
 
-let freevars (expression : 'a expression') : string list = 
-  StringSet.elements (freevarSet expression)
-
-let freevars_def def = visit_def [] freevars def
+let freevars_def def = visit_def StringSet.empty freevars def
 
 let freevars_program (Program (defs, body)) =
-  Utility.concat_map freevars_def defs @ freevars body
+  StringSet.union_all (freevars body :: List.map freevars_def defs)
 
 let free_bound_type_vars expression =
   let module S = Types.TypeVarSet in
@@ -711,9 +696,9 @@ let rename_fast name replacement expr =
 
 (** {0 Sanity Checks} *)
 
-let is_closed expr = freevars expr == []
+let is_closed expr = StringSet.is_empty (freevars expr)
 
-let is_closed_wrt expr freebies = freevars expr <|subset|> freebies
+let is_closed_wrt expr freebies = freevars expr <|StringSet.subset|> freebies
 
 (** {0 Labelizing} *)
 

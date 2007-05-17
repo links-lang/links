@@ -40,7 +40,7 @@ let is_client_program (Syntax.Program (defs, _) as program) =
       (Library.primitive_location ->- (=) `Client) p
     with Not_found ->  false
   in
-  let freevars = Syntax.freevars_program program in
+  let freevars = StringSet.elements (Syntax.freevars_program program) in
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
     List.exists is_client_def defs || List.exists is_client_prim prims
@@ -220,7 +220,7 @@ let perform_request
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
         assert(Syntax.is_closed_wrt expr 
-                 (dom globals @ dom env @ dom (fst Library.typing_env)));
+                 (StringSet.from_list (dom globals @ dom env @ dom (fst Library.typing_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))

@@ -67,7 +67,7 @@ struct
     in fun map -> aux 1 map []
 
   let remove_unused_variables : RewriteSyntax.rewriter = function
-    | Let (var, expr, body, _) when Optimiser.pure expr && not (mem var (freevars body))
+    | Let (var, expr, body, _) when Optimiser.pure expr && not (StringSet.mem var (freevars body))
         -> Some body
     | _ -> None
 

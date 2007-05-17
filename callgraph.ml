@@ -29,7 +29,7 @@ let is_mapped_by alist x = mem_assoc x alist
 let make_callgraph bindings = 
   alistmap
     (fun expr -> 
-       filter (is_mapped_by bindings) (freevars expr)) 
+       filter (is_mapped_by bindings) (StringSet.elements (freevars expr)) )
     bindings
 
 let group_and_order_bindings_by_callgraph 
@@ -78,11 +78,11 @@ struct
   }
 
   let elim_dead_defs globals defs root_names =
-    let filter_globals = filter (fun name -> not (mem name globals)) in
+    let filter_globals s = filter (fun name -> not (mem name globals)) (StringSet.elements s) in
     let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) defs in
     let groupings = refine_def_groups [defs] in
     let clique_info = map (fun defs ->
-                             {free_names = filter_globals (concat_map freevars_def defs);
+                             {free_names = filter_globals  (StringSet.union_all (List.map freevars_def defs));
                               exposed_names = map fst (defs_to_bindings defs);
                               defs = defs}) groupings
     and expr_info = { free_names =  filter_globals root_names;

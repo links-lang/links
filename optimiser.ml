@@ -59,11 +59,11 @@ let countNodes e =
 
 (* Inline small, non-recursive functions *)
 let contains_no_extrefs : Syntax.expression -> bool =
-  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- freevars
+  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- StringSet.elements -<- freevars
 
 let recursivep : Syntax.expression -> bool = function
   | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 
-      -> List.mem name (freevars fn)
+      -> StringSet.mem name (freevars fn)
   | _ -> false
 
 let size_limit = 150
@@ -141,7 +141,7 @@ let reduce_recursion : RewriteSyntax.rewriter = function
   | Rec (bindings, cont, data) ->
       let untyped_bindings = List.map (fun (name, expr, _) -> name, expr) bindings in
       let find_definition v = List.find (fun (name, expr, annotation) -> name = v) bindings in
-      let recursive_p (name, expr, annot) =  mem name (freevars expr) in
+      let recursive_p (name, expr, annot) =  StringSet.mem name (freevars expr) in
       let cliques = Callgraph.group_and_order_bindings_by_callgraph untyped_bindings in
         begin match map (map find_definition) cliques with
           | [_::_::_] -> None (* one multi-element group.  Everything must be mutually-recursive *)
@@ -151,7 +151,7 @@ let reduce_recursion : RewriteSyntax.rewriter = function
               Some (List.fold_right
                       (fun group body -> 
                          match group with 
-                           | [(name, expr, annot)] when not (mem name (freevars expr)) ->
+                           | [(name, expr, annot)] when not (StringSet.mem name (freevars expr)) ->
                                let rhs = match annot with
                                  | Some annot -> HasType (expr, annot, data)
                                  | None -> expr in
@@ -266,7 +266,7 @@ let unused_variables : RewriteSyntax.rewriter = function
        list of free variables outwards rather than searching the body
        every time we find a let. *)
   | Let (var, expr, body, _) when pure expr 
-                               && not (mem var (freevars body)) -> Some body
+                               && not (StringSet.mem var (freevars body)) -> Some body
   | _ -> None
       (* FIXME: this ignores variables that are hidden inside queries *)
 
@@ -619,7 +619,7 @@ let lift_lets : RewriteSyntax.rewriter = function
     -> Some(Let(letvar, letval,
                 For(loopbody, loopvar, letbody, data), letdata))
   | For(Let(letvar, letval, letbody, letdata), loopvar, src, data)
-      when not (mem loopvar (freevars letval))
+      when not (StringSet.mem loopvar (freevars letval))
         && pure letval
         -> Some(Let(letvar, letval, For(letbody, loopvar, src, data), letdata))
   | Condition(cond, Let(letvar, letval, letbody, letdata), e, data)

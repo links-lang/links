@@ -164,7 +164,7 @@ let client_call_impl name cont (args:Result.result list) =
         let start_script = "_invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
           Library.print_http_response ["Content-type", "text/html"]
             (Js.make_boiler_page ~onload:start_script
-               (Js.generate_program_defs (!program_source) [name]))
+               (Js.generate_program_defs (!program_source) (StringSet.singleton name)))
           ; exit 0
       end
     else begin

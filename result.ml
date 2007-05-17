@@ -617,7 +617,7 @@ and unbox_unit : result -> unit = function
 
 
 (* Retain only bindings in env named by members of `names' *)
-let retain names env = filter (fun (x, _) -> mem x names) env
+let retain names env = filter (fun (x, _) -> StringSet.mem x names) env
 
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
