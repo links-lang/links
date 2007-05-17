@@ -104,13 +104,15 @@ let gen_format_polyv (row,_) ({loc=loc} as ti) = <:str_item<
 >>
 
 (* TODO: merge with gen_printer *)
-let gen_module_expr ti = 
+let gen_module_expr ({loc=loc} as ti) = 
   let wrapper f ti data = apply_defaults ti (f data ti) in
-  gen_module_expr ti
+  let s = gen_module_expr ti
     ~tyrec:(fun _ _ -> wrapper gen_format_record)
     ~tysum:(fun _ _ -> wrapper gen_format_sum)
     ~tyvrn:(fun _ _ -> wrapper gen_format_polyv) ti.rtype
-
+  in
+    <:module_expr< struct include $s$; value format f = format f; end >>
+      
 let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 
 let _ = 
