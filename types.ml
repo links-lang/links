@@ -16,7 +16,7 @@ module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type 
 
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
-                 | `Abstract ]
+                 | `Abstract | `NativeString ]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type 't meta_type_var_basis =
@@ -386,6 +386,7 @@ let unwrap_row : row -> (row * row_var option) =
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
 let xml_type = `Application ("Xml", [])
+let native_string_type = `Primitive `NativeString
 
 (*
 let empty_var_maps : unit -> inference_type_map =
@@ -515,7 +516,7 @@ exception Not_tuple
 
 let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)"
+  | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)" | `NativeString -> "NativeString"
 
 let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> string =
   fun rec_vars vars datatype ->

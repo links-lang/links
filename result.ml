@@ -181,14 +181,16 @@ and string_of_item : xmlitem -> string =
 type table = (database * string) * string * Types.row
    deriving (Show, Pickle, Eq, Typeable, Shelve)
 
+
 type primitive_value = [
 | `Bool of bool
-| `Int of num
-| `Float of float
 | `Char of char
-| `XML of xmlitem
 | `Database of (database * string)
 | `Table of table
+| `Float of float
+| `Int of num
+| `XML of xmlitem
+| `NativeString of string
                 ]
     deriving (Typeable, Show, Pickle, Eq, Shelve)
 
@@ -200,6 +202,7 @@ let type_of_primitive : primitive_value -> datatype = function
   | `XML _ -> `Primitive `XmlItem
   | `Database _ -> `Primitive `DB
   | `Table _ -> `Primitive `Abstract
+  | `NativeString _ ->`Primitive `NativeString
 
 let string_of_primitive_type = type_of_primitive ->- string_of_datatype
 
@@ -370,7 +373,9 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
-
+  | `NativeString s -> "\"" ^ s ^ "\""
+  | _  -> failwith "Unexpected primitive value"
+				
 and string_of_tuple (fields : (string * result) list) : string = 
     let fields = map (function
                         | x, y when numberp x  -> (int_of_string x, y)
@@ -636,6 +641,9 @@ let marshal_continuation (c : continuation) : string
 let marshal_exprenv : (expression * environment) -> string
   = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
 
+let marshal_value : result  -> string
+  = Pickle_result.pickleS ->- Netencoding.Base64.encode
+
 exception UnrealizableContinuation
 
 let unmarshal_continuation valenv program : string -> continuation
@@ -663,3 +671,6 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
   Netencoding.Base64.decode
   ->- Pickle_ExprEnv.unpickleS
   ->- resolve
+
+let unmarshal_value : string -> result =
+  Netencoding.Base64.decode ->- Pickle_result.unpickleS

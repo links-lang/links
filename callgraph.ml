@@ -85,17 +85,21 @@ struct
                              {free_names = filter_globals  (StringSet.union_all (List.map freevars_def defs));
                               exposed_names = map fst (defs_to_bindings defs);
                               defs = defs}) groupings
-    and expr_info = { free_names =  filter_globals root_names;
+    and expr_info = { free_names = filter_globals root_names;
                       exposed_names = [];
                       defs = [] } in
-
     let rec close env =
         match env.free_names with
           | [] -> env
           | names ->
               let defines name {exposed_names = names} = List.mem name names in
-              let defining_cliques =  List.map (fun name -> List.find (defines name) clique_info) names in
-                close (List.fold_right (fun clique env ->
+              let defining_cliques =  
+ 		List.map (fun name -> 
+			    try
+			      List.find (defines name) clique_info
+			    with Not_found -> (* useful in debugging to include the symbol name *)
+			      failwith ("Not_found in elim_dead_defs: " ^ name)) names in
+		close (List.fold_right (fun clique env ->
                                           let exposed_names = env.exposed_names @ clique.exposed_names in
                                             { free_names = List.filter (fun name -> not (List.mem name exposed_names))
                                                 (env.free_names @ clique.free_names);

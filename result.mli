@@ -44,7 +44,6 @@ val reconstruct_db_string : string * string -> string
 
 
 (** Values and continuations for the interpreter **)
-
 type unop = | MkColl
             | MkVariant of string
             | Abs
@@ -74,7 +73,9 @@ type primitive_value =
     | `Table of table
     | `Float of float
     | `Int of Num.num
-    | `XML of xmlitem ]
+    | `XML of xmlitem 
+    | `NativeString of string
+    ]
 type contin_frame =
     | Definition of (environment * string)
     | FuncArg of (Syntax.expression list * environment)
@@ -151,5 +152,9 @@ val retain : Utility.StringSet.t -> (string * 'b) list -> (string * 'b) list
 
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
+val marshal_value : result -> string
+val unmarshal_value : string -> result
+
 val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
 val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
+

@@ -44,11 +44,11 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-w Ae
+OCAMLFLAGS=-dtypes -w Ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
-TRASH=*.tmp *.output
+TRASH=*.tmp *.output *.cache
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli

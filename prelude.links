@@ -650,12 +650,17 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-sig preludeOption : ((a,String), a) -> State(Names,(Xml, (((String) -> [a]) -> (String) -> [a])))
-fun preludeOption ((a,b), default) {
-   var selectedAttr = if (default == a) "SELECTED" else "";
+sig preludeOption : ((a,String), Bool) -> State(Names,(Xml, (((String) -> [a]) -> (String) -> [a])))
+fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
-   retern ((<option value="{name}" selected="{selectedAttr}">{stringToXml(b)}</option>,
+	if(selected) {
+	   retern ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
+	}
+	else {
+	   retern ((<option value="{name}">{stringToXml(b)}</option>,
+            (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
+	}
 }}
 
 
@@ -663,8 +668,18 @@ sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
   switch (items) {
      case [] -> retern ((<#/>, fun (_) { [] }))
-     case item::items -> preludeOption(item, default) 
+     case item::items -> preludeOption(item, (first(item) == default))
                      >>= fun ((xml, r1)) { preludeOptions(items, default)
+                                         >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
+  }
+}
+
+sig preludeMultiOptions : ([(a,String,Bool)]) -> State(Names,(Xml, (String) -> [a]))
+fun preludeMultiOptions(items) {
+  switch (items) {
+     case [] -> retern ((<#/>, fun (_) { [] }))
+     case item::items -> preludeOption((first(item),second(item)), third(item))
+                     >>= fun ((xml, r1)) { preludeMultiOptions(items)
                                          >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
   }
 }
@@ -688,11 +703,10 @@ fun choiceDefault (items, default) {
   }
 }
 
-sig choices : ([(a,String)]) -> Formlet ([a])
+sig choices : ([(a,String, Bool)]) -> Formlet ([a])
 fun choices (items) {
-  var default = first(hd(items));
   nextName >>= fun (name) {
-     preludeOptions(items, default) >>= fun ((xml, retrieve)) {
+     preludeMultiOptions(items) >>= fun ((xml, retrieve)) {
         retern ((<select name="{name}" multiple="multiple">{xml}</select>,
                  fun (env) { concat(map(retrieve, assocAll(name,env))) }))
 

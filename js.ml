@@ -264,6 +264,13 @@ let chrlistlit s  = Lst(map chrlit (explode s))
 let script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
+let inline_script file = (* makes debugging with firebug easier *)
+  let file_in = open_in file in
+  let file_len = in_channel_length file_in in
+  let file_contents = String.make file_len '\000' in
+    really_input file_in file_contents 0 file_len;
+    "  <script type='text/javascript'>" ^file_contents^ "</script>"
+
 let boiler_1 () = "<html>
   <head>
   "^script_tag "json.js"^"
@@ -354,7 +361,7 @@ let apply_yielding (f, args) =
 let callk_no_yield arg = apply_no_yield ("__kappa", [arg])
 
 let callk_yielding arg =
-  Call(Var "_yieldCont", [Var "__kappa"; arg])
+  Call(Var "_yieldCont", [Var "__kappa"; arg]) 
 
 
 let trivial_cps expr = 
@@ -1081,8 +1088,13 @@ let make_boiler_page ?(onload="") ?(body="") defs =
   ^ body
   ^ boiler_4 ()
     
+let get_alien_names defs = 
+  let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
+    List.map (function Alien(_, s, _, _) -> s) alienDefs
+      
 (* Note: the body is not really used here. *)
 let generate_program_defs (Program(defs,body)) root_names =
+  let aliens = get_alien_names defs in
   let defs = List.map rename_symbol_operators_def defs
   and body = rename_symbol_operators body in
   let (Program (defs, body)) =
@@ -1090,7 +1102,7 @@ let generate_program_defs (Program(defs,body)) root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body)
   in
-  let library_names = List.map fst (fst Library.typing_env) in
+  let library_names = aliens @ (List.map fst (fst Library.typing_env)) in
   let defs =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names

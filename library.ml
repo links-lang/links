@@ -158,6 +158,7 @@ let rec equal l r =
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> length l = length r &&
             fold_left2 (fun result x y -> result && equal x y) true l r
+    | `NativeString s1, `NativeString s2 -> s1 = s2
     | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
 
 let rec less l r =
@@ -699,6 +700,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "log",     float_fn log;
   "sqrt",    float_fn sqrt;
 
+  ("environment",
+     (`PFun (fun [] -> 
+        let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
+        let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
+        `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+	datatype "() -> [(String,String)]"));
+
   (* regular expression matching *)
   ("~",
    (p2 (fun s r -> 
@@ -713,12 +721,135 @@ let env : (string * (located_primitive * Types.assumption)) list = [
       ((`TypeVar mb) :: qs,
        `Function (arg_type, make_type_variable mb, `Primitive `Bool))));
 
-  ("environment",
-   (`PFun (fun [] -> 
-             let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
-             let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
-    datatype "() -> [(String,String)]"));
+  (* All functions below are currenly server only; but client version should be relatively easy to provide *)
+  ("n~",
+   (p2 (fun s r -> 
+          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
+        box_bool (Str.string_match regex string 0)),
+	let qs, regex = datatype Linksregex.Regex.datatype in
+	let mb = Types.fresh_raw_variable () in
+	let arg_type = 
+	`Record (Types.row_with ("1", `Present native_string_type)
+                (Types.row_with ("2", `Present regex)
+                (Types.make_empty_closed_row ()))) in
+	((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, `Primitive `Bool))));
+
+  (* regular expression matching with grouped matched results as a list *)
+  ("l~",	
+    (`Server (p2 (fun s r ->
+        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        and string = unbox_string s in
+	let regex = Regex.compile_ocaml re in
+	match (Str.string_match regex string 0) with
+	 false -> `List []
+	| _ -> 
+	(let rec accumMatches l : int -> Result.result = function 
+           0 -> `List ((box_string (Str.matched_group 0 string))::l)
+	|  i -> 
+	(try
+	let m = Str.matched_group i string in 
+        accumMatches ((box_string m)::l) (i - 1)
+	with 
+	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
+	accumMatches [] ngroups))),
+	let qs, regex = datatype Linksregex.Regex.datatype in
+	let mb = Types.fresh_raw_variable () in
+	let arg_type = 
+	`Record (Types.row_with ("1", `Present string_type)
+                (Types.row_with ("2", `Present regex)
+                (Types.make_empty_closed_row ()))) in
+	((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
+
+  ("ln~",	
+    (`Server (p2 (fun s r ->
+        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
+	let regex = Regex.compile_ocaml re in
+	match (Str.string_match regex string 0) with
+	 false -> `List []
+	| _ -> 
+	(let rec accumMatches l : int -> Result.result = function 
+           0 -> `List ((box_string (Str.matched_group 0 string))::l)
+	|  i -> 
+	(try
+	let m = Str.matched_group i string in 
+        accumMatches ((box_string m)::l) (i - 1)
+	with 
+	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
+	accumMatches [] ngroups))),
+	let qs, regex = datatype Linksregex.Regex.datatype in
+	let mb = Types.fresh_raw_variable () in
+	let arg_type = 
+	`Record (Types.row_with ("1", `Present native_string_type)
+                (Types.row_with ("2", `Present regex)
+                (Types.make_empty_closed_row ()))) in
+	((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
+
+  (* regular expression substitutions --- don't yet support global substitutions *)
+  ("s~",	
+   (`Server (p2 (fun s r ->
+	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let (regex, tmpl) = Regex.compile_ocaml l, t in
+        let string = unbox_string s in
+        box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
+	let qs, regex = datatype Linksregex.Regex.datatype in
+	let mb = Types.fresh_raw_variable () in
+	let arg_type = 
+	`Record (Types.row_with ("1", `Present string_type)
+                (Types.row_with ("2", `Present regex)
+                (Types.make_empty_closed_row ()))) in
+	((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, string_type))));
+	
+  ("sn~",	
+   (`Server (p2 (fun s r ->
+	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let (regex, tmpl) = Regex.compile_ocaml l, t in
+	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
+	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
+	let qs, regex = datatype Linksregex.Regex.datatype in
+	let mb = Types.fresh_raw_variable () in
+	let arg_type = 
+	`Record (Types.row_with ("1", `Present native_string_type)
+        (Types.row_with ("2", `Present regex)
+        (Types.make_empty_closed_row ()))) in
+	((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, native_string_type))));
+
+  (* NativeString utilities *)
+  ("char_at",
+	(`Server (p2 (fun ((`NativeString ss) : result) ((`Int ix):result) -> `Char (ss.[Num.int_of_num ix]))),
+	(datatype ("(NativeString, Int) -> Char"))));
+
+  ("strlen",
+     (`Server (p1 (fun s -> match s with
+                     `NativeString ss -> `Int (Num.num_of_int (String.length ss))
+	            |  _ -> failwith "Internal error: char_at got wrong arguments")),
+	(datatype ("(NativeString) -> Int "))));
+
+  ("to_native_string",
+	(`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
+	 (datatype ("(String) -> NativeString"))));
+	
+  ("from_native_string",
+	(`Server (p1 
+	           (fun s-> match s with  
+	             (`NativeString ss) -> box_string ss
+	             | _  -> failwith "Internal error: Bad coercion from native string")),
+	 (datatype ("(NativeString) -> String"))));	
+	
+  (* Serialize values to DB *)
+  ("pickle_value", 
+     (`Server(p1 (fun v -> (box_string (marshal_value v)))),
+	datatype "(a) -> String"));     
+
+  ("unpickle_value",
+     (`Server(p1 (fun v -> unmarshal_value (unbox_string v))),
+	datatype "(String) -> a"))
 ]
 
 let impl : located_primitive -> primitive option = function

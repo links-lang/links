@@ -28,7 +28,6 @@ type 'r a_pattern = [
 let appPrim pos name args = 
  Apply (Variable (name, pos), args, pos)
 
-
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
 (** Construct a Links list out of a list of Links expressions; all
@@ -985,8 +984,20 @@ module Desugarer =
                let `U (a,b,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | InfixAppl (`RegexMatch, e1, (Regex r, _)) -> (appPrim "~" 
-                                                             [desugar e1; desugar (desugar_regex desugar pos' r, pos')])
+           | InfixAppl (`RegexMatch, e1, (Regex((Replace(_,_) as r), flags), _)) -> 
+	       let libfn = 
+		 if(List.exists (function RegexNative -> true | _ -> false) flags) then "sn~" else "s~" in
+	       (appPrim libfn
+		  [desugar e1;desugar (desugar_regex pos' r, pos')])
+           | InfixAppl (`RegexMatch, e1, (Regex(r, flags), _)) -> 
+	       let native = (List.exists (function RegexNative -> true | _ -> false) flags) in
+	       let libfn = 
+		 if (List.exists (function RegexList -> true | _ -> false) flags) then 
+		   if native then "ln~" else "l~"
+		 else 
+		   if native then "n~" else "~" in
+	       (appPrim libfn
+		  [desugar e1;desugar (desugar_regex pos' r, pos')])
            | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
@@ -1330,7 +1341,7 @@ module Desugarer =
        | Regex.Star      -> ConstructorLit ("Star", None)
        | Regex.Plus      -> ConstructorLit ("Plus", None)
        | Regex.Question  -> ConstructorLit ("Question", None)
-     and desugar_regex _ pos : regex -> phrasenode = 
+     and desugar_regex pos : regex' -> phrasenode = 
        (* Desugar a regex, making sure that only variables are embedded
           within.  Any expressions that are spliced into the regex must be
           let-bound beforehand.  *)
@@ -1345,18 +1356,21 @@ module Desugarer =
          function
            | Range (f, t)    -> ConstructorLit ("Range", Some (TupleLit [CharLit f, pos; CharLit t, pos], pos))
            | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
+           | Quote s        -> ConstructorLit ("Quote", Some (aux s, pos))
            | Any             -> ConstructorLit ("Any", None)
-           | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (map (fun s -> aux s, pos) rs), pos))
+           | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> aux s, pos) 
+                                                                        rs), pos))
+           | Group rs          -> ConstructorLit ("Group", Some (ListLit (List.map (fun s -> aux s, pos) 
+                                                                        rs), pos))
            | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
                                                                           aux r, pos], pos))
            | Splice e        -> ConstructorLit ("Simply", Some (expr e))
+	   | Replace (re, (`ReplaceLiteral tmpl)) -> ConstructorLit("Replace", Some(TupleLit ([(aux re, pos); (StringLit tmpl, pos)]), pos))
+	   | Replace (re, (`ReplaceSplice e)) -> ConstructorLit("Replace", Some(TupleLit ([(aux re, pos); expr e]), pos))
        in fun e ->
          let e = aux e in
-           Block 
-             (List.map
-                (fun (v, e1) -> Binding ((`Variable v, pos), e1), pos)
-                !exprs,
-              (e, pos))
+         Block (List.map (fun (v, e1) -> Binding ((`Variable v, pos), e1), pos) !exprs,
+		(e, pos))
      and simple_pattern_of_pattern var_env lookup_pos ((pat,pos') : ppattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern var_env lookup_pos
        and pos = `U (lookup_pos pos') in

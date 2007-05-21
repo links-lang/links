@@ -59,13 +59,14 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
-  | `Char c -> "\"" ^ js_dq_escape_string (String.make 1 c) ^"\""
+  | `Char c -> "\"" ^ (Char.escaped c) ^"\""
 (* [Q] what does Char.escape do?
    [A] the wrong things!
 *)
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
+  | `NativeString _ -> prerr_endline ("Can't yet jsonize NativeString"); ""
 
 let rec jsonize_result : Result.result -> string = function
   | `PrimitiveFunction _

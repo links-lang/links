@@ -22,7 +22,7 @@ module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
 module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
-                 | `Abstract ]
+                 | `Abstract | `NativeString]
     deriving (Typeable, Show, Pickle)
 
 type 't meta_type_var_basis =
@@ -73,6 +73,7 @@ type typing_environment = environment * alias_environment
 val unit_type : datatype
 val string_type : datatype
 val xml_type : datatype
+val native_string_type : datatype
 
 (* get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t

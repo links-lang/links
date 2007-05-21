@@ -3,33 +3,38 @@
 (* Representation for a very limited subset of (OCaml) regular
    expressions. *)
 
+
 type repeat = Star | Plus | Question
-                 deriving (Show)
-type regex = | Range of (char * char)
+and  regex = | Range of (char * char)
              | Simply of string
+             | Quote of regex
              | Any
              | Seq of regex list
+	     | Group of regex list
              | Repeat of (repeat * regex)
-                 deriving (Show)
+	     | Replace of (regex * string)
+	          deriving (Show, Pickle, Eq, Typeable, Shelve)
+
 
 let compile_ocaml : regex -> Str.regexp = 
 
   (* Using points-free style here (i.e. omitting the s) triggers a bug in 
      versions of OCaml before about 3.09.0, so don't do that. *)
-  let group s = Printf.sprintf "\\(:?%s\\)" s
-    (* non-capturing grouping *)
-  in
+  let group s = Printf.sprintf "\\(%s\\)" s  in
   let compile_repeat = function
     | Star -> "*"
     | Plus -> "+"
     | Question -> "?" in
-  let rec compile = function
+  let rec compile = function (* got rid of gratuituous grouping. this matters for replace *)
     | Range (f, t) -> Printf.sprintf "[%s-%s]" (Str.quote (String.make 1 f)) (Str.quote (String.make 1 t))
-    | Simply s ->  group (Str.quote s)
+    | Simply s ->  s (* Str.quote s *)
+    | Quote s ->  Str.quote (compile s)
     | Any -> "."
-    | Seq rs -> group (List.fold_right (fun input output -> (compile input) ^ output) rs "")
-    | Repeat (s, r) -> group (compile r ^ compile_repeat s)
-  in fun s -> Str.regexp ("^" ^ compile s ^ "$")
+    | Seq rs -> List.fold_right (fun input output -> (compile input) ^ output) rs ""
+    | Group rs -> group (List.fold_right (fun input output -> (compile input) ^ output) rs "")
+    | Repeat (s, r) ->  (compile r ^ compile_repeat s)
+  in fun s -> 
+    Str.regexp (compile s) 
 
 let tests : (string * regex * string * bool) list = 
   [

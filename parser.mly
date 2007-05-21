@@ -31,7 +31,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN
 %token LPAREN RPAREN
-%token LBRACE RBRACE LQUOTE RQUOTE
+%token LBRACE RBRACE ELBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW HANDLE WHERE FORMLET
 %token COMMA VBAR DOT COLON COLONCOLON
@@ -45,13 +45,13 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %token BARBAR AMPAMP
 %token <Num.num> UINTEGER
 %token <float> UFLOAT 
-%token <string> STRING CDATA
+%token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG
-%token QUESTION TILDE PLUS STAR SLASH
+%token QUESTION TILDE PLUS STAR SLASH SSLASH LSLASH FLAGL FLAGN FLAGG
 %token <char*char> RANGE
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
@@ -76,7 +76,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
-%type <Sugartypes.regex list> regex_pattern_sequence
+%type <Sugartypes.regex' list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
 
 %%
@@ -586,6 +586,8 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
+								   | "NativeString" -> PrimitiveType `NativeString
+                                                                (*   | "Xml"     -> ListType (PrimitiveType `XmlItem) *)
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])
                                                                }
@@ -637,17 +639,33 @@ row_variable:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_sequence SLASH                           { Regex (Seq $2), pos() }
-| SLASH SLASH                                                  { Regex (Simply ""), pos() }
+| SLASH regex_pattern_sequence SLASH regex_flags_opt SLASH                           { (Regex ((Seq $2), $4), pos()) }
+| SLASH SLASH regex_flags_opt SLASH                                                  { (Regex ((Simply ""), $3), pos()) }
+| SSLASH regex_pattern_sequence SLASH regex_replace SLASH regex_flags_opt SLASH      { (Regex((Replace (Seq $2, $4)), $6), pos())} 
+
+regex_flags_opt:
+| /* empty */                                                  {[]}
+| regex_flag regex_flags_opt                                   {$1::$2}
+
+regex_flag:
+| FLAGL                                                          {RegexList}
+| FLAGN                                                          {RegexNative}
+| FLAGG                                                          {RegexGlobal}
+
+regex_replace:
+| /* empty */                                                  {`ReplaceLiteral ""}
+| REGEXREPL                                                    {`ReplaceLiteral $1}
+| block                                                        {`ReplaceSplice $1}
 
 regex_pattern:
 | RANGE                                                        { Range $1 }
 | STRING                                                       { Simply $1 }
 | DOT                                                          { Any }
-| LPAREN regex_pattern_sequence RPAREN                         { Seq $2 }
+| LPAREN regex_pattern_sequence RPAREN                         { Group $2 }
 | regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { Repeat (Regex.Question, $1) }
+| ELBRACE block_contents RBRACE                                { Quote(Splice((Block $2, pos()))) }
 | block                                                        { Splice $1 }
 
 regex_pattern_sequence:

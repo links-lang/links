@@ -101,12 +101,18 @@ and phrasenode =
   | FormBinding of (phrase * ppattern)
 and phrase = phrasenode * pposition
 and binder = ppattern * phrase
-and regex = | Range of (char * char)
-            | Simply of string
-            | Any
-            | Seq of regex list
-            | Repeat of (Regex.repeat * regex)
-            | Splice of phrase
+and regex' = | Range of (char * char)
+             | Simply of string
+             | Quote of regex'
+             | Any
+             | Seq of regex' list
+             | Group of regex' list
+             | Repeat of (Regex.repeat * regex')
+             | Splice of phrase
+	     | Replace of (regex' * [`ReplaceLiteral of string | `ReplaceSplice of phrase])
+and regexflags = RegexList | RegexNative | RegexGlobal
+and regex = regex' * (regexflags list)
+	 
 and rawgeneratorphrase = ppattern * phrase
 and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]
 and fieldconstraint = [ `Readonly ]
