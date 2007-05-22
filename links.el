@@ -29,7 +29,7 @@
 (defconst links-font-lock-keywords
   (list
    ; comments
-   '("[^</]#.*$" . font-lock-comment-face)
+   '("\\(^\\|[^</]\\)#.*$" . font-lock-comment-face)
    ; XML forests
    '("<#>.*</#>" . font-lock-xml-face)
    ; XML tags
