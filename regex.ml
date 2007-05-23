@@ -10,7 +10,8 @@ and  regex = | Range of (char * char)
              | Quote of regex
              | Any
              | Seq of regex list
-	     | Group of regex list
+             | Alternate of (regex * regex)
+	     | Group of regex 
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
 	          deriving (Show, Pickle, Eq, Typeable, Shelve)
@@ -27,15 +28,18 @@ let compile_ocaml : regex -> Str.regexp =
     | Question -> "?" in
   let rec compile = function (* got rid of gratuituous grouping. this matters for replace *)
     | Range (f, t) -> Printf.sprintf "[%s-%s]" (Str.quote (String.make 1 f)) (Str.quote (String.make 1 t))
-    | Simply s ->  s (* Str.quote s *)
+    | Simply s ->  s 
     | Quote s ->  Str.quote (compile s)
     | Any -> "."
     | Seq rs -> List.fold_right (fun input output -> (compile input) ^ output) rs ""
-    | Group rs -> group (List.fold_right (fun input output -> (compile input) ^ output) rs "")
+    | Alternate (r1,r2) -> (compile r1) ^ "\\|" ^ (compile r2)
+    | Group s -> group (compile s)
     | Repeat (s, r) ->  (compile r ^ compile_repeat s)
   in fun s -> 
-    Str.regexp (compile s) 
-
+    let re = (compile s)  in
+(*      Printf.fprintf stderr "REGEX compiled to : <%s>\n" re; *)
+      Str.regexp (compile s) 
+	
 let tests : (string * regex * string * bool) list = 
   [
     (let s = "some .*string$\" ++?" in

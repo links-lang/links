@@ -22,7 +22,7 @@ fun completions(s) server {
   if (s == "") []
   else {
     take(10, for (var def <-- defsTable)
-              where (def.word ~ /{s}.*/)
+              where (def.word ~ /^{s}.*/)
               orderby (def.word)
                [def])
   }

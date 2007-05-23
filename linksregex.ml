@@ -44,7 +44,8 @@ struct
        | Quote : regex
        | Any
        | Seq : [regex]
-       | Group : [regex]
+       | Alternate : (regex, regex)
+       | Group : regex
        | Repeat : ([| Star | Plus | Question |], regex)
        | Replace : (regex, String)
       |]
@@ -57,7 +58,9 @@ struct
     | Quote s           -> `Variant ("Quote", asLinks s)
     | Any                -> `Variant ("Any", unit)
     | Seq rs             -> `Variant ("Seq", `List (List.map asLinks rs))
-    | Group rs             -> `Variant ("Group", `List (List.map asLinks rs))
+    | Alternate (r1, r2)  -> `Variant ("Alternate", `Record [("1", asLinks r1);
+                                                         ("2", asLinks r2)])
+    | Group s             -> `Variant ("Group", asLinks s)
     | Repeat (repeat, r) -> `Variant ("Repeat", `Record [("1", Repeat.asLinks repeat);
                                                          ("2", asLinks r)])
     | Replace(re, tmpl) -> `Variant ("Replace", `Record [("1", asLinks re);
@@ -76,11 +79,12 @@ struct
 	  let regexes = List.map fst result in
 	  let sum = List.fold_right ((+) -<- snd) result count in
 	  Seq regexes, sum
-      | `Variant ("Group", `List rs) -> 
-	  let result = (List.map (ofLinksCount 0) rs) in
-	  let regexes = List.map fst result in
-	  let sum = List.fold_right ((+) -<- snd) result count in
-	  Group regexes, sum+1
+      | `Variant ("Alternate", `Record([("1", r1); ("2", r2)])) ->
+	  let ((r1', c1), (r2', c2)) = (ofLinksCount 0 r1, ofLinksCount 0 r2)  in
+	    Alternate(r1', r2'), count + c1 + c2
+      | `Variant ("Group", s) -> 
+	  let (s', count')  = ofLinksCount (count+1) s in
+	    Group s', count'
       | `Variant ("Repeat", `Record ([("1", repeat); ("2", r)]
       | [("2", r); ("1", repeat)]))
 	-> 

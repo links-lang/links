@@ -1,5 +1,5 @@
 Range [1]
-"3" ~ /[0-9]/
+"3" ~ /[0-9]/ 
 stdout : true : Bool
 
 Range [2]
@@ -22,7 +22,7 @@ Range [6]
 "p" ~ /[A-Z]/
 stdout : false : Bool
 
-Escaping metacharaceter
+Escaping metacharacter
 "some .*string$\" ++?" ~ /some \.\*string\$\" \+\+\?/
 stdout : true : Bool
 
@@ -48,11 +48,11 @@ stdout : true : Bool
 
 Star [6]
 "a" ~ /(abc)*/
-stdout : false : Bool
+stdout : true : Bool
 
 Star [7]
 "abca" ~ /(abc)*/
-stdout : false : Bool
+stdout : true : Bool
 
 Plus [1]
 "23r2r3" ~ /.+/
@@ -80,7 +80,7 @@ stdout : false : Bool
 
 Plus [7]
 "abca" ~ /(abc)+/
-stdout : false : Bool
+stdout : true : Bool
 
 Plus/grouping [1]
 "ABBB" ~ /AB+/
@@ -88,7 +88,7 @@ stdout : true : Bool
 
 Plus/grouping [2]
 "ABAB" ~ /AB+/
-stdout : false : Bool
+stdout : true : Bool
 
 Plus/grouping [3]
 "ABAB" ~ /((A)(B))+/
@@ -96,7 +96,7 @@ stdout : true : Bool
 
 Plus/grouping [4]
 "ABBB" ~ /((A)(B))+/
-stdout : false : Bool
+stdout : true : Bool
 
 Interpolation [1]
 var x = "a"; "aaa" ~ /{x}*/
@@ -104,4 +104,9 @@ stdout : true : Bool
 
 Interpolation [2]
 var x = "a"; "abc" ~ /{x}*/
-stdout : false : Bool
+stdout : true : Bool
+
+WikiParser [1]
+./tests/wikiparser.links
+filemode : true
+stdout : true : Bool

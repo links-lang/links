@@ -206,6 +206,7 @@ let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
 let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
 let regexrepl_fsa =  [^ '{' '/']* (* this regex is too restrictive. But can't seem to get a more precise one to work  :( *) 
+let regex_flags = ['l' 'n' 'g']*
 
 let directive_prefix = ['' '@' '$' '%']
 
@@ -316,39 +317,35 @@ and attrlex optable lexers nl = parse
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and regex' optable lexers nl = parse
-  | '/'                                 { Stack.push (regexflags optable lexers nl) lexers;  
-                                          Stack.push (regex optable lexers nl) lexers; SLASH }
-  | "s/"                                { Stack.push (regexflags optable lexers nl) lexers;  
+  | '/'                                 { Stack.push (regex optable lexers nl) lexers; SLASH }
+  | "s/"                                { Stack.push (regexrepl optable lexers nl) lexers; (* push twice is intentional *)
 					  Stack.push (regexrepl optable lexers nl) lexers;
 					  Stack.push (regex optable lexers nl) lexers; 
 					  SSLASH }
   | '#' ([^ '\n'] *)                    { regex' optable lexers nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' optable lexers nl lexbuf }
   | def_blank                           { regex' optable lexers nl lexbuf }
-and regexflags optable lexers nl  = parse
-  | '/'                                 {Stack.pop lexers; Stack.pop lexers; SLASH}
-  | 'l'                                 {FLAGL}
-  | 'n'                                 {FLAGN}
-  | 'g'                                 {FLAGG}
 and regex optable lexers nl  = parse
-  | '/'                                 { Stack.pop lexers; SLASH }
+  | '/'                                 { Stack.pop lexers; Stack.pop lexers; SLASH }
+  | '/' (regex_flags as f)              { Stack.pop lexers; Stack.pop lexers; SLASHFLAGS (f) }
   | '.'                                 { DOT }
   | '[' (_ as f) '-' (_ as t) ']'       { RANGE (f,t) }
   | '?'                                 { QUESTION }
   | '*'                                 { STAR }
   | '+'                                 { PLUS }
+  | '|'                                 { ALTERNATE }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
-  | "E{"                                { Stack.push (lex optable lexers nl) lexers; ELBRACE }
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex optable lexers nl) lexers; LBRACE }
-  | '\\' (_ as c)                       
+  | '\\' (_ as c)                       { QUOTEDMETA (String.make 1 c)}
   | (_ as c)                            { STRING (String.make 1 c) }
 and regexrepl optable lexers nl = parse
   | regexrepl_fsa as var                { REGEXREPL(var) }
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex optable lexers nl) lexers; LBRACE }
-  | '/'                                 { Stack.pop lexers;  SLASH}
+  | '/'                                 { Stack.pop lexers; Stack.pop lexers; SLASH}
+  | '/' (regex_flags as f)              { Stack.pop lexers; Stack.pop lexers; SLASHFLAGS (f) }
 
 
 {

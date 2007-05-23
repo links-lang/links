@@ -21,7 +21,13 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
               pos ()));
   TypeAnnotation ((Definition defbit, dpos),datatype), pos()
 
-
+let parseRegexFlags f =
+  let rec asList f i l = 
+    if (i == String.length f) then
+      List.rev l
+    else
+      asList f (i+1) ((String.get f i)::l) in
+    List.map (function 'l' -> RegexList | 'n' -> RegexNative | 'g' -> RegexGlobal) (asList f 0 [])
 %}
 
 %token END
@@ -51,8 +57,10 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG
-%token QUESTION TILDE PLUS STAR SLASH SSLASH LSLASH FLAGL FLAGN FLAGG
+%token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH 
 %token <char*char> RANGE
+%token <string> QUOTEDMETA
+%token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
@@ -76,6 +84,7 @@ let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
+%type <Sugartypes.regex'> regex_pattern_alternate
 %type <Sugartypes.regex' list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
 
@@ -639,18 +648,13 @@ row_variable:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_sequence SLASH regex_flags_opt SLASH                           { (Regex ((Seq $2), $4), pos()) }
-| SLASH SLASH regex_flags_opt SLASH                                                  { (Regex ((Simply ""), $3), pos()) }
-| SSLASH regex_pattern_sequence SLASH regex_replace SLASH regex_flags_opt SLASH      { (Regex((Replace (Seq $2, $4)), $6), pos())} 
+| SLASH regex_pattern_alternate regex_flags_opt                                  { (Regex ($2, $3), pos()) }
+| SLASH regex_flags_opt                                                          { (Regex (Simply "", $2), pos()) }
+| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (Regex(Replace ($2, $4), $5), pos())} 
 
 regex_flags_opt:
-| /* empty */                                                  {[]}
-| regex_flag regex_flags_opt                                   {$1::$2}
-
-regex_flag:
-| FLAGL                                                          {RegexList}
-| FLAGN                                                          {RegexNative}
-| FLAGG                                                          {RegexGlobal}
+| SLASH                                                        {[]}
+| SLASHFLAGS                                                   {parseRegexFlags $1}
 
 regex_replace:
 | /* empty */                                                  {`ReplaceLiteral ""}
@@ -660,18 +664,21 @@ regex_replace:
 regex_pattern:
 | RANGE                                                        { Range $1 }
 | STRING                                                       { Simply $1 }
+| QUOTEDMETA                                                   { Quote (Simply $1) }
 | DOT                                                          { Any }
-| LPAREN regex_pattern_sequence RPAREN                         { Group $2 }
+| LPAREN regex_pattern_alternate RPAREN                        { Group $2 }
 | regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { Repeat (Regex.Question, $1) }
-| ELBRACE block_contents RBRACE                                { Quote(Splice((Block $2, pos()))) }
 | block                                                        { Splice $1 }
+
+regex_pattern_alternate:
+| regex_pattern_sequence                                       { Seq $1 }
+| regex_pattern_sequence ALTERNATE regex_pattern_alternate     { Alternate(Seq $1, $3) }
 
 regex_pattern_sequence:
 | regex_pattern                                                { [$1] }
 | regex_pattern regex_pattern_sequence                         { $1 :: $2 }
-
 
 /*
  * Pattern grammar

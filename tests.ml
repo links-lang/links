@@ -983,11 +983,11 @@ let working_tests = [
 
   "Star [6]",
   "\"a\" ~ /(abc)*/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
   "Star [7]",
   "\"abca\" ~ /(abc)*/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
   "Plus [1]",
   "\"23r2r3\" ~ /.+/",
@@ -1015,7 +1015,7 @@ let working_tests = [
 
   "Plus [7]",
   "\"abca\" ~ /(abc)+/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
   "Plus/grouping [1]",
   "\"ABBB\" ~ /AB+/",
@@ -1023,7 +1023,7 @@ let working_tests = [
 
   "Plus/grouping [2]",
   "\"ABAB\" ~ /AB+/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
   "Plus/grouping [3]",
   "\"ABAB\" ~ /((A)(B))+/",
@@ -1031,7 +1031,7 @@ let working_tests = [
 
   "Plus/grouping [4]",
   "\"ABBB\" ~ /((A)(B))+/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
   "Interpolation [1]",
   "var x = \"a\"; \"aaa\" ~ /{x}*/",
@@ -1039,9 +1039,9 @@ let working_tests = [
 
   "Interpolation [2]",
   "var x = \"a\"; \"abc\" ~ /{x}*/",
-  result "false" ~with_type: "Bool";
+  result "true" ~with_type: "Bool";
 
-  "Escaping metacharaceter",
+  "Escaping metacharacter",
   "\"some .*string$\\\" ++?\" ~ /some \\.\\*string\\$\\\" \\+\\+\\?/",
   result "true" ~with_type: "Bool";
 

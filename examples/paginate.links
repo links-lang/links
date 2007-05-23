@@ -10,7 +10,7 @@ fun query(n,c) {
  take(results_per_page,
   drop(results_per_page * (n-1),
    for (var r <-- wordlist)
-    where (r.word ~ /{c}.*/)
+    where (r.word ~ /^{c}.*/)
     orderby (r.word)
     [r]
   )

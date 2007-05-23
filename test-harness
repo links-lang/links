@@ -34,9 +34,8 @@ def parse(stream):
             print >> sys.stderr, 'WARNING: empty test'
         else:
             name = str.strip(test.pop(0))
-            code = str.strip(test.pop(0))
-            opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in
-test])
+      	    code = str.strip(test.pop(0))
+            opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
             yield name, code, opts                
 
 def check_expected(name, item, got, expected, errors):
@@ -58,8 +57,11 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None):
-    proc = Popen((links, flags, code), stdout=PIPE, stderr=PIPE, env=env)
+def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode=''):
+    if filemode.startswith('true') :
+        proc = Popen((links, code), stdout=PIPE, stderr=PIPE, env=env)
+    else:
+        proc = Popen((links, flags, code), stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
     for i in xrange(0, TIMEOUT*100):

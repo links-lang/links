@@ -29,7 +29,7 @@ fun completions(pre) server {
  if (pre == "") []
  else {
   take(10, for (var w <-- wordlist)
-            where (w.word ~ /{pre}.*/)
+            where (w.word ~ /^{pre}.*/)
             orderby (w.word)
             [w])
  }

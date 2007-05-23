@@ -1360,11 +1360,11 @@ module Desugarer =
            | Any             -> ConstructorLit ("Any", None)
            | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> aux s, pos) 
                                                                         rs), pos))
-           | Group rs          -> ConstructorLit ("Group", Some (ListLit (List.map (fun s -> aux s, pos) 
-                                                                        rs), pos))
+           | Alternate (r1, r2)  -> ConstructorLit ("Alternate",  Some (TupleLit [aux r1, pos; aux r2, pos], pos))
+           | Group s          -> ConstructorLit ("Group", Some (aux s, pos))
            | Repeat (rep, r) -> ConstructorLit ("Repeat", Some (TupleLit [desugar_repeat pos rep, pos; 
                                                                           aux r, pos], pos))
-           | Splice e        -> ConstructorLit ("Simply", Some (expr e))
+           | Splice e        -> ConstructorLit ("Quote", Some(ConstructorLit ("Simply", Some (expr e)), pos))
 	   | Replace (re, (`ReplaceLiteral tmpl)) -> ConstructorLit("Replace", Some(TupleLit ([(aux re, pos); (StringLit tmpl, pos)]), pos))
 	   | Replace (re, (`ReplaceSplice e)) -> ConstructorLit("Replace", Some(TupleLit ([(aux re, pos); expr e]), pos))
        in fun e ->

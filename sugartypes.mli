@@ -106,7 +106,8 @@ and regex' = | Range of (char * char)
              | Quote of regex'
              | Any
              | Seq of regex' list
-             | Group of regex' list
+             | Alternate of (regex' * regex')
+             | Group of regex'
              | Repeat of (Regex.repeat * regex')
              | Splice of phrase
 	     | Replace of (regex' * [`ReplaceLiteral of string | `ReplaceSplice of phrase])
