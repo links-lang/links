@@ -1,6 +1,4 @@
-(* camlp4r *)
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo" ;;
+open Camlp4.PreCast
 
 (* Various utility bits *)
 let rec range f t = 
@@ -34,32 +32,40 @@ let random_id length =
 let tuple_expr loc = function  (* 0-tuples and 1-tuples are invalid *)
   | []  -> <:expr< () >>
   | [x] -> x
-  | xs  -> <:expr< ( $list:xs$ ) >>
-
+  | xs  -> failwith "nyi tuple_expr" (*<:expr< ( $list:xs$ ) >>*)
 exception NotImpl of (Lexing.position * Lexing.position)
+
+module AST = Quotation.Ast
+
+type type_decl = (Loc.t 
+                  * string (* type constructor *)
+                  * AST.ctyp list (* parameters *)
+                  * AST.ctyp (* rhs *)
+                  * (AST.ctyp * AST.ctyp)  list) (* constraints *)
 
 (* Generate instances of a particular class for a list of
    possibly-mutually-recursive type declarations *)
-type instantiator = MLast.type_decl list -> MLast.str_item
-type sig_instantiator = MLast.type_decl list -> MLast.sig_item
+type instantiator = type_decl list -> AST.str_item
+type sig_instantiator = type_decl list -> AST.sig_item
 
 (* Display a fatal error and exit *)
 let error loc msg = 
   begin 
-    !Pcaml.warning loc msg;
-    raise (NotImpl loc)
+    (*Ast.print_warning loc msg;*)
+    failwith "print_warning  nyi"
+(*    raise (NotImpl loc)*)
   end
     
 type ltype = (string list * string) (* type parameters * type name *)
 
 type thisinfo = {
-  loc    : MLast.loc;
-  argmap : list (string * (string * string)); (* mapping from type parameters to functor arguments *)
+  loc    : Loc.t;
+  argmap :  (string * (string * string)) list; (* mapping from type parameters to functor arguments *)
   tname  : string;                 (* name of this type *)
   ltype  : ltype;                  (* The type name plus any parameters, e.g. 'c 'd t *)
-  atype  : MLast.ctyp;             (* The type name plus modularized parameters, e.g. V0.a V1.a t  *)
-  rtype  : MLast.ctyp;             (* The rhs of the type definitions *)
-  currents : list (string * string) (* ? *)
+  atype  : AST.ctyp;             (* The type name plus modularized parameters, e.g. V0.a V1.a t  *)
+  rtype  : AST.ctyp;             (* The rhs of the type definitions *)
+  currents : (string * string) list (* ? *)
 }
 
 (* Generate the 'a' type element of the generated module by applying
@@ -86,20 +92,20 @@ let gen_functor loc classname : 'a list -> 'b -> 'b =
     (fun (_,(_,mname)) m -> <:module_expr< functor ($mname$ : $uid:classname$) -> $m$ >>)
 
 (* Does a type declaration declare a "scheme" or a concrete type? *)
-let is_polymorphic : MLast.type_decl -> bool = function
-  | (_, (_::_), _, _) -> true
+let is_polymorphic : type_decl -> bool = function
+  | (_, _, (_::_), _, _) -> true
   | _                 -> false
 
 (* Generate names for type parameters (type variables) *)
-let param_names (params : list (string * (bool*bool))) : list (string * (string * string)) =
+let param_names (params :  (string * (bool*bool)) list) :  (string * (string * string)) list =
   (List.map2
       (fun (p,_) n -> (p, (Printf.sprintf "v%d" n, Printf.sprintf "V%d" n)))
       params
       (range 0 (List.length params - 1)))
 
 (* A association list of class names * instance generators *)
-let instantiators : (string * (MLast.loc -> instantiator)) list ref = ref []
-let sig_instantiators : (string * (MLast.loc -> sig_instantiator)) list ref = ref []
+let instantiators : (string * (Loc.t -> instantiator)) list ref = ref []
+let sig_instantiators : (string * (Loc.t -> sig_instantiator)) list ref = ref []
 
 module Struct_utils
   (S : 
@@ -111,8 +117,8 @@ struct
   open S
   let apply_defaults ({loc=loc} as ti) decls = 
         <:module_expr< ($uid:defaults$ (struct
-                                         type a = $ti.atype$;
-                                         $decls$;
+                                         type a = $ti.atype$
+                                         $decls$
                                        end) : $uid:classname$ with type a = $ti.atype$) >>
 
 
@@ -141,42 +147,48 @@ struct
       ({loc=loc; tname=tname; atype=_; rtype=rtype} as ti)
       = 
     let rec gen t = match t with
+        (* See 
+           $OCAML_ROOT/camlp4/Camlp4/Camlp4Ast.partial.ml
+           for details on how to clean this lot up.
+           Perhaps it should use quotations instead of constructors 
+        *)
+
         (* sum type *)
-        | MLast.TySum (_, variants) -> tysum t gen ti variants
+        | Ast.TySum (_, variants) -> tysum t gen ti variants
 
         (* polymorphic variant *)
-        | MLast.TyVrn (_, fields, extends) -> tyvrn t gen ti (fields, extends)
+        | Ast.TyVrn (_, fields, extends) -> tyvrn t gen ti (fields, extends)
 
         (* record *)
-        | MLast.TyRec (_, fields) -> tyrec t gen ti fields
+        | Ast.TyRec (_, fields) -> tyrec t gen ti fields
             
         (* tuple *)
-        | MLast.TyTup (_, ctyps) -> tytup t gen ti ctyps
+        | Ast.TyTup (_, ctyps) -> tytup t gen ti ctyps
 
         (* type name (lowercase identifier) *)
-        | MLast.TyLid (_, string) -> tylid t gen ti string
+        | Ast.TyLid (_, string) -> tylid t gen ti string
 
         (* type constructor application *)
-        | MLast.TyApp (_, ctyp1, ctyp2) -> tyapp t gen ti (ctyp1, ctyp2)
+        | Ast.TyApp (_, ctyp1, ctyp2) -> tyapp t gen ti (ctyp1, ctyp2)
             
         (* Module access *)
-        | MLast.TyAcc (_, MLast.TyUid (_, name), ctyp2) -> tyacc t gen ti (name, ctyp2)
+        | Ast.TyAcc (_, Ast.TyUid (_, name), ctyp2) -> tyacc t gen ti (name, ctyp2)
             
         (* type variable *)
-        | MLast.TyQuo (_, string) -> tyquo t gen ti (string)
+        | Ast.TyQuo (_, string) -> tyquo t gen ti (string)
             
-        | MLast.TyAli _ (* alias (as-type) *)
-        | MLast.TyAny _ (* wildcard *)
-        | MLast.TyArr _ (* arrow (function) type *)
-        | MLast.TyCls _ (* class path *)
-        | MLast.TyLab _ (* label type *)
-        | MLast.TyMan _ (* type manifest *)
-        | MLast.TyObj _ (* object *)
-        | MLast.TyOlb _ (* optional label *)
-        | MLast.TyPol _ (* class path application *)
-        | MLast.TyPrv _ (* private row *)
-        | MLast.TyUid _ (* uppercase identifier *)
-        | MLast.TyAcc _ (* module access *)
+        | Ast.TyAli _ (* alias (as-type) *)
+        | Ast.TyAny _ (* wildcard *)
+        | Ast.TyArr _ (* arrow (function) type *)
+        | Ast.TyCls _ (* class path *)
+        | Ast.TyLab _ (* label type *)
+        | Ast.TyMan _ (* type manifest *)
+        | Ast.TyObj _ (* object *)
+        | Ast.TyOlb _ (* optional label *)
+        | Ast.TyPol _ (* class path application *)
+        | Ast.TyPrv _ (* private row *)
+        | Ast.TyUid _ (* uppercase identifier *)
+        | Ast.TyAcc _ (* module access *)
           -> other t gen ti ()
             
     in gen
@@ -211,54 +223,54 @@ struct
               in
               let (enclosing, projections) = 
                 let rid = random_id 32 in
-                let body = <:module_expr< struct $modules$; end >> in
+                let body = <:module_expr< struct $modules$ end >> in
                   (<:str_item< module $uid:prefix^ rid$ = $gen_functor loc classname params body$ >>,
                    List.map (fun ((*tname*)_, mname) ->
                                let body = 
                                  let funct = <:module_expr< $uid:prefix^ rid$ >> in
-                                   <:module_expr< struct module S = $apply_functor loc funct params$ ; include S.$uid:mname$; end >>
+                                   <:module_expr< struct module S = $apply_functor loc funct params$ include S.$uid:mname$ end >>
                                in
                                  <:str_item< module $uid:mname$ = $gen_functor loc classname params body$ >>) tnames)
-              in <:str_item< declare
-                               open $uid:classname$;
-                               open Primitives;
-                               $enclosing$;
-                               declare $list:projections$ end;
-                             end >>
+              in <:str_item< 
+                               open $uid:classname$
+                               open Primitives
+                               $enclosing$
+                               $list:projections$ 
+                              >>
            end
       | _ -> assert false
 
   (* replace each type variable `v' with the result of `lookup v' *)
   let instantiate lookup t = 
     let rec inst = function
-      | MLast.TyAny _
-      | MLast.TyCls _
-      | MLast.TyLid _
-      | MLast.TyUid _ as m -> m
-      | MLast.TyPrv (loc, ctyp) -> MLast.TyPrv (loc, inst ctyp)
-      | MLast.TyAcc (loc, c1, c2) -> MLast.TyAcc (loc, inst c1, inst c2)
-      | MLast.TyAli (loc, c1, c2) -> MLast.TyAli (loc, inst c1, inst c2)
-      | MLast.TyApp (loc, c1, c2) -> MLast.TyApp (loc, inst c1, inst c2)
-      | MLast.TyArr (loc, c1, c2) -> MLast.TyArr (loc, inst c1, inst c2)
-      | MLast.TyMan (loc, c1, c2) -> MLast.TyMan (loc, inst c1, inst c2)
-      | MLast.TyLab (loc, string, ctyp) -> MLast.TyLab (loc, string, inst ctyp)
-      | MLast.TyOlb (loc, string, ctyp) -> MLast.TyOlb (loc, string, inst ctyp)
-      | MLast.TyTup (loc, x) -> MLast.TyTup (loc, List.map inst x)
-      | MLast.TyRec (loc, x) -> MLast.TyRec (loc, List.map (fun (loc,s,b,c) -> loc,s,b,inst c) x)
-      | MLast.TySum (loc, x) -> MLast.TySum (loc, List.map (fun (l,s,c) -> l,s,List.map inst c) x)
-      | MLast.TyObj (loc, x, bool) -> MLast.TyObj (loc, List.map (fun (s,c) -> s,inst c) x, bool)
-      | MLast.TyPol (loc, x, ctyp) -> MLast.TyPol (loc, x, inst ctyp)
-      | MLast.TyVrn (loc, x, y) -> MLast.TyVrn (loc,List.map inst_row x, y)
+      | Ast.TyAny _
+      | Ast.TyCls _
+      | Ast.TyLid _
+      | Ast.TyUid _ as m -> m
+      | Ast.TyPrv (loc, ctyp) -> Ast.TyPrv (loc, inst ctyp)
+      | Ast.TyAcc (loc, c1, c2) -> Ast.TyAcc (loc, inst c1, inst c2)
+      | Ast.TyAli (loc, c1, c2) -> Ast.TyAli (loc, inst c1, inst c2)
+      | Ast.TyApp (loc, c1, c2) -> Ast.TyApp (loc, inst c1, inst c2)
+      | Ast.TyArr (loc, c1, c2) -> Ast.TyArr (loc, inst c1, inst c2)
+      | Ast.TyMan (loc, c1, c2) -> Ast.TyMan (loc, inst c1, inst c2)
+      | Ast.TyLab (loc, string, ctyp) -> Ast.TyLab (loc, string, inst ctyp)
+      | Ast.TyOlb (loc, string, ctyp) -> Ast.TyOlb (loc, string, inst ctyp)
+      | Ast.TyTup (loc, x) -> Ast.TyTup (loc, List.map inst x)
+      | Ast.TyRec (loc, x) -> Ast.TyRec (loc, List.map (fun (loc,s,b,c) -> loc,s,b,inst c) x)
+      | Ast.TySum (loc, x) -> Ast.TySum (loc, List.map (fun (l,s,c) -> l,s,List.map inst c) x)
+      | Ast.TyObj (loc, x, bool) -> Ast.TyObj (loc, List.map (fun (s,c) -> s,inst c) x, bool)
+      | Ast.TyPol (loc, x, ctyp) -> Ast.TyPol (loc, x, inst ctyp)
+      | Ast.TyVrn (loc, x, y) -> Ast.TyVrn (loc,List.map inst_row x, y)
 
       (* type var *)
-      | MLast.TyQuo (loc, string) -> lookup string
+      | Ast.TyQuo (loc, string) -> lookup string
 
     and inst_row = function
-      | MLast.RfTag (string, bool, (x:MLast.ctyp list)) -> MLast.RfTag (string, bool, List.map inst x)
-      | MLast.RfInh (ctyp) -> MLast.RfInh (inst ctyp)
+      | Ast.RfTag (string, bool, (x:Ast.ctyp list)) -> Ast.RfTag (string, bool, List.map inst x)
+      | Ast.RfInh (ctyp) -> Ast.RfInh (inst ctyp)
     in inst t
 
-  let instantiate_modargs ({loc=loc} as ti) t : MLast.ctyp = 
+  let instantiate_modargs ({loc=loc} as ti) t : Ast.ctyp = 
     let lookup var = 
       try
         <:ctyp< $uid:snd (List.assoc var ti.argmap)$.a >>
@@ -272,14 +284,14 @@ struct
      Some <:expr<
             let module M = 
              struct
-              type t = $t$;
-              value test = fun [ #t -> True | _ -> False];
+              type t = $t$
+              let test = function #t -> True | _ -> False
              end in M.test $lid:param$ >>,
      <:expr<
        (let module M = 
             struct
-              type t = $t$;
-              value cast = fun [#t as t -> t | _ -> assert False];
+              type t = $t$
+              let cast = function #t as t -> t | _ -> assert False
             end in M.cast $lid:param$ )>>)
       
 end
@@ -291,27 +303,29 @@ struct
     List.fold_right 
       (fun (_,(_,mname)) m -> <:module_type< functor ($mname$ : $uid:classname$) -> $m$ >>)
       
-  let gen_sig (mname : string) (loc : MLast.loc) (((_,tname),params,_,_ ) : MLast.type_decl) = 
+  let gen_sig (mname : string) (loc : Ast.loc) (((_,tname),params,_,_ ) : Ast.type_decl) = 
     let params = param_names params in
     let type_arg = gen_type_a loc <:ctyp< $lid:tname$ >> params  in
     let rhs =  <:module_type< ($uid:mname$ with type a = $type_arg$) >> in
     let module_expr = gen_functor_type loc mname params rhs in
-      <:sig_item< declare open $uid:mname$; module $uid:(mname ^ "_" ^ tname)$ : $module_expr$; end >>
+      <:sig_item< open $uid:mname$ module $uid:(mname ^ "_" ^ tname)$ : $module_expr$ >>
 
   let gen_sigs mname loc : sig_instantiator
       = fun tdl ->
         let decls = List.map (gen_sig mname loc) tdl in
-          <:sig_item< declare $list:decls$ end >>
+          <:sig_item< $list:decls$ >>
 end
 
-DELETE_RULE Pcaml.str_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
-DELETE_RULE Pcaml.sig_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
+module Gram = MakeGram(Lexer)
 
-EXTEND
+DELETE_RULE Gram Pcaml.str_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
+DELETE_RULE Gram Pcaml.sig_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
+
+EXTEND Gram
   Pcaml.str_item:
   [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
        <:str_item< type $list:tdl$ >>
-         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 UIDENT SEP ","  ; ")" ->
+         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
              let type_decl = <:str_item< type $list:tdl$ >> in 
              let instances = 
                List.map (fun name -> 
@@ -320,13 +334,13 @@ EXTEND
                              with Not_found -> error loc (name ^" is not a known class") in
                              instantiator loc tdl)
                  cl in
-               <:str_item< declare $list:type_decl :: instances$ end >>
+               <:str_item< $list:type_decl :: instances$ >>
   ]]
 ;
   Pcaml.sig_item:
   [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
        <:sig_item< type $list:tdl$ >>
-         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 UIDENT SEP ","  ; ")" ->
+         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
              let type_decl = <:sig_item< type $list:tdl$ >> in
              let instances  = 
                List.map (fun name -> 
@@ -335,7 +349,7 @@ EXTEND
                              with Not_found -> error loc (name ^" is not a known class (for signatures)") in
                              instantiator loc tdl)
                  cl in
-               <:sig_item< declare $list:type_decl :: instances$ end >>
+               <:sig_item< $list:type_decl :: instances$ >>
   ]]
 ;
 END;

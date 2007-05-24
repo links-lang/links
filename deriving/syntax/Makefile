@@ -1,7 +1,7 @@
 # $Id: Makefile,v 1.12 2002/02/04 10:21:44 ddr Exp $
 
 OCAMLC   = ocamlc.opt
-CAMLP4   = "camlp4o -loc loc "
+CAMLP4   = "camlp4of -loc loc "
 OCAMLOPT = ocamlopt.opt
 OCAMLDEP = ocamldep
 LIBDIR = $(shell ocamlc -where)
@@ -9,7 +9,7 @@ CAMLP4DIR = $(shell camlp4 -where)
 
 OCAMLFLAGS=-w Aef
 
-DERIVERS=eq_class typeable_class pickle_class shelve_class show_class enum_class bounded_class functor_class rewriter_class
+#DERIVERS=eq_class typeable_class pickle_class shelve_class show_class enum_class bounded_class functor_class rewriter_class
 
 DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
 DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
