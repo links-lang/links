@@ -175,7 +175,7 @@ struct
         | <:ctyp< $ctyp1$ $ctyp2$ >> -> tyapp t gen ti (ctyp1, ctyp2)
             
         (* Module access *)
-        | _ -> failwith "module access nyi" (*<:ctyp< $name$ . $ctyp2$ >> -> tyacc t gen ti (name, ctyp2)*)
+        | <:ctyp< $uid:_$.$lid:_$ >> -> failwith "nyi" (*tyacc t gen ti (name, ctyp2)*)
             
         (* type variable *)
         | Ast.TyQuo (_, string) -> tyquo t gen ti (string)
@@ -184,13 +184,13 @@ struct
         | <:ctyp< $_$ of $_$ >>
              
         (* alias *)
-        (* | <:ctyp< t as t >>  *)
+(*        | <:ctyp< $_$ as $_$ >>  *)
 
         (* wildcard *)
         | <:ctyp< _ >> 
             
         (* function type *)
-        (*| <:ctyp< $ctyp:t$ -> $ctyp:t$ >> *)
+        | <:ctyp< $_$ -> $_$ >> 
 
         (* null type *)
         | <:ctyp< >> 
@@ -199,13 +199,13 @@ struct
         | <:ctyp< #$_$ >>
 
           (* label type *)
-(*        | <:ctyp< ~ $_$ >>*)
+        | <:ctyp< $_$: $_$ >>
 
         (* type name *)
         | <:ctyp< $lid:_$ >>
 
         (* ? "TyMan" *)
-        (*| <:ctyp< $_$ == $_$ >>*)
+        | <:ctyp< $_$ = $_$ >>
 
         (* type declaration *)
 (*       (* type t 'a 'b 'c = t constraint t = t constraint t = t *) *)
@@ -215,11 +215,10 @@ struct
         | <:ctyp< < $_$ > >>
 
           (* optional label type *)
-        | <:ctyp< ? $_$>>
+        | <:ctyp< ? $_$:$_$ >>
 
         (* polymorphic type ("TyPol") *)
-  (*      | <:ctyp< ! $_$ . $_$ >>*)
-
+(*        | <:ctyp< '$_$ . $_$ >>*)
 
        (* type variable *)
         | <:ctyp< ' $_$ >>
@@ -264,13 +263,13 @@ struct
         | <:ctyp< $_$ * $_$ >>
 
         (* exact variant *)
-(*        | <:ctyp< [ = $_$ ] >>*)
+        | <:ctyp< [ $_$ ] >>
 
         (* gt variant *)
         | <:ctyp< [ > $_$ ] >>
 
         (* lt variant *)
-        (*| <:ctyp< [ < $_$ ] >>*)
+        | <:ctyp< [< $_$ ] >>
 
         (* gt lt variant *)
         | <:ctyp< [ < $_$ > $_$ ] >>
