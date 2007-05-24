@@ -127,10 +127,11 @@ struct
   let gen_lid t _ {loc=loc} (name) = <:module_expr< $uid:classname ^ "_" ^ name$ >>
   let gen_quo t _ ({loc=loc}as ti) (name) = <:module_expr< $uid:snd (List.assoc name ti.argmap)$ >>
   let gen_tup t gen {loc=loc} ts =
-    List.fold_left 
+    failwith "nyi (now takes a type not a list of types)" 
+(*    List.fold_left 
       (fun s param -> <:module_expr< $s$ $param$ >>)
     <:module_expr< $uid:Printf.sprintf "%s_%d" classname (List.length ts)$ >>
-      (List.map gen ts)
+      (List.map gen ts)*)
   let gen_other t gen {loc=loc;tname=tname} _ =
     error loc ("Cannot currently generate "^S.classname^" instances for "^ tname)
 
@@ -154,43 +155,134 @@ struct
         *)
 
         (* sum type *)
-        | Ast.TySum (_, variants) -> tysum t gen ti variants
+        | <:ctyp< [ $list:variants$ ] >> -> tysum t gen ti variants
 
         (* polymorphic variant *)
-        | Ast.TyVrn (_, fields, extends) -> tyvrn t gen ti (fields, extends)
+        | _ ->
+          failwith "nyi gen for variants (what about extends?)"
+(*tyvrn t gen ti (fields, extends) *)
 
         (* record *)
-        | Ast.TyRec (_, fields) -> tyrec t gen ti fields
+        | <:ctyp< { $fields$ } >> -> tyrec t gen ti fields
             
         (* tuple *)
-        | Ast.TyTup (_, ctyps) -> tytup t gen ti ctyps
+        | <:ctyp< ( $ctyps$ ) >> -> tytup t gen ti ctyps
 
         (* type name (lowercase identifier) *)
-        | Ast.TyLid (_, string) -> tylid t gen ti string
+        | <:ctyp< $lid:string$ >> -> tylid t gen ti string
 
         (* type constructor application *)
-        | Ast.TyApp (_, ctyp1, ctyp2) -> tyapp t gen ti (ctyp1, ctyp2)
+        | <:ctyp< $ctyp1$ $ctyp2$ >> -> tyapp t gen ti (ctyp1, ctyp2)
             
         (* Module access *)
-        | Ast.TyAcc (_, Ast.TyUid (_, name), ctyp2) -> tyacc t gen ti (name, ctyp2)
+        | _ -> failwith "module access nyi" (*<:ctyp< $name$ . $ctyp2$ >> -> tyacc t gen ti (name, ctyp2)*)
             
         (* type variable *)
         | Ast.TyQuo (_, string) -> tyquo t gen ti (string)
+
+        (* summand *)
+        | <:ctyp< $_$ of $_$ >>
+             
+        (* alias *)
+        (* | <:ctyp< t as t >>  *)
+
+        (* wildcard *)
+        | <:ctyp< _ >> 
             
-        | Ast.TyAli _ (* alias (as-type) *)
-        | Ast.TyAny _ (* wildcard *)
-        | Ast.TyArr _ (* arrow (function) type *)
-        | Ast.TyCls _ (* class path *)
-        | Ast.TyLab _ (* label type *)
-        | Ast.TyMan _ (* type manifest *)
-        | Ast.TyObj _ (* object *)
-        | Ast.TyOlb _ (* optional label *)
-        | Ast.TyPol _ (* class path application *)
-        | Ast.TyPrv _ (* private row *)
-        | Ast.TyUid _ (* uppercase identifier *)
-        | Ast.TyAcc _ (* module access *)
-          -> other t gen ti ()
+        (* function type *)
+        (*| <:ctyp< $ctyp:t$ -> $ctyp:t$ >> *)
+
+        (* null type *)
+        | <:ctyp< >> 
+
+        (* class type *)
+        | <:ctyp< #$_$ >>
+
+          (* label type *)
+(*        | <:ctyp< ~ $_$ >>*)
+
+        (* type name *)
+        | <:ctyp< $lid:_$ >>
+
+        (* ? "TyMan" *)
+        (*| <:ctyp< $_$ == $_$ >>*)
+
+        (* type declaration *)
+(*       (* type t 'a 'b 'c = t constraint t = t constraint t = t *) *)
+(*        | <:ctyp< type $_$ $_$ = $_$ $_$ >>*)
+
+        (* object type *)
+        | <:ctyp< < $_$ > >>
+
+          (* optional label type *)
+        | <:ctyp< ? $_$>>
+
+        (* polymorphic type ("TyPol") *)
+  (*      | <:ctyp< ! $_$ . $_$ >>*)
+
+
+       (* type variable *)
+        | <:ctyp< ' $_$ >>
+
+       (* covariant type variable *)
+        | <:ctyp< +' $_$ >>
+
+       (* contravariant type variable *)
+        | <:ctyp< -' $_$ >>
+
+        (* polymorphic variant constructor *)
+        | <:ctyp< `$_$ >>
+
+          (* record *)
+        | <:ctyp< { $_$ } >>
+
+        (* ? colon type, TyCol *)
+        | <:ctyp< $_$ : $_$ >>
+
+        (* ? semicolon type, TySem *)
+        | <:ctyp< $_$ ; $_$ >>
+
+        (* ? comma type, TyCom *)
+        | <:ctyp< $_$ , $_$ >>
+
+        (* and type, TyAnd *)
+        | <:ctyp< $_$ and $_$ >>
+
+        (* | type, TyAnd *)
+        | <:ctyp< $_$ | $_$ >>
+
+        (* private row *)
+        | <:ctyp< private $_$ >>
+
+        (* mutable field *)
+        | <:ctyp< mutable $_$ >>
+
+        (* `tuple' *)
+        | <:ctyp< ( $_$ ) >>
+
+        (* product *)
+        | <:ctyp< $_$ * $_$ >>
+
+        (* exact variant *)
+(*        | <:ctyp< [ = $_$ ] >>*)
+
+        (* gt variant *)
+        | <:ctyp< [ > $_$ ] >>
+
+        (* lt variant *)
+        (*| <:ctyp< [ < $_$ ] >>*)
+
+        (* gt lt variant *)
+        | <:ctyp< [ < $_$ > $_$ ] >>
+
+        (* & type *)
+        | <:ctyp< $_$ & $_$ >>
             
+        (* of-& type *)
+        | <:ctyp< $_$ of & $_$ >>
+
+        (* what is TyAnt? *)
+           -> other t gen ti ()
     in gen
 
   let apply_functor loc funct params =
@@ -200,6 +292,7 @@ struct
 
   (* Generate n mutually-recursive instances (possibly functors) *)
   let gen_finstances loc ~tdl ~gen_module_expr = 
+    failwith "nyi" (*
     let prefix = classname ^ "_" in
     match tdl with 
       | (_,params,_,_)::_ ->
@@ -239,35 +332,51 @@ struct
                               >>
            end
       | _ -> assert false
-
+                   *)
   (* replace each type variable `v' with the result of `lookup v' *)
   let instantiate lookup t = 
     let rec inst = function
-      | Ast.TyAny _
-      | Ast.TyCls _
-      | Ast.TyLid _
-      | Ast.TyUid _ as m -> m
-      | Ast.TyPrv (loc, ctyp) -> Ast.TyPrv (loc, inst ctyp)
-      | Ast.TyAcc (loc, c1, c2) -> Ast.TyAcc (loc, inst c1, inst c2)
-      | Ast.TyAli (loc, c1, c2) -> Ast.TyAli (loc, inst c1, inst c2)
-      | Ast.TyApp (loc, c1, c2) -> Ast.TyApp (loc, inst c1, inst c2)
-      | Ast.TyArr (loc, c1, c2) -> Ast.TyArr (loc, inst c1, inst c2)
-      | Ast.TyMan (loc, c1, c2) -> Ast.TyMan (loc, inst c1, inst c2)
-      | Ast.TyLab (loc, string, ctyp) -> Ast.TyLab (loc, string, inst ctyp)
-      | Ast.TyOlb (loc, string, ctyp) -> Ast.TyOlb (loc, string, inst ctyp)
-      | Ast.TyTup (loc, x) -> Ast.TyTup (loc, List.map inst x)
-      | Ast.TyRec (loc, x) -> Ast.TyRec (loc, List.map (fun (loc,s,b,c) -> loc,s,b,inst c) x)
-      | Ast.TySum (loc, x) -> Ast.TySum (loc, List.map (fun (l,s,c) -> l,s,List.map inst c) x)
-      | Ast.TyObj (loc, x, bool) -> Ast.TyObj (loc, List.map (fun (s,c) -> s,inst c) x, bool)
-      | Ast.TyPol (loc, x, ctyp) -> Ast.TyPol (loc, x, inst ctyp)
-      | Ast.TyVrn (loc, x, y) -> Ast.TyVrn (loc,List.map inst_row x, y)
-
-      (* type var *)
-      | Ast.TyQuo (loc, string) -> lookup string
-
-    and inst_row = function
-      | Ast.RfTag (string, bool, (x:Ast.ctyp list)) -> Ast.RfTag (string, bool, List.map inst x)
-      | Ast.RfInh (ctyp) -> Ast.RfInh (inst ctyp)
+        
+      (* type variable *)
+      | Ast.TyQuo (_ , name) -> lookup name
+          
+      | Ast.TyNil _
+      | Ast.TyAny _ 
+      | Ast.TyCls (_ , _) 
+      | Ast.TyQuP (_ , _) 
+      | Ast.TyQuM (_ , _) 
+      | Ast.TyVrn (_ , _) 
+      | Ast.TyId  (_ , _) 
+      | Ast.TyAnt (_ , _)  as m       -> m
+      | Ast.TyLab (loc, d1, c1)       -> Ast.TyLab (loc, d1, inst c1)
+      | Ast.TyObj (loc, c1, d1)       -> Ast.TyObj (loc, inst c1, d1)
+      | Ast.TyOlb (loc, d1, c1)       -> Ast.TyOlb (loc, d1, inst c1)
+      | Ast.TyRec (loc, c1)           -> Ast.TyRec (loc, inst c1)
+      | Ast.TySum (loc, c1)           -> Ast.TySum (loc, inst c1)
+      | Ast.TyPrv (loc, c1)           -> Ast.TyPrv (loc, inst c1)
+      | Ast.TyMut (loc, c1)           -> Ast.TyMut (loc, inst c1)
+      | Ast.TyTup (loc, c1)           -> Ast.TyTup (loc, inst c1)
+      | Ast.TyVrnEq (loc, c1)         -> Ast.TyVrnEq (loc, inst c1)
+      | Ast.TyVrnSup (loc, c1)        -> Ast.TyVrnSup (loc, inst c1)
+      | Ast.TyVrnInf (loc, c1)        -> Ast.TyVrnInf (loc, inst c1)
+      | Ast.TyAli (loc, c1, c2)       -> Ast.TyAli (loc, inst c1, inst c2)
+      | Ast.TyApp (loc, c1, c2)       -> Ast.TyApp (loc, inst c1, inst c2)
+      | Ast.TyArr (loc, c1, c2)       -> Ast.TyArr (loc, inst c1, inst c2)
+      | Ast.TyMan (loc, c1, c2)       -> Ast.TyMan (loc, inst c1, inst c2)
+      | Ast.TyDcl (loc, d1, ctyps, 
+                   c1, ctyps2)        -> Ast.TyDcl (loc, d1, List.map inst ctyps, inst c1, 
+                                                    List.map (fun (t1,t2) -> inst t1, inst t2) ctyps2)
+      | Ast.TyPol (loc, c1, c2)       -> Ast.TyPol (loc, inst c1, inst c2)
+      | Ast.TyCol (loc, c1, c2)       -> Ast.TyCol (loc, inst c1, inst c2)
+      | Ast.TySem (loc, c1, c2)       -> Ast.TySem (loc, inst c1, inst c2)
+      | Ast.TyCom (loc, c1, c2)       -> Ast.TyCom (loc, inst c1, inst c2)
+      | Ast.TyOf  (loc, c1, c2)       -> Ast.TyOf  (loc, inst c1, inst c2)
+      | Ast.TyAnd (loc, c1, c2)       -> Ast.TyAnd (loc, inst c1, inst c2)
+      | Ast.TyOr  (loc, c1, c2)       -> Ast.TyOr  (loc, inst c1, inst c2)
+      | Ast.TySta (loc, c1, c2)       -> Ast.TySta (loc, inst c1, inst c2)
+      | Ast.TyVrnInfSup (loc, c1, c2) -> Ast.TyVrnInfSup (loc, inst c1, inst c2)
+      | Ast.TyAmp (loc, c1, c2)       -> Ast.TyAmp (loc, inst c1, inst c2)
+      | Ast.TyOfAmp (loc, c1, c2)     -> Ast.TyOfAmp (loc, inst c1, inst c2)
     in inst t
 
   let instantiate_modargs ({loc=loc} as ti) t : Ast.ctyp = 
@@ -303,13 +412,15 @@ struct
     List.fold_right 
       (fun (_,(_,mname)) m -> <:module_type< functor ($mname$ : $uid:classname$) -> $m$ >>)
       
-  let gen_sig (mname : string) (loc : Ast.loc) (((_,tname),params,_,_ ) : Ast.type_decl) = 
-    let params = param_names params in
+  let gen_sig (mname : string) (loc : Loc.t) 
+      (loc, tname, params, _, _ : type_decl) = 
+    failwith "nyi"
+(*    let params = param_names params in
     let type_arg = gen_type_a loc <:ctyp< $lid:tname$ >> params  in
     let rhs =  <:module_type< ($uid:mname$ with type a = $type_arg$) >> in
     let module_expr = gen_functor_type loc mname params rhs in
       <:sig_item< open $uid:mname$ module $uid:(mname ^ "_" ^ tname)$ : $module_expr$ >>
-
+*)
   let gen_sigs mname loc : sig_instantiator
       = fun tdl ->
         let decls = List.map (gen_sig mname loc) tdl in
@@ -318,36 +429,38 @@ end
 
 module Gram = MakeGram(Lexer)
 
-DELETE_RULE Gram Pcaml.str_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
-DELETE_RULE Gram Pcaml.sig_item: "type"; LIST1 Pcaml.type_declaration SEP "and" END;
+open Syntax
+
+DELETE_RULE Gram str_item: "type"; LIST1 type_declaration SEP "and" END;
+DELETE_RULE Gram sig_item: "type"; LIST1 type_declaration SEP "and" END;
 
 EXTEND Gram
-  Pcaml.str_item:
-  [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
+  str_item:
+  [[ "type"; tdl = LIST1 type_declaration SEP "and" ->
        <:str_item< type $list:tdl$ >>
-         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
+         | "type"; tdl = LIST1 type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
              let type_decl = <:str_item< type $list:tdl$ >> in 
              let instances = 
                List.map (fun name -> 
                            let instantiator = 
                              try List.assoc name !instantiators
                              with Not_found -> error loc (name ^" is not a known class") in
-                             instantiator loc tdl)
+                             instantiator loc (*tdl*) (failwith "nyi") )
                  cl in
                <:str_item< $list:type_decl :: instances$ >>
   ]]
 ;
-  Pcaml.sig_item:
-  [[ "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ->
+  sig_item:
+  [[ "type"; tdl = LIST1 type_declaration SEP "and" ->
        <:sig_item< type $list:tdl$ >>
-         | "type"; tdl = LIST1 Pcaml.type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
+         | "type"; tdl = LIST1 type_declaration SEP "and" ; "deriving" ; "(" ; cl = LIST0 [x = UIDENT -> x] SEP ","  ; ")" ->
              let type_decl = <:sig_item< type $list:tdl$ >> in
              let instances  = 
                List.map (fun name -> 
                            let instantiator = 
                              try List.assoc name !sig_instantiators
                              with Not_found -> error loc (name ^" is not a known class (for signatures)") in
-                             instantiator loc tdl)
+                             instantiator loc (*tdl*) (failwith "nyi"))
                  cl in
                <:sig_item< $list:type_decl :: instances$ >>
   ]]

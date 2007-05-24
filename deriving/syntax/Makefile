@@ -7,7 +7,7 @@ OCAMLDEP = ocamldep
 LIBDIR = $(shell ocamlc -where)
 CAMLP4DIR = $(shell camlp4 -where)
 
-OCAMLFLAGS=-w Aef
+OCAMLFLAGS=-w aef
 
 #DERIVERS=eq_class typeable_class pickle_class shelve_class show_class enum_class bounded_class functor_class rewriter_class
 
@@ -26,7 +26,7 @@ opt: $(OBJS)
 # This is less flexible than loading the bytecode files into the
 # standard camlp4, but (consequently) runs much faster.
 deriving: $(OBJS)
-	$(OCAMLOPT) -linkall -o $@ -I $(CAMLP4DIR) odyl.cmxa camlp4.cmxa pa_o.cmx pa_op.cmx pr_dump.cmx $(NOBJS) camlp4/odyl.cmx 
+	$(OCAMLOPT) -linkall -o $@ -I $(CAMLP4DIR) $(NOBJS)
 
 clean:
 	rm -f *.cm[oix] *.o deriving
