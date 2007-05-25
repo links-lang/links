@@ -13,7 +13,7 @@ OCAMLFLAGS=-w aef
 
 DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
 DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
-OBJS=deriving.cmo $(DERIVER_OBJS)
+OBJS=types.cmo deriving.cmo $(DERIVER_OBJS)
 NOBJS=deriving.cmx $(addsuffix .cmx,$(DERIVERS))
 
 all: byte opt deriving
