@@ -66,7 +66,8 @@ and phrasenode =
   | Spawn of phrase
   | ListLit of (phrase list)
   | Definition of (name * phrase * location)
-  | Iteration of (generatorphrase * phrase * (*where:*)phrase option * (*orderby:*)phrase option)
+  | Iteration of (generatorphrase * phrase * (*where:*)phrase option 
+                  * (*orderby:*)phrase option)
   | Escape of (name * phrase)
   | HandleWith of (phrase * name * phrase)
   | Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])

@@ -236,7 +236,6 @@ let perform_request
           (Utility.base64encode 
              result_json)
     | RemoteCall(func, args) ->
-(*        Debug.print("Entering program for remote call.");*)
         Interpreter.has_client_context := true;
         let cont, value = 
           match args with
@@ -248,7 +247,6 @@ let perform_request
                (Json.jsonize_result
                   (Interpreter.apply_cont_safe globals cont value)))
     | CallMain -> 
-(*        Debug.print("Entering program through Main");*)
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              catch_notfound_l "generate_program"
@@ -259,8 +257,8 @@ let perform_request
 
 let serve_request prelude (valenv, typenv) filename = 
   try 
-    let _, (Syntax.Program (defs, main) as program) = Utility.catch_notfound_l "reading and optimising"
-      (lazy (read_and_optimise_program prelude typenv filename)) in
+    let _, (Syntax.Program (defs, main) as program) =
+      read_and_optimise_program prelude typenv filename in
 (*    if (List.length main < 1) then raise Errors.NoMainExpr else*)
     let defs = Utility.catch_notfound_l "stubifying" 
       (lazy (stubify_client_funcs valenv program)) in

@@ -278,7 +278,7 @@ let prim_val_of_expr : expression -> result option = function
       end
   | _ -> None
 
-let (toplevel: continuation) = [] 
+let (toplevel_cont: continuation) = []
 
 let xmlitem_of : result -> xmlitem = function
   | `XML x -> x

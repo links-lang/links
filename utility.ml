@@ -623,6 +623,9 @@ let pair_fresh_names ?prefix:pfx list =
        | None     -> (fun _ -> gensym ()))
     list 
 
+let refresh_names = 
+  graph_func (fun x -> gensym ~prefix:x ())
+
 let any_true = List.exists identity
 
 let getenv : string -> string option =

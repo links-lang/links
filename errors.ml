@@ -18,6 +18,11 @@ exception WrongArgumentTypeError of (Syntax.position *
                                        string list * Types.datatype list *
 				       Types.datatype option)
 
+exception MistypedSendError of (Syntax.position *
+				       string * Types.datatype * 
+                                       string list * Types.datatype list *
+				       Types.datatype option)
+
 exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype * 
 					string list * Types.datatype list *
 					Types.datatype option)
@@ -30,12 +35,17 @@ let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
   let pexprs = List.map (fun param -> 
                            let `T ((_, _, pexpr),_,_) = expression_data param in
                              pexpr) params 
-  in  
-    match fntype with 
-      | `Function _ -> 
-          raise (WrongArgumentTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
-      | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
-          
+  in match fn, paramtypes with
+      (* Sadly, this doesn't trigger--I think because of metatypevars
+         and other stuff that gets in the way of the type. --eekc 5/07 *)
+    | Variable("send", _), [`Application("Mailbox", [mbType]); msgType] -> 
+        raise(MistypedSendError(pos,fexpr,fntype,pexprs,paramtypes,mb))
+    | _ -> 
+        match fntype with 
+          | `Function _ -> 
+              raise(WrongArgumentTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
+          | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
+              
 let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
     = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_datatype ltype 
                            ^") and "^ string_of_expression r ^" ("^ string_of_datatype rtype ^")"))
@@ -134,6 +144,15 @@ let rec format_exception_html = function
   | Type_error ((pos,_,expr), s) -> 
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
+  | MistypedSendError(pos, fexpr, fntype, pexpr, ([`Application("Mailbox", [mbType]); msgType] as paramtypes), mb)
+    ->
+      let msg = "The expressions <code class=\"typeError\">" ^ String.concat ", " (List.map Utility.xml_escape pexpr) ^ (get_mailbox_msg true mb) ^
+        "</code> have type <code class=\"typeError\">" ^ Utility.xml_escape (String.concat ", " (List.map string_of_datatype paramtypes)) ^
+        "</code> and cannot be passed to function <code class=\"typeError\">"^ Utility.xml_escape(fexpr) ^
+        "</code>which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>" ^ " (this tries to send a message of type " ^ string_of_datatype msgType ^ " to a process expecting message of type " ^ string_of_datatype mbType ^ ")"
+      in
+        format_exception_html(Type_error(pos, msg))
+     
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expressions <code class=\"typeError\">" ^ String.concat ", " (List.map Utility.xml_escape pexpr) ^ (get_mailbox_msg true mb) ^
         "</code> have type <code class=\"typeError\">" ^ Utility.xml_escape (String.concat ", " (List.map string_of_datatype paramtype)) ^
@@ -141,6 +160,7 @@ let rec format_exception_html = function
         "</code>which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
+
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression <code class=\"typeError\">"^ 
         Utility.xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
@@ -150,7 +170,7 @@ let rec format_exception_html = function
         String.concat ", " (List.map string_of_datatype paramtype) ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
-   
+
   | MultiplyDefinedToplevelNames duplicates -> 
       let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum

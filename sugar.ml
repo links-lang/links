@@ -794,7 +794,8 @@ module Desugarer =
              | CharLit _
              | InfixDecl
              | Var _ -> empty
-             | FunLit (_, patterns, body) -> flatten (concat_map (List.map ptv) patterns @ [etv body])
+             | FunLit (_, patterns, body) -> 
+                 flatten (concat_map (List.map ptv) patterns @ [etv body])
              | Spawn e -> etv e
              | ListLit es -> etvs es
              | Definition (_, e, _) -> etv e
@@ -1224,11 +1225,21 @@ module Desugarer =
 
            (*  TBD: We should die if the XML text literal has bare ampersands or
                is otherwise ill-formed. It should also be made to properly handle
-               CDATA.
-               Where's a good place to do so? 
+               CDATA. Where's a good place to do so? 
            *)
            | TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
            | Xml (tag, attrs, subnodes) -> 
+
+               let rec coalesce : (Sugartypes.phrase list -> Sugartypes.phrase list)
+                   = function 
+                   [] -> []
+                 | [x] -> [x]
+
+                 | ((TextNode s1, d1)::(TextNode s2, d2)::xs) ->
+                     coalesce((TextNode (s1^s2), d1) :: xs)
+
+                 | x::xs -> x :: coalesce xs in
+
                let concat a b = 
                  Concat (desugar a, b, pos) in
                let desugar_attr = function
@@ -1245,7 +1256,8 @@ module Desugarer =
                             Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Types.xml_type, pos))
                    end
                  else
-                   Xml_node (tag, alistmap desugar_attr attrs, map desugar subnodes, pos)
+                   Xml_node (tag, alistmap desugar_attr attrs,
+                             map desugar (coalesce subnodes), pos)
            | XmlForest []  -> HasType(Nil pos, Types.xml_type, pos)
            | XmlForest [x] -> HasType(desugar x, Types.xml_type, pos)
            | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)

@@ -110,6 +110,7 @@ and result = [ primitive_value
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Pickle)
+val toplevel_cont : continuation
 val expr_of_prim_val : result -> Syntax.expression option
 val prim_val_of_expr : Syntax.expression -> result option
 val xmlitem_of : result -> xmlitem

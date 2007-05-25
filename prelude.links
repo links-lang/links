@@ -245,25 +245,20 @@ fun last(list) {
   }
 }
 
+
 # lines :: String -> [String]
 # unlines :: [String] -> String
 # unwords :: [String] -> String
 # words :: String -> [String]
 
+### Defined internally to Links:
 # ceiling :: Float -> Int
-# cos :: Float -> Float
-# exp :: Float -> Float
 # floor :: Float -> Int
-# fromInt :: Int -> Float
+# cos :: Float -> Float
 # log :: Float -> Float
-# pi :: Float
-# round :: Float -> Int
-# signumFloat :: Float -> Int
 # sin :: Float -> Float
 # sqrt :: Float -> Float
 # tan :: Float -> Float
-# truncate :: Float -> Int
-# (**.) :: Float -> Float -> Float
 # (*.) :: Float -> Float -> Float
 # (/.) :: Float -> Float -> Float
 # (+.) :: Float -> Float -> Float
@@ -272,12 +267,12 @@ fun last(list) {
 # (/=.) :: Float -> Float -> Bool
 # (==.) :: Float -> Float -> Bool
 
-
+# (**.) :: Float -> Float -> Float
+# exp :: Float -> Float
 # pi :: Float
 # signumFloat :: Float -> Int
 # round :: Float -> Int
 # truncate :: Float -> Int
-
 
 # Option types
 typename Maybe (a) = [|Nothing | Just:a|];

@@ -218,8 +218,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
             (conversion_op' ~unbox:unbox_int ~conv:(string_of_num) ~box:box_string)),
    datatype "(Int) -> Xml");
   
+  "floatToXml",
+  (`PFun (string_to_xml -<-
+            (conversion_op' ~unbox:unbox_float ~conv:(string_of_float) ~box:box_string)),
+   datatype "(Float) -> Xml");
+  
   "exit",
-  (`Continuation [],
+  (`Continuation Result.toplevel_cont,
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.: 
      if (test) exit(1) else 42 *)
@@ -352,7 +357,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
    datatype "(String) -> ()");
 
   "debug", 
-  (p1 (fun message -> prerr_endline (unbox_string message); flush stderr; `Record []),
+  (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
+                      `Record []),
    datatype "(String) -> ()");
 
   "debugObj",
@@ -363,6 +369,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   
   "textContent",
   (client_only_1 "textContent", datatype "(a) -> String");
+  (* FIXME: textContent should be from a type like DomNode, right? *)
 
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),

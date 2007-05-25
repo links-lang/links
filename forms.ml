@@ -135,13 +135,13 @@ let xml_transform env lookup eval : expression -> expression =
             | ("l:action", laction)::_ ->
                 [hidden_input "_k" (serialise_exprenv laction env)]
             | ("l:onsubmit", laction)::_ -> (* l:onsubmit holds a frozen expression *)
-                [hidden_input "_k" (serialise_exprenv laction env)]
+                failwith("onsubmit gen'd at server not impl.");
             | ("l:handler", lhandler)::_ -> 
                 (* an l:handler attribute holds an expression that
                    evaluates to a continuation. This continuation will
                    be applied to a record representing the form values,
                    when the form is submitted.  *)
-                (match eval lhandler [] with
+                (match eval lhandler Result.toplevel_cont with
                    | `Continuation c ->
                        [hidden_input "_cont" (marshal_continuation c)]
                    | _ -> failwith "Internal error: l:handler was not a continuation")

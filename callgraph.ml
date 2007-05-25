@@ -24,8 +24,9 @@ open Syntax
 
 let is_mapped_by alist x = mem_assoc x alist
 
-(** [make_callgraph bindings] returns an alist that gives a list of called
-    functions for each function in [bindings] *)
+(** [make_callgraph bindings] returns an alist that gives a list of
+    called functions for each function in [bindings], limited to the
+    definitions in bindings. *)
 let make_callgraph bindings = 
   alistmap
     (fun expr -> 

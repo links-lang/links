@@ -126,13 +126,14 @@ let rec normalise_query (globals:environment) (env:environment) (db:database) (q
 (** [get_row_field_type field row]: what type has [field] in [row]? 
     TBD: Factor this out.
 *)
-exception NotFound of string
+
+exception NoSuchField of string
 
 let row_field_type field : Types.row -> Types.datatype = 
   fun (fields, _) ->
     match StringMap.find field fields with
       | `Present t -> t
-      | `Absent -> raise (NotFound field)
+      | `Absent -> raise (NoSuchField field)
 
 let query_result_types (query : query) (table_defs : (string * Types.row) list)
     : (string * Types.datatype) list =
@@ -143,10 +144,29 @@ let query_result_types (query : query) (table_defs : (string * Types.row) list)
       concat_map (function
                     | Left col -> [col.renamed, col_type col.table_renamed col.name]
                     | Right _ -> []) query.Query.result_cols
-  with NotFound field -> failwith ("Field " ^ field ^ " from " ^ 
-                                     Sql.string_of_query query ^
-                                     " was not found in tables " ^ 
-                                     mapstrcat "," fst table_defs ^ ".")
+  with NoSuchField field ->
+    failwith ("Field " ^ field ^ " from " ^ 
+                Sql.string_of_query query ^
+                " was not found in tables " ^ 
+                mapstrcat "," fst table_defs ^ ".")
+
+let do_query globals locals query table_aliases tables = 
+  let (dbs, table_defs) = 
+    split(map(function `Table((db, params), _table_name, row) -> (db, row)
+                | _ -> assert false) 
+            tables) in
+    
+    if(not (all_equiv (=) dbs)) then
+      failwith ("Cannot join across different databases");
+    
+    let table_defs = combine table_aliases table_defs in
+    let db = hd(dbs) in
+      (* TBD: factor this stuff out into
+         a module that processes queries *)
+    let result_types = query_result_types query table_defs in
+    let query_string = Sql.string_of_query (normalise_query globals locals db query) in
+      prerr_endline("RUNNING QUERY:\n" ^ query_string);
+      Database.execute_select result_types query_string db
 
 (** 0 Web-related stuff *)
 let has_client_context = ref false
@@ -372,24 +392,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let result = 
                          match value with
                            | `List(tbls) ->
-                               let (dbs, table_defs) = 
-                                 split(map(function `Table((db, params), _table_name, row) 
-                                               -> (db, row)
-                                             | _ -> failwith "THX1138") 
-                                         tbls) in
-
-                                 if(not (all_equiv (=) dbs)) then
-                                   failwith ("Cannot join across different databases");
-
-                                 let table_defs = combine table_aliases table_defs in
-                                 let db = hd(dbs) in
-                                   (* TBD: factor this stuff out into
-                                      a module that processes queries *)
-                                 let result_types = query_result_types query table_defs in
-       	                         let query_string = Sql.string_of_query (normalise_query globals locals db query) in
-                                   prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                   Database.execute_select result_types query_string db
-                           | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
+                               do_query globals locals query table_aliases tbls
+                           | _ -> assert false
                        in
                          apply_cont globals cont result
 	        )
@@ -596,7 +600,7 @@ let run_program (globals : environment) locals (Program (defs, body)) : (environ
   try (
     (match defs with
        | [] ->
-           interpret globals locals body []
+           interpret globals locals body toplevel_cont
        | def :: defs ->
            interpret_definition globals locals def
              (map (fun def -> IgnoreDef([], def)) defs @ [Ignore([], body)]));
