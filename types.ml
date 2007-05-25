@@ -590,7 +590,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
 	    in begin match concrete_type args with
               | `Record row when is_tuple ~allow_onetuples:true row ->
                   string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
-              | t ->      "*" ^ sd t  ^ " " ^arrow ^ " " ^ sd t
+              | t' ->     "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t
               end
         | `Record row      ->
             let row = unwrap row in
