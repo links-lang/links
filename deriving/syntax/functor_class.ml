@@ -14,21 +14,6 @@ open Deriving
    Tuples and records must be handled specially.
  *)
 
-let rec contains_tvars = function
-| <:ctyp< [ $list:ctors$ ] >>  -> List.exists (fun (_,_,cs) -> (List.exists contains_tvars cs)) ctors
-| <:ctyp< $t1$ $t2$ >>         -> contains_tvars t1 || contains_tvars t2
-| <:ctyp< $lid:id$ >>          -> false
-| <:ctyp< $uid:m$ . $t2$ >>    -> false
-| <:ctyp< { $list:fields$ } >> -> List.exists (fun (_, _, _, c) -> contains_tvars c) fields
-| <:ctyp< ( $list:params$ ) >> -> List.exists contains_tvars params
-| <:ctyp< [= $list:row$ ] >>   -> List.exists (function 
-                                                  | MLast.RfTag (_, _, targs) -> List.exists contains_tvars targs
-                                                  | MLast.RfInh _ -> false)
-                                    row
-| <:ctyp< '$a$ >>              -> true
-| _                            -> failwith "Failed to generate functor instance [1]"
-
-
 
 let rec gen_function loc = function
 | c when not (contains_tvars c) -> None

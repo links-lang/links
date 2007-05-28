@@ -20,21 +20,6 @@ let rec index pred =
 let curry f x y = f (x,y)
 let uncurry f (x, y) = f x y
 
-let random_id length = 
-  let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
-  let nidchars = String.length idchars in
-  let s = String.create length in 
-    for i = 0 to length - 1 do 
-      s.[i] <- idchars.[Random.int nidchars]
-    done;
-    s
-
-let tuple_expr loc = function  (* 0-tuples and 1-tuples are invalid *)
-  | []  -> <:expr< () >>
-  | [x] -> x
-  | xs  -> failwith "nyi tuple_expr" (*<:expr< ( $list:xs$ ) >>*)
-exception NotImpl of (Lexing.position * Lexing.position)
-
 module AST = Quotation.Ast
 
 type type_decl = (Loc.t 
