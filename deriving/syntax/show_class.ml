@@ -21,14 +21,8 @@ struct
   let in_hovbox = in_a_box "pp_open_hovbox"
   let in_box = in_a_box "pp_open_box"
 
-  let rec expr t =
-  object (self)
-    inherit make_module_expr ~classname
-    method variant = variant
-    method record = record
-    method sum = sum
-  end # expr t
-    
+  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+
   and polycase : Types.tagspec -> Ast.match_case = function
     | Tag (name, None) -> 
         <:match_case< `$uid:name$ -> 
@@ -63,11 +57,11 @@ struct
                                      in M.format formatter $lid:name$ >>
     | f -> raise (Underivable (classname, context.atype)) (* Can't handle "higher-rank" types *)
 
-  and sum summands = <:module_expr< struct
+  and sum summands = <:module_expr< struct type a = $Untranslate.expr context.atype$
     let rec format formatter = function $list:List.map case summands$
   end >>
 
-  and record fields = <:module_expr< struct
+  and record fields = <:module_expr< struct type a = $Untranslate.expr context.atype$
     let rec format formatter $record_pattern fields$ = $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{'
@@ -78,7 +72,7 @@ struct
       >>$
   end >>
 
-  and variant (spec, tags) = <:module_expr< struct
+  and variant (spec, tags) = <:module_expr< struct type a = $Untranslate.expr context.atype$
     let rec format formatter = function $list:List.map polycase tags$
   end >>
 end
