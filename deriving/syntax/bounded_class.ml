@@ -1,42 +1,39 @@
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo";;
-open Deriving
+module InContext (C : Base.Context) =
+struct
+  open C
+  open Base
+  open Util
+  open Types
+  open Camlp4.PreCast
+  include Base.InContext(C)
 
-let rec last : 'a list -> 'a = function
-  | []    -> raise (Invalid_argument "last")
-  | [x]   -> x
-  | _::xs -> last xs
+  let classname = "Bounded"
 
-let fill_bounded_template loc tname first last = 
-<:str_item< declare
-             open Bounded;
-             module $uid:"Bounded_"^ tname$ = 
-               (struct 
-                  type a = $lid:tname$; 
-                  value minBound = $uid:first$; 
-                  value maxBound = $uid:last$; 
-               end : Bounded with type a = $lid:tname$ );
-             end >>
+  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+    
+  and sum summands = 
+    let names = ListLabels.map summands
+        ~f:(function
+              | (name,[]) -> name
+              | _ -> raise (Underivable (classname, context.atype))) in
+        <:module_expr< struct type a = $Untranslate.expr context.atype$
+                       let minBound = $uid:List.hd names$ 
+                       and maxBound = $uid:List.last names$ end >>
 
-let gen_bounded_instance = function
-  | ((loc,tname), (_::_), _, _) -> error loc ("Not generating Bounded instance for polymorphic type "^ tname)
-  | ((loc, tname), tvars, <:ctyp< [ $list:ctors$ ] >> , _) -> 
-      let ((_,first,_), (_,last,_)) = (List.hd ctors, last ctors) in 
-        begin
-          List.iter (function 
-                      | (loc, name, [])   -> ()
-                      | (loc, name, args) -> error loc ("Not generating Bounded instance for "^ tname
-                                                         ^" because constructor "^ name ^" is not nullary"))
-            ctors;
-          fill_bounded_template loc tname first last
-        end
-  | ((loc, tname), _, _, _) -> error loc ("Not generating Bounded instance for non-sum type "^ tname)
+  and variant (_, tags) = 
+    let names = ListLabels.map tags
+        ~f:(function
+              | Tag (name, None) -> name
+              | _ -> raise (Underivable (classname, context.atype))) in
+      <:module_expr< struct type a = $Untranslate.expr context.atype$
+                     let minBound = `$List.hd names$ 
+                     and maxBound = `$List.last names$ end >>
 
-let gen_bounded_instances loc : instantiator =
-  fun tdl -> <:str_item< declare $list:List.map gen_bounded_instance tdl$ end >>
+  (* should perhaps implement this one *)
+  and record _ = raise (Underivable (classname, context.atype))
+end
 
-let _ =
-  begin
-    instantiators := ("Bounded", gen_bounded_instances):: !instantiators;
-    sig_instantiators := ("Bounded", Sig_utils.gen_sigs "Bounded"):: !sig_instantiators;
-  end
+let generate context csts = 
+  let module M = InContext(struct let context = context end) in
+    M.generate ~csts ~make_module_expr:M.expr
+      ~classname:M.classname ~default_module:None

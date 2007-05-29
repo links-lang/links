@@ -9,15 +9,21 @@ struct
 
   let classname = "Pickle"
 
-  let rec expr t =
-  object (self)
-    inherit make_module_expr ~classname
-    method variant = variant
-    method record = record
-    method sum = sum
-  end # expr t
+  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
     
   and polycase : Types.tagspec * int -> Ast.match_case * Ast.match_case = 
+    (* TODO: use 
+       $`int:Obj.magic `tag : int$ for the tags rather than
+       generating sequential numbers.  
+
+       Advantages:
+       * more robust
+       * don't need to tag "extended" types (i.e. the r in [`A|r])
+
+       Disadvantages:
+       * probably less space efficient in general, since the numbers
+         will be bigger.
+    *)
     function
       | Tag (name, args), n -> 
           let tag_patt, pickle_args,unpickle_args = match args with 
@@ -64,7 +70,7 @@ struct
       List.split (List.map2 (F.uncurry case) 
                     summands
                     (List.range 0 (List.length summands))) in
-      <:module_expr< struct
+      <:module_expr< struct type a = $Untranslate.expr context.atype$
         let pickle buffer = function $list:picklers$
         let unpickle stream = function $list:unpicklers$
       end >>
@@ -79,7 +85,7 @@ struct
         fields
         unpicklers
         (record_expression fields) in
-      <:module_expr< struct
+      <:module_expr< struct type a = $Untranslate.expr context.atype$
         let pickle buffer $record_pattern fields$ = $List.fold_left1 seq picklers$
         let unpickle stream = $List.fold_left1 seq unpicklers$
       end >>
@@ -89,7 +95,7 @@ struct
       List.split (List.map2 (F.uncurry polycase) 
                     tags
                     (List.range 0 (List.length tags))) in
-      <:module_expr< struct
+      <:module_expr< struct type a = $Untranslate.expr context.atype$
         let pickle buffer = function $list:picklers$
         let unpickle stream = function $list:unpicklers$
       end >>

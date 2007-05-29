@@ -95,18 +95,18 @@ struct
 
   let seq l r = <:expr< $l$ ; $r$ >>
 
-  let record_pattern : Types.field list -> Ast.patt = 
+  let record_pattern ?(prefix="") : Types.field list -> Ast.patt = 
     fun fields ->
       List.fold_left1
         (fun l r -> <:patt< $l$ ; $r$ >>)
-        (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:label$ >>) 
+        (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:prefix ^ label$ >>) 
            fields)
 
-  let record_expression : Types.field list -> Ast.expr = 
+  let record_expression ?(prefix="") : Types.field list -> Ast.expr = 
     fun fields ->
       List.fold_left1
         (fun l r -> <:expr< $l$ ; $r$ >>)
-        (List.map (fun (label,_,_) -> <:expr< $lid:label$ = $lid:label$ >>) 
+        (List.map (fun (label,_,_) -> <:expr< $lid:label$ = $lid:prefix ^ label$ >>) 
            fields)
 
   let tuple_expr : Ast.expr list -> Ast.expr = function
@@ -132,7 +132,7 @@ struct
       | [t] -> <:ident< $uid:classname ^ "_"^ t$ >>
       | t::ts -> <:ident< $uid:t$.$modname_from_qname ~qname:ts ~classname$ >>
           
-  class virtual make_module_expr ~classname =
+  class make_module_expr ~classname ~variant ~record ~sum =
   object (self)
 
     method mapply (funct : Ast.module_expr) args =
@@ -141,9 +141,9 @@ struct
         funct
         args
 
-    method virtual variant : Types.variant -> Ast.module_expr
-    method virtual sum : Types.summand list -> Ast.module_expr
-    method virtual record : Types.field list -> Ast.module_expr
+    method variant = variant
+    method sum = sum
+    method record = record
 
     method param (name, variance) =
       <:module_expr< $uid:NameMap.find name context.argmap$ >>
@@ -181,6 +181,15 @@ struct
       | `Fresh (None, Record fields) -> self # record fields
       | `Alias e -> self # expr e
   end
+
+(*  let expr_class ~classname ~variant ~record ~sum =
+  object (self)
+    inherit make_module_expr ~classname
+    method variant = variant
+    method record = record
+    method sum = sum
+  end
+*)
 
   let extract_params classname = 
     let has_params params (_, ps, _, _) = ps = params in

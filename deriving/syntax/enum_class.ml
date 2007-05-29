@@ -1,36 +1,44 @@
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo";;
+module InContext (C : Base.Context) =
+struct
+  open C
+  open Base
+  open Util
+  open Types
+  open Camlp4.PreCast
+  include Base.InContext(C)
 
-open Deriving
+  let classname = "Enum"
 
-let fill_enum_template loc tname numbering = <:str_item< 
-  declare
-    open Enum;
-    module $uid:"Enum_"^ tname$ = 
-      EnumDefaults (struct 
-                      type a = $lid:tname$; 
-                      value numbering = $numbering$; 
-                    end);
-  end>>
+  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
 
-let gen_enum_instance = function
-  | ((loc, tname), _::_, _, _) -> error loc ("Not generating enumeration for polymorphic type "^ tname)
-  | ((loc, tname), tvars, <:ctyp< [ $list:ctors$ ] >>, constraints) ->
-      let numbering = 
-        List.fold_right2 (fun n ctor list -> (match ctor with
-                                           | (loc, name, [])    -> <:expr< [($uid:name$, $int:string_of_int n$) :: $list$] >>
-                                           | (loc, name, args)  -> (error
-                                                                      loc ("Not generating Enum instance for "^ tname
-                                                                           ^" because constructor "^ name ^" is not nullary"))))
-       (range 0 (List.length ctors - 1)) ctors <:expr< [] >> in
-     fill_enum_template loc tname numbering
-  | ((loc, tname), _, _, _) -> error loc ("Not generating Enum instance for non-sum type "^ tname)
+  and sum summands =
+    let numbering = 
+      List.fold_right2
+        (fun n ctor rest -> 
+           match ctor with
+             | (name, []) -> <:expr< ($uid:name$, $`int:n$) :: $rest$ >>
+             | _ -> raise (Underivable (classname, context.atype)))
+        (List.range 0 (List.length summands))
+        summands
+        <:expr< [] >> in
+      <:module_expr< struct let numbering = $numbering$ end >>
 
-let gen_enum_instances loc : instantiator = fun tdl ->
-  <:str_item< declare $list:List.map gen_enum_instance tdl$ end >>
+  and variant (_, tags) = 
+    let numbering = 
+      List.fold_right2
+        (fun n tagspec rest -> 
+           match tagspec with
+             | Tag (name, None) -> <:expr< (`$name$, $`int:n$) :: $rest$ >>
+             | _ -> raise (Underivable (classname, context.atype)))
+        (List.range 0 (List.length tags))
+        tags
+        <:expr< [] >> in
+      <:module_expr< struct let numbering = $numbering$ end >>
 
-let _ = 
-  begin
-    instantiators := ("Enum", gen_enum_instances):: !instantiators;
-    sig_instantiators := ("Enum", Sig_utils.gen_sigs "Enum"):: !sig_instantiators;
-  end
+  and record _ = raise (Underivable (classname, context.atype))
+end
+
+let generate context csts = 
+  let module M = InContext(struct let context = context end) in
+    M.generate ~csts ~make_module_expr:M.expr
+      ~classname:M.classname ~default_module:(Some "Enum_defaults")

@@ -19,6 +19,12 @@ struct
       else aux (f+1) t (f::result)
     in if upto < from then raise (Invalid_argument "range")
       else List.rev (aux from upto [])
+
+  let rec last : 'a list -> 'a = function
+    | []    -> invalid_arg "last"
+    | [x]   -> x
+    | _::xs -> last xs
+
 end
 
 module F =
