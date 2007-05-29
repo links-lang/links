@@ -19,5 +19,10 @@ struct
       else aux (f+1) t (f::result)
     in if upto < from then raise (Invalid_argument "range")
       else List.rev (aux from upto [])
+end
 
+module F =
+struct
+  let curry f (x,y) = f x y
+  let uncurry f x y = f (x,y)
 end

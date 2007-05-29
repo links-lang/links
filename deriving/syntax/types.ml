@@ -234,38 +234,39 @@ struct
 
 end
 
-module Untranslate =
+module Untranslate (C:sig val loc : Camlp4.PreCast.Ast.Loc.t end) =
 struct
   open Camlp4.PreCast
+  open C
 
-  let param loc = function
+  let param = function
     | p, None        -> <:ctyp<  '$lid:p$ >>
     | p, Some `Plus  -> <:ctyp< +'$lid:p$ >>
     | p, Some `Minus -> <:ctyp< -'$lid:p$ >>
 
-  let rec qname loc = function
+  let rec qname = function
     | [] -> assert false
     | [x] -> <:ident< $lid:x$ >>
-    | x::xs -> <:ident< $uid:x$.$qname loc xs$ >>
+    | x::xs -> <:ident< $uid:x$.$qname xs$ >>
 
-  let unlist loc join items translate = 
-    List.fold_right (join loc) (List.map translate items) (Ast.TyNil loc)
+  let unlist join items translate = 
+    List.fold_right join (List.map translate items) (Ast.TyNil loc)
 
-  let pair loc l r = <:ctyp< $l$ * $r$ >>
-  let bar loc l r = <:ctyp< $l$ | $r$ >>
-  let semi loc l r = <:ctyp< $l$ ; $r$ >>
-  let comma loc l r = <:ctyp< $l$ , $r$ >>
+  let pair l r = <:ctyp< $l$ * $r$ >>
+  let bar l r = <:ctyp< $l$ | $r$ >>
+  let semi l r = <:ctyp< $l$ ; $r$ >>
+  let comma l r = <:ctyp< $l$ , $r$ >>
 
-  let expr loc = 
+  let expr = 
     let rec expr = function
-        Param p -> param loc p
+        Param p -> param p
       | Underscore -> <:ctyp< _ >>
       | Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
-      | Tuple ts -> unlist loc pair ts expr
-      | Constr (tcon, args) -> app (Ast.TyId (loc, qname loc tcon)) args
-      | Variant (`Eq, tags) -> <:ctyp< [  $unlist loc bar tags tagspec$ ] >>
-      | Variant (`Gt, tags) -> <:ctyp< [> $unlist loc bar tags tagspec$ ] >>
-      | Variant (`Lt, tags) -> <:ctyp< [< $unlist loc bar tags tagspec$ ] >>
+      | Tuple ts -> unlist pair ts expr
+      | Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
+      | Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
+      | Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
+      | Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
     and app f = function
       | []    -> f
       | [x]   -> <:ctyp< $f$ $expr x$ >>
@@ -276,29 +277,29 @@ struct
       | Extends t -> <:ctyp< $expr t$ >>
     in expr
 
-  let poly loc (params, t) =
+  let poly (params, t) =
     List.fold_right
       (fun (p : param) (t : Ast.ctyp) -> 
-         Ast.TyPol (loc, param loc p, t))
+         Ast.TyPol (loc, param p, t))
       params
-      (expr loc t)
+      (expr t)
 
-  let rhs loc = 
+  let rhs = 
     let summand (name, (args : expr list)) =
-      let args = unlist loc comma args (expr loc) in
+      let args = unlist comma args expr in
         <:ctyp< $uid:name$ of $args$ >> in
     let field ((name, t, mut) : field) = 
       match mut with
-        | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly loc t$ >>
-        | `Immutable -> <:ctyp<         $lid:name$ : $poly loc t$ >> in
+        | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly t$ >>
+        | `Immutable -> <:ctyp<         $lid:name$ : $poly t$ >> in
     let repr = function
-      | Sum summands  -> unlist loc bar summands summand
-      | Record fields -> unlist loc semi fields field
+      | Sum summands  -> unlist bar summands summand
+      | Record fields -> unlist semi fields field
     in function
       | `Fresh (None, t) -> repr t
-      | `Alias t         -> expr loc t
+      | `Alias t         -> expr t
 
-  let decl loc (name, params, rhs, constraints) =
-    Ast.TyDcl (loc, name, List.map (param loc) params,
+  let decl (name, params, rhs, constraints) =
+    Ast.TyDcl (loc, name, List.map param params,
                rhs, []) (* TODO: constraints *)
 end
