@@ -12,12 +12,14 @@ type context = {
   tname : name;
   (* the type name plus any type parameters *)
   ltype : name * name list;
-  (* The type name instantiated with modularized parameters, e.g. (V0.a, V1.a) t  *)
+  (* The rhs instantiated with modularized parameters, e.g. (V0.a, V1.a) t  *)
   atype : expr;
   (* The rhs of the type declaration *)
   rtype :  [`Fresh of expr option * repr | `Alias of expr];
   (* all the types in this recursive clique *)
   tnames : NameSet.t; 
+  (* the original definition *)
+  tdec : decl;
 }
 
 exception Underivable of (string * Types.expr)
@@ -68,6 +70,15 @@ struct
          | e -> default#expr e
      end) # expr
 
+  let substitute env =
+    (object
+       inherit transform as default
+       method expr = function
+         | Param (p,v) when NameMap.mem p env -> 
+             Param (NameMap.find p env,v)
+         | e -> default# expr e
+     end) # expr
+
   let cast_pattern ?(param="x") t = 
     let t = instantiate_modargs t in
       (<:patt< $lid:param$ >>,
@@ -101,6 +112,14 @@ struct
         (fun l r -> <:patt< $l$ ; $r$ >>)
         (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:prefix ^ label$ >>) 
            fields)
+
+  let record_expr : (string * Ast.expr) list -> Ast.expr = 
+    fun fields ->
+      List.fold_left1 
+        (fun l r -> <:expr< $l$ ; $r$ >>)
+        (List.map (fun (label, exp) -> <:expr< $lid:label$ = $exp$ >>) 
+           fields)
+
 
   let record_expression ?(prefix="") : Types.field list -> Ast.expr = 
     fun fields ->
@@ -272,7 +291,8 @@ let setup_contexts loc types =
               ltype  = ltype;
               atype  = atype;
               rtype  = rhs;
-              tnames = tnames }, dec)
+              tnames = tnames;
+              tdec   = dec}, dec)
       tdecls
 
 type deriver = (context * decl) list -> Ast.str_item

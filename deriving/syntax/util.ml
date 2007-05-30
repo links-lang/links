@@ -32,3 +32,10 @@ struct
   let curry f (x,y) = f x y
   let uncurry f x y = f (x,y)
 end
+
+module Option =
+struct
+  let map f = function
+    | None -> None 
+    | Some x -> Some (f x)
+end

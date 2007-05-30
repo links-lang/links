@@ -9,8 +9,8 @@ CAMLP4DIR = $(shell camlp4 -where)
 
 OCAMLFLAGS=-w aef
 
-#DERIVERS=eq_class typeable_class shelve_class functor_class rewriter_class
-DERIVERS=show_class pickle_class enum_class bounded_class eq_class
+#DERIVERS=shelve_class rewriter_class
+DERIVERS=show_class pickle_class enum_class bounded_class eq_class typeable_class functor_class
 
 DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
 DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))

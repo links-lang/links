@@ -1,6 +1,7 @@
 (* More convenient representation for types, and translation from the
    Camlp4 representation *)
 
+open Util
 
 (* auxiliary definitions *)
 type ('a,'b) either = Left of 'a | Right of 'b
@@ -92,6 +93,52 @@ object (self : 'self)
                     Tag (_, None) -> []
                   | Tag (_, Some e)
                   | Extends e -> [self#expr e])
+end
+
+class transform = 
+object (self : 'self)
+
+  method decl ((name, params, rhs, constraints):decl) : decl =
+    let rhs = match rhs with
+      | `Fresh (eopt, repr) -> `Fresh (Option.map (self # expr) eopt, 
+                                       self # repr repr)
+      | `Alias e -> `Alias (self # expr e)
+    in  (name, params, rhs, List.map (self # constraint_) constraints)
+
+  method repr = function
+    | Sum summands -> Sum (List.map (self # summand) summands)
+    | Record fields -> Record (List.map (self # field) fields)
+
+  method field (name, poly_expr, flag) =
+    (name, self # poly_expr poly_expr, flag)
+    
+  method summand (name, exprs) = 
+    (name, List.map (self # expr) exprs)
+
+  method constraint_ (name, expr) =
+    (name, self # expr expr)
+
+  method expr = function
+    | Object _
+    | Class _
+    | Param _
+    | Underscore as e -> e
+    | Label (flag, name, e1, e2) -> Label (flag, name, self # expr e1, self # expr e2)
+    | Function (e1, e2) -> Function (self # expr e1, self # expr e2)
+    | Constr (qname, exprs) -> Constr (qname, List.map (self # expr) exprs)
+    | Tuple exprs -> Tuple (List.map self # expr exprs)
+    | Alias (expr, name) -> Alias (self # expr expr, name)
+    | Variant variant -> Variant (self # variant variant)
+
+  method poly_expr (params, expr)
+    = (params, self # expr expr)
+
+  method variant (t, tagspecs)
+    = (t, List.map (self # tagspec) tagspecs)
+    
+  method tagspec = function
+    | Tag (name, eopt) -> Tag (name, Option.map (self # expr) eopt)
+    | Extends e -> Extends (self # expr e)
 end
 
 module Translate =
@@ -299,7 +346,13 @@ struct
       | `Fresh (None, t) -> repr t
       | `Alias t         -> expr t
 
-  let decl (name, params, rhs, constraints) =
-    Ast.TyDcl (loc, name, List.map param params,
-               rhs, []) (* TODO: constraints *)
+  let decl ((name, params, r, constraints): decl) =
+    Ast.StTyp (loc,
+               Ast.TyDcl (loc, name, List.map param params,
+                          rhs r, [])) (* TODO: constraints *)
+
+  let sigdecl ((name, params, r, constraints): decl) =
+    Ast.SgTyp (loc,
+               Ast.TyDcl (loc, name, List.map param params,
+                          rhs r, [])) (* TODO: constraints *)
 end
