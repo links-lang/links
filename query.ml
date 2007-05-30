@@ -2,13 +2,16 @@
 open Num
 open Utility
 
-type like_expr = [`percent | `string of string | `variable of string | `seq of like_expr list]
+type like_expr = [ `caret | `dollar | `underscore | `percent | `string of string | `variable of string | `seq of like_expr list]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (* Convert a like expression to a string. *)
 let rec like_as_string : like_expr -> string =
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     function
+      |	`caret -> ""
+      |	`dollar -> ""
+      |	`underscore -> "_"
       | `percent -> "%"
       | `string s -> quote s
       | `variable v -> "VARIABLE : " ^ v

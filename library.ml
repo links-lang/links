@@ -715,7 +715,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	datatype "() -> [(String,String)]"));
 
   (* regular expression matching *)
-  ("~",
+  ("tilde",
    (p2 (fun s r -> 
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
@@ -729,7 +729,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
        `Function (arg_type, make_type_variable mb, `Primitive `Bool))));
 
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
-  ("n~",
+  ("ntilde",
    (p2 (fun s r -> 
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
@@ -744,7 +744,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	`Function (arg_type, make_type_variable mb, `Primitive `Bool))));
 
   (* regular expression matching with grouped matched results as a list *)
-  ("l~",	
+  ("ltilde",	
     (`Server (p2 (fun s r ->
         let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
         and string = unbox_string s in
@@ -770,7 +770,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	((`TypeVar mb) :: qs,
 	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
 
-  ("ln~",	
+  ("lntilde",	
     (`Server (p2 (fun s r ->
         let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
@@ -797,7 +797,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
-  ("s~",	
+  ("stilde",	
    (`Server (p2 (fun s r ->
 	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
@@ -812,7 +812,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	((`TypeVar mb) :: qs,
 	`Function (arg_type, make_type_variable mb, string_type))));
 	
-  ("sn~",	
+  ("sntilde",	
    (`Server (p2 (fun s r ->
 	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in

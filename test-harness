@@ -6,7 +6,7 @@ import sys, re, time
 from subprocess import Popen, PIPE
 
 successes = failures = 0
-TIMEOUT = 4 # seconds before a test is timed out.
+TIMEOUT = 8 # seconds before a test is timed out.
 
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)

@@ -179,13 +179,14 @@ let rec is_free var expr = mem var (freevars expr)
     expression, which may turn out to be false.)
 *)
 (* TODO: make this less appalling, somehow. *)
-let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_source list) option = 
-  let unpair : 'a Syntax.expression' -> ('a Syntax.expression' * 'a Syntax.expression') option  = function
-    | Record_intro (fields, None, _)
-    | Record_intro (fields, None, _)
+let likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_source list) option = 
+  let rec likify_regex' bindings e =
+    let unpair : 'a Syntax.expression' -> ('a Syntax.expression' * 'a Syntax.expression') option  = function
+      | Record_intro (fields, None, _)
+      | Record_intro (fields, None, _)
         when StringMap.mem "1" fields
-          && StringMap.mem "2" fields
-          && StringMapUtils.size fields == 2
+            && StringMap.mem "2" fields
+            && StringMapUtils.size fields == 2
         -> Some (StringMap.find "1" fields, StringMap.find "2" fields)
     | _ -> None in
   let rec unlist = function
@@ -199,8 +200,13 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
            | Some (Variant_injection ("Star", _, _), Variant_injection ("Any", _, _)) ->  
 	       Some (`percent, [])
            | _ -> None)
+    | Variant_injection ("Any", _, _) -> Some(`underscore, [])
+    | Variant_injection ("StartAnchor", _, _) -> Some(`caret, [])
+    | Variant_injection ("EndAnchor", _, _) -> Some(`dollar, [])
+    | Variant_injection ("Simply", HasType(Constant(String s, _), _, _),  _) 
     | Variant_injection ("Simply", Constant(String s, _), _) -> 
 	Some (`string (quote s), [])
+    | Variant_injection ("Simply", HasType(Syntax.Variable (name, _), _, _), _) 
     | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> 
 	(match trace_variable name bindings with
 	   | `Earlier (rename, origin) ->
@@ -208,7 +214,7 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
            | _ -> failwith "Internal error: Invalid expression in regex"
         )
     | Variant_injection ("Seq", rs, _) -> 
-        let x = opt_sequence (List.map (likify_regex bindings) (unlist rs)) in 
+        let x = opt_sequence (List.map (likify_regex' bindings) (unlist rs)) in 
         (match x with
            | None -> None
            | Some s -> let a, b = split s in 
@@ -219,8 +225,21 @@ let rec likify_regex bindings (e : 'a Syntax.expression') : (like_expr * project
       let likes, origin_lists = split s in
         (`seq likes, List.concat origin_lists) 
     in opt_map f (opt_sequence l)
-  in Syntax.reduce_expression visitor combiner e
+  in Syntax.reduce_expression visitor combiner e in
+  let maybe_unanchor = function
+      None -> None
+    | Some(like, origin_lists) -> 
+	let rec flatten_like_expr accum = function
+	  |  [] -> accum
+	  | `seq rs::tl -> flatten_like_expr (flatten_like_expr accum rs) tl
+	  |  hd::tl ->  flatten_like_expr (hd::accum) tl in
+	let revlike = flatten_like_expr [] [like] in
+	let flike = match revlike with `dollar::tl -> rev tl | l -> rev (`percent::l) in
+	let flike = match flike with `caret::tl -> tl | _ -> `percent::flike in
+	(Some(`seq flike, origin_lists)) in
+  maybe_unanchor (likify_regex' bindings e) 
 
+      
 (** make_sql
     Converts an expression from the constant/variable sublanguage into
     an SQL expression (with respect to the given environment,
@@ -255,14 +274,20 @@ let make_binop_sql oper left_value right_value =
 
         
 (** Convert a LIKE expression to a string. *)
-let rec like_as_string env : like_expr -> string =
+let rec like_as_string env le = 
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+  let rec like_as_string' env =
     function
       | `percent -> "%"
+      | `underscore -> "_"
+      | `caret -> ""
+      | `dollar -> ""
       | `string s -> quote s
       | `variable v -> quote (Result.unbox_string (assoc v env))
-      | `seq rs -> mapstrcat "" (like_as_string env) rs
-
+      | `seq rs -> mapstrcat "" (like_as_string' env) rs in
+  let result =  like_as_string' env le in
+  result
+    
 (** condition_to_sql
     Converts a Links condition into an SQL condition; should only be
     applied to expressions that have boolean type
@@ -298,7 +323,7 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
           (match make_sql bindings expr with
             | Some(expr, origin) -> Some(expr, origin)
             | _ -> failwith("Internal error: unintelligible free var in query expression"))
-      | Syntax.Apply (Syntax.Variable ("~", _), [lhs; rhs], _)  ->
+      | Syntax.Apply (Syntax.Variable ("tilde", _), [lhs; rhs], _)  ->
           let left_binds, lhs = sep_assgmts bindings lhs in
           let right_binds, rhs = sep_assgmts bindings rhs in
             (match make_sql left_binds lhs, likify_regex right_binds rhs with

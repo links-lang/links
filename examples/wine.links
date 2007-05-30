@@ -57,8 +57,6 @@ fun range(n) {
   range(n-1) ++ [n]
 }
 
-fun floatToXml(x) { stringToXml(floatToString(x)) } 
-
 fun sum_float(l) {
   switch (l) {
     case [] -> 0.

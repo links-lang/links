@@ -334,6 +334,8 @@ and regex optable lexers nl  = parse
   | '*'                                 { STAR }
   | '+'                                 { PLUS }
   | '|'                                 { ALTERNATE }
+  | '^'                                 { CARET }
+  | '$'                                 { DOLLAR }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | '{'                                 { (* scan the expression, then back here *)

@@ -9,6 +9,8 @@ and  regex = | Range of (char * char)
              | Simply of string
              | Quote of regex
              | Any
+             | StartAnchor
+             | EndAnchor
              | Seq of regex list
              | Alternate of (regex * regex)
 	     | Group of regex 
@@ -31,6 +33,8 @@ let compile_ocaml : regex -> Str.regexp =
     | Simply s ->  s 
     | Quote s ->  Str.quote (compile s)
     | Any -> "."
+    | StartAnchor -> "^"
+    | EndAnchor -> "$"
     | Seq rs -> List.fold_right (fun input output -> (compile input) ^ output) rs ""
     | Alternate (r1,r2) -> (compile r1) ^ "\\|" ^ (compile r2)
     | Group s -> group (compile s)

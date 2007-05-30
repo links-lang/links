@@ -57,7 +57,7 @@ let parseRegexFlags f =
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG
-%token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH 
+%token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
@@ -666,6 +666,8 @@ regex_pattern:
 | STRING                                                       { Simply $1 }
 | QUOTEDMETA                                                   { Quote (Simply $1) }
 | DOT                                                          { Any }
+| CARET                                                        { StartAnchor }
+| DOLLAR                                                       { EndAnchor }
 | LPAREN regex_pattern_alternate RPAREN                        { Group $2 }
 | regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }

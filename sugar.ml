@@ -987,16 +987,16 @@ module Desugarer =
            | InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
            | InfixAppl (`RegexMatch, e1, (Regex((Replace(_,_) as r), flags), _)) -> 
 	       let libfn = 
-		 if(List.exists (function RegexNative -> true | _ -> false) flags) then "sn~" else "s~" in
+		 if(List.exists (function RegexNative -> true | _ -> false) flags) then "sntilde" else "stilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
            | InfixAppl (`RegexMatch, e1, (Regex(r, flags), _)) -> 
 	       let native = (List.exists (function RegexNative -> true | _ -> false) flags) in
 	       let libfn = 
 		 if (List.exists (function RegexList -> true | _ -> false) flags) then 
-		   if native then "ln~" else "l~"
+		   if native then "lntilde" else "ltilde"
 		 else 
-		   if native then "n~" else "~" in
+		   if native then "ntilde" else "tilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
            | InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
@@ -1370,6 +1370,8 @@ module Desugarer =
            | Simply s        -> ConstructorLit ("Simply", Some (StringLit s, pos))
            | Quote s        -> ConstructorLit ("Quote", Some (aux s, pos))
            | Any             -> ConstructorLit ("Any", None)
+           | StartAnchor   -> ConstructorLit ("StartAnchor", None)
+           | EndAnchor     -> ConstructorLit ("EndAnchor", None)
            | Seq rs          -> ConstructorLit ("Seq", Some (ListLit (List.map (fun s -> aux s, pos) 
                                                                         rs), pos))
            | Alternate (r1, r2)  -> ConstructorLit ("Alternate",  Some (TupleLit [aux r1, pos; aux r2, pos], pos))

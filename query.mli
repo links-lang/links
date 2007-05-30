@@ -1,6 +1,9 @@
 (*pp deriving *)
 type like_expr =
-    [ `percent
+    [ `caret
+    | `dollar
+    | `underscore
+    | `percent
     | `seq of like_expr list
     | `string of string
     | `variable of string ]

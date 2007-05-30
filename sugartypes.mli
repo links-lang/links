@@ -106,6 +106,8 @@ and regex' = | Range of (char * char)
              | Simply of string
              | Quote of regex'
              | Any
+             | StartAnchor
+             | EndAnchor
              | Seq of regex' list
              | Alternate of (regex' * regex')
              | Group of regex'
