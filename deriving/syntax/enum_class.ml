@@ -12,7 +12,7 @@ struct
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
 
-  and sum ctxt (tname,_,_,_) summands =
+  and sum ctxt ((tname,_,_,_) as decl) summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
@@ -24,7 +24,7 @@ struct
         (List.range 0 (List.length summands))
         summands
         <:expr< [] >> in
-      <:module_expr< struct let numbering = $numbering$ end >>
+      <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
   and variant ctxt ((_, tags) as vspec) = 
     let numbering = 
@@ -39,7 +39,7 @@ struct
         (List.range 0 (List.length tags))
         tags
         <:expr< [] >> in
-      <:module_expr< struct let numbering = $numbering$ end >>
+      <:module_expr< struct type a = $atypev ctxt vspec$ let numbering = $numbering$ end >>
 
   and record _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
                                                      tname^")"))
@@ -49,4 +49,4 @@ let _ = Base.register "Enum"
   (fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
        M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
-         ~default_module:"Enum_defaults" ())
+         ~default_module:"EnumDefaults" ())

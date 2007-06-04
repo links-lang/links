@@ -76,12 +76,14 @@ struct
         <:expr< let module M = $expr ctxt t$ in M.unpickle stream >>
     | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands = 
+  and sum ctxt ((tname,_,_,_) as decl) summands = 
+    let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
     let picklers, unpicklers = 
       List.split (List.map2 (F.uncurry (case ctxt)) 
                     summands
                     (List.range 0 (List.length summands))) in
-      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ >>
+      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
+                                              | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 
   and record ctxt decl fields = 
     let picklers, unpicklers = 
@@ -98,11 +100,13 @@ struct
             unpickle
 
   and variant ctxt ((_, tags) as vspec) = 
+    let msg = "Unexpected tag when unpickling polymorphic variant: " in
     let picklers, unpicklers = 
       List.split (List.map2 (F.uncurry (polycase ctxt)) 
                     tags
                     (List.range 0 (List.length tags))) in
-      wrap (atypev ctxt vspec) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ >>
+      wrap (atypev ctxt vspec) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
+                                              | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 end
 
 let _ = Base.register "Pickle"

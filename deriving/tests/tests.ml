@@ -5,6 +5,9 @@
 type sum = S0 | S1 of int | S2 of int * float | S3 of int * float * bool | Sunit of unit | Stup of (int * float) | Stup1 of (int)
   deriving (Pickle, Eq, Show)
 
+type nullsum = S0 | S1 | S2 | S3
+    deriving (Enum, Bounded)
+
 (* 2. records with mutable and immutable fields (and various combinations) *)
 type r1 = {
   l1 : int;
@@ -58,6 +61,9 @@ class c = object end
   (* deriving (Pickle, Eq, Show) *)
 
 (* 11. polymorphic variants (nullary, unary tags, extending complex type expressions, defined inline) *)
+type poly0 = [`T0 | `T1 | `T2 | `T3]
+    deriving (Enum, Bounded)
+
 type poly1 = [`T0 | `T1 of int]
     deriving (Pickle, Eq, Show)
 

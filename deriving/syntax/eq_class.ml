@@ -48,10 +48,12 @@ struct
           M.eq $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
     | f -> raise (Underivable ("Eq cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands = <:module_expr< 
+  and sum ctxt decl summands =
+    let wildcard = match summands with [_] -> [] | _ -> [ <:match_case< _ -> false >>] in
+  <:module_expr< 
       struct type a = $atype ctxt decl$
              let eq l r = match l, r with 
-                          $list:List.map (case ctxt) summands$ | _ -> false (* wildcard unused for unary sums *)
+                          $list:List.map (case ctxt) summands @ wildcard$
   end >>
 
   and record ctxt decl fields = 
