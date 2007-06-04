@@ -1,0 +1,40 @@
+(* what to test ?
+
+   1. sums (nullary, unary and n-ary)
+
+   2. records with mutable and immutable fields (and various combinations)
+   3. polymorphic records
+
+   4. label types
+
+   5. function types 
+
+   6. recursive types
+
+   7. applied type constructors (nullary, n-ary)
+
+   8. polymorphic recursion (should fail)
+
+   9. object types
+   10. class types
+
+   11. polymorphic variants (nullary, unary tags, extending complex type expressions, defined inline)
+   12. `as'-recursion
+   13. <, >, =, > < polymorphic variants, private types
+
+   14. mutually recursive types (monomorphic, polymorphic)
+
+   15. polymorphic types
+
+   16. tuples
+
+   17. underscore (?)
+
+   18. type constraints
+
+   19. type equations
+
+   20. references
+ *)
+
+

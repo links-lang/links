@@ -31,14 +31,17 @@ struct
 
   and case ctxt : Types.summand -> Ast.match_case = 
     fun (name,args) ->
-      let nargs = List.length args in
-      let lpatt, lexpr = tuple ~param:"l" nargs
-      and rpatt, rexpr = tuple ~param:"r" nargs in
-      <:match_case<
-        ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
-          let module M = $expr ctxt (Tuple args)$ in
-            M.eq $lexpr$ $rexpr$ >> 
-
+      match args with 
+        | [] -> <:match_case< ($uid:name$, $uid:name$) -> true >>
+        | _ -> 
+            let nargs = List.length args in
+            let lpatt, lexpr = tuple ~param:"l" nargs
+            and rpatt, rexpr = tuple ~param:"r" nargs in
+              <:match_case<
+                ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
+                   let module M = $expr ctxt (Tuple args)$ in
+                     M.eq $lexpr$ $rexpr$ >> 
+              
   and field ctxt : Types.field -> Ast.expr = function
     | (name, ([], t), _) -> <:expr<
         let module M = $expr ctxt t$ in
@@ -47,9 +50,8 @@ struct
 
   and sum ctxt decl summands = <:module_expr< 
       struct type a = $atype ctxt decl$
-             open Eq
              let eq l r = match l, r with 
-                          $list:List.map (case ctxt) summands$ | _ -> false
+                          $list:List.map (case ctxt) summands$ | _ -> false (* wildcard unused for unary sums *)
   end >>
 
   and record ctxt decl fields = 
@@ -57,15 +59,14 @@ struct
     and rpatt = record_pattern ~prefix:"r" fields 
     and expr = 
       List.fold_right
-        (fun f e -> <:expr< $field ctxt f$ && e >>)
+        (fun f e -> <:expr< $field ctxt f$ && $e$ >>)
         fields
         <:expr< true >>
-    in <:module_expr< struct type a = $atype ctxt decl$ open Eq
+    in <:module_expr< struct type a = $atype ctxt decl$
                              let eq $lpatt$ $rpatt$ = $expr$ end >>
 
   and variant ctxt (spec, tags) = 
     <:module_expr< struct type a = $atypev ctxt (spec, tags)$
-                          open Eq
                           let eq l r = match l, r with
                                        $list:List.map (polycase ctxt) tags$
                                        | _ -> false end >>

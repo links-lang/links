@@ -1,4 +1,4 @@
-(*pp deriving *)
+(*pp derivingpp *)
 open Typeable
 
 module MapByType = 

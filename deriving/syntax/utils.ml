@@ -40,7 +40,7 @@ struct
     | Some x -> Some (f x)
 end
 
-module DumpCtyp =
+module DumpAst =
 struct
   open Camlp4.PreCast.Ast
 
@@ -99,4 +99,18 @@ struct
   let find s m = 
     try find s m
     with Not_found -> raise (NotFound s)
+end
+
+module Set =
+struct
+  module type OrderedType = Set.OrderedType
+  module type S = sig
+    include Set.S
+    val fromList : elt list -> t
+  end
+  module Make (Ord : OrderedType) =
+  struct
+    include Set.Make(Ord)
+    let fromList elems = List.fold_right add elems empty
+  end
 end

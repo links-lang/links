@@ -9,6 +9,12 @@ struct
 
   let classname = "Pickle"
 
+  let wrap t picklers unpickle =
+    <:module_expr< struct type a = $t$
+                          let pickle buffer = function $list:picklers$
+                          let unpickle stream = $unpickle$
+    end >>
+
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
     
@@ -58,7 +64,7 @@ struct
                    in M.pickle buffer $exp$ >>,
     <:match_case< $`int:n$ -> 
                   let module M = $expr ctxt (Tuple args)$ 
-                   in $uid:name$ (M.unpickle stream) >>
+                   in let $patt$ = M.unpickle stream in $uid:name$ $exp$  >>
 
   and field ctxt : Types.field -> Ast.expr * Ast.expr = function
     | (name, ([], t), _) -> 
@@ -71,11 +77,7 @@ struct
       List.split (List.map2 (F.uncurry (case ctxt)) 
                     summands
                     (List.range 0 (List.length summands))) in
-      <:module_expr< struct type a = $atype ctxt decl$
-                            open Pickle open Primitives
-        let pickle buffer = function $list:picklers$
-        let unpickle stream = function $list:unpicklers$
-      end >>
+      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ >>
 
   and record ctxt decl fields = 
     let picklers, unpicklers = 
@@ -87,22 +89,16 @@ struct
         fields
         unpicklers
         (record_expression fields) in
-      <:module_expr< struct type a = $atype ctxt decl$
-                            open Pickle open Primitives
-        let pickle buffer $record_pattern fields$ = $List.fold_left1 seq picklers$
-        let unpickle stream = $List.fold_left1 seq unpicklers$
-      end >>
+      wrap (atype ctxt decl) 
+            [ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
+            (List.fold_left1 seq unpicklers)
 
   and variant ctxt ((_, tags) as vspec) = 
     let picklers, unpicklers = 
       List.split (List.map2 (F.uncurry (polycase ctxt)) 
                     tags
                     (List.range 0 (List.length tags))) in
-      <:module_expr< struct type a = $atypev ctxt vspec$
-                            open Pickle open Primitives
-        let pickle buffer = function $list:picklers$
-        let unpickle stream = function $list:unpicklers$
-      end >>
+      wrap (atypev ctxt vspec) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ >>
 end
 
 let _ = Base.register "Pickle"

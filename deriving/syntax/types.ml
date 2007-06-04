@@ -224,7 +224,8 @@ struct
     | Ast.TyVrnInf (_, t) -> Variant (`Lt, list tagspec split_or t)
     | Ast.TyVrnInfSup (_, _, _) -> failwith "nyi TyVrnInfSup"
     | Ast.TyAli (_, t, Ast.TyQuo (_,name)) -> Alias (expr t, name)
-    | e -> failwith ("unexpected type at expr : " ^ DumpCtyp.ctyp e)
+    | Ast.TyLab _ -> failwith "deriving does not handle label types"
+    | e -> failwith ("unexpected type at expr : " ^ DumpAst.ctyp e)
   and tagspec = function
     | Ast.TyVrn (_,tag)                  -> Tag (tag, None)
     | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> Tag (tag, Some (Tuple (list expr split_comma t)))
@@ -244,7 +245,7 @@ struct
 
 
   let field : Ast.ctyp -> field = function 
-    | Ast.TyMut (_, Ast.TyCol (_, Ast.TyId (_,name), t)) -> 
+    | Ast.TyCol (_, Ast.TyId (_,name), Ast.TyMut (_, t)) ->
         (ident name, polyexpr t, `Mutable)
     | Ast.TyCol (_, Ast.TyId (_,name), t) ->
         (ident name, polyexpr t, `Immutable)
@@ -262,6 +263,12 @@ struct
     | t -> Right (expr t)
 
   let constraints _ = [] (* failwith "constraints nyi" *)
+
+  let split : Ast.ctyp -> Ast.ctyp list =
+    let rec aux t = match split_and t with
+      | Left (l, r) -> aux l @ aux r
+      | Right t -> [t]
+    in aux
 
   let decl : Ast.ctyp -> decl = function
     | Ast.TyDcl (loc, name, ps, rhs, cs) ->
@@ -301,7 +308,7 @@ struct
   let unlist join items translate = 
     List.fold_right join (List.map translate items) (Ast.TyNil loc)
 
-  let pair l r = <:ctyp< $l$ * $r$ >>
+  let pair l r = Ast.TySta (loc, l,r)
   let bar l r = <:ctyp< $l$ | $r$ >>
   let semi l r = <:ctyp< $l$ ; $r$ >>
   let comma l r = <:ctyp< $l$ , $r$ >>
@@ -311,15 +318,15 @@ struct
         Param p -> param p
       | Underscore -> <:ctyp< _ >>
       | Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
-      | Tuple ts -> unlist pair ts expr
+      | Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)
       | Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
       | Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
       | Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
       | Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
     and app f = function
       | []    -> f
-      | [x]   -> <:ctyp< $f$ $expr x$ >>
-      | x::xs -> app (<:ctyp< $f$ $expr x$ >>) xs
+      | [x]   -> <:ctyp< $expr x$ $f$ >>
+      | x::xs -> app (<:ctyp< $expr x$ $f$ >>) xs
     and tagspec = function
       | Tag (c, None) -> <:ctyp< `$c$ >>
       | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>

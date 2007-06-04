@@ -21,10 +21,11 @@ DELETE_RULE Gram sig_item: "type"; LIST1 type_declaration SEP "and" END
 *)
 EXTEND Gram
 str_item:
-[[ "type"; types = LIST1 type_declaration SEP "and" -> 
-     <:str_item< type $list:types$ >>
-  | "type"; types = LIST1 type_declaration SEP "and"; 
+[[ "type"; types = (*LIST1*) type_declaration(* SEP "and"*) -> 
+     <:str_item< type $types$ >>
+  | "type"; types = (*LIST1*) type_declaration (*SEP "and"*); 
     "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
+    let types = Types.Translate.split types in
     <:str_item< type $list:types$
                 $list:List.map (derive loc types) cl$ >> ]]
 ;

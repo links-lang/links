@@ -55,11 +55,11 @@ struct
                                      in M.format formatter $lid:name$ >>
     | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands = <:module_expr< struct type a = $atype ctxt decl$ open Show open Primitives
+  and sum ctxt decl summands = <:module_expr< struct type a = $atype ctxt decl$
     let rec format formatter = function $list:List.map (case ctxt) summands$
   end >>
 
-  and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$ open Show open Primitives
+  and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$
     let rec format formatter $record_pattern fields$ = $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{'
@@ -71,7 +71,6 @@ struct
   end >>
 
   and variant ctxt (spec, tags) = <:module_expr< struct type a = $atypev ctxt (spec, tags)$
-    open Show open Primitives
     let rec format formatter = function $list:List.map (polycase ctxt) tags$
   end >>
 end

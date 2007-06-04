@@ -11,6 +11,8 @@ type context = {
   argmap : name NameMap.t;
   (* ordered list of type parameters *)
   params : param list;
+  (* type names *)
+  tnames : NameSet.t;
 }
 
 
@@ -92,23 +94,21 @@ struct
          let module M = 
              struct
                type t = $t$
-               let test = function #t -> True | _ -> False
+               let test = function #t -> true | _ -> false
              end in M.test $lid:param$ >>,
        <:expr<
          (let module M = 
               struct
                 type t = $t$
-                let cast = function #t as t -> t | _ -> assert False
+                let cast = function #t as t -> t | _ -> assert false
               end in M.cast $lid:param$ )>>)
 
   let seq l r = <:expr< $l$ ; $r$ >>
 
-  let record_pattern ?(prefix="") : Types.field list -> Ast.patt = 
-    fun fields ->
-      List.fold_left1
-        (fun l r -> <:patt< $l$ ; $r$ >>)
-        (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:prefix ^ label$ >>) 
-           fields)
+  let record_pattern ?(prefix="") (fields : Types.field list) : Ast.patt = 
+    <:patt<{$list:
+              (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:prefix ^ label$ >>) 
+                      fields) $}>>
 
   let record_expr : (string * Ast.expr) list -> Ast.expr = 
     fun fields ->
@@ -136,26 +136,40 @@ struct
       match n with
         | 0 -> <:patt< () >>, <:expr< () >>
         | 1 -> <:patt< $lid:v 0$ >>, <:expr< $lid:v 0$ >>
-        | n -> List.fold_right1
-            (fun (p1,e1) (p2,e2) -> <:patt< $p1$, $p2$ >>, <:expr< $e1$, $e2$ >>)
-              (List.map 
-                 (fun n -> <:patt< $lid:v n$ >>, <:expr< $lid:v n$ >>)
-                 (List.range 0 n))
+        | n -> 
+            let patts, exprs = 
+              (* At time of writing I haven't managed to write anything
+                 using quotations that generates an n-tuple *)
+              List.fold_left 
+                (fun (p, e) (patt, expr) -> Ast.PaCom (loc, patt, p), Ast.ExCom (loc, expr, e))
+                (<:patt< >>, <:expr< >>)
+                (List.map (fun n -> <:patt< $lid:v n$ >>, <:expr< $lid:v n $ >>)
+                   (List.range 0 n))
+            in
+              Ast.PaTup (loc, patts), Ast.ExTup (loc, exprs)
+
+
+(*            <:patt< ( $patts$ ) >>, <:expr< ( $exprs$ ) >>*)
+
+(* let tuple_expr loc = function  (\* 0-tuples and 1-tuples are invalid *\) *)
+(*   | []  -> <:expr< () >> *)
+(*   | [x] -> x *)
+(*   | xs  -> <:expr< ( $list:xs$ ) >> *)
 
   let rec modname_from_qname ~qname ~classname =
     match qname with 
       | [] -> invalid_arg "modname_from_qname"
       | [t] -> <:ident< $uid:classname ^ "_"^ t$ >>
       | t::ts -> <:ident< $uid:t$.$modname_from_qname ~qname:ts ~classname$ >>
+
+  let apply_functor (f : Ast.module_expr) (args : Ast.module_expr list) : Ast.module_expr =
+      List.fold_left (fun f p -> <:module_expr< $f$ $p$ >>) f args
           
   class make_module_expr ~classname ~variant ~record ~sum =
   object (self)
 
     method mapply ctxt (funct : Ast.module_expr) args =
-      List.fold_left
-        (fun funct param -> <:module_expr< $funct$ $self#expr ctxt param$ >>)
-        funct
-        args
+      apply_functor funct (List.map (self#expr ctxt) args)
 
     method variant = variant
     method sum = sum
@@ -172,8 +186,12 @@ struct
     method function_ _ f = raise (Underivable (classname ^ " cannot be derived for function types"))
 
     method constr ctxt (qname, args) = 
-      let f = (modname_from_qname ~qname ~classname) in
-        self#mapply ctxt (Ast.MeId (loc, f)) args
+      match qname with
+        | [name] when NameSet.mem name ctxt.tnames ->
+            <:module_expr< $uid:Printf.sprintf "%s_%s" classname name$ >>
+        | _ -> 
+            let f = (modname_from_qname ~qname ~classname) in
+              self#mapply ctxt (Ast.MeId (loc, f)) args
 
     method tuple ctxt = function
         | [] -> <:module_expr< $uid:Printf.sprintf "%s_unit" classname$ >>
@@ -202,11 +220,16 @@ struct
         | `Alias e -> self#expr ctxt e
   end
 
-  let atype ctxt (name, params, _, _) = 
-    Untranslate.expr (Constr ([name],
-                              List.map (fun (p,_) -> Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
+  let atype ctxt (name, params, rhs, _) = 
+    match rhs with 
+      | `Fresh _ ->
+          Untranslate.expr (Constr ([name],
+                                    List.map (fun (p,_) -> Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
+      | `Alias e -> Untranslate.expr (instantiate_modargs ctxt e)
 
-  let atypev _ _ = failwith "atypev nyi"
+  let atypev ctxt vspec = 
+    Untranslate.expr (instantiate_modargs ctxt (Variant vspec))
+
 
   let generate ~context ~decls ~make_module_expr ~classname ?default_module () =
     (* plan: 
@@ -220,7 +243,6 @@ struct
        - where there's no recursion
        - etc.
     *)
-    let params = context.params in
       (*    let _ = ensure_no_polymorphic_recursion in *)
     let wrapper_name = Printf.sprintf "%s_%s" classname (random_id 32)  in
     let make_functor = 
@@ -228,7 +250,7 @@ struct
         (fun (p,_) rhs -> 
            let arg = NameMap.find p context.argmap in
              <:module_expr< functor ($arg$ : $uid:classname$.$uid:classname$) -> $rhs$ >>)
-        params in
+        context.params in
     let apply_defaults mexpr = match default_module with
       | None -> mexpr
       | Some default -> <:module_expr< $uid:classname$.$uid:default$ ($mexpr$) >> in
@@ -241,12 +263,15 @@ struct
           = $apply_defaults (make_module_expr context decl)$ >>)
         decls in
     let mrec =
-      <:str_item< module rec $list:mbinds$ >> in
+      <:str_item< open $uid:classname$ open Primitives module rec $list:mbinds$ >> in
     let fixed = make_functor <:module_expr< struct $mrec$ end >> in
-    let projected =
+    let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
+                                (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
+                                      context.params) in
+    let projected = (* TODO: apply the functor here *)
       List.map (fun (name,params,rhs,constraints) -> 
                   let modname = classname ^ "_"^ name in
-                  let rhs = <:module_expr< $uid:wrapper_name$ . $uid:modname$ >> in
+                  let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
                     <:str_item< module $uid:modname$ = $make_functor rhs$>>)
         decls in
     let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
@@ -276,7 +301,8 @@ let setup_context loc (types : Ast.ctyp list) : context =
       NameMap.empty in 
     { loc = loc;
       argmap = argmap;
-      params = params; } 
+      params = params; 
+      tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) }
       
 type deriver = Loc.t * context * Types.decl list -> Ast.str_item
 let derivers : (name, deriver) Hashtbl.t = Hashtbl.create 15
