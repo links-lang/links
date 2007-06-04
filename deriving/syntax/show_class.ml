@@ -39,16 +39,19 @@ struct
 
   and case ctxt : Types.summand -> Ast.match_case =  (* Does this handle the zero-arg case correctly? *)
     fun (name, args) ->
-      let patt, exp = tuple (List.length args) in
-      <:match_case<
-        $uid:name$ $patt$ ->
-         $in_hovbox <:expr<
-           Format.pp_print_string formatter $str:name$;
-           Format.pp_print_break formatter 1 2;
-           let module M = $expr ctxt (Tuple args)$ 
-            in M.format formatter $exp$
-           >>$ >>
-
+      match args with 
+        | [] -> <:match_case< $uid:name$ -> Format.pp_print_string formatter $str:name$ >>
+        | _ -> 
+          let patt, exp = tuple (List.length args) in
+          <:match_case<
+            $uid:name$ $patt$ ->
+             $in_hovbox <:expr<
+               Format.pp_print_string formatter $str:name$;
+               Format.pp_print_break formatter 1 2;
+               let module M = $expr ctxt (Tuple args)$ 
+                in M.format formatter $exp$
+               >>$ >>
+    
   and field ctxt : Types.field -> Ast.expr = function
     | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " ="$;
                                     let module M = $expr ctxt t$
@@ -62,17 +65,17 @@ struct
   and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$
     let rec format formatter $record_pattern fields$ = $in_hovbox
       <:expr<
-         Format.pp_print_char formatter '{'
+         Format.pp_print_char formatter '{';
          $List.fold_left1
            (fun l r -> <:expr< $l$; Format.pp_print_string formatter "; "; $r$ >>)
-           (List.map (field ctxt) fields)$
-         Format.pp_print_char formatter '}'
+           (List.map (field ctxt) fields)$;
+         Format.pp_print_char formatter '}';
       >>$
   end >>
 
-  and variant ctxt (spec, tags) = <:module_expr< struct type a = $atypev ctxt (spec, tags)$
+  and variant ctxt (spec, tags) = <:module_expr< Show.ShowDefaults(struct type a = $atypev ctxt (spec, tags)$
     let rec format formatter = function $list:List.map (polycase ctxt) tags$
-  end >>
+  end) >>
 end
 
 let _ = Base.register "Show" 

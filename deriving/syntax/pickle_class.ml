@@ -9,7 +9,7 @@ struct
 
   let classname = "Pickle"
 
-  let wrap t picklers unpickle =
+  let wrap t picklers (unpickle : Ast.expr) =
     <:module_expr< struct type a = $t$
                           let pickle buffer = function $list:picklers$
                           let unpickle stream = $unpickle$
@@ -57,15 +57,19 @@ struct
                                        in (M.unpickle stream :> a) >>
 
   and case ctxt : Types.summand * int -> Ast.match_case * Ast.match_case = fun ((name,args),n) ->
-    let patt, exp = tuple (List.length args) in (* Does this work correctly for zero-arg constructors? *)
-    <:match_case< $uid:name$ $patt$ -> 
-                  Pickle_int.pickle buffer $`int:n$;
-                  let module M = $expr ctxt (Tuple args)$ 
-                   in M.pickle buffer $exp$ >>,
-    <:match_case< $`int:n$ -> 
-                  let module M = $expr ctxt (Tuple args)$ 
-                   in let $patt$ = M.unpickle stream in $uid:name$ $exp$  >>
-
+      match args with 
+        | [] -> (<:match_case< $uid:name$ -> Pickle_int.pickle buffer $`int:n$ >>,
+                 <:match_case< $`int:n$ -> $uid:name$ >>)
+        | _ -> 
+        let patt, exp = tuple (List.length args) in (* Does this work correctly for zero-arg constructors? *)
+        <:match_case< $uid:name$ $patt$ -> 
+                      Pickle_int.pickle buffer $`int:n$;
+                      let module M = $expr ctxt (Tuple args)$ 
+                       in M.pickle buffer $exp$ >>,
+        <:match_case< $`int:n$ -> 
+                      let module M = $expr ctxt (Tuple args)$ 
+                       in let $patt$ = M.unpickle stream in $uid:name$ $exp$  >>
+    
   and field ctxt : Types.field -> Ast.expr * Ast.expr = function
     | (name, ([], t), _) -> 
         <:expr< let module M = $expr ctxt t$ in M.pickle buffer $lid:name$ >>,
@@ -91,7 +95,7 @@ struct
         (record_expression fields) in
       wrap (atype ctxt decl) 
             [ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
-            (List.fold_left1 seq unpicklers)
+            unpickle
 
   and variant ctxt ((_, tags) as vspec) = 
     let picklers, unpicklers = 

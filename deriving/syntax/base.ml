@@ -112,18 +112,21 @@ struct
 
   let record_expr : (string * Ast.expr) list -> Ast.expr = 
     fun fields ->
+      let fs = 
       List.fold_left1 
-        (fun l r -> <:expr< $l$ ; $r$ >>)
-        (List.map (fun (label, exp) -> <:expr< $lid:label$ = $exp$ >>) 
-           fields)
+        (fun l r -> <:rec_binding< $l$ ; $r$ >>)
+        (List.map (fun (label, exp) -> <:rec_binding< $lid:label$ = $exp$ >>) 
+           fields) in
+        Ast.ExRec (loc, fs, Ast.ExNil loc)
 
 
   let record_expression ?(prefix="") : Types.field list -> Ast.expr = 
     fun fields ->
-      List.fold_left1
-        (fun l r -> <:expr< $l$ ; $r$ >>)
-        (List.map (fun (label,_,_) -> <:expr< $lid:label$ = $lid:prefix ^ label$ >>) 
-           fields)
+      let es = List.fold_left1
+        (fun l r -> <:rec_binding< $l$ ; $r$ >>)
+        (List.map (fun (label,_,_) -> <:rec_binding< $lid:label$ = $lid:prefix ^ label$ >>) 
+           fields) in
+        Ast.ExRec (loc, es, Ast.ExNil loc)
 
   let tuple_expr : Ast.expr list -> Ast.expr = function
     | [] -> <:expr< () >>
