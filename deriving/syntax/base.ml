@@ -1,41 +1,38 @@
-open Util
+(*pp camlp4of *)
+open Utils
 open Types
 open Camlp4.PreCast
-module NameMap = Map.Make(String)
+module NameMap = StringMap
 module NameSet = Set.Make(String)
 
 type context = {
   loc : Loc.t;
   (* mapping from type parameters to functor arguments *)
   argmap : name NameMap.t;
-  (* name of this type *)
-  tname : name;
-  (* the type name plus any type parameters *)
-  ltype : name * name list;
-  (* The rhs instantiated with modularized parameters, e.g. (V0.a, V1.a) t  *)
-  atype : expr;
-  (* The rhs of the type declaration *)
-  rtype :  [`Fresh of expr option * repr | `Alias of expr];
-  (* all the types in this recursive clique *)
-  tnames : NameSet.t; 
-  (* the original definition *)
-  tdec : decl;
+  (* ordered list of type parameters *)
+  params : param list;
 }
 
-exception Underivable of (string * Types.expr)
+
+exception Underivable of string
+exception NoSuchClass of string
+
 
 (* display a fatal error and exit *)
 let error loc (msg : string) =
   Syntax.print_warning loc msg;
   exit 1
 
+(*
 module type Context = sig val context: context end
+module type TContext = sig include Context val tcontext : type_context end
+*)
+module type Loc = sig val loc : Loc.t end
 
-module InContext(C : Context) =
+module InContext(L : Loc) =
 struct
-  open C
-  let loc = C.context.loc
-  module Untranslate = Untranslate(struct let loc = loc end)
+  include L
+  module Untranslate = Untranslate(L)
 
   let instantiate (lookup : name -> expr) : expr -> expr =
     let rec inst = function
@@ -53,13 +50,22 @@ struct
       | Extends t -> Extends (inst t)
     in inst
 
-  let instantiate_modargs t =
+  let instantiate_modargs ctxt t =
     let lookup var = 
       try 
-        Constr ([NameMap.find var context.argmap; "a"], [])
+        Constr ([NameMap.find var ctxt.argmap; "a"], [])
       with Not_found ->
         failwith ("Unbound type parameter '" ^ var)
     in instantiate lookup t
+
+  let random_id length = 
+    let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
+    let nidchars = String.length idchars in
+    let s = String.create length in 
+      for i = 0 to length - 1 do 
+        s.[i] <- idchars.[Random.int nidchars]
+      done;
+      s
 
   let contains_tvars : expr -> bool = 
     (object
@@ -79,30 +85,21 @@ struct
          | e -> default# expr e
      end) # expr
 
-  let cast_pattern ?(param="x") t = 
-    let t = instantiate_modargs t in
+  let cast_pattern ctxt ?(param="x") t = 
+    let t = Untranslate.expr (instantiate_modargs ctxt t) in
       (<:patt< $lid:param$ >>,
        <:expr<
          let module M = 
              struct
-               type t = $Untranslate.expr t$
+               type t = $t$
                let test = function #t -> True | _ -> False
              end in M.test $lid:param$ >>,
        <:expr<
          (let module M = 
               struct
-                type t = $Untranslate.expr t$
+                type t = $t$
                 let cast = function #t as t -> t | _ -> assert False
               end in M.cast $lid:param$ )>>)
-
-  let random_id length = 
-    let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
-    let nidchars = String.length idchars in
-    let s = String.create length in 
-      for i = 0 to length - 1 do 
-        s.[i] <- idchars.[Random.int nidchars]
-      done;
-      s
 
   let seq l r = <:expr< $l$ ; $r$ >>
 
@@ -154,9 +151,9 @@ struct
   class make_module_expr ~classname ~variant ~record ~sum =
   object (self)
 
-    method mapply (funct : Ast.module_expr) args =
+    method mapply ctxt (funct : Ast.module_expr) args =
       List.fold_left
-        (fun funct param -> <:module_expr< $funct$ $self#expr param$ >>)
+        (fun funct param -> <:module_expr< $funct$ $self#expr ctxt param$ >>)
         funct
         args
 
@@ -164,65 +161,54 @@ struct
     method sum = sum
     method record = record
 
-    method param (name, variance) =
-      <:module_expr< $uid:NameMap.find name context.argmap$ >>
+    method param ctxt (name, variance) =
+      <:module_expr< $uid:NameMap.find name ctxt.argmap$ >>
 
-    method underscore  = raise (Underivable (classname, Underscore))
-    method object_   o = raise (Underivable (classname, Object o))
-    method class_    c = raise (Underivable (classname, Class c))
-    method alias     a = raise (Underivable (classname, Alias a))
-    method label     l = raise (Underivable (classname, Label l))
-    method function_ f = raise (Underivable (classname, Function f))
+    method underscore _  = raise (Underivable (classname ^ " cannot be derived for types with `_'"))
+    method object_   _ o = raise (Underivable (classname ^ " cannot be derived for object types"))
+    method class_    _ c = raise (Underivable (classname ^ " cannot be derived for class types"))
+    method alias     _ a = raise (Underivable (classname ^ " cannot be derived for `as' types"))
+    method label     _ l = raise (Underivable (classname ^ " cannot be derived for label types"))
+    method function_ _ f = raise (Underivable (classname ^ " cannot be derived for function types"))
 
-    method constr (qname, args) = 
+    method constr ctxt (qname, args) = 
       let f = (modname_from_qname ~qname ~classname) in
-        self # mapply (Ast.MeId (loc, f)) args
+        self#mapply ctxt (Ast.MeId (loc, f)) args
 
-    method tuple args =
-      let f = <:module_expr< $uid:Printf.sprintf "%s_%d" 
-        classname (List.length args)$ >> in
-        self # mapply f args
+    method tuple ctxt = function
+        | [] -> <:module_expr< $uid:Printf.sprintf "%s_unit" classname$ >>
+        | [a] -> self#expr ctxt a
+        | args -> 
+            let f = <:module_expr< $uid:Printf.sprintf "%s_%d" 
+                                   classname (List.length args)$ >> in
+              self#mapply ctxt f args
 
-    method expr : expr -> Ast.module_expr = function
-      | Param p    -> self # param p
-      | Underscore -> self # underscore
-      | Object o   -> self # object_ o
-      | Class c    -> self # class_ c
-      | Alias a    -> self # alias a
-      | Label l    -> self # label l 
-      | Function f -> self # function_ f
-      | Constr c   -> self # constr c
-      | Tuple t    -> self # tuple t
-      | Variant v  -> self # variant v
+    method expr (ctxt : context) : expr -> Ast.module_expr = function
+      | Param p    -> self#param      ctxt p
+      | Underscore -> self#underscore ctxt
+      | Object o   -> self#object_    ctxt o
+      | Class c    -> self#class_     ctxt c
+      | Alias a    -> self#alias      ctxt a
+      | Label l    -> self#label      ctxt l 
+      | Function f -> self#function_  ctxt f
+      | Constr c   -> self#constr     ctxt c
+      | Tuple t    -> self#tuple      ctxt t
+      | Variant v  -> self#variant    ctxt v
 
-    method rhs : Types.rhs -> Ast.module_expr = function
-      | `Fresh (None, Sum summands) -> self # sum summands
-      | `Fresh (None, Record fields) -> self # record fields
-      | `Alias e -> self # expr e
+    method rhs ctxt (tname, params, rhs, constraints  as decl : Types.decl) : Ast.module_expr = 
+      match rhs with
+        | `Fresh (None, Sum summands) -> self#sum ctxt decl summands
+        | `Fresh (None, Record fields) -> self#record ctxt decl fields
+        | `Alias e -> self#expr ctxt e
   end
 
-(*  let expr_class ~classname ~variant ~record ~sum =
-  object (self)
-    inherit make_module_expr ~classname
-    method variant = variant
-    method record = record
-    method sum = sum
-  end
-*)
+  let atype ctxt (name, params, _, _) = 
+    Untranslate.expr (Constr ([name],
+                              List.map (fun (p,_) -> Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
 
-  let extract_params classname = 
-    let has_params params (_, ps, _, _) = ps = params in
-      function
-        | [] -> invalid_arg "extract_params"
-        | (_,params,_,_)::rest
-            when List.for_all (has_params params) rest ->
-            params
-        | (_,_,rhs,_)::_ -> 
-            (* all types in a clique must have the same parameters *)
-            raise (Underivable (classname, rhs))
-            
+  let atypev _ _ = failwith "atypev nyi"
 
-  let generate ~csts ~make_module_expr ~classname ~default_module =
+  let generate ~context ~decls ~make_module_expr ~classname ?default_module () =
     (* plan: 
        set up an enclosing recursive module
        generate functors for all types in the clique
@@ -234,68 +220,69 @@ struct
        - where there's no recursion
        - etc.
     *)
-    let params = extract_params classname (List.map snd csts) in
-(*    let _ = ensure_no_polymorphic_recursion in *)
+    let params = context.params in
+      (*    let _ = ensure_no_polymorphic_recursion in *)
     let wrapper_name = Printf.sprintf "%s_%s" classname (random_id 32)  in
     let make_functor = 
       List.fold_right 
         (fun (p,_) rhs -> 
            let arg = NameMap.find p context.argmap in
-             <:module_expr< functor ($arg$ : $uid:classname$) -> $rhs$ >>)
+             <:module_expr< functor ($arg$ : $uid:classname$.$uid:classname$) -> $rhs$ >>)
         params in
     let apply_defaults mexpr = match default_module with
       | None -> mexpr
-      | Some default -> <:module_expr< $uid:default$ ($mexpr$) >> in
+      | Some default -> <:module_expr< $uid:classname$.$uid:default$ ($mexpr$) >> in
     let mbinds =
       List.map 
-        (fun (context, (name,params,rhs,constraints)) -> 
+        (fun (name,params,rhs,constraints as decl) -> 
            <:module_binding< 
-             $uid:classname ^ "_"^ context.tname$
-           : $uid:classname$ with type a = $Untranslate.expr context.atype$
-           = $apply_defaults (make_module_expr rhs)$
-             >>)
-        csts in
+             $uid:classname ^ "_"^ name$
+             : $uid:classname$.$uid:classname$ with type a = $atype context decl$
+          = $apply_defaults (make_module_expr context decl)$ >>)
+        decls in
     let mrec =
       <:str_item< module rec $list:mbinds$ >> in
     let fixed = make_functor <:module_expr< struct $mrec$ end >> in
     let projected =
-      List.map (fun (ctxt, (name,params,rhs,constraints)) -> 
-                  let modname = classname ^ "_"^ context.tname in
+      List.map (fun (name,params,rhs,constraints) -> 
+                  let modname = classname ^ "_"^ name in
                   let rhs = <:module_expr< $uid:wrapper_name$ . $uid:modname$ >> in
                     <:str_item< module $uid:modname$ = $make_functor rhs$>>)
-        csts in
+        decls in
     let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
       <:str_item< $m$ $List.hd projected$ >>
 end
+   
+let extract_params = 
+  let has_params params (_, ps, _, _) = ps = params in
+    function
+      | [] -> invalid_arg "extract_params"
+      | (_,params,_,_)::rest
+          when List.for_all (has_params params) rest ->
+          params
+      | (_,_,rhs,_)::_ -> 
+          (* all types in a clique must have the same parameters *)
+          raise (Underivable ("Instances can only be derived for "
+                             ^"recursive groups where all types\n"
+                             ^"in the group have the same parameters."))
 
-let setup_contexts loc types =
+let setup_context loc (types : Ast.ctyp list) : context =
   let tdecls = List.map Translate.decl types in
-  let tnames = List.fold_right (fun (n,_,_,_) ns -> 
-                                  NameSet.add n ns) 
-                    tdecls NameSet.empty in
-    List.map 
-      (fun (name,params,rhs,constraints as dec) -> 
-         let argmap = 
-           List.fold_right
-             (fun (p,_) m -> NameMap.add p (Printf.sprintf "V_%s" p) m)
-             params
-             NameMap.empty
-         and ltype  = 
-           name, List.map fst params in
-         let atype  = 
-           let param (p,_) = Constr ([NameMap.find p argmap; "a"], []) in
-             Constr ([name], List.map param params)
-         in { loc = loc;
-              argmap = argmap;
-              tname  = name;
-              ltype  = ltype;
-              atype  = atype;
-              rtype  = rhs;
-              tnames = tnames;
-              tdec   = dec}, dec)
-      tdecls
-
-type deriver = (context * decl) list -> Ast.str_item
+  let params = extract_params tdecls in
+  let argmap = 
+    List.fold_right
+      (fun (p,_) m -> NameMap.add p (Printf.sprintf "V_%s" p) m)
+      params
+      NameMap.empty in 
+    { loc = loc;
+      argmap = argmap;
+      params = params; } 
+      
+type deriver = Loc.t * context * Types.decl list -> Ast.str_item
 let derivers : (name, deriver) Hashtbl.t = Hashtbl.create 15
-let register = Hashtbl.add derivers
-let find = Hashtbl.find derivers
+let register c = 
+  prerr_endline ("registering " ^ c);
+  Hashtbl.add derivers c
+let find classname = 
+  try Hashtbl.find derivers classname
+  with Not_found -> raise (NoSuchClass classname)

@@ -1,39 +1,46 @@
-module InContext (C : Base.Context) =
+(*pp camlp4of *)
+module InContext (L : Base.Loc) =
 struct
-  open C
   open Base
-  open Util
+  open Utils
   open Types
   open Camlp4.PreCast
-  include Base.InContext(C)
+  include Base.InContext(L)
 
   let classname = "Bounded"
 
-  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
     
-  and sum summands = 
+  and sum ctxt ((tname,_,_,_) as decl) summands = 
     let names = ListLabels.map summands
         ~f:(function
               | (name,[]) -> name
-              | _ -> raise (Underivable (classname, context.atype))) in
-        <:module_expr< struct type a = $Untranslate.expr context.atype$
+              | (name,_) -> raise (Underivable ("Bounded cannot be derived for the type "^
+                                                  tname ^" because the constructor "^
+                                                  name^" is not nullary"))) in
+        <:module_expr< struct type a = $atype ctxt decl$
                        let minBound = $uid:List.hd names$ 
                        and maxBound = $uid:List.last names$ end >>
 
-  and variant (_, tags) = 
+  and variant ctxt ((_, tags) as vspec) = 
     let names = ListLabels.map tags
         ~f:(function
               | Tag (name, None) -> name
-              | _ -> raise (Underivable (classname, context.atype))) in
-      <:module_expr< struct type a = $Untranslate.expr context.atype$
+             | Tag (name, _) -> raise (Underivable ("Bounded cannot be derived because the tag "^
+                                                      name^" is not nullary"))
+             | _ -> raise (Underivable ("Bounded cannot be derived for this "
+                                        ^"polymorphic variant type"))) in
+      <:module_expr< struct type a = $atypev ctxt vspec$
                      let minBound = `$List.hd names$ 
                      and maxBound = `$List.last names$ end >>
 
   (* should perhaps implement this one *)
-  and record _ = raise (Underivable (classname, context.atype))
+  and record _ (tname,_,_,_) = raise (Underivable ("Bounded cannot be derived for record types (i.e. "^
+                                                     tname^")"))
 end
 
-let generate context csts = 
-  let module M = InContext(struct let context = context end) in
-    M.generate ~csts ~make_module_expr:M.expr
-      ~classname:M.classname ~default_module:None
+let _ = Base.register "Bounded" 
+  (fun (loc, context, decls) -> 
+     let module M = InContext(struct let loc = loc end) in
+       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname ())

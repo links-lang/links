@@ -1,44 +1,33 @@
-# $Id: Makefile,v 1.12 2002/02/04 10:21:44 ddr Exp $
+OCAMLMAKEFILE = ../../OCamlMakefile
 
-OCAMLC   = ocamlc.opt
-CAMLP4   = "camlp4of -loc loc "
-OCAMLOPT = ocamlopt.opt
-OCAMLDEP = ocamldep
-LIBDIR = $(shell ocamlc -where)
-CAMLP4DIR = $(shell camlp4 -where)
+OCAMLC     = ocamlc.opt
+OCAMLOPT   = ocamlopt.opt
+OCAMLDEP   = ocamldep.opt
+ANNOTATE   = yes
+PPFLAGS    = -loc loc
+USE_CAMLP4 = yes
+LIBS       = camlp4lib
 
-OCAMLFLAGS=-w aef
+SOURCES = utils.ml              \
+          types.ml              \
+          base.ml               \
+          extend.ml             \
+          show_class.ml         \
+          pickle_class.ml       \
+          enum_class.ml         \
+          bounded_class.ml      \
+          eq_class.ml           \
+          typeable_class.ml     \
+          functor_class.ml      \
 
-#DERIVERS=shelve_class rewriter_class
-DERIVERS=show_class pickle_class enum_class bounded_class eq_class typeable_class functor_class
+#shelve rewriter fold
 
-DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
-DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
-OBJS=util.cmo types.cmo base.cmo extend.cmo deriving.cmo $(DERIVER_OBJS)
-NOBJS=deriving.cmx $(addsuffix .cmx,$(DERIVERS))
+RESULT = deriving
 
-all: byte opt # deriving
-byte: $(OBJS)
-opt: $(OBJS)
+include $(OCAMLMAKEFILE)
 
-# Create a custom native camlp4 that incorporates the deriving
-# extension.
-#
-# This is less flexible than loading the bytecode files into the
-# standard camlp4, but (consequently) runs much faster.
-deriving: $(OBJS)
-	$(OCAMLOPT) -linkall -o $@ -I $(CAMLP4DIR) $(NOBJS)
 
-clean:
-	rm -f *.cm[oix] *.o deriving
 
-depend:
-	$(OCAMLDEP) -pp $(CAMLP4) *.ml* > .depend
 
-$(OBJS): %.cmo: %.ml
-	$(OCAMLC) $(OCAMLFLAGS) -pp $(CAMLP4) -I +camlp4 -c $<
-	$(OCAMLOPT) $(OCAMLFLAGS) -pp $(CAMLP4) -I +camlp4 -c $<
 
-.SUFFIXES: .mli .ml .cmi .cmo .cmx
-
--include .depend
+#ocamlc -g -thread -I -custom -o macroprint unix.cma threads.cma camlp4/camlp4lib.cma camlp4/Camlp4Printers/Camlp4OCamlPrinter.cmo camlp4/Camlp4Parsers/Camlp4OCamlParser.cmo Camlp4MacroParser.cmo camlp4/Camlp4Filters/Camlp4TrashRemover.cmo camlp4/Camlp4Bin.cmo

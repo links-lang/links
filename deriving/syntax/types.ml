@@ -1,7 +1,8 @@
+(*pp camlp4of *)
 (* More convenient representation for types, and translation from the
    Camlp4 representation *)
 
-open Util
+open Utils
 
 (* auxiliary definitions *)
 type ('a,'b) either = Left of 'a | Right of 'b
@@ -216,12 +217,14 @@ struct
     | Ast.TyArr (_,f,t) -> Function (expr f,
                                      expr t)
     | Ast.TyApp _ as app -> Constr (application app)
+    | Ast.TyId (_, i) -> Constr (qident i, [])
     | Ast.TyTup (_, t) -> Tuple (list expr split_star t)
     | Ast.TyVrnEq (_, t)  -> Variant (`Eq, list tagspec split_or t)
     | Ast.TyVrnSup (_, t) -> Variant (`Gt, list tagspec split_or t)
     | Ast.TyVrnInf (_, t) -> Variant (`Lt, list tagspec split_or t)
-    | Ast.TyVrnInfSup (_, _, _) -> failwith "nyi"
-    | _ -> assert false
+    | Ast.TyVrnInfSup (_, _, _) -> failwith "nyi TyVrnInfSup"
+    | Ast.TyAli (_, t, Ast.TyQuo (_,name)) -> Alias (expr t, name)
+    | e -> failwith ("unexpected type at expr : " ^ DumpCtyp.ctyp e)
   and tagspec = function
     | Ast.TyVrn (_,tag)                  -> Tag (tag, None)
     | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> Tag (tag, Some (Tuple (list expr split_comma t)))
@@ -249,7 +252,7 @@ struct
 
   let summand = function 
     | Ast.TyId (_, c)                  -> ident c, []
-    | Ast.TyOf (_, Ast.TyId (_, c), t) -> ident c, list expr split_comma t
+    | Ast.TyOf (_, Ast.TyId (_, c), t) -> ident c, list expr split_and t
     | _                                -> assert false
 
   let toplevel = function
@@ -258,7 +261,7 @@ struct
     | Ast.TyPrv _ -> failwith "private types nyi"
     | t -> Right (expr t)
 
-  let constraints _ = failwith "constraints nyi"
+  let constraints _ = [] (* failwith "constraints nyi" *)
 
   let decl : Ast.ctyp -> decl = function
     | Ast.TyDcl (loc, name, ps, rhs, cs) ->
@@ -274,7 +277,6 @@ struct
 
   (* Not yet implemented in the translation:
    * label types (TyOlb, TyLab)
-   * Aliases (TyAli)
    * Equations (TyMan)
    * constraints
    *)

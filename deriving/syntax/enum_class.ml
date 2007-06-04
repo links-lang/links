@@ -1,44 +1,52 @@
-module InContext (C : Base.Context) =
+(*pp camlp4of *)
+module InContext (L : Base.Loc) =
 struct
-  open C
   open Base
-  open Util
+  open Utils
   open Types
   open Camlp4.PreCast
-  include Base.InContext(C)
+  include Base.InContext(L)
 
   let classname = "Enum"
 
-  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
 
-  and sum summands =
+  and sum ctxt (tname,_,_,_) summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
            match ctor with
              | (name, []) -> <:expr< ($uid:name$, $`int:n$) :: $rest$ >>
-             | _ -> raise (Underivable (classname, context.atype)))
+             | (name,_) -> raise (Underivable ("Enum cannot be derived for the type "^
+                                  tname ^" because the constructor "^
+                                  name^" is not nullary")))
         (List.range 0 (List.length summands))
         summands
         <:expr< [] >> in
       <:module_expr< struct let numbering = $numbering$ end >>
 
-  and variant (_, tags) = 
+  and variant ctxt ((_, tags) as vspec) = 
     let numbering = 
       List.fold_right2
         (fun n tagspec rest -> 
            match tagspec with
              | Tag (name, None) -> <:expr< (`$name$, $`int:n$) :: $rest$ >>
-             | _ -> raise (Underivable (classname, context.atype)))
+             | Tag (name, _) -> raise (Underivable ("Enum cannot be derived because the tag "^
+                                                      name^" is not nullary"))
+             | _ -> raise (Underivable ("Enum cannot be derived for this "
+                                        ^"polymorphic variant type")))
         (List.range 0 (List.length tags))
         tags
         <:expr< [] >> in
       <:module_expr< struct let numbering = $numbering$ end >>
 
-  and record _ = raise (Underivable (classname, context.atype))
+  and record _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
+                                                     tname^")"))
 end
 
-let generate context csts = 
-  let module M = InContext(struct let context = context end) in
-    M.generate ~csts ~make_module_expr:M.expr
-      ~classname:M.classname ~default_module:(Some "Enum_defaults")
+let _ = Base.register "Enum" 
+  (fun (loc, context, decls) -> 
+     let module M = InContext(struct let loc = loc end) in
+       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+         ~default_module:"Enum_defaults" ())

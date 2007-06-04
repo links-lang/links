@@ -1,17 +1,18 @@
-module InContext (C : Base.Context) =
+(*pp camlp4of *)
+module InContext (L : Base.Loc) =
 struct
-  open C
   open Base
-  open Util
+  open Utils
   open Types
   open Camlp4.PreCast
-  include Base.InContext(C)
+  include Base.InContext(L)
 
   let classname = "Pickle"
 
-  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
     
-  and polycase : Types.tagspec * int -> Ast.match_case * Ast.match_case = 
+  and polycase ctxt : Types.tagspec * int -> Ast.match_case * Ast.match_case = 
     (* TODO: use 
        $`int:Obj.magic `tag : int$ for the tags rather than
        generating sequential numbers.  
@@ -31,9 +32,9 @@ struct
                         <:expr< >>,
                         <:expr< `$name$ >>
             | Some e -> <:patt< `$name$ x >>,
-                        <:expr< let module M = $expr e$ 
+                        <:expr< let module M = $expr ctxt e$ 
                                  in M.pickle buffer x >>,
-                        <:expr< let module M = $expr e$ in 
+                        <:expr< let module M = $expr ctxt e$ in 
                                 let x = M.unpickle stream in
                                `$name$ x >> in
             <:match_case< $tag_patt$ -> 
@@ -41,43 +42,44 @@ struct
               $pickle_args$ >>,
             <:match_case< $`int:n$ -> $unpickle_args$ >>
       | Extends t, n -> 
-          let patt, guard, cast = cast_pattern t in
+          let patt, guard, cast = cast_pattern ctxt t in
             <:match_case< $patt$ when $guard$ -> 
-                          let module M = $expr t$ in 
+                          let module M = $expr ctxt t$ in 
                             Pickle_int.pickle buffer $`int:n$;
                             M.pickle buffer $cast$ >>,
-            <:match_case< $`int:n$ -> let module M = $expr t$ 
+            <:match_case< $`int:n$ -> let module M = $expr ctxt t$ 
                                        in (M.unpickle stream :> a) >>
 
-  and case : Types.summand * int -> Ast.match_case * Ast.match_case = fun ((name,args),n) ->
+  and case ctxt : Types.summand * int -> Ast.match_case * Ast.match_case = fun ((name,args),n) ->
     let patt, exp = tuple (List.length args) in (* Does this work correctly for zero-arg constructors? *)
     <:match_case< $uid:name$ $patt$ -> 
                   Pickle_int.pickle buffer $`int:n$;
-                  let module M = $expr (Tuple args)$ 
-                   in M.pickle $exp$ >>,
+                  let module M = $expr ctxt (Tuple args)$ 
+                   in M.pickle buffer $exp$ >>,
     <:match_case< $`int:n$ -> 
-                  let module M = $expr (Tuple args)$ 
+                  let module M = $expr ctxt (Tuple args)$ 
                    in $uid:name$ (M.unpickle stream) >>
 
-  and field : Types.field -> Ast.expr * Ast.expr = function
+  and field ctxt : Types.field -> Ast.expr * Ast.expr = function
     | (name, ([], t), _) -> 
-        <:expr< let module M = $expr t$ in M.pickle buffer $lid:name$ >>,
-        <:expr< let module M = $expr t$ in M.unpickle stream >>
-    | f -> raise (Underivable (classname, context.atype)) (* Can't handle "higher-rank" types *)
+        <:expr< let module M = $expr ctxt t$ in M.pickle buffer $lid:name$ >>,
+        <:expr< let module M = $expr ctxt t$ in M.unpickle stream >>
+    | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
 
-  and sum summands = 
+  and sum ctxt decl summands = 
     let picklers, unpicklers = 
-      List.split (List.map2 (F.uncurry case) 
+      List.split (List.map2 (F.uncurry (case ctxt)) 
                     summands
                     (List.range 0 (List.length summands))) in
-      <:module_expr< struct type a = $Untranslate.expr context.atype$
+      <:module_expr< struct type a = $atype ctxt decl$
+                            open Pickle open Primitives
         let pickle buffer = function $list:picklers$
         let unpickle stream = function $list:unpicklers$
       end >>
 
-  and record fields = 
+  and record ctxt decl fields = 
     let picklers, unpicklers = 
-      List.split (List.map field fields) in
+      List.split (List.map (field ctxt) fields) in
     let unpickle = 
       List.fold_right2
         (fun (field,_,_) unpickler e -> 
@@ -85,23 +87,26 @@ struct
         fields
         unpicklers
         (record_expression fields) in
-      <:module_expr< struct type a = $Untranslate.expr context.atype$
+      <:module_expr< struct type a = $atype ctxt decl$
+                            open Pickle open Primitives
         let pickle buffer $record_pattern fields$ = $List.fold_left1 seq picklers$
         let unpickle stream = $List.fold_left1 seq unpicklers$
       end >>
 
-  and variant (_, tags) = 
+  and variant ctxt ((_, tags) as vspec) = 
     let picklers, unpicklers = 
-      List.split (List.map2 (F.uncurry polycase) 
+      List.split (List.map2 (F.uncurry (polycase ctxt)) 
                     tags
                     (List.range 0 (List.length tags))) in
-      <:module_expr< struct type a = $Untranslate.expr context.atype$
+      <:module_expr< struct type a = $atypev ctxt vspec$
+                            open Pickle open Primitives
         let pickle buffer = function $list:picklers$
         let unpickle stream = function $list:unpicklers$
       end >>
 end
 
-let generate context csts = 
-  let module M = InContext(struct let context = context end) in
-    M.generate ~csts ~make_module_expr:M.expr
-      ~classname:M.classname ~default_module:(Some "Pickle_defaults")
+let _ = Base.register "Pickle"
+  (fun (loc, context, decls) -> 
+     let module M = InContext(struct let loc = loc end) in
+       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+         ~default_module:"Pickle_defaults" ())

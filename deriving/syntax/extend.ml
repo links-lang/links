@@ -1,7 +1,8 @@
+(*pp camlp4of *)
 (* Extend the OCaml grammar to include the `deriving' clause after
    type declarations in structure and signatures. *)
 
-open Util
+open Utils
 open Camlp4.PreCast
 
 module Gram = MakeGram(Lexer)
@@ -9,14 +10,15 @@ module Gram = MakeGram(Lexer)
 open Syntax
 
 let derive loc types classname : Ast.str_item =
-  Base.find classname (Base.setup_contexts loc types)
+  let context = Base.setup_context loc types in
+    Base.find classname (loc, context, List.map Types.Translate.decl types) 
 
 let derive_sig loc types classname : Ast.sig_item =
   failwith "nyi"
 
-DELETE_RULE Gram str_item: "type"; LIST1 type_declaration SEP "and" END
+(*DELETE_RULE Gram str_item: "type"; LIST1 type_declaration SEP "and" END
 DELETE_RULE Gram sig_item: "type"; LIST1 type_declaration SEP "and" END
-
+*)
 EXTEND Gram
 str_item:
 [[ "type"; types = LIST1 type_declaration SEP "and" -> 

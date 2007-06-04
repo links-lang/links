@@ -1,14 +1,12 @@
-module InContext (C : Base.Context) =
+(*pp camlp4of *)
+module InContext (L : Base.Loc) =
 struct
-  open C
   open Base
-  open Util
+  open Utils
   open Types
   open Camlp4.PreCast
-  include Base.InContext(C)
+  include Base.InContext(L)
 
-
-  let loc = context.loc
   let classname = "Show"
 
   let in_a_box box e =
@@ -18,12 +16,12 @@ struct
       Format.pp_close_box formatter ()
     >>
 
-  let in_hovbox = in_a_box "pp_open_hovbox"
-  let in_box = in_a_box "pp_open_box"
+  let in_hovbox = in_a_box "pp_open_hovbox" and in_box = in_a_box "pp_open_box"
 
-  let rec expr t = (new make_module_expr ~classname ~variant ~record ~sum) # expr t
+  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
 
-  and polycase : Types.tagspec -> Ast.match_case = function
+  and polycase ctxt : Types.tagspec -> Ast.match_case = function
     | Tag (name, None) -> 
         <:match_case< `$uid:name$ -> 
                       Format.pp_print_string formatter $str:"`" ^ name ^" "$ >>
@@ -31,15 +29,15 @@ struct
         <:match_case< `$uid:name$ x ->
                        $in_hovbox <:expr< 
                           Format.pp_print_string formatter $str:"`" ^ name ^" "$;
-                          let module M = $expr e$ in M.format formatter x >>$ >>
+                          let module M = $expr ctxt e$ in M.format formatter x >>$ >>
     | Extends t -> 
-        let patt, guard, cast = cast_pattern t in
+        let patt, guard, cast = cast_pattern ctxt t in
           <:match_case<
             $patt$ when $guard$ -> 
-            $in_hovbox <:expr< let module M = $expr t$ 
+            $in_hovbox <:expr< let module M = $expr ctxt t$ 
                                 in M.format formatter cast >>$ >>
 
-  and case : Types.summand -> Ast.match_case =  (* Does this handle the zero-arg case correctly? *)
+  and case ctxt : Types.summand -> Ast.match_case =  (* Does this handle the zero-arg case correctly? *)
     fun (name, args) ->
       let patt, exp = tuple (List.length args) in
       <:match_case<
@@ -47,37 +45,39 @@ struct
          $in_hovbox <:expr<
            Format.pp_print_string formatter $str:name$;
            Format.pp_print_break formatter 1 2;
-           let module M = $expr (Tuple args)$ 
+           let module M = $expr ctxt (Tuple args)$ 
             in M.format formatter $exp$
            >>$ >>
 
-  and field : Types.field -> Ast.expr = function
+  and field ctxt : Types.field -> Ast.expr = function
     | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " ="$;
-                                    let module M = $expr t$
+                                    let module M = $expr ctxt t$
                                      in M.format formatter $lid:name$ >>
-    | f -> raise (Underivable (classname, context.atype)) (* Can't handle "higher-rank" types *)
+    | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
-  and sum summands = <:module_expr< struct type a = $Untranslate.expr context.atype$
-    let rec format formatter = function $list:List.map case summands$
+  and sum ctxt decl summands = <:module_expr< struct type a = $atype ctxt decl$ open Show open Primitives
+    let rec format formatter = function $list:List.map (case ctxt) summands$
   end >>
 
-  and record fields = <:module_expr< struct type a = $Untranslate.expr context.atype$
+  and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$ open Show open Primitives
     let rec format formatter $record_pattern fields$ = $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{'
          $List.fold_left1
            (fun l r -> <:expr< $l$; Format.pp_print_string formatter "; "; $r$ >>)
-           (List.map field fields)$
+           (List.map (field ctxt) fields)$
          Format.pp_print_char formatter '}'
       >>$
   end >>
 
-  and variant (spec, tags) = <:module_expr< struct type a = $Untranslate.expr context.atype$
-    let rec format formatter = function $list:List.map polycase tags$
+  and variant ctxt (spec, tags) = <:module_expr< struct type a = $atypev ctxt (spec, tags)$
+    open Show open Primitives
+    let rec format formatter = function $list:List.map (polycase ctxt) tags$
   end >>
 end
 
-let generate context csts = 
-  let module M = InContext(struct let context = context end) in
-    M.generate ~csts ~make_module_expr:M.expr
-      ~classname:M.classname ~default_module:(Some "Show_defaults")
+let _ = Base.register "Show" 
+  (fun (loc, context, decls) -> 
+     let module M = InContext(struct let loc = loc end) in
+       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+         ~default_module:"ShowDefaults" ())
