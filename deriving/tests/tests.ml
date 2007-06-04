@@ -39,7 +39,7 @@ type intseq = INil | ICons of int * intseq
   deriving (Pickle, Eq, Show)
 
 type 'a seq = Nil | Cons of 'a * 'a seq
-  deriving (Pickle, Eq, Show)
+  deriving (Pickle, Eq, Show, Functor)
 
 (* 7. applied type constructors (nullary, n-ary) *)
 type uses_seqs = (intseq * float seq) 
@@ -47,7 +47,7 @@ type uses_seqs = (intseq * float seq)
 
 (* 8. polymorphic recursion (should fail) *)
 type 'a nested = NNil | NCons of 'a * ('a * 'a ) nested
-  (*deriving (Pickle, Eq, Show)*)
+  (*deriving (Pickle, Eq, Show, Functor)*)
 
 (* 9. object and class types *)
 type obj = < x : int >
@@ -89,10 +89,12 @@ type ('a,'b) pmutrec_a = ('a,'b) pmutrec_c
 and ('a,'b) pmutrec_b = { l1 : ('a,'b) pmutrec_c ; l2 : ('a,'b) pmutrec_a }
 and ('a,'b) pmutrec_c = S of 'a * ('a,'b) pmutrec_a * 'b
 and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Functor)
 
 (* 15. polymorphic types *)
-(* TODO *)
+type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Pickle, Functor)
+type ('a,'b) ff2 = F1 of ('a,'b) ff2 | F2 of 'a seq * int * 'b option
+  deriving (Pickle, Eq, Show, Functor)
 
 (* 16. tuples *)
 type tup0 = unit

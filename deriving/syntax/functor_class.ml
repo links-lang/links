@@ -27,13 +27,16 @@ struct
       (fun name -> Untranslate.sigdecl (dec name))
 
   let wrapper name expr = 
-    let patts :Ast.ident list = 
+    let patts :Ast.patt list = 
       List.map 
-        (fun (name,_) -> <:ident< $lid:NameMap.find name param_map$ >>)
+        (fun (name,_) -> <:patt< $lid:NameMap.find name param_map$ >>)
         context.params in
+    let rhs = 
+      List.fold_right (fun p e -> <:expr< fun $p$ -> $e$ >>) patts expr in
       <:module_expr< struct
+        open Functor
         $tdec name$ 
-        let map $list:patts$ = $expr$
+        let map = $rhs$
       end >>
 (*
    prototype: [[t]] : t -> t[b_i/a_i]
@@ -64,7 +67,8 @@ struct
         let patt, guard, exp = cast_pattern context t in
           <:match_case< $patt$ when $guard$ -> $expr t$ $exp$ >>
 
-  and expr = function
+  and expr : Types.expr -> Ast.expr = function
+    | t when not (contains_tvars t) -> <:expr< fun x -> x >>
     | Param (p,_) -> <:expr< $lid:NameMap.find p param_map$ >>
     | Function (f,t) when not (contains_tvars t) -> 
         <:expr< fun f x -> f ($expr f$ x) >>
@@ -80,21 +84,23 @@ struct
 
   and tup ts = 
     let args, exps = 
-      List.split
-        (List.map2
-           (fun t n -> 
+        (List.fold_right2
+           (fun t n (p,e) -> 
               let v = Printf.sprintf "t%d" n in
-                <:ident< $lid:v$ >>, <:expr< $expr t$ $lid:v$ >>)
+                Ast.PaCom (loc, <:patt< $lid:v$ >>, p),
+                Ast.ExCom (loc, <:expr< $expr t$ $lid:v$ >>, e))
            ts
-           (List.range 0 (List.length ts))) in
-      <:expr< fun ($list:args$) -> ($tuple_expr exps$) >>
+           (List.range 0 (List.length ts))
+           (<:patt< >>, <:expr< >>)) in
+    let pat, exp = Ast.PaTup (loc, args), Ast.ExTup (loc, exps) in
+      <:expr< fun $pat$ -> $exp$ >>
 
   and case = function
     | (name, []) -> <:match_case< $uid:name$ -> $uid:name$ >>
     | (name, args) -> 
         let f = tup args 
         and tpatt, texp = tuple (List.length args) in
-          <:match_case< $uid:name$ $tpatt$ -> $uid:name$ ($f$ $texp$) >>
+          <:match_case< $uid:name$ $tpatt$ -> let $tpatt$ = ($f$ $texp$) in $uid:name$ ($texp$) >>
 
   and field (name, (_,t), _) : Ast.expr =
     <:expr< $expr t$ $lid:name$ >>
