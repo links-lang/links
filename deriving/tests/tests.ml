@@ -72,7 +72,9 @@ type poly2 = P of int * [`T0 | `T1 of int] * float
 
 (* 12. `as'-recursion *)
 type poly3 = [`Nil | `Cons of int * 'c] as 'c
-    (*deriving (Pickle, Eq, Show) TODO! *) 
+    deriving (Pickle, Eq, Show) 
+type poly3b = int * ([`Nil | `Cons of int * 'c] as 'c) * [`F]
+    deriving (Pickle, Eq, Show) 
 
 (* 13. <, >, =, > < polymorphic variants *)
 type poly4 = private [< `A]
@@ -83,6 +85,17 @@ type poly5 = private [> `A]
 
 (*type poly6 = [< `A > `B]*)
     (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
+
+type 'a poly7 = Foo of [`F of 'a]
+and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
+    deriving (Pickle, Eq, Show, Functor)
+
+(*
+type poly9 = [`F | [`G]]
+    deriving (Pickle, Eq, Show)
+  currently broken.
+
+*)
 
 (* 14. mutually recursive types (monomorphic, polymorphic) *)
 type mutrec_a = mutrec_c
@@ -122,3 +135,4 @@ type tup3 = int * float * bool
 (* 20. references *)
 type withref = WR of int * (int ref)
   deriving (Pickle, Eq, Show, Typeable(*, Shelve*))
+

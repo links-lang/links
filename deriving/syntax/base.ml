@@ -2,8 +2,6 @@
 open Utils
 open Types
 open Camlp4.PreCast
-module NameMap = StringMap
-module NameSet = Set.Make(String)
 
 type context = {
   loc : Loc.t;
@@ -36,45 +34,28 @@ struct
   include L
   module Untranslate = Untranslate(L)
 
-  let instantiate (lookup : name -> expr) : expr -> expr =
-    let rec inst = function
-      | Param (name, _) -> lookup name 
-      | Underscore      -> Underscore
-      | Function (l, r) -> Function (inst l, inst r)
-      | Constr (c, ts)  -> Constr (c, List.map inst ts)
-      | Tuple es        -> Tuple (List.map inst es)
-      | Alias (e, n)    -> Alias (inst e, n)
-      | Variant (v, ts) -> Variant (v, List.map inst_tag ts)
-      | _ -> assert false
-    and inst_tag = function
-      | Tag (n, Some t) ->  Tag (n, Some (inst t))
-      | Tag _ as t -> t
-      | Extends t -> Extends (inst t)
-    in inst
+  let instantiate (lookup : name -> expr) : expr -> expr = 
+  object 
+    inherit transform as super
+    method expr = function
+      | `Param (name, _) -> lookup name
+      | e                -> super # expr e
+  end # expr
 
   let instantiate_modargs ctxt t =
     let lookup var = 
       try 
-        Constr ([NameMap.find var ctxt.argmap; "a"], [])
+        `Constr ([NameMap.find var ctxt.argmap; "a"], [])
       with Not_found ->
         failwith ("Unbound type parameter '" ^ var)
     in instantiate lookup t
-
-  let random_id length = 
-    let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
-    let nidchars = String.length idchars in
-    let s = String.create length in 
-      for i = 0 to length - 1 do 
-        s.[i] <- idchars.[Random.int nidchars]
-      done;
-      s
 
   let contains_tvars : expr -> bool = 
     (object
        inherit [bool] fold as default
        method crush = List.exists (fun x -> x)
        method expr = function
-         | Param _ -> true
+         | `Param _ -> true
          | e -> default#expr e
      end) # expr
 
@@ -82,8 +63,8 @@ struct
     (object
        inherit transform as default
        method expr = function
-         | Param (p,v) when NameMap.mem p env -> 
-             Param (NameMap.find p env,v)
+         | `Param (p,v) when NameMap.mem p env -> 
+             `Param (NameMap.find p env,v)
          | e -> default# expr e
      end) # expr
 
@@ -191,7 +172,6 @@ struct
     method underscore _  = raise (Underivable (classname ^ " cannot be derived for types with `_'"))
     method object_   _ o = raise (Underivable (classname ^ " cannot be derived for object types"))
     method class_    _ c = raise (Underivable (classname ^ " cannot be derived for class types"))
-    method alias     _ a = raise (Underivable (classname ^ " cannot be derived for `as' types"))
     method label     _ l = raise (Underivable (classname ^ " cannot be derived for label types"))
     method function_ _ f = raise (Underivable (classname ^ " cannot be derived for function types"))
 
@@ -212,34 +192,29 @@ struct
               self#mapply ctxt f args
 
     method expr (ctxt : context) : expr -> Ast.module_expr = function
-      | Param p    -> self#param      ctxt p
-      | Underscore -> self#underscore ctxt
-      | Object o   -> self#object_    ctxt o
-      | Class c    -> self#class_     ctxt c
-      | Alias a    -> self#alias      ctxt a
-      | Label l    -> self#label      ctxt l 
-      | Function f -> self#function_  ctxt f
-      | Constr c   -> self#constr     ctxt c
-      | Tuple t    -> self#tuple      ctxt t
-      | Variant v  -> self#variant    ctxt v
+      | `Param p    -> self#param      ctxt p
+      | `Underscore -> self#underscore ctxt
+      | `Object o   -> self#object_    ctxt o
+      | `Class c    -> self#class_     ctxt c
+      | `Label l    -> self#label      ctxt l 
+      | `Function f -> self#function_  ctxt f
+      | `Constr c   -> self#constr     ctxt c
+      | `Tuple t    -> self#tuple      ctxt t
 
     method rhs ctxt (tname, params, rhs, constraints  as decl : Types.decl) : Ast.module_expr = 
       match rhs with
         | `Fresh (None, Sum summands) -> self#sum ctxt decl summands
         | `Fresh (None, Record fields) -> self#record ctxt decl fields
-        | `Alias e -> self#expr ctxt e
+        | `Expr e -> self#expr ctxt e
+        | `Variant v -> self# variant ctxt decl v
   end
 
   let atype ctxt (name, params, rhs, _) = 
     match rhs with 
-      | `Fresh _ ->
-          Untranslate.expr (Constr ([name],
-                                    List.map (fun (p,_) -> Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
-      | `Alias e -> Untranslate.expr (instantiate_modargs ctxt e)
-
-  let atypev ctxt vspec = 
-    Untranslate.expr (instantiate_modargs ctxt (Variant vspec))
-
+      | `Fresh _ | `Variant _ ->
+          Untranslate.expr (`Constr ([name],
+                                     List.map (fun (p,_) -> `Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
+      | `Expr e -> Untranslate.expr (instantiate_modargs ctxt e)
 
   let generate ~context ~decls ~make_module_expr ~classname ?default_module () =
     (* plan: 
@@ -301,8 +276,7 @@ let extract_params =
                              ^"recursive groups where all types\n"
                              ^"in the group have the same parameters."))
 
-let setup_context loc (types : Ast.ctyp list) : context =
-  let tdecls = List.map Translate.decl types in
+let setup_context loc tdecls : context =
   let params = extract_params tdecls in
   let argmap = 
     List.fold_right
@@ -316,9 +290,7 @@ let setup_context loc (types : Ast.ctyp list) : context =
       
 type deriver = Loc.t * context * Types.decl list -> Ast.str_item
 let derivers : (name, deriver) Hashtbl.t = Hashtbl.create 15
-let register c = 
-  prerr_endline ("registering " ^ c);
-  Hashtbl.add derivers c
+let register = Hashtbl.add derivers
 let find classname = 
   try Hashtbl.find derivers classname
   with Not_found -> raise (NoSuchClass classname)

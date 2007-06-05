@@ -21,7 +21,7 @@ struct
   let tdec, sigdec = 
     let dec name = 
       ("f", context.params, 
-                 `Alias (Constr ([name], List.map (fun p -> Param p) context.params)), [])
+       `Expr (`Constr ([name], List.map (fun p -> `Param p) context.params)), [])
     in
       (fun name -> Untranslate.decl (dec name)),
       (fun name -> Untranslate.sigdecl (dec name))
@@ -35,7 +35,7 @@ struct
       List.fold_right (fun p e -> <:expr< fun $p$ -> $e$ >>) patts expr in
       <:module_expr< struct
         open Functor
-        $tdec name$ 
+        type $tdec name$ 
         let map = $rhs$
       end >>
 (*
@@ -69,17 +69,15 @@ struct
 
   and expr : Types.expr -> Ast.expr = function
     | t when not (contains_tvars t) -> <:expr< fun x -> x >>
-    | Param (p,_) -> <:expr< $lid:NameMap.find p param_map$ >>
-    | Function (f,t) when not (contains_tvars t) -> 
+    | `Param (p,_) -> <:expr< $lid:NameMap.find p param_map$ >>
+    | `Function (f,t) when not (contains_tvars t) -> 
         <:expr< fun f x -> f ($expr f$ x) >>
-    | Constr (qname, ts) -> 
+    | `Constr (qname, ts) -> 
         List.fold_left 
           (fun fn arg -> <:expr< $fn$ $expr arg$ >>)
           <:expr< $id:modname_from_qname ~qname ~classname$.map >>
           ts
-    | Tuple ts -> tup ts
-    | Variant (_, tags) -> 
-        <:expr< function $list:List.map polycase tags$ >>
+    | `Tuple ts -> tup ts
     | _ -> raise (Underivable "Functor cannot be derived for this type")
 
   and tup ts = 
@@ -111,19 +109,22 @@ struct
     |`Fresh (_, Record fields) -> 
        <:expr< fun $record_pattern fields$ -> 
                    $record_expr (List.map (fun ((l,_,_) as f) -> (l,field f)) fields)$ >>
-    |`Alias e                  -> expr e
+    |`Expr e                  -> expr e
+    |`Variant (_, tags) -> 
+       <:expr< function $list:List.map polycase tags$ >>
+
 
   let maptype name = 
-    let ctor_in = Constr ([name], List.map (fun p -> Param p) context.params) in
+    let ctor_in = `Constr ([name], List.map (fun p -> `Param p) context.params) in
     let ctor_out = substitute param_map ctor_in  (* c[f_i/a_i] *) in
       List.fold_right (* (a_i -> f_i) -> ... -> c[a_i] -> c[f_i/a_i] *)
         (fun (p,_) out -> 
            (<:ctyp< ('$lid:p$ -> '$lid:NameMap.find p param_map$) -> $out$>>))
         context.params
-        (Untranslate.expr (Function (ctor_in, ctor_out)))
+        (Untranslate.expr (`Function (ctor_in, ctor_out)))
 
    let signature name : Ast.sig_item list =  
-     [ <:sig_item< $sigdec name$ >>; 
+     [ <:sig_item< type $sigdec name$ >>; 
        <:sig_item< val map : $maptype name$ >> ] 
 
   let decl (name, _, r, _) : Camlp4.PreCast.Ast.module_binding =

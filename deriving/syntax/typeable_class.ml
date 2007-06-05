@@ -1,6 +1,7 @@
 (*pp camlp4of *)
 module InContext (L : Base.Loc) =
 struct
+  open Types
   open Base
   open Camlp4.PreCast
   include Base.InContext(L)

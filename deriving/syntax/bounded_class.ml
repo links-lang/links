@@ -23,7 +23,7 @@ struct
                        let minBound = $uid:List.hd names$ 
                        and maxBound = $uid:List.last names$ end >>
 
-  and variant ctxt ((_, tags) as vspec) = 
+  and variant ctxt decl (_, tags) = 
     let names = ListLabels.map tags
         ~f:(function
               | Tag (name, None) -> name
@@ -31,7 +31,7 @@ struct
                                                       name^" is not nullary"))
              | _ -> raise (Underivable ("Bounded cannot be derived for this "
                                         ^"polymorphic variant type"))) in
-      <:module_expr< struct type a = $atypev ctxt vspec$
+      <:module_expr< struct type a = $atype ctxt decl$
                      let minBound = `$List.hd names$ 
                      and maxBound = `$List.last names$ end >>
 

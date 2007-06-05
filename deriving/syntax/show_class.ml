@@ -48,7 +48,7 @@ struct
              $in_hovbox <:expr<
                Format.pp_print_string formatter $str:name$;
                Format.pp_print_break formatter 1 2;
-               let module M = $expr ctxt (Tuple args)$ 
+               let module M = $expr ctxt (`Tuple args)$ 
                 in M.format formatter $exp$
                >>$ >>
     
@@ -73,7 +73,7 @@ struct
       >>$
   end >>
 
-  and variant ctxt (spec, tags) = <:module_expr< Show.ShowDefaults(struct type a = $atypev ctxt (spec, tags)$
+  and variant ctxt decl (spec, tags) = <:module_expr< Show.ShowDefaults(struct type a = $atype ctxt decl$
     let rec format formatter = function $list:List.map (polycase ctxt) tags$
   end) >>
 end

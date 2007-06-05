@@ -9,9 +9,9 @@ module Gram = MakeGram(Lexer)
 
 open Syntax
 
-let derive_str loc types classname : Ast.str_item =
-  let context = Base.setup_context loc types in
-    Base.find classname (loc, context, List.map Types.Translate.decl types) 
+let derive_str loc (tdecls : Types.decl list) classname : Ast.str_item =
+  let context = Base.setup_context loc tdecls in
+    Base.find classname (loc, context, tdecls)
 
 let derive_sig loc types classname : Ast.sig_item =
   failwith "nyi"
@@ -23,11 +23,15 @@ EXTEND Gram
 str_item:
 [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
   | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-    <:str_item< type $types$ $list:List.map (derive_str loc (Types.Translate.split types)) cl$ >> ]]
+      let decls : Types.decl list = Types.Translate.decls types in 
+      let module U = Types.Untranslate(struct let loc = loc end) in
+      let tdecls : Ast.ctyp list = List.map U.decl decls in
+        <:str_item< type $list:tdecls$ $list:List.map (derive_str loc decls) cl$ >>
+ ]]
 ;
 sig_item:
 [[ "type"; types = type_declaration -> <:sig_item< type $types$ >>
  | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
-    <:sig_item< type $types$ $list:List.map (derive_sig loc (Types.Translate.split types)) cl$ >> ]]
+    <:sig_item< type $types$ $list:List.map (derive_sig loc types) cl$ >> ]]
 ;
 END

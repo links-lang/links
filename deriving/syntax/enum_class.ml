@@ -26,7 +26,7 @@ struct
         <:expr< [] >> in
       <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
-  and variant ctxt ((_, tags) as vspec) = 
+  and variant ctxt decl (_, tags) = 
     let numbering = 
       List.fold_right2
         (fun n tagspec rest -> 
@@ -39,7 +39,7 @@ struct
         (List.range 0 (List.length tags))
         tags
         <:expr< [] >> in
-      <:module_expr< struct type a = $atypev ctxt vspec$ let numbering = $numbering$ end >>
+      <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
   and record _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
                                                      tname^")"))

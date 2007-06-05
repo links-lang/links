@@ -56,7 +56,7 @@ struct
             <:match_case< $`int:n$ -> let module M = $expr ctxt t$ 
                                        in (M.unpickle stream :> a) >>
 
-  and case ctxt : Types.summand * int -> Ast.match_case * Ast.match_case = fun ((name,args),n) ->
+  and case ctxt : Types.summand -> int -> Ast.match_case * Ast.match_case = fun (name,args) n ->
       match args with 
         | [] -> (<:match_case< $uid:name$ -> Pickle_int.pickle buffer $`int:n$ >>,
                  <:match_case< $`int:n$ -> $uid:name$ >>)
@@ -64,10 +64,10 @@ struct
         let patt, exp = tuple (List.length args) in (* Does this work correctly for zero-arg constructors? *)
         <:match_case< $uid:name$ $patt$ -> 
                       Pickle_int.pickle buffer $`int:n$;
-                      let module M = $expr ctxt (Tuple args)$ 
+                      let module M = $expr ctxt (`Tuple args)$ 
                        in M.pickle buffer $exp$ >>,
         <:match_case< $`int:n$ -> 
-                      let module M = $expr ctxt (Tuple args)$ 
+                      let module M = $expr ctxt (`Tuple args)$ 
                        in let $patt$ = M.unpickle stream in $uid:name$ $exp$  >>
     
   and field ctxt : Types.field -> Ast.expr * Ast.expr = function
@@ -79,7 +79,7 @@ struct
   and sum ctxt ((tname,_,_,_) as decl) summands = 
     let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
     let picklers, unpicklers = 
-      List.split (List.map2 (F.uncurry (case ctxt)) 
+      List.split (List.map2 (case ctxt) 
                     summands
                     (List.range 0 (List.length summands))) in
       wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
@@ -99,13 +99,13 @@ struct
             [ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
             unpickle
 
-  and variant ctxt ((_, tags) as vspec) = 
+  and variant ctxt decl (_, tags) = 
     let msg = "Unexpected tag when unpickling polymorphic variant: " in
     let picklers, unpicklers = 
-      List.split (List.map2 (F.uncurry (polycase ctxt)) 
+      List.split (List.map2 (F.curry (polycase ctxt))
                     tags
                     (List.range 0 (List.length tags))) in
-      wrap (atypev ctxt vspec) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
+      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
                                               | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 end
 

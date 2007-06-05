@@ -31,7 +31,7 @@ struct
   and polycase ctxt tagspec n : Ast.match_case = 
     failwith "nyi"
 
-  and variant ctxt (_, tags) = 
+  and variant ctxt decl (_, tags) = 
     failwith "nyi"
 
   and case ctxt (name, params') n : Ast.match_case = 
@@ -58,12 +58,12 @@ struct
     let patt = record_pattern fields in 
     let tuplemod = 
       expr ctxt
-        (Tuple (List.map (function
-                            | (_,([],t),_) -> t
-                            | _ -> raise (Underivable
-                                            ("Shelve cannot be derived for record types"
-                                             ^" with polymorphic fields")))
-                                       (fields : Types.field list))) in
+        (`Tuple (List.map (function
+                             | (_,([],t),_) -> t
+                             | _ -> raise (Underivable
+                                             ("Shelve cannot be derived for record types"
+                                              ^" with polymorphic fields")))
+                   fields)) in
     let nametup = tuple_expr (List.map (fun (f,_,_) -> <:expr< $lid:f$ >>) fields) in
     wrap ctxt tname (atype ctxt decl)
       [ <:match_case< ($patt$ as obj) -> let module M = $tuplemod$ in M.shelve $nametup$  >> ]

@@ -39,7 +39,7 @@ struct
             and rpatt, rexpr = tuple ~param:"r" nargs in
               <:match_case<
                 ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
-                   let module M = $expr ctxt (Tuple args)$ in
+                   let module M = $expr ctxt (`Tuple args)$ in
                      M.eq $lexpr$ $rexpr$ >> 
               
   and field ctxt : Types.field -> Ast.expr = function
@@ -67,8 +67,8 @@ struct
     in <:module_expr< struct type a = $atype ctxt decl$
                              let eq $lpatt$ $rpatt$ = $expr$ end >>
 
-  and variant ctxt (spec, tags) = 
-    <:module_expr< struct type a = $atypev ctxt (spec, tags)$
+  and variant ctxt decl (spec, tags) = 
+    <:module_expr< struct type a = $atype ctxt decl$
                           let eq l r = match l, r with
                                        $list:List.map (polycase ctxt) tags$
                                        | _ -> false end >>

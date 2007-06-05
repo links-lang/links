@@ -1,3 +1,5 @@
+type ('a,'b) either = Left of 'a | Right of 'b
+
 module List = 
 struct
   include List
@@ -25,12 +27,17 @@ struct
     | [x]   -> x
     | _::xs -> last xs
 
+  let concat_map f l = 
+    let rec aux = function
+      | _, [] -> []
+      | f, x :: xs -> f x @ aux (f, xs)
+    in aux (f,l)
 end
 
 module F =
 struct
-  let curry f (x,y) = f x y
-  let uncurry f x y = f (x,y)
+  let curry f x y = f (x,y)
+  let uncurry f (x,y) = f x y
 end
 
 module Option =
@@ -99,6 +106,14 @@ struct
   let find s m = 
     try find s m
     with Not_found -> raise (NotFound s)
+  let fromList : (key * 'a) list -> 'a t = fun elems ->
+    List.fold_right (F.uncurry add) elems empty
+  let union_disjoint2 l r =
+    fold
+      (fun k v r -> 
+         if mem k r then invalid_arg "union_disjoint"
+         else add k v r) l r
+  let union_disjoint maps = List.fold_right union_disjoint2 maps empty
 end
 
 module Set =
@@ -114,3 +129,12 @@ struct
     let fromList elems = List.fold_right add elems empty
   end
 end
+
+let random_id length = 
+  let idchars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'" in
+  let nidchars = String.length idchars in
+  let s = String.create length in 
+    for i = 0 to length - 1 do 
+      s.[i] <- idchars.[Random.int nidchars]
+    done;
+    s

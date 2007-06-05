@@ -5,15 +5,16 @@
 open Utils
 
 (* auxiliary definitions *)
-type ('a,'b) either = Left of 'a | Right of 'b
 type name = string
 type qname = name list
+module NameMap = StringMap
+module NameSet = Set.Make(String)
 
 type param = name * [`Plus | `Minus] option
 
 (* no support for private types yet *)
 type decl = name * param list
-    * [`Fresh of expr option (* "equation" *) * repr | `Alias of expr]
+    * [`Fresh of expr option (* "equation" *) * repr | `Expr of expr | `Variant of variant]
     * constraint_ list
 and repr = 
     Sum of summand list
@@ -22,16 +23,14 @@ and field = name * poly_expr * [`Mutable | `Immutable]
 and summand = name * expr list
 and constraint_ = name * expr
 and expr =  (* elements that can be nested *)
-    Param of param
-  | Underscore
-  | Label of ([`Optional|`NonOptional] * name * expr * expr)
-  | Function of (expr * expr)
-  | Constr of (qname * expr list)
-  | Tuple of expr list
-  | Alias of (expr * name)
-  | Variant of variant
-  | Object of [`NYI]
-  | Class of [`NYI]
+    [ `Param of param
+    | `Underscore
+    | `Label of ([`Optional|`NonOptional] * name * expr * expr)
+    | `Function of (expr * expr)
+    | `Constr of (qname * expr list)
+    | `Tuple of expr list
+    | `Object of [`NYI]
+    | `Class of [`NYI] ]
 and poly_expr = param list * expr
     (* no support for < > variants yet.
        no support for '&' yet.
@@ -39,7 +38,7 @@ and poly_expr = param list * expr
 and variant = [`Gt | `Lt | `Eq] * tagspec list
 and tagspec = Tag of name * expr option 
               | Extends of expr
-type rhs = [`Fresh of expr option * repr |`Alias of expr]
+type rhs = [`Fresh of expr option * repr | `Expr of expr | `Variant of variant]
 
 class virtual ['result] fold = 
 object (self : 'self)
@@ -51,8 +50,10 @@ object (self : 'self)
                       self#expr e :: self#repr r :: List.map self#constraint_ cs
                   | (_, _, `Fresh (None, r), cs) ->
                       self#repr r :: List.map self#constraint_ cs
-                  | (_, _, `Alias e, cs) ->
-                      self#expr e :: List.map self#constraint_ cs)
+                  | (_, _, `Expr e, cs) ->
+                      self#expr e :: List.map self#constraint_ cs
+                  | (_, _, `Variant v, cs) ->
+                      self#variant v :: List.map self#constraint_ cs)
 
   method repr r =
     self#crush (match r with
@@ -72,16 +73,14 @@ object (self : 'self)
 
   method expr e = 
     self#crush (match e with
-                    Param _
-                  | Underscore
-                  | Object _
-                  | Class _ -> []
-                  | Alias (expr, name) -> [self#expr expr]
-                  | Label (_, _, e1, e2) 
-                  | Function (e1, e2) -> [self#expr e1; self#expr e2]
-                  | Constr (_, exprs)
-                  | Tuple exprs  -> List.map self#expr exprs
-                  | Variant v -> [self#variant v])
+                    `Param _
+                  | `Underscore
+                  | `Object _
+                  | `Class _ -> []
+                  | `Label (_, _, e1, e2) 
+                  | `Function (e1, e2) -> [self#expr e1; self#expr e2]
+                  | `Constr (_, exprs)
+                  | `Tuple exprs  -> List.map self#expr exprs)
 
   method poly_expr (params,e) =
     self#crush [self#expr e]
@@ -103,7 +102,8 @@ object (self : 'self)
     let rhs = match rhs with
       | `Fresh (eopt, repr) -> `Fresh (Option.map (self # expr) eopt, 
                                        self # repr repr)
-      | `Alias e -> `Alias (self # expr e)
+      | `Expr e -> `Expr (self # expr e)
+      | `Variant v -> `Variant (self # variant v)
     in  (name, params, rhs, List.map (self # constraint_) constraints)
 
   method repr = function
@@ -120,16 +120,14 @@ object (self : 'self)
     (name, self # expr expr)
 
   method expr = function
-    | Object _
-    | Class _
-    | Param _
-    | Underscore as e -> e
-    | Label (flag, name, e1, e2) -> Label (flag, name, self # expr e1, self # expr e2)
-    | Function (e1, e2) -> Function (self # expr e1, self # expr e2)
-    | Constr (qname, exprs) -> Constr (qname, List.map (self # expr) exprs)
-    | Tuple exprs -> Tuple (List.map self # expr exprs)
-    | Alias (expr, name) -> Alias (self # expr expr, name)
-    | Variant variant -> Variant (self # variant variant)
+    | `Object _
+    | `Class _
+    | `Param _
+    | `Underscore as e -> e
+    | `Label (flag, name, e1, e2) -> `Label (flag, name, self # expr e1, self # expr e2)
+    | `Function (e1, e2) -> `Function (self # expr e1, self # expr e2)
+    | `Constr (qname, exprs) -> `Constr (qname, List.map (self # expr) exprs)
+    | `Tuple exprs -> `Tuple (List.map self # expr exprs)
 
   method poly_expr (params, expr)
     = (params, self # expr expr)
@@ -205,134 +203,189 @@ struct
     | Ast.IdLid _
     | Ast.IdUid _ as i -> [ident i]
 
-  let rec expr = function
-    | Ast.TyObj _ -> Object `NYI
-    | Ast.TyCls _ -> Class `NYI
-    | Ast.TyQuP (_,_)
-    | Ast.TyQuM (_,_)
-    | Ast.TyQuo (_,_) as p -> Param (param p)
-    | Ast.TySum _
-    | Ast.TyRec _ -> failwith "top level element found nested"
-    | Ast.TyAny _ -> Underscore
-    | Ast.TyArr (_,f,t) -> Function (expr f,
-                                     expr t)
-    | Ast.TyApp _ as app -> Constr (application app)
-    | Ast.TyId (_, i) -> Constr (qident i, [])
-    | Ast.TyTup (_, t) -> Tuple (list expr split_star t)
-    | Ast.TyVrnEq (_, t)  -> Variant (`Eq, list tagspec split_or t)
-    | Ast.TyVrnSup (_, t) -> Variant (`Gt, list tagspec split_or t)
-    | Ast.TyVrnInf (_, t) -> Variant (`Lt, list tagspec split_or t)
-    | Ast.TyVrnInfSup (_, _, _) -> failwith "nyi TyVrnInfSup"
-    | Ast.TyAli (_, t, Ast.TyQuo (_,name)) -> Alias (expr t, name)
-    | Ast.TyLab _ -> failwith "deriving does not handle label types"
-    | e -> failwith ("unexpected type at expr : " ^ DumpAst.ctyp e)
-  and tagspec = function
-    | Ast.TyVrn (_,tag)                  -> Tag (tag, None)
-    | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> Tag (tag, Some (Tuple (list expr split_comma t)))
-    | t                                  -> Extends (expr t)
-  and application = function
-    | Ast.TyApp (_, (Ast.TyApp _ as a), t) -> 
-        let tcon, args = application a in
-          tcon, args @ [expr t]
-    | Ast.TyApp (_, (Ast.TyId (_, tcon)), t) -> (qident tcon, [expr t])
-    | _ -> assert false
+  type vmap = (name * variant * name option) list
 
-  let rec polyexpr : Ast.ctyp -> poly_expr = function
-    | Ast.TyPol (_, ps, t) -> 
-        let ps', t' = polyexpr t in
-          list param split_comma ps @ ps', t'
-    | t -> [], expr t
+  let fresh_name () = "deriving_" ^ random_id 16
+
+  module WithParams(P : sig val params : param list end) =
+  struct
+    include P
+
+    let apply_t name = 
+      `Constr([name], List.map (fun p -> `Param p) params)
+
+    let rec expr : Ast.ctyp -> expr * vmap  = function
+      | Ast.TyObj _ -> `Object `NYI, []
+      | Ast.TyCls _ -> `Class `NYI, []
+      | Ast.TyQuP (_,_)
+      | Ast.TyQuM (_,_)
+      | Ast.TyQuo (_,_) as p -> `Param (param p), []
+      | Ast.TySum _
+      | Ast.TyRec _ -> failwith "top level element found nested"
+      | Ast.TyAny _ -> `Underscore, []
+      | Ast.TyArr (_,f,t) -> 
+          let f, v1 = expr f and t,v2 = expr t in
+            `Function (f, t), v1 @ v2
+      | Ast.TyApp _ as app -> let app, v = application app in `Constr app, v
+      | Ast.TyId (_, i) -> `Constr (qident i, []), []
+      | Ast.TyTup (_, t) -> let es, vs = List.split (list expr split_star t) in `Tuple es, List.concat vs
+      | Ast.TyVrnEq  (_, t) -> variant t `Eq
+      | Ast.TyVrnSup (_, t) -> variant t `Gt
+      | Ast.TyVrnInf (_, t) -> variant t `Lt
+      | Ast.TyAli (_, _, Ast.TyQuo (_,name)) when List.mem_assoc name params ->
+          failwith ("Alias names must be distinct from parameter names for "
+                    ^"derived types, but '"^name^" is both an alias and a parameter")
+      | Ast.TyAli (_, Ast.TyVrnEq  (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Eq
+      | Ast.TyAli (_, Ast.TyVrnSup (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Gt
+      | Ast.TyAli (_, Ast.TyVrnInf (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Lt
+      | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
+      | Ast.TyLab _ -> failwith "deriving does not handle label types"
+      | e -> failwith ("unexpected type at expr : " ^ DumpAst.ctyp e)
+    and tagspec = function
+      | Ast.TyVrn (_,tag)                  -> Tag (tag, None), []
+      | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> 
+          let es, vs = List.split (list expr split_comma t) in 
+            Tag (tag, Some (`Tuple es)), List.concat vs
+      | t                                  -> let e, v = expr t in Extends e, v
+    and application : Ast.ctyp -> (qname * expr list) * vmap = function
+      | Ast.TyApp (_, (Ast.TyApp _ as a), t) -> 
+          let (tcon, args), vs = application a in
+          let e, vs' = expr t in
+            (tcon, args @ [e]), vs @ vs'
+      | Ast.TyApp (_, (Ast.TyId (_, tcon)), t) -> 
+          let e, v = expr t in (qident tcon, [e]), v
+      | _ -> assert false
+    and variant tags ?alias spec = 
+      let name = fresh_name () in
+      let tags, vs = List.split (list tagspec split_or tags) in
+        (apply_t name, 
+         [name, (spec, tags), alias] @ List.concat vs)
+    let rec polyexpr : Ast.ctyp -> poly_expr * vmap = function
+      | Ast.TyPol (_, ps, t) -> 
+          begin match polyexpr t with 
+            | (ps',t'), [] -> (list param split_comma ps @ ps', t'), []
+            |  _ -> failwith ("deriving does not handle polymorphic variant "
+                              ^"definitions within polymorphic record field types")
+          end
+      | t -> let e, v = expr t in ([], e), v
 
 
-  let field : Ast.ctyp -> field = function 
-    | Ast.TyCol (_, Ast.TyId (_,name), Ast.TyMut (_, t)) ->
-        (ident name, polyexpr t, `Mutable)
-    | Ast.TyCol (_, Ast.TyId (_,name), t) ->
-        (ident name, polyexpr t, `Immutable)
-    | _ -> assert false
+    let field : Ast.ctyp -> field * vmap = function 
+      | Ast.TyCol (_, Ast.TyId (_,name), Ast.TyMut (_, t)) ->
+          let p, v = polyexpr t in (ident name, p, `Mutable), v
+      | Ast.TyCol (_, Ast.TyId (_,name), t) ->
+          let p, v = polyexpr t in (ident name, p, `Immutable), v
+      | _ -> assert false
 
-  let summand = function 
-    | Ast.TyId (_, c)                  -> ident c, []
-    | Ast.TyOf (_, Ast.TyId (_, c), t) -> ident c, list expr split_and t
-    | _                                -> assert false
+    let summand : Ast.ctyp -> summand * vmap = function 
+      | Ast.TyId (_, c)                  -> (ident c, []), []
+      | Ast.TyOf (_, Ast.TyId (_, c), t) -> 
+          let es, vs = List.split (list expr split_and t) in (ident c, es), List.concat vs
+      | _                                -> assert false
 
-  let toplevel = function
-    | Ast.TyRec (loc, fields) -> Left (Record (list field split_semi fields))
-    | Ast.TySum (loc, summands) -> Left (Sum (list summand split_or summands))
-    | Ast.TyPrv _ -> failwith "private types nyi"
-    | t -> Right (expr t)
+    let toplevel : Ast.ctyp -> rhs * vmap  = function
+      | Ast.TyRec (loc, fields) -> 
+          let fields, vs = List.split (list field split_semi fields) in 
+            `Fresh (None, Record fields), List.concat vs
+      | Ast.TySum (loc, summands) -> 
+          let summands, vs = List.split (list summand split_or summands) in
+            `Fresh (None, Sum summands), List.concat vs
+      | Ast.TyVrnEq (_, t)  -> 
+          let es, vs = List.split (list tagspec split_or t) in
+            `Variant (`Eq, es), List.concat vs
+      | Ast.TyVrnSup (_, t) ->
+          let es, vs = List.split (list tagspec split_or t) in
+            `Variant (`Gt, es), List.concat vs 
+      | Ast.TyVrnInf (_, t) ->
+          let es, vs = List.split (list tagspec split_or t) in
+            `Variant (`Lt, es), List.concat vs
+      | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
+      | Ast.TyPrv _ -> failwith "deriving does not handle private types"
+      | t -> let e, v = expr t in `Expr e, v
 
-  let constraints _ = [] (* failwith "constraints nyi" *)
+    let constraints = function
+        [] -> []
+      | _ -> failwith "deriving does not currently handle constraints on type declarations"
+
+    let declify = 
+      let declify1 (name, variant, alias) : decl * (name * expr) option = 
+        (name, params, `Variant variant, []), Option.map (fun a -> a, apply_t name) alias in
+        List.map declify1
+  end
+
+  type alias_map = expr NameMap.t
+  let build_alias_map : (name * expr) option list -> alias_map = fun m ->
+    NameMap.fromList (List.concat_map (function None -> [] | Some e -> [e]) m)
 
   let split : Ast.ctyp -> Ast.ctyp list =
     let rec aux t = match split_and t with
       | Left (l, r) -> aux l @ aux r
       | Right t -> [t]
     in aux
-
-  let decl : Ast.ctyp -> decl = function
+       
+  let rec decl : Ast.ctyp -> decl list * alias_map = function
     | Ast.TyDcl (loc, name, ps, rhs, cs) ->
-        (name,
-         params ps,
-         (match toplevel rhs with
-            | Left dec -> `Fresh (None, dec)
-            | Right expr -> `Alias expr
-         ),
-         constraints cs)
+        let module P = WithParams(struct let params = params ps end) in
+        let tl, vs = P.toplevel rhs in
+        let decls, aliases = List.split (P.declify vs) in
+          [(name, P.params, tl, P.constraints cs)] @ decls, build_alias_map aliases
     | _ -> assert false
+        
+  let substitute_aliases : alias_map -> decl -> decl = fun map ->
+  object
+    inherit transform as super
+    method expr = function
+      | `Param (p,_) when NameMap.mem p map -> NameMap.find p map
+      | e -> super#expr e
+  end # decl
 
-
-  (* Not yet implemented in the translation:
-   * label types (TyOlb, TyLab)
-   * Equations (TyMan)
-   * constraints
-   *)
-
+  let decls : Ast.ctyp -> decl list =
+    fun ctyp -> 
+      let decls, aliases = List.split (List.map decl (split ctyp)) in
+        List.concat
+          (List.map
+             (List.map
+                (substitute_aliases (NameMap.union_disjoint aliases))) decls)
 end
 
 module Untranslate (C:sig val loc : Camlp4.PreCast.Ast.Loc.t end) =
 struct
   open Camlp4.PreCast
   open C
-
+    
   let param = function
     | p, None        -> <:ctyp<  '$lid:p$ >>
     | p, Some `Plus  -> <:ctyp< +'$lid:p$ >>
     | p, Some `Minus -> <:ctyp< -'$lid:p$ >>
 
-  let rec qname = function
-    | [] -> assert false
-    | [x] -> <:ident< $lid:x$ >>
-    | x::xs -> <:ident< $uid:x$.$qname xs$ >>
+        let rec qname = function
+          | [] -> assert false
+          | [x] -> <:ident< $lid:x$ >>
+          | x::xs -> <:ident< $uid:x$.$qname xs$ >>
 
-  let unlist join items translate = 
-    List.fold_right join (List.map translate items) (Ast.TyNil loc)
+              let unlist join items translate = 
+                List.fold_right join (List.map translate items) (Ast.TyNil loc)
 
   let pair l r = Ast.TySta (loc, l,r)
   let bar l r = <:ctyp< $l$ | $r$ >>
   let semi l r = <:ctyp< $l$ ; $r$ >>
   let comma l r = <:ctyp< $l$ , $r$ >>
+  let and_ l r = <:ctyp< $l$ and $r$ >>
 
   let expr = 
-    let rec expr = function
-        Param p -> param p
-      | Underscore -> <:ctyp< _ >>
-      | Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
-      | Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)
-      | Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
-      | Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
-      | Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
-      | Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
+    let rec expr : expr -> Ast.ctyp = function
+        `Param p -> param p
+      | `Underscore -> <:ctyp< _ >>
+      | `Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
+      | `Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)
+      | `Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
+      | _ -> assert false
     and app f = function
       | []    -> f
       | [x]   -> <:ctyp< $expr x$ $f$ >>
       | x::xs -> app (<:ctyp< $expr x$ $f$ >>) xs
-    and tagspec = function
-      | Tag (c, None) -> <:ctyp< `$c$ >>
-      | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
-      | Extends t -> <:ctyp< $expr t$ >>
     in expr
-
+         
   let poly (params, t) =
     List.fold_right
       (fun (p : param) (t : Ast.ctyp) -> 
@@ -341,27 +394,31 @@ struct
       (expr t)
 
   let rhs = 
+    let tagspec = function
+      | Tag (c, None) -> <:ctyp< `$c$ >>
+      | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
+      | Extends t -> <:ctyp< $expr t$ >> in
     let summand (name, (args : expr list)) =
-      let args = unlist comma args expr in
+      let args = unlist and_ args expr in
         <:ctyp< $uid:name$ of $args$ >> in
-    let field ((name, t, mut) : field) = 
-      match mut with
-        | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly t$ >>
-        | `Immutable -> <:ctyp<         $lid:name$ : $poly t$ >> in
+    let field ((name, t, mut) : field) = match mut with
+      | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly t$ >>
+      | `Immutable -> <:ctyp<         $lid:name$ : $poly t$ >> in
     let repr = function
       | Sum summands  -> unlist bar summands summand
-      | Record fields -> unlist semi fields field
+      | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
     in function
       | `Fresh (None, t) -> repr t
-      | `Alias t         -> expr t
-
+      | `Expr t          -> expr t
+      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
+      | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
+      | `Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
+          
   let decl ((name, params, r, constraints): decl) =
-    Ast.StTyp (loc,
-               Ast.TyDcl (loc, name, List.map param params,
-                          rhs r, [])) (* TODO: constraints *)
+(*    Ast.StTyp (loc,*)
+    Ast.TyDcl (loc, name, List.map param params, rhs r, [])
 
   let sigdecl ((name, params, r, constraints): decl) =
-    Ast.SgTyp (loc,
-               Ast.TyDcl (loc, name, List.map param params,
-                          rhs r, [])) (* TODO: constraints *)
+    Ast.TyDcl (loc, name, List.map param params, rhs r, []) 
+
 end
