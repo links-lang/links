@@ -62,7 +62,7 @@ class c = object end
 
 (* 11. polymorphic variants (nullary, unary tags, extending complex type expressions, defined inline) *)
 type poly0 = [`T0 | `T1 | `T2 | `T3]
-    deriving (Enum, Bounded)
+    deriving (Enum, Bounded, Show, Eq, Typeable, Shelve)
 
 type poly1 = [`T0 | `T1 of int]
     deriving (Pickle, Eq, Show)
@@ -72,9 +72,10 @@ type poly2 = P of int * [`T0 | `T1 of int] * float
 
 (* 12. `as'-recursion *)
 type poly3 = [`Nil | `Cons of int * 'c] as 'c
-    deriving (Pickle, Eq, Show) 
+    deriving (Pickle, Eq, Show, Typeable, Shelve) 
+
 type poly3b = int * ([`Nil | `Cons of int * 'c] as 'c) * [`F]
-    deriving (Pickle, Eq, Show) 
+    deriving (Pickle, Eq, Show, Typeable, Shelve) 
 
 (* 13. <, >, =, > < polymorphic variants *)
 type poly4 = private [< `A]
@@ -88,27 +89,29 @@ type poly5 = private [> `A]
 
 type 'a poly7 = Foo of [`F of 'a]
 and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
-    deriving (Pickle, Eq, Show, Functor)
+    deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
 (*
 type poly9 = [`F | [`G]]
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
   currently broken.
 
 *)
+type poly10 = [`F | poly3]
+    deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
 (* 14. mutually recursive types (monomorphic, polymorphic) *)
 type mutrec_a = mutrec_c
 and mutrec_b = { l1 : mutrec_c ; l2 : mutrec_a }
 and mutrec_c = S of int * mutrec_a
 and mutrec_d = [`T of mutrec_b]
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type ('a,'b) pmutrec_a = ('a,'b) pmutrec_c
 and ('a,'b) pmutrec_b = { l1 : ('a,'b) pmutrec_c ; l2 : ('a,'b) pmutrec_a }
 and ('a,'b) pmutrec_c = S of 'a * ('a,'b) pmutrec_a * 'b
 and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
-    deriving (Pickle, Eq, Show, Functor)
+    deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
 (* 15. polymorphic types *)
 type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Pickle, Functor, Typeable, Shelve)
@@ -136,3 +139,26 @@ type tup3 = int * float * bool
 type withref = WR of int * (int ref)
   deriving (Pickle, Eq, Show, Typeable(*, Shelve*))
 
+
+(* 21. through module boundaries *)
+module rec M : sig 
+  type t
+  module Pickle_t : Pickle.Pickle with type a = t
+  module Eq_t : Eq.Eq with type a = t
+  module Show_t : Show.Show with type a = t
+end =
+struct
+  type t = [`N|`C of M.t] deriving (Show, Eq, Pickle)
+end
+
+
+(* 21. parameterized types through module boundaries *)
+module rec P : sig 
+  type 'a t
+(*  module Show_t (A : Show.Show) : Show.Show with type a = A.a *)
+end =
+struct
+  type 'a t = [`N|`C of 'a P.t] 
+(*Doesn't work: results in an unsafe module definition 
+*)(*      deriving (Show)*)
+end

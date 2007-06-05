@@ -253,14 +253,14 @@ struct
     let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
                                 (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
                                       context.params) in
-    let projected = (* TODO: apply the functor here *)
+    let projected =
       List.map (fun (name,params,rhs,constraints) -> 
                   let modname = classname ^ "_"^ name in
                   let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
                     <:str_item< module $uid:modname$ = $make_functor rhs$>>)
         decls in
     let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
-      <:str_item< $m$ $List.hd projected$ >>
+      <:str_item< $m$ $list:projected$ >>
 end
    
 let extract_params = 

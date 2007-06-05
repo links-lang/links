@@ -10,7 +10,7 @@ struct
   let classname = "Shelve"
   let bindop = ">>="
 
-  let wrap ctxt tname t shelvers =
+  let wrap ctxt tname decl shelvers =
     let typs, eqs = List.split 
       (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p ctxt.argmap$.Typeable >>, 
                               <:module_expr< $uid:NameMap.find p ctxt.argmap$.Eq >>)
@@ -21,18 +21,38 @@ struct
                           module Eq = $eqmod$ 
                           module Comp = Dynmap.Comp(Typeable)(Eq)
                           open Shelvehelper
-                          type a = $t$
+                          type a = $atype ctxt decl$
                           let shelve = function $list:shelvers$
     end >>
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
     
-  and polycase ctxt tagspec n : Ast.match_case = 
-    failwith "nyi"
+  and polycase ctxt tagspec n : Ast.match_case = match tagspec with
+    | Tag (name, None) -> <:match_case<
+        (`$name$ as obj) ->
+           allocate_store_return (Typeable.makeDynamic obj) Comp.eq
+                                 (make_repr ~constructor:$`int:n$ []) >>
+    | Tag (name, Some t) -> <:match_case< 
+        (`$name$ v1 as obj) ->
+           let module M = $expr ctxt t$ in 
+              $lid:bindop$ (M.shelve v1)
+                 (fun id -> allocate_store_return (Typeable.makeDynamic obj)
+                             Comp.eq
+                             (make_repr ~constructor:$`int:n$ [id])) >>
+    | Extends t -> 
+        let patt, guard, cast = cast_pattern ctxt t in <:match_case<
+         ($patt$ as obj) when $guard$ ->
+           let module M = $expr ctxt t$ in
+           $lid:bindop$ (M.shelve $cast$)
+                     (fun id -> allocate_store_return 
+                                   (Typeable.makeDynamic obj)
+                                   Comp.eq
+                                   (make_repr ~constructor:$`int:n$ [id])) >>
 
-  and variant ctxt decl (_, tags) = 
-    failwith "nyi"
+  and variant ctxt (tname,_,_,_ as decl) (_, tags) = 
+    wrap ctxt tname decl 
+      (List.map2 (polycase ctxt) tags (List.range 0 (List.length tags)))
 
   and case ctxt (name, params') n : Ast.match_case = 
     let ids = List.map (fun n ->  <:expr< $lid:Printf.sprintf "id%d" n$ >>) (List.range 0 (List.length params')) in
@@ -51,7 +71,7 @@ struct
         | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" (List.length params'))$ as obj -> $expr$ >>
 
   and sum ctxt (tname,_,_,_ as decl) summands =
-    wrap ctxt tname (atype ctxt decl)
+    wrap ctxt tname decl
       (List.map2 (case ctxt) summands (List.range 0 (List.length summands)))
 
   and record ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
@@ -65,7 +85,7 @@ struct
                                               ^" with polymorphic fields")))
                    fields)) in
     let nametup = tuple_expr (List.map (fun (f,_,_) -> <:expr< $lid:f$ >>) fields) in
-    wrap ctxt tname (atype ctxt decl)
+    wrap ctxt tname decl
       [ <:match_case< ($patt$ as obj) -> let module M = $tuplemod$ in M.shelve $nametup$  >> ]
 end
 

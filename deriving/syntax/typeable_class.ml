@@ -29,7 +29,7 @@ struct
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
   and sum = gen and record = gen
-  and variant _ _ = raise (Underivable ("Typeable cannot currently be derived for polymorphic variant types"))
+  and variant  = gen (*_ _ = raise (Underivable ("Typeable cannot currently be derived for polymorphic variant types"))*)
 end
 
 let _ = Base.register "Typeable" 

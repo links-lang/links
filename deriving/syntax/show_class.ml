@@ -35,7 +35,7 @@ struct
           <:match_case<
             $patt$ when $guard$ -> 
             $in_hovbox <:expr< let module M = $expr ctxt t$ 
-                                in M.format formatter cast >>$ >>
+                                in M.format formatter $cast$ >>$ >>
 
   and case ctxt : Types.summand -> Ast.match_case =  (* Does this handle the zero-arg case correctly? *)
     fun (name, args) ->
@@ -59,11 +59,11 @@ struct
     | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
   and sum ctxt decl summands = <:module_expr< struct type a = $atype ctxt decl$
-    let rec format formatter = function $list:List.map (case ctxt) summands$
+    let format formatter = function $list:List.map (case ctxt) summands$
   end >>
 
   and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$
-    let rec format formatter $record_pattern fields$ = $in_hovbox
+    let format formatter $record_pattern fields$ = $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{';
          $List.fold_left1
@@ -74,7 +74,7 @@ struct
   end >>
 
   and variant ctxt decl (spec, tags) = <:module_expr< Show.ShowDefaults(struct type a = $atype ctxt decl$
-    let rec format formatter = function $list:List.map (polycase ctxt) tags$
+    let format formatter = function $list:List.map (polycase ctxt) tags$
   end) >>
 end
 
