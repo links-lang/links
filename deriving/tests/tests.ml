@@ -3,31 +3,31 @@
 
 (* 1. sums (nullary, unary, and n-ary) *)
 type sum = S0 | S1 of int | S2 of int * float | S3 of int * float * bool | Sunit of unit | Stup of (int * float) | Stup1 of (int)
-  deriving (Pickle, Eq, Show)
+  deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type nullsum = S0 | S1 | S2 | S3
-    deriving (Enum, Bounded)
+    deriving (Enum, Bounded, Eq, Typeable, Shelve)
 
 (* 2. records with mutable and immutable fields (and various combinations) *)
 type r1 = {
   l1 : int;
   l2 : int;
-} deriving (Pickle, Eq, Show)
+} deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type r2 = {
   mutable l1 : int;
   mutable l2 : int;
-} deriving (Pickle, Eq, Show)
+} deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type r3 = {
   l1 : int;
   mutable l2 : int;
-} deriving (Pickle, Eq, Show)
+} deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 (* 3. polymorphic records *)
 type r4 = {
   l1 : 'a . 'a list
-} (* deriving (Pickle, Eq, Show) *)
+} (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
 
 (* 4. label types *)
 type label = x:int -> int
@@ -39,14 +39,14 @@ type funct = int -> int
 
 (* 6. recursive types *)
 type intseq = INil | ICons of int * intseq
-  deriving (Pickle, Eq, Show)
+  deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type 'a seq = Nil | Cons of 'a * 'a seq
-  deriving (Pickle, Eq, Show, Functor)
+  deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
 (* 7. applied type constructors (nullary, n-ary) *)
 type uses_seqs = (intseq * float seq) 
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 (* 8. polymorphic recursion (should fail) *)
 type 'a nested = NNil | NCons of 'a * ('a * 'a ) nested
@@ -54,11 +54,11 @@ type 'a nested = NNil | NCons of 'a * ('a * 'a ) nested
 
 (* 9. object and class types *)
 type obj = < x : int >
-    (*deriving (Pickle, Eq, Show)*)
+    (*deriving (Pickle, Eq, Show, Typeable, Shelve)*)
 
 (* 10. class types *)
 class c = object end
-  (* deriving (Pickle, Eq, Show) *)
+  (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
 
 (* 11. polymorphic variants (nullary, unary tags, extending complex type expressions, defined inline) *)
 type poly0 = [`T0 | `T1 | `T2 | `T3]
@@ -79,10 +79,10 @@ type poly4 = private [< `A]
     (* deriving (Pickle, Eq, Show) *)
 
 type poly5 = private [> `A]
-    (* deriving (Pickle, Eq, Show) *)
+    (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
 
 (*type poly6 = [< `A > `B]*)
-    (* deriving (Pickle, Eq, Show) *)
+    (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
 
 (* 14. mutually recursive types (monomorphic, polymorphic) *)
 type mutrec_a = mutrec_c
@@ -98,17 +98,17 @@ and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
     deriving (Pickle, Eq, Show, Functor)
 
 (* 15. polymorphic types *)
-type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Pickle, Functor)
+type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Pickle, Functor, Typeable, Shelve)
 type ('a,'b) ff2 = F1 of ('a,'b) ff2 | F2 of 'a seq * int * 'b option
-  deriving (Pickle, Eq, Show, Functor)
+  deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
 (* 16. tuples *)
 type tup0 = unit
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
 type tup2 = int * float
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
 type tup3 = int * float * bool
-    deriving (Pickle, Eq, Show)
+    deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 (* 17. underscore (?) *)
 (* TODO *)
@@ -121,4 +121,4 @@ type tup3 = int * float * bool
 
 (* 20. references *)
 type withref = WR of int * (int ref)
-  deriving (Pickle, Eq, Show)
+  deriving (Pickle, Eq, Show, Typeable(*, Shelve*))

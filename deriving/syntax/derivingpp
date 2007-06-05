@@ -2,4 +2,4 @@ DIR=$(dirname $(realpath $0))
 
 #echo $DIR
 
-camlp4o -I $DIR utils.cmo types.cmo base.cmo extend.cmo show_class.cmo pickle_class.cmo enum_class.cmo bounded_class.cmo eq_class.cmo typeable_class.cmo functor_class.cmo pr_o.cmo "$@"
+camlp4o -I $DIR utils.cmo types.cmo base.cmo extend.cmo show_class.cmo pickle_class.cmo enum_class.cmo bounded_class.cmo eq_class.cmo typeable_class.cmo functor_class.cmo shelve_class.cmo pr_o.cmo "$@"

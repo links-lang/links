@@ -128,6 +128,13 @@ struct
            fields) in
         Ast.ExRec (loc, es, Ast.ExNil loc)
 
+  let expr_list : Ast.expr list -> Ast.expr = 
+    fun exprs ->
+      List.fold_right 
+        (fun car cdr -> <:expr< $car$ :: $cdr$ >>)
+        exprs
+      <:expr< [] >>
+
   let tuple_expr : Ast.expr list -> Ast.expr = function
     | [] -> <:expr< () >>
     | [x] -> x
@@ -144,7 +151,7 @@ struct
               (* At time of writing I haven't managed to write anything
                  using quotations that generates an n-tuple *)
               List.fold_left 
-                (fun (p, e) (patt, expr) -> Ast.PaCom (loc, patt, p), Ast.ExCom (loc, expr, e))
+                (fun (p, e) (patt, expr) -> Ast.PaCom (loc, p, patt), Ast.ExCom (loc, e, expr))
                 (<:patt< >>, <:expr< >>)
                 (List.map (fun n -> <:patt< $lid:v n$ >>, <:expr< $lid:v n $ >>)
                    (List.range 0 n))

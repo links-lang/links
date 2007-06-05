@@ -19,6 +19,7 @@ SOURCES = utils.ml              \
           eq_class.ml           \
           typeable_class.ml     \
           functor_class.ml      \
+          shelve_class.ml       \
 
 #shelve rewriter fold
 
