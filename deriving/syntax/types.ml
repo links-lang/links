@@ -21,7 +21,7 @@ and repr =
   | Record of field list
 and field = name * poly_expr * [`Mutable | `Immutable]
 and summand = name * expr list
-and constraint_ = name * expr
+and constraint_ = expr * expr
 and expr =  (* elements that can be nested *)
     [ `Param of param
     | `Underscore
@@ -68,8 +68,8 @@ object (self : 'self)
   method summand (_,es) =
     self#crush (List.map self#expr es)
 
-  method constraint_ (_,e) =
-    self#crush [self#expr e]
+  method constraint_ (e1,e2) =
+    self#crush [self#expr e1; self#expr e2]
 
   method expr e = 
     self#crush (match e with
@@ -116,8 +116,8 @@ object (self : 'self)
   method summand (name, exprs) = 
     (name, List.map (self # expr) exprs)
 
-  method constraint_ (name, expr) =
-    (name, self # expr expr)
+  method constraint_ (e1, e2) =
+    (self#expr e1, self#expr e2)
 
   method expr = function
     | `Object _
@@ -303,9 +303,15 @@ struct
       | Ast.TyPrv _ -> failwith "deriving does not handle private types"
       | t -> let e, v = expr t in `Expr e, v
 
-    let constraints = function
-        [] -> []
-      | _ -> failwith "deriving does not currently handle constraints on type declarations"
+    let constraints : (Ast.ctyp * Ast.ctyp) list -> constraint_ list * vmap = 
+      fun cs ->
+        List.fold_right
+          (fun (c1,c2) (es,vs) -> 
+             let e1,v1 = expr c1 
+             and e2,v2 = expr c2
+             in ((e1,e2)::es), (v1 @ v2 @ vs))
+          cs
+          ([],[])
 
     let declify = 
       let declify1 (name, variant, alias) : decl * (name * expr) option = 
@@ -327,8 +333,9 @@ struct
     | Ast.TyDcl (loc, name, ps, rhs, cs) ->
         let module P = WithParams(struct let params = params ps end) in
         let tl, vs = P.toplevel rhs in
-        let decls, aliases = List.split (P.declify vs) in
-          [(name, P.params, tl, P.constraints cs)] @ decls, build_alias_map aliases
+        let cs, vcs = P.constraints cs in
+        let decls, aliases = List.split (P.declify (vs @ vcs)) in
+          [(name, P.params, tl, cs)] @ decls, build_alias_map aliases
     | _ -> assert false
         
   let substitute_aliases : alias_map -> decl -> decl = fun map ->
@@ -413,12 +420,14 @@ struct
       | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
       | `Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
-          
+
+  let constraint_ (e1,e2) = (expr e1, expr e2)
+
   let decl ((name, params, r, constraints): decl) =
 (*    Ast.StTyp (loc,*)
-    Ast.TyDcl (loc, name, List.map param params, rhs r, [])
+    Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
 
   let sigdecl ((name, params, r, constraints): decl) =
-    Ast.TyDcl (loc, name, List.map param params, rhs r, []) 
+    Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
 
 end
