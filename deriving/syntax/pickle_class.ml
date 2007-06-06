@@ -9,50 +9,29 @@ struct
 
   let classname = "Pickle"
 
-  let wrap t picklers (unpickle : Ast.expr) =
-    <:module_expr< struct type a = $t$
+  let wrap ctxt decl picklers unpickle =
+    <:module_expr< struct type a = $atype ctxt decl$
                           let pickle buffer = function $list:picklers$
-                          let unpickle stream = $unpickle$
-    end >>
+                          let unpickle stream = $unpickle$ end >>
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
     
-  and polycase ctxt : Types.tagspec * int -> Ast.match_case * Ast.match_case = 
-    (* TODO: use 
-       $`int:Obj.magic `tag : int$ for the tags rather than
-       generating sequential numbers.  
-
-       Advantages:
-       * more robust
-       * don't need to tag "extended" types (i.e. the r in [`A|r])
-
-       Disadvantages:
-       * probably less space efficient in general, since the numbers
-         will be bigger.
-    *)
-    function
-      | Tag (name, args), n -> 
-          let tag_patt, pickle_args,unpickle_args = match args with 
-            | None   -> <:patt< `$name$ >>,
-                        <:expr< >>,
-                        <:expr< `$name$ >>
-            | Some e -> <:patt< `$name$ x >>,
-                        <:expr< let module M = $expr ctxt e$ 
-                                 in M.pickle buffer x >>,
-                        <:expr< let module M = $expr ctxt e$ in 
-                                let x = M.unpickle stream in
-                               `$name$ x >> in
-            <:match_case< $tag_patt$ -> 
-              Pickle_int.pickle buffer $`int:n$;
-              $pickle_args$ >>,
-            <:match_case< $`int:n$ -> $unpickle_args$ >>
-      | Extends t, n -> 
+  and polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
+   let picklen = <:expr< Pickle_int.pickle buffer $`int:n$ >> in
+    match tagspec with
+      | Tag (name, args) -> (match args with 
+            | None   -> <:match_case< `$name$ -> $picklen$ >>,
+                        <:match_case< $`int:n$ -> `$name$ >>
+            | Some e -> <:match_case< `$name$ x -> $picklen$;
+                                       let module M = $expr ctxt e$ in M.pickle buffer x >>,
+                        <:match_case< $`int:n$ -> let module M = $expr ctxt e$ in 
+                                       `$name$ (M.unpickle stream) >>)
+      | Extends t -> 
           let patt, guard, cast = cast_pattern ctxt t in
             <:match_case< $patt$ when $guard$ -> 
                           let module M = $expr ctxt t$ in 
-                            Pickle_int.pickle buffer $`int:n$;
-                            M.pickle buffer $cast$ >>,
+                            $picklen$; M.pickle buffer $cast$ >>,
             <:match_case< $`int:n$ -> let module M = $expr ctxt t$ 
                                        in (M.unpickle stream :> a) >>
 
@@ -61,7 +40,7 @@ struct
         | [] -> (<:match_case< $uid:name$ -> Pickle_int.pickle buffer $`int:n$ >>,
                  <:match_case< $`int:n$ -> $uid:name$ >>)
         | _ -> 
-        let patt, exp = tuple (List.length args) in (* Does this work correctly for zero-arg constructors? *)
+        let patt, exp = tuple (List.length args) in
         <:match_case< $uid:name$ $patt$ -> 
                       Pickle_int.pickle buffer $`int:n$;
                       let module M = $expr ctxt (`Tuple args)$ 
@@ -79,11 +58,9 @@ struct
   and sum ctxt ((tname,_,_,_) as decl) summands = 
     let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
     let picklers, unpicklers = 
-      List.split (List.map2 (case ctxt) 
-                    summands
-                    (List.range 0 (List.length summands))) in
-      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
-                                              | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
+      List.split (List.map2 (case ctxt) summands (List.range 0 (List.length summands))) in
+      wrap ctxt decl picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
+                                        | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 
   and record ctxt decl fields = 
     let picklers, unpicklers = 
@@ -95,18 +72,16 @@ struct
         fields
         unpicklers
         (record_expression fields) in
-      wrap (atype ctxt decl) 
+      wrap ctxt decl
             [ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
             unpickle
 
-  and variant ctxt decl (_, tags) = 
+   and variant ctxt decl (_, tags) = 
     let msg = "Unexpected tag when unpickling polymorphic variant: " in
     let picklers, unpicklers = 
-      List.split (List.map2 (F.curry (polycase ctxt))
-                    tags
-                    (List.range 0 (List.length tags))) in
-      wrap (atype ctxt decl) picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
-                                              | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
+      List.split (List.map2 (polycase ctxt) tags (List.range 0 (List.length tags))) in
+      wrap ctxt decl picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
+                                         | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 end
 
 let _ = Base.register "Pickle"

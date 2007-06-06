@@ -12,7 +12,7 @@ type nullsum = S0 | S1 | S2 | S3
 type r1 = {
   l1 : int;
   l2 : int;
-} deriving (Pickle, Eq, Show, Typeable, Shelve)
+} deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
 
 type r2 = {
   mutable l1 : int;
@@ -39,7 +39,7 @@ type funct = int -> int
 
 (* 6. recursive types *)
 type intseq = INil | ICons of int * intseq
-  deriving (Pickle, Eq, Show, Typeable, Shelve)
+  deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
 
 type 'a seq = Nil | Cons of 'a * 'a seq
   deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)

@@ -10,7 +10,7 @@ struct
   let classname = "Shelve"
   let bindop = ">>="
 
-  let wrap ctxt tname decl shelvers =
+  let wrap ctxt tname decl shelvers unshelver =
     let typs, eqs = List.split 
       (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p ctxt.argmap$.Typeable >>, 
                               <:module_expr< $uid:NameMap.find p ctxt.argmap$.Eq >>)
@@ -23,6 +23,9 @@ struct
                           open Shelvehelper
                           type a = $atype ctxt decl$
                           let shelve = function $list:shelvers$
+                          open Shelvehelper.Input
+                          module W = Whizzy(Typeable)
+                          let unshelve = $unshelver$
     end >>
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
@@ -50,29 +53,56 @@ struct
                                    Comp.eq
                                    (make_repr ~constructor:$`int:n$ [id])) >>
 
-  and variant ctxt (tname,_,_,_ as decl) (_, tags) = 
-    wrap ctxt tname decl 
-      (List.map2 (polycase ctxt) tags (List.range 0 (List.length tags)))
+  and polycase_un ctxt tagspec n : Ast.match_case = match tagspec with
+    | Tag (name, None) -> <:match_case< $`int:n$, [] -> return `$name$ >>
+    | Tag (name, Some t) -> <:match_case< $`int:n$, [x] -> 
+      let module M = $expr ctxt t$ in ($lid:bindop$) (M.unshelve x) (fun o -> return (`$name$ o)) >>
+    | Extends t -> <:match_case< $`int:n$, [x] -> let module M = $expr ctxt t$ in (M.unshelve x : M.a n :> a n) >>
 
-  and case ctxt (name, params') n : Ast.match_case = 
-    let ids = List.map (fun n ->  <:expr< $lid:Printf.sprintf "id%d" n$ >>) (List.range 0 (List.length params')) in
-    let expr = 
+  and variant ctxt (tname,_,_,_ as decl) (_, tags) = 
+    let ns = (List.range 0 (List.length tags)) in
+      wrap ctxt tname decl 
+        (List.map2 (polycase ctxt) tags ns)
+        <:expr< fun id -> 
+                 let f = function $list:List.map2 (polycase_un ctxt) tags ns$
+                 in W.whizzySum f id >>
+
+  and case ctxt (name, params') n : Ast.match_case * Ast.match_case = 
+    let nparams = List.length params' in
+    let ids = List.map (fun n ->  <:expr< $lid:Printf.sprintf "id%d" n$ >>) (List.range 0 nparams) in
+    let exp = 
       List.fold_right2
         (fun p n tail -> 
            <:expr< let module M = $expr ctxt p$ in
                        $lid:bindop$ (M.shelve $lid:Printf.sprintf "v%d" n$)
                          (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
         params'
-        (List.range 0 (List.length params'))
+        (List.range 0 nparams)
         <:expr< allocate_store_return (Typeable.makeDynamic obj)
                 Comp.eq (make_repr ~constructor:$`int:n$ $expr_list ids$) >> in
       match params' with
-        | [] -> <:match_case< $uid:name$ as obj -> $expr$ >>
-        | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" (List.length params'))$ as obj -> $expr$ >>
+        | [] -> <:match_case< $uid:name$ as obj -> $exp$ >>,
+                <:match_case< $`int:n$, [] -> return $uid:name$ >>
+        | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" nparams)$ as obj -> $exp$ >>,
+  let _, tuple = tuple ~param:"id" nparams in
+  let patt, exp = 
+    List.fold_right2 
+      (fun n t (pat, exp) ->
+         let m = Printf.sprintf "M%d" n and id = Printf.sprintf "id%d" n in
+         <:patt< $lid:id$ :: $pat$ >>,
+         <:expr< let module $uid:m$ = $expr ctxt t$
+                  in $lid:bindop$ ($uid:m$.unshelve $lid:id$) (fun $lid:id$ -> $exp$) >>)
+      (List.range 0 nparams)
+      params'
+    (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
+    <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
   and sum ctxt (tname,_,_,_ as decl) summands =
+    let shelvers, unshelvers = List.split (List.map2 (case ctxt) summands (List.range 0 (List.length summands))) in
     wrap ctxt tname decl
-      (List.map2 (case ctxt) summands (List.range 0 (List.length summands)))
+      shelvers
+      <:expr< fun id -> 
+        let f = function $list:unshelvers$ in W.whizzySum f id >>
 
   and record ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
     let patt = record_pattern fields in 
@@ -87,10 +117,25 @@ struct
     let nametup = tuple_expr (List.map (fun (f,_,_) -> <:expr< $lid:f$ >>) fields) in
     wrap ctxt tname decl
       [ <:match_case< ($patt$ as obj) -> let module M = $tuplemod$ in M.shelve $nametup$  >> ]
+      (let names = List.map (Printf.sprintf "id%d") (List.range 0 (List.length fields)) in
+       let patt = 
+         List.fold_right
+           (fun name patt -> <:patt< $lid:name$::$patt$>>) names <:patt< [] >> in
+       let rexp = 
+         record_expr (List.map2
+                        (fun (label,_,_) name -> (label, <:expr< $lid:name$ >>))
+                        fields names) in
+       let exp = 
+         List.fold_right2
+           (fun name (_,(_,t),_) exp -> 
+              <:expr< let module M = $expr ctxt t$ 
+                       in ($lid:bindop$) (M.unshelve $lid:name$) 
+                               (fun $lid:name$ -> $exp$) >>)
+           names fields <:expr< return $rexp$ >> in
+      <:expr< fun id -> let f = fun $patt$ -> $exp$ in W.whizzyNoCtor f id >>)
 end
 
 let _ = Base.register "Shelve"
   (fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
-         ~default_module:"Shelve_defaults" ())
+       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname ())

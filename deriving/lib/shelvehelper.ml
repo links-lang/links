@@ -26,7 +26,7 @@ end
 module IdMap = Map.Make (Id)
 type id = Id.t
 
-type repr = Bytes of string | CApp of int option * Id.t list
+type repr = Bytes of string | CApp of (int option * Id.t list)
   deriving (Typeable, Eq, Show, Pickle)
 
 module Pickle_Ids = Pickle.Pickle_list(Id.Pickle_t)
@@ -122,3 +122,49 @@ end
 include Shelver
 
 let repr_of_string s = Bytes s
+let string_of_repr = function
+  | Bytes s -> s
+  | _ -> invalid_arg "string_of_repr"
+
+module Input =
+struct
+  type input_state = (repr * (dynamic option)) IdMap.t
+      
+  include Monad.Monad_state(struct type state = input_state end)
+
+  let decode_repr_ctor = function
+    | CApp (Some c, ids) -> (c, ids)
+    | _ -> invalid_arg "decode_repr_ctor"
+
+  let decode_repr_noctor = function
+    | CApp (None, ids) -> ids
+    | _ -> invalid_arg "decode_repr_ctor"
+  
+  let find_by_id id =
+    get >>= fun state ->
+      return (IdMap.find id state)
+        
+  let update_map id dynamic =
+    get >>= fun state -> 
+      match IdMap.find id state with 
+        | (repr, None) ->     
+            put (IdMap.add id (repr, Some dynamic) state)
+        | (repr, Some dyn) -> failwith "id already present"
+
+  module Whizzy (T : Typeable.Typeable) =
+  struct
+    let whizzy f id decode =
+      find_by_id id >>= fun (repr, dynopt) ->
+        match dynopt with 
+          | None ->
+              f (decode repr) >>= fun obj ->
+                update_map id (T.makeDynamic obj) >>
+                return obj
+          | Some obj -> match T.cast obj with
+              | Some obj -> return obj
+              | None -> assert false
+
+    let whizzySum f id = whizzy f id decode_repr_ctor
+    let whizzyNoCtor f id = whizzy f id decode_repr_noctor
+  end
+end

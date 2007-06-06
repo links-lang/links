@@ -4,14 +4,21 @@
   2. an object is serialized using the ids of its subobjects
   3. we also serialize a mapping from ids to offsets.
 *)
+exception UnshelvingError of string
+
 open Shelvehelper
+
+type 'a m = 'a Shelvehelper.m
+type id = Shelvehelper.id
+type 'a n = 'a Shelvehelper.Input.m
 
 module type Shelve =
 sig
   type a
   module Typeable : Typeable.Typeable with type a = a
   module Eq : Eq.Eq with type a = a
-  val shelve : a -> id m
+  val shelve   : a -> id m
+  val unshelve : id -> a n
 end
 
 module Shelve_defaults (S : Shelve) = S
@@ -29,6 +36,18 @@ struct
   module Comp = Dynmap.Comp(T)(Eq)
   let shelve obj = 
     allocate_store_return (T.makeDynamic obj) Comp.eq (repr_of_string (P.pickleS obj))
+  open Shelvehelper.Input
+  let unshelve id = 
+    find_by_id id >>= fun (repr, dynopt) ->
+      match dynopt with
+        | None -> 
+            let obj : a = P.unpickleS (string_of_repr repr) in
+              update_map id (T.makeDynamic obj) >> 
+                return obj
+        | Some obj -> 
+            match T.cast obj with 
+              | Some obj -> return obj
+              | None -> assert false
 end
 
 module Shelve_unit : Shelve with type a = unit = Shelve_primtype(Pickle.Pickle_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
@@ -51,12 +70,20 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option =
              allocate_store_return (Typeable.makeDynamic obj) Comp.eq
                (make_repr ~constructor:0 [])
          | Some v0 as obj ->
-             let module M = V0
-             in
-               ( >>= ) (M.shelve v0)
-                 (fun id0 ->
-                    allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-                      (make_repr ~constructor:1 [id0]))
+             V0.shelve v0 >>=
+               (fun id0 ->
+                  allocate_store_return (Typeable.makeDynamic obj) Comp.eq
+                    (make_repr ~constructor:1 [id0]))
+     open Shelvehelper.Input
+     let unshelve = 
+       let module W = Whizzy(Typeable) in
+       let f = function
+         | 0, [] -> return None
+         | 1, [id] -> V0.unshelve id >>= fun obj -> return (Some obj)
+         | n, _ -> raise (UnshelvingError
+                            ("Unexpected tag encountered unshelving "
+                             ^"option : " ^ string_of_int n)) in
+         W.whizzySum f
    end :
      Shelve with type a = V0.a option)
 
@@ -81,6 +108,19 @@ struct
                 (Typeable.makeDynamic obj)
                 Comp.eq
                 (make_repr ~constructor:1 [id0; id1])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let rec unshelve id = 
+    let f = function
+      | 0, [] -> return []
+      | 1, [car;cdr] -> 
+          V0.unshelve car >>= fun car ->
+            unshelve cdr >>= fun cdr ->
+              return (car :: cdr)
+      | n, _ -> raise (UnshelvingError
+                         ("Unexpected tag encountered unshelving "
+                          ^"option : " ^ string_of_int n)) in
+      W.whizzySum f id
 end 
   
 
@@ -103,6 +143,17 @@ struct
       S1.shelve obj1 >>= fun id1 ->
       S2.shelve obj2 >>= fun id2 ->
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2])
+               
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+             return (obj1, obj2)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving pair")))
 end
 
 module Shelve_3
@@ -121,6 +172,17 @@ struct
       S2.shelve obj2 >>= fun id2 ->
       S3.shelve obj3 >>= fun id3 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+             return (obj1, obj2, obj3)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 
@@ -142,6 +204,18 @@ struct
       S3.shelve obj3 >>= fun id3 ->
       S4.shelve obj4 >>= fun id4 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+             return (obj1, obj2, obj3, obj4)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 4-tuple")))
 end
 
 
@@ -165,6 +239,19 @@ struct
       S4.shelve obj4 >>= fun id4 ->
       S5.shelve obj5 >>= fun id5 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4;id5] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+           S5.unshelve id5 >>= fun obj5->
+             return (obj1, obj2, obj3, obj4, obj5)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 
@@ -190,6 +277,20 @@ struct
       S5.shelve obj5 >>= fun id5 ->
       S6.shelve obj6 >>= fun id6 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4;id5;id6] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+           S5.unshelve id5 >>= fun obj5 ->
+           S6.unshelve id6 >>= fun obj6 ->
+             return (obj1, obj2, obj3, obj4, obj5, obj6)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 
@@ -217,6 +318,21 @@ struct
       S6.shelve obj6 >>= fun id6 ->
       S7.shelve obj7 >>= fun id7 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4;id5;id6;id7] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+           S5.unshelve id5 >>= fun obj5 ->
+           S6.unshelve id6 >>= fun obj6 ->
+           S7.unshelve id7 >>= fun obj7 ->
+             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 
@@ -246,6 +362,22 @@ struct
       S7.shelve obj7 >>= fun id7 ->
       S8.shelve obj8 >>= fun id8 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7;id8])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4;id5;id6;id7;id8] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+           S5.unshelve id5 >>= fun obj5 ->
+           S6.unshelve id6 >>= fun obj6 ->
+           S7.unshelve id7 >>= fun obj7 ->
+           S8.unshelve id8 >>= fun obj8 ->
+             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 
@@ -277,6 +409,23 @@ struct
       S8.shelve obj8 >>= fun id8 ->
       S9.shelve obj9 >>= fun id9 ->    
       allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7;id8;id9])
+  open Shelvehelper.Input
+  module W = Whizzy(Typeable)
+  let unshelve = W.whizzyNoCtor
+    (function
+       | [id1;id2;id3;id4;id5;id6;id7;id8;id9] -> 
+           S1.unshelve id1 >>= fun obj1 ->
+           S2.unshelve id2 >>= fun obj2 ->
+           S3.unshelve id3 >>= fun obj3 ->
+           S4.unshelve id4 >>= fun obj4 ->
+           S5.unshelve id5 >>= fun obj5 ->
+           S6.unshelve id6 >>= fun obj6 ->
+           S7.unshelve id7 >>= fun obj7 ->
+           S8.unshelve id8 >>= fun obj8 ->
+           S9.unshelve id9 >>= fun obj9 ->
+             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9)
+       | _ -> raise (UnshelvingError
+                       ("unexpected object encountered unshelving 3-tuple")))
 end
 
 

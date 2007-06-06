@@ -144,10 +144,10 @@ sig
   type config
   type property
   type result
-  type 'a gen (* Functor, Monad *)
+  type +'a gen (* Functor, Monad *)
       
   (* instance decls *)
-  module Monad_gen         : Monad with type 'a m = 'a gen
+  module Monad_gen         : Monad with type +'a m = 'a gen
   module Functor_gen       : Functor with type 'a f = 'a gen
 
   (* Classes *)

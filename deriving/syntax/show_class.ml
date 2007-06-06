@@ -9,6 +9,9 @@ struct
 
   let classname = "Show"
 
+  let wrap ctxt decl matches = <:module_expr< struct type a = $atype ctxt decl$
+      let format formatter = function $list:matches$ end >>
+
   let in_a_box box e =
     <:expr< 
       Format.$lid:box$ formatter 0;
@@ -37,7 +40,7 @@ struct
             $in_hovbox <:expr< let module M = $expr ctxt t$ 
                                 in M.format formatter $cast$ >>$ >>
 
-  and case ctxt : Types.summand -> Ast.match_case =  (* Does this handle the zero-arg case correctly? *)
+  and case ctxt : Types.summand -> Ast.match_case = 
     fun (name, args) ->
       match args with 
         | [] -> <:match_case< $uid:name$ -> Format.pp_print_string formatter $str:name$ >>
@@ -58,24 +61,19 @@ struct
                                      in M.format formatter $lid:name$ >>
     | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands = <:module_expr< struct type a = $atype ctxt decl$
-    let format formatter = function $list:List.map (case ctxt) summands$
-  end >>
+  and sum ctxt decl summands = wrap ctxt decl (List.map (case ctxt) summands)
 
-  and record ctxt decl fields = <:module_expr< struct type a = $atype ctxt decl$
-    let format formatter $record_pattern fields$ = $in_hovbox
+  and record ctxt decl fields = wrap ctxt decl [ <:match_case<
+     $record_pattern fields$ -> $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{';
          $List.fold_left1
            (fun l r -> <:expr< $l$; Format.pp_print_string formatter "; "; $r$ >>)
            (List.map (field ctxt) fields)$;
          Format.pp_print_char formatter '}';
-      >>$
-  end >>
+      >>$ >>]
 
-  and variant ctxt decl (spec, tags) = <:module_expr< Show.ShowDefaults(struct type a = $atype ctxt decl$
-    let format formatter = function $list:List.map (polycase ctxt) tags$
-  end) >>
+  and variant ctxt decl (_,tags) = wrap ctxt decl (List.map (polycase ctxt) tags)
 end
 
 let _ = Base.register "Show" 
