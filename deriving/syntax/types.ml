@@ -14,7 +14,7 @@ type param = name * [`Plus | `Minus] option
 
 (* no support for private types yet *)
 type decl = name * param list
-    * [`Fresh of expr option (* "equation" *) * repr | `Expr of expr | `Variant of variant]
+    * [`Fresh of expr option (* "equation" *) * repr | `Expr of expr | `Variant of variant | `Nothing]
     * constraint_ list
 and repr = 
     Sum of summand list
@@ -38,7 +38,7 @@ and poly_expr = param list * expr
 and variant = [`Gt | `Lt | `Eq] * tagspec list
 and tagspec = Tag of name * expr option 
               | Extends of expr
-type rhs = [`Fresh of expr option * repr | `Expr of expr | `Variant of variant]
+type rhs = [`Fresh of expr option * repr | `Expr of expr | `Variant of variant | `Nothing]
 
 class virtual ['result] fold = 
 object (self : 'self)
@@ -53,7 +53,9 @@ object (self : 'self)
                   | (_, _, `Expr e, cs) ->
                       self#expr e :: List.map self#constraint_ cs
                   | (_, _, `Variant v, cs) ->
-                      self#variant v :: List.map self#constraint_ cs)
+                      self#variant v :: List.map self#constraint_ cs
+                  | (_, _, `Nothing, cs) -> 
+                      List.map self#constraint_ cs)
 
   method repr r =
     self#crush (match r with
@@ -104,6 +106,7 @@ object (self : 'self)
                                        self # repr repr)
       | `Expr e -> `Expr (self # expr e)
       | `Variant v -> `Variant (self # variant v)
+      | `Nothing -> `Nothing
     in  (name, params, rhs, List.map (self # constraint_) constraints)
 
   method repr = function
@@ -240,7 +243,7 @@ struct
       | Ast.TyAli (_, Ast.TyVrnInf (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Lt
       | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
       | Ast.TyLab _ -> failwith "deriving does not handle label types"
-      | e -> failwith ("unexpected type at expr : " ^ DumpAst.ctyp e)
+      | e -> failwith ("unexpected type at expr : " ^ Utils.DumpAst.ctyp e)
     and tagspec = function
       | Ast.TyVrn (_,tag)                  -> Tag (tag, None), []
       | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> 
@@ -299,6 +302,7 @@ struct
       | Ast.TyVrnInf (_, t) ->
           let es, vs = List.split (list tagspec split_or t) in
             `Variant (`Lt, es), List.concat vs
+      | Ast.TyNil _ -> `Nothing, []
       | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
       | Ast.TyPrv _ -> failwith "deriving does not handle private types"
       | t -> let e, v = expr t in `Expr e, v
@@ -420,6 +424,7 @@ struct
       | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
       | `Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
+      | `Nothing -> <:ctyp< >>
 
   let constraint_ (e1,e2) = (expr e1, expr e2)
 

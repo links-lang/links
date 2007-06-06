@@ -77,7 +77,10 @@ struct
 end
 
 let _ = Base.register "Show" 
-  (fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
-         ~default_module:"ShowDefaults" ())
+  ((fun (loc, context, decls) -> 
+      let module M = InContext(struct let loc = loc end) in   
+        M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+          ~default_module:"ShowDefaults" ()),
+   (fun (loc, context, decls) ->
+      let module M = InContext(struct let loc = loc end) in
+        M.gen_sigs ~classname:M.classname ~context ~decls))

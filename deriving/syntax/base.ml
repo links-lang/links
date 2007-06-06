@@ -207,11 +207,12 @@ struct
         | `Fresh (None, Record fields) -> self#record ctxt decl fields
         | `Expr e -> self#expr ctxt e
         | `Variant v -> self# variant ctxt decl v
+        | `Nothing -> <:module_expr< >>
   end
 
   let atype ctxt (name, params, rhs, _) = 
     match rhs with 
-      | `Fresh _ | `Variant _ ->
+      | `Fresh _ | `Variant _ | `Nothing ->
           Untranslate.expr (`Constr ([name],
                                      List.map (fun (p,_) -> `Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
       | `Expr e -> Untranslate.expr (instantiate_modargs ctxt e)
@@ -261,6 +262,16 @@ struct
         decls in
     let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
       <:str_item< $m$ $list:projected$ >>
+
+    let gen_sig ~classname ~context (tname,params,_,_ as decl) = 
+      let t = List.fold_right 
+        (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
+        params
+        <:module_type< $uid:classname$.$uid:classname$ with type a = $atype context decl$ >> in
+        <:sig_item< module $uid:Printf.sprintf "%s_%s" classname tname$ : $t$ >>
+
+    let gen_sigs ~classname ~context ~decls =
+      <:sig_item< $list:List.map (gen_sig ~classname ~context) decls$ >>
 end
    
 let extract_params = 
@@ -289,7 +300,8 @@ let setup_context loc tdecls : context =
       tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) }
       
 type deriver = Loc.t * context * Types.decl list -> Ast.str_item
-let derivers : (name, deriver) Hashtbl.t = Hashtbl.create 15
+and sigderiver = Loc.t * context * Types.decl list -> Ast.sig_item
+let derivers : (name, (deriver * sigderiver)) Hashtbl.t = Hashtbl.create 15
 let register = Hashtbl.add derivers
 let find classname = 
   try Hashtbl.find derivers classname

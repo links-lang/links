@@ -33,7 +33,10 @@ struct
 end
 
 let _ = Base.register "Typeable" 
-  (fun (loc, context, decls) -> 
+  ((fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
        M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
-         ~default_module:"Typeable_defaults" ())
+         ~default_module:"Typeable_defaults" ()),
+  (fun (loc, context, decls) -> 
+     let module M = InContext(struct let loc = loc end) in
+       M.gen_sigs ~context ~decls ~classname:M.classname))

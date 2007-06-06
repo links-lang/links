@@ -112,6 +112,7 @@ struct
     |`Expr e                  -> expr e
     |`Variant (_, tags) -> 
        <:expr< function $list:List.map polycase tags$ >>
+    | `Nothing -> raise (Underivable "Cannot generate functor instance for the empty type")
 
 
   let maptype name = 
@@ -132,9 +133,17 @@ struct
          $uid:classname ^ "_" ^ name$
        : sig $list:signature name$ end
        = $wrapper name (rhs r)$ >>
+
+  let gen_sig (tname, params, _, _) = 
+    <:sig_item< module $uid:classname ^ "_" ^ tname$ :
+      sig type $tdec tname$ val map : $sigdec tname$ end >>
+
 end
 
 let _ = Base.register "Functor"
+  ((fun (loc, context, decls) ->
+     let module F = InContext(struct let loc = loc and context = context end) in
+       <:str_item< module rec $list:List.map F.decl decls$ >>),
   (fun (loc, context, decls) ->
      let module F = InContext(struct let loc = loc and context = context end) in
-       <:str_item< module rec $list:List.map F.decl decls$ >>)
+       <:sig_item< $list:List.map F.gen_sig decls$>>))
