@@ -17,38 +17,53 @@ sig
   type a
   module Typeable : Typeable.Typeable with type a = a
   module Eq : Eq.Eq with type a = a
-  val shelve   : a -> id m
+  val shelve : a -> id m
   val unshelve : id -> a n
+  val shelveS : a -> string
+  val unshelveS : string -> a
 end
 
-module Shelve_defaults (S : Shelve) = S
+module Shelve_defaults
+  (S : sig
+     type a
+     module Typeable : Typeable.Typeable with type a = a
+     module Eq : Eq.Eq with type a = a
+     val shelve : a -> id m
+     val unshelve : id -> a Input.m
+   end) =
+struct
+  include S
+  module M = Do(S)
+  let shelveS = M.doShelve
+  and unshelveS = M.doUnshelve
+end
 
 module Shelve_primtype
   (P : Pickle.Pickle)
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
   : Shelve with type a = P.a
-           and type a = T.a =
-struct
-  type a = T.a
-  module Typeable = T
-  module Eq = E
-  module Comp = Dynmap.Comp(T)(Eq)
-  let shelve obj = 
-    allocate_store_return (T.makeDynamic obj) Comp.eq (repr_of_string (P.pickleS obj))
-  open Shelvehelper.Input
-  let unshelve id = 
-    find_by_id id >>= fun (repr, dynopt) ->
-      match dynopt with
-        | None -> 
-            let obj : a = P.unpickleS (string_of_repr repr) in
-              update_map id (T.makeDynamic obj) >> 
-                return obj
-        | Some obj -> 
-            match T.cast obj with 
-              | Some obj -> return obj
-              | None -> assert false
-end
+           and type a = T.a = Shelve_defaults
+  (struct
+     type a = T.a
+     module Typeable = T
+     module Eq = E
+     module Comp = Dynmap.Comp(T)(Eq)
+     let shelve obj = 
+       allocate_store_return (T.makeDynamic obj) Comp.eq (repr_of_string (P.pickleS obj))
+     open Shelvehelper.Input
+     let unshelve id = 
+       find_by_id id >>= fun (repr, dynopt) ->
+         match dynopt with
+           | None -> 
+               let obj : a = P.unpickleS (string_of_repr repr) in
+                 update_map id (T.makeDynamic obj) >> 
+                   return obj
+           | Some obj -> 
+               match T.cast obj with 
+                 | Some obj -> return obj
+                 | None -> assert false
+   end)
 
 module Shelve_unit : Shelve with type a = unit = Shelve_primtype(Pickle.Pickle_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
 module Shelve_bool = Shelve_primtype(Pickle.Pickle_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
@@ -57,39 +72,38 @@ module Shelve_char = Shelve_primtype(Pickle.Pickle_char)(Eq.Eq_char)(Typeable.Ty
 module Shelve_float = Shelve_primtype(Pickle.Pickle_float)(Eq.Eq_float)(Typeable.Typeable_float)
 module Shelve_num = Shelve_primtype(Pickle.Pickle_num)(Eq.Eq_num)(Typeable.Typeable_num)
 
-module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option =
-  (struct
-     module Typeable = Typeable.Typeable_option (V0.Typeable)
-     module Eq = Eq.Eq_option (V0.Eq)
-     module Comp = Dynmap.Comp (Typeable) (Eq)
-     open Shelvehelper
-     type a = V0.a option
-     let rec shelve =
-       function
-           None as obj ->
-             allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-               (make_repr ~constructor:0 [])
-         | Some v0 as obj ->
-             V0.shelve v0 >>=
-               (fun id0 ->
-                  allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-                    (make_repr ~constructor:1 [id0]))
-     open Shelvehelper.Input
-     let unshelve = 
-       let module W = Whizzy(Typeable) in
-       let f = function
-         | 0, [] -> return None
-         | 1, [id] -> V0.unshelve id >>= fun obj -> return (Some obj)
-         | n, _ -> raise (UnshelvingError
-                            ("Unexpected tag encountered unshelving "
-                             ^"option : " ^ string_of_int n)) in
-         W.whizzySum f
-   end :
-     Shelve with type a = V0.a option)
+module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_defaults(
+  struct
+    module Typeable = Typeable.Typeable_option (V0.Typeable)
+    module Eq = Eq.Eq_option (V0.Eq)
+    module Comp = Dynmap.Comp (Typeable) (Eq)
+    open Shelvehelper
+    type a = V0.a option
+    let rec shelve =
+      function
+          None as obj ->
+            allocate_store_return (Typeable.makeDynamic obj) Comp.eq
+              (make_repr ~constructor:0 [])
+        | Some v0 as obj ->
+            V0.shelve v0 >>=
+              (fun id0 ->
+                 allocate_store_return (Typeable.makeDynamic obj) Comp.eq
+                   (make_repr ~constructor:1 [id0]))
+    open Shelvehelper.Input
+    let unshelve = 
+      let module W = Whizzy(Typeable) in
+      let f = function
+        | 0, [] -> return None
+        | 1, [id] -> V0.unshelve id >>= fun obj -> return (Some obj)
+        | n, _ -> raise (UnshelvingError
+                           ("Unexpected tag encountered unshelving "
+                            ^"option : " ^ string_of_int n)) in
+        W.whizzySum f
+  end)
 
 
 module Shelve_list (V0 : Shelve)
-  : Shelve with type a = V0.a list =
+  : Shelve with type a = V0.a list = Shelve_defaults (
 struct
   module Typeable = Typeable.Typeable_list (V0.Typeable)
   module Eq = Eq.Eq_list (V0.Eq)
@@ -121,7 +135,7 @@ struct
                          ("Unexpected tag encountered unshelving "
                           ^"option : " ^ string_of_int n)) in
       W.whizzySum f id
-end 
+end)
   
 
 (* Is this right for mutable strings?  I think so, because of Eq, but it should be checked *)
@@ -132,8 +146,8 @@ module Shelve_1 (S1 : Shelve) = S1
 module Shelve_2
   (S1 : Shelve)
   (S2 : Shelve) 
-  : Shelve with type a = S1.a * S2.a =
-struct
+  : Shelve with type a = S1.a * S2.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a
   module Typeable = Typeable.Typeable_2(S1.Typeable)(S2.Typeable)
   module Eq = Eq.Eq_2(S1.Eq)(S2.Eq)
@@ -154,14 +168,14 @@ struct
              return (obj1, obj2)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving pair")))
-end
+ end)
 
 module Shelve_3
   (S1 : Shelve)
   (S2 : Shelve)
   (S3 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a
   module Typeable = Typeable.Typeable_3(S1.Typeable)(S2.Typeable)(S3.Typeable)
   module Eq = Eq.Eq_3(S1.Eq)(S2.Eq)(S3.Eq)
@@ -183,7 +197,7 @@ struct
              return (obj1, obj2, obj3)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+ end)
 
 
 module Shelve_4
@@ -191,8 +205,8 @@ module Shelve_4
   (S2 : Shelve)
   (S3 : Shelve)
   (S4 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a
   module Typeable = Typeable.Typeable_4(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)
   module Eq = Eq.Eq_4(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)
@@ -216,7 +230,7 @@ struct
              return (obj1, obj2, obj3, obj4)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 4-tuple")))
-end
+end)
 
 
 module Shelve_5
@@ -225,8 +239,8 @@ module Shelve_5
   (S3 : Shelve)
   (S4 : Shelve)
   (S5 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a * S5.a
   module Typeable = Typeable.Typeable_5(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)
   module Eq = Eq.Eq_5(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)
@@ -252,7 +266,7 @@ struct
              return (obj1, obj2, obj3, obj4, obj5)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+end)
 
 
 module Shelve_6
@@ -262,8 +276,8 @@ module Shelve_6
   (S4 : Shelve)
   (S5 : Shelve)
   (S6 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
   module Typeable = Typeable.Typeable_6(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)
   module Eq = Eq.Eq_6(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)
@@ -291,7 +305,7 @@ struct
              return (obj1, obj2, obj3, obj4, obj5, obj6)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+end)
 
 
 module Shelve_7
@@ -302,8 +316,8 @@ module Shelve_7
   (S5 : Shelve)
   (S6 : Shelve)
   (S7 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
   module Typeable = Typeable.Typeable_7(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)
   module Eq = Eq.Eq_7(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)
@@ -333,7 +347,7 @@ struct
              return (obj1, obj2, obj3, obj4, obj5, obj6, obj7)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+end)
 
 
 module Shelve_8
@@ -345,8 +359,8 @@ module Shelve_8
   (S6 : Shelve)
   (S7 : Shelve)
   (S8 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
   module Typeable = Typeable.Typeable_8(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)(S8.Typeable)
   module Eq = Eq.Eq_8(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)(S8.Eq)
@@ -378,7 +392,7 @@ struct
              return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+end)
 
 
 module Shelve_9
@@ -391,8 +405,8 @@ module Shelve_9
   (S7 : Shelve)
   (S8 : Shelve)
   (S9 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a =
-struct
+  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a = Shelve_defaults
+(struct
   type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
   module Typeable = Typeable.Typeable_9(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)(S8.Typeable)(S9.Typeable)
   module Eq = Eq.Eq_9(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)(S8.Eq)(S9.Eq)
@@ -426,7 +440,7 @@ struct
              return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9)
        | _ -> raise (UnshelvingError
                        ("unexpected object encountered unshelving 3-tuple")))
-end
+end)
 
 
 (* Idea: compress the representation portion (id2rep) of the

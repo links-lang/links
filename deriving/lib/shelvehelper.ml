@@ -6,25 +6,19 @@ module MapByType =
 
 module Id :
 sig
-  type t
+  type t deriving (Show, Pickle, Eq)
   val initial : t
   val compare : t -> t -> int
   val next : t -> t  
-  module Pickle_t : Pickle.Pickle with type a = t
-  module Show_t : Show.Show with type a = t
-  module Eq_t : Eq.Eq with type a = t
 end =
 struct
-  type t = int
+  type t = int deriving (Show, Pickle, Eq)
   let initial = 0
   let compare = compare
   let next = succ
-  module Pickle_t = Pickle.Pickle_int
-  module Show_t = Primitives.Show_int
-  module Eq_t = Eq.Eq_int
 end
 module IdMap = Map.Make (Id)
-type id = Id.t
+type id = Id.t deriving (Show, Pickle)
 
 type repr = Bytes of string | CApp of (int option * Id.t list)
   deriving (Typeable, Eq, Show, Pickle)
@@ -33,14 +27,6 @@ module Pickle_Ids = Pickle.Pickle_list(Id.Pickle_t)
 
 let make_repr : ?constructor:int -> Id.t list -> repr
   = fun ?constructor ids ->
-(*    match constructor with 
-        (* This doesn't seem reliable.  How can we know whether
-           there's a constructor there when we unpickle?  A better way
-           might be to store a list of ints which the client can
-           decode *)
-      | Some tag -> Pickle.Pickle_int.pickleS tag ^ Pickle_Ids.pickleS ids
-      | None -> Pickle_Ids.pickleS ids
-*)
     CApp (constructor, ids)
 
 type output_state = {
@@ -167,4 +153,41 @@ struct
     let whizzySum f id = whizzy f id decode_repr_ctor
     let whizzyNoCtor f id = whizzy f id decode_repr_noctor
   end
+end
+
+type dumpable = id * (id * repr) list
+    deriving (Show, Pickle)
+
+module Do (S : sig
+    type a
+    val shelve : a -> id m
+    val unshelve : id -> a Input.m
+  end) =
+struct
+  type a = S.a
+
+  let decode_shelved_string : string -> id * Input.state =
+    fun s -> 
+      let (id, state : dumpable) = Pickle_dumpable.unpickleS s in
+        id, (List.fold_right 
+               (fun (id,repr) map -> IdMap.add id (repr,None) map)
+               state
+               IdMap.empty)
+    
+  let encode_shelved_string : id * output_state -> string  =
+    fun (id,state) ->
+      let input_state = 
+        id, IdMap.fold (fun id repr output -> (id,repr)::output)
+          state.id2rep [] in
+(*        prerr_endline ("input state " ^ Show_dumpable.show input_state);*)
+        Pickle_dumpable.pickleS input_state
+
+  let doShelve v = 
+    let id, state = runState (S.shelve v) initial_output_state in
+      encode_shelved_string (id, state)
+
+  let doUnshelve string = 
+    let id, initial_input_state = decode_shelved_string string in  
+    let value, state = Input.runState (S.unshelve id) initial_input_state in
+      value
 end

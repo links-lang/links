@@ -9,7 +9,18 @@ sig
   module Eq : Eq.Eq with type a = a
   val shelve : a -> id m
   val unshelve : id -> a n
+  val shelveS : a -> string
+  val unshelveS : string -> a
 end
+
+module Shelve_defaults
+  (S : sig
+     type a
+     module Typeable : Typeable.Typeable with type a = a
+     module Eq : Eq.Eq with type a = a
+     val shelve : a -> id m
+     val unshelve : id -> a n
+   end) : Shelve with type a = S.a
 
 module Shelve_unit  : Shelve with type a = unit
 module Shelve_bool  : Shelve with type a = bool

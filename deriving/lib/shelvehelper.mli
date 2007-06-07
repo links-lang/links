@@ -23,3 +23,13 @@ sig
     val whizzyNoCtor : (id list -> T.a m) -> (id -> T.a m)
   end
 end
+
+module Do (S : sig
+             type a
+             val shelve : a -> id m
+             val unshelve : id -> a Input.m
+           end) : sig
+  type a = S.a
+  val doShelve : a -> string
+  val doUnshelve : string -> a
+end
