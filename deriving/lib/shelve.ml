@@ -442,6 +442,18 @@ module Shelve_9
                        ("unexpected object encountered unshelving 3-tuple")))
 end)
 
+module Shelve_ref (S : Shelve) = Shelve_defaults(
+  struct
+    module Eq = Eq.Eq_ref(S.Eq)
+    module Typeable = Typeable.Typeable_ref(S.Typeable)
+    type a = S.a ref
+    let shelve : a -> id m =
+      fun _ -> failwith "nyi"
+
+    open Shelvehelper.Input
+    let unshelve : id -> a m =
+      fun _ -> failwith "nyi"
+  end)
 
 (* Idea: compress the representation portion (id2rep) of the
    output_state before serialization, allowing objects of different

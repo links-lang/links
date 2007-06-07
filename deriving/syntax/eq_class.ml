@@ -14,7 +14,7 @@ struct
   let wildcard_failure = <:match_case< _ -> false >>
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
-  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:true)
     
   and polycase ctxt : Types.tagspec -> Ast.match_case = function
     | Tag (name, None) -> <:match_case< `$name$, `$name$ -> true >>

@@ -15,7 +15,7 @@ struct
                           let unpickle stream = $unpickle$ end >>
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
-  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:false)
     
   and polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
    let picklen = <:expr< Pickle_int.pickle buffer $`int:n$ >> in

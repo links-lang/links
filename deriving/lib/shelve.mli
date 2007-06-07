@@ -52,3 +52,5 @@ module Shelve_8 (S1 : Shelve) (S2 : Shelve) (S3 : Shelve) (S4 : Shelve) (S5 : Sh
 module Shelve_9 (S1 : Shelve) (S2 : Shelve) (S3 : Shelve) (S4 : Shelve) (S5 : Shelve)
   (S6 : Shelve) (S7 : Shelve) (S8 : Shelve) (S9 : Shelve)
   : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
+
+module Shelve_ref (S : Shelve) : Shelve with type a = S.a ref

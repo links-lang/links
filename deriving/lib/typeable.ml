@@ -160,3 +160,5 @@ module Typeable_float = Primitive_typeable(struct type t = float end)
 module Typeable_bool = Primitive_typeable(struct type t = bool end)
 module Typeable_string = Primitive_typeable(struct type t = string end)
 module Typeable_char = Primitive_typeable(struct type t = char end)
+
+module Typeable_ref(A : Typeable) = Primitive_typeable(struct type t = A.a ref end)

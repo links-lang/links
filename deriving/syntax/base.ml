@@ -156,7 +156,7 @@ struct
   let apply_functor (f : Ast.module_expr) (args : Ast.module_expr list) : Ast.module_expr =
       List.fold_left (fun f p -> <:module_expr< $f$ $p$ >>) f args
           
-  class make_module_expr ~classname ~variant ~record ~sum =
+  class make_module_expr ~classname ~variant ~record ~sum ~allow_private =
   object (self)
 
     method mapply ctxt (funct : Ast.module_expr) args =
@@ -201,10 +201,12 @@ struct
       | `Constr c   -> self#constr     ctxt c
       | `Tuple t    -> self#tuple      ctxt t
 
-    method rhs ctxt (tname, params, rhs, constraints  as decl : Types.decl) : Ast.module_expr = 
+    method rhs ctxt (tname, params, rhs, constraints as decl : Types.decl) : Ast.module_expr = 
       match rhs with
-        | `Fresh (None, Sum summands) -> self#sum ctxt decl summands
-        | `Fresh (None, Record fields) -> self#record ctxt decl fields
+        | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
+            raise (Underivable ("The class "^ classname ^" cannot be derived for private types"))
+        | `Fresh (None, Sum summands, _) -> self#sum ctxt decl summands
+        | `Fresh (None, Record fields, _) -> self#record ctxt decl fields
         | `Expr e -> self#expr ctxt e
         | `Variant v -> self# variant ctxt decl v
         | `Nothing -> <:module_expr< >>

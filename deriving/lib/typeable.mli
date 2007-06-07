@@ -55,3 +55,5 @@ module Typeable_float : Typeable with type a = float
 module Typeable_bool : Typeable with type a = bool
 module Typeable_string : Typeable with type a = string
 module Typeable_char : Typeable with type a = char
+
+module Typeable_ref (A : Typeable) : Typeable with type a = A.a ref

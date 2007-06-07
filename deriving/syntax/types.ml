@@ -14,7 +14,7 @@ type param = name * [`Plus | `Minus] option
 
 (* no support for private types yet *)
 type decl = name * param list
-    * [`Fresh of expr option (* "equation" *) * repr | `Expr of expr | `Variant of variant | `Nothing]
+    * [`Fresh of expr option (* "equation" *) * repr * [`Private | `Public] | `Expr of expr | `Variant of variant | `Nothing]
     * constraint_ list
 and repr = 
     Sum of summand list
@@ -38,7 +38,7 @@ and poly_expr = param list * expr
 and variant = [`Gt | `Lt | `Eq] * tagspec list
 and tagspec = Tag of name * expr option 
               | Extends of expr
-type rhs = [`Fresh of expr option * repr | `Expr of expr | `Variant of variant | `Nothing]
+type rhs = [`Fresh of expr option * repr * [`Private|`Public] | `Expr of expr | `Variant of variant | `Nothing]
 
 class virtual ['result] fold = 
 object (self : 'self)
@@ -46,9 +46,9 @@ object (self : 'self)
 
   method decl (d:decl) =
     self#crush (match d with
-                  | (_, _, `Fresh (Some e, r), cs) ->
+                  | (_, _, `Fresh (Some e, r, _), cs) ->
                       self#expr e :: self#repr r :: List.map self#constraint_ cs
-                  | (_, _, `Fresh (None, r), cs) ->
+                  | (_, _, `Fresh (None, r, _), cs) ->
                       self#repr r :: List.map self#constraint_ cs
                   | (_, _, `Expr e, cs) ->
                       self#expr e :: List.map self#constraint_ cs
@@ -100,10 +100,10 @@ end
 class transform = 
 object (self : 'self)
 
-  method decl ((name, params, rhs, constraints):decl) : decl =
+  method decl (name, params, rhs, constraints:decl) : decl =
     let rhs = match rhs with
-      | `Fresh (eopt, repr) -> `Fresh (Option.map (self # expr) eopt, 
-                                       self # repr repr)
+      | `Fresh (eopt, repr, p) -> `Fresh (Option.map (self # expr) eopt, 
+                                          self # repr repr, p)
       | `Expr e -> `Expr (self # expr e)
       | `Variant v -> `Variant (self # variant v)
       | `Nothing -> `Nothing
@@ -287,12 +287,18 @@ struct
       | _                                -> assert false
 
     let toplevel : Ast.ctyp -> rhs * vmap  = function
+      | Ast.TyPrv (_, Ast.TyRec (loc, fields)) -> 
+          let fields, vs = List.split (list field split_semi fields) in 
+            `Fresh (None, Record fields, `Private), List.concat vs
+      | Ast.TyPrv (_, Ast.TySum (loc, summands)) -> 
+          let summands, vs = List.split (list summand split_or summands) in
+            `Fresh (None, Sum summands, `Private), List.concat vs
       | Ast.TyRec (loc, fields) -> 
           let fields, vs = List.split (list field split_semi fields) in 
-            `Fresh (None, Record fields), List.concat vs
+            `Fresh (None, Record fields, `Public), List.concat vs
       | Ast.TySum (loc, summands) -> 
           let summands, vs = List.split (list summand split_or summands) in
-            `Fresh (None, Sum summands), List.concat vs
+            `Fresh (None, Sum summands, `Public), List.concat vs
       | Ast.TyVrnEq (_, t)  -> 
           let es, vs = List.split (list tagspec split_or t) in
             `Variant (`Eq, es), List.concat vs
@@ -304,7 +310,7 @@ struct
             `Variant (`Lt, es), List.concat vs
       | Ast.TyNil _ -> `Nothing, []
       | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
-      | Ast.TyPrv _ -> failwith "deriving does not handle private types"
+      | Ast.TyPrv _ -> failwith "deriving does not currently handle private rows"
       | t -> let e, v = expr t in `Expr e, v
 
     let constraints : (Ast.ctyp * Ast.ctyp) list -> constraint_ list * vmap = 
@@ -404,7 +410,7 @@ struct
       params
       (expr t)
 
-  let rhs = 
+  let rhs : rhs -> Ast.ctyp = 
     let tagspec = function
       | Tag (c, None) -> <:ctyp< `$c$ >>
       | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
@@ -419,7 +425,8 @@ struct
       | Sum summands  -> unlist bar summands summand
       | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
     in function
-      | `Fresh (None, t) -> repr t
+      | `Fresh (None, t, `Private) -> <:ctyp< private $repr t$ >>
+      | `Fresh (None, t, `Public) -> repr t
       | `Expr t          -> expr t
       | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>

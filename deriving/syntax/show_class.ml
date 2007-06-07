@@ -22,7 +22,7 @@ struct
   let in_hovbox = in_a_box "pp_open_hovbox" and in_box = in_a_box "pp_open_box"
 
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
-  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum)
+  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:true)
 
   and polycase ctxt : Types.tagspec -> Ast.match_case = function
     | Tag (name, None) -> 

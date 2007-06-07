@@ -167,3 +167,16 @@ end
 type 'a constrained = [`F of 'a] constraint 'a = int
     deriving (Functor) (* Show, etc. don't work here *)
 
+(* 23. private datatypes *)
+type p1 = private P 
+    deriving (Show, Eq)
+
+module Private : sig (* check that `private' in the interface is
+                        allowed for classes that disallow `private' as
+                        long as we don't have `private' in the
+                        implementation *)
+  type p2 = private Q deriving (Show, Eq, Pickle)
+end =
+struct
+  type p2 = Q deriving (Show, Eq, Pickle)
+end

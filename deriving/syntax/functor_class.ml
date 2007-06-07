@@ -104,9 +104,10 @@ struct
     <:expr< $expr t$ $lid:name$ >>
 
   let rhs = function
-    |`Fresh (_, Sum summands)  -> 
+    |`Fresh (_, _, `Private) -> raise (Underivable "Functor cannot be derived for private types")
+    |`Fresh (_, Sum summands, _)  -> 
        <:expr<  function $list:List.map case summands$ >>
-    |`Fresh (_, Record fields) -> 
+    |`Fresh (_, Record fields, _) -> 
        <:expr< fun $record_pattern fields$ -> 
                    $record_expr (List.map (fun ((l,_,_) as f) -> (l,field f)) fields)$ >>
     |`Expr e                  -> expr e
