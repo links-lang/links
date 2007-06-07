@@ -43,9 +43,10 @@ struct
                      M.eq $lexpr$ $rexpr$ >> 
               
   and field ctxt : Types.field -> Ast.expr = function
-    | (name, ([], t), _) -> <:expr<
+    | (name, ([], t), `Immutable) -> <:expr<
         let module M = $expr ctxt t$ in
           M.eq $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
+    | (_, _, `Mutable) -> assert false
     | f -> raise (Underivable ("Eq cannot be derived for record types with polymorphic fields")) 
 
   and sum ctxt decl summands =
@@ -57,6 +58,9 @@ struct
   end >>
 
   and record ctxt decl fields = 
+    if List.exists (function (_,_,`Mutable) -> true | _ -> false) fields then
+       <:module_expr< struct type a = $atype ctxt decl$ let eq = (==) end >>
+    else
     let lpatt = record_pattern ~prefix:"l" fields
     and rpatt = record_pattern ~prefix:"r" fields 
     and expr = 
