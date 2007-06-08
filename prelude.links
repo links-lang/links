@@ -541,7 +541,7 @@ sig render : (Formlet (a), (a) -> Xml) -> Xml
 fun render(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
    <form enctype="application/x-www-form-urlencoded"
-         l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+         l:action="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
@@ -551,7 +551,7 @@ fun render(frm, continuation) {
 sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
 fun renderMultipart(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="multipart/form-data" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+   <form enctype="multipart/form-data" l:action="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
@@ -707,4 +707,9 @@ fun choices (items) {
 
      }
   }
+}
+
+sig choicesNone : ([(a, String)]) -> Formlet ([a])
+fun choicesNone (items) {
+  choices (map (fun ((v, name)) {(v, name, false)}, items))
 }

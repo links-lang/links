@@ -17,9 +17,9 @@ var theFormlet =
        </label>
      </div>
      <div>
-       Add-ons: <br />{ choices([(2, "Bell"),
-                                 (3, "Rack"),
-                                 (6, "Glow-in-the-dark handlebar tape")]) -> addons }
+       Add-ons: <br />{ choicesNone([(2, "Bell"),
+                                     (3, "Rack"),
+                                     (6, "Glow-in-the-dark handlebar tape")]) -> addons }
      </div>
      <div>
         { inputRadiogroup([("red", "Red")], ("green", "Green"), [("blue", "Blue")], radioGroupVertical) -> colour }
