@@ -50,7 +50,11 @@ module Shelve_primtype
      module Eq = E
      module Comp = Dynmap.Comp(T)(Eq)
      let shelve obj = 
-       allocate_store_return (T.makeDynamic obj) Comp.eq (repr_of_string (P.pickleS obj))
+       allocate_id (T.makeDynamic obj) Comp.eq >>= fun (id, freshp) ->
+         if freshp then
+           store_repr id (repr_of_string (P.pickleS obj)) >>
+             return id
+         else return id
      open Shelvehelper.Input
      let unshelve id = 
        find_by_id id >>= fun (repr, dynopt) ->
@@ -82,13 +86,20 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
     let rec shelve =
       function
           None as obj ->
-            allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-              (make_repr ~constructor:0 [])
+            allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
+              if freshp then
+                store_repr id (make_repr ~constructor:0 []) >>
+                  return id
+              else
+                return id
         | Some v0 as obj ->
-            V0.shelve v0 >>=
-              (fun id0 ->
-                 allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-                   (make_repr ~constructor:1 [id0]))
+            allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
+              if freshp then
+                V0.shelve v0 >>= fun id0 ->
+                  store_repr thisid (make_repr ~constructor:1 [id0]) >>
+                    return thisid
+              else
+                return thisid
     open Shelvehelper.Input
     let unshelve = 
       let module W = Whizzy(Typeable) in
@@ -111,17 +122,21 @@ struct
   type a = V0.a list
   let rec shelve = function
       [] as obj ->
-        allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-          (make_repr ~constructor:0 [])
+        allocate_id  (Typeable.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
+          if freshp then
+            store_repr id (make_repr ~constructor:0 []) >>
+              return id
+          else
+            return id
     | (v0::v1) as obj ->
-        let module M = V0
-        in
-          M.shelve v0 >>= fun id0 ->
-            shelve v1 >>= fun id1 ->
-              allocate_store_return
-                (Typeable.makeDynamic obj)
-                Comp.eq
-                (make_repr ~constructor:1 [id0; id1])
+        allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
+          if freshp then
+            V0.shelve v0 >>= fun id0 ->
+              shelve v1 >>= fun id1 ->
+                store_repr thisid (make_repr ~constructor:1 [id0; id1]) >>
+                  return thisid
+          else
+            return thisid
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let rec unshelve id = 
@@ -154,10 +169,14 @@ module Shelve_2
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2])
-               
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          store_repr thisid (make_repr [id1;id2]) >>
+          return thisid
+        else
+          return thisid               
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -182,10 +201,15 @@ module Shelve_3
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->    
+          store_repr thisid (make_repr [id1;id2;id3]) >>
+          return thisid
+        else
+          return thisid
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -213,11 +237,17 @@ module Shelve_4
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -247,12 +277,18 @@ module Shelve_5
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4, obj5) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->
-      S5.shelve obj5 >>= fun id5 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->
+          S5.shelve obj5 >>= fun id5 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4;id5]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -284,13 +320,19 @@ module Shelve_6
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4, obj5, obj6) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->
-      S5.shelve obj5 >>= fun id5 ->
-      S6.shelve obj6 >>= fun id6 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->
+          S5.shelve obj5 >>= fun id5 ->
+          S6.shelve obj6 >>= fun id6 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -324,14 +366,20 @@ module Shelve_7
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->
-      S5.shelve obj5 >>= fun id5 ->
-      S6.shelve obj6 >>= fun id6 ->
-      S7.shelve obj7 >>= fun id7 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->
+          S5.shelve obj5 >>= fun id5 ->
+          S6.shelve obj6 >>= fun id6 ->
+          S7.shelve obj7 >>= fun id7 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -367,15 +415,21 @@ module Shelve_8
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->
-      S5.shelve obj5 >>= fun id5 ->
-      S6.shelve obj6 >>= fun id6 ->
-      S7.shelve obj7 >>= fun id7 ->
-      S8.shelve obj8 >>= fun id8 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7;id8])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->
+          S5.shelve obj5 >>= fun id5 ->
+          S6.shelve obj6 >>= fun id6 ->
+          S7.shelve obj7 >>= fun id7 ->
+          S8.shelve obj8 >>= fun id8 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7;id8]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -413,16 +467,22 @@ module Shelve_9
   module Comp = Dynmap.Comp(Typeable)(Eq)
   let shelve : a -> id m =
     fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9) as obj) ->
-      S1.shelve obj1 >>= fun id1 ->
-      S2.shelve obj2 >>= fun id2 ->
-      S3.shelve obj3 >>= fun id3 ->
-      S4.shelve obj4 >>= fun id4 ->
-      S5.shelve obj5 >>= fun id5 ->
-      S6.shelve obj6 >>= fun id6 ->
-      S7.shelve obj7 >>= fun id7 ->
-      S8.shelve obj8 >>= fun id8 ->
-      S9.shelve obj9 >>= fun id9 ->    
-      allocate_store_return (Typeable.makeDynamic obj) Comp.eq (make_repr [id1;id2;id3;id4;id5;id6;id7;id8;id9])
+      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
+        if freshp then
+          S1.shelve obj1 >>= fun id1 ->
+          S2.shelve obj2 >>= fun id2 ->
+          S3.shelve obj3 >>= fun id3 ->
+          S4.shelve obj4 >>= fun id4 ->
+          S5.shelve obj5 >>= fun id5 ->
+          S6.shelve obj6 >>= fun id6 ->
+          S7.shelve obj7 >>= fun id7 ->
+          S8.shelve obj8 >>= fun id8 ->
+          S9.shelve obj9 >>= fun id9 ->    
+          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7;id8;id9]) >>
+          return thisid
+        else
+          return thisid
+
   open Shelvehelper.Input
   module W = Whizzy(Typeable)
   let unshelve = W.whizzyNoCtor
@@ -449,7 +509,7 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
     module Comp = Dynmap.Comp(Typeable)(Eq)
     type a = S.a ref
     let shelve : a -> id m =
-      fun r -> (* exactly what we'd generate (even for immutable types*)
+      fun r -> (* exactly what we'd generate (even for immutable types) *)
         let dyn = Typeable.makeDynamic r in
         allocate_id dyn Comp.eq >>= fun (id,freshp) ->
         if freshp then 
@@ -460,16 +520,36 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
           return id
 
     open Shelvehelper.Input
+    let record_tag = 0
+    let ref_size = 1
     let unshelve : id -> a m =
-      fun _ -> failwith "nyi"
+      fun id ->
+        find_by_id id >>= fun (repr, obj) ->
+          match obj with
+            | None ->
+                flush stderr;
+                let this = Obj.new_block record_tag ref_size in
+                  update_map id (Typeable.makeDynamic (Obj.magic this)) >>= 
+                    (fun _ ->
+                       begin match ctor_repr repr with
+                         | None, [x] -> 
+                             S.unshelve x >>= fun contents ->
+                               let obj : S.a ref = Obj.magic this in
+                                 obj.contents <- contents;
+                                 return obj
+                             | _ -> assert false
+                       end)
+                    
+            | Some obj -> 
+                begin match Typeable.cast obj with
+                  | Some obj -> return obj
+                  | None     -> assert false
+                end
   end)
 
 (* Idea: compress the representation portion (id2rep) of the
    output_state before serialization, allowing objects of different
    types to share their serialized representation. *)
-
-
-
 
 (* Idea: keep pointers to values that we've serialized in a global
    weak hash table so that we can share structure with them if we

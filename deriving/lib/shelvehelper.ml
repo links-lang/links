@@ -60,13 +60,6 @@ let initial_output_state = {
   id2rep = IdMap.empty;
 }
   
-let allocate_store_return dynamic eq (repr:repr) =
-  allocate_id dynamic eq >>= fun (id,fresh) ->
-    if fresh then
-      (store_repr id repr >>
-         return id)
-    else return id
-
 open Printf
 let dump_state {
   nextid = nextid;
@@ -120,6 +113,10 @@ struct
       
   include Monad.Monad_state(struct type state = input_state end)
 
+  let ctor_repr : repr -> int option * id list = function 
+    | CApp arg -> arg
+    | _ -> assert false
+
   let decode_repr_ctor = function
     | CApp (Some c, ids) -> (c, ids)
     | _ -> invalid_arg "decode_repr_ctor"
@@ -137,7 +134,36 @@ struct
       match IdMap.find id state with 
         | (repr, None) ->     
             put (IdMap.add id (repr, Some dynamic) state)
-        | (repr, Some dyn) -> failwith "id already present"
+        | (repr, Some dyn) -> 
+            return ()
+              (* Checking for id already present causes unshelving to fail 
+                 when there is circularity involving immutable values (even 
+                 if the recursion wholly depends on mutability).
+
+                 For example, consider the code
+
+                    type t = A | B of t ref deriving (Typeable, Eq, Shelve)
+                    let s = ref A in
+                    let r = B s in
+                       s := r;
+                       let shelved = Shelve_t.shelveS r in
+                       Shelve_t.unshelveS r
+
+                 which results in the value
+                    B {contents = B {contents = B { ... }}}
+
+                 During deserialization the following steps occur:
+                     1. lookup "B {...}" in the dictionary (not there)
+                     2. unshelve the contents of B:
+                        3. lookup the contents in the dictionary (not there)
+                        4. create a blank reference, insert it into the dictionary
+                        5. unshelve the contents of the reference:
+                           6. lookup ("B {...}") in the dictionary (not there)
+                           7. unshelve the contents of B:
+                               8. lookup the contents in the dictionary (there)
+                           9. insert "B{...}" into the dictionary.
+                     10. insert "B{...}" into the dictionary.
+              *)
 
   module Whizzy (T : Typeable.Typeable) =
   struct
@@ -148,11 +174,13 @@ struct
               f (decode repr) >>= fun obj ->
                 update_map id (T.makeDynamic obj) >>
                 return obj
-          | Some obj -> match T.cast obj with
-              | Some obj -> return obj
-              | None -> assert false
+          | Some obj -> 
+              match T.cast obj with
+                | Some obj -> return obj
+                | None -> assert false
 
-    let whizzySum f id = whizzy f id decode_repr_ctor
+    let whizzySum f id = 
+      whizzy f id decode_repr_ctor
     let whizzyNoCtor f id = whizzy f id decode_repr_noctor
   end
 end
@@ -181,7 +209,6 @@ struct
       let input_state = 
         id, IdMap.fold (fun id repr output -> (id,repr)::output)
           state.id2rep [] in
-(*        prerr_endline ("input state " ^ Show_dumpable.show input_state);*)
         Pickle_dumpable.pickleS input_state
 
   let doShelve v = 
@@ -193,3 +220,4 @@ struct
     let value, state = Input.runState (S.unshelve id) initial_input_state in
       value
 end
+

@@ -36,8 +36,11 @@ struct
   and polycase ctxt tagspec n : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case<
         (`$name$ as obj) ->
-           allocate_store_return (Typeable.makeDynamic obj) Comp.eq
-                                 (make_repr ~constructor:$`int:n$ []) >>
+           $bind$ (allocate_id (Typeable.makeDynamic obj) Comp.eq) (fun (thisid, freshp) -> 
+                   if freshp then 
+                     $seq$ (store_repr thisid (make_repr ~constructor:$`int:n$ []))
+                           (return thisid)
+                   else return thisid) >>
     | Tag (name, Some t) -> <:match_case< 
         (`$name$ v1 as obj) ->
            let module M = $expr ctxt t$ in 
