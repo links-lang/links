@@ -12,7 +12,7 @@ struct
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:false)
 
-  and sum ctxt ((tname,_,_,_) as decl) summands =
+  and sum ?eq ctxt ((tname,_,_,_) as decl) summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
@@ -41,7 +41,7 @@ struct
         <:expr< [] >> in
       <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
-  and record _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
+  and record ?eq _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
                                                      tname^")"))
 end
 

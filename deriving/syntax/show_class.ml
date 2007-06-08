@@ -61,9 +61,9 @@ struct
                                      in M.format formatter $lid:name$ >>
     | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands = wrap ctxt decl (List.map (case ctxt) summands)
+  and sum ?eq ctxt decl summands = wrap ctxt decl (List.map (case ctxt) summands)
 
-  and record ctxt decl fields = wrap ctxt decl [ <:match_case<
+  and record ?eq ctxt decl fields = wrap ctxt decl [ <:match_case<
      $record_pattern fields$ -> $in_hovbox
       <:expr<
          Format.pp_print_char formatter '{';

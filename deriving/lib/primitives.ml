@@ -1,3 +1,4 @@
+(*pp derivingpp *)
 open Bounded
 open Enum
 open Show
@@ -110,3 +111,28 @@ end
 module Bounded_unit = (Unit : Bounded with type a = Unit.a)
 module Enum_unit = EnumDefaults' (Unit) (Bounded_unit)
 module Show_unit = ShowDefaults (Unit)
+
+module Primitives = struct end (* hack: currently deriving always opens primitives,
+                                  which won't work here *)
+type open_flag = Pervasives.open_flag  =
+                 | Open_rdonly
+                 | Open_wronly
+                 | Open_append
+                 | Open_creat
+                 | Open_trunc
+                 | Open_excl
+                 | Open_binary
+                 | Open_text
+                 | Open_nonblock
+                     deriving (Typeable, Show, Eq, Enum, Bounded, Pickle)
+
+type fpclass = Pervasives.fpclass =
+               | FP_normal
+               | FP_subnormal
+               | FP_zero
+               | FP_infinite
+               | FP_nan
+                   deriving (Typeable, Show, Eq, Enum, Bounded, Pickle)
+
+type 'a ref = 'a Pervasives.ref = { mutable contents : 'a; }
+    deriving (Typeable, Show, Eq)

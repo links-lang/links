@@ -49,7 +49,7 @@ struct
     | (_, _, `Mutable) -> assert false
     | f -> raise (Underivable ("Eq cannot be derived for record types with polymorphic fields")) 
 
-  and sum ctxt decl summands =
+  and sum ?eq ctxt decl summands =
     let wildcard = match summands with [_] -> [] | _ -> [ <:match_case< _ -> false >>] in
   <:module_expr< 
       struct type a = $atype ctxt decl$
@@ -57,7 +57,7 @@ struct
                           $list:List.map (case ctxt) summands @ wildcard$
   end >>
 
-  and record ctxt decl fields = 
+  and record ?eq ctxt decl fields = 
     if List.exists (function (_,_,`Mutable) -> true | _ -> false) fields then
        <:module_expr< struct type a = $atype ctxt decl$ let eq = (==) end >>
     else

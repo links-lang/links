@@ -8,7 +8,7 @@ struct
 
   let classname = "Typeable"
 
-  let gen ctxt ((tname,_,_,_) as decl : Types.decl) _ = 
+  let gen ?eq ctxt ((tname,_,_,_) as decl : Types.decl) _ = 
     let paramList = 
       List.fold_right 
         (fun (p,_) cdr ->
@@ -29,7 +29,7 @@ struct
   let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
   and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:true)
   and sum = gen and record = gen
-  and variant  = gen (*_ _ = raise (Underivable ("Typeable cannot currently be derived for polymorphic variant types"))*)
+  and variant  = gen ~eq:None (*_ _ = raise (Underivable ("Typeable cannot currently be derived for polymorphic variant types"))*)
 end
 
 let _ = Base.register "Typeable" 

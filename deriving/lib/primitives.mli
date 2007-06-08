@@ -1,3 +1,5 @@
+(*pp derivingpp *)
+
 module Bounded_bool : Bounded.Bounded with type a = bool
 module Enum_bool : Enum.Enum with type a = bool
 module Show_bool : Show.Show with type a = bool
@@ -13,3 +15,12 @@ module Show_string : Show.Show with type a = string
 module Bounded_unit : Bounded.Bounded with type a = unit
 module Enum_unit : Enum.Enum with type a = unit
 module Show_unit : Show.Show with type a = unit
+
+type open_flag = Pervasives.open_flag
+    deriving (Typeable, Show, Eq, Enum, Bounded, Pickle)
+
+type fpclass = Pervasives.fpclass
+    deriving (Typeable, Show, Eq, Enum, Bounded, Pickle)
+
+type 'a ref = 'a Pervasives.ref
+    deriving (Typeable, Show, Eq)

@@ -97,14 +97,14 @@ struct
     (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
     <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
-  and sum ctxt (tname,_,_,_ as decl) summands =
+  and sum ?eq ctxt (tname,_,_,_ as decl) summands =
     let shelvers, unshelvers = List.split (List.map2 (case ctxt) summands (List.range 0 (List.length summands))) in
     wrap ctxt tname decl
       shelvers
       <:expr< fun id -> 
         let f = function $list:unshelvers$ in W.whizzySum f id >>
 
-  and record ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
+  and record ?eq ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
     let patt = record_pattern fields in 
     let tuplemod = 
       expr ctxt

@@ -205,8 +205,8 @@ struct
       match rhs with
         | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
             raise (Underivable ("The class "^ classname ^" cannot be derived for private types"))
-        | `Fresh (None, Sum summands, _) -> self#sum ctxt decl summands
-        | `Fresh (None, Record fields, _) -> self#record ctxt decl fields
+        | `Fresh (eq, Sum summands, _) -> self#sum ?eq ctxt decl summands
+        | `Fresh (eq, Record fields, _) -> self#record ?eq ctxt decl fields
         | `Expr e -> self#expr ctxt e
         | `Variant v -> self# variant ctxt decl v
         | `Nothing -> <:module_expr< >>

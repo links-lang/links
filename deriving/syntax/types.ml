@@ -13,9 +13,11 @@ module NameSet = Set.Make(String)
 type param = name * [`Plus | `Minus] option
 
 (* no support for private types yet *)
-type decl = name * param list
-    * [`Fresh of expr option (* "equation" *) * repr * [`Private | `Public] | `Expr of expr | `Variant of variant | `Nothing]
-    * constraint_ list
+type decl = name * param list * rhs * constraint_ list
+and rhs = [`Fresh of expr option * repr * [`Private|`Public] 
+          |`Expr of expr
+          |`Variant of variant
+          |`Nothing]
 and repr = 
     Sum of summand list
   | Record of field list
@@ -38,7 +40,6 @@ and poly_expr = param list * expr
 and variant = [`Gt | `Lt | `Eq] * tagspec list
 and tagspec = Tag of name * expr option 
               | Extends of expr
-type rhs = [`Fresh of expr option * repr * [`Private|`Public] | `Expr of expr | `Variant of variant | `Nothing]
 
 class virtual ['result] fold = 
 object (self : 'self)
@@ -46,17 +47,18 @@ object (self : 'self)
 
   method decl (d:decl) =
     self#crush (match d with
-                  | (_, _, `Fresh (Some e, r, _), cs) ->
-                      self#expr e :: self#repr r :: List.map self#constraint_ cs
-                  | (_, _, `Fresh (None, r, _), cs) ->
-                      self#repr r :: List.map self#constraint_ cs
-                  | (_, _, `Expr e, cs) ->
-                      self#expr e :: List.map self#constraint_ cs
-                  | (_, _, `Variant v, cs) ->
-                      self#variant v :: List.map self#constraint_ cs
-                  | (_, _, `Nothing, cs) -> 
-                      List.map self#constraint_ cs)
+                  | (_, _, rhs, cs) ->
+                      self#rhs rhs :: List.map self#constraint_ cs)
 
+  method rhs (r:rhs) =
+    self#crush (match r with
+                  | `Fresh (Some e, r, _) -> [self#expr e; self#repr r]
+                  | `Fresh (None, r, _)   -> [self#repr r]
+                  | `Expr e               -> [self#expr e]
+                  | `Variant v            -> [self#variant v]
+                  | `Nothing              -> [])
+                      
+      
   method repr r =
     self#crush (match r with
                     | Sum summands ->
@@ -101,13 +103,14 @@ class transform =
 object (self : 'self)
 
   method decl (name, params, rhs, constraints:decl) : decl =
-    let rhs = match rhs with
-      | `Fresh (eopt, repr, p) -> `Fresh (Option.map (self # expr) eopt, 
-                                          self # repr repr, p)
-      | `Expr e -> `Expr (self # expr e)
-      | `Variant v -> `Variant (self # variant v)
-      | `Nothing -> `Nothing
-    in  (name, params, rhs, List.map (self # constraint_) constraints)
+    (name, params, self#rhs rhs, List.map (self # constraint_) constraints)
+
+  method rhs = function
+    | `Fresh (eopt, repr, p) -> `Fresh (Option.map (self # expr) eopt, 
+                                        self # repr repr, p)
+    | `Expr e -> `Expr (self # expr e)
+    | `Variant v -> `Variant (self # variant v)
+    | `Nothing -> `Nothing
 
   method repr = function
     | Sum summands -> Sum (List.map (self # summand) summands)
@@ -286,19 +289,20 @@ struct
           let es, vs = List.split (list expr split_and t) in (ident c, es), List.concat vs
       | _                                -> assert false
 
-    let toplevel : Ast.ctyp -> rhs * vmap  = function
-      | Ast.TyPrv (_, Ast.TyRec (loc, fields)) -> 
-          let fields, vs = List.split (list field split_semi fields) in 
-            `Fresh (None, Record fields, `Private), List.concat vs
-      | Ast.TyPrv (_, Ast.TySum (loc, summands)) -> 
-          let summands, vs = List.split (list summand split_or summands) in
-            `Fresh (None, Sum summands, `Private), List.concat vs
+    let rec repr = function
       | Ast.TyRec (loc, fields) -> 
           let fields, vs = List.split (list field split_semi fields) in 
-            `Fresh (None, Record fields, `Public), List.concat vs
+            Record fields, List.concat vs
       | Ast.TySum (loc, summands) -> 
           let summands, vs = List.split (list summand split_or summands) in
-            `Fresh (None, Sum summands, `Public), List.concat vs
+            Sum summands, List.concat vs
+      | e -> failwith ("unexpected representation type ("^Utils.DumpAst.ctyp e^")")
+
+    let toplevel : Ast.ctyp -> rhs * vmap  = function
+      | Ast.TyPrv (_, (Ast.TyRec _ | Ast.TySum _ as r)) -> 
+          let repr, vs = repr r in `Fresh (None, repr, `Private), vs
+      | Ast.TyRec _ | Ast.TySum _ as r -> 
+          let repr, vs = repr r in `Fresh (None, repr, `Public), vs
       | Ast.TyVrnEq (_, t)  -> 
           let es, vs = List.split (list tagspec split_or t) in
             `Variant (`Eq, es), List.concat vs
@@ -308,9 +312,15 @@ struct
       | Ast.TyVrnInf (_, t) ->
           let es, vs = List.split (list tagspec split_or t) in
             `Variant (`Lt, es), List.concat vs
-      | Ast.TyNil _ -> `Nothing, []
       | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
+      | Ast.TyNil _ -> `Nothing, []
       | Ast.TyPrv _ -> failwith "deriving does not currently handle private rows"
+      | Ast.TyMan (_, eq, (Ast.TyRec _ | Ast.TySum _ as r)) ->
+          let repr, v1 = repr r and ex, v2 = expr eq in 
+            `Fresh (Some ex, repr, `Public), v1 @ v2
+      | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec _ | Ast.TySum _ as r))) ->
+          let repr, v1 = repr r and ex, v2 = expr eq in 
+            `Fresh (Some ex, repr, `Private), v1 @ v2
       | t -> let e, v = expr t in `Expr e, v
 
     let constraints : (Ast.ctyp * Ast.ctyp) list -> constraint_ list * vmap = 
@@ -422,11 +432,13 @@ struct
       | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly t$ >>
       | `Immutable -> <:ctyp<         $lid:name$ : $poly t$ >> in
     let repr = function
-      | Sum summands  -> unlist bar summands summand
+      | Sum summands  -> Ast.TySum (loc, unlist bar summands summand)
       | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
     in function
       | `Fresh (None, t, `Private) -> <:ctyp< private $repr t$ >>
       | `Fresh (None, t, `Public) -> repr t
+      | `Fresh (Some e, t, `Private) -> <:ctyp< $expr e$ = private $repr t$ >>
+      | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr e, repr t)
       | `Expr t          -> expr t
       | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
