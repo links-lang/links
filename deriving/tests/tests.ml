@@ -137,7 +137,7 @@ type tup3 = int * float * bool
 
 (* 20. references *)
 type withref = WR of int * (int ref)
-  deriving (Pickle, Eq, Show, Typeable(*, Shelve*))
+  deriving (Eq, Show, Typeable, Shelve (*, Pickle*))
 
 
 (* 21. through module boundaries *)

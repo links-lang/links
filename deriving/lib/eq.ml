@@ -18,7 +18,7 @@ module Eq_mutable(S : sig type a end) :
   Eq with type a = S.a =
 struct
   type a = S.a
-  let eq = (=)
+  let eq = (==)
 end
 
 module Eq_int = Eq_immutable(struct type a = int end)

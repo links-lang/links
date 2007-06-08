@@ -38,17 +38,17 @@ type output_state = {
 include Monad.Monad_state
   (struct type state = output_state end)
   
-let allocate_id : dynamic -> Dynmap.DynMap.comparator -> Id.t m
+let allocate_id : dynamic -> Dynmap.DynMap.comparator -> (Id.t * bool) m
   = fun obj comparator -> 
     get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
       match Dynmap.DynMap.find obj obj2id with
-        | Some id -> return id
+        | Some id -> return (id,false)
         | None -> 
             let id, nextid = nextid, Id.next nextid in
             put {t with
                    obj2id=Dynmap.DynMap.add obj id comparator obj2id;
                    nextid=nextid} >>
-            return id
+            return (id, true)
                 
 let store_repr id repr = 
   get >>= fun state ->
@@ -61,9 +61,11 @@ let initial_output_state = {
 }
   
 let allocate_store_return dynamic eq (repr:repr) =
-  allocate_id dynamic eq >>= fun id ->
-  store_repr id repr >>
-  return id
+  allocate_id dynamic eq >>= fun (id,fresh) ->
+    if fresh then
+      (store_repr id repr >>
+         return id)
+    else return id
 
 open Printf
 let dump_state {

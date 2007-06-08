@@ -45,10 +45,11 @@ struct
     with Not_found -> false
 
   let find dynamic map =
-    try let monomap, comparator = TypeMap.find (tagOf dynamic) map in
-      Some (snd (List.find
-                   (fun (k,_) -> comparator dynamic k)
-                   monomap))
+    try 
+      let monomap, comparator = TypeMap.find (tagOf dynamic) map in
+        Some (snd (List.find
+                     (fun (k,_) -> comparator dynamic k)
+                     monomap))
     with Not_found -> None
 
   let iter : (dynamic -> 'a -> unit) -> 'a t -> unit

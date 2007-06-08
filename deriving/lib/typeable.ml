@@ -1,3 +1,5 @@
+(*pp derivingpp *)
+
 (** A type is viewed as the application of type constructors to zero
     or more type arguments.  We provide equality and ordering
     operations on types.  The ordering is unspecified, but consistent
@@ -25,7 +27,6 @@ end
 
 (* Type of type representations *)
 type typeRep = TypeRep of (Tag.tag * typeRep list)
-
 
 module TypeRep =
 struct

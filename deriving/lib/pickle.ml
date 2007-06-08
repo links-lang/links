@@ -142,6 +142,7 @@ module Pickle_float = Pickle_defaults (
   end
 )
 
+(* This should end up a bit more compact than the derived version *)
 module Pickle_list (P : SimplePickle) = Pickle_defaults (
   (* This could perhaps be more efficient by pickling the list in
      reverse: this would result in only one traversal being needed
@@ -162,14 +163,7 @@ module Pickle_list (P : SimplePickle) = Pickle_defaults (
   end
 )
 
-(* This doesn't preserve sharing, so it shouldn't be allowed *)
-module Pickle_ref (P : SimplePickle) = Pickle_defaults (
-  struct
-    type a = P.a ref
-    let pickle buffer item = P.pickle buffer (!item)
-    and unpickle stream = ref (P.unpickle stream)
-  end
-)
+(* Pickle_ref cannot preserve sharing, so we don't provide an implementation *)
 
 module Pickle_option (P : SimplePickle) = Pickle_defaults (
   struct

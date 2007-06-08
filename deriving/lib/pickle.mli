@@ -26,8 +26,7 @@ module Pickle_float : Pickle with type a = float
 module Pickle_num : Pickle with type a = Num.num
 module Pickle_list  (P : SimplePickle) 
  : Pickle with type a = P.a list
-module Pickle_ref (P : SimplePickle) 
- : Pickle with type a = P.a ref
+
 module Pickle_option (P : SimplePickle) 
  : Pickle with type a = P.a option
 module Pickle_array (P : SimplePickle) 

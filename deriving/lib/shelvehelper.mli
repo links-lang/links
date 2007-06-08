@@ -1,4 +1,5 @@
-type id
+(*pp derivingpp *)
+type id deriving (Show)
 type repr
 type output_state
   
@@ -7,6 +8,8 @@ val repr_of_string : string -> repr
 val string_of_repr : repr -> string
 val make_repr : ?constructor:int -> id list -> repr
 val allocate_store_return : Typeable.dynamic -> Dynmap.DynMap.comparator -> repr -> id m
+val allocate_id : Typeable.dynamic -> Dynmap.DynMap.comparator -> (id * bool) m
+val store_repr : id -> repr -> unit m
 
 val doShelveB : id m -> Buffer.t -> unit
 val doShelveS : id m -> string

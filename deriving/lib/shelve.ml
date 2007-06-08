@@ -446,9 +446,18 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
   struct
     module Eq = Eq.Eq_ref(S.Eq)
     module Typeable = Typeable.Typeable_ref(S.Typeable)
+    module Comp = Dynmap.Comp(Typeable)(Eq)
     type a = S.a ref
     let shelve : a -> id m =
-      fun _ -> failwith "nyi"
+      fun r -> (* exactly what we'd generate (even for immutable types*)
+        let dyn = Typeable.makeDynamic r in
+        allocate_id dyn Comp.eq >>= fun (id,freshp) ->
+        if freshp then 
+          (S.shelve r.contents >>= fun content_id ->
+          (store_repr id (make_repr [content_id]) >>
+             (return id)))
+        else
+          return id
 
     open Shelvehelper.Input
     let unshelve : id -> a m =

@@ -8,7 +8,9 @@ struct
   include Base.InContext(L)
 
   let classname = "Shelve"
-  let bindop = ">>="
+  let bind, seq = 
+    let bindop = ">>=" and seqop = ">>" in
+      <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
 
   let wrap ctxt tname decl shelvers unshelver =
     let typs, eqs = List.split 
@@ -39,24 +41,28 @@ struct
     | Tag (name, Some t) -> <:match_case< 
         (`$name$ v1 as obj) ->
            let module M = $expr ctxt t$ in 
-              $lid:bindop$ (M.shelve v1)
-                 (fun id -> allocate_store_return (Typeable.makeDynamic obj)
-                             Comp.eq
-                             (make_repr ~constructor:$`int:n$ [id])) >>
+           $bind$ (allocate_id (Typeable.makeDynamic obj) Comp.eq) (fun (thisid, freshp) -> 
+           if freshp then
+             $bind$ (M.shelve v1) (fun mid -> 
+             $seq$  (store_repr thisid (make_repr ~constructor:$`int:n$ [mid]))
+                    (return thisid))
+           else return thisid) >>  
+
     | Extends t -> 
         let patt, guard, cast = cast_pattern ctxt t in <:match_case<
          ($patt$ as obj) when $guard$ ->
            let module M = $expr ctxt t$ in
-           $lid:bindop$ (M.shelve $cast$)
-                     (fun id -> allocate_store_return 
-                                   (Typeable.makeDynamic obj)
-                                   Comp.eq
-                                   (make_repr ~constructor:$`int:n$ [id])) >>
+           $bind$ (allocate_id (Typeable.makeDynamic obj) Comp.eq) (fun (thisid, freshp) ->
+           if freshp then 
+             $bind$ (M.shelve $cast$) (fun mid ->
+             $seq$  (store_repr thisid (make_repr ~constructor:$`int:n$ [mid]))
+                    (return thisid))
+           else return thisid) >>
 
   and polycase_un ctxt tagspec n : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case< $`int:n$, [] -> return `$name$ >>
     | Tag (name, Some t) -> <:match_case< $`int:n$, [x] -> 
-      let module M = $expr ctxt t$ in ($lid:bindop$) (M.unshelve x) (fun o -> return (`$name$ o)) >>
+      let module M = $expr ctxt t$ in $bind$ (M.unshelve x) (fun o -> return (`$name$ o)) >>
     | Extends t -> <:match_case< $`int:n$, [x] -> let module M = $expr ctxt t$ in (M.unshelve x : M.a n :> a n) >>
 
   and variant ctxt (tname,_,_,_ as decl) (_, tags) = 
@@ -74,16 +80,20 @@ struct
       List.fold_right2
         (fun p n tail -> 
            <:expr< let module M = $expr ctxt p$ in
-                       $lid:bindop$ (M.shelve $lid:Printf.sprintf "v%d" n$)
+                       $bind$ (M.shelve $lid:Printf.sprintf "v%d" n$)
                          (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
         params'
         (List.range 0 nparams)
-        <:expr< allocate_store_return (Typeable.makeDynamic obj)
-                Comp.eq (make_repr ~constructor:$`int:n$ $expr_list ids$) >> in
+        <:expr< $seq$ (store_repr thisid (make_repr ~constructor:$`int:n$ $expr_list ids$))
+                      (return thisid) >> in
       match params' with
-        | [] -> <:match_case< $uid:name$ as obj -> $exp$ >>,
+        | [] -> <:match_case< $uid:name$ as obj -> 
+                              $bind$ (allocate_id (Typeable.makeDynamic obj) Comp.eq) (fun (thisid,freshp) -> 
+                              if freshp then $exp$ else return thisid) >>,
                 <:match_case< $`int:n$, [] -> return $uid:name$ >>
-        | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" nparams)$ as obj -> $exp$ >>,
+        | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" nparams)$ as obj -> 
+                              $bind$ (allocate_id (Typeable.makeDynamic obj) Comp.eq) (fun (thisid,freshp) ->
+                              if freshp then $exp$ else return thisid) >>,
   let _, tuple = tuple ~param:"id" nparams in
   let patt, exp = 
     List.fold_right2 
@@ -91,7 +101,7 @@ struct
          let m = Printf.sprintf "M%d" n and id = Printf.sprintf "id%d" n in
          <:patt< $lid:id$ :: $pat$ >>,
          <:expr< let module $uid:m$ = $expr ctxt t$
-                  in $lid:bindop$ ($uid:m$.unshelve $lid:id$) (fun $lid:id$ -> $exp$) >>)
+                  in $bind$ ($uid:m$.unshelve $lid:id$) (fun $lid:id$ -> $exp$) >>)
       (List.range 0 nparams)
       params'
     (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
@@ -129,7 +139,7 @@ struct
          List.fold_right2
            (fun name (_,(_,t),_) exp -> 
               <:expr< let module M = $expr ctxt t$ 
-                       in ($lid:bindop$) (M.unshelve $lid:name$) 
+                       in $bind$ (M.unshelve $lid:name$) 
                                (fun $lid:name$ -> $exp$) >>)
            names fields <:expr< return $rexp$ >> in
       <:expr< fun id -> let f = fun $patt$ -> $exp$ in W.whizzyNoCtor f id >>)
