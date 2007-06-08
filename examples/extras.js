@@ -17,7 +17,7 @@ function _mandelbrot(x, y) {
   }
   return 0;
 }
-var jsmandelbrot =_continuationize(_mandelbrot, 2);
+var jsmandelbrot =LINKS.kify(_mandelbrot, 2);
 
 function _getCanvasById(id) {
   var node =_getNodeById(id);
@@ -29,9 +29,9 @@ function _canvasSetFillStyle(context, colour) {
 function _canvasFillRect(context, x, y, width, height) {
   context.fillRect(x, y, width, height);
 }
-var getCanvasById = _continuationize(_getCanvasById, 1);
-var canvasSetFillStyle = _continuationize(_canvasSetFillStyle, 2);
-var canvasFillRect = _continuationize(_canvasFillRect, 5);
+var getCanvasById = LINKS.kify(_getCanvasById, 1);
+var canvasSetFillStyle = LINKS.kify(_canvasSetFillStyle, 2);
+var canvasFillRect = LINKS.kify(_canvasFillRect, 5);
 
 
 function _plot(context, x, y) {
@@ -85,10 +85,10 @@ function _fullyNativeMandelbrot() {
   //domInsertBefore(enxml(string_of_int(totalTime)++"ms"), getNodeById(id));
   //debug("Time to draw "++id++": "++string_of_int(totalTime)++"ms") 
 }
-var fullyNativeMandelbrot = _continuationize(_fullyNativeMandelbrot, 0);
+var fullyNativeMandelbrot = LINKS.kify(_fullyNativeMandelbrot, 0);
 
 
 function _getCurrentTime() {
   return (new Date()).getTime();
 }
-var getCurrentTime = _continuationize(_getCurrentTime, 0);
+var getCurrentTime = LINKS.kify(_getCurrentTime, 0);

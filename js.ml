@@ -797,6 +797,11 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
       let href_hdlr_ast = (assoc "l:href" handlers_ast) in
       let code_ptr = Result.marshal_exprenv (href_hdlr_ast, []) in
       let href_hdlr = (assoc "href" handlers) in
+      (* [NOTE]
+
+         The following relies on the invariant that global names are distinct from local names, which
+         is established by Syntax.uniquify_names.
+      *)
       let local_vars = StringSet.diff (Syntax.freevars href_hdlr_ast) (StringSet.from_list global_names) in
         ["href", Call(Var "LINKS.stringToCharlist",
                       [Call(Var "LINKS.jsStrConcat",
