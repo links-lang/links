@@ -9,6 +9,8 @@ sig
   val mkPolyv : (string * delayed) list -> delayed list -> delayed
 end
 
+exception CastFailure of string
+
 type dynamic
 val tagOf : dynamic -> TypeRep.t
 
@@ -18,6 +20,7 @@ sig
   val typeRep : unit -> TypeRep.t
   val hasType : dynamic -> bool
   val cast : dynamic -> a option
+  val throwingCast : dynamic -> a
   val makeDynamic : a -> dynamic
 end
 

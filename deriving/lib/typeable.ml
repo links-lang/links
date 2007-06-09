@@ -1,4 +1,4 @@
-
+(*pp derivingpp *)
 
 (** A type is viewed as the application of type constructors to zero
     or more type arguments.  We provide equality and ordering
@@ -34,12 +34,19 @@ let memoize f =
             let r = f () in
               t := Some r;
               r
+
+type interned = Interned.t
+module Show_interned = Show.ShowDefaults(struct
+  type a = interned
+  let format f s = Show.Show_string.format f (Interned.to_string s)
+end)
 (* Type of type representations *)
 module TypeRep =
 struct 
-  type t = | Fresh of (Interned.t * t list) 
+  type t = | Fresh of (interned * t list) 
            | Polyv of (string * t) list
            | Tuple of t list
+               deriving (Show)
   type delayed = unit -> t
   let compare : t -> t -> int = compare
   let eq = (=)
@@ -71,8 +78,11 @@ sig
   val typeRep : unit -> TypeRep.t
   val hasType : dynamic -> bool
   val cast : dynamic -> a option
+  val throwingCast : dynamic -> a
   val makeDynamic : a -> dynamic
 end
+
+exception CastFailure of string
 
 module Typeable_defaults (T : (sig
                                  type a
@@ -87,6 +97,12 @@ struct
       | Some c -> Some (Obj.magic c)
       | None -> None
   let makeDynamic o = (Obj.repr o, typeRep ())
+  let throwingCast d = 
+    match cast d with
+      | None -> raise (CastFailure ("cast from type "^
+                                      TypeRep.Show_t.show (tagOf d) ^" to type "^
+                                      TypeRep.Show_t.show (T.typeRep ()) ^" failed"))
+      | Some s -> s
 end
 
 module Typeable_list (A:Typeable) : Typeable with type a = A.a list = 

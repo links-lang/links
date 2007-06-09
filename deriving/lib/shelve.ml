@@ -63,10 +63,7 @@ module Shelve_primtype
                let obj : a = P.unpickleS (string_of_repr repr) in
                  update_map id (T.makeDynamic obj) >> 
                    return obj
-           | Some obj -> 
-               match T.cast obj with 
-                 | Some obj -> return obj
-                 | None -> assert false
+           | Some obj -> return (T.throwingCast obj)
    end)
 
 module Shelve_unit : Shelve with type a = unit = Shelve_primtype(Pickle.Pickle_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
@@ -113,6 +110,17 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
   end)
 
 
+module Allocate =
+struct
+  let allocate dynamic eq f =
+    allocate_id dynamic eq >>= fun (id,freshp) ->
+      if freshp then
+        f id >>
+          return id
+      else
+        return id
+end
+
 module Shelve_list (V0 : Shelve)
   : Shelve with type a = V0.a list = Shelve_defaults (
 struct
@@ -122,21 +130,13 @@ struct
   type a = V0.a list
   let rec shelve = function
       [] as obj ->
-        allocate_id  (T.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
-          if freshp then
-            store_repr id (make_repr ~constructor:0 []) >>
-              return id
-          else
-            return id
+        Allocate.allocate (T.makeDynamic obj) Comp.eq 
+          (fun this -> store_repr this (make_repr ~constructor:0 []))
     | (v0::v1) as obj ->
-        allocate_id (T.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
-          if freshp then
-            V0.shelve v0 >>= fun id0 ->
-              shelve v1 >>= fun id1 ->
-                store_repr thisid (make_repr ~constructor:1 [id0; id1]) >>
-                  return thisid
-          else
-            return thisid
+        Allocate.allocate (T.makeDynamic obj) Comp.eq
+          (fun this -> V0.shelve v0 >>= fun id0 ->
+                          shelve v1 >>= fun id1 ->
+                            store_repr this (make_repr ~constructor:1 [id0; id1]))
   open Shelvehelper.Input
   module W = Whizzy (T)
   let rec unshelve id = 
@@ -144,8 +144,8 @@ struct
       | 0, [] -> return []
       | 1, [car;cdr] -> 
           V0.unshelve car >>= fun car ->
-            unshelve cdr >>= fun cdr ->
-              return (car :: cdr)
+             unshelve cdr >>= fun cdr ->
+               return (car :: cdr)
       | n, _ -> raise (UnshelvingError
                          ("Unexpected tag encountered unshelving "
                           ^"option : " ^ string_of_int n)) in
@@ -164,14 +164,9 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
     type a = S.a ref
     let shelve : a -> id m =
       fun r -> (* exactly what we'd generate (even for immutable types) *)
-        let dyn = T.makeDynamic r in
-        allocate_id dyn Comp.eq >>= fun (id,freshp) ->
-        if freshp then 
-          (S.shelve r.contents >>= fun content_id ->
-          (store_repr id (make_repr [content_id]) >>
-             (return id)))
-        else
-          return id
+        Allocate.allocate (T.makeDynamic r) Comp.eq 
+          (fun this -> (S.shelve r.contents >>= fun content_id ->
+                          (store_repr this (make_repr [content_id]))))
 
     open Shelvehelper.Input
     let record_tag = 0
@@ -193,12 +188,7 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
                                  return obj
                              | _ -> assert false
                        end)
-                    
-            | Some obj -> 
-                begin match T.cast obj with
-                  | Some obj -> return obj
-                  | None     -> assert false
-                end
+            | Some obj -> return (T.throwingCast obj)
   end)
 
 (* Idea: compress the representation portion (id2rep) of the
