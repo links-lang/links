@@ -15,8 +15,8 @@ type 'a n = 'a Shelvehelper.Input.m
 module type Shelve =
 sig
   type a
-  module Typeable : Typeable.Typeable with type a = a
-  module Eq : Eq.Eq with type a = a
+  module T : Typeable.Typeable with type a = a
+  module E : Eq.Eq with type a = a
   val shelve : a -> id m
   val unshelve : id -> a n
   val shelveS : a -> string
@@ -26,8 +26,8 @@ end
 module Shelve_defaults
   (S : sig
      type a
-     module Typeable : Typeable.Typeable with type a = a
-     module Eq : Eq.Eq with type a = a
+     module T : Typeable.Typeable with type a = a
+     module E : Eq.Eq with type a = a
      val shelve : a -> id m
      val unshelve : id -> a Input.m
    end) =
@@ -46,9 +46,9 @@ module Shelve_primtype
            and type a = T.a = Shelve_defaults
   (struct
      type a = T.a
-     module Typeable = T
-     module Eq = E
-     module Comp = Dynmap.Comp(T)(Eq)
+     module T = T
+     module E = E
+     module Comp = Dynmap.Comp(T)(E)
      let shelve obj = 
        allocate_id (T.makeDynamic obj) Comp.eq >>= fun (id, freshp) ->
          if freshp then
@@ -78,22 +78,22 @@ module Shelve_num = Shelve_primtype(Pickle.Pickle_num)(Eq.Eq_num)(Typeable.Typea
 
 module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_defaults(
   struct
-    module Typeable = Typeable.Typeable_option (V0.Typeable)
-    module Eq = Eq.Eq_option (V0.Eq)
-    module Comp = Dynmap.Comp (Typeable) (Eq)
+    module T = Typeable.Typeable_option (V0.T)
+    module E = Eq.Eq_option (V0.E)
+    module Comp = Dynmap.Comp (T) (E)
     open Shelvehelper
     type a = V0.a option
     let rec shelve =
       function
           None as obj ->
-            allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
+            allocate_id (T.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
               if freshp then
                 store_repr id (make_repr ~constructor:0 []) >>
                   return id
               else
                 return id
         | Some v0 as obj ->
-            allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
+            allocate_id (T.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
               if freshp then
                 V0.shelve v0 >>= fun id0 ->
                   store_repr thisid (make_repr ~constructor:1 [id0]) >>
@@ -102,7 +102,7 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
                 return thisid
     open Shelvehelper.Input
     let unshelve = 
-      let module W = Whizzy(Typeable) in
+      let module W = Whizzy(T) in
       let f = function
         | 0, [] -> return None
         | 1, [id] -> V0.unshelve id >>= fun obj -> return (Some obj)
@@ -116,20 +116,20 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
 module Shelve_list (V0 : Shelve)
   : Shelve with type a = V0.a list = Shelve_defaults (
 struct
-  module Typeable = Typeable.Typeable_list (V0.Typeable)
-  module Eq = Eq.Eq_list (V0.Eq)
-  module Comp = Dynmap.Comp (Typeable) (Eq)
+  module T = Typeable.Typeable_list (V0.T)
+  module E = Eq.Eq_list (V0.E)
+  module Comp = Dynmap.Comp (T) (E)
   type a = V0.a list
   let rec shelve = function
       [] as obj ->
-        allocate_id  (Typeable.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
+        allocate_id  (T.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
           if freshp then
             store_repr id (make_repr ~constructor:0 []) >>
               return id
           else
             return id
     | (v0::v1) as obj ->
-        allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
+        allocate_id (T.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
           if freshp then
             V0.shelve v0 >>= fun id0 ->
               shelve v1 >>= fun id1 ->
@@ -138,7 +138,7 @@ struct
           else
             return thisid
   open Shelvehelper.Input
-  module W = Whizzy(Typeable)
+  module W = Whizzy (T)
   let rec unshelve id = 
     let f = function
       | 0, [] -> return []
@@ -156,361 +156,15 @@ end)
 (* Is this right for mutable strings?  I think so, because of Eq, but it should be checked *)
 module Shelve_string = Shelve_primtype(Pickle.Pickle_string)(Eq.Eq_string)(Typeable.Typeable_string) 
 
-module Shelve_1 (S1 : Shelve) = S1
-
-module Shelve_2
-  (S1 : Shelve)
-  (S2 : Shelve) 
-  : Shelve with type a = S1.a * S2.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a
-  module Typeable = Typeable.Typeable_2(S1.Typeable)(S2.Typeable)
-  module Eq = Eq.Eq_2(S1.Eq)(S2.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          store_repr thisid (make_repr [id1;id2]) >>
-          return thisid
-        else
-          return thisid               
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-             return (obj1, obj2)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving pair")))
- end)
-
-module Shelve_3
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a
-  module Typeable = Typeable.Typeable_3(S1.Typeable)(S2.Typeable)(S3.Typeable)
-  module Eq = Eq.Eq_3(S1.Eq)(S2.Eq)(S3.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->    
-          store_repr thisid (make_repr [id1;id2;id3]) >>
-          return thisid
-        else
-          return thisid
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-             return (obj1, obj2, obj3)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
- end)
-
-
-module Shelve_4
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a
-  module Typeable = Typeable.Typeable_4(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)
-  module Eq = Eq.Eq_4(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-             return (obj1, obj2, obj3, obj4)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 4-tuple")))
-end)
-
-
-module Shelve_5
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  (S5 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a * S5.a
-  module Typeable = Typeable.Typeable_5(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)
-  module Eq = Eq.Eq_5(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4, obj5) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->
-          S5.shelve obj5 >>= fun id5 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4;id5]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4;id5] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-           S5.unshelve id5 >>= fun obj5->
-             return (obj1, obj2, obj3, obj4, obj5)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
-end)
-
-
-module Shelve_6
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  (S5 : Shelve)
-  (S6 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
-  module Typeable = Typeable.Typeable_6(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)
-  module Eq = Eq.Eq_6(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4, obj5, obj6) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->
-          S5.shelve obj5 >>= fun id5 ->
-          S6.shelve obj6 >>= fun id6 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4;id5;id6] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-           S5.unshelve id5 >>= fun obj5 ->
-           S6.unshelve id6 >>= fun obj6 ->
-             return (obj1, obj2, obj3, obj4, obj5, obj6)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
-end)
-
-
-module Shelve_7
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  (S5 : Shelve)
-  (S6 : Shelve)
-  (S7 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
-  module Typeable = Typeable.Typeable_7(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)
-  module Eq = Eq.Eq_7(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->
-          S5.shelve obj5 >>= fun id5 ->
-          S6.shelve obj6 >>= fun id6 ->
-          S7.shelve obj7 >>= fun id7 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4;id5;id6;id7] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-           S5.unshelve id5 >>= fun obj5 ->
-           S6.unshelve id6 >>= fun obj6 ->
-           S7.unshelve id7 >>= fun obj7 ->
-             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
-end)
-
-
-module Shelve_8
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  (S5 : Shelve)
-  (S6 : Shelve)
-  (S7 : Shelve)
-  (S8 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
-  module Typeable = Typeable.Typeable_8(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)(S8.Typeable)
-  module Eq = Eq.Eq_8(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)(S8.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->
-          S5.shelve obj5 >>= fun id5 ->
-          S6.shelve obj6 >>= fun id6 ->
-          S7.shelve obj7 >>= fun id7 ->
-          S8.shelve obj8 >>= fun id8 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7;id8]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4;id5;id6;id7;id8] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-           S5.unshelve id5 >>= fun obj5 ->
-           S6.unshelve id6 >>= fun obj6 ->
-           S7.unshelve id7 >>= fun obj7 ->
-           S8.unshelve id8 >>= fun obj8 ->
-             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
-end)
-
-
-module Shelve_9
-  (S1 : Shelve)
-  (S2 : Shelve)
-  (S3 : Shelve)
-  (S4 : Shelve)
-  (S5 : Shelve)
-  (S6 : Shelve)
-  (S7 : Shelve)
-  (S8 : Shelve)
-  (S9 : Shelve)
-  : Shelve with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a = Shelve_defaults
-(struct
-  type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
-  module Typeable = Typeable.Typeable_9(S1.Typeable)(S2.Typeable)(S3.Typeable)(S4.Typeable)(S5.Typeable)(S6.Typeable)(S7.Typeable)(S8.Typeable)(S9.Typeable)
-  module Eq = Eq.Eq_9(S1.Eq)(S2.Eq)(S3.Eq)(S4.Eq)(S5.Eq)(S6.Eq)(S7.Eq)(S8.Eq)(S9.Eq)
-  module Comp = Dynmap.Comp(Typeable)(Eq)
-  let shelve : a -> id m =
-    fun ((obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9) as obj) ->
-      allocate_id (Typeable.makeDynamic obj) Comp.eq >>= fun (thisid, freshp) ->
-        if freshp then
-          S1.shelve obj1 >>= fun id1 ->
-          S2.shelve obj2 >>= fun id2 ->
-          S3.shelve obj3 >>= fun id3 ->
-          S4.shelve obj4 >>= fun id4 ->
-          S5.shelve obj5 >>= fun id5 ->
-          S6.shelve obj6 >>= fun id6 ->
-          S7.shelve obj7 >>= fun id7 ->
-          S8.shelve obj8 >>= fun id8 ->
-          S9.shelve obj9 >>= fun id9 ->    
-          store_repr thisid (make_repr [id1;id2;id3;id4;id5;id6;id7;id8;id9]) >>
-          return thisid
-        else
-          return thisid
-
-  open Shelvehelper.Input
-  module W = Whizzy(Typeable)
-  let unshelve = W.whizzyNoCtor
-    (function
-       | [id1;id2;id3;id4;id5;id6;id7;id8;id9] -> 
-           S1.unshelve id1 >>= fun obj1 ->
-           S2.unshelve id2 >>= fun obj2 ->
-           S3.unshelve id3 >>= fun obj3 ->
-           S4.unshelve id4 >>= fun obj4 ->
-           S5.unshelve id5 >>= fun obj5 ->
-           S6.unshelve id6 >>= fun obj6 ->
-           S7.unshelve id7 >>= fun obj7 ->
-           S8.unshelve id8 >>= fun obj8 ->
-           S9.unshelve id9 >>= fun obj9 ->
-             return (obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9)
-       | _ -> raise (UnshelvingError
-                       ("unexpected object encountered unshelving 3-tuple")))
-end)
-
 module Shelve_ref (S : Shelve) = Shelve_defaults(
   struct
-    module Eq = Eq.Eq_ref(S.Eq)
-    module Typeable = Typeable.Typeable_ref(S.Typeable)
-    module Comp = Dynmap.Comp(Typeable)(Eq)
+    module E = Eq.Eq_ref(S.E)
+    module T = Typeable.Typeable_ref(S.T)
+    module Comp = Dynmap.Comp(T)(E)
     type a = S.a ref
     let shelve : a -> id m =
       fun r -> (* exactly what we'd generate (even for immutable types) *)
-        let dyn = Typeable.makeDynamic r in
+        let dyn = T.makeDynamic r in
         allocate_id dyn Comp.eq >>= fun (id,freshp) ->
         if freshp then 
           (S.shelve r.contents >>= fun content_id ->
@@ -529,7 +183,7 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
             | None ->
                 flush stderr;
                 let this = Obj.new_block record_tag ref_size in
-                  update_map id (Typeable.makeDynamic (Obj.magic this)) >>= 
+                  update_map id (T.makeDynamic (Obj.magic this)) >>= 
                     (fun _ ->
                        begin match ctor_repr repr with
                          | None, [x] -> 
@@ -541,7 +195,7 @@ module Shelve_ref (S : Shelve) = Shelve_defaults(
                        end)
                     
             | Some obj -> 
-                begin match Typeable.cast obj with
+                begin match T.cast obj with
                   | Some obj -> return obj
                   | None     -> assert false
                 end

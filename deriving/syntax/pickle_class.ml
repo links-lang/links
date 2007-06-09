@@ -9,87 +9,103 @@ struct
 
   let classname = "Pickle"
 
-  let wrap ctxt decl picklers unpickle =
-    <:module_expr< struct type a = $atype ctxt decl$
+  let wrap ~atype ~picklers ~unpickle =
+    <:module_expr< struct type a = $atype$
                           let pickle buffer = function $list:picklers$
                           let unpickle stream = $unpickle$ end >>
 
-  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
-  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:false)
-    
-  and polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
-   let picklen = <:expr< Pickle_int.pickle buffer $`int:n$ >> in
-    match tagspec with
-      | Tag (name, args) -> (match args with 
-            | None   -> <:match_case< `$name$ -> $picklen$ >>,
-                        <:match_case< $`int:n$ -> `$name$ >>
-            | Some e -> <:match_case< `$name$ x -> $picklen$;
-                                       let module M = $expr ctxt e$ in M.pickle buffer x >>,
-                        <:match_case< $`int:n$ -> let module M = $expr ctxt e$ in 
-                                       `$name$ (M.unpickle stream) >>)
-      | Extends t -> 
-          let patt, guard, cast = cast_pattern ctxt t in
-            <:match_case< $patt$ when $guard$ -> 
-                          let module M = $expr ctxt t$ in 
-                            $picklen$; M.pickle buffer $cast$ >>,
-            <:match_case< $`int:n$ -> let module M = $expr ctxt t$ 
-                                       in (M.unpickle stream :> a) >>
+  let instance = object (self)
+    inherit make_module_expr ~classname ~allow_private:false
 
-  and case ctxt : Types.summand -> int -> Ast.match_case * Ast.match_case = fun (name,args) n ->
+    method nargs ctxt (exprs : (name * Types.expr) list) : Ast.expr * Ast.expr =
+      List.fold_right
+        (fun (id,t) (p,u) -> 
+           <:expr< let module M = $self#expr ctxt t$ in M.pickle buffer $lid:id$; $p$ >>,
+           <:expr< let module M = $self#expr ctxt t$ in let $lid:id$ = M.unpickle stream in $u$ >>)
+        exprs (<:expr<>>, <:expr< $tuple_expr (List.map (fun (id,_) -> <:expr< $lid:id$ >>) exprs)$>>)
+
+    method tuple ctxt ts = 
+      let atype = atype_expr ctxt (`Tuple ts)
+      and picklers, unpickle = 
+        let n = List.length ts in 
+        let pinner, unpickle = self#nargs ctxt (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) ts) in
+        let patt, expr = tuple n in
+          [ <:match_case< $patt$ -> $pinner$ >> ], unpickle in
+        <:module_expr< Pickle_defaults( $wrap ~atype ~picklers ~unpickle$) >>
+
+    method polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
+      let picklen = <:expr< Pickle_int.pickle buffer $`int:n$ >> in
+        match tagspec with
+          | Tag (name, args) -> (match args with 
+              | None   -> <:match_case< `$name$ -> $picklen$ >>,
+                          <:match_case< $`int:n$ -> `$name$ >>
+              | Some e -> <:match_case< `$name$ x -> $picklen$;
+                                         let module M = $self#expr ctxt e$ in M.pickle buffer x >>,
+                          <:match_case< $`int:n$ -> let module M = $self#expr ctxt e$ in 
+                                        `$name$ (M.unpickle stream) >>)
+          | Extends t -> 
+              let patt, guard, cast = cast_pattern ctxt t in
+                <:match_case< $patt$ when $guard$ -> 
+                              let module M = $self#expr ctxt t$ in 
+                               $picklen$; M.pickle buffer $cast$ >>,
+                <:match_case< $`int:n$ -> let module M = $self#expr ctxt t$ 
+                                           in (M.unpickle stream :> a) >>
+
+    method case ctxt (ctor,args) n =
       match args with 
-        | [] -> (<:match_case< $uid:name$ -> Pickle_int.pickle buffer $`int:n$ >>,
-                 <:match_case< $`int:n$ -> $uid:name$ >>)
+        | [] -> (<:match_case< $uid:ctor$ -> Pickle_int.pickle buffer $`int:n$ >>,
+                 <:match_case< $`int:n$ -> $uid:ctor$ >>)
         | _ -> 
-        let patt, exp = tuple (List.length args) in
-        <:match_case< $uid:name$ $patt$ -> 
+        let nargs = List.length args in
+        let patt, exp = tuple nargs in
+        let pickle, unpickle = self#nargs ctxt (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) args) in
+        <:match_case< $uid:ctor$ $patt$ -> 
                       Pickle_int.pickle buffer $`int:n$;
-                      let module M = $expr ctxt (`Tuple args)$ 
-                       in M.pickle buffer $exp$ >>,
-        <:match_case< $`int:n$ -> 
-                      let module M = $expr ctxt (`Tuple args)$ 
-                       in let $patt$ = M.unpickle stream in $uid:name$ $exp$  >>
+                      $pickle$ >>,
+        <:match_case< $`int:n$ -> let $patt$ = $unpickle$ in $uid:ctor$ $exp$  >>
     
-  and field ctxt : Types.field -> Ast.expr * Ast.expr = function
-    | (name, ([], t), _) -> 
-        <:expr< let module M = $expr ctxt t$ in M.pickle buffer $lid:name$ >>,
-        <:expr< let module M = $expr ctxt t$ in M.unpickle stream >>
-    | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
+    method field ctxt : Types.field -> Ast.expr * Ast.expr = function
+      | (name, ([], t), _) -> 
+          <:expr< let module M = $self#expr ctxt t$ in M.pickle buffer $lid:name$ >>,
+          <:expr< let module M = $self#expr ctxt t$ in M.unpickle stream >>
+      | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
 
-  and sum ?eq ctxt ((tname,_,_,_) as decl) summands = 
-    let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
-    let picklers, unpicklers = 
-      List.split (List.map2 (case ctxt) summands (List.range 0 (List.length summands))) in
-      wrap ctxt decl picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
-                                        | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
+    method sum ?eq ctxt ((tname,_,_,_) as decl) summands = 
+      let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
+      let picklers, unpicklers = 
+        List.split (List.mapn (self#case ctxt) summands) in
+        wrap ~atype:(atype ctxt decl) ~picklers
+          ~unpickle:<:expr< match Pickle_int.unpickle stream with $list:unpicklers$ 
+                                | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
 
-  and record ?eq ctxt decl fields = 
-    let picklers, unpicklers = 
-      List.split (List.map (field ctxt) fields) in
-    let unpickle = 
-      List.fold_right2
-        (fun (field,_,_) unpickler e -> 
-           <:expr< let $lid:field$ = $unpickler$ in $e$ >>)
-        fields
-        unpicklers
-        (record_expression fields) in
-      wrap ctxt decl
-            [ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
-            unpickle
-
-   and variant ctxt decl (_, tags) = 
-    let msg = "Unexpected tag when unpickling polymorphic variant: " in
-    let picklers, unpicklers = 
-      List.split (List.map2 (polycase ctxt) tags (List.range 0 (List.length tags))) in
-      wrap ctxt decl picklers <:expr< match Pickle_int.unpickle stream with $list:unpicklers$
-                                         | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
+    method record ?eq ctxt decl fields = 
+       let picklers, unpicklers = 
+         List.split (List.map (self#field ctxt) fields) in
+       let unpickle = 
+         List.fold_right2
+           (fun (field,_,_) unpickler e -> 
+              <:expr< let $lid:field$ = $unpickler$ in $e$ >>)
+           fields
+           unpicklers
+           (record_expression fields) in
+         wrap ~atype:(atype ctxt decl) ~unpickle
+               ~picklers:[ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq picklers$ >>]
+   
+    method variant ctxt decl (_, tags) = 
+      let msg = "Unexpected tag when unpickling polymorphic variant: " in
+      let picklers, unpicklers = 
+        List.split (List.mapn (self#polycase ctxt) tags) in
+        wrap ~atype:(atype ctxt decl) ~picklers 
+        ~unpickle:<:expr< match Pickle_int.unpickle stream with $list:unpicklers$
+                              | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
+  end
 end
 
 let _ = Base.register "Pickle"
   ((fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
          ~default_module:"Pickle_defaults" ()),
    (fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in
         M.gen_sigs ~context ~decls ~classname:M.classname))
-

@@ -116,11 +116,17 @@ struct
         exprs
       <:expr< [] >>
 
+  let patt_list : Ast.patt list -> Ast.patt = 
+    fun patts ->
+      List.fold_right 
+        (fun car cdr -> <:patt< $car$ :: $cdr$ >>)
+        patts
+      <:patt< [] >>
+
   let tuple_expr : Ast.expr list -> Ast.expr = function
     | [] -> <:expr< () >>
     | [x] -> x
-    | x::xs -> let cs l r = <:expr< $l$, $r$ >> in
-        <:expr< $List.fold_left cs x xs$ >>
+    | x::xs -> Ast.ExTup (loc, List.fold_left (fun e t -> Ast.ExCom (loc, e,t)) x xs)
 
   let tuple ?(param="v") n : Ast.patt * Ast.expr =
     let v n = Printf.sprintf "%s%d" param n in
@@ -139,14 +145,6 @@ struct
             in
               Ast.PaTup (loc, patts), Ast.ExTup (loc, exprs)
 
-
-(*            <:patt< ( $patts$ ) >>, <:expr< ( $exprs$ ) >>*)
-
-(* let tuple_expr loc = function  (\* 0-tuples and 1-tuples are invalid *\) *)
-(*   | []  -> <:expr< () >> *)
-(*   | [x] -> x *)
-(*   | xs  -> <:expr< ( $list:xs$ ) >> *)
-
   let rec modname_from_qname ~qname ~classname =
     match qname with 
       | [] -> invalid_arg "modname_from_qname"
@@ -156,15 +154,16 @@ struct
   let apply_functor (f : Ast.module_expr) (args : Ast.module_expr list) : Ast.module_expr =
       List.fold_left (fun f p -> <:module_expr< $f$ $p$ >>) f args
           
-  class make_module_expr ~classname ~variant ~record ~sum ~allow_private =
+  class virtual make_module_expr ~classname (* ~variant ~record ~sum *) ~allow_private =
   object (self)
 
     method mapply ctxt (funct : Ast.module_expr) args =
       apply_functor funct (List.map (self#expr ctxt) args)
 
-    method variant = variant
-    method sum = sum
-    method record = record
+    method virtual variant : context -> decl -> variant -> Ast.module_expr
+    method virtual sum     : ?eq:expr -> context -> decl -> summand list -> Ast.module_expr
+    method virtual record  : ?eq:expr -> context -> decl -> field list -> Ast.module_expr
+    method virtual tuple   : context -> expr list -> Ast.module_expr
 
     method param ctxt (name, variance) =
       <:module_expr< $uid:NameMap.find name ctxt.argmap$ >>
@@ -183,13 +182,14 @@ struct
             let f = (modname_from_qname ~qname ~classname) in
               self#mapply ctxt (Ast.MeId (loc, f)) args
 
-    method tuple ctxt = function
+(*    method tuple ctxt = function
         | [] -> <:module_expr< $uid:Printf.sprintf "%s_unit" classname$ >>
         | [a] -> self#expr ctxt a
         | args -> 
             let f = <:module_expr< $uid:Printf.sprintf "%s_%d" 
                                    classname (List.length args)$ >> in
-              self#mapply ctxt f args
+            self#mapply ctxt f args
+*)
 
     method expr (ctxt : context) : expr -> Ast.module_expr = function
       | `Param p    -> self#param      ctxt p
@@ -212,12 +212,15 @@ struct
         | `Nothing -> <:module_expr< >>
   end
 
+  let atype_expr ctxt expr = 
+    Untranslate.expr (instantiate_modargs ctxt expr)
+
   let atype ctxt (name, params, rhs, _) = 
     match rhs with 
       | `Fresh _ | `Variant _ | `Nothing ->
           Untranslate.expr (`Constr ([name],
                                      List.map (fun (p,_) -> `Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
-      | `Expr e -> Untranslate.expr (instantiate_modargs ctxt e)
+      | `Expr e -> atype_expr ctxt e
 
   let generate ~context ~decls ~make_module_expr ~classname ?default_module () =
     (* plan: 

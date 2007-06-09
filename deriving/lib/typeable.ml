@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+
 
 (** A type is viewed as the application of type constructors to zero
     or more type arguments.  We provide equality and ordering
@@ -25,19 +25,39 @@ struct
       fun () -> incr current; !current
 end
 
+let memoize f =
+  let t = ref None in 
+    fun () ->
+      match !t with
+        | Some t -> t
+        | None ->
+            let r = f () in
+              t := Some r;
+              r
 (* Type of type representations *)
-type typeRep = TypeRep of (Tag.tag * typeRep list)
-
 module TypeRep =
-struct
-  type t = typeRep
+struct 
+  type t = | Fresh of (Interned.t * t list) 
+           | Polyv of (string * t) list
+           | Tuple of t list
+  type delayed = unit -> t
   let compare : t -> t -> int = compare
+  let eq = (=)
+  let mkFresh magic args = 
+    let interned = Interned.intern magic in
+      memoize (fun () -> Fresh (interned, List.map (fun f -> f ()) args))
+  let mkTuple tuple =
+    memoize (fun () -> Tuple (List.map (fun f -> f ()) tuple))
+  let mkPolyv fields extends =
+    memoize (fun () -> 
+               let fields = List.map (fun (f,t) -> (f,t())) fields in
+               let efields = List.map (fun f -> match f () with Polyv f -> f
+                                         | _ -> assert false) extends in
+                 Polyv (fields @ List.concat efields))
 end
 
-let const : 'a -> 'b -> 'a = fun x _ -> x
-
 (* Dynamic types *)
-type dynamic = Obj.t * typeRep
+type dynamic = Obj.t * TypeRep.t
 let tagOf (_, tag) = tag
 let untag (obj, tag) target = 
   if tag = target 
@@ -69,97 +89,30 @@ struct
   let makeDynamic o = (Obj.repr o, typeRep ())
 end
 
-let cache thunk = 
-  let answer = ref None in
-  fun () -> match !answer with
-    | None -> 
-        let r = thunk () in
-          begin
-            answer := Some r;
-            r
-          end
-    | Some r -> r
-  
-module Typeable_unit : Typeable with type a = unit = Typeable_defaults(struct type a = unit 
-                                                                              let typeRep = cache (fun _ -> TypeRep (Tag.fresh(), []))
-                                                                        end)
-module Typeable_2 (S1:Typeable)(S2:Typeable)
-  : Typeable with type a = S1.a * S2.a
-    = Typeable_defaults(struct type a = S1.a * S2.a
-let typeRep = cache (fun () -> TypeRep (Tag.fresh(), [S1.typeRep(); S2.typeRep()]))
-    end)
-module Typeable_3 (S1:Typeable)(S2:Typeable)(S3:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a
-    = Typeable_defaults(struct type a = S1.a * S2.a * S3.a
-let typeRep = cache (fun () -> TypeRep (Tag.fresh(), [S1.typeRep(); S2.typeRep(); S3.typeRep()]))
-    end)
-module Typeable_4 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a
-    = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a
-let typeRep = cache (fun () -> TypeRep (Tag.fresh(), [S1.typeRep(); S2.typeRep(); S3.typeRep();S4.typeRep()]))
-    end)
-module Typeable_5 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a
-  = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a * S5.a
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), 
-                                                                     [S1.typeRep(); S2.typeRep(); S3.typeRep();
-                                                                      S4.typeRep(); S5.typeRep()]))
-    end)
-module Typeable_6 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
-  = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), 
-                                                                     [S1.typeRep(); S2.typeRep(); S3.typeRep();
-                                                                      S4.typeRep(); S5.typeRep(); S6.typeRep()]))
-end)
-module Typeable_7 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
-  = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), 
-                                                                       [S1.typeRep(); S2.typeRep(); S3.typeRep();
-                                                                        S4.typeRep(); S5.typeRep(); S6.typeRep();
-                                                                        S7.typeRep()]))
-end)
-module Typeable_8 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)(S8 :Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
-  = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), 
-                                                                     [S1.typeRep(); S2.typeRep(); S3.typeRep();
-                                                                      S4.typeRep(); S5.typeRep(); S6.typeRep();
-                                                                      S7.typeRep(); S8.typeRep()]))
-end)
-module Typeable_9 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)(S8 :Typeable)(S9:Typeable) 
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
-  = Typeable_defaults(struct type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), 
-                                                                     [S1.typeRep(); S2.typeRep(); S3.typeRep();
-                                                                      S4.typeRep(); S5.typeRep(); S6.typeRep();
-                                                                      S7.typeRep(); S8.typeRep(); S9.typeRep()]))
-    end)
+module Typeable_list (A:Typeable) : Typeable with type a = A.a list = 
+  Typeable_defaults(struct type a = A.a list
+                           let typeRep = TypeRep.mkFresh "Primitive.list" [A.typeRep]
+                    end)
 
-module Typeable_list (A:Typeable) : Typeable with type a = A.a list
-  = Typeable_defaults(struct type a = A.a list
-                             let typeRep = cache (fun () -> TypeRep (Tag.fresh(), [A.typeRep()]))
-                      end)
+module Typeable_option (A:Typeable) : Typeable with type a = A.a option =
+  Typeable_defaults(struct type a = A.a option
+                           let typeRep = TypeRep.mkFresh "Primitive.option" [A.typeRep]
+                    end)
 
-module Typeable_option (A:Typeable) : Typeable with type a = A.a option
-  = Typeable_defaults(struct type a = A.a option
-           let typeRep = cache (fun () -> TypeRep (Tag.fresh(), [A.typeRep()]))
-                      end)
+module Primitive_typeable (T : sig type t val magic : string end) : Typeable with type a = T.t =
+  Typeable_defaults(struct type a = T.t
+                           let typeRep = TypeRep.mkFresh T.magic []
+                    end)
+module Typeable_unit   = Primitive_typeable(struct type t = unit let magic = "Primitive.unit" end)
+module Typeable_int    = Primitive_typeable(struct type t = int let magic = "Primitive.int" end)
+module Typeable_num    = Primitive_typeable(struct type t = Num.num let magic = "Primitive.Num.num" end)
+module Typeable_float  = Primitive_typeable(struct type t = float let magic = "Primitive.float" end)
+module Typeable_bool   = Primitive_typeable(struct type t = bool let magic = "Primitive.bool" end)
+module Typeable_string = Primitive_typeable(struct type t = string let magic = "Primitive.string" end)
+module Typeable_char   = Primitive_typeable(struct type t = char let magic = "Primitive.char" end)
 
-module Primitive_typeable (T : sig type t end)
-  : Typeable with type a = T.t 
-  = 
-Typeable_defaults(struct 
-  type a = T.t
-  let typeRep = cache (fun () -> TypeRep (Tag.fresh(), []))
-end)
+module Typeable_ref(A : Typeable) : Typeable with type a = A.a ref =
+  Typeable_defaults(struct type a = A.a ref
+                           let typeRep = TypeRep.mkFresh "Primitive.ref" [A.typeRep]
+                    end)
 
-module Typeable_int = Primitive_typeable(struct type t = int end)
-module Typeable_num = Primitive_typeable(struct type t = Num.num end)
-module Typeable_float = Primitive_typeable(struct type t = float end)
-module Typeable_bool = Primitive_typeable(struct type t = bool end)
-module Typeable_string = Primitive_typeable(struct type t = string end)
-module Typeable_char = Primitive_typeable(struct type t = char end)
-
-module Typeable_ref(A : Typeable) = Primitive_typeable(struct type t = A.a ref end)

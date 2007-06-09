@@ -9,10 +9,10 @@ struct
 
   let classname = "Enum"
 
-  let rec expr t = (Lazy.force obj) # expr t and rhs t = (Lazy.force obj) # rhs t
-  and obj = lazy (new make_module_expr ~classname ~variant ~record ~sum ~allow_private:false)
+  let instance = object(self)
+    inherit make_module_expr ~classname ~allow_private:false
 
-  and sum ?eq ctxt ((tname,_,_,_) as decl) summands =
+    method sum ?eq ctxt ((tname,_,_,_) as decl) summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
@@ -26,7 +26,7 @@ struct
         <:expr< [] >> in
       <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
-  and variant ctxt decl (_, tags) = 
+    method variant ctxt decl (_, tags) = 
     let numbering = 
       List.fold_right2
         (fun n tagspec rest -> 
@@ -41,14 +41,17 @@ struct
         <:expr< [] >> in
       <:module_expr< struct type a = $atype ctxt decl$ let numbering = $numbering$ end >>
 
-  and record ?eq _ (tname,_,_,_) = raise (Underivable ("Enum cannot be derived for record types (i.e. "^
-                                                     tname^")"))
+    method tuple context _ = raise (Underivable "Enum cannot be derived for tuple types")
+    method record ?eq _ (tname,_,_,_) = raise (Underivable
+                                                 ("Enum cannot be derived for record types (i.e. "^
+                                                    tname^")"))
+  end
 end
 
 let _ = Base.register "Enum" 
   ((fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.rhs ~classname:M.classname
+       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
          ~default_module:"EnumDefaults" ()),
    (fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in

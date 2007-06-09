@@ -125,6 +125,8 @@ type tup2 = int * float
     deriving (Pickle, Eq, Show, Typeable, Shelve)
 type tup3 = int * float * bool
     deriving (Pickle, Eq, Show, Typeable, Shelve)
+type tup4 = int * int * bool * unit
+    deriving (Pickle, Eq, Show, Typeable, Shelve, Bounded)
 
 (* 17. underscore (?) *)
 (* TODO *)

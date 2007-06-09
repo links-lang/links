@@ -82,6 +82,9 @@ let dump_state {
 
 module Shelver =
 struct
+  type ids = (Id.t * repr) list
+      deriving (Pickle)
+
   let doShelveB : id m -> Buffer.t -> unit
     = fun m buffer ->
       let _, {id2rep=id2rep} = runState m initial_output_state in
@@ -89,8 +92,7 @@ struct
         Printf.fprintf stderr  "%d ids\n" (List.length ids);
       let ids' = unduplicate (=) (List.map snd ids) in
         Printf.fprintf stderr  "~ %d ids?\n" (List.length ids');
-      let module Pickle_Ids = Pickle.Pickle_list(Pickle.Pickle_2(Id.Pickle_t)(Pickle_repr)) in
-        Pickle_Ids.pickle buffer ids
+        Pickle_ids.pickle buffer ids
   let doShelveS : id m -> string
     = fun m ->
       let buffer = Buffer.create 127 in 

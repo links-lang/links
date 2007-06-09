@@ -32,6 +32,12 @@ struct
       | _, [] -> []
       | f, x :: xs -> f x @ aux (f, xs)
     in aux (f,l)
+
+  let mapn ?(init=0) f = 
+    let rec aux n = function
+      | [] -> []
+      | x::xs -> f x n :: aux (n+1) xs in
+      aux init
 end
 
 module F =
