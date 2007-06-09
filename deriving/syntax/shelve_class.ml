@@ -58,7 +58,7 @@ struct
       let pidlist = patt_list (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
       let tpatt,texpr = tuple ~param:"id" nts in
       let tymod = Typeable.tup ctxt ts <:expr< M.T.typeRep >> (self#expr)
-      and eqmod = Eq.tup ctxt ts <:expr< M.T.typeRep >> (self#expr)
+      and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
       and shelvers =
         let inner = 
           List.fold_right

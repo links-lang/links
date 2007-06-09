@@ -1,5 +1,8 @@
+(*pp derivingpp *)
 open Bounded
 
+module Enum =
+struct
 (** Enum **)
 module type Enum = sig
   type a
@@ -69,3 +72,55 @@ struct
                              else firstCon))
   let enumFrom x = enumFromTo x lastCon
 end
+
+module Enum_bool = EnumDefaults(struct
+  type a = bool
+  let numbering = [false, 0; true, 1]
+end)
+
+module Enum_char = EnumDefaults'(struct
+  type a = char
+  let fromEnum = Char.code
+  let toEnum = Char.chr
+end) (Bounded_char)
+
+module Enum_int = EnumDefaults' (struct
+  type a = int
+  let fromEnum i = i
+  let toEnum i = i
+end)(Bounded_int)
+
+(* Can `instance Enum Float' be justified?
+   For some floats `f' we have `succ f == f'. 
+   Furthermore, float is wider than int, so fromEnum will necessarily
+   give nonsense on many inputs. *)
+
+module Enum_unit = EnumDefaults' (struct
+  type a = unit
+  let fromEnum () = 0
+  let toEnum = function
+    | 0 -> ()
+    | _ -> raise (Invalid_argument "toEnum")
+end) (Bounded_unit)
+end
+include Enum
+
+type open_flag = Pervasives.open_flag  =
+                 | Open_rdonly
+                 | Open_wronly
+                 | Open_append
+                 | Open_creat
+                 | Open_trunc
+                 | Open_excl
+                 | Open_binary
+                 | Open_text
+                 | Open_nonblock
+                     deriving (Enum)
+
+type fpclass = Pervasives.fpclass =
+               | FP_normal
+               | FP_subnormal
+               | FP_zero
+               | FP_infinite
+               | FP_nan
+                   deriving (Enum)

@@ -18,7 +18,6 @@ SOURCES = util.ml           util.mli		\
           pickle.ml         pickle.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
-          primitives.ml     primitives.mli	\
           shelvehelper.ml   shelvehelper.mli	\
           shelve.ml	    shelve.mli    	\
           functor.ml        functor.mli		\

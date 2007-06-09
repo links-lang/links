@@ -1,3 +1,6 @@
+(*pp derivingpp *)
+module Show = 
+struct 
 (** Show **)
 module type Show = sig
   type a
@@ -60,14 +63,6 @@ module Show_list (S : Show) : Show with type a = S.a list =
                   let format = S.formatList
                 end)
     
-(* instance Show a => Show (a ref) *)
-module Show_ref (S : Show) : Show with type a = S.a ref =
-  ShowDefaults (struct
-                  type a = S.a ref
-                  let format formatter obj = 
-                    Format.fprintf formatter "@[ref@;%a]" S.format !obj
-                end)
-
 (* instance Show a => Show (a option) *)
 module Show_option (S : Show) : Show with type a = S.a option =
   ShowDefaults (struct
@@ -136,3 +131,79 @@ ShowDefaults(
       Format.pp_print_string formatter "}";
       Format.pp_close_box formatter ();
   end)
+
+module Show_bool = ShowDefaults (struct
+  type a = bool
+  let format formatter item =
+    match item with
+      | true  -> Format.pp_print_string formatter "true"
+      | false -> Format.pp_print_string formatter "false"
+end) 
+
+module Show_integer (S : sig type t val to_string : t -> string end) = ShowDefaults (struct
+  type a = S.t
+  let format formatter item = Format.pp_print_string formatter (S.to_string item)
+end)
+ 
+module Show_int32 = Show_integer(Int32)
+module Show_int64 = Show_integer(Int64)
+module Show_nativeint = Show_integer(Nativeint)
+
+module Show_char = ShowDefaults (struct
+  type a = char
+  let format formatter item = Format.pp_print_string formatter ("'" ^ Char.escaped item ^ "'")
+end)
+
+module Show_int = ShowDefaults(struct
+  type a = int
+  let format formatter item = Format.pp_print_string formatter (string_of_int item)
+end)
+
+module Show_num = ShowDefaults (struct
+  type a = Num.num
+  let format formatter item = Format.pp_print_string formatter (Num.string_of_num item)
+end)
+
+module Show_float = ShowDefaults(struct
+    type a = float
+    let format formatter item = Format.pp_print_string formatter (string_of_float item)
+end)
+
+module Show_string = ShowDefaults (struct
+  type a = string
+  let format formatter item = 
+    Format.pp_print_char formatter '"';
+    Format.pp_print_string formatter (String.escaped item);
+    Format.pp_print_char formatter '"'
+end)  
+
+module Show_unit = ShowDefaults(struct
+  type a = unit
+  let format formatter () = Format.pp_print_string formatter "()"
+end)
+
+end
+include Show
+
+type open_flag = Pervasives.open_flag  =
+                 | Open_rdonly
+                 | Open_wronly
+                 | Open_append
+                 | Open_creat
+                 | Open_trunc
+                 | Open_excl
+                 | Open_binary
+                 | Open_text
+                 | Open_nonblock
+                     deriving (Show)
+
+type fpclass = Pervasives.fpclass =
+               | FP_normal
+               | FP_subnormal
+               | FP_zero
+               | FP_infinite
+               | FP_nan
+                   deriving (Show)
+
+type 'a ref = 'a Pervasives.ref = { mutable contents : 'a; }
+    deriving (Show)

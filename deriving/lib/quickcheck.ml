@@ -63,8 +63,8 @@ end
 module Random_int : Random with type a = int  =
 struct
   type a = int 
-  let max_int = Primitives.Bounded_int.maxBound
-  let min_int = Primitives.Bounded_int.minBound
+  let max_int = Bounded.Bounded_int.maxBound
+  let min_int = Bounded.Bounded_int.minBound
   module RandomR (RandomGen : RandomGen) =
   struct
     open Big_int
@@ -96,7 +96,7 @@ type stdgen = Random.State.t
 module RandomGen_stdgen : RandomGen with type g = stdgen =
 struct
   type g = stdgen
-  let max_int = Primitives.Bounded_int.maxBound
+  let max_int = Bounded.Bounded_int.maxBound
   let top = Int64.shift_left (Int64.of_int max_int) 1
   let next g = 
     let g' = Random.State.copy g in
@@ -476,7 +476,7 @@ struct
   struct
     let vector : int -> Arbitrary.a list gen
       = fun n -> Monad_gen_utils.sequence (List.map (fun _ -> Arbitrary.arbitrary)
-                                              (Primitives.Enum_int.enumFromTo 1 n))
+                                              (Enum.Enum_int.enumFromTo 1 n))
   end
 end
 
@@ -556,7 +556,7 @@ struct
       = float_of_int a +. (float_of_int b /. (abs_float (float_of_int c) +. 1.)) 
   let decodeFloat f
       = let m,e = frexp f in
-          (int_of_float (m *. float_of_int Primitives.Bounded_int.maxBound), e)
+          (int_of_float (m *. float_of_int Bounded.Bounded_int.maxBound), e)
   let arbitrary
       = (liftM3
             fraction
@@ -758,7 +758,7 @@ struct
       sized
         (fun n -> oneof
           (List.map (fun i -> return (Name ("v" ^ string_of_int i))) 
-              (Primitives.Enum_int.enumFromTo 1 (ilog (n+1)))))
+              (Enum.Enum_int.enumFromTo 1 (ilog (n+1)))))
   let coarbitrary _ = failwith "NYI"
     
 end 

@@ -65,4 +65,3 @@ struct
   type a = Num.num
   let eq = Num.eq_num
 end
-

@@ -254,7 +254,7 @@ struct
           = $apply_defaults (make_module_expr context decl)$ >>)
         decls in
     let mrec =
-      <:str_item< open $uid:classname$ open Primitives module rec $list:mbinds$ >> in
+      <:str_item< open $uid:classname$ module rec $list:mbinds$ >> in
     let fixed = make_functor <:module_expr< struct $mrec$ end >> in
     let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
                                 (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
