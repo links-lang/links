@@ -43,31 +43,93 @@ end)
 (* Type of type representations *)
 module TypeRep =
 struct 
-  type t = | Fresh of (interned * t list) 
-           | Polyv of (string * t) list
-           | Tuple of t list
-               deriving (Show)
-  type delayed = unit -> t
-  let compare : t -> t -> int = compare
-  let eq = (=)
-  let mkFresh magic args = 
+  type t = | Fresh of (interned * delayed list) 
+           | Polyv of (interned * int * (string * delayed option) list)
+           | Tuple of (int * delayed list)
+  and delayed = unit -> t
+
+  let compareList cmp l r =
+    try
+      List.fold_right2
+        (fun l r n ->
+           if n <> 0 then n
+           else cmp l r)
+        l r 0
+    with Invalid_argument _ -> -1
+
+  let rec compare : t -> t -> int = 
+    (* naive, no-recursion implementation *)
+      fun l r ->  match l, r with
+        | Fresh (l,ls), Fresh (r,rs) ->
+            begin match Interned.compare l r with
+              | 0 -> compareList compare' ls rs
+              | n -> n end
+        | Polyv (_,ln,ls), Polyv (_,rn,rs) -> 
+            begin match Pervasives.compare ln rn with
+              | 0 -> compareList 
+                  (fun (l,lt) (r,rt) -> 
+                     match Pervasives.compare l r with
+                       | 0 -> 
+                           begin match lt, rt with
+                             | None, Some _ -> -1
+                             | None, None -> 0
+                             | Some _, None -> 1
+                             | Some lt, Some rt -> compare' lt rt end
+                       | n -> n)
+                    ls rs
+              | n -> n end
+        | Tuple (ln,ls), Tuple (rn,rs)  ->
+            begin match Pervasives.compare ln rn with
+              | 0 -> compareList compare' ls rs
+              | n -> n end
+        | l, r -> 
+            let ctornum = function
+              | Fresh _ -> 0
+              | Polyv _ -> 1
+              | Tuple _ -> 2 
+            in
+              Pervasives.compare (ctornum l) (ctornum r)
+  and compare' (l : unit -> t) (r : unit -> t) = compare (l()) (r())
+
+
+  let rec eq = (* naive, no-recursion implementation *)
+      fun l r ->  try begin match l, r with
+        | Fresh (l,ls), Fresh (r,rs) when Interned.eq l r -> List.for_all2 eq' ls rs
+        | Polyv (_,ln,ls), Polyv (_,rn,rs) when ln = rn ->
+            List.for_all2 (fun (ll,lt) (rl,rt) -> 
+                             match lt, rt with
+                               | Some lt, Some rt -> ll = rl && eq' lt rt
+                               | None, None -> true
+                               | _ -> false) ls rs
+        | Tuple (ln,ls), Tuple (rn,rs) when ln = rn -> List.for_all2 eq' ls rs
+        | _ -> false
+      end with Invalid_argument _ -> false
+  and eq' l r = eq (l()) (r())
+
+  let mkFresh (magic : string) (args : (unit -> t) list) : unit -> t = 
     let interned = Interned.intern magic in
-      memoize (fun () -> Fresh (interned, List.map (fun f -> f ()) args))
+      memoize (fun () -> Fresh (interned, args))
+
   let mkTuple tuple =
-    memoize (fun () -> Tuple (List.map (fun f -> f ()) tuple))
-  let mkPolyv fields extends =
+    memoize (fun () -> Tuple (List.length tuple, tuple))
+
+  let mkPolyv (magic : string) fields extends =
+    let interned = Interned.intern magic in
     memoize (fun () -> 
-               let fields = List.map (fun (f,t) -> (f,t())) fields in
-               let efields = List.map (fun f -> match f () with Polyv f -> f
-                                         | _ -> assert false) extends in
-                 Polyv (fields @ List.concat efields))
+               let efields = 
+                 List.concat (List.map (fun f -> match f () with Polyv (_,_,f) -> f
+                                          | _ -> assert false) extends) in
+                 Polyv (interned, 
+                        List.length fields + List.length efields,
+                        List.sort (fun (l,_) (r,_) -> String.compare l r)
+                          fields @ efields))
 end
 
 (* Dynamic types *)
 type dynamic = Obj.t * TypeRep.t
 let tagOf (_, tag) = tag
 let untag (obj, tag) target = 
-  if tag = target 
+  if TypeRep.eq tag target 
   then Some obj
   else None
 
@@ -99,9 +161,10 @@ struct
   let makeDynamic o = (Obj.repr o, typeRep ())
   let throwingCast d = 
     match cast d with
-      | None -> raise (CastFailure ("cast from type "^
+      | None -> (*raise (CastFailure ("cast from type "^
                                       TypeRep.Show_t.show (tagOf d) ^" to type "^
-                                      TypeRep.Show_t.show (T.typeRep ()) ^" failed"))
+                                      TypeRep.Show_t.show (T.typeRep ()) ^" failed"))*)
+          raise (CastFailure "cast failed")
       | Some s -> s
 end
 

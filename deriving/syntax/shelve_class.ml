@@ -6,6 +6,7 @@ struct
   open Types
   open Camlp4.PreCast
   include Base.InContext(L)
+  module UT = Types.Untranslate(L)
 
   let typeable_defaults t = <:module_expr< Typeable.Typeable_defaults($t$) >>
 
@@ -16,6 +17,55 @@ struct
   let bind, seq = 
     let bindop = ">>=" and seqop = ">>" in
       <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
+
+  let unshelve_record_bindings ctxt (tname,params,rhs,cs) (fields : field list) e =
+    let tname = "mutable_copy_of_" ^ tname in <:expr<
+      let record_tag = 0
+      and object_size = $`int:List.length fields$ in
+      let module Mutable = struct
+        type $lid:tname$ = $UT.repr 
+            (instantiate_modargs_repr ctxt 
+               (Record (List.map (fun (n,p,_) -> (n,p,`Mutable)) fields)))$
+      end in $e$ >>
+
+  let unshelve_record ctxt decl fields expr = 
+    let assignments = 
+      List.fold_right
+        (fun (id,_,_) exp ->
+           <:expr< this.Mutable.$lid:id$ <- $lid:id$; $exp$ >>)
+        fields
+      <:expr< return this >> in
+    let inner = 
+      List.fold_right
+        (fun (id,([],t),_) exp ->
+           <:expr< $bind$ ($mproject (expr ctxt t) "unshelve"$ $lid:id$)
+             (fun $lid:id$ -> $exp$) >>)
+        fields
+        assignments in
+    let idpat = patt_list (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
+      unshelve_record_bindings ctxt decl fields
+        (<:expr< fun id -> W.whizzyRecord id
+           (function
+              | $idpat$ ->
+                  let this = Obj.magic (Obj.new_block record_tag object_size) in
+                    $seq$ (update_map id (T.makeDynamic this))
+                      $inner$
+              | _ -> assert false) >>)
+
+  let shelve_record ctxt decl fields expr =
+    let inner =
+      List.fold_right 
+        (fun (id,([],t),_) e ->
+           <:expr< $bind$ ($mproject (expr ctxt t) "shelve"$ $lid:id$) 
+                          (fun $lid:id$ -> $e$) >>)
+        fields
+        <:expr< (store_repr this
+                   (Repr.make
+                      $expr_list (List.map (fun (id,_,_) -> <:expr< $lid:id$ >>) fields)$)) >>
+    in
+      [ <:match_case< ($record_pattern fields$ as obj) ->
+                       allocate (T.makeDynamic obj) Comp.eq 
+                                (fun this -> $inner$) >> ]
 
 
   let typeable_instance ctxt tname =
@@ -40,12 +90,11 @@ struct
                           module T = $tymod$
                           module E = $eqmod$
                           module Comp = Dynmap.Comp(T)(E)
-                          open Shelvehelper
+                          open Write
                           type a = $atype$
                           let shelve = function $list:shelvers$
-                          open Shelvehelper.Input
-                          module W = Whizzy(T)
-                          let unshelve = $unshelver$
+                          open Read
+                          let unshelve = let module W = Utils(T) in $unshelver$
     end >>
 
     let instance = object (self)
@@ -63,22 +112,20 @@ struct
         let inner = 
           List.fold_right
             (fun (id,t) expr -> 
-               <:expr< let module M = $self#expr ctxt t$
-                        in $bind$ (M.shelve $lid:id$) 
-                                  (fun $lid:id$ -> $expr$) >>)
+               <:expr< $bind$ ($mproject (self#expr ctxt t) "shelve"$ $lid:id$) 
+                            (fun $lid:id$ -> $expr$) >>)
             ids
-            <:expr< store_repr this (make_repr $eidlist$) >> in
+            <:expr< store_repr this (Repr.make $eidlist$) >> in
           [ <:match_case< ($tpatt$ as obj) -> 
                   $bind$ (allocate_id (T.makeDynamic obj) Comp.eq) (fun (this, freshp) ->
-                         if freshp then ($inner$; return this)
+                         if freshp then ($seq$ $inner$ (return this))
                          else return this) >>]
       and unshelver = 
         let msg = "unexpected object encountered unshelving "^string_of_int nts^"-tuple" in
         let inner = 
           List.fold_right 
             (fun (id,t) expr ->
-               <:expr< let module M = $self#expr ctxt t$ 
-                        in $bind$ (M.unshelve $lid:id$) (fun $lid:id$ -> $expr$) >>)
+               <:expr< $bind$ ($mproject (self#expr ctxt t) "unshelve"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
             ids
             <:expr< return $texpr$ >> in
           <:expr< W.whizzyNoCtor
@@ -93,35 +140,34 @@ struct
         (`$name$ as obj) ->
            $bind$ (allocate_id (T.makeDynamic obj) Comp.eq) (fun (thisid, freshp) -> 
                    if freshp then 
-                     $seq$ (store_repr thisid (make_repr ~constructor:$`int:n$ []))
+                     $seq$ (store_repr thisid (Repr.make ~constructor:$`int:n$ []))
                            (return thisid)
                    else return thisid) >>
     | Tag (name, Some t) -> <:match_case< 
         (`$name$ v1 as obj) ->
-           let module M = $self#expr ctxt t$ in 
            $bind$ (allocate_id (T.makeDynamic obj) Comp.eq) (fun (thisid, freshp) -> 
            if freshp then
-             $bind$ (M.shelve v1) (fun mid -> 
-             $seq$  (store_repr thisid (make_repr ~constructor:$`int:n$ [mid]))
+             $bind$ ($mproject (self#expr ctxt t) "shelve"$ v1) (fun mid -> 
+             $seq$  (store_repr thisid (Repr.make ~constructor:$`int:n$ [mid]))
                     (return thisid))
            else return thisid) >>  
 
     | Extends t -> 
         let patt, guard, cast = cast_pattern ctxt t in <:match_case<
          ($patt$ as obj) when $guard$ ->
-           let module M = $self#expr ctxt t$ in
            $bind$ (allocate_id (T.makeDynamic obj) Comp.eq) (fun (thisid, freshp) ->
            if freshp then 
-             $bind$ (M.shelve $cast$) (fun mid ->
-             $seq$  (store_repr thisid (make_repr ~constructor:$`int:n$ [mid]))
+             $bind$ ($mproject (self#expr ctxt t) "shelve"$ $cast$) (fun mid ->
+             $seq$  (store_repr thisid (Repr.make ~constructor:$`int:n$ [mid]))
                     (return thisid))
            else return thisid) >>
 
     method polycase_un ctxt tagspec n : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case< $`int:n$, [] -> return `$name$ >>
     | Tag (name, Some t) -> <:match_case< $`int:n$, [x] -> 
-      let module M = $self#expr ctxt t$ in $bind$ (M.unshelve x) (fun o -> return (`$name$ o)) >>
-    | Extends t -> <:match_case< $`int:n$, [x] -> let module M = $self#expr ctxt t$ in (M.unshelve x : M.a n :> a n) >>
+      $bind$ ($mproject (self#expr ctxt t) "unshelve"$ x) (fun o -> return (`$name$ o)) >>
+    | Extends t -> <:match_case< $`int:n$, [x] -> let module M = $(self#expr ctxt t)$ 
+                                                         in (M.unshelve x : M.a Read.m :> a Read.m) >>
 
     method variant ctxt (tname,_,_,_ as decl) (_, tags) = 
       wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
@@ -129,6 +175,8 @@ struct
         ~shelvers:(List.mapn (self#polycase ctxt) tags)
         ~unshelver:<:expr< fun id -> 
                  let f = function $list:List.mapn (self#polycase_un ctxt) tags$
+                                  | n,_ -> raise (UnshelvingError ($str:"Unexpected tag when unshelving "
+                                                                   ^tname^": "$^ string_of_int n))
                  in W.whizzySum f id >>
 
     method case ctxt (name, params') n : Ast.match_case * Ast.match_case = 
@@ -137,12 +185,11 @@ struct
     let exp = 
       List.fold_right2
         (fun p n tail -> 
-           <:expr< let module M = $self#expr ctxt p$ in
-                       $bind$ (M.shelve $lid:Printf.sprintf "v%d" n$)
-                         (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
+           <:expr< $bind$ ($mproject (self#expr ctxt p) "shelve"$ $lid:Printf.sprintf "v%d" n$)
+                          (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
         params'
         (List.range 0 nparams)
-        <:expr< $seq$ (store_repr thisid (make_repr ~constructor:$`int:n$ $expr_list ids$))
+        <:expr< $seq$ (store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ids$))
                       (return thisid) >> in
       match params' with
         | [] -> <:match_case< $uid:name$ as obj -> 
@@ -172,40 +219,17 @@ struct
       ~eqmod:(eq_instance ctxt tname)
       ~shelvers
       ~unshelver:<:expr< fun id -> 
-        let f = function $list:unshelvers$ in W.whizzySum f id >>
+        let f = function $list:unshelvers$ 
+                 | n,_ -> raise (UnshelvingError ($str:"Unexpected tag when unshelving "
+                                                  ^tname^": "$^ string_of_int n))
+        in W.whizzySum f id >>
 
   method record ?eq ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
-    let patt = record_pattern fields in 
-    let tuplemod = 
-      self#expr ctxt
-        (`Tuple (List.map (function
-                             | (_,([],t),_) -> t
-                             | _ -> raise (Underivable
-                                             ("Shelve cannot be derived for record types"
-                                              ^" with polymorphic fields")))
-                   fields)) in
-    let nametup = tuple_expr (List.map (fun (f,_,_) -> <:expr< $lid:f$ >>) fields) in
-    let shelvers, unshelver = 
-      [ <:match_case< ($patt$ as obj) -> let module M = $tuplemod$ in M.shelve $nametup$  >> ],
-      (let names = List.map (Printf.sprintf "id%d") (List.range 0 (List.length fields)) in
-       let patt = 
-         List.fold_right
-           (fun name patt -> <:patt< $lid:name$::$patt$>>) names <:patt< [] >> in
-       let rexp = 
-         record_expr (List.map2
-                        (fun (label,_,_) name -> (label, <:expr< $lid:name$ >>))
-                        fields names) in
-       let exp = 
-         List.fold_right2
-           (fun name (_,(_,t),_) exp -> 
-              <:expr< let module M = $self#expr ctxt t$ 
-                       in $bind$ (M.unshelve $lid:name$) 
-                               (fun $lid:name$ -> $exp$) >>)
-           names fields <:expr< return $rexp$ >> in
-      <:expr< fun id -> let f = fun $patt$ -> $exp$ in W.whizzyNoCtor f id >>) in
-    wrap ~ctxt ~atype:(atype ctxt decl) ~shelvers ~unshelver
-      ~tymod:(typeable_instance ctxt tname)
-      ~eqmod:(eq_instance ctxt tname)
+      wrap ~ctxt ~atype:(atype ctxt decl) 
+        ~shelvers:(shelve_record ctxt decl fields (self#expr))
+        ~unshelver:(unshelve_record ctxt decl fields (self#expr))
+        ~tymod:(typeable_instance ctxt tname)
+        ~eqmod:(eq_instance ctxt tname)
   end
 end
 

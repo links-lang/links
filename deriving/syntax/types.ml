@@ -404,6 +404,7 @@ struct
         `Param p -> param p
       | `Underscore -> <:ctyp< _ >>
       | `Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
+      | `Tuple [t] -> expr t
       | `Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)
       | `Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
       | _ -> assert false
@@ -420,21 +421,7 @@ struct
       params
       (expr t)
 
-  let rhs : rhs -> Ast.ctyp = 
-    let tagspec = function
-      | Tag (c, None) -> <:ctyp< `$c$ >>
-      | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
-      | Extends t -> <:ctyp< $expr t$ >> in
-    let summand (name, (args : expr list)) =
-      let args = unlist and_ args expr in
-        <:ctyp< $uid:name$ of $args$ >> in
-    let field ((name, t, mut) : field) = match mut with
-      | `Mutable   -> <:ctyp< mutable $lid:name$ : $poly t$ >>
-      | `Immutable -> <:ctyp<         $lid:name$ : $poly t$ >> in
-    let repr = function
-      | Sum summands  -> Ast.TySum (loc, unlist bar summands summand)
-      | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
-    in function
+  let rec rhs : rhs -> Ast.ctyp = function
       | `Fresh (None, t, `Private) -> <:ctyp< private $repr t$ >>
       | `Fresh (None, t, `Public) -> repr t
       | `Fresh (Some e, t, `Private) -> <:ctyp< $expr e$ = private $repr t$ >>
@@ -444,11 +431,23 @@ struct
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
       | `Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
       | `Nothing -> <:ctyp< >>
+  and tagspec = function
+      | Tag (c, None) -> <:ctyp< `$c$ >>
+      | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
+      | Extends t -> <:ctyp< $expr t$ >>
+  and summand (name, (args : expr list)) =
+      let args = unlist and_ args expr in
+        <:ctyp< $uid:name$ of $args$ >> 
+  and field ((name, t, mut) : field) = match mut with
+      | `Mutable   -> <:ctyp< $lid:name$ : mutable $poly t$ >> (* mutable l : t doesn't work; perhaps a camlp4 bug *)
+      | `Immutable -> <:ctyp< $lid:name$ : $poly t$ >>
+  and repr = function
+      | Sum summands  -> Ast.TySum (loc, unlist bar summands summand)
+      | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
 
   let constraint_ (e1,e2) = (expr e1, expr e2)
 
   let decl ((name, params, r, constraints): decl) =
-(*    Ast.StTyp (loc,*)
     Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
 
   let sigdecl ((name, params, r, constraints): decl) =

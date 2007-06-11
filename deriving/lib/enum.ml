@@ -1,6 +1,16 @@
 (*pp derivingpp *)
 open Bounded
 
+let rec rassoc (rkey : 'b) : ('a * 'b) list -> 'a = function
+  | []                     -> raise Not_found
+  | (a,b)::_ when b = rkey -> a
+  | _::xs                  -> rassoc rkey xs
+
+let rec last : 'a list -> 'a = function
+    | []    -> raise (Invalid_argument "last")
+    | [x]   -> x
+    | _::xs -> last xs
+
 module Enum =
 struct
 (** Enum **)
@@ -34,11 +44,11 @@ module EnumDefaults
         end)) : Enum with type a = E.a =
 struct
   let firstCon = fst (List.hd E.numbering)
-  let lastCon = fst (Util.last E.numbering)
+  let lastCon = fst (last E.numbering)
 
   type a = E.a
   let fromEnum a = List.assoc a E.numbering
-  let toEnum i = try Util.rassoc i E.numbering with Not_found -> raise (Invalid_argument "toEnum")
+  let toEnum i = try rassoc i E.numbering with Not_found -> raise (Invalid_argument "toEnum")
   let succ s = try toEnum ((fromEnum s) + 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "succ")
   let pred s = try toEnum ((fromEnum s) - 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "pred")
   let enumFromTo x y = List.map toEnum (range (fromEnum x) (fromEnum y))

@@ -20,8 +20,8 @@ struct
     method nargs ctxt (exprs : (name * Types.expr) list) : Ast.expr * Ast.expr =
       List.fold_right
         (fun (id,t) (p,u) -> 
-           <:expr< let module M = $self#expr ctxt t$ in M.pickle buffer $lid:id$; $p$ >>,
-           <:expr< let module M = $self#expr ctxt t$ in let $lid:id$ = M.unpickle stream in $u$ >>)
+           <:expr< $mproject (self#expr ctxt t) "pickle"$ buffer $lid:id$; $p$ >>,
+           <:expr< let $lid:id$ = $mproject (self#expr ctxt t) "unpickle"$ stream in $u$ >>)
         exprs (<:expr<>>, <:expr< $tuple_expr (List.map (fun (id,_) -> <:expr< $lid:id$ >>) exprs)$>>)
 
     method tuple ctxt ts = 
@@ -40,16 +40,14 @@ struct
               | None   -> <:match_case< `$name$ -> $picklen$ >>,
                           <:match_case< $`int:n$ -> `$name$ >>
               | Some e -> <:match_case< `$name$ x -> $picklen$;
-                                         let module M = $self#expr ctxt e$ in M.pickle buffer x >>,
-                          <:match_case< $`int:n$ -> let module M = $self#expr ctxt e$ in 
-                                        `$name$ (M.unpickle stream) >>)
+                                         $mproject (self#expr ctxt e) "pickle"$ buffer x >>,
+                          <:match_case< $`int:n$ -> 
+                                        `$name$ ($mproject (self#expr ctxt e) "unpickle"$ stream) >>)
           | Extends t -> 
               let patt, guard, cast = cast_pattern ctxt t in
                 <:match_case< $patt$ when $guard$ -> 
-                              let module M = $self#expr ctxt t$ in 
-                               $picklen$; M.pickle buffer $cast$ >>,
-                <:match_case< $`int:n$ -> let module M = $self#expr ctxt t$ 
-                                           in (M.unpickle stream :> a) >>
+                               $picklen$; $mproject (self#expr ctxt t) "pickle"$ buffer $cast$ >>,
+                <:match_case< $`int:n$ -> ($mproject (self#expr ctxt t) "unpickle"$ stream :> a) >>
 
     method case ctxt (ctor,args) n =
       match args with 
@@ -66,8 +64,8 @@ struct
     
     method field ctxt : Types.field -> Ast.expr * Ast.expr = function
       | (name, ([], t), _) -> 
-          <:expr< let module M = $self#expr ctxt t$ in M.pickle buffer $lid:name$ >>,
-          <:expr< let module M = $self#expr ctxt t$ in M.unpickle stream >>
+          <:expr< $mproject (self#expr ctxt t) "pickle"$ buffer $lid:name$ >>,
+          <:expr< $mproject (self#expr ctxt t) "unpickle"$ stream >>
       | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
 
     method sum ?eq ctxt ((tname,_,_,_) as decl) summands = 
@@ -95,7 +93,7 @@ struct
       let msg = "Unexpected tag when unpickling polymorphic variant: " in
       let picklers, unpicklers = 
         List.split (List.mapn (self#polycase ctxt) tags) in
-        wrap ~atype:(atype ctxt decl) ~picklers 
+        wrap ~atype:(atype ctxt decl) ~picklers:(picklers @ [ <:match_case< _ -> assert false >>])
         ~unpickle:<:expr< match Pickle_int.unpickle stream with $list:unpicklers$
                               | n -> raise (Unpickling_failure ($str:msg$ ^ string_of_int n)) >>
   end

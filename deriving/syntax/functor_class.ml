@@ -80,18 +80,20 @@ struct
     | `Tuple ts -> tup ts
     | _ -> raise (Underivable "Functor cannot be derived for this type")
 
-  and tup ts = 
-    let args, exps = 
-        (List.fold_right2
-           (fun t n (p,e) -> 
-              let v = Printf.sprintf "t%d" n in
-                Ast.PaCom (loc, <:patt< $lid:v$ >>, p),
-                Ast.ExCom (loc, <:expr< $expr t$ $lid:v$ >>, e))
-           ts
-           (List.range 0 (List.length ts))
-           (<:patt< >>, <:expr< >>)) in
-    let pat, exp = Ast.PaTup (loc, args), Ast.ExTup (loc, exps) in
-      <:expr< fun $pat$ -> $exp$ >>
+  and tup = function
+    | [t] -> expr t
+    | ts ->
+        let args, exps = 
+          (List.fold_right2
+             (fun t n (p,e) -> 
+                let v = Printf.sprintf "t%d" n in
+                  Ast.PaCom (loc, <:patt< $lid:v$ >>, p),
+                  Ast.ExCom (loc, <:expr< $expr t$ $lid:v$ >>, e))
+             ts
+             (List.range 0 (List.length ts))
+             (<:patt< >>, <:expr< >>)) in
+        let pat, exp = Ast.PaTup (loc, args), Ast.ExTup (loc, exps) in
+          <:expr< fun $pat$ -> $exp$ >>
 
   and case = function
     | (name, []) -> <:match_case< $uid:name$ -> $uid:name$ >>
@@ -112,7 +114,7 @@ struct
                    $record_expr (List.map (fun ((l,_,_) as f) -> (l,field f)) fields)$ >>
     |`Expr e                  -> expr e
     |`Variant (_, tags) -> 
-       <:expr< function $list:List.map polycase tags$ >>
+       <:expr< function $list:List.map polycase tags$ | _ -> assert false >>
     | `Nothing -> raise (Underivable "Cannot generate functor instance for the empty type")
 
 

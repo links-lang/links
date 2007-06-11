@@ -1,3 +1,4 @@
+(*pp derivingpp *)
 (* Interned strings *)
 module StringMap = Map.Make(String)
 
@@ -6,6 +7,7 @@ let map = ref StringMap.empty
 let counter = ref 0
 
 type t = int * string
+    deriving (Show)
 
 let intern s = 
   try StringMap.find s !map
@@ -19,4 +21,4 @@ let intern s =
 let to_string (_,s) = String.copy s
 let name = snd
 let compare (l,_) (r,_) = compare l r
-let eq l r = l = r
+let eq (l,_) (r,_) = l = r

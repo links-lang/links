@@ -182,3 +182,4 @@ end =
 struct
   type p2 = Q deriving (Show, Eq, Pickle)
 end
+

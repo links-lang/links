@@ -594,7 +594,6 @@ struct
 end
 
 
-open Primitives
 open Show
 open QuickCheck
 

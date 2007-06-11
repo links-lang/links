@@ -8,9 +8,8 @@ OCAMLDEP   = ocamldep.opt
 OCAMLFLAGS =-w Ae
 LIBS       = nums
 
-SOURCES = util.ml           util.mli		\
+SOURCES = show.ml           show.mli		\
           interned.mli      interned.ml		\
-          show.ml           show.mli		\
           eq.ml             eq.mli		\
           bounded.ml        bounded.mli		\
           enum.ml           enum.mli		\
@@ -18,7 +17,6 @@ SOURCES = util.ml           util.mli		\
           pickle.ml         pickle.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
-          shelvehelper.ml   shelvehelper.mli	\
           shelve.ml	    shelve.mli    	\
           functor.ml        functor.mli		\
           rewriter.ml       rewriter.mli	\

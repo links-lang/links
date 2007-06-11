@@ -6,7 +6,7 @@ sig
   val eq : t -> t -> bool
   val mkFresh : string -> delayed list -> delayed
   val mkTuple : delayed list -> delayed
-  val mkPolyv : (string * delayed) list -> delayed list -> delayed
+  val mkPolyv : string -> (string * delayed option) list -> delayed list -> delayed
 end
 
 exception CastFailure of string

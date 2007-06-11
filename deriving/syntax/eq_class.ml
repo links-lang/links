@@ -14,20 +14,26 @@ struct
   let wildcard_failure = <:match_case< _ -> false >>
 
   let tup ctxt ts mexpr exp = 
-    let _, (lpatt, rpatt), expr = 
-      List.fold_right
-        (fun t (n, (lpatt, rpatt), expr) ->
-           let lid = Printf.sprintf "l%d" n and rid = Printf.sprintf "r%d" n in
-             (n+1,
-              (Ast.PaCom (loc,<:patt< $lid:lid$ >>, lpatt),
-               Ast.PaCom (loc,<:patt< $lid:rid$ >>, rpatt)),
-              <:expr< let module M = $exp ctxt t$ 
-                       in $mexpr$ $lid:lid$ $lid:rid$ && $expr$ >>))
-        ts
-        (0, (<:patt< >>, <:patt< >>), <:expr< true >>)
-    in 
-      <:module_expr< struct type a = $atype_expr ctxt (`Tuple ts)$
-                            let eq $Ast.PaTup (loc, lpatt)$ $Ast.PaTup (loc, rpatt)$ = $expr$ end >>
+      match ts with
+        | [t] -> 
+            <:module_expr< struct type a = $atype_expr ctxt (`Tuple ts)$
+                                  let eq l r = let module M = $exp ctxt t$ 
+                                   in $mexpr$ l r end >>
+        | ts ->
+            let _, (lpatt, rpatt), expr = 
+              List.fold_right
+                (fun t (n, (lpatt, rpatt), expr) ->
+                   let lid = Printf.sprintf "l%d" n and rid = Printf.sprintf "r%d" n in
+                     (n+1,
+                      (Ast.PaCom (loc,<:patt< $lid:lid$ >>, lpatt),
+                       Ast.PaCom (loc,<:patt< $lid:rid$ >>, rpatt)),
+                      <:expr< let module M = $exp ctxt t$ 
+                              in $mexpr$ $lid:lid$ $lid:rid$ && $expr$ >>))
+                ts
+                (0, (<:patt< >>, <:patt< >>), <:expr< true >>)
+            in 
+              <:module_expr< struct type a = $atype_expr ctxt (`Tuple ts)$
+                                    let eq $Ast.PaTup (loc, lpatt)$ $Ast.PaTup (loc, rpatt)$ = $expr$ end >>
 
 
   let instance = object (self)
@@ -39,14 +45,13 @@ struct
     | Tag (name, None) -> <:match_case< `$name$, `$name$ -> true >>
     | Tag (name, Some e) -> <:match_case< 
         `$name$ l, `$name$ r -> 
-           let module M = $self#expr ctxt e$ in M.eq l r >>
+           $mproject (self#expr ctxt e) "eq"$ l r >>
     | Extends t -> 
         let lpatt, lguard, lcast = cast_pattern ctxt ~param:"l" t in
         let rpatt, rguard, rcast = cast_pattern ctxt ~param:"r" t in
           <:match_case<
             ($lpatt$, $rpatt$) when $lguard$ && $rguard$ ->
-            let module M = $self#expr ctxt t$ in 
-              M.eq $lcast$ $rcast$ >>
+            $mproject (self#expr ctxt t) "eq"$ $lcast$ $rcast$ >>
   
   method case ctxt : Types.summand -> Ast.match_case = 
     fun (name,args) ->
@@ -58,13 +63,11 @@ struct
             and rpatt, rexpr = tuple ~param:"r" nargs in
               <:match_case<
                 ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
-                   let module M = $self#expr ctxt (`Tuple args)$ in
-                     M.eq $lexpr$ $rexpr$ >> 
+                   $mproject (self#expr ctxt (`Tuple args)) "eq"$ $lexpr$ $rexpr$ >> 
               
   method field ctxt : Types.field -> Ast.expr = function
     | (name, ([], t), `Immutable) -> <:expr<
-        let module M = $self#expr ctxt t$ in
-          M.eq $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
+        $mproject (self#expr ctxt t) "eq"$ $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
     | (_, _, `Mutable) -> assert false
     | f -> raise (Underivable ("Eq cannot be derived for record types with polymorphic fields")) 
 

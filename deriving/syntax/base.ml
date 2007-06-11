@@ -34,21 +34,24 @@ struct
   include L
   module Untranslate = Untranslate(L)
 
-  let instantiate (lookup : name -> expr) : expr -> expr = 
-  object 
-    inherit transform as super
-    method expr = function
-      | `Param (name, _) -> lookup name
-      | e                -> super # expr e
-  end # expr
+  let instantiate, instantiate_repr =
+    let o lookup = object 
+      inherit transform as super
+      method expr = function
+        | `Param (name, _) -> lookup name
+        | e                -> super # expr e
+    end in
+      (fun (lookup : name -> expr) -> (o lookup)#expr),
+      (fun (lookup : name -> expr) -> (o lookup)#repr)
 
-  let instantiate_modargs ctxt t =
-    let lookup var = 
+  let instantiate_modargs, instantiate_modargs_repr =
+    let lookup ctxt var = 
       try 
         `Constr ([NameMap.find var ctxt.argmap; "a"], [])
       with Not_found ->
         failwith ("Unbound type parameter '" ^ var)
-    in instantiate lookup t
+    in (fun ctxt -> instantiate (lookup ctxt)),
+       (fun ctxt -> instantiate_repr (lookup ctxt))
 
   let contains_tvars : expr -> bool = 
     (object
@@ -109,19 +112,29 @@ struct
            fields) in
         Ast.ExRec (loc, es, Ast.ExNil loc)
 
+  let mproject mexpr name = 
+    match mexpr with
+      | <:module_expr< $id:m$ >> -> <:expr< $id:m$.$lid:name$ >>
+      | _ -> <:expr< let module M = $mexpr$ in M.$lid:name$ >>
+
+(*  let catch_singletons : ('a list -> 'a) -> 'a list -> 'a = fun f ->
+    function
+      | [x] -> x
+      | xs  -> f xs*)
+
   let expr_list : Ast.expr list -> Ast.expr = 
-    fun exprs ->
-      List.fold_right 
-        (fun car cdr -> <:expr< $car$ :: $cdr$ >>)
-        exprs
-      <:expr< [] >>
+      (fun exprs ->
+         List.fold_right 
+           (fun car cdr -> <:expr< $car$ :: $cdr$ >>)
+           exprs
+         <:expr< [] >>)
 
   let patt_list : Ast.patt list -> Ast.patt = 
-    fun patts ->
-      List.fold_right 
-        (fun car cdr -> <:patt< $car$ :: $cdr$ >>)
-        patts
-      <:patt< [] >>
+      (fun patts ->
+         List.fold_right 
+           (fun car cdr -> <:patt< $car$ :: $cdr$ >>)
+           patts
+         <:patt< [] >>)
 
   let tuple_expr : Ast.expr list -> Ast.expr = function
     | [] -> <:expr< () >>
@@ -154,7 +167,7 @@ struct
   let apply_functor (f : Ast.module_expr) (args : Ast.module_expr list) : Ast.module_expr =
       List.fold_left (fun f p -> <:module_expr< $f$ $p$ >>) f args
           
-  class virtual make_module_expr ~classname (* ~variant ~record ~sum *) ~allow_private =
+  class virtual make_module_expr ~classname ~allow_private =
   object (self)
 
     method mapply ctxt (funct : Ast.module_expr) args =

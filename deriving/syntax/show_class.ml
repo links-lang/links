@@ -34,20 +34,19 @@ struct
           <:match_case< `$uid:name$ x ->
                          $in_hovbox <:expr< 
                             Format.pp_print_string formatter $str:"`" ^ name ^" "$;
-                            let module M = $self#expr ctxt e$ in M.format formatter x >>$ >>
+                            $mproject (self#expr ctxt e) "format"$ formatter x >>$ >>
       | Extends t -> 
           let patt, guard, cast = cast_pattern ctxt t in
             <:match_case<
               $patt$ when $guard$ -> 
-              $in_hovbox <:expr< let module M = $self#expr ctxt t$ 
-                                  in M.format formatter $cast$ >>$ >>
+              $in_hovbox <:expr< $mproject (self#expr ctxt t) "format"$ formatter $cast$ >>$ >>
 
     method nargs ctxt (exprs : (name * Types.expr) list) : Ast.expr =
     let fmt = 
-      "^@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^"@]" in
+      "@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^")@]" in
       List.fold_left
         (fun f (id, t) ->
-           <:expr< $f$ (let module M = $self#expr ctxt t$ in M.format) $lid:id$ >>)
+           <:expr< $f$ $mproject (self#expr ctxt t) "format"$ $lid:id$ >>)
         <:expr< Format.fprintf formatter $str:fmt$ >>
         exprs
 
@@ -74,8 +73,7 @@ struct
     
     method field ctxt : Types.field -> Ast.expr = function
       | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " ="$;
-                                      let module M = $self#expr ctxt t$
-                                       in M.format formatter $lid:name$ >>
+                                      $mproject (self#expr ctxt t) "format"$ formatter $lid:name$ >>
       | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
     method sum ?eq ctxt decl summands = wrap ctxt decl (List.map (self#case ctxt) summands)
@@ -89,7 +87,8 @@ struct
             (List.map (self#field ctxt) fields)$;
           Format.pp_print_char formatter '}'; >>$ >>]
 
-    method variant ctxt decl (_,tags) = wrap ctxt decl (List.map (self#polycase ctxt) tags)
+    method variant ctxt decl (_,tags) = wrap ctxt decl (List.map (self#polycase ctxt) tags
+                                                        @ [ <:match_case< _ -> assert false >> ])
   end
 end
 

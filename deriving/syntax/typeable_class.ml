@@ -23,7 +23,6 @@ struct
     in <:module_expr< struct type a = $atype ctxt decl$
           let typeRep = TypeRep.mkFresh $str:mkName tname$ $paramList$ end >>
 
-
   let tup ctxt ts mexpr expr = 
       let params = 
         expr_list 
@@ -38,8 +37,23 @@ struct
     method tuple ctxt ts = tup ctxt ts <:expr< M.typeRep >> (self#expr)
     method sum = gen 
     method record = gen
-    method variant = gen ~eq:None
-      (*_ _ = raise (Underivable ("Typeable cannot currently be derived for polymorphic variant types"))*)
+    method variant ctxt (tname,_,_,_ as decl) (_,tags) =
+    let tags, extends = 
+      List.fold_left 
+        (fun (tags, extends) -> function
+           | Tag (l, None)  -> <:expr< ($str:l$, None) :: $tags$ >>, extends
+           | Tag (l,Some t) ->
+               <:expr< ($str:l$, Some $mproject (self#expr ctxt t) "typeRep"$) ::$tags$ >>,
+               extends
+           | Extends t -> 
+               tags,
+               <:expr< $mproject (self#expr ctxt t) "typeRep"$::$extends$ >>)
+        (<:expr< [] >>, <:expr< [] >>) tags in
+      <:module_expr< Typeable_defaults(
+        struct type a = $atype ctxt decl$
+               let typeRep = Typeable.TypeRep.mkPolyv $str:mkName tname$ $tags$ $extends$
+        end) >>
+
   end
 end
 

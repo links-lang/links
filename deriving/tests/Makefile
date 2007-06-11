@@ -5,12 +5,12 @@ OCAMLOPT     = ocamlopt.opt
 OCAMLC       = ocamlc.opt
 OCAMLDEP     = ocamldep
 PATH        := $(PATH):../syntax
-OCAMLFLAGS   = -w Ae
+OCAMLFLAGS   = -w Aef
 
-SOURCES = tests.ml tests.mli shelvetest.ml
+SOURCES = tests.ml tests.mli shelvetest.ml typeable_tests.ml
 
 LIBS    = nums deriving
-RESULT  = test
+RESULT  = tests
 CLIBS 	= 
 
 INCDIRS = $(AUXLIB_DIRS)
