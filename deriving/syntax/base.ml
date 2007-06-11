@@ -268,9 +268,9 @@ struct
         decls in
     let mrec =
       <:str_item< open $uid:classname$ module rec $list:mbinds$ >> in
-(*      match context.params with
+      match context.params with
         | [] -> mrec
-        | _ ->*)
+        | _ ->
            let fixed = make_functor <:module_expr< struct $mrec$ end >> in
            let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
                                        (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
