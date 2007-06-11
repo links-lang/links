@@ -45,7 +45,6 @@ module TypeRep =
 struct 
   type t = | Fresh of (interned * delayed list) 
            | Polyv of (interned * int * (string * delayed option) list)
-           | Tuple of (int * delayed list)
   and delayed = unit -> t
 
   let compareList cmp l r =
@@ -78,17 +77,8 @@ struct
                        | n -> n)
                     ls rs
               | n -> n end
-        | Tuple (ln,ls), Tuple (rn,rs)  ->
-            begin match Pervasives.compare ln rn with
-              | 0 -> compareList compare' ls rs
-              | n -> n end
-        | l, r -> 
-            let ctornum = function
-              | Fresh _ -> 0
-              | Polyv _ -> 1
-              | Tuple _ -> 2 
-            in
-              Pervasives.compare (ctornum l) (ctornum r)
+        | Fresh _, Polyv _ -> -1
+        | Polyv _, Fresh _ -> 1
   and compare' (l : unit -> t) (r : unit -> t) = compare (l()) (r())
 
 
@@ -101,7 +91,6 @@ struct
                                | Some lt, Some rt -> ll = rl && eq' lt rt
                                | None, None -> true
                                | _ -> false) ls rs
-        | Tuple (ln,ls), Tuple (rn,rs) when ln = rn -> List.for_all2 eq' ls rs
         | _ -> false
       end with Invalid_argument _ -> false
   and eq' l r = eq (l()) (r())
@@ -111,7 +100,8 @@ struct
       memoize (fun () -> Fresh (interned, args))
 
   let mkTuple tuple =
-    memoize (fun () -> Tuple (List.length tuple, tuple))
+    memoize (fun () -> Fresh (Interned.intern (string_of_int (List.length tuple)),
+                              tuple))
 
   let mkPolyv (magic : string) fields extends =
     let interned = Interned.intern magic in

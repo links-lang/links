@@ -42,13 +42,17 @@ struct
               $in_hovbox <:expr< $mproject (self#expr ctxt t) "format"$ formatter $cast$ >>$ >>
 
     method nargs ctxt (exprs : (name * Type.expr) list) : Ast.expr =
-    let fmt = 
-      "@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^")@]" in
-      List.fold_left
-        (fun f (id, t) ->
-           <:expr< $f$ $mproject (self#expr ctxt t) "format"$ $lid:id$ >>)
-        <:expr< Format.fprintf formatter $str:fmt$ >>
-        exprs
+      match exprs with
+        | [id,t] -> 
+              <:expr< $mproject (self#expr ctxt t) "format"$ formatter $lid:id$ >>
+        | exprs ->
+            let fmt = 
+              "@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^")@]" in
+              List.fold_left
+                (fun f (id, t) ->
+                   <:expr< $f$ $mproject (self#expr ctxt t) "format"$ $lid:id$ >>)
+                <:expr< Format.fprintf formatter $str:fmt$ >>
+                exprs
 
     method tuple ctxt args = 
       let n = List.length args in
