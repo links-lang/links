@@ -4,13 +4,13 @@ module InContext (L : Base.Loc) =
 struct
   open Base
   open Utils
-  open Types
+  open Type
   open Camlp4.PreCast
   include Base.InContext(L)
   
   let classname = "Show"
     
-  let wrap (ctxt:Base.context) (decl : Types.decl) matches = <:module_expr< 
+  let wrap (ctxt:Base.context) (decl : Type.decl) matches = <:module_expr< 
   struct type a = $atype ctxt decl$
          let format formatter = function $list:matches$ end >>
     
@@ -26,7 +26,7 @@ struct
   let instance = object (self)
     inherit make_module_expr ~classname ~allow_private:true
     
-    method polycase ctxt : Types.tagspec -> Ast.match_case = function
+    method polycase ctxt : Type.tagspec -> Ast.match_case = function
       | Tag (name, None) -> 
           <:match_case< `$uid:name$ -> 
                         Format.pp_print_string formatter $str:"`" ^ name ^" "$ >>
@@ -41,7 +41,7 @@ struct
               $patt$ when $guard$ -> 
               $in_hovbox <:expr< $mproject (self#expr ctxt t) "format"$ formatter $cast$ >>$ >>
 
-    method nargs ctxt (exprs : (name * Types.expr) list) : Ast.expr =
+    method nargs ctxt (exprs : (name * Type.expr) list) : Ast.expr =
     let fmt = 
       "@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^")@]" in
       List.fold_left
@@ -58,7 +58,7 @@ struct
                               $self#nargs ctxt 
                                 (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ end) >>
 
-    method case ctxt : Types.summand -> Ast.match_case = 
+    method case ctxt : Type.summand -> Ast.match_case = 
       fun (name, args) ->
         match args with 
           | [] -> <:match_case< $uid:name$ -> Format.pp_print_string formatter $str:name$ >>
@@ -71,7 +71,7 @@ struct
                 Format.pp_print_break formatter 1 2;
                 $self#nargs ctxt (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ >>$ >>
     
-    method field ctxt : Types.field -> Ast.expr = function
+    method field ctxt : Type.field -> Ast.expr = function
       | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " ="$;
                                       $mproject (self#expr ctxt t) "format"$ formatter $lid:name$ >>
       | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 

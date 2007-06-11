@@ -1,6 +1,6 @@
 (*pp camlp4of *)
 open Utils
-open Types
+open Type
 open Camlp4.PreCast
 
 type context = {
@@ -89,7 +89,7 @@ struct
 
   let seq l r = <:expr< $l$ ; $r$ >>
 
-  let record_pattern ?(prefix="") (fields : Types.field list) : Ast.patt = 
+  let record_pattern ?(prefix="") (fields : Type.field list) : Ast.patt = 
     <:patt<{$list:
               (List.map (fun (label,_,_) -> <:patt< $lid:label$ = $lid:prefix ^ label$ >>) 
                       fields) $}>>
@@ -104,7 +104,7 @@ struct
         Ast.ExRec (loc, fs, Ast.ExNil loc)
 
 
-  let record_expression ?(prefix="") : Types.field list -> Ast.expr = 
+  let record_expression ?(prefix="") : Type.field list -> Ast.expr = 
     fun fields ->
       let es = List.fold_left1
         (fun l r -> <:rec_binding< $l$ ; $r$ >>)
@@ -214,7 +214,7 @@ struct
       | `Constr c   -> self#constr     ctxt c
       | `Tuple t    -> self#tuple      ctxt t
 
-    method rhs ctxt (tname, params, rhs, constraints as decl : Types.decl) : Ast.module_expr = 
+    method rhs ctxt (tname, params, rhs, constraints as decl : Type.decl) : Ast.module_expr = 
       match rhs with
         | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
             raise (Underivable ("The class "^ classname ^" cannot be derived for private types"))
@@ -268,19 +268,22 @@ struct
         decls in
     let mrec =
       <:str_item< open $uid:classname$ module rec $list:mbinds$ >> in
-    let fixed = make_functor <:module_expr< struct $mrec$ end >> in
-    let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
-                                (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
-                                      context.params) in
-    let projected =
-      List.map (fun (name,params,rhs,constraints) -> 
-                  let modname = classname ^ "_"^ name in
-                  let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
-                    <:str_item< module $uid:modname$ = $make_functor rhs$>>)
-        decls in
-    let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
-      <:str_item< $m$ $list:projected$ >>
-
+(*      match context.params with
+        | [] -> mrec
+        | _ ->*)
+           let fixed = make_functor <:module_expr< struct $mrec$ end >> in
+           let applied = apply_functor <:module_expr< $uid:wrapper_name$ >> 
+                                       (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
+                                             context.params) in
+           let projected =
+             List.map (fun (name,params,rhs,constraints) -> 
+                         let modname = classname ^ "_"^ name in
+                         let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
+                           <:str_item< module $uid:modname$ = $make_functor rhs$>>)
+               decls in
+           let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
+             <:str_item< $m$ $list:projected$ >>
+       
     let gen_sig ~classname ~context (tname,params,_,_ as decl) = 
       let t = List.fold_right 
         (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
@@ -317,8 +320,8 @@ let setup_context loc tdecls : context =
       params = params; 
       tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) }
       
-type deriver = Loc.t * context * Types.decl list -> Ast.str_item
-and sigderiver = Loc.t * context * Types.decl list -> Ast.sig_item
+type deriver = Loc.t * context * Type.decl list -> Ast.str_item
+and sigderiver = Loc.t * context * Type.decl list -> Ast.sig_item
 let derivers : (name, (deriver * sigderiver)) Hashtbl.t = Hashtbl.create 15
 let register = Hashtbl.add derivers
 let find classname = 

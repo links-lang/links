@@ -3,10 +3,10 @@ module InContext (L : Base.Loc) =
 struct
   open Base
   open Utils
-  open Types
+  open Type
   open Camlp4.PreCast
   include Base.InContext(L)
-  module UT = Types.Untranslate(L)
+  module UT = Type.Untranslate(L)
 
   let typeable_defaults t = <:module_expr< Typeable.Typeable_defaults($t$) >>
 
@@ -224,7 +224,7 @@ struct
                                                   ^tname^": "$^ string_of_int n))
         in W.whizzySum f id >>
 
-  method record ?eq ctxt (tname,_,_,_ as decl) (fields : Types.field list) = 
+  method record ?eq ctxt (tname,_,_,_ as decl) (fields : Type.field list) = 
       wrap ~ctxt ~atype:(atype ctxt decl) 
         ~shelvers:(shelve_record ctxt decl fields (self#expr))
         ~unshelver:(unshelve_record ctxt decl fields (self#expr))

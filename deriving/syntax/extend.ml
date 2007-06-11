@@ -13,7 +13,7 @@ let derive proj loc tdecls classname =
   let context = Base.setup_context loc tdecls in
     proj (Base.find classname) (loc, context, tdecls)
 
-let derive_str loc (tdecls : Types.decl list) classname : Ast.str_item =
+let derive_str loc (tdecls : Type.decl list) classname : Ast.str_item =
   derive fst loc tdecls classname
 
 let derive_sig loc tdecls classname : Ast.sig_item =
@@ -28,8 +28,8 @@ EXTEND Gram
 str_item:
 [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
   | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-      let decls : Types.decl list = Types.Translate.decls types in 
-      let module U = Types.Untranslate(struct let loc = loc end) in
+      let decls : Type.decl list = Type.Translate.decls types in 
+      let module U = Type.Untranslate(struct let loc = loc end) in
       let tdecls : Ast.ctyp list = List.map U.decl decls in
         <:str_item< type $list:tdecls$ $list:List.map (derive_str loc decls) cl$ >>
  ]]
@@ -37,8 +37,8 @@ str_item:
 sig_item:
 [[ "type"; types = type_declaration -> <:sig_item< type $types$ >>
  | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
-     let decls : Types.decl list = Types.Translate.decls types in 
-     let module U = Types.Untranslate(struct let loc = loc end) in
+     let decls : Type.decl list = Type.Translate.decls types in 
+     let module U = Type.Untranslate(struct let loc = loc end) in
      let tdecls : Ast.ctyp list = List.map U.sigdecl decls in
      let ms = List.map (derive_sig loc decls) cl in
        <:sig_item< type $list:tdecls$ $list:ms$ >> ]]

@@ -7,7 +7,7 @@ OCAMLDEP     = ocamldep
 PATH        := $(PATH):../syntax
 OCAMLFLAGS   = -w Aef
 
-SOURCES = tests.ml tests.mli shelvetest.ml typeable_tests.ml
+SOURCES = tests.ml tests.mli shelvetest.ml typeable_tests.ml exp.ml
 
 LIBS    = nums deriving
 RESULT  = tests

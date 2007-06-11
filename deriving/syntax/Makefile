@@ -9,7 +9,7 @@ USE_CAMLP4 = yes
 LIBS       = camlp4lib unix
 
 SOURCES = utils.ml              \
-          types.ml              \
+          type.ml               \
           base.ml               \
           extend.ml             \
           show_class.ml         \

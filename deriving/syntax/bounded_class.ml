@@ -3,7 +3,7 @@ module InContext (L : Base.Loc) =
 struct
   open Base
   open Utils
-  open Types
+  open Type
   open Camlp4.PreCast
   include Base.InContext(L)
 

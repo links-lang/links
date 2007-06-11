@@ -5,7 +5,7 @@ open Camlp4.PreCast
 module InContext (C : sig val context : Base.context val loc : Camlp4.PreCast.Loc.t end) =
 struct
   open C
-  open Types
+  open Type
   open Utils
   open Base
   include Base.InContext(C)
@@ -67,7 +67,7 @@ struct
         let patt, guard, exp = cast_pattern context t in
           <:match_case< $patt$ when $guard$ -> $expr t$ $exp$ >>
 
-  and expr : Types.expr -> Ast.expr = function
+  and expr : Type.expr -> Ast.expr = function
     | t when not (contains_tvars t) -> <:expr< fun x -> x >>
     | `Param (p,_) -> <:expr< $lid:NameMap.find p param_map$ >>
     | `Function (f,t) when not (contains_tvars t) -> 

@@ -1,7 +1,7 @@
 (*pp camlp4of *)
 module InContext (L : Base.Loc) =
 struct
-  open Types
+  open Type
   open Base
   open Camlp4.PreCast
   include Base.InContext(L)
@@ -13,7 +13,7 @@ struct
       Printf.sprintf "%s_%d_%f_%s" 
         file_name sl (Unix.gettimeofday ())
 
-  let gen ?eq ctxt ((tname,_,_,_) as decl : Types.decl) _ = 
+  let gen ?eq ctxt ((tname,_,_,_) as decl : Type.decl) _ = 
     let paramList = 
       List.fold_right 
         (fun (p,_) cdr ->

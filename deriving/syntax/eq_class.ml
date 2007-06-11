@@ -3,7 +3,7 @@ module InContext (L : Base.Loc) =
 struct
   open Base
   open Utils
-  open Types
+  open Type
   open Camlp4.PreCast
   include Base.InContext(L)
 
@@ -41,7 +41,7 @@ struct
 
   method tuple ctxt ts = tup ctxt ts <:expr< M.eq >> (self#expr)
     
-  method polycase ctxt : Types.tagspec -> Ast.match_case = function
+  method polycase ctxt : Type.tagspec -> Ast.match_case = function
     | Tag (name, None) -> <:match_case< `$name$, `$name$ -> true >>
     | Tag (name, Some e) -> <:match_case< 
         `$name$ l, `$name$ r -> 
@@ -53,7 +53,7 @@ struct
             ($lpatt$, $rpatt$) when $lguard$ && $rguard$ ->
             $mproject (self#expr ctxt t) "eq"$ $lcast$ $rcast$ >>
   
-  method case ctxt : Types.summand -> Ast.match_case = 
+  method case ctxt : Type.summand -> Ast.match_case = 
     fun (name,args) ->
       match args with 
         | [] -> <:match_case< ($uid:name$, $uid:name$) -> true >>
@@ -65,7 +65,7 @@ struct
                 ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
                    $mproject (self#expr ctxt (`Tuple args)) "eq"$ $lexpr$ $rexpr$ >> 
               
-  method field ctxt : Types.field -> Ast.expr = function
+  method field ctxt : Type.field -> Ast.expr = function
     | (name, ([], t), `Immutable) -> <:expr<
         $mproject (self#expr ctxt t) "eq"$ $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
     | (_, _, `Mutable) -> assert false

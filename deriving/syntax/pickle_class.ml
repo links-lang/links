@@ -3,7 +3,7 @@ module InContext (L : Base.Loc) =
 struct
   open Base
   open Utils
-  open Types
+  open Type
   open Camlp4.PreCast
   include Base.InContext(L)
 
@@ -17,7 +17,7 @@ struct
   let instance = object (self)
     inherit make_module_expr ~classname ~allow_private:false
 
-    method nargs ctxt (exprs : (name * Types.expr) list) : Ast.expr * Ast.expr =
+    method nargs ctxt (exprs : (name * Type.expr) list) : Ast.expr * Ast.expr =
       List.fold_right
         (fun (id,t) (p,u) -> 
            <:expr< $mproject (self#expr ctxt t) "pickle"$ buffer $lid:id$; $p$ >>,
@@ -62,7 +62,7 @@ struct
                       $pickle$ >>,
         <:match_case< $`int:n$ -> let $patt$ = $unpickle$ in $uid:ctor$ $exp$  >>
     
-    method field ctxt : Types.field -> Ast.expr * Ast.expr = function
+    method field ctxt : Type.field -> Ast.expr * Ast.expr = function
       | (name, ([], t), _) -> 
           <:expr< $mproject (self#expr ctxt t) "pickle"$ buffer $lid:name$ >>,
           <:expr< $mproject (self#expr ctxt t) "unpickle"$ stream >>
