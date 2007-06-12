@@ -25,7 +25,8 @@ module IdMap = Map.Make (Id)
 type id = Id.t deriving (Show, Pickle)
 
 module Repr : sig
-  type t deriving (Pickle, Show)
+  (* Break abstraction for the sake of efficiency for now *)
+  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Pickle, Show)
   val of_string : string -> t
   val to_string : t -> string
   val make : ?constructor:int -> id list -> t
@@ -193,14 +194,71 @@ struct
 
   type ids = (Id.t * Repr.t) list
       deriving (Pickle, Show)
+
   type dumpable = id * ids
       deriving (Show, Pickle)
+
+  type ('a,'b) pair = 'a * 'b deriving (Pickle)
+  type capp = int option * Id.t list deriving (Pickle)
+
+  type discriminated = 
+      (Id.t * string) list
+    * (Id.t * (int * Id.t list)) list
+    * (Id.t * (Id.t list)) list
+        deriving (Pickle)
+
+  type ('a,'b) either = Left of 'a | Right of 'b
+  let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
+      : 'b list * 'c list =
+    let rec aux (lefts, rights) = function
+      | [] -> (List.rev lefts, List.rev rights)
+      | x::xs ->
+          match f x with 
+            | Left l  -> aux (l :: lefts, rights) xs
+            | Right r -> aux (lefts, r :: rights) xs
+    in aux ([], []) l
+
+  type discriminated_dumpable = Id.t * discriminated deriving (Pickle) 
+
+  let discriminate : (Id.t * Repr.t) list -> discriminated
+    = fun input ->
+      let bytes, others = 
+        either_partition
+          (function
+             | id, (Repr.Bytes s) -> Left (id,s)
+             | id, (Repr.CApp c) -> Right (id,c))
+          input in
+      let ctors, no_ctors =
+        either_partition
+          (function
+             | id, (Some c, ps) -> Left (id, (c,ps))
+             | id, (None, ps) -> Right (id,ps))
+          others in
+        (bytes, ctors, no_ctors)
+
+  let undiscriminate : discriminated -> (Id.t * Repr.t) list
+    = fun (a,b,c) ->
+      List.map (fun (id,s) -> (id,Repr.Bytes s)) a
+    @ List.map (fun (id,(c,ps)) -> (id,Repr.CApp (Some c,ps))) b
+    @ List.map (fun (id,(ps)) -> (id,Repr.CApp (None,ps))) c
+
+  let write_discriminated : Id.t * (Id.t * Repr.t) list -> string
+    = fun (id,map) -> Pickle_discriminated_dumpable.pickleS (id,discriminate map)
+
+  let read_discriminated : string -> Id.t * (Id.t * Repr.t) list
+    = fun s -> let (id,map) = Pickle_discriminated_dumpable.unpickleS s in
+      (id,undiscriminate map)
 
   open Write
 
   let decode_shelved_string : string -> Id.t * Read.s =
     fun s -> 
-      let (id, state : dumpable) = Pickle_dumpable.unpickleS s in
+      let (id, state : dumpable) = 
+        
+(*Pickle_dumpable.unpickleS s *)
+(*        Marshal.from_string s 0*)
+        read_discriminated s
+in
         id, (List.fold_right 
                (fun (id,repr) map -> IdMap.add id (repr,None) map)
                state
@@ -211,7 +269,11 @@ struct
       let input_state = 
         id, IdMap.fold (fun id repr output -> (id,repr)::output)
           state.id2rep [] in
+(*
         Pickle_dumpable.pickleS input_state
+*)
+(*        Marshal.to_string input_state []*)
+        write_discriminated input_state
 
   let rec unduplicate equal = function
     | [] -> []
@@ -409,3 +471,15 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
 (* Idea: serialize small objects (bools, chars) in place rather than
    using the extra level of indirection (and space) introduced by ids
 *)
+
+(* Idea: when serializing the repr list (the type `Run.ids') at the very end we could save space 
+   by serializing two maps:
+
+      (Id.t * string) list
+      (Id.t * (int option * Id.t list)) list
+   instead of 
+      (Id.t * Repr.t) list
+   since we'd wouldn't have an extra byte overhead for every item in the list.
+*)
+
+(* Idea: bitwise output instead of bytewise. *)
