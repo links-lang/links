@@ -482,4 +482,21 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
    since we'd wouldn't have an extra byte overhead for every item in the list.
 *)
 
-(* Idea: bitwise output instead of bytewise. *)
+(* Idea: bitwise output instead of bytewise.  Probably a bit much to
+   implement now, but should have a significant impact (e.g. one using
+   bit instead of one byte for two-constructor sums) *)
+
+(* Idea: shouldn't need to serialize ids at all: we can just use
+   ordering in the output file (since ids are numbered sequentially).
+   We may have to renumber, though (which means violating abstraction
+   again, unfortunately).
+
+   This should *significantly* reduce the size of the output.
+*)
+
+(* 
+   Should we use a different representation for lists? 
+   i.e. write out the length followed by the elements?
+   we could no longer claim sharing maximization, but it would
+   actually be more efficient in most cases.
+*)
