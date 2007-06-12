@@ -201,11 +201,55 @@ struct
   type ('a,'b) pair = 'a * 'b deriving (Pickle)
   type capp = int option * Id.t list deriving (Pickle)
 
+  (* We don't serialize ids of each object at all: we just use the
+     ordering in the output file to implicitly record the ids of
+     objects.
+
+     This can (and should) all be written much more efficiently.
+  *)
   type discriminated = 
       (Id.t * string) list
     * (Id.t * (int * Id.t list)) list
     * (Id.t * (Id.t list)) list
-        deriving (Pickle)
+        deriving (Pickle, Show)
+
+  type discriminated_ordered = 
+      string list
+      * (int * Id.t list) list
+      * (Id.t list) list
+        deriving (Pickle, Show)
+
+  let reorder : Id.t * discriminated -> Id.t * discriminated_ordered =
+    fun (root,(a,b,c)) ->
+      let collect_ids items (map,counter) =
+        List.fold_left 
+          (fun (map,counter) (id,_) ->
+             IdMap.add id counter map, Id.next counter) 
+          (map,counter) items in
+
+      let map, _ = 
+        collect_ids c
+          (collect_ids b
+             (collect_ids a
+                (IdMap.empty, Id.initial))) in
+      let lookup id = IdMap.find id map in
+        (lookup root,
+         (List.map snd a,
+          List.map (fun (_,(c,l)) -> c, List.map lookup l) b,
+          List.map (fun (_,l) -> List.map lookup l) c))
+
+  let unorder : Id.t * discriminated_ordered -> Id.t * discriminated
+    = fun (root,(a,b,c)) ->
+      let number_sequentially id items =
+        List.fold_left
+          (fun (id,items) item -> 
+             (Id.next id, (id,item)::items))
+          (id,[]) items in
+      let id = Id.initial in
+      let id, a = number_sequentially id a in
+      let id, b = number_sequentially id b in
+      let  _, c = number_sequentially id c in
+        (root, (a,b,c))
 
   type ('a,'b) either = Left of 'a | Right of 'b
   let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
@@ -239,15 +283,24 @@ struct
   let undiscriminate : discriminated -> (Id.t * Repr.t) list
     = fun (a,b,c) ->
       List.map (fun (id,s) -> (id,Repr.Bytes s)) a
-    @ List.map (fun (id,(c,ps)) -> (id,Repr.CApp (Some c,ps))) b
-    @ List.map (fun (id,(ps)) -> (id,Repr.CApp (None,ps))) c
+      @ List.map (fun (id,(c,ps)) -> (id,Repr.CApp (Some c,ps))) b
+      @ List.map (fun (id,(ps)) -> (id,Repr.CApp (None,ps))) c
+
+  type do_pair = Id.t * discriminated_ordered 
+      deriving (Show, Pickle)
 
   let write_discriminated : Id.t * (Id.t * Repr.t) list -> string
-    = fun (id,map) -> Pickle_discriminated_dumpable.pickleS (id,discriminate map)
+    = fun (root,map) -> 
+      let dmap = discriminate map in 
+      let rmap = reorder (root,dmap) in
+        (*prerr_endline ("dmap : " ^ Show_discriminated.show dmap);*)
+        Pickle_do_pair.pickleS rmap
 
   let read_discriminated : string -> Id.t * (Id.t * Repr.t) list
-    = fun s -> let (id,map) = Pickle_discriminated_dumpable.unpickleS s in
-      (id,undiscriminate map)
+    = fun s -> 
+      let rmap = Pickle_do_pair.unpickleS s in
+      let (root,dmap) = unorder rmap in
+        (root, undiscriminate dmap)
 
   open Write
 
@@ -485,14 +538,6 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
 (* Idea: bitwise output instead of bytewise.  Probably a bit much to
    implement now, but should have a significant impact (e.g. one using
    bit instead of one byte for two-constructor sums) *)
-
-(* Idea: shouldn't need to serialize ids at all: we can just use
-   ordering in the output file (since ids are numbered sequentially).
-   We may have to renumber, though (which means violating abstraction
-   again, unfortunately).
-
-   This should *significantly* reduce the size of the output.
-*)
 
 (* 
    Should we use a different representation for lists? 
