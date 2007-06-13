@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 (* Test for pickle instance generation *)
 
 (* 1. sums (nullary, unary, and n-ary) *)

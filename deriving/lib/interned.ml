@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 (* Interned strings *)
 module StringMap = Map.Make(String)
 

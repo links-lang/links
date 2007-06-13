@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 (** Primitive instanecs for bounded **)
 module Bounded = struct 
 module type Bounded = sig

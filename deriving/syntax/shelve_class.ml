@@ -86,8 +86,8 @@ struct
     <:module_expr< struct open Eq open Typeable
                           module T = $tymod$
                           module E = $eqmod$
-                          open Write
                           type a = $atype$
+                          open Write
                           let shelve = let module W = Utils(T)(E) in function $list:shelvers$
                           open Read
                           let unshelve = let module W = Utils(T) in $unshelver$

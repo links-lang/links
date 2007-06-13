@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 
 (** A type is viewed as the application of type constructors to zero
     or more type arguments.  We provide equality and ordering

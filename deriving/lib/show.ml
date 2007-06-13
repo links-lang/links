@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 module Show = 
 struct 
 (** Show **)

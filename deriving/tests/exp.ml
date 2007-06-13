@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 
 module VarMap = Map.Make(String)
 module VarSet = Set.Make(String)

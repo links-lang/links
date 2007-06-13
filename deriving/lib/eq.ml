@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 
 module type Eq =
 sig

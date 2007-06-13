@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 open Bounded
 
 let rec rassoc (rkey : 'b) : ('a * 'b) list -> 'a = function

@@ -1,4 +1,4 @@
-(*pp derivingpp *)
+(*pp deriving *)
 (*
   Idea: 
   1. every object receives a serializable id.
