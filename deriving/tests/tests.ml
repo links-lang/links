@@ -5,28 +5,28 @@
 type sum = S0 | S1 of int | S2 of int * float | S3 of int * float * bool | Sunit of unit | Stup of (int * float) | Stup1 of (int)
   deriving (Pickle, Eq, Show, Typeable, Shelve)
 
-type nullsum = S0 | S1 | S2 | S3
+type nullsum = N0 | N1 | N2 | N3
     deriving (Enum, Bounded, Eq, Typeable, Shelve)
 
 (* 2. records with mutable and immutable fields (and various combinations) *)
 type r1 = {
-  l1 : int;
-  l2 : int;
+  r1_l1 : int;
+  r1_l2 : int;
 } deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
 
 type r2 = {
-  mutable l1 : int;
-  mutable l2 : int;
+  mutable r2_l1 : int;
+  mutable r2_l2 : int;
 } deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type r3 = {
-  l1 : int;
-  mutable l2 : int;
+  r3_l1 : int;
+  mutable r3_l2 : int;
 } deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 (* 3. polymorphic records *)
 type r4 = {
-  l1 : 'a . 'a list
+  r4_l1 : 'a . 'a list
 } (* deriving (Pickle, Eq, Show, Typeable, Shelve) *)
 
 (* 4. label types *)
@@ -108,8 +108,8 @@ and mutrec_d = [`T of mutrec_b]
     deriving (Pickle, Eq, Show, Typeable, Shelve)
 
 type ('a,'b) pmutrec_a = ('a,'b) pmutrec_c
-and ('a,'b) pmutrec_b = { l1 : ('a,'b) pmutrec_c ; l2 : ('a,'b) pmutrec_a }
-and ('a,'b) pmutrec_c = S of 'a * ('a,'b) pmutrec_a * 'b
+and ('a,'b) pmutrec_b = { pl1 : ('a,'b) pmutrec_c ; pl2 : ('a,'b) pmutrec_a }
+and ('a,'b) pmutrec_c = SS of 'a * ('a,'b) pmutrec_a * 'b
 and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
     deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
 
@@ -170,7 +170,7 @@ type 'a constrained = [`F of 'a] constraint 'a = int
     deriving (Functor) (* Show, etc. don't work here *)
 
 (* 23. private datatypes *)
-type p1 = private P 
+type p1 = private P1 
     deriving (Show, Eq)
 
 module Private : sig (* check that `private' in the interface is
@@ -183,3 +183,6 @@ struct
   type p2 = Q deriving (Show, Eq, Pickle)
 end
 
+(* 24. Reusing existing instances *)
+type t = int 
+    deriving (Eq, Enum, Bounded, Pickle, Show, Typeable, Shelve, Functor)

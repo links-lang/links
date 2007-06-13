@@ -220,6 +220,38 @@ struct
                                      List.map (fun (p,_) -> `Constr ([NameMap.find p ctxt.argmap; "a"],[])) params))
       | `Expr e -> atype_expr ctxt e
 
+  let make_safe (decls : (decl * Ast.module_binding) list) : Ast.module_binding list =
+    (* re-order a set of mutually recursive modules in an attempt to
+       make initialization problems less likely *) 
+    List.map snd
+      (List.sort 
+         (fun ((_,_,lrhs,_), _) ((_,_,rrhs,_), _) -> match (lrhs : rhs), rrhs with
+            (* aliases to types in the group score higher than
+               everything else.
+
+               In general, things that must come first receive a
+               positive score when they occur on the left and a
+               negative score when they occur on the right. *)
+            | (`Fresh _|`Variant _), (`Fresh _|`Variant _) -> 0
+            | (`Fresh _|`Variant _), _ -> -1
+            | _, (`Fresh _|`Variant _) -> 1
+            | (`Nothing, `Nothing) -> 0
+            | (`Nothing, _) -> 1
+            | (_, `Nothing) -> -1
+            | `Expr l, `Expr r -> 
+                let module M = 
+                    struct
+                      type low = 
+                          [`Param of param
+                          | `Underscore
+                          | `Tuple of expr list]
+                    end in
+                  match l, r with
+                    | #M.low, _ -> 1
+                    | _, #M.low -> -1
+                    | _         -> 0)
+         decls)
+      
   let generate ~context ~decls ~make_module_expr ~classname ?default_module () =
     (* plan: 
        set up an enclosing recursive module
@@ -246,13 +278,15 @@ struct
     let mbinds =
       List.map 
         (fun (name,params,rhs,constraints as decl) -> 
-           <:module_binding< 
-             $uid:classname ^ "_"^ name$
-             : $uid:classname$.$uid:classname$ with type a = $atype context decl$
-          = $apply_defaults (make_module_expr context decl)$ >>)
+           (decl,
+            <:module_binding< 
+              $uid:classname ^ "_"^ name$
+              : $uid:classname$.$uid:classname$ with type a = $atype context decl$
+             = $apply_defaults (make_module_expr context decl)$ >>))
         decls in
+    let sorted_mbinds = make_safe mbinds in
     let mrec =
-      <:str_item< open $uid:classname$ module rec $list:mbinds$ >> in
+      <:str_item< open $uid:classname$ module rec $list:sorted_mbinds$ >> in
       match context.params with
         | [] -> mrec
         | _ ->
