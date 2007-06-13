@@ -33,6 +33,13 @@ struct
       | f, x :: xs -> f x @ aux (f, xs)
     in aux (f,l)
 
+  let concat_map2 (f : 'a -> 'b -> 'c list) (l1 : 'a list) (l2 : 'b list) : 'c list = 
+    let rec aux = function
+      | [], [] -> []
+      | x::xs, y :: ys -> f x y @ aux (xs, ys)
+      | _ -> invalid_arg "concat_map2"
+    in aux (l1, l2)
+
   let mapn ?(init=0) f = 
     let rec aux n = function
       | [] -> []
@@ -42,6 +49,7 @@ end
 
 module F =
 struct
+  let id x = x
   let curry f x y = f (x,y)
   let uncurry f (x,y) = f x y
 end

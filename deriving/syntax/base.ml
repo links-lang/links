@@ -56,7 +56,7 @@ struct
   let contains_tvars : expr -> bool = 
     (object
        inherit [bool] fold as default
-       method crush = List.exists (fun x -> x)
+       method crush = List.exists F.id
        method expr = function
          | `Param _ -> true
          | e -> default#expr e
@@ -103,7 +103,6 @@ struct
            fields) in
         Ast.ExRec (loc, fs, Ast.ExNil loc)
 
-
   let record_expression ?(prefix="") : Type.field list -> Ast.expr = 
     fun fields ->
       let es = List.fold_left1
@@ -116,11 +115,6 @@ struct
     match mexpr with
       | <:module_expr< $id:m$ >> -> <:expr< $id:m$.$lid:name$ >>
       | _ -> <:expr< let module M = $mexpr$ in M.$lid:name$ >>
-
-(*  let catch_singletons : ('a list -> 'a) -> 'a list -> 'a = fun f ->
-    function
-      | [x] -> x
-      | xs  -> f xs*)
 
   let expr_list : Ast.expr list -> Ast.expr = 
       (fun exprs ->
@@ -194,15 +188,6 @@ struct
         | _ -> 
             let f = (modname_from_qname ~qname ~classname) in
               self#mapply ctxt (Ast.MeId (loc, f)) args
-
-(*    method tuple ctxt = function
-        | [] -> <:module_expr< $uid:Printf.sprintf "%s_unit" classname$ >>
-        | [a] -> self#expr ctxt a
-        | args -> 
-            let f = <:module_expr< $uid:Printf.sprintf "%s_%d" 
-                                   classname (List.length args)$ >> in
-            self#mapply ctxt f args
-*)
 
     method expr (ctxt : context) : expr -> Ast.module_expr = function
       | `Param p    -> self#param      ctxt p
@@ -295,6 +280,23 @@ struct
       <:sig_item< $list:List.map (gen_sig ~classname ~context) decls$ >>
 end
    
+let find_non_regular params tnames decls : name list =
+  List.concat_map
+    (object 
+       inherit [name list] fold as default
+       method crush = List.concat
+       method expr = function
+         | `Constr ([t], args) 
+             when NameSet.mem t tnames ->
+             (List.concat_map2
+                (fun (p,_) a -> match a with
+                   | `Param (q,_) when p = q -> []
+                   | _ -> [t])
+                params
+                args)
+         | e -> default#expr e
+     end)#decl decls
+
 let extract_params = 
   let has_params params (_, ps, _, _) = ps = params in
     function
@@ -309,16 +311,23 @@ let extract_params =
                              ^"in the group have the same parameters."))
 
 let setup_context loc tdecls : context =
-  let params = extract_params tdecls in
-  let argmap = 
-    List.fold_right
-      (fun (p,_) m -> NameMap.add p (Printf.sprintf "V_%s" p) m)
-      params
-      NameMap.empty in 
-    { loc = loc;
-      argmap = argmap;
-      params = params; 
-      tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) }
+  let params = extract_params tdecls 
+  and tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) in
+    match find_non_regular params tnames tdecls with
+      | _::_ as names -> 
+          failwith ("The following types contain non-regular recursion:\n   "
+                   ^String.concat ", " names
+                   ^"\nderiving does not support non-regular types")
+      | [] ->
+          let argmap = 
+            List.fold_right
+              (fun (p,_) m -> NameMap.add p (Printf.sprintf "V_%s" p) m)
+              params
+              NameMap.empty in 
+            { loc = loc;
+              argmap = argmap;
+              params = params; 
+              tnames = tnames }
       
 type deriver = Loc.t * context * Type.decl list -> Ast.str_item
 and sigderiver = Loc.t * context * Type.decl list -> Ast.sig_item

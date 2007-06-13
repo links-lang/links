@@ -10,10 +10,14 @@ struct
 
   include Syntax
 
-
-  let derive proj loc tdecls classname =
-    let context = Base.setup_context loc tdecls in
-      proj (Base.find classname) (loc, context, tdecls)
+  let derive proj (loc : Loc.t) tdecls classname =
+    try 
+      let context = Base.setup_context loc tdecls in
+        proj (Base.find classname) (loc, context, tdecls)
+    with
+        Base.Underivable msg | Failure msg ->
+          Syntax.print_warning loc msg;
+          exit 1
   
   let derive_str loc (tdecls : Type.decl list) classname =
     derive fst loc tdecls classname
