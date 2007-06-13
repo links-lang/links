@@ -3,31 +3,27 @@ type id
 (* representation of values of user-defined types *)
 module Repr : sig
   type t
-  val make : ?constructor:int -> id list -> t
-  val unpack_ctor : t -> int option * id list
+  val make : ?constructor:(int*int) -> id list -> t
 end 
 
 (* Utilities for serialization *)
 module Write : sig
   type s
   include Monad.Monad_state_type with type state = s
-  val allocate_id : Typeable.dynamic -> Dynmap.DynMap.comparator -> (id * bool) m
-  val store_repr : id -> Repr.t -> unit m
-
-  (* temporary *)
-  val allocate : Typeable.dynamic -> Dynmap.DynMap.comparator -> (id -> unit m) -> id m
+  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) : sig
+    val allocate : T.a -> (id -> unit m) -> id m
+    val store_repr : id -> Repr.t -> unit m
+  end
 end
 
 (* Utilities for deserialization *)
 module Read : sig
   type s
   include Monad.Monad_state_type with type state = s
-  val find_by_id : id -> (Repr.t * Typeable.dynamic option) m
-  val update_map : id -> Typeable.dynamic -> unit m
   module Utils (T : Typeable.Typeable) : sig
-    val whizzySum : (int * id list -> T.a m) -> id -> T.a m
-    val whizzyNoCtor : (id list -> T.a m) -> (id -> T.a m)
-    val whizzyRecord : id -> (id list -> T.a m) -> T.a m
+    val sum    : (int * id list -> T.a m)  -> (id -> T.a m)
+    val tuple  : (id list -> T.a m)        -> (id -> T.a m)
+    val record : (T.a -> id list -> T.a m) -> int -> (id -> T.a m)
   end
 end
 

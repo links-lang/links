@@ -116,6 +116,7 @@ module Pickle_char = Pickle_defaults (
   end
 )
 
+(* This is questionable; it doesn't preserve sharing *)
 module Pickle_string = Pickle_defaults (
   struct
     type a = string

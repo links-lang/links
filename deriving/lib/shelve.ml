@@ -29,7 +29,7 @@ module Repr : sig
   type t = Bytes of string | CApp of (int option * Id.t list) deriving (Pickle, Show)
   val of_string : string -> t
   val to_string : t -> string
-  val make : ?constructor:int -> id list -> t
+  val make : ?constructor:(int*int) -> id list -> t
   val unpack_ctor : t -> int option * id list
 end =
 struct
@@ -38,7 +38,10 @@ struct
   let to_string = function
     | Bytes s -> s
     | _ -> invalid_arg "string_of_repr"
-  let make ?constructor ids = CApp (constructor, ids)
+  let make ?constructor ids = 
+    match constructor with
+      | Some (n,_) -> CApp (Some n, ids)
+      | None       -> CApp (None, ids)
   let unpack_ctor = function 
     | CApp arg -> arg
     | _ -> assert false
@@ -53,9 +56,11 @@ module Write : sig
   }
   val initial_output_state : s
   include Monad.Monad_state_type with type state = s
-  val allocate_id : Typeable.dynamic -> Dynmap.DynMap.comparator -> (id * bool) m
-  val allocate : Typeable.dynamic -> Dynmap.DynMap.comparator -> (id -> unit m) -> id m
-  val store_repr : id -> Repr.t -> unit m
+
+  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) : sig
+    val allocate : T.a -> (id -> unit m) -> id m
+    val store_repr : id -> Repr.t -> unit m
+  end
 end =
 struct
   type s = {
@@ -69,40 +74,38 @@ struct
     id2rep = IdMap.empty;
   }
   include Monad.Monad_state (struct type state = s end)
+  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) =
+  struct
+    module C = Dynmap.Comp(T)(E)
+    let comparator = C.eq
 
-  let allocate_id obj comparator =
-    get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
-    match Dynmap.DynMap.find obj obj2id with
-      | Some id -> return (id,false)
-      | None -> 
-          let id, nextid = nextid, Id.next nextid in
-            put {t with
-                   obj2id=Dynmap.DynMap.add obj id comparator obj2id;
-                   nextid=nextid} >>
-            return (id, true)
-
-  let allocate dynamic eq f : id m =
-    allocate_id dynamic eq >>= fun (id,freshp) ->
-      if freshp then
-        f id >>
-          return id
-      else
-        return id
-
-  let store_repr id repr =
-    get >>= fun state ->
-    put {state with id2rep = IdMap.add id repr state.id2rep}
+    let allocate o f =
+      let obj = T.makeDynamic o in
+      get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
+        match Dynmap.DynMap.find obj obj2id with
+          | Some id -> return id
+          | None -> 
+              let id, nextid = nextid, Id.next nextid in
+                put {t with
+                       obj2id=Dynmap.DynMap.add obj id comparator obj2id;
+                       nextid=nextid} >>
+                  f id >> return id
+                  
+    let store_repr id repr =
+      get >>= fun state ->
+        put {state with id2rep = IdMap.add id repr state.id2rep}
+  end
 end
 
 module Read : sig
   type s = (repr * (Typeable.dynamic option)) IdMap.t
   include Monad.Monad_state_type with type state = s
   val find_by_id : id -> (Repr.t * Typeable.dynamic option) m
-  val update_map : id -> Typeable.dynamic -> unit m
   module Utils (T : Typeable.Typeable) : sig
-    val whizzySum : (int * id list -> T.a m) -> id -> T.a m
-    val whizzyNoCtor : (id list -> T.a m) -> (id -> T.a m)
-    val whizzyRecord : id -> (id list -> T.a m) -> T.a m
+    val sum    : (int * id list -> T.a m)  -> id -> T.a m
+    val tuple  : (id list -> T.a m)        -> id -> T.a m
+    val record : (T.a -> id list -> T.a m) -> int -> id -> T.a m
+    val update_map : id -> (T.a -> unit m)
   end
 end =
 struct
@@ -113,7 +116,17 @@ struct
     get >>= fun state ->
     return (IdMap.find id state)
 
-  let update_map id dynamic =
+  module Utils (T : Typeable.Typeable) = struct
+    let decode_repr_ctor c = match Repr.unpack_ctor c with
+      | (Some c, ids) -> (c, ids)
+      | _ -> invalid_arg "decode_repr_ctor"
+
+    let decode_repr_noctor c = match Repr.unpack_ctor c with
+      | (None, ids) -> ids
+      | _ -> invalid_arg "decode_repr_ctor"
+
+    let update_map id obj =
+      let dynamic = T.makeDynamic obj in
       get >>= fun state -> 
         match IdMap.find id state with 
           | (repr, None) ->     
@@ -148,31 +161,28 @@ struct
                    9. insert "B{...}" into the dictionary.
                    10. insert "B{...}" into the dictionary.
                 *)
-  module Utils (T : Typeable.Typeable) = struct
-    let decode_repr_ctor c = match Repr.unpack_ctor c with
-      | (Some c, ids) -> (c, ids)
-      | _ -> invalid_arg "decode_repr_ctor"
 
-    let decode_repr_noctor c = match Repr.unpack_ctor c with
-      | (None, ids) -> ids
-      | _ -> invalid_arg "decode_repr_ctor"
 
     let whizzy f id decode =
       find_by_id id >>= fun (repr, dynopt) ->
       match dynopt with 
         | None ->
             f (decode repr) >>= fun obj ->
-            update_map id (T.makeDynamic obj) >>
+            update_map id obj >>
             return obj
         | Some obj -> return (T.throwingCast obj)
 
-    let whizzySum f id = whizzy f id decode_repr_ctor
-    let whizzyNoCtor f id = whizzy f id decode_repr_noctor
-    let whizzyRecord id (f : id list -> T.a m) =
+    let sum f id = whizzy f id decode_repr_ctor
+    let tuple f id = whizzy f id decode_repr_noctor
+    let record_tag = 0
+    let record f size id =
       find_by_id id >>= fun (repr, obj) ->
         match obj with
           | None ->
-              f (decode_repr_noctor repr)
+              let this = Obj.magic  (Obj.new_block record_tag size) in
+                update_map id this >>
+                f this (decode_repr_noctor repr) >>
+                return this
           | Some obj -> return (T.throwingCast obj)
 
 
@@ -204,6 +214,9 @@ struct
   (* We don't serialize ids of each object at all: we just use the
      ordering in the output file to implicitly record the ids of
      objects.
+
+     Also, we don't serialize the repr constructors.  All values with
+     a particular constructor are grouped in a single list.
 
      This can (and should) all be written much more efficiently.
   *)
@@ -400,19 +413,18 @@ module Shelve_from_pickle
      module E = E
      module Comp = Dynmap.Comp(T)(E)
      open Write
+     module W = Utils(T)(E)
      let shelve obj = 
-       allocate_id (T.makeDynamic obj) Comp.eq >>= fun (id, freshp) ->
-         if freshp then
-           store_repr id (Repr.of_string (P.pickleS obj)) >>
-             return id
-         else return id
+       W.allocate obj 
+         (fun id -> W.store_repr id (Repr.of_string (P.pickleS obj)))
      open Read
+     module U = Utils(T)
      let unshelve id = 
        find_by_id id >>= fun (repr, dynopt) ->
          match dynopt with
            | None -> 
                let obj : a = P.unpickleS (Repr.to_string repr) in
-                 update_map id (T.makeDynamic obj) >> 
+                 U.update_map id obj >> 
                    return obj
            | Some obj -> return (T.throwingCast obj)
    end)
@@ -433,22 +445,16 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
     open Write
     type a = V0.a option
     let rec shelve =
+      let module W = Utils(T)(E) in
       function
           None as obj ->
-            allocate_id (T.makeDynamic obj) Comp.eq >>= fun (id,freshp) ->
-              if freshp then
-                store_repr id (Repr.make ~constructor:0 []) >>
-                  return id
-              else
-                return id
+            W.allocate obj
+              (fun id -> W.store_repr id (Repr.make ~constructor:(0,2) []))
         | Some v0 as obj ->
-            allocate_id (T.makeDynamic obj) Comp.eq >>= fun (thisid,freshp) ->
-              if freshp then
-                V0.shelve v0 >>= fun id0 ->
-                  store_repr thisid (Repr.make ~constructor:1 [id0]) >>
-                    return thisid
-              else
-                return thisid
+            W.allocate obj
+              (fun thisid ->
+                 V0.shelve v0 >>= fun id0 ->
+                   W.store_repr thisid (Repr.make ~constructor:(1,2) [id0]))
     open Read
     let unshelve = 
       let module W = Utils(T) in
@@ -458,22 +464,9 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
         | n, _ -> raise (UnshelvingError
                            ("Unexpected tag encountered unshelving "
                             ^"option : " ^ string_of_int n)) in
-        W.whizzySum f
+        W.sum f
   end)
 
-
-module Allocate =
-struct
-  open Write
-
-  let allocate dynamic eq f =
-    allocate_id dynamic eq >>= fun (id,freshp) ->
-      if freshp then
-        f id >>
-          return id
-      else
-        return id
-end
 
 module Shelve_list (V0 : Shelve)
   : Shelve with type a = V0.a list = Shelve_defaults (
@@ -483,15 +476,16 @@ struct
   module Comp = Dynmap.Comp (T) (E)
   type a = V0.a list
   open Write
+  module U = Utils(T)(E)
   let rec shelve = function
       [] as obj ->
-        Allocate.allocate (T.makeDynamic obj) Comp.eq 
-          (fun this -> store_repr this (Repr.make ~constructor:0 []))
+        U.allocate obj
+          (fun this -> U.store_repr this (Repr.make ~constructor:(0,2) []))
     | (v0::v1) as obj ->
-        Allocate.allocate (T.makeDynamic obj) Comp.eq
+        U.allocate obj
           (fun this -> V0.shelve v0 >>= fun id0 ->
                           shelve v1 >>= fun id1 ->
-                            store_repr this (Repr.make ~constructor:1 [id0; id1]))
+                            U.store_repr this (Repr.make ~constructor:(1,2) [id0; id1]))
   open Read
   module W = Utils (T)
   let rec unshelve id = 
@@ -504,7 +498,7 @@ struct
       | n, _ -> raise (UnshelvingError
                          ("Unexpected tag encountered unshelving "
                           ^"option : " ^ string_of_int n)) in
-      W.whizzySum f id
+      W.sum f id
 end)
 end
 include Shelve  
@@ -512,10 +506,6 @@ include Shelve
 
 type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
     deriving (Shelve)
-
-(* Idea: compress the representation portion (id2rep) of the
-   output_state before serialization, allowing objects of different
-   types to share their serialized representation. *)
 
 (* Idea: keep pointers to values that we've serialized in a global
    weak hash table so that we can share structure with them if we
@@ -525,23 +515,12 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
    using the extra level of indirection (and space) introduced by ids
 *)
 
-(* Idea: when serializing the repr list (the type `Run.ids') at the very end we could save space 
-   by serializing two maps:
-
-      (Id.t * string) list
-      (Id.t * (int option * Id.t list)) list
-   instead of 
-      (Id.t * Repr.t) list
-   since we'd wouldn't have an extra byte overhead for every item in the list.
-*)
-
 (* Idea: bitwise output instead of bytewise.  Probably a bit much to
    implement now, but should have a significant impact (e.g. one using
    bit instead of one byte for two-constructor sums) *)
 
-(* 
-   Should we use a different representation for lists? 
-   i.e. write out the length followed by the elements?
-   we could no longer claim sharing maximization, but it would
-   actually be more efficient in most cases.
+(* Should we use a different representation for lists?  i.e. write out
+   the length followed by the elements?  we could no longer claim
+   sharing maximization, but it would actually be more efficient in
+   most cases.
 *)
