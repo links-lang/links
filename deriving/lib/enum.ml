@@ -28,11 +28,13 @@ end
 
 let startThenTo (start : int) (next : int) (until : int) : int list = 
   let step = next - start in
-  let rec upFrom current =
-    if current > until then []
-    else current :: upFrom (current+step)
-  in
-    upFrom start
+    if step <= 0 then invalid_arg "startThenTo" 
+    else
+      let rec upFrom current =
+        if current > until then []
+        else current :: upFrom (current+step)
+      in
+        upFrom start
 
 let range : int -> int -> int list 
   = fun f t -> startThenTo f (f+1) t
