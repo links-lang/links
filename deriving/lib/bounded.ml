@@ -3,8 +3,8 @@
 module Bounded = struct 
 module type Bounded = sig
   type a
-  val minBound : a
-  val maxBound : a
+  val min_bound : a
+  val max_bound : a
 end
 
 module Bounded_integer(B : sig type t
@@ -13,31 +13,31 @@ module Bounded_integer(B : sig type t
                        end) : Bounded with type a = B.t =
 struct 
   type a = B.t
-  let minBound = B.min_int
-  let maxBound = B.max_int
+  let min_bound = B.min_int
+  let max_bound = B.max_int
 end
 module Bounded_int32 = Bounded_integer(Int32)
 module Bounded_int64 = Bounded_integer(Int64)
 module Bounded_nativeint = Bounded_integer(Nativeint)
 module Bounded_int = struct
   type a = int
-  let minBound = Pervasives.min_int
-  let maxBound = Pervasives.max_int
+  let min_bound = Pervasives.min_int
+  let max_bound = Pervasives.max_int
 end
 module Bounded_bool = struct
   type a = bool
-  let minBound = false
-  let maxBound = true
+  let min_bound = false
+  let max_bound = true
 end
 module Bounded_char = struct
   type a = char
-  let minBound = Char.chr 0
-  let maxBound = Char.chr 0xff (* Is this guaranteed? *)
+  let min_bound = Char.chr 0
+  let max_bound = Char.chr 0xff (* Is this guaranteed? *)
 end
 module Bounded_unit = struct
   type a = unit
-  let minBound = ()
-  let maxBound = ()
+  let min_bound = ()
+  let max_bound = ()
 end 
 end
 include Bounded

@@ -8,7 +8,7 @@ struct
   include Base.InContext(L)
   module UT = Type.Untranslate(L)
 
-  let typeable_defaults t = <:module_expr< Typeable.Typeable_defaults($t$) >>
+  let typeable_defaults t = <:module_expr< Typeable.Defaults($t$) >>
 
   module Typeable = Typeable_class.InContext(L)
   module Eq       = Eq_class.InContext(L)
@@ -66,7 +66,7 @@ struct
 
 
   let typeable_instance ctxt tname =
-    <:module_expr< Typeable.Typeable_defaults(
+    <:module_expr< Typeable.Defaults(
     $apply_functor <:module_expr< $uid:"Typeable_" ^ tname$ >> 
       (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p ctxt.argmap$.T >>)
          ctxt.params)$) >>
@@ -102,7 +102,7 @@ struct
       let eidlist = expr_list (List.map (fun (id,_) -> <:expr< $lid:id$ >>) ids) in
       let pidlist = patt_list (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
       let tpatt,texpr = tuple ~param:"id" nts in
-      let tymod = Typeable.tup ctxt ts <:expr< M.T.typeRep >> (self#expr)
+      let tymod = Typeable.tup ctxt ts <:expr< M.T.type_rep >> (self#expr)
       and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
       and shelvers =
         let inner = 
@@ -245,7 +245,7 @@ let _ = Base.register "Shelve"
   ((fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in
         M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-          ~default_module:"Shelve_defaults" ()),
+          ~default_module:"Defaults" ()),
    (fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in
         M.gen_sigs ~context ~decls ~classname:M.classname))

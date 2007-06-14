@@ -41,7 +41,7 @@ sig
   val unshelveS : string -> a
 end
 
-module Shelve_defaults
+module Defaults
   (S : sig
      type a
      module T : Typeable.Typeable with type a = a

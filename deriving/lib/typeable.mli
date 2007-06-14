@@ -17,17 +17,17 @@ val tagOf : dynamic -> TypeRep.t
 module type Typeable =
 sig
   type a
-  val typeRep : unit -> TypeRep.t
-  val hasType : dynamic -> bool
+  val type_rep : unit -> TypeRep.t
+  val has_type : dynamic -> bool
   val cast : dynamic -> a option
-  val throwingCast : dynamic -> a
-  val makeDynamic : a -> dynamic
+  val throwing_cast : dynamic -> a
+  val make_dynamic : a -> dynamic
 end
 
-module Typeable_defaults (T : (sig
-                                 type a
-                                 val typeRep : unit -> TypeRep.t
-                               end))
+module Defaults (T : (sig
+                        type a
+                        val type_rep : unit -> TypeRep.t
+                      end))
   : Typeable with type a = T.a
 
 module Typeable_list   (A : Typeable) : Typeable with type a = A.a list

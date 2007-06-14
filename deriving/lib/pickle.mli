@@ -7,7 +7,7 @@ module type Pickle =
     val unpickleS : string -> a
   end
 
-module Pickle_defaults
+module Defaults
   (P : sig
      type a
      val pickle : Buffer.t -> a -> unit

@@ -18,12 +18,12 @@ module type Enum = sig
   type a
   val succ : a -> a
   val pred : a -> a
-  val toEnum : int -> a
-  val fromEnum : a -> int
-  val enumFrom : a -> a list
-  val enumFromThen : a -> a -> a list
-  val enumFromTo : a -> a -> a list
-  val enumFromThenTo : a -> a -> a -> a list
+  val to_enum : int -> a
+  val from_enum : a -> int
+  val enum_from : a -> a list
+  val enum_from_then : a -> a -> a list
+  val enum_from_to : a -> a -> a list
+  val enum_from_then_to : a -> a -> a -> a list
 end
 
 let startThenTo (start : int) (next : int) (until : int) : int list = 
@@ -39,7 +39,7 @@ let startThenTo (start : int) (next : int) (until : int) : int list =
 let range : int -> int -> int list 
   = fun f t -> startThenTo f (f+1) t
 
-module EnumDefaults 
+module Defaults 
   (E : (sig
           type a
           val numbering : (a * int) list
@@ -49,70 +49,70 @@ struct
   let lastCon = fst (last E.numbering)
 
   type a = E.a
-  let fromEnum a = List.assoc a E.numbering
-  let toEnum i = try rassoc i E.numbering with Not_found -> raise (Invalid_argument "toEnum")
-  let succ s = try toEnum ((fromEnum s) + 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "succ")
-  let pred s = try toEnum ((fromEnum s) - 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "pred")
-  let enumFromTo x y = List.map toEnum (range (fromEnum x) (fromEnum y))
-  let enumFromThenTo x y z = List.map toEnum (startThenTo (fromEnum x) (fromEnum y) (fromEnum z))
-  let enumFromThen x y = (enumFromThenTo x y 
-                            (if fromEnum y >= fromEnum x then lastCon
+  let from_enum a = List.assoc a E.numbering
+  let to_enum i = try rassoc i E.numbering with Not_found -> raise (Invalid_argument "to_enum")
+  let succ s = try to_enum ((from_enum s) + 1) with Invalid_argument "to_enum" -> raise (Invalid_argument "succ")
+  let pred s = try to_enum ((from_enum s) - 1) with Invalid_argument "to_enum" -> raise (Invalid_argument "pred")
+  let enum_from_to x y = List.map to_enum (range (from_enum x) (from_enum y))
+  let enum_from_then_to x y z = List.map to_enum (startThenTo (from_enum x) (from_enum y) (from_enum z))
+  let enum_from_then x y = (enum_from_then_to x y 
+                            (if from_enum y >= from_enum x then lastCon
                              else firstCon))
-  let enumFrom x = enumFromTo x lastCon
+  let enum_from x = enum_from_to x lastCon
 end
 
 
-module EnumDefaults' 
+module Defaults' 
   (E : (sig
           type a
-          val fromEnum : a -> int
-          val toEnum   : int -> a
+          val from_enum : a -> int
+          val to_enum   : int -> a
         end))
   (B : Bounded with type a = E.a) : Enum with type a = E.a 
                                          and  type a = B.a =
 struct
   include E
-  let firstCon = B.minBound
-  let lastCon = B.maxBound
+  let firstCon = B.min_bound
+  let lastCon = B.max_bound
 
-  let succ s = try toEnum ((fromEnum s) + 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "succ")
-  let pred s = try toEnum ((fromEnum s) - 1) with Invalid_argument "toEnum" -> raise (Invalid_argument "pred")
-  let enumFromTo x y = List.map toEnum (range (fromEnum x) (fromEnum y))
-  let enumFromThenTo x y z = List.map toEnum (startThenTo (fromEnum x) (fromEnum y) (fromEnum z))
-  let enumFromThen x y = (enumFromThenTo x y 
-                            (if fromEnum y >= fromEnum x then lastCon
+  let succ s = try to_enum ((from_enum s) + 1) with Invalid_argument "to_enum" -> raise (Invalid_argument "succ")
+  let pred s = try to_enum ((from_enum s) - 1) with Invalid_argument "to_enum" -> raise (Invalid_argument "pred")
+  let enum_from_to x y = List.map to_enum (range (from_enum x) (from_enum y))
+  let enum_from_then_to x y z = List.map to_enum (startThenTo (from_enum x) (from_enum y) (from_enum z))
+  let enum_from_then x y = (enum_from_then_to x y 
+                            (if from_enum y >= from_enum x then lastCon
                              else firstCon))
-  let enumFrom x = enumFromTo x lastCon
+  let enum_from x = enum_from_to x lastCon
 end
 
-module Enum_bool = EnumDefaults(struct
+module Enum_bool = Defaults(struct
   type a = bool
   let numbering = [false, 0; true, 1]
 end)
 
-module Enum_char = EnumDefaults'(struct
+module Enum_char = Defaults'(struct
   type a = char
-  let fromEnum = Char.code
-  let toEnum = Char.chr
+  let from_enum = Char.code
+  let to_enum = Char.chr
 end) (Bounded_char)
 
-module Enum_int = EnumDefaults' (struct
+module Enum_int = Defaults' (struct
   type a = int
-  let fromEnum i = i
-  let toEnum i = i
+  let from_enum i = i
+  let to_enum i = i
 end)(Bounded_int)
 
 (* Can `instance Enum Float' be justified?
    For some floats `f' we have `succ f == f'. 
-   Furthermore, float is wider than int, so fromEnum will necessarily
+   Furthermore, float is wider than int, so from_enum will necessarily
    give nonsense on many inputs. *)
 
-module Enum_unit = EnumDefaults' (struct
+module Enum_unit = Defaults' (struct
   type a = unit
-  let fromEnum () = 0
-  let toEnum = function
+  let from_enum () = 0
+  let to_enum = function
     | 0 -> ()
-    | _ -> raise (Invalid_argument "toEnum")
+    | _ -> raise (Invalid_argument "to_enum")
 end) (Bounded_unit)
 end
 include Enum

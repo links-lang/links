@@ -24,7 +24,7 @@ struct
         (List.range 0 (List.length summands))
         summands
         <:expr< [] >> in
-      <:module_expr< Enum.EnumDefaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
+      <:module_expr< Enum.Defaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
 
     method variant ctxt decl (_, tags) = 
     let numbering = 
@@ -39,7 +39,7 @@ struct
         (List.range 0 (List.length tags))
         tags
         <:expr< [] >> in
-      <:module_expr< Enum.EnumDefaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
+      <:module_expr< Enum.Defaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
 
     method tuple context _ = raise (Underivable "Enum cannot be derived for tuple types")
     method record ?eq _ (tname,_,_,_,_) = raise (Underivable

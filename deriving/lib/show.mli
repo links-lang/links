@@ -2,12 +2,12 @@ module type Show =
   sig
     type a
     val format : Format.formatter -> a -> unit
-    val formatList : Format.formatter -> a list -> unit
+    val format_list : Format.formatter -> a list -> unit
     val show : a -> string
-    val showList : a list -> string
+    val show_list : a list -> string
   end
 
-module ShowDefaults (S : 
+module Defaults (S : 
   sig
     type a
     val format : Format.formatter -> a -> unit 

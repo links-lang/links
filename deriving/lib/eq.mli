@@ -1,6 +1,5 @@
 (* A module for SML-style equality, i.e. where equality of mutables is
-   an identity test and equality of immutables is structural equality.
-   (Leibniz equality, I think.)
+   physical equality and equality of immutables is structural equality.
 *)
 
 module type Eq =
@@ -9,8 +8,7 @@ sig
   val eq : a -> a -> bool
 end
 
-module Eq_defaults (E : Eq) : Eq with type a = E.a
-  
+module Defaults (E : Eq) : Eq with type a = E.a
 
 module Eq_immutable (S : sig type a end) : Eq with type a = S.a
 module Eq_mutable (S : sig type a end) : Eq with type a = S.a

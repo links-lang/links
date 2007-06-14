@@ -20,8 +20,7 @@ and t8 = [`T3 of t7]
 type t9 = [`T1 of int | `T2 of [`T3 of t9 ]]
     deriving (Typeable)
 
-let main () = 
-  prerr_endline (string_of_bool 
-                   (Typeable.TypeRep.eq
-                      (Typeable_t5.typeRep ())
-                      (Typeable_t5.typeRep ())))
+let main = 
+  assert (Typeable.TypeRep.eq
+            (Typeable_t5.type_rep ())
+            (Typeable_t5.type_rep ()))

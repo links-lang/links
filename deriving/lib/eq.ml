@@ -6,7 +6,7 @@ sig
   val eq : a -> a -> bool
 end
 
-module Eq_defaults (E : Eq) = E
+module Defaults (E : Eq) = E
 
 module Eq_immutable(S : sig type a end) :
   Eq with type a = S.a =

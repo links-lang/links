@@ -57,7 +57,7 @@ struct
     method tuple ctxt args = 
       let n = List.length args in
       let tpatt, _ = tuple n in
-      <:module_expr< ShowDefaults (struct type a = $atype_expr ctxt (`Tuple args)$
+      <:module_expr< Defaults (struct type a = $atype_expr ctxt (`Tuple args)$
                             let format formatter $tpatt$ = 
                               $self#nargs ctxt 
                                 (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ end) >>
@@ -100,7 +100,7 @@ let _ = Base.register "Show"
   ((fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in   
         M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-          ~default_module:"ShowDefaults" ()),
+          ~default_module:"Defaults" ()),
    (fun (loc, context, decls) ->
       let module M = InContext(struct let loc = loc end) in
         M.gen_sigs ~classname:M.classname ~context ~decls))

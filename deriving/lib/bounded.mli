@@ -1,8 +1,8 @@
 module type Bounded = 
 sig
   type a
-  val minBound : a 
-  val maxBound : a 
+  val min_bound : a 
+  val max_bound : a 
 end
 
 module Bounded_bool      : Bounded with type a = bool

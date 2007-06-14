@@ -19,8 +19,6 @@ SOURCES = show.ml           show.mli		\
           dynmap.ml         dynmap.mli		\
           shelve.ml	    shelve.mli    	\
           functor.ml        functor.mli		\
-          rewriter.ml       rewriter.mli	\
-          quickcheck.ml                         \
 
 RESULT  = deriving
 

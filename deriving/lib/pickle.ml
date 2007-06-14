@@ -29,7 +29,7 @@ let bad_tag tag stream typename =
               "Failure during %s unpickling at character %d; unexpected tag %d" 
               typename (Stream.count stream) tag))
 
-module Pickle_defaults (P : sig   
+module Defaults (P : sig   
 			  type a
 			  val pickle : Buffer.t -> a -> unit
 			  val unpickle : char Stream.t -> a
@@ -57,7 +57,7 @@ module Pickle_intN (P : sig
                       val shift_left : t -> int -> t
                       val of_int : int -> t
                       val to_int : t -> int
-                    end) = Pickle_defaults (
+                    end) = Defaults (
   struct
     type a = P.t
 	(* Format an integer using the following scheme:
@@ -100,7 +100,7 @@ module Pickle_intN (P : sig
 module Pickle_int32 = Pickle_intN (Int32)
 module Pickle_int64 = Pickle_intN (Int64)
 module Pickle_nativeint = Pickle_intN (Nativeint)
-module Pickle_int = Pickle_defaults (
+module Pickle_int = Defaults (
   struct
     type a = int
     let pickle buffer int = Pickle_nativeint.pickle buffer (Nativeint.of_int int)
@@ -108,7 +108,7 @@ module Pickle_int = Pickle_defaults (
   end
 )
 
-module Pickle_char = Pickle_defaults (
+module Pickle_char = Defaults (
   struct
     type a = char
     let pickle = Buffer.add_char
@@ -117,7 +117,7 @@ module Pickle_char = Pickle_defaults (
 )
 
 (* This is questionable; it doesn't preserve sharing *)
-module Pickle_string = Pickle_defaults (
+module Pickle_string = Defaults (
   struct
     type a = string
     let pickle buffer string = 
@@ -135,7 +135,7 @@ module Pickle_string = Pickle_defaults (
   end
 )
 
-module Pickle_float = Pickle_defaults (
+module Pickle_float = Defaults (
   struct
     type a = float
     let pickle buffer f = Pickle_int64.pickle buffer (Int64.bits_of_float f)
@@ -144,7 +144,7 @@ module Pickle_float = Pickle_defaults (
 )
 
 (* This should end up a bit more compact than the derived version *)
-module Pickle_list (P : SimplePickle) = Pickle_defaults (
+module Pickle_list (P : SimplePickle) = Defaults (
   (* This could perhaps be more efficient by pickling the list in
      reverse: this would result in only one traversal being needed
      during pickling, and no "reverse" being needed during unpickling.
@@ -166,7 +166,7 @@ module Pickle_list (P : SimplePickle) = Pickle_defaults (
 
 (* Pickle_ref cannot preserve sharing, so we don't provide an implementation *)
 
-module Pickle_option (P : SimplePickle) = Pickle_defaults (
+module Pickle_option (P : SimplePickle) = Defaults (
   struct
     type a = P.a option
     let pickle buffer = function
@@ -185,7 +185,7 @@ module Pickle_option (P : SimplePickle) = Pickle_defaults (
 )
 
 (* This doesn't preserve sharing, so it shouldn't be allowed *)
-module Pickle_array (P : SimplePickle) = Pickle_defaults (
+module Pickle_array (P : SimplePickle) = Defaults (
   struct
     type a = P.a array
         (* rather inefficient *)
@@ -198,7 +198,7 @@ module Pickle_array (P : SimplePickle) = Pickle_defaults (
   end
 )
 
-module Pickle_bool = Pickle_defaults (
+module Pickle_bool = Defaults (
   struct
     type a = bool
     let pickle buffer = function
@@ -212,7 +212,7 @@ module Pickle_bool = Pickle_defaults (
   end
 )
 
-module Pickle_unit = Pickle_defaults (
+module Pickle_unit = Defaults (
   struct
     type a = unit
     let pickle _ () = ()
@@ -220,7 +220,7 @@ module Pickle_unit = Pickle_defaults (
   end
 )
 
-module Pickle_num = Pickle_defaults (
+module Pickle_num = Defaults (
   struct
     (* TODO: a less wasteful pickler for nums.  A good start would be
        using half a byte per decimal-coded digit, instead of a whole
@@ -231,7 +231,7 @@ module Pickle_num = Pickle_defaults (
   end
 )
 
-module Pickle_unpicklable (P : sig type a val tname : string end) = Pickle_defaults ( 
+module Pickle_unpicklable (P : sig type a val tname : string end) = Defaults ( 
   struct 
     type a = P.a
     let pickle _ _ = failwith ("attempt to pickle a value of unpicklable type : " ^ P.tname)
@@ -241,7 +241,7 @@ module Pickle_unpicklable (P : sig type a val tname : string end) = Pickle_defau
 
 (* Uses Marshal to pickle the values that the parse-the-declarations
    technique can't reach. *)
-module Pickle_via_marshal (P : sig type a end) = Pickle_defaults (
+module Pickle_via_marshal (P : sig type a end) = Defaults (
 (* Rather inefficient. *)
   struct
     include P

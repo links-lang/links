@@ -31,7 +31,7 @@ struct
         let pinner, unpickle = self#nargs ctxt (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) ts) in
         let patt, expr = tuple n in
           [ <:match_case< $patt$ -> $pinner$ >> ], unpickle in
-        <:module_expr< Pickle_defaults( $wrap ~atype ~picklers ~unpickle$) >>
+        <:module_expr< Defaults( $wrap ~atype ~picklers ~unpickle$) >>
 
     method polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
       let picklen = <:expr< Pickle_int.pickle buffer $`int:n$ >> in
@@ -105,7 +105,7 @@ let _ = Base.register "Pickle"
   ((fun (loc, context, decls) -> 
      let module M = InContext(struct let loc = loc end) in
        M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-         ~default_module:"Pickle_defaults" ()),
+         ~default_module:"Defaults" ()),
    (fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in
         M.gen_sigs ~context ~decls ~classname:M.classname))

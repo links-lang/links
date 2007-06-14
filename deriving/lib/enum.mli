@@ -3,20 +3,20 @@ module type Enum =
     type a
     val succ : a -> a
     val pred : a -> a
-    val toEnum : int -> a
-    val fromEnum : a -> int
-    val enumFrom : a -> a list
-    val enumFromThen : a -> a -> a list
-    val enumFromTo : a -> a -> a list
-    val enumFromThenTo : a -> a -> a -> a list
+    val to_enum : int -> a
+    val from_enum : a -> int
+    val enum_from : a -> a list
+    val enum_from_then : a -> a -> a list
+    val enum_from_to : a -> a -> a list
+    val enum_from_then_to : a -> a -> a -> a list
   end
 
-module EnumDefaults
+module Defaults
   (E : sig type a val numbering : (a * int) list end)
   : Enum with type a = E.a
 
-module EnumDefaults' 
-  (E : sig type a val fromEnum : a -> int val toEnum : int -> a end) 
+module Defaults' 
+  (E : sig type a val from_enum : a -> int val to_enum : int -> a end) 
   (B : Bounded.Bounded with type a = E.a)
   : Enum with type a = B.a
 

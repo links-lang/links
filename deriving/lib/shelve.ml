@@ -81,7 +81,7 @@ struct
     let comparator = C.eq
 
     let allocate o f =
-      let obj = T.makeDynamic o in
+      let obj = T.make_dynamic o in
       get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
         match Dynmap.DynMap.find obj obj2id with
           | Some id -> return id
@@ -127,7 +127,7 @@ struct
       | _ -> invalid_arg "decode_repr_ctor"
 
     let update_map id obj =
-      let dynamic = T.makeDynamic obj in
+      let dynamic = T.make_dynamic obj in
       get >>= fun state -> 
         match IdMap.find id state with 
           | (repr, None) ->     
@@ -171,7 +171,7 @@ struct
             f (decode repr) >>= fun obj ->
             update_map id obj >>
             return obj
-        | Some obj -> return (T.throwingCast obj)
+        | Some obj -> return (T.throwing_cast obj)
 
     let sum f id = whizzy f id decode_repr_ctor
     let tuple f id = whizzy f id decode_repr_noctor
@@ -184,7 +184,7 @@ struct
                 update_map id this >>
                 f this (decode_repr_noctor repr) >>
                 return this
-          | Some obj -> return (T.throwingCast obj)
+          | Some obj -> return (T.throwing_cast obj)
 
 
   end
@@ -387,7 +387,7 @@ sig
   val unshelveS : string -> a
 end
 
-module Shelve_defaults
+module Defaults
   (S : sig
      type a
      module T : Typeable.Typeable with type a = a
@@ -407,7 +407,7 @@ module Shelve_from_pickle
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
   : Shelve with type a = P.a
-           and type a = T.a = Shelve_defaults
+           and type a = T.a = Defaults
   (struct
      type a = T.a
      module T = T
@@ -427,7 +427,7 @@ module Shelve_from_pickle
                let obj : a = P.unpickleS (Repr.to_string repr) in
                  U.update_map id obj >> 
                    return obj
-           | Some obj -> return (T.throwingCast obj)
+           | Some obj -> return (T.throwing_cast obj)
    end)
 
 module Shelve_unit : Shelve with type a = unit = Shelve_from_pickle(Pickle.Pickle_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
@@ -438,7 +438,7 @@ module Shelve_float = Shelve_from_pickle(Pickle.Pickle_float)(Eq.Eq_float)(Typea
 module Shelve_num = Shelve_from_pickle(Pickle.Pickle_num)(Eq.Eq_num)(Typeable.Typeable_num)
 module Shelve_string = Shelve_from_pickle(Pickle.Pickle_string)(Eq.Eq_string)(Typeable.Typeable_string) 
 
-module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_defaults(
+module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Defaults(
   struct
     module T = Typeable.Typeable_option (V0.T)
     module E = Eq.Eq_option (V0.E)
@@ -470,7 +470,7 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
 
 
 module Shelve_list (V0 : Shelve)
-  : Shelve with type a = V0.a list = Shelve_defaults (
+  : Shelve with type a = V0.a list = Defaults (
 struct
   module T = Typeable.Typeable_list (V0.T)
   module E = Eq.Eq_list (V0.E)

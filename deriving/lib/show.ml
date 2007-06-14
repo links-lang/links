@@ -5,9 +5,9 @@ struct
 module type Show = sig
   type a
   val format : Format.formatter -> a -> unit
-  val formatList : Format.formatter -> a list -> unit
+  val format_list : Format.formatter -> a list -> unit
   val show : a -> string
-  val showList : a list -> string
+  val show_list : a list -> string
 end
 
 module type SimpleFormatter = 
@@ -19,7 +19,7 @@ end
 module ShowFormatterDefault (S : SimpleFormatter) =
 struct
   include S
-  let formatList formatter items = 
+  let format_list formatter items = 
     let rec writeItems formatter = function
       | []      -> ()
       | [x]     -> S.format formatter x;
@@ -32,7 +32,7 @@ module ShowDefaults'
   (S : (sig
           type a
           val format : Format.formatter -> a -> unit
-          val formatList : Format.formatter -> a list -> unit
+          val format_list : Format.formatter -> a list -> unit
         end)) : Show with type a = S.a =
 struct
   include S
@@ -44,56 +44,56 @@ struct
 
   (* Warning: do not eta-reduce either of the following *)
   let show item = showFormatted S.format item
-  let showList items = showFormatted S.formatList items
+  let show_list items = showFormatted S.format_list items
 end
 
-module ShowDefaults (S : SimpleFormatter) : Show with type a = S.a =
+module Defaults (S : SimpleFormatter) : Show with type a = S.a =
   ShowDefaults' (ShowFormatterDefault (S))
 
 module Show_unprintable (S : sig type a end) (*: Show with type a = S.a *) = 
-  ShowDefaults (struct
-                  type a = S.a
-                  let format formatter _ = Format.pp_print_string formatter "..."
-                end)
+  Defaults (struct
+              type a = S.a
+              let format formatter _ = Format.pp_print_string formatter "..."
+            end)
     
 (* instance Show a => Show [a] *)
 module Show_list (S : Show) : Show with type a = S.a list = 
-  ShowDefaults (struct
-                  type a = S.a list
-                  let format = S.formatList
-                end)
+  Defaults (struct
+              type a = S.a list
+              let format = S.format_list
+            end)
     
 (* instance Show a => Show (a option) *)
 module Show_option (S : Show) : Show with type a = S.a option =
-  ShowDefaults (struct
-                  type a = S.a option
-                  let format formatter = function
-                    | None   -> Format.fprintf formatter "@[None@]"
-                    | Some s -> Format.fprintf formatter "@[Some@;<1 2>%a@]" S.format s
-                end)
-
+  Defaults (struct
+              type a = S.a option
+              let format formatter = function
+                | None   -> Format.fprintf formatter "@[None@]"
+                | Some s -> Format.fprintf formatter "@[Some@;<1 2>%a@]" S.format s
+            end)
+    
 (* instance Show a => Show (a array) *)
 module Show_array (S : Show) : Show with type a = S.a array =
-  ShowDefaults (struct
-                  type a = S.a array
-                  let format formatter obj = 
-                    let writeItems formatter items = 
-                      let length = Array.length items in
-                        for i = 0 to length - 2 do
-                          Format.fprintf formatter "@[%a;@;@]" S.format (Array.get items i)
-                        done;
-                        if length <> 0 then
-                          S.format formatter (Array.get items (length -1));
-                    in 
-                      Format.fprintf formatter "@[[|%a|]@]" writeItems obj
-                end)
+  Defaults (struct
+              type a = S.a array
+              let format formatter obj = 
+                let writeItems formatter items = 
+                  let length = Array.length items in
+                    for i = 0 to length - 2 do
+                      Format.fprintf formatter "@[%a;@;@]" S.format (Array.get items i)
+                    done;
+                    if length <> 0 then
+                      S.format formatter (Array.get items (length -1));
+                in 
+                  Format.fprintf formatter "@[[|%a|]@]" writeItems obj
+            end)
 
 module Show_map
   (O : Map.OrderedType) 
   (K : Show with type a = O.t)
   (V : Show)
   : Show with type a = V.a Map.Make(O).t =
-ShowDefaults(
+Defaults(
   struct
     module M = Map.Make(O)
     type a = V.a M.t
@@ -116,7 +116,7 @@ module Show_set
   (O : Set.OrderedType) 
   (K : Show with type a = O.t)
   : Show with type a = Set.Make(O).t =
-ShowDefaults(
+Defaults(
   struct
     module S = Set.Make(O)
     type a = S.t
@@ -132,7 +132,7 @@ ShowDefaults(
       Format.pp_close_box formatter ();
   end)
 
-module Show_bool = ShowDefaults (struct
+module Show_bool = Defaults (struct
   type a = bool
   let format formatter item =
     match item with
@@ -140,7 +140,7 @@ module Show_bool = ShowDefaults (struct
       | false -> Format.pp_print_string formatter "false"
 end) 
 
-module Show_integer (S : sig type t val to_string : t -> string end) = ShowDefaults (struct
+module Show_integer (S : sig type t val to_string : t -> string end) = Defaults (struct
   type a = S.t
   let format formatter item = Format.pp_print_string formatter (S.to_string item)
 end)
@@ -149,27 +149,27 @@ module Show_int32 = Show_integer(Int32)
 module Show_int64 = Show_integer(Int64)
 module Show_nativeint = Show_integer(Nativeint)
 
-module Show_char = ShowDefaults (struct
+module Show_char = Defaults (struct
   type a = char
   let format formatter item = Format.pp_print_string formatter ("'" ^ Char.escaped item ^ "'")
 end)
 
-module Show_int = ShowDefaults(struct
+module Show_int = Defaults (struct
   type a = int
   let format formatter item = Format.pp_print_string formatter (string_of_int item)
 end)
 
-module Show_num = ShowDefaults (struct
+module Show_num = Defaults (struct
   type a = Num.num
   let format formatter item = Format.pp_print_string formatter (Num.string_of_num item)
 end)
 
-module Show_float = ShowDefaults(struct
+module Show_float = Defaults(struct
     type a = float
     let format formatter item = Format.pp_print_string formatter (string_of_float item)
 end)
 
-module Show_string = ShowDefaults (struct
+module Show_string = Defaults (struct
   type a = string
   let format formatter item = 
     Format.pp_print_char formatter '"';
@@ -177,7 +177,7 @@ module Show_string = ShowDefaults (struct
     Format.pp_print_char formatter '"'
 end)  
 
-module Show_unit = ShowDefaults(struct
+module Show_unit = Defaults(struct
   type a = unit
   let format formatter () = Format.pp_print_string formatter "()"
 end)

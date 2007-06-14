@@ -181,51 +181,51 @@ let untag (obj, tag) target =
 module type Typeable =
 sig
   type a
-  val typeRep : unit -> TypeRep.t
-  val hasType : dynamic -> bool
+  val type_rep : unit -> TypeRep.t
+  val has_type : dynamic -> bool
   val cast : dynamic -> a option
-  val throwingCast : dynamic -> a
-  val makeDynamic : a -> dynamic
+  val throwing_cast : dynamic -> a
+  val make_dynamic : a -> dynamic
 end
 
 exception CastFailure of string
 
-module Typeable_defaults (T : (sig
-                                 type a
-                                 val typeRep : unit -> TypeRep.t
-                               end))
+module Defaults (T : (sig
+                        type a
+                        val type_rep : unit -> TypeRep.t
+                      end))
   : Typeable with type a = T.a =
 struct
   include T
-  let hasType o = tagOf o = typeRep ()
+  let has_type o = tagOf o = type_rep ()
   let cast d =
-    match untag d (typeRep ()) with
+    match untag d (type_rep ()) with
       | Some c -> Some (Obj.magic c)
       | None -> None
-  let makeDynamic o = (Obj.repr o, typeRep ())
-  let throwingCast d = 
+  let make_dynamic o = (Obj.repr o, type_rep ())
+  let throwing_cast d = 
     match cast d with
       | None -> (*raise (CastFailure ("cast from type "^
                                       TypeRep.Show_t.show (tagOf d) ^" to type "^
-                                      TypeRep.Show_t.show (T.typeRep ()) ^" failed"))*)
+                                      TypeRep.Show_t.show (T.type_rep ()) ^" failed"))*)
           raise (CastFailure "cast failed")
       | Some s -> s
 end
 
 module Typeable_list (A:Typeable) : Typeable with type a = A.a list = 
-  Typeable_defaults(struct type a = A.a list
-                           let typeRep = TypeRep.mkFresh "Primitive.list" [A.typeRep]
-                    end)
+  Defaults(struct type a = A.a list
+                  let type_rep = TypeRep.mkFresh "Primitive.list" [A.type_rep]
+           end)
 
 module Typeable_option (A:Typeable) : Typeable with type a = A.a option =
-  Typeable_defaults(struct type a = A.a option
-                           let typeRep = TypeRep.mkFresh "Primitive.option" [A.typeRep]
-                    end)
+  Defaults(struct type a = A.a option
+                  let type_rep = TypeRep.mkFresh "Primitive.option" [A.type_rep]
+           end)
 
 module Primitive_typeable (T : sig type t val magic : string end) : Typeable with type a = T.t =
-  Typeable_defaults(struct type a = T.t
-                           let typeRep = TypeRep.mkFresh T.magic []
-                    end)
+  Defaults(struct type a = T.t
+                  let type_rep = TypeRep.mkFresh T.magic []
+           end)
 module Typeable_unit   = Primitive_typeable(struct type t = unit let magic = "Primitive.unit" end)
 module Typeable_int    = Primitive_typeable(struct type t = int let magic = "Primitive.int" end)
 module Typeable_num    = Primitive_typeable(struct type t = Num.num let magic = "Primitive.Num.num" end)
@@ -235,7 +235,7 @@ module Typeable_string = Primitive_typeable(struct type t = string let magic = "
 module Typeable_char   = Primitive_typeable(struct type t = char let magic = "Primitive.char" end)
 
 module Typeable_ref(A : Typeable) : Typeable with type a = A.a ref =
-  Typeable_defaults(struct type a = A.a ref
-                           let typeRep = TypeRep.mkFresh "Primitive.ref" [A.typeRep]
-                    end)
+  Defaults(struct type a = A.a ref
+                  let type_rep = TypeRep.mkFresh "Primitive.ref" [A.type_rep]
+           end)
 
