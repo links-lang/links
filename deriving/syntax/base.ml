@@ -275,11 +275,15 @@ struct
     let mbinds =
       List.map 
         (fun (name,_,_,_,_ as decl) -> 
-           (decl,
-            <:module_binding< 
-              $uid:classname ^ "_"^ name$
-              : $uid:classname$.$uid:classname$ with type a = $atype context decl$
-             = $apply_defaults (make_module_expr context decl)$ >>))
+           if name = "a" then
+             raise (Underivable ("deriving: types called `a' are not allowed.\n"
+                                 ^"Please change the name of your type and try again."))
+           else
+             (decl,
+              <:module_binding< 
+                $uid:classname ^ "_"^ name$
+                : $uid:classname$.$uid:classname$ with type a = $atype context decl$
+               = $apply_defaults (make_module_expr context decl)$ >>))
         decls in
     let sorted_mbinds = make_safe mbinds in
     let mrec =
@@ -301,13 +305,17 @@ struct
              <:str_item< $m$ $list:projected$ >>
        
     let gen_sig ~classname ~context (tname,params,_,_,generated as decl) = 
-      if generated then <:sig_item< >> 
+      if tname = "a" then
+        raise (Underivable ("deriving: types called `a' are not allowed.\n"
+                            ^"Please change the name of your type and try again."))
       else
-        let t = List.fold_right 
-          (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
-          params
-          <:module_type< $uid:classname$.$uid:classname$ with type a = $atype context decl$ >> in
-          <:sig_item< module $uid:Printf.sprintf "%s_%s" classname tname$ : $t$ >>
+        if generated then <:sig_item< >> 
+        else
+          let t = List.fold_right 
+            (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
+            params
+            <:module_type< $uid:classname$.$uid:classname$ with type a = $atype context decl$ >> in
+            <:sig_item< module $uid:Printf.sprintf "%s_%s" classname tname$ : $t$ >>
 
     let gen_sigs ~classname ~context ~decls =
       <:sig_item< $list:List.map (gen_sig ~classname ~context) decls$ >>

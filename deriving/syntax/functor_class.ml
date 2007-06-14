@@ -132,17 +132,25 @@ struct
        <:sig_item< val map : $maptype name$ >> ] 
 
   let decl (name, _, r, _, _) : Camlp4.PreCast.Ast.module_binding =
+    if name = "f" then
+      raise (Underivable ("deriving: Functor cannot be derived for types called `f'.\n"
+                          ^"Please change the name of your type and try again."))
+    else
       <:module_binding<
          $uid:classname ^ "_" ^ name$
        : sig $list:signature name$ end
        = $wrapper name (rhs r)$ >>
 
   let gen_sig (tname, params, _, _, generated) = 
-    if generated then
-      <:sig_item< >>
+    if tname = "f" then
+      raise (Underivable ("deriving: Functor cannot be derived for types called `f'.\n"
+                          ^"Please change the name of your type and try again."))
     else
-      <:sig_item< module $uid:classname ^ "_" ^ tname$ :
-                  sig type $tdec tname$ val map : $maptype tname$ end >>
+      if generated then
+        <:sig_item< >>
+      else
+        <:sig_item< module $uid:classname ^ "_" ^ tname$ :
+                    sig type $tdec tname$ val map : $maptype tname$ end >>
 
 end
 
