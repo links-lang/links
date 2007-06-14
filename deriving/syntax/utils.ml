@@ -1,5 +1,16 @@
 type ('a,'b) either = Left of 'a | Right of 'b
 
+let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
+    : 'b list * 'c list =
+  let rec aux (lefts, rights) = function
+    | [] -> (List.rev lefts, List.rev rights)
+    | x::xs ->
+        match f x with 
+          | Left l  -> aux (l :: lefts, rights) xs
+          | Right r -> aux (lefts, r :: rights) xs
+  in aux ([], []) l
+       
+
 module List = 
 struct
   include List
@@ -152,3 +163,25 @@ let random_id length =
       s.[i] <- idchars.[Random.int nidchars]
     done;
     s
+
+(* The function used in OCaml to convert variant labels to their
+   integer representations (well, a black-box re-implementation).
+*)
+let tag_hash s = 
+  let acc = ref 0 in
+  let mul = ref 1 in
+  let len = String.length s in
+    for i = 0 to len - 1 do
+      let c = String.unsafe_get s (len - i - 1) in
+      let n = Char.code c in
+        acc := !acc + n * !mul;
+        mul := !mul * 223
+    done;
+    !acc
+
+let _ = 
+  (* Sanity check to make sure the function doesn't change underneath
+     us *)
+  assert (tag_hash "premiums" = tag_hash "squigglier");
+  assert (tag_hash "deriving" = 398308260)
+

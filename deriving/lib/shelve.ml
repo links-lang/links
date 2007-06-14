@@ -6,6 +6,7 @@
 *)
 module Shelve =
 struct
+exception UnknownTag of int * string
 exception UnshelvingError of string
 
 module Id :
@@ -29,7 +30,7 @@ module Repr : sig
   type t = Bytes of string | CApp of (int option * Id.t list) deriving (Pickle, Show)
   val of_string : string -> t
   val to_string : t -> string
-  val make : ?constructor:(int*int) -> id list -> t
+  val make : ?constructor:int -> id list -> t
   val unpack_ctor : t -> int option * id list
 end =
 struct
@@ -40,8 +41,8 @@ struct
     | _ -> invalid_arg "string_of_repr"
   let make ?constructor ids = 
     match constructor with
-      | Some (n,_) -> CApp (Some n, ids)
-      | None       -> CApp (None, ids)
+      | Some n -> CApp (Some n, ids)
+      | None   -> CApp (None, ids)
   let unpack_ctor = function 
     | CApp arg -> arg
     | _ -> assert false
@@ -449,12 +450,12 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Shelve_d
       function
           None as obj ->
             W.allocate obj
-              (fun id -> W.store_repr id (Repr.make ~constructor:(0,2) []))
+              (fun id -> W.store_repr id (Repr.make ~constructor:0 []))
         | Some v0 as obj ->
             W.allocate obj
               (fun thisid ->
                  V0.shelve v0 >>= fun id0 ->
-                   W.store_repr thisid (Repr.make ~constructor:(1,2) [id0]))
+                   W.store_repr thisid (Repr.make ~constructor:1 [id0]))
     open Read
     let unshelve = 
       let module W = Utils(T) in
@@ -480,12 +481,12 @@ struct
   let rec shelve = function
       [] as obj ->
         U.allocate obj
-          (fun this -> U.store_repr this (Repr.make ~constructor:(0,2) []))
+          (fun this -> U.store_repr this (Repr.make ~constructor:0 []))
     | (v0::v1) as obj ->
         U.allocate obj
           (fun this -> V0.shelve v0 >>= fun id0 ->
                           shelve v1 >>= fun id1 ->
-                            U.store_repr this (Repr.make ~constructor:(1,2) [id0; id1]))
+                            U.store_repr this (Repr.make ~constructor:1 [id0; id1]))
   open Read
   module W = Utils (T)
   let rec unshelve id = 

@@ -30,3 +30,15 @@ let circularm =
     i
   
 let shelvedm = Shelve_mut.shelveS circularm
+
+
+
+(* highlight the problems arising from structural equality on variant
+   types *)
+type t1 = [`A|`B] deriving (Typeable, Eq, Shelve)
+
+type t2 = [`B|`A] deriving (Typeable, Eq, Shelve)
+
+let _ = 
+  assert (Shelve_t1.unshelveS (Shelve_t2.shelveS `A) = `A);
+

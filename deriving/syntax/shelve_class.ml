@@ -130,13 +130,13 @@ struct
       and atype = atype_expr ctxt (`Tuple ts) in
         wrap ~ctxt ~atype ~tymod ~eqmod ~shelvers ~unshelver
 
-    method polycase ctors ctxt tagspec n : Ast.match_case = match tagspec with
+    method polycase ctxt tagspec : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case<
         (`$name$ as obj) ->
           W.allocate obj
               (fun thisid -> 
                  W.store_repr thisid
-                    (Repr.make ~constructor:($`int:n$,$`int:ctors$) [])) >>
+                    (Repr.make ~constructor:$`int:(tag_hash name)$ [])) >>
     | Tag (name, Some t) -> <:match_case< 
         (`$name$ v1 as obj) ->
            W.allocate obj
@@ -144,7 +144,7 @@ struct
              $bind$ ($mproject (self#expr ctxt t) "shelve"$ v1)
                     (fun mid -> 
                     (W.store_repr thisid
-                        (Repr.make ~constructor:($`int:n$,$`int:ctors$) [mid])))) >>
+                        (Repr.make ~constructor:$`int:(tag_hash name)$ [mid])))) >>
     | Extends t -> 
         let patt, guard, cast = cast_pattern ctxt t in <:match_case<
          ($patt$ as obj) when $guard$ ->
@@ -152,25 +152,46 @@ struct
             (fun thisid -> 
                $bind$ ($mproject (self#expr ctxt t) "shelve"$ $cast$) 
                   (fun mid ->
-                    W.store_repr thisid (Repr.make ~constructor:($`int:n$,$`int:ctors$) [mid]))) >>
+                    W.store_repr thisid (Repr.make [mid]))) >>
 
-    method polycase_un ctors ctxt tagspec n : Ast.match_case = match tagspec with
-    | Tag (name, None) -> <:match_case< $`int:n$, [] -> return `$name$ >>
-    | Tag (name, Some t) -> <:match_case< $`int:n$, [x] -> 
+    method polycase_un ctxt tagspec : Ast.match_case = match tagspec with
+    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> return `$name$ >>
+    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> 
       $bind$ ($mproject (self#expr ctxt t) "unshelve"$ x) (fun o -> return (`$name$ o)) >>
-    | Extends t -> <:match_case< $`int:n$, [x] -> let module M = $(self#expr ctxt t)$ 
-                                                         in (M.unshelve x : M.a Read.m :> a Read.m) >>
+
+    method extension ctxt tname ts : Ast.match_case =
+      (* Try each extension in turn.  If we get an UnknownTag failure,
+         try the next one.  This is
+
+         * safe because any two extensions that define the same tag
+           must be compatible at that point
+
+         * fast because we can tell on the first integer comparison
+           whether we've picked the right path or not.
+      *)
+      let inner = List.fold_right 
+        (fun t exp -> <:expr<
+           let module M = $(self#expr ctxt t)$ in
+             try $exp$
+             with UnknownTag (n,_) -> (M.unshelve id : M.a Read.m :> a Read.m)
+               >>)
+        ts
+        <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unshelving of "
+                                       ^tname$))) >>
+    in <:match_case< n,_ -> $inner$ >>
 
     method variant ctxt (tname,_,_,_ as decl) (_, tags) = 
-      let ntags = List.length tags in
-      wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
-        ~eqmod:(eq_instance ctxt tname)
-        ~shelvers:(List.mapn (self#polycase ntags ctxt) tags)
-        ~unshelver:<:expr< fun id -> 
-                 let f = function $list:List.mapn (self#polycase_un ntags ctxt) tags$
-                                  | n,_ -> raise (UnshelvingError ($str:"Unexpected tag when unshelving "
-                                                                   ^tname^": "$^ string_of_int n))
-                 in W.sum f id >>
+      let unshelver = 
+        let tags, extensions = either_partition
+          (function Tag (name,t) -> Left (name,t) | Extends t -> Right t) tags in
+        let tag_cases = List.map (self#polycase_un ctxt) tags in
+        let extension_case = self#extension ctxt tname extensions in
+          <:expr< fun id ->
+            let f = function $list:tag_cases @ [extension_case]$ in W.sum f id >>
+      in
+        wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
+          ~eqmod:(eq_instance ctxt tname)
+          ~shelvers:(List.map (self#polycase ctxt) tags) ~unshelver
 
     method case ctors ctxt (name, params') n : Ast.match_case * Ast.match_case = 
     let nparams = List.length params' in
@@ -182,7 +203,7 @@ struct
                           (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
         params'
         (List.range 0 nparams)
-        <:expr< W.store_repr thisid (Repr.make ~constructor:($`int:n$,$`int:ctors$) $expr_list ids$) >> in
+        <:expr< W.store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ids$) >> in
       match params' with
         | [] -> <:match_case< $uid:name$ as obj -> 
                               W.allocate obj (fun thisid -> $exp$) >>,

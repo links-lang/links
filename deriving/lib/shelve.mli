@@ -3,7 +3,7 @@ type id
 (* representation of values of user-defined types *)
 module Repr : sig
   type t
-  val make : ?constructor:(int*int) -> id list -> t
+  val make : ?constructor:int -> id list -> t
 end 
 
 (* Utilities for serialization *)
@@ -28,6 +28,7 @@ module Read : sig
 end
 
 exception UnshelvingError of string
+exception UnknownTag of int * string
 
 module type Shelve =
 sig
