@@ -37,7 +37,7 @@ struct
     method tuple ctxt ts = tup ctxt ts <:expr< M.typeRep >> (self#expr)
     method sum = gen 
     method record = gen
-    method variant ctxt (tname,_,_,_ as decl) (_,tags) =
+    method variant ctxt decl (_,tags) =
     let tags, extends = 
       List.fold_left 
         (fun (tags, extends) -> function
@@ -51,9 +51,8 @@ struct
         (<:expr< [] >>, <:expr< [] >>) tags in
       <:module_expr< Typeable_defaults(
         struct type a = $atype ctxt decl$
-               let typeRep = Typeable.TypeRep.mkPolyv $str:mkName tname$ $tags$ $extends$
+               let typeRep = Typeable.TypeRep.mkPolyv $tags$ $extends$
         end) >>
-
   end
 end
 

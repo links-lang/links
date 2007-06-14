@@ -10,6 +10,16 @@ type t4 = [`T of t2] deriving (Typeable)
 type t5 = [`T of t5]
     deriving (Typeable)
 
+type t6 = [`T of t6]
+    deriving (Typeable)
+
+type t7 = [`T1 of int | `T2 of t8]
+and t8 = [`T3 of t7]
+    deriving (Typeable)
+
+type t9 = [`T1 of int | `T2 of [`T3 of t9 ]]
+    deriving (Typeable)
+
 let main () = 
   prerr_endline (string_of_bool 
                    (Typeable.TypeRep.eq

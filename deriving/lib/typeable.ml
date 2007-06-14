@@ -12,19 +12,6 @@
     maximise value sharing.
 *)
 
-(* Abstract type for type tags. *)
-module Tag : 
-sig
-  type tag
-  val fresh : unit -> tag
-end =
-struct
-  type tag = int
-  let fresh = 
-    let current = ref 0 in
-      fun () -> incr current; !current
-end
-
 let memoize f =
   let t = ref None in 
     fun () ->
@@ -35,84 +22,151 @@ let memoize f =
               t := Some r;
               r
 
-type interned = Interned.t
-module Show_interned = Show.ShowDefaults(struct
-  type a = interned
-  let format f s = Show.Show_string.format f (Interned.to_string s)
-end)
-(* Type of type representations *)
-module TypeRep =
-struct 
-  type t = | Fresh of (interned * delayed list) 
-           | Polyv of (interned * int * (string * delayed option) list)
+
+module TypeRep :
+sig
+  type t
+  type delayed = unit -> t
+  val compare : t -> t -> int
+  val eq : t -> t -> bool
+  val mkFresh : string -> delayed list -> delayed
+  val mkTuple : delayed list -> delayed
+  val mkPolyv : (string * delayed option) list -> delayed list -> delayed
+end =
+struct
+  module StringMap = Map.Make(String)
+  module IntMap = Map.Make(struct type t = int let compare = Pervasives.compare end)
+  module StringSet = Set.Make(String)
+
+  let counter = ref 0 
+  let fresh () = 
+    let c = !counter in 
+      incr counter;
+      c
+  type t = 
+      [`Variant of (delayed option StringMap.t)
+      |`Gen of Interned.t * delayed list ] * int
+
   and delayed = unit -> t
 
-  let compareList cmp l r =
-    try
-      List.fold_right2
-        (fun l r n ->
-           if n <> 0 then n
-           else cmp l r)
-        l r 0
-    with Invalid_argument _ -> -1
+  let make_fresh row : t =
+    (* Just allocate a pointer for now.  Dereference the row later *)
+    `Variant row, fresh ()
 
-  let rec compare : t -> t -> int = 
-    (* naive, no-recursion implementation *)
-      fun l r ->  match l, r with
-        | Fresh (l,ls), Fresh (r,rs) ->
-            begin match Interned.compare l r with
-              | 0 -> compareList compare' ls rs
-              | n -> n end
-        | Polyv (_,ln,ls), Polyv (_,rn,rs) -> 
-            begin match Pervasives.compare ln rn with
-              | 0 -> compareList 
-                  (fun (l,lt) (r,rt) -> 
-                     match Pervasives.compare l r with
-                       | 0 -> 
-                           begin match lt, rt with
-                             | None, Some _ -> -1
-                             | None, None -> 0
-                             | Some _, None -> 1
-                             | Some lt, Some rt -> compare' lt rt end
-                       | n -> n)
-                    ls rs
-              | n -> n end
-        | Fresh _, Polyv _ -> -1
-        | Polyv _, Fresh _ -> 1
-  and compare' (l : unit -> t) (r : unit -> t) = compare (l()) (r())
+  module EqualMap =
+  struct
+    type map = int list IntMap.t
+    let equalp : map -> int -> int -> bool
+      = fun map l r -> 
+        try List.mem r (IntMap.find l map)
+        with Not_found -> false
 
+    let record_equality : map -> int -> int -> map =
+      fun map l r ->
+        let add map l r = 
+          try 
+            let vals = IntMap.find l map
+            in IntMap.add l (r::vals) map
+          with Not_found ->
+            IntMap.add l [r] map
+        in add (add map l r) r l
+  end
 
-  let rec eq = (* naive, no-recursion implementation *)
-      fun l r ->  try begin match l, r with
-        | Fresh (l,ls), Fresh (r,rs) when Interned.eq l r -> List.for_all2 eq' ls rs
-        | Polyv (_,ln,ls), Polyv (_,rn,rs) when ln = rn ->
-            List.for_all2 (fun (ll,lt) (rl,rt) -> 
-                             match lt, rt with
-                               | Some lt, Some rt -> ll = rl && eq' lt rt
-                               | None, None -> true
-                               | _ -> false) ls rs
+  let keys : 'a StringMap.t -> StringSet.t =
+    fun m -> 
+      StringMap.fold (fun k _ set -> StringSet.add k set) m StringSet.empty
+
+  let rec equal : EqualMap.map -> t -> t -> bool
+    = fun equalmap (l,lid) (r,rid) ->
+      if lid = rid then true
+      else if EqualMap.equalp equalmap lid rid then true
+      else match l, r with
+        | `Variant lrow, `Variant rrow ->
+            (* distinct types.  assume they're equal for now; record
+               that fact in the map, then look inside the types for
+               evidence to the contrary *)
+            equal_rows (EqualMap.record_equality equalmap lid rid) lrow rrow
+        | `Gen (lname, ls), `Gen (rname, rs) when Interned.eq lname rname ->
+            List.for_all2 (fun l r -> equal equalmap (l ()) (r ())) ls rs
         | _ -> false
-      end with Invalid_argument _ -> false
-  and eq' l r = eq (l()) (r())
+  and equal_rows equalmap lfields rfields = 
+    equal_names lfields rfields
+    && StringMap.fold 
+      (fun name t eq ->
+         let t' = StringMap.find name rfields in
+           match t, t' with
+             | None, None -> eq
+             | Some t, Some t' -> 
+                 equal equalmap (t ()) (t' ()) && eq
+             | _ -> false)
+      lfields
+      true
+  and equal_names lmap rmap = 
+    StringSet.equal (keys lmap) (keys rmap)
 
-  let mkFresh (magic : string) (args : (unit -> t) list) : unit -> t = 
-    let interned = Interned.intern magic in
-      memoize (fun () -> Fresh (interned, args))
+  let mkFresh name args =
+    let t : t = `Gen (Interned.intern name, args), fresh () in
+      fun () -> t
 
-  let mkTuple tuple =
-    memoize (fun () -> Fresh (Interned.intern (string_of_int (List.length tuple)),
-                              tuple))
+  let mkTuple args = 
+    mkFresh (string_of_int (List.length args)) args
 
-  let mkPolyv (magic : string) fields extends =
-    let interned = Interned.intern magic in
-    memoize (fun () -> 
-               let efields = 
-                 List.concat (List.map (fun f -> match f () with Polyv (_,_,f) -> f
-                                          | _ -> assert false) extends) in
-                 Polyv (interned, 
-                        List.length fields + List.length efields,
-                        List.sort (fun (l,_) (r,_) -> String.compare l r)
-                          fields @ efields))
+  let mkPolyv (args : (string * delayed option) list) (extends : delayed list) : delayed = 
+    (* assume all extensions have to be completely known types at this
+       point *)
+    let initial = 
+      List.fold_left
+        (fun map extension ->
+           match fst (extension ()) with
+         | `Variant map' -> 
+             StringMap.fold StringMap.add map map'
+         | `Gen _ -> assert false)
+        StringMap.empty 
+        extends
+    in
+    let row = 
+      List.fold_left
+        (fun map (name, t) ->
+           StringMap.add name t map)
+        initial
+        args in
+    let fresh = make_fresh row in
+      fun () -> fresh
+  let eq = equal IntMap.empty
+
+  let rec compare recargs (lrep,lid as l) (rrep,rid as r) = 
+    if eq l r then 0
+    else if EqualMap.equalp recargs lid rid then 0
+    else match lrep, rrep with 
+      | `Gen (lname, ls), `Gen (rname, rs) ->
+          begin match Pervasives.compare lname rname with
+            | 0 -> 
+                begin match Pervasives.compare (List.length ls) (List.length rs) with
+                  | 0 -> 
+                      List.fold_left2
+                        (fun cmp l r -> 
+                           if cmp <> 0 then cmp
+                           else compare recargs (l ()) (r ()))
+                        0 ls rs
+                  | n -> n
+                end
+            | n -> n
+          end
+      | `Variant lrow, `Variant rrow ->
+          compare_rows (EqualMap.record_equality recargs lid rid) lrow rrow
+      | `Variant _, `Gen _ -> -1
+      | `Gen _, `Variant _ -> 1
+  and compare_rows recargs lrow rrow = 
+    match StringSet.compare (keys lrow) (keys rrow) with
+      | 0 -> StringMap.compare 
+          (fun l r -> match l, r with
+             | None, None -> 0
+             | Some l, Some r -> compare recargs (l ()) (r ())
+             | None, Some _ -> -1
+             | Some _, None -> 1) lrow rrow
+      | n -> n
+
+  let compare = compare IntMap.empty
 end
 
 (* Dynamic types *)

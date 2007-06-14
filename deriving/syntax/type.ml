@@ -26,7 +26,6 @@ and summand = name * expr list
 and constraint_ = expr * expr
 and expr =  (* elements that can be nested *)
     [ `Param of param
-    | `Underscore
     | `Label of ([`Optional|`NonOptional] * name * expr * expr)
     | `Function of (expr * expr)
     | `Constr of (qname * expr list)
@@ -78,7 +77,6 @@ object (self : 'self)
   method expr e = 
     self#crush (match e with
                     `Param _
-                  | `Underscore
                   | `Object _
                   | `Class _ -> []
                   | `Label (_, _, e1, e2) 
@@ -128,8 +126,7 @@ object (self : 'self)
   method expr = function
     | `Object _
     | `Class _
-    | `Param _
-    | `Underscore as e -> e
+    | `Param _ as e -> e
     | `Label (flag, name, e1, e2) -> `Label (flag, name, self # expr e1, self # expr e2)
     | `Function (e1, e2) -> `Function (self # expr e1, self # expr e2)
     | `Constr (qname, exprs) -> `Constr (qname, List.map (self # expr) exprs)
@@ -227,8 +224,8 @@ struct
       | Ast.TyQuM (_,_)
       | Ast.TyQuo (_,_) as p -> `Param (param p), []
       | Ast.TySum _
-      | Ast.TyRec _ -> failwith "top level element found nested"
-      | Ast.TyAny _ -> `Underscore, []
+      | Ast.TyRec _ -> failwith "deriving: top level element found nested"
+      | Ast.TyAny _ -> failwith "deriving does not support `_' in type definitions"
       | Ast.TyArr (_,f,t) -> 
           let f, v1 = expr f and t,v2 = expr t in
             `Function (f, t), v1 @ v2
@@ -244,8 +241,8 @@ struct
       | Ast.TyAli (_, Ast.TyVrnEq  (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Eq
       | Ast.TyAli (_, Ast.TyVrnSup (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Gt
       | Ast.TyAli (_, Ast.TyVrnInf (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Lt
-      | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
-      | Ast.TyLab _ -> failwith "deriving does not handle label types"
+      | Ast.TyVrnInfSup (_, _, _) -> failwith "deriving does not currently support [ < > ] variant types"
+      | Ast.TyLab _ -> failwith "deriving does not support label types"
       | e -> failwith ("unexpected type at expr : " ^ Utils.DumpAst.ctyp e)
     and tagspec = function
       | Ast.TyVrn (_,tag)                  -> Tag (tag, None), []
@@ -270,7 +267,7 @@ struct
       | Ast.TyPol (_, ps, t) -> 
           begin match polyexpr t with 
             | (ps',t'), [] -> (list param split_comma ps @ ps', t'), []
-            |  _ -> failwith ("deriving does not handle polymorphic variant "
+            |  _ -> failwith ("deriving does not support polymorphic variant "
                               ^"definitions within polymorphic record field types")
           end
       | t -> let e, v = expr t in ([], e), v
@@ -296,7 +293,7 @@ struct
       | Ast.TySum (loc, summands) -> 
           let summands, vs = List.split (list summand split_or summands) in
             Sum summands, List.concat vs
-      | e -> failwith ("unexpected representation type ("^Utils.DumpAst.ctyp e^")")
+      | e -> failwith ("deriving: unexpected representation type ("^Utils.DumpAst.ctyp e^")")
 
     let toplevel : Ast.ctyp -> rhs * vmap  = function
       | Ast.TyPrv (_, (Ast.TyRec _ | Ast.TySum _ as r)) -> 
@@ -312,9 +309,9 @@ struct
       | Ast.TyVrnInf (_, t) ->
           let es, vs = List.split (list tagspec split_or t) in
             `Variant (`Lt, es), List.concat vs
-      | Ast.TyVrnInfSup (_, _, _) -> failwith "handling of [ < > ] types is not yet implemented"
+      | Ast.TyVrnInfSup (_, _, _) -> failwith "deriving does not currently support [ < > ] types"
       | Ast.TyNil _ -> `Nothing, []
-      | Ast.TyPrv _ -> failwith "deriving does not currently handle private rows"
+      | Ast.TyPrv _ -> failwith "deriving does not currently support private rows"
       | Ast.TyMan (_, eq, (Ast.TyRec _ | Ast.TySum _ as r)) ->
           let repr, v1 = repr r and ex, v2 = expr eq in 
             `Fresh (Some ex, repr, `Public), v1 @ v2
@@ -402,7 +399,6 @@ struct
   let expr = 
     let rec expr : expr -> Ast.ctyp = function
         `Param p -> param p
-      | `Underscore -> <:ctyp< _ >>
       | `Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
       | `Tuple [t] -> expr t
       | `Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)

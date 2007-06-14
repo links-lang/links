@@ -175,7 +175,6 @@ struct
     method param ctxt (name, variance) =
       <:module_expr< $uid:NameMap.find name ctxt.argmap$ >>
 
-    method underscore _  = raise (Underivable (classname ^ " cannot be derived for types with `_'"))
     method object_   _ o = raise (Underivable (classname ^ " cannot be derived for object types"))
     method class_    _ c = raise (Underivable (classname ^ " cannot be derived for class types"))
     method label     _ l = raise (Underivable (classname ^ " cannot be derived for label types"))
@@ -191,7 +190,6 @@ struct
 
     method expr (ctxt : context) : expr -> Ast.module_expr = function
       | `Param p    -> self#param      ctxt p
-      | `Underscore -> self#underscore ctxt
       | `Object o   -> self#object_    ctxt o
       | `Class c    -> self#class_     ctxt c
       | `Label l    -> self#label      ctxt l 
@@ -243,8 +241,7 @@ struct
                     struct
                       type low = 
                           [`Param of param
-                          | `Underscore
-                          | `Tuple of expr list]
+                          |`Tuple of expr list]
                     end in
                   match l, r with
                     | #M.low, _ -> 1

@@ -10,14 +10,18 @@ struct
 
   include Syntax
 
-  let derive proj (loc : Loc.t) tdecls classname =
-    try 
-      let context = Base.setup_context loc tdecls in
-        proj (Base.find classname) (loc, context, tdecls)
-    with
+  let display_errors loc f p =
+    try
+      f p
+    with 
         Base.Underivable msg | Failure msg ->
           Syntax.print_warning loc msg;
           exit 1
+
+  let derive proj (loc : Loc.t) tdecls classname =
+    let context = Base.setup_context loc tdecls in
+      display_errors loc
+        (proj (Base.find classname)) (loc, context, tdecls)
   
   let derive_str loc (tdecls : Type.decl list) classname =
     derive fst loc tdecls classname
@@ -35,18 +39,18 @@ struct
   str_item:
   [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
     | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-        let decls = Type.Translate.decls types in 
+        let decls = display_errors loc Type.Translate.decls types in 
         let module U = Type.Untranslate(struct let loc = loc end) in
-        let tdecls : Ast.ctyp list = List.map U.decl decls in
+        let tdecls = List.map U.decl decls in
           <:str_item< type $list:tdecls$ $list:List.map (derive_str loc decls) cl$ >>
    ]]
   ;
   sig_item:
   [[ "type"; types = type_declaration -> <:sig_item< type $types$ >>
    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
-       let decls : Type.decl list = Type.Translate.decls types in 
+       let decls  = display_errors loc Type.Translate.decls types in 
        let module U = Type.Untranslate(struct let loc = loc end) in
-       let tdecls : Ast.ctyp list = List.map U.sigdecl decls in
+       let tdecls = List.map U.sigdecl decls in
        let ms = List.map (derive_sig loc decls) cl in
          <:sig_item< type $list:tdecls$ $list:ms$ >> ]]
   ;

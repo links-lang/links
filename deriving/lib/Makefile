@@ -5,8 +5,8 @@ PATH       := $(PATH):../syntax
 OCAMLOPT   = ocamlopt.opt
 OCAMLC     = ocamlc.opt
 OCAMLDEP   = ocamldep.opt
-OCAMLFLAGS =-w Ae
-LIBS       = nums
+OCAMLFLAGS =-w ae
+LIBS       = nums str unix
 
 SOURCES = show.ml           show.mli		\
           interned.mli      interned.ml		\

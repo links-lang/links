@@ -1,4 +1,4 @@
-open Tests
+open Defs
 
 let sum =
   begin
