@@ -148,11 +148,7 @@ struct
     | Extends t -> 
         let patt, guard, cast = cast_pattern ctxt t in <:match_case<
          ($patt$ as obj) when $guard$ ->
-           W.allocate obj
-            (fun thisid -> 
-               $bind$ ($mproject (self#expr ctxt t) "shelve"$ $cast$) 
-                  (fun mid ->
-                    W.store_repr thisid (Repr.make [mid]))) >>
+            ($mproject (self#expr ctxt t) "shelve"$ $cast$) >>
 
     method polycase_un ctxt tagspec : Ast.match_case = match tagspec with
     | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> return `$name$ >>
