@@ -86,7 +86,7 @@ type poly10 = [`F | poly3]
 (* mutually recursive types (monomorphic, polymorphic) *)
 type mutrec_a = mutrec_c
 and mutrec_b = { l1 : mutrec_c ; l2 : mutrec_a }
-and mutrec_c = S of int * mutrec_a
+and mutrec_c = S of int * mutrec_a | N
 and mutrec_d = [`T of mutrec_b]
     deriving (Pickle, Eq, Show, Typeable, Shelve)
 

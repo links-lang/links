@@ -133,12 +133,18 @@ let _ =
 
 let mutrec =
   begin
-    (*
-      type mutrec_a = mutrec_c
-      and mutrec_b = { l1 : mutrec_c ; l2 : mutrec_a }
-      and mutrec_c = S of int * mutrec_a
-      and mutrec_d = [`T of mutrec_b]
-    *)
+    let module A = Test(Shelve_mutrec_a) in
+    let module B = Test(Shelve_mutrec_b) in
+    let module C = Test(Shelve_mutrec_c) in
+    let module D = Test(Shelve_mutrec_d) in
+    let a = N in
+    let b = { l1 = S (3, a); l2 = a } in
+    let c = S (3, S (4, S (5, N))) in
+    let d = `T b in
+      assert (A.test a);
+      assert (B.test b);
+      assert (C.test c);
+      assert (D.test d);
   end
 
 let pmutrec =
