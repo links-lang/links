@@ -21,7 +21,7 @@ struct
   let tdec, sigdec = 
     let dec name = 
       ("f", context.params, 
-       `Expr (`Constr ([name], List.map (fun p -> `Param p) context.params)), [])
+       `Expr (`Constr ([name], List.map (fun p -> `Param p) context.params)), [], false)
     in
       (fun name -> Untranslate.decl (dec name)),
       (fun name -> Untranslate.sigdecl (dec name))
@@ -128,18 +128,21 @@ struct
         (Untranslate.expr (`Function (ctor_in, ctor_out)))
 
    let signature name : Ast.sig_item list =  
-     [ <:sig_item< type $sigdec name$ >>; 
+     [ <:sig_item< type $list:sigdec name$ >>; 
        <:sig_item< val map : $maptype name$ >> ] 
 
-  let decl (name, _, r, _) : Camlp4.PreCast.Ast.module_binding =
+  let decl (name, _, r, _, _) : Camlp4.PreCast.Ast.module_binding =
       <:module_binding<
          $uid:classname ^ "_" ^ name$
        : sig $list:signature name$ end
        = $wrapper name (rhs r)$ >>
 
-  let gen_sig (tname, params, _, _) = 
-    <:sig_item< module $uid:classname ^ "_" ^ tname$ :
-      sig type $tdec tname$ val map : $sigdec tname$ end >>
+  let gen_sig (tname, params, _, _, generated) = 
+    if generated then
+      <:sig_item< >>
+    else
+      <:sig_item< module $uid:classname ^ "_" ^ tname$ :
+                  sig type $tdec tname$ val map : $maptype tname$ end >>
 
 end
 

@@ -22,7 +22,7 @@ struct
                           let minBound = $tuple_expr minBounds$ 
                           let maxBound = $tuple_expr maxBounds$ end >>
 
-    method sum ?eq ctxt ((tname,_,_,_) as decl) summands = 
+    method sum ?eq ctxt ((tname,_,_,_,_) as decl) summands = 
     let names = ListLabels.map summands
         ~f:(function
               | (name,[]) -> name
@@ -46,7 +46,7 @@ struct
                      and maxBound = `$List.last names$ end >>
 
   (* should perhaps implement this one *)
-  method record ?eq _ (tname,_,_,_) = raise (Underivable ("Bounded cannot be derived for record types (i.e. "^
+  method record ?eq _ (tname,_,_,_,_) = raise (Underivable ("Bounded cannot be derived for record types (i.e. "^
                                                      tname^")"))
   end
 end

@@ -12,7 +12,7 @@ struct
   let instance = object(self)
     inherit make_module_expr ~classname ~allow_private:false
 
-    method sum ?eq ctxt ((tname,_,_,_) as decl) summands =
+    method sum ?eq ctxt ((tname,_,_,_,_) as decl) summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
@@ -42,7 +42,7 @@ struct
       <:module_expr< Enum.EnumDefaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
 
     method tuple context _ = raise (Underivable "Enum cannot be derived for tuple types")
-    method record ?eq _ (tname,_,_,_) = raise (Underivable
+    method record ?eq _ (tname,_,_,_,_) = raise (Underivable
                                                  ("Enum cannot be derived for record types (i.e. "^
                                                     tname^")"))
   end

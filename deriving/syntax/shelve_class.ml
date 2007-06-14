@@ -18,7 +18,7 @@ struct
     let bindop = ">>=" and seqop = ">>" in
       <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
 
-  let unshelve_record_bindings ctxt (tname,params,rhs,cs) (fields : field list) e = <:expr<
+  let unshelve_record_bindings ctxt (tname,params,rhs,cs,_) (fields : field list) e = <:expr<
       let num_fields = $`int:List.length fields$ in
       let module Mutable = struct
         type t = $UT.repr 
@@ -26,7 +26,7 @@ struct
                (Record (List.map (fun (n,p,_) -> (n,p,`Mutable)) fields)))$
       end in $e$ >>
 
-  let unshelve_record ctxt (tname,_,_,_ as decl) fields expr = 
+  let unshelve_record ctxt (tname,_,_,_,_ as decl) fields expr = 
     let msg = "unexpected object encountered unshelving "^tname in
     let assignments = 
       List.fold_right
@@ -180,7 +180,7 @@ struct
                                        ^tname$))) >>
     in <:match_case< n,_ -> $inner$ >>
 
-    method variant ctxt (tname,_,_,_ as decl) (_, tags) = 
+    method variant ctxt (tname,_,_,_,_ as decl) (_, tags) = 
       let unshelver = 
         let tags, extensions = either_partition
           (function Tag (name,t) -> Left (name,t) | Extends t -> Right t) tags in
@@ -223,7 +223,7 @@ struct
       (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
       <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
-  method sum ?eq ctxt (tname,_,_,_ as decl) summands =
+  method sum ?eq ctxt (tname,_,_,_,_ as decl) summands =
     let nctors = List.length summands in
     let shelvers, unshelvers = List.split (List.mapn (self#case nctors ctxt) summands) in
     wrap ~ctxt ~atype:(atype ctxt decl)
@@ -236,7 +236,7 @@ struct
                                                   ^tname^": "$^ string_of_int n))
         in W.sum f id >>
 
-  method record ?eq ctxt (tname,_,_,_ as decl) (fields : Type.field list) = 
+  method record ?eq ctxt (tname,_,_,_,_ as decl) (fields : Type.field list) = 
       wrap ~ctxt ~atype:(atype ctxt decl) 
         ~shelvers:(shelve_record ctxt decl fields (self#expr))
         ~unshelver:(unshelve_record ctxt decl fields (self#expr))

@@ -197,7 +197,7 @@ struct
       | `Constr c   -> self#constr     ctxt c
       | `Tuple t    -> self#tuple      ctxt t
 
-    method rhs ctxt (tname, params, rhs, constraints as decl : Type.decl) : Ast.module_expr = 
+    method rhs ctxt (tname, params, rhs, constraints, _ as decl : Type.decl) : Ast.module_expr = 
       match rhs with
         | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
             raise (Underivable ("The class "^ classname ^" cannot be derived for private types"))
@@ -211,7 +211,7 @@ struct
   let atype_expr ctxt expr = 
     Untranslate.expr (instantiate_modargs ctxt expr)
 
-  let atype ctxt (name, params, rhs, _) = 
+  let atype ctxt (name, params, rhs, _, _) = 
     match rhs with 
       | `Fresh _ | `Variant _ | `Nothing ->
           Untranslate.expr (`Constr ([name],
@@ -223,7 +223,7 @@ struct
        make initialization problems less likely *) 
     List.map snd
       (List.sort 
-         (fun ((_,_,lrhs,_), _) ((_,_,rrhs,_), _) -> match (lrhs : rhs), rrhs with
+         (fun ((_,_,lrhs,_,_), _) ((_,_,rrhs,_,_), _) -> match (lrhs : rhs), rrhs with
             (* aliases to types in the group score higher than
                everything else.
 
@@ -274,7 +274,7 @@ struct
       | Some default -> <:module_expr< $uid:classname$.$uid:default$ ($mexpr$) >> in
     let mbinds =
       List.map 
-        (fun (name,params,rhs,constraints as decl) -> 
+        (fun (name,_,_,_,_ as decl) -> 
            (decl,
             <:module_binding< 
               $uid:classname ^ "_"^ name$
@@ -292,7 +292,7 @@ struct
                                        (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p context.argmap$>>) 
                                              context.params) in
            let projected =
-             List.map (fun (name,params,rhs,constraints) -> 
+             List.map (fun (name,params,rhs,_,_) -> 
                          let modname = classname ^ "_"^ name in
                          let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
                            <:str_item< module $uid:modname$ = $make_functor rhs$>>)
@@ -300,12 +300,14 @@ struct
            let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
              <:str_item< $m$ $list:projected$ >>
        
-    let gen_sig ~classname ~context (tname,params,_,_ as decl) = 
-      let t = List.fold_right 
-        (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
-        params
-        <:module_type< $uid:classname$.$uid:classname$ with type a = $atype context decl$ >> in
-        <:sig_item< module $uid:Printf.sprintf "%s_%s" classname tname$ : $t$ >>
+    let gen_sig ~classname ~context (tname,params,_,_,generated as decl) = 
+      if generated then <:sig_item< >> 
+      else
+        let t = List.fold_right 
+          (fun (p,_) m -> <:module_type< functor ($NameMap.find p context.argmap$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
+          params
+          <:module_type< $uid:classname$.$uid:classname$ with type a = $atype context decl$ >> in
+          <:sig_item< module $uid:Printf.sprintf "%s_%s" classname tname$ : $t$ >>
 
     let gen_sigs ~classname ~context ~decls =
       <:sig_item< $list:List.map (gen_sig ~classname ~context) decls$ >>
@@ -329,21 +331,21 @@ let find_non_regular params tnames decls : name list =
      end)#decl decls
 
 let extract_params = 
-  let has_params params (_, ps, _, _) = ps = params in
+  let has_params params (_, ps, _, _, _) = ps = params in
     function
       | [] -> invalid_arg "extract_params"
-      | (_,params,_,_)::rest
+      | (_,params,_,_,_)::rest
           when List.for_all (has_params params) rest ->
           params
-      | (_,_,rhs,_)::_ -> 
+      | (_,_,rhs,_,_)::_ -> 
           (* all types in a clique must have the same parameters *)
           raise (Underivable ("Instances can only be derived for "
                              ^"recursive groups where all types\n"
                              ^"in the group have the same parameters."))
 
-let setup_context loc tdecls : context =
+let setup_context loc (tdecls : decl list) : context =
   let params = extract_params tdecls 
-  and tnames = NameSet.fromList (List.map (fun (name,_,_,_) -> name) tdecls) in
+  and tnames = NameSet.fromList (List.map (fun (name,_,_,_,_) -> name) tdecls) in
     match find_non_regular params tnames tdecls with
       | _::_ as names -> 
           failwith ("The following types contain non-regular recursion:\n   "

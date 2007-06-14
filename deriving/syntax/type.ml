@@ -14,6 +14,8 @@ type param = name * [`Plus | `Minus] option
 
 (* no support for private types yet *)
 type decl = name * param list * rhs * constraint_ list
+    (* whether the type was inserted by deriving *)
+    * bool
 and rhs = [`Fresh of expr option * repr * [`Private|`Public] 
           |`Expr of expr
           |`Variant of variant
@@ -46,7 +48,7 @@ object (self : 'self)
 
   method decl (d:decl) =
     self#crush (match d with
-                  | (_, _, rhs, cs) ->
+                  | (_, _, rhs, cs,_) ->
                       self#rhs rhs :: List.map self#constraint_ cs)
 
   method rhs (r:rhs) =
@@ -100,8 +102,8 @@ end
 class transform = 
 object (self : 'self)
 
-  method decl (name, params, rhs, constraints:decl) : decl =
-    (name, params, self#rhs rhs, List.map (self # constraint_) constraints)
+  method decl (name, params, rhs, constraints,g:decl) : decl =
+    (name, params, self#rhs rhs, List.map (self # constraint_) constraints, g)
 
   method rhs = function
     | `Fresh (eopt, repr, p) -> `Fresh (Option.map (self # expr) eopt, 
@@ -208,7 +210,14 @@ struct
 
   type vmap = (name * variant * name option) list
 
-  let fresh_name () = "deriving_" ^ random_id 16
+  let fresh_name, set_name_prefix
+    = 
+    let name_prefix = ref "" in
+    let counter = ref 0 in
+      ((fun () -> 
+        incr counter;
+          "deriving_" ^ !name_prefix ^ "_" ^ string_of_int !counter),
+       (fun name -> name_prefix := name; counter := 0))
 
   module WithParams(P : sig val params : param list end) =
   struct
@@ -237,7 +246,7 @@ struct
       | Ast.TyVrnInf (_, t) -> variant t `Lt
       | Ast.TyAli (_, _, Ast.TyQuo (_,name)) when List.mem_assoc name params ->
           failwith ("Alias names must be distinct from parameter names for "
-                    ^"derived types, but '"^name^" is both an alias and a parameter")
+                    ^"\nderived types, but '"^name^" is both an alias and a parameter")
       | Ast.TyAli (_, Ast.TyVrnEq  (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Eq
       | Ast.TyAli (_, Ast.TyVrnSup (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Gt
       | Ast.TyAli (_, Ast.TyVrnInf (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Lt
@@ -332,7 +341,7 @@ struct
 
     let declify = 
       let declify1 (name, variant, alias) : decl * (name * expr) option = 
-        (name, params, `Variant variant, []), Option.map (fun a -> a, apply_t name) alias in
+        (name, params, `Variant variant, [], true), Option.map (fun a -> a, apply_t name) alias in
         List.map declify1
   end
 
@@ -348,11 +357,12 @@ struct
        
   let rec decl : Ast.ctyp -> decl list * alias_map = function
     | Ast.TyDcl (loc, name, ps, rhs, cs) ->
+        set_name_prefix name;
         let module P = WithParams(struct let params = params ps end) in
         let tl, vs = P.toplevel rhs in
         let cs, vcs = P.constraints cs in
         let decls, aliases = List.split (P.declify (vs @ vcs)) in
-          [(name, P.params, tl, cs)] @ decls, build_alias_map aliases
+          [(name, P.params, tl, cs, false)] @ decls, build_alias_map aliases
     | _ -> assert false
         
   let substitute_aliases : alias_map -> decl -> decl = fun map ->
@@ -443,10 +453,10 @@ struct
 
   let constraint_ (e1,e2) = (expr e1, expr e2)
 
-  let decl ((name, params, r, constraints): decl) =
+  let decl ((name, params, r, constraints,_): decl) =
     Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
 
-  let sigdecl ((name, params, r, constraints): decl) =
-    Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
+  let sigdecl ((name, params, r, constraints, _): decl) =
+    [Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)]
 
 end

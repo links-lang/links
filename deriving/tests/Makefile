@@ -8,6 +8,7 @@ PATH        := $(PATH):../syntax
 OCAMLFLAGS   = -w Aef
 
 SOURCES = defs.ml               \
+          sigs.ml               \
           shelve_tests.ml       \
 	  typeable_tests.ml     \
 	  bounded_tests.ml      \

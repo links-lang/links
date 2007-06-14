@@ -19,14 +19,14 @@ struct
           exit 1
 
   let derive proj (loc : Loc.t) tdecls classname =
-    let context = Base.setup_context loc tdecls in
+    let context = display_errors loc (Base.setup_context loc) tdecls in
       display_errors loc
         (proj (Base.find classname)) (loc, context, tdecls)
   
-  let derive_str loc (tdecls : Type.decl list) classname =
+  let derive_str loc (tdecls : Type.decl list) classname : Ast.str_item =
     derive fst loc tdecls classname
   
-  let derive_sig loc tdecls classname =
+  let derive_sig loc tdecls classname : Ast.sig_item =
     derive snd loc tdecls classname
 
 
@@ -50,7 +50,7 @@ struct
    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
        let decls  = display_errors loc Type.Translate.decls types in 
        let module U = Type.Untranslate(struct let loc = loc end) in
-       let tdecls = List.map U.sigdecl decls in
+       let tdecls = List.concat_map U.sigdecl decls in
        let ms = List.map (derive_sig loc decls) cl in
          <:sig_item< type $list:tdecls$ $list:ms$ >> ]]
   ;

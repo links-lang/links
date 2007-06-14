@@ -68,7 +68,7 @@ struct
           <:expr< $mproject (self#expr ctxt t) "unpickle"$ stream >>
       | f -> raise (Underivable ("Pickle cannot be derived for record types with polymorphic fields")) 
 
-    method sum ?eq ctxt ((tname,_,_,_) as decl) summands = 
+    method sum ?eq ctxt ((tname,_,_,_,_) as decl) summands = 
       let msg = "Unexpected tag when unpickling " ^ tname ^ ": " in
       let picklers, unpicklers = 
         List.split (List.mapn (self#case ctxt) summands) in
