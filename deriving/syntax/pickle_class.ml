@@ -63,6 +63,8 @@ struct
         <:match_case< $`int:n$ -> let $patt$ = $unpickle$ in $uid:ctor$ $exp$  >>
     
     method field ctxt : Type.field -> Ast.expr * Ast.expr = function
+      | (name, _, `Mutable) -> 
+          raise (Underivable ("Pickle cannot be derived for record types with mutable fields ("^name^")"))
       | (name, ([], t), _) -> 
           <:expr< $mproject (self#expr ctxt t) "pickle"$ buffer $lid:name$ >>,
           <:expr< $mproject (self#expr ctxt t) "unpickle"$ stream >>

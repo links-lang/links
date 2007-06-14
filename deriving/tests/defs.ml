@@ -16,12 +16,12 @@ type r1 = {
 type r2 = {
   mutable r2_l1 : int;
   mutable r2_l2 : int;
-} deriving (Pickle, Eq, Show, Typeable, Shelve)
+} deriving (Eq, Show, Typeable, Shelve)
 
 type r3 = {
   r3_l1 : int;
   mutable r3_l2 : int;
-} deriving (Pickle, Eq, Show, Typeable, Shelve)
+} deriving (Eq, Show, Typeable, Shelve)
 
 (* polymorphic records *)
 type r4 = {
