@@ -392,13 +392,13 @@ struct
     | p, Some `Plus  -> <:ctyp< +'$lid:p$ >>
     | p, Some `Minus -> <:ctyp< -'$lid:p$ >>
 
-        let rec qname = function
-          | [] -> assert false
-          | [x] -> <:ident< $lid:x$ >>
-          | x::xs -> <:ident< $uid:x$.$qname xs$ >>
-
-              let unlist join items translate = 
-                List.fold_right join (List.map translate items) (Ast.TyNil loc)
+  let rec qname = function
+    | [] -> assert false
+    | [x] -> <:ident< $lid:x$ >>
+    | x::xs -> <:ident< $uid:x$.$qname xs$ >>
+        
+  let unlist join items translate = 
+    List.fold_right join (List.map translate items) (Ast.TyNil loc)
 
   let pair l r = Ast.TySta (loc, l,r)
   let bar l r = <:ctyp< $l$ | $r$ >>

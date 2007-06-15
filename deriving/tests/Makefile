@@ -19,6 +19,7 @@ SOURCES = defs.ml               \
 	  rewriter_tests.ml     \
 	  show_tests.ml         \
           exp.ml                \
+          inline.ml             \
 
 LIBS    = nums deriving
 RESULT  = tests

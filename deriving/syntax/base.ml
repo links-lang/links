@@ -377,3 +377,5 @@ let register = Hashtbl.add derivers
 let find classname = 
   try Hashtbl.find derivers classname
   with Not_found -> raise (NoSuchClass classname)
+let is_registered : name -> bool =
+  fun classname -> try ignore (find classname); true with NoSuchClass _ -> false
