@@ -169,8 +169,7 @@ struct
         (fun t exp -> <:expr<
            let module M = $(self#expr ctxt t)$ in
              try $exp$
-             with UnknownTag (n,_) -> (M.unshelve id : M.a Read.m :> a Read.m)
-               >>)
+             with UnknownTag (n,_) -> (M.unshelve id :> a Read.m) >>)
         ts
         <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unshelving of "
                                        ^tname$))) >>

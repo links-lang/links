@@ -12,17 +12,6 @@
     maximise value sharing.
 *)
 
-let memoize f =
-  let t = ref None in 
-    fun () ->
-      match !t with
-        | Some t -> t
-        | None ->
-            let r = f () in
-              t := Some r;
-              r
-
-
 module TypeRep :
 sig
   type t
@@ -186,6 +175,7 @@ sig
   val cast : dynamic -> a option
   val throwing_cast : dynamic -> a
   val make_dynamic : a -> dynamic
+  val mk : a -> dynamic
 end
 
 exception CastFailure of string
@@ -200,9 +190,10 @@ struct
   let has_type o = tagOf o = type_rep ()
   let cast d =
     match untag d (type_rep ()) with
-      | Some c -> Some (Obj.magic c)
+      | Some c -> Some (Obj.obj c)
       | None -> None
   let make_dynamic o = (Obj.repr o, type_rep ())
+  let mk = make_dynamic
   let throwing_cast d = 
     match cast d with
       | None -> (*raise (CastFailure ("cast from type "^

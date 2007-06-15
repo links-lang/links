@@ -96,25 +96,3 @@ let y =
                                         Apply (Apply (Var "d",
                                                       Var "d"),
                                                Var "e"))))))
-
-
-(*plus = ¦Ëm.¦Ën.¦Ëf.¦Ëx. m f (n f x)*)
-let plus = 
-  Lambda ("m", 
-          Lambda ("n",
-                  Lambda ("f",
-                          Lambda ("x",
-                                  Apply (Apply (Var "m", Var "f"),
-                                         Apply (Apply (Var "n", Var "f"),
-                                                Var "x"))))))
-
-(*two = ¦Ëf.¦Ëx. f (f x)*)
-let two = 
-  Lambda ("f", 
-          Lambda ("x", 
-                  Apply (Var "f", 
-                         Apply (Var "f", Var "x"))))
-
-(*one = ¦Ëm.¦Ëf. m f*)
-let one = 
-  Lambda ("m", Lambda ("f", Apply (Var "m", Var "f")))

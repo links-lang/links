@@ -22,6 +22,7 @@ sig
   val cast : dynamic -> a option
   val throwing_cast : dynamic -> a
   val make_dynamic : a -> dynamic
+  val mk : a -> dynamic
 end
 
 module Defaults (T : (sig
