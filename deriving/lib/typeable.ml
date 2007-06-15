@@ -34,9 +34,9 @@ sig
   val mkPolyv : (string * delayed option) list -> delayed list -> delayed
 end =
 struct
-  module StringMap = Map.Make(String)
+  module StringMap = Map.Make(Interned)
   module IntMap = Map.Make(struct type t = int let compare = Pervasives.compare end)
-  module StringSet = Set.Make(String)
+  module StringSet = Set.Make(Interned)
 
   let counter = ref 0 
   let fresh () = 
@@ -127,7 +127,7 @@ struct
     let row = 
       List.fold_left
         (fun map (name, t) ->
-           StringMap.add name t map)
+           StringMap.add (Interned.intern name) t map)
         initial
         args in
     let fresh = make_fresh row in
