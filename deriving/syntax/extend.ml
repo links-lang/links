@@ -65,22 +65,24 @@ struct
   [e1 = val_longident ; "<" ; t = ctyp; ">" ->
      match e1 with
        | <:ident< $uid:classname$ . $lid:methodname$ >> ->
-           if Base.is_registered classname then
-             let module U = Type.Untranslate(struct let loc = loc end) in
-             let binding = Ast.TyDcl (loc, "inline", [], t, []) in
-             let decls = display_errors loc Type.Translate.decls binding in
-             let tdecls = List.map U.decl decls in
-             let m = derive_str loc decls classname in
-               <:expr< let module $uid:classname$ = 
-                           struct
-                             type $list:tdecls$
-                             $m$ 
-                             include $uid:classname ^ "_inline"$
-                           end
-                        in $uid:classname$.$lid:methodname$ >>
-           else
-             fatal_error loc ("deriving: "^ classname ^" is not a known `class'");
-             
+         if not (Base.is_registered classname) then
+           fatal_error loc ("deriving: "^ classname ^" is not a known `class'")
+         else
+           let module U = Type.Untranslate(struct let loc = loc end) in
+           let binding = Ast.TyDcl (loc, "inline", [], t, []) in
+           let decls = display_errors loc Type.Translate.decls binding in
+             if List.exists Base.contains_tvars_decl decls then
+               fatal_error loc ("deriving: type variables cannot be used in `method' instantiations")
+             else
+               let tdecls = List.map U.decl decls in
+               let m = derive_str loc decls classname in
+                 <:expr< let module $uid:classname$ = 
+                             struct
+                               type $list:tdecls$
+                               $m$ 
+                               include $uid:classname ^ "_inline"$
+                             end
+                          in $uid:classname$.$lid:methodname$ >>
        | _ -> 
            fatal_error loc ("deriving: this looks a bit like a method application, but "
                             ^"the syntax is not valid");

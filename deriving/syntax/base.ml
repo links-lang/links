@@ -13,21 +13,24 @@ type context = {
   tnames : NameSet.t;
 }
 
-
 exception Underivable of string
 exception NoSuchClass of string
-
 
 (* display a fatal error and exit *)
 let error loc (msg : string) =
   Syntax.print_warning loc msg;
   exit 1
 
-(*
-module type Context = sig val context: context end
-module type TContext = sig include Context val tcontext : type_context end
-*)
 module type Loc = sig val loc : Loc.t end
+
+let contains_tvars, contains_tvars_decl =
+  let o = object
+     inherit [bool] fold as default
+     method crush = List.exists F.id
+     method expr = function
+       | `Param _ -> true
+       | e -> default#expr e
+  end in (o#expr, o#decl)
 
 module InContext(L : Loc) =
 struct
@@ -52,15 +55,6 @@ struct
         failwith ("Unbound type parameter '" ^ var)
     in (fun ctxt -> instantiate (lookup ctxt)),
        (fun ctxt -> instantiate_repr (lookup ctxt))
-
-  let contains_tvars : expr -> bool = 
-    (object
-       inherit [bool] fold as default
-       method crush = List.exists F.id
-       method expr = function
-         | `Param _ -> true
-         | e -> default#expr e
-     end) # expr
 
   let substitute env =
     (object
