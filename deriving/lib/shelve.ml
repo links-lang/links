@@ -51,8 +51,8 @@ type repr = Repr.t
 
 module Write : sig
   type s = {
-    nextid : Id.t; (* the next id to be allocated *)
-    obj2id : Id.t Dynmap.DynMap.t; (* map from typerep to id cache for the corresponding type *)
+    nextid : Id.t;
+    obj2id : Id.t Dynmap.DynMap.t;
     id2rep : repr IdMap.t;
   }
   val initial_output_state : s

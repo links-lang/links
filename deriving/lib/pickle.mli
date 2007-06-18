@@ -28,7 +28,6 @@ module Pickle_bool      : Pickle with type a = bool
 module Pickle_unit      : Pickle with type a = unit
 module Pickle_list   (P : Pickle) : Pickle with type a = P.a list
 module Pickle_option (P : Pickle) : Pickle with type a = P.a option
-module Pickle_array  (P : Pickle) : Pickle with type a = P.a array
 
 module Pickle_unpicklable (P : sig type a val tname : string end) 
   : Pickle with type a = P.a

@@ -22,8 +22,6 @@ struct
 
   let empty = TypeMap.empty
 
-  let is_empty _ = failwith "is_empty nyi"
-
   let add dynamic value comparator map =
     let typeRep = tagOf dynamic in
     let monomap = 

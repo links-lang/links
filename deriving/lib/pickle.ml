@@ -164,7 +164,8 @@ module Pickle_list (P : SimplePickle) = Defaults (
   end
 )
 
-(* Pickle_ref cannot preserve sharing, so we don't provide an implementation *)
+(* Pickle_ref and Pickle_array cannot preserve sharing, so we don't
+   provide implementations *)
 
 module Pickle_option (P : SimplePickle) = Defaults (
   struct
@@ -184,19 +185,6 @@ module Pickle_option (P : SimplePickle) = Defaults (
   end
 )
 
-(* This doesn't preserve sharing, so it shouldn't be allowed *)
-module Pickle_array (P : SimplePickle) = Defaults (
-  struct
-    type a = P.a array
-        (* rather inefficient *)
-    let pickle buffer items = 
-    let module PList = Pickle_list (P) in
-      PList.pickle buffer (Array.to_list items)
-    and unpickle stream = 
-      let module PList = Pickle_list (P) in
-        Array.of_list (PList.unpickle stream)
-  end
-)
 
 module Pickle_bool = Defaults (
   struct

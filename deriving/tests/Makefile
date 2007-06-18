@@ -17,7 +17,6 @@ SOURCES = defs.ml               \
 	  pickle_tests.ml       \
 	  enum_tests.ml         \
 	  functor_tests.ml      \
-	  rewriter_tests.ml     \
 	  show_tests.ml         \
           exp.ml                \
           inline.ml             \
