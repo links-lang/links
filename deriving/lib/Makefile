@@ -1,4 +1,4 @@
-OCAMLMAKEFILE = ../../OCamlMakefile
+OCAMLMAKEFILE = ../OCamlMakefile
 
 PATH       := $(PATH):../syntax
 

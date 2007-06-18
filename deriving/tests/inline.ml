@@ -29,3 +29,6 @@ let _ =
 
 let _ =
     Eq.eq<bool> true (Eq.eq<int> 3 4)
+
+let _ =
+  print_endline "Tests succeeded!"

@@ -1,4 +1,4 @@
-OCAMLMAKEFILE = ../../OCamlMakefile
+OCAMLMAKEFILE = ../OCamlMakefile
 
 AUXLIB_DIRS  = ../lib/
 OCAMLOPT     = ocamlopt.opt

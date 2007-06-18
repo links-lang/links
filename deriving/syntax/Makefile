@@ -1,4 +1,4 @@
-OCAMLMAKEFILE = ../../OCamlMakefile
+OCAMLMAKEFILE = ../OCamlMakefile
 
 OCAMLC     = ocamlc.opt
 OCAMLOPT   = ocamlopt.opt
