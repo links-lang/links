@@ -165,7 +165,8 @@ let random_id length =
     s
 
 (* The function used in OCaml to convert variant labels to their
-   integer representations (well, a black-box re-implementation).
+   integer representations.  The formula is given in Jacques
+   Garrigue's 1998 ML workshop paper.
 *)
 let tag_hash s = 
   let acc = ref 0 in

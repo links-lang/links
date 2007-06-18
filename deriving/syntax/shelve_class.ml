@@ -19,7 +19,6 @@ struct
       <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
 
   let unshelve_record_bindings ctxt (tname,params,rhs,cs,_) (fields : field list) e = <:expr<
-      let num_fields = $`int:List.length fields$ in
       let module Mutable = struct
         type t = $UT.repr 
             (instantiate_modargs_repr ctxt 
@@ -33,7 +32,7 @@ struct
         (fun (id,_,_) exp ->
            <:expr< this.Mutable.$lid:id$ <- $lid:id$; $exp$ >>)
         fields
-      <:expr< return this_input >> in
+      <:expr< return self >> in
     let inner = 
       List.fold_right
         (fun (id,([],t),_) exp ->
@@ -43,12 +42,10 @@ struct
         assignments in
     let idpat = patt_list (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
       unshelve_record_bindings ctxt decl fields
-        (<:expr< fun id -> W.record
-           (fun this_input subvalues -> 
-              let this = (Obj.magic this_input : Mutable.t) in
-                match subvalues with
-                  | $idpat$ -> $inner$
-                  | _ -> raise (UnshelvingError $str:msg$)) num_fields id >>)
+        (<:expr< W.record
+           (fun self -> function
+                  | $idpat$ -> let this = (Obj.magic self : Mutable.t) in $inner$
+                  | _ -> raise (UnshelvingError $str:msg$)) $`int:List.length fields$ >>)
 
   let shelve_record ctxt decl fields expr =
     let inner =
@@ -128,7 +125,7 @@ struct
                | $pidlist$ -> $inner$
                | _ -> raise (UnshelvingError $str:msg$)) >>
       and atype = atype_expr ctxt (`Tuple ts) in
-        wrap ~ctxt ~atype ~tymod ~eqmod ~shelvers ~unshelver
+        <:module_expr< Shelve.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~shelvers ~unshelver$) >>
 
     method polycase ctxt tagspec : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case<
@@ -181,8 +178,7 @@ struct
           (function Tag (name,t) -> Left (name,t) | Extends t -> Right t) tags in
         let tag_cases = List.map (self#polycase_un ctxt) tags in
         let extension_case = self#extension ctxt tname extensions in
-          <:expr< fun id ->
-            let f = function $list:tag_cases @ [extension_case]$ in W.sum f id >>
+          <:expr< fun id -> W.sum (function $list:tag_cases @ [extension_case]$) id >>
       in
         wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
           ~eqmod:(eq_instance ctxt tname)

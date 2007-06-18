@@ -45,7 +45,7 @@ struct
       | None   -> CApp (None, ids)
   let unpack_ctor = function 
     | CApp arg -> arg
-    | _ -> assert false
+    | _ -> raise (UnshelvingError "Error unshelving constructor")
 end
 type repr = Repr.t
 
