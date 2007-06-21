@@ -4,10 +4,10 @@
   1. every object receives a serializable id.
   2. an object is serialized using the ids of its subobjects
 *)
-module Shelve =
+module Pickle =
 struct
 exception UnknownTag of int * string
-exception UnshelvingError of string
+exception UnpicklingError of string
 
 module Id :
 sig
@@ -45,7 +45,7 @@ struct
       | None   -> CApp (None, ids)
   let unpack_ctor = function 
     | CApp arg -> arg
-    | _ -> raise (UnshelvingError "Error unshelving constructor")
+    | _ -> raise (UnpicklingError "Error unpickling constructor")
 end
 type repr = Repr.t
 
@@ -134,30 +134,30 @@ struct
               put (IdMap.add id (repr, Some dynamic) state)
           | (_, Some _) -> 
               return ()
-                (* Checking for id already present causes unshelving to fail 
+                (* Checking for id already present causes unpickling to fail 
                    when there is circularity involving immutable values (even 
                    if the recursion wholly depends on mutability).
 
                    For example, consider the code
 
-                   type t = A | B of t ref deriving (Typeable, Eq, Shelve)
+                   type t = A | B of t ref deriving (Typeable, Eq, Pickle)
                    let s = ref A in
                    let r = B s in
                    s := r;
-                   let shelved = Shelve_t.shelveS r in
-                   Shelve_t.unshelveS r
+                   let pickled = Pickle_t.pickleS r in
+                   Pickle_t.unpickleS r
 
                    which results in the value
                    B {contents = B {contents = B { ... }}}
 
                    During deserialization the following steps occur:
                    1. lookup "B {...}" in the dictionary (not there)
-                   2. unshelve the contents of B:
+                   2. unpickle the contents of B:
                    3. lookup the contents in the dictionary (not there)
                    4. create a blank reference, insert it into the dictionary
-                   5. unshelve the contents of the reference:
+                   5. unpickle the contents of the reference:
                    6. lookup ("B {...}") in the dictionary (not there)
-                   7. unshelve the contents of B:
+                   7. unpickle the contents of B:
                    8. lookup the contents in the dictionary (there)
                    9. insert "B{...}" into the dictionary.
                    10. insert "B{...}" into the dictionary.
@@ -193,12 +193,12 @@ end
 module Run
   (S : sig
      type a
-     val shelve : a -> id Write.m
-     val unshelve : id -> a Read.m
+     val pickle : a -> id Write.m
+     val unpickle : id -> a Read.m
    end) : sig
   type a = S.a
-  val doShelve : a -> string
-  val doUnshelve : string -> a
+  val doPickle : a -> string
+  val doUnpickle : string -> a
 end =
 struct
   type a = S.a
@@ -318,7 +318,7 @@ struct
 
   open Write
 
-  let decode_shelved_string : string -> Id.t * Read.s =
+  let decode_pickled_string : string -> Id.t * Read.s =
     fun s -> 
       let (id, state : dumpable) = 
         read_discriminated s
@@ -328,7 +328,7 @@ in
                state
                IdMap.empty)
 
-  let encode_shelved_string : id * Write.s -> string  =
+  let encode_pickled_string : id * Write.s -> string  =
     fun (id,state) ->
       let input_state = 
         id, IdMap.fold (fun id repr output -> (id,repr)::output)
@@ -340,7 +340,7 @@ in
     | elem :: elems -> (let _, others = List.partition (equal elem) elems in
                           elem :: unduplicate equal others)
 
-  let doShelveB : id m -> Buffer.t -> unit
+  let doPickleB : id m -> Buffer.t -> unit
     = fun m buffer ->
       let _, {id2rep=id2rep} = runState m initial_output_state in
       let ids : (Id.t * repr) list  = IdMap.fold (fun k v output -> (k,v)::output) id2rep [] in
@@ -348,20 +348,20 @@ in
         let ids' = unduplicate (=) (List.map snd ids) in
           Printf.fprintf stderr  "~ %d ids?\n" (List.length ids');
           Dump.to_buffer<ids> buffer ids
-  let doShelveS : id Write.m -> string
+  let doPickleS : id Write.m -> string
     = fun m ->
       let buffer = Buffer.create 127 in 
         begin
-          doShelveB m buffer;
+          doPickleB m buffer;
           Buffer.contents buffer
         end
-  let doShelve v = 
-    let id, state = runState (S.shelve v) initial_output_state in
-      encode_shelved_string (id, state)
+  let doPickle v = 
+    let id, state = runState (S.pickle v) initial_output_state in
+      encode_pickled_string (id, state)
 
-  let doUnshelve string = 
-    let id, initial_input_state = decode_shelved_string string in  
-    let value, _ = Read.runState (S.unshelve id) initial_input_state in
+  let doUnpickle string = 
+    let id, initial_input_state = decode_pickled_string string in  
+    let value, _ = Read.runState (S.unpickle id) initial_input_state in
       value
 end
 
@@ -369,15 +369,15 @@ end
 
 
 
-module type Shelve =
+module type Pickle =
 sig
   type a
   module T : Typeable.Typeable with type a = a
   module E : Eq.Eq with type a = a
-  val shelve : a -> id Write.m
-  val unshelve : id -> a Read.m
-  val shelveS : a -> string
-  val unshelveS : string -> a
+  val pickle : a -> id Write.m
+  val unpickle : id -> a Read.m
+  val to_string : a -> string
+  val from_string : string -> a
 end
 
 module Defaults
@@ -385,21 +385,21 @@ module Defaults
      type a
      module T : Typeable.Typeable with type a = a
      module E : Eq.Eq with type a = a
-     val shelve : a -> id Write.m
-     val unshelve : id -> a Read.m
+     val pickle : a -> id Write.m
+     val unpickle : id -> a Read.m
    end) =
 struct
   include S
   module M = Run(S)
-  let shelveS = M.doShelve
-  and unshelveS = M.doUnshelve
+  let to_string = M.doPickle
+  and from_string = M.doUnpickle
 end
 
-module Shelve_from_dump
+module Pickle_from_dump
   (P : Dump.Dump)
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
-  : Shelve with type a = P.a
+  : Pickle with type a = P.a
            and type a = T.a = Defaults
   (struct
      type a = T.a
@@ -408,12 +408,12 @@ module Shelve_from_dump
      module Comp = Dynmap.Comp(T)(E)
      open Write
      module W = Utils(T)(E)
-     let shelve obj = 
+     let pickle obj = 
        W.allocate obj 
          (fun id -> W.store_repr id (Repr.of_string (P.to_string obj)))
      open Read
      module U = Utils(T)
-     let unshelve id = 
+     let unpickle id = 
        find_by_id id >>= fun (repr, dynopt) ->
          match dynopt with
            | None -> 
@@ -423,22 +423,22 @@ module Shelve_from_dump
            | Some obj -> return (T.throwing_cast obj)
    end)
 
-module Shelve_unit : Shelve with type a = unit = Shelve_from_dump(Dump.Dump_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
-module Shelve_bool = Shelve_from_dump(Dump.Dump_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
-module Shelve_int = Shelve_from_dump(Dump.Dump_int)(Eq.Eq_int)(Typeable.Typeable_int)
-module Shelve_char = Shelve_from_dump(Dump.Dump_char)(Eq.Eq_char)(Typeable.Typeable_char)
-module Shelve_float = Shelve_from_dump(Dump.Dump_float)(Eq.Eq_float)(Typeable.Typeable_float)
-module Shelve_num = Shelve_from_dump(Dump.Dump_num)(Eq.Eq_num)(Typeable.Typeable_num)
-module Shelve_string = Shelve_from_dump(Dump.Dump_string)(Eq.Eq_string)(Typeable.Typeable_string) 
+module Pickle_unit : Pickle with type a = unit = Pickle_from_dump(Dump.Dump_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
+module Pickle_bool = Pickle_from_dump(Dump.Dump_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
+module Pickle_int = Pickle_from_dump(Dump.Dump_int)(Eq.Eq_int)(Typeable.Typeable_int)
+module Pickle_char = Pickle_from_dump(Dump.Dump_char)(Eq.Eq_char)(Typeable.Typeable_char)
+module Pickle_float = Pickle_from_dump(Dump.Dump_float)(Eq.Eq_float)(Typeable.Typeable_float)
+module Pickle_num = Pickle_from_dump(Dump.Dump_num)(Eq.Eq_num)(Typeable.Typeable_num)
+module Pickle_string = Pickle_from_dump(Dump.Dump_string)(Eq.Eq_string)(Typeable.Typeable_string) 
 
-module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Defaults(
+module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option = Defaults(
   struct
     module T = Typeable.Typeable_option (V0.T)
     module E = Eq.Eq_option (V0.E)
     module Comp = Dynmap.Comp (T) (E)
     open Write
     type a = V0.a option
-    let rec shelve =
+    let rec pickle =
       let module W = Utils(T)(E) in
       function
           None as obj ->
@@ -447,23 +447,23 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Defaults
         | Some v0 as obj ->
             W.allocate obj
               (fun thisid ->
-                 V0.shelve v0 >>= fun id0 ->
+                 V0.pickle v0 >>= fun id0 ->
                    W.store_repr thisid (Repr.make ~constructor:1 [id0]))
     open Read
-    let unshelve = 
+    let unpickle = 
       let module W = Utils(T) in
       let f = function
         | 0, [] -> return None
-        | 1, [id] -> V0.unshelve id >>= fun obj -> return (Some obj)
-        | n, _ -> raise (UnshelvingError
-                           ("Unexpected tag encountered unshelving "
+        | 1, [id] -> V0.unpickle id >>= fun obj -> return (Some obj)
+        | n, _ -> raise (UnpicklingError
+                           ("Unexpected tag encountered unpickling "
                             ^"option : " ^ string_of_int n)) in
         W.sum f
   end)
 
 
-module Shelve_list (V0 : Shelve)
-  : Shelve with type a = V0.a list = Defaults (
+module Pickle_list (V0 : Pickle)
+  : Pickle with type a = V0.a list = Defaults (
 struct
   module T = Typeable.Typeable_list (V0.T)
   module E = Eq.Eq_list (V0.E)
@@ -471,35 +471,34 @@ struct
   type a = V0.a list
   open Write
   module U = Utils(T)(E)
-  let rec shelve = function
+  let rec pickle = function
       [] as obj ->
         U.allocate obj
           (fun this -> U.store_repr this (Repr.make ~constructor:0 []))
     | (v0::v1) as obj ->
         U.allocate obj
-          (fun this -> V0.shelve v0 >>= fun id0 ->
-                          shelve v1 >>= fun id1 ->
+          (fun this -> V0.pickle v0 >>= fun id0 ->
+                          pickle v1 >>= fun id1 ->
                             U.store_repr this (Repr.make ~constructor:1 [id0; id1]))
   open Read
   module W = Utils (T)
-  let rec unshelve id = 
+  let rec unpickle id = 
     let f = function
       | 0, [] -> return []
       | 1, [car;cdr] -> 
-          V0.unshelve car >>= fun car ->
-             unshelve cdr >>= fun cdr ->
+          V0.unpickle car >>= fun car ->
+             unpickle cdr >>= fun cdr ->
                return (car :: cdr)
-      | n, _ -> raise (UnshelvingError
-                         ("Unexpected tag encountered unshelving "
+      | n, _ -> raise (UnpicklingError
+                         ("Unexpected tag encountered unpickling "
                           ^"option : " ^ string_of_int n)) in
       W.sum f id
 end)
 end
-include Shelve  
-
+include Pickle  
 
 type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
-    deriving (Shelve)
+    deriving (Pickle)
 
 (* Idea: keep pointers to values that we've serialized in a global
    weak hash table so that we can share structure with them if we

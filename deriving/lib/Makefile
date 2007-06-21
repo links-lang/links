@@ -17,7 +17,7 @@ SOURCES = show.ml           show.mli		\
           dump.ml           dump.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
-          shelve.ml	    shelve.mli    	\
+          pickle.ml	    pickle.mli    	\
           functor.ml        functor.mli		\
 
 

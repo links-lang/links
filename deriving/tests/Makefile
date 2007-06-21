@@ -10,7 +10,7 @@ OCAMLFLAGS   = -w Aef
 SOURCES = defs.ml               \
           bimap.ml bimap.mli    \
           sigs.ml               \
-          shelve_tests.ml       \
+          pickle_tests.ml       \
 	  typeable_tests.ml     \
 	  bounded_tests.ml      \
 	  eq_tests.ml           \

@@ -13,20 +13,20 @@ struct
   module Typeable = Typeable_class.InContext(L)
   module Eq       = Eq_class.InContext(L)
 
-  let classname = "Shelve"
+  let classname = "Pickle"
   let bind, seq = 
     let bindop = ">>=" and seqop = ">>" in
       <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
 
-  let unshelve_record_bindings ctxt (tname,params,rhs,cs,_) (fields : field list) e = <:expr<
+  let unpickle_record_bindings ctxt (tname,params,rhs,cs,_) (fields : field list) e = <:expr<
       let module Mutable = struct
         type t = $UT.repr 
             (instantiate_modargs_repr ctxt 
                (Record (List.map (fun (n,p,_) -> (n,p,`Mutable)) fields)))$
       end in $e$ >>
 
-  let unshelve_record ctxt (tname,_,_,_,_ as decl) fields expr = 
-    let msg = "unexpected object encountered unshelving "^tname in
+  let unpickle_record ctxt (tname,_,_,_,_ as decl) fields expr = 
+    let msg = "unexpected object encountered unpickling "^tname in
     let assignments = 
       List.fold_right
         (fun (id,_,_) exp ->
@@ -36,22 +36,22 @@ struct
     let inner = 
       List.fold_right
         (fun (id,([],t),_) exp ->
-           <:expr< $bind$ ($mproject (expr ctxt t) "unshelve"$ $lid:id$)
+           <:expr< $bind$ ($mproject (expr ctxt t) "unpickle"$ $lid:id$)
              (fun $lid:id$ -> $exp$) >>)
         fields
         assignments in
     let idpat = patt_list (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
-      unshelve_record_bindings ctxt decl fields
+      unpickle_record_bindings ctxt decl fields
         (<:expr< W.record
            (fun self -> function
                   | $idpat$ -> let this = (Obj.magic self : Mutable.t) in $inner$
-                  | _ -> raise (UnshelvingError $str:msg$)) $`int:List.length fields$ >>)
+                  | _ -> raise (UnpicklingError $str:msg$)) $`int:List.length fields$ >>)
 
-  let shelve_record ctxt decl fields expr =
+  let pickle_record ctxt decl fields expr =
     let inner =
       List.fold_right 
         (fun (id,([],t),_) e ->
-           <:expr< $bind$ ($mproject (expr ctxt t) "shelve"$ $lid:id$) 
+           <:expr< $bind$ ($mproject (expr ctxt t) "pickle"$ $lid:id$) 
                           (fun $lid:id$ -> $e$) >>)
         fields
         <:expr< (W.store_repr this
@@ -79,15 +79,15 @@ struct
       ctxt.argmap
       <:str_item< >>
 
-  let wrap ~ctxt ~atype ~tymod ~eqmod ~shelvers ~unshelver =
+  let wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler =
     <:module_expr< struct open Eq open Typeable
                           module T = $tymod$
                           module E = $eqmod$
                           type a = $atype$
                           open Write
-                          let shelve = let module W = Utils(T)(E) in function $list:shelvers$
+                          let pickle = let module W = Utils(T)(E) in function $list:picklers$
                           open Read
-                          let unshelve = let module W = Utils(T) in $unshelver$
+                          let unpickle = let module W = Utils(T) in $unpickler$
     end >>
 
     let instance = object (self)
@@ -101,31 +101,31 @@ struct
       let tpatt,texpr = tuple ~param:"id" nts in
       let tymod = Typeable.tup ctxt ts <:expr< M.T.type_rep >> (self#expr)
       and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
-      and shelvers =
+      and picklers =
         let inner = 
           List.fold_right
             (fun (id,t) expr -> 
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "shelve"$ $lid:id$) 
+               <:expr< $bind$ ($mproject (self#expr ctxt t) "pickle"$ $lid:id$) 
                             (fun $lid:id$ -> $expr$) >>)
             ids
             <:expr< W.store_repr this (Repr.make $eidlist$) >> in
           [ <:match_case< ($tpatt$ as obj) -> 
                   W.allocate obj (fun this -> $inner$) >>]
 
-      and unshelver = 
-        let msg = "unexpected object encountered unshelving "^string_of_int nts^"-tuple" in
+      and unpickler = 
+        let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
         let inner = 
           List.fold_right 
             (fun (id,t) expr ->
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "unshelve"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
+               <:expr< $bind$ ($mproject (self#expr ctxt t) "unpickle"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
             ids
             <:expr< return $texpr$ >> in
           <:expr< W.tuple
             (function
                | $pidlist$ -> $inner$
-               | _ -> raise (UnshelvingError $str:msg$)) >>
+               | _ -> raise (UnpicklingError $str:msg$)) >>
       and atype = atype_expr ctxt (`Tuple ts) in
-        <:module_expr< Shelve.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~shelvers ~unshelver$) >>
+        <:module_expr< Pickle.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler$) >>
 
     method polycase ctxt tagspec : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case<
@@ -138,19 +138,19 @@ struct
         (`$name$ v1 as obj) ->
            W.allocate obj
             (fun thisid ->
-             $bind$ ($mproject (self#expr ctxt t) "shelve"$ v1)
+             $bind$ ($mproject (self#expr ctxt t) "pickle"$ v1)
                     (fun mid -> 
                     (W.store_repr thisid
                         (Repr.make ~constructor:$`int:(tag_hash name)$ [mid])))) >>
     | Extends t -> 
         let patt, guard, cast = cast_pattern ctxt t in <:match_case<
          ($patt$ as obj) when $guard$ ->
-            ($mproject (self#expr ctxt t) "shelve"$ $cast$) >>
+            ($mproject (self#expr ctxt t) "pickle"$ $cast$) >>
 
     method polycase_un ctxt tagspec : Ast.match_case = match tagspec with
     | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> return `$name$ >>
     | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> 
-      $bind$ ($mproject (self#expr ctxt t) "unshelve"$ x) (fun o -> return (`$name$ o)) >>
+      $bind$ ($mproject (self#expr ctxt t) "unpickle"$ x) (fun o -> return (`$name$ o)) >>
 
     method extension ctxt tname ts : Ast.match_case =
       (* Try each extension in turn.  If we get an UnknownTag failure,
@@ -166,14 +166,14 @@ struct
         (fun t exp -> <:expr<
            let module M = $(self#expr ctxt t)$ in
              try $exp$
-             with UnknownTag (n,_) -> (M.unshelve id :> a Read.m) >>)
+             with UnknownTag (n,_) -> (M.unpickle id :> a Read.m) >>)
         ts
-        <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unshelving of "
+        <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unpickling of "
                                        ^tname$))) >>
     in <:match_case< n,_ -> $inner$ >>
 
     method variant ctxt (tname,_,_,_,_ as decl) (_, tags) = 
-      let unshelver = 
+      let unpickler = 
         let tags, extensions = either_partition
           (function Tag (name,t) -> Left (name,t) | Extends t -> Right t) tags in
         let tag_cases = List.map (self#polycase_un ctxt) tags in
@@ -182,7 +182,7 @@ struct
       in
         wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
           ~eqmod:(eq_instance ctxt tname)
-          ~shelvers:(List.map (self#polycase ctxt) tags) ~unshelver
+          ~picklers:(List.map (self#polycase ctxt) tags) ~unpickler
 
     method case ctors ctxt (name, params') n : Ast.match_case * Ast.match_case = 
     let nparams = List.length params' in
@@ -190,7 +190,7 @@ struct
     let exp = 
       List.fold_right2
         (fun p n tail -> 
-           <:expr< $bind$ ($mproject (self#expr ctxt p) "shelve"$ $lid:Printf.sprintf "v%d" n$)
+           <:expr< $bind$ ($mproject (self#expr ctxt p) "pickle"$ $lid:Printf.sprintf "v%d" n$)
                           (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
         params'
         (List.range 0 nparams)
@@ -208,7 +208,7 @@ struct
            let m = Printf.sprintf "M%d" n and id = Printf.sprintf "id%d" n in
            <:patt< $lid:id$ :: $pat$ >>,
            <:expr< let module $uid:m$ = $self#expr ctxt t$
-                    in $bind$ ($uid:m$.unshelve $lid:id$) (fun $lid:id$ -> $exp$) >>)
+                    in $bind$ ($uid:m$.unpickle $lid:id$) (fun $lid:id$ -> $exp$) >>)
         (List.range 0 nparams)
         params'
       (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
@@ -216,27 +216,27 @@ struct
 
   method sum ?eq ctxt (tname,_,_,_,_ as decl) summands =
     let nctors = List.length summands in
-    let shelvers, unshelvers = List.split (List.mapn (self#case nctors ctxt) summands) in
+    let picklers, unpicklers = List.split (List.mapn (self#case nctors ctxt) summands) in
     wrap ~ctxt ~atype:(atype ctxt decl)
       ~tymod:(typeable_instance ctxt tname)
       ~eqmod:(eq_instance ctxt tname)
-      ~shelvers
-      ~unshelver:<:expr< fun id -> 
-        let f = function $list:unshelvers$ 
-                 | n,_ -> raise (UnshelvingError ($str:"Unexpected tag when unshelving "
+      ~picklers
+      ~unpickler:<:expr< fun id -> 
+        let f = function $list:unpicklers$ 
+                 | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
                                                   ^tname^": "$^ string_of_int n))
         in W.sum f id >>
 
   method record ?eq ctxt (tname,_,_,_,_ as decl) (fields : Type.field list) = 
       wrap ~ctxt ~atype:(atype ctxt decl) 
-        ~shelvers:(shelve_record ctxt decl fields (self#expr))
-        ~unshelver:(unshelve_record ctxt decl fields (self#expr))
+        ~picklers:(pickle_record ctxt decl fields (self#expr))
+        ~unpickler:(unpickle_record ctxt decl fields (self#expr))
         ~tymod:(typeable_instance ctxt tname)
         ~eqmod:(eq_instance ctxt tname)
   end
 end
 
-let _ = Base.register "Shelve"
+let _ = Base.register "Pickle"
   ((fun (loc, context, decls) -> 
       let module M = InContext(struct let loc = loc end) in
         M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname

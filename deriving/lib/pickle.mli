@@ -27,18 +27,18 @@ module Read : sig
   end
 end
 
-exception UnshelvingError of string
+exception UnpicklingError of string
 exception UnknownTag of int * string
 
-module type Shelve =
+module type Pickle =
 sig
   type a
   module T : Typeable.Typeable with type a = a
   module E : Eq.Eq with type a = a
-  val shelve : a -> id Write.m
-  val unshelve : id -> a Read.m
-  val shelveS : a -> string
-  val unshelveS : string -> a
+  val pickle : a -> id Write.m
+  val unpickle : id -> a Read.m
+  val to_string : a -> string
+  val from_string : string -> a
 end
 
 module Defaults
@@ -46,23 +46,23 @@ module Defaults
      type a
      module T : Typeable.Typeable with type a = a
      module E : Eq.Eq with type a = a
-     val shelve : a -> id Write.m
-     val unshelve : id -> a Read.m
-   end) : Shelve with type a = S.a
+     val pickle : a -> id Write.m
+     val unpickle : id -> a Read.m
+   end) : Pickle with type a = S.a
 
-module Shelve_unit  : Shelve with type a = unit
-module Shelve_bool  : Shelve with type a = bool
-module Shelve_int   : Shelve with type a = int
-module Shelve_char  : Shelve with type a = char
-module Shelve_float : Shelve with type a = float
-module Shelve_num   : Shelve with type a = Num.num
-module Shelve_string : Shelve with type a = string
-module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option
-module Shelve_list (V0 : Shelve)  : Shelve with type a = V0.a list
-module Shelve_ref (S : Shelve) : Shelve with type a = S.a ref
+module Pickle_unit  : Pickle with type a = unit
+module Pickle_bool  : Pickle with type a = bool
+module Pickle_int   : Pickle with type a = int
+module Pickle_char  : Pickle with type a = char
+module Pickle_float : Pickle with type a = float
+module Pickle_num   : Pickle with type a = Num.num
+module Pickle_string : Pickle with type a = string
+module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option
+module Pickle_list (V0 : Pickle)  : Pickle with type a = V0.a list
+module Pickle_ref (S : Pickle) : Pickle with type a = S.a ref
 
-module Shelve_from_dump
+module Pickle_from_dump
   (P : Dump.Dump)
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
-  : Shelve with type a = P.a
+  : Pickle with type a = P.a

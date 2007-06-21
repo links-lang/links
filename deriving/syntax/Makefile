@@ -23,13 +23,13 @@ SOURCES = id.ml                 \
           base.ml               \
           extend.ml             \
           show_class.ml         \
-          dump_class.ml       \
+          dump_class.ml         \
           enum_class.ml         \
           bounded_class.ml      \
           eq_class.ml           \
           typeable_class.ml     \
           functor_class.ml      \
-          shelve_class.ml       \
+          pickle_class.ml       \
 
 RESULT = deriving
 

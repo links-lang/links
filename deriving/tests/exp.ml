@@ -8,15 +8,15 @@ struct
   type a = name
   let eq = (=)
 end 
-module Shelve_name
-  = Shelve.Shelve_from_dump(Dump_string)(Eq_string)(Typeable_string)
+module Pickle_name
+  = Pickle.Pickle_from_dump(Dump_string)(Eq_string)(Typeable_string)
 
 module rec Exp :
 sig
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp
-               deriving (Eq,Show,Shelve,Typeable,Dump)
+               deriving (Eq,Show,Pickle,Typeable,Dump)
 end =
 struct
   module Eq_exp = struct 
@@ -38,7 +38,7 @@ struct
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp
-               deriving (Show, Typeable, Shelve,Dump)
+               deriving (Show, Typeable, Pickle,Dump)
 end
 
 open Exp
