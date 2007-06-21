@@ -169,14 +169,15 @@ let random_id length =
    Garrigue's 1998 ML workshop paper.
 *)
 let tag_hash s = 
+  let wrap = 0x40000000 in
   let acc = ref 0 in
   let mul = ref 1 in
   let len = String.length s in
     for i = 0 to len - 1 do
       let c = String.unsafe_get s (len - i - 1) in
       let n = Char.code c in
-        acc := !acc + n * !mul;
-        mul := !mul * 223
+        acc := (!acc + n * !mul) mod wrap;
+        mul := (!mul * 223) mod wrap;
     done;
     !acc
 
