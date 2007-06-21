@@ -153,7 +153,7 @@ struct
       | t::ts -> <:ident< $uid:t$.$modname_from_qname ~qname:ts ~classname$ >>
 
   let apply_functor (f : Ast.module_expr) (args : Ast.module_expr list) : Ast.module_expr =
-      List.fold_left (fun f p -> <:module_expr< $f$ $p$ >>) f args
+      List.fold_left (fun f p -> <:module_expr< $f$ ($p$) >>) f args
           
   class virtual make_module_expr ~classname ~allow_private =
   object (self)
