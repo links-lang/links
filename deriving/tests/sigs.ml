@@ -4,7 +4,7 @@
 module T :
 sig 
   type sum = S0 | S1 of int | S2 of int * float | S3 of int * float * bool | Sunit of unit | Stup of (int * float) | Stup1 of (int)
-    deriving (Pickle, Eq, Show, Typeable, Shelve)
+    deriving (Dump, Eq, Show, Typeable, Shelve)
 
   type nullsum = N0 | N1 | N2 | N3
       deriving (Enum, Bounded, Eq, Typeable, Shelve)
@@ -12,7 +12,7 @@ sig
   type r1 = {
     r1_l1 : int;
     r1_l2 : int;
-  } deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
+  } deriving (Dump, Eq, Show, Typeable, Shelve, Functor)
 
   type r2 = {
     mutable r2_l1 : int;
@@ -32,13 +32,13 @@ sig
   type funct = int -> int
 
   type intseq = INil | ICons of int * intseq
-    deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
+    deriving (Dump, Eq, Show, Typeable, Shelve, Functor)
 
   type 'a seq = Nil | Cons of 'a * 'a seq
-    deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+    deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
 
   type uses_seqs = (intseq * float seq) 
-      deriving (Pickle, Eq, Show, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Typeable, Shelve)
 
   type obj = < x : int >
 
@@ -46,54 +46,54 @@ sig
       deriving (Enum, Bounded, Show, Eq, Typeable, Shelve)
 
   type poly1 = [`T0 | `T1 of int]
-      deriving (Pickle, Eq, Show)
+      deriving (Dump, Eq, Show)
 
   type poly2 = P of int * [`T0 | `T1 of int] * float
-    deriving (Pickle, Eq, Show)
+    deriving (Dump, Eq, Show)
 
   type poly3 = [`Nil | `Cons of int * 'c] as 'c
-      deriving (Pickle, Eq, Show, Typeable, Shelve) 
+      deriving (Dump, Eq, Show, Typeable, Shelve) 
 
   type poly3b = int * ([`Nil | `Cons of int * 'c] as 'c) * [`F]
-      deriving (Pickle, Eq, Show, Typeable, Shelve) 
+      deriving (Dump, Eq, Show, Typeable, Shelve) 
 
   type 'a poly7 = Foo of [`F of 'a]
   and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
-      deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
 
   type poly10 = [`F | poly3]
-      deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
 
   type mutrec_a = mutrec_c
   and mutrec_b = { l1 : mutrec_c ; l2 : mutrec_a }
   and mutrec_c = S of int * mutrec_a | N
   and mutrec_d = [`T of mutrec_b]
-      deriving (Pickle, Eq, Show, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Typeable, Shelve)
 
   type ('a,'b) pmutrec_a = ('a,'b) pmutrec_c
   and ('a,'b) pmutrec_b = { pl1 : ('a,'b) pmutrec_c ; pl2 : ('a,'b) pmutrec_a }
   and ('a,'b) pmutrec_c = SS of 'a * ('a,'b) pmutrec_a * 'b
   and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
-      deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
 
-  type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Pickle, Functor, Typeable, Shelve)
+  type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Dump, Functor, Typeable, Shelve)
   type ('a,'b) ff2 = F1 of ('a,'b) ff2 | F2 of 'a seq * int * 'b option
-    deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+    deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
 
   type tup0 = unit
-      deriving (Pickle, Eq, Show, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Typeable, Shelve)
   type tup2 = int * float
-      deriving (Pickle, Eq, Show, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Typeable, Shelve)
   type tup3 = int * float * bool
-      deriving (Pickle, Eq, Show, Typeable, Shelve)
+      deriving (Dump, Eq, Show, Typeable, Shelve)
   type tup4 = int * int * bool * unit
-      deriving (Pickle, Eq, Show, Typeable, Shelve, Bounded)
+      deriving (Dump, Eq, Show, Typeable, Shelve, Bounded)
 
   type withref = WR of int * (int ref)
     deriving (Eq, Show, Typeable, Shelve)
 
   module M : sig 
-    type t deriving (Show, Eq, Pickle)
+    type t deriving (Show, Eq, Dump)
   end
 
   module P : sig 
@@ -107,58 +107,58 @@ sig
       deriving (Show, Eq)
       
   module Private : sig
-    type p2 = private Q deriving (Show, Eq, Pickle)
+    type p2 = private Q deriving (Show, Eq, Dump)
   end
     
   type t = int 
-      deriving (Eq, Enum, Bounded, Pickle, Show, Typeable, Shelve, Functor)
+      deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Shelve, Functor)
 end
   = Defs
 
 (* Deriving a signature with types made abstract *)
 module T_opaque :
 sig 
-  type sum deriving (Pickle, Eq, Show, Typeable, Shelve)
+  type sum deriving (Dump, Eq, Show, Typeable, Shelve)
   type nullsum deriving (Enum, Bounded, Eq, Typeable, Shelve)
-  type r1 deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
+  type r1 deriving (Dump, Eq, Show, Typeable, Shelve, Functor)
   type r2 deriving (Eq, Show, Typeable, Shelve)
   type r3 deriving (Eq, Show, Typeable, Shelve)
   type r4 
   type label
   type funct
-  type intseq deriving (Pickle, Eq, Show, Typeable, Shelve, Functor)
-  type 'a seq deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
-  type uses_seqs deriving (Pickle, Eq, Show, Typeable, Shelve)
+  type intseq deriving (Dump, Eq, Show, Typeable, Shelve, Functor)
+  type 'a seq deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
+  type uses_seqs deriving (Dump, Eq, Show, Typeable, Shelve)
   type obj
   type poly0 deriving (Enum, Bounded, Show, Eq, Typeable, Shelve)
-  type poly1 deriving (Pickle, Eq, Show)
-  type poly2 deriving (Pickle, Eq, Show)
-  type poly3 deriving (Pickle, Eq, Show, Typeable, Shelve) 
-  type poly3b deriving (Pickle, Eq, Show, Typeable, Shelve) 
+  type poly1 deriving (Dump, Eq, Show)
+  type poly2 deriving (Dump, Eq, Show)
+  type poly3 deriving (Dump, Eq, Show, Typeable, Shelve) 
+  type poly3b deriving (Dump, Eq, Show, Typeable, Shelve) 
   type 'a poly7 
-  and 'a poly8 deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
-  type poly10 deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
+  and 'a poly8 deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
+  type poly10 deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
   type mutrec_a 
   and mutrec_b 
   and mutrec_c 
-  and mutrec_d deriving (Pickle, Eq, Show, Typeable, Shelve)
+  and mutrec_d deriving (Dump, Eq, Show, Typeable, Shelve)
   type ('a,'b) pmutrec_a 
   and ('a,'b) pmutrec_b 
   and ('a,'b) pmutrec_c 
-  and ('a,'b) pmutrec_d deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
-  type 'a ff1 deriving (Show, Eq, Pickle, Functor, Typeable, Shelve)
-  type ('a,'b) ff2 deriving (Pickle, Eq, Show, Functor, Typeable, Shelve)
-  type tup0 deriving (Pickle, Eq, Show, Typeable, Shelve)
-  type tup2 deriving (Pickle, Eq, Show, Typeable, Shelve)
-  type tup3 deriving (Pickle, Eq, Show, Typeable, Shelve)
-  type tup4 deriving (Pickle, Eq, Show, Typeable, Shelve, Bounded)
+  and ('a,'b) pmutrec_d deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
+  type 'a ff1 deriving (Show, Eq, Dump, Functor, Typeable, Shelve)
+  type ('a,'b) ff2 deriving (Dump, Eq, Show, Functor, Typeable, Shelve)
+  type tup0 deriving (Dump, Eq, Show, Typeable, Shelve)
+  type tup2 deriving (Dump, Eq, Show, Typeable, Shelve)
+  type tup3 deriving (Dump, Eq, Show, Typeable, Shelve)
+  type tup4 deriving (Dump, Eq, Show, Typeable, Shelve, Bounded)
   type withref deriving (Eq, Show, Typeable, Shelve)
-  module M : sig type t deriving (Show, Eq, Pickle) end
+  module M : sig type t deriving (Show, Eq, Dump) end
   module P : sig type 'a t end
   type 'a constrained constraint 'a = int deriving (Functor) 
   type p1 deriving (Show, Eq)
   module Private : sig type p2 end
-  type t deriving (Eq, Enum, Bounded, Pickle, Show, Typeable, Shelve, Functor)
+  type t deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Shelve, Functor)
 end
   = Defs
 

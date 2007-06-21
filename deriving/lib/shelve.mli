@@ -61,8 +61,8 @@ module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option
 module Shelve_list (V0 : Shelve)  : Shelve with type a = V0.a list
 module Shelve_ref (S : Shelve) : Shelve with type a = S.a ref
 
-module Shelve_from_pickle
-  (P : Pickle.Pickle)
+module Shelve_from_dump
+  (P : Dump.Dump)
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
   : Shelve with type a = P.a

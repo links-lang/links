@@ -23,7 +23,7 @@ SOURCES = id.ml                 \
           base.ml               \
           extend.ml             \
           show_class.ml         \
-          pickle_class.ml       \
+          dump_class.ml       \
           enum_class.ml         \
           bounded_class.ml      \
           eq_class.ml           \

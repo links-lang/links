@@ -11,30 +11,30 @@ exception UnshelvingError of string
 
 module Id :
 sig
-  type t deriving (Show, Pickle, Eq)
+  type t deriving (Show, Dump, Eq)
   val initial : t
   val compare : t -> t -> int
   val next : t -> t  
 end =
 struct
-  type t = int deriving (Show, Pickle, Eq)
+  type t = int deriving (Show, Dump, Eq)
   let initial = 0
   let compare = compare
   let next = succ
 end
 module IdMap = Map.Make (Id)
-type id = Id.t deriving (Show, Pickle)
+type id = Id.t deriving (Show, Dump)
 
 module Repr : sig
   (* Break abstraction for the sake of efficiency for now *)
-  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Pickle, Show)
+  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Dump, Show)
   val of_string : string -> t
   val to_string : t -> string
   val make : ?constructor:int -> id list -> t
   val unpack_ctor : t -> int option * id list
 end =
 struct
-  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Pickle, Show)
+  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Dump, Show)
   let of_string s = Bytes s
   let to_string = function
     | Bytes s -> s
@@ -204,13 +204,13 @@ struct
   type a = S.a
 
   type ids = (Id.t * Repr.t) list
-      deriving (Pickle, Show)
+      deriving (Dump, Show)
 
   type dumpable = id * ids
-      deriving (Show, Pickle)
+      deriving (Show, Dump)
 
-  type ('a,'b) pair = 'a * 'b deriving (Pickle)
-  type capp = int option * Id.t list deriving (Pickle)
+  type ('a,'b) pair = 'a * 'b deriving (Dump)
+  type capp = int option * Id.t list deriving (Dump)
 
   (* We don't serialize ids of each object at all: we just use the
      ordering in the output file to implicitly record the ids of
@@ -225,13 +225,13 @@ struct
       (Id.t * string) list
     * (Id.t * (int * Id.t list)) list
     * (Id.t * (Id.t list)) list
-        deriving (Pickle, Show)
+        deriving (Dump, Show)
 
   type discriminated_ordered = 
       string list
       * (int * Id.t list) list
       * (Id.t list) list
-        deriving (Pickle, Show)
+        deriving (Dump, Show)
 
   let reorder : Id.t * discriminated -> Id.t * discriminated_ordered =
     fun (root,(a,b,c)) ->
@@ -276,7 +276,7 @@ struct
             | Right r -> aux (lefts, r :: rights) xs
     in aux ([], []) l
 
-  type discriminated_dumpable = Id.t * discriminated deriving (Pickle) 
+  type discriminated_dumpable = Id.t * discriminated deriving (Dump) 
 
   let discriminate : (Id.t * Repr.t) list -> discriminated
     = fun input ->
@@ -301,18 +301,18 @@ struct
       @ List.map (fun (id,(ps)) -> (id,Repr.CApp (None,ps))) c
 
   type do_pair = Id.t * discriminated_ordered 
-      deriving (Show, Pickle)
+      deriving (Show, Dump)
 
   let write_discriminated : Id.t * (Id.t * Repr.t) list -> string
     = fun (root,map) -> 
       let dmap = discriminate map in 
       let rmap = reorder (root,dmap) in
         (*prerr_endline ("dmap : " ^ Show_discriminated.show dmap);*)
-        Pickle_do_pair.pickleS rmap
+        Dump.to_string<do_pair> rmap
 
   let read_discriminated : string -> Id.t * (Id.t * Repr.t) list
     = fun s -> 
-      let rmap = Pickle_do_pair.unpickleS s in
+      let rmap = Dump.from_string<do_pair> s in
       let (root,dmap) = unorder rmap in
         (root, undiscriminate dmap)
 
@@ -321,9 +321,6 @@ struct
   let decode_shelved_string : string -> Id.t * Read.s =
     fun s -> 
       let (id, state : dumpable) = 
-        
-(*Pickle_dumpable.unpickleS s *)
-(*        Marshal.from_string s 0*)
         read_discriminated s
 in
         id, (List.fold_right 
@@ -336,10 +333,6 @@ in
       let input_state = 
         id, IdMap.fold (fun id repr output -> (id,repr)::output)
           state.id2rep [] in
-(*
-        Pickle_dumpable.pickleS input_state
-*)
-(*        Marshal.to_string input_state []*)
         write_discriminated input_state
 
   let rec unduplicate equal = function
@@ -354,7 +347,7 @@ in
         Printf.fprintf stderr  "%d ids\n" (List.length ids);
         let ids' = unduplicate (=) (List.map snd ids) in
           Printf.fprintf stderr  "~ %d ids?\n" (List.length ids');
-          Pickle_ids.pickle buffer ids
+          Dump.to_buffer<ids> buffer ids
   let doShelveS : id Write.m -> string
     = fun m ->
       let buffer = Buffer.create 127 in 
@@ -402,8 +395,8 @@ struct
   and unshelveS = M.doUnshelve
 end
 
-module Shelve_from_pickle
-  (P : Pickle.Pickle)
+module Shelve_from_dump
+  (P : Dump.Dump)
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
   : Shelve with type a = P.a
@@ -417,26 +410,26 @@ module Shelve_from_pickle
      module W = Utils(T)(E)
      let shelve obj = 
        W.allocate obj 
-         (fun id -> W.store_repr id (Repr.of_string (P.pickleS obj)))
+         (fun id -> W.store_repr id (Repr.of_string (P.to_string obj)))
      open Read
      module U = Utils(T)
      let unshelve id = 
        find_by_id id >>= fun (repr, dynopt) ->
          match dynopt with
            | None -> 
-               let obj : a = P.unpickleS (Repr.to_string repr) in
+               let obj : a = P.from_string (Repr.to_string repr) in
                  U.update_map id obj >> 
                    return obj
            | Some obj -> return (T.throwing_cast obj)
    end)
 
-module Shelve_unit : Shelve with type a = unit = Shelve_from_pickle(Pickle.Pickle_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
-module Shelve_bool = Shelve_from_pickle(Pickle.Pickle_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
-module Shelve_int = Shelve_from_pickle(Pickle.Pickle_int)(Eq.Eq_int)(Typeable.Typeable_int)
-module Shelve_char = Shelve_from_pickle(Pickle.Pickle_char)(Eq.Eq_char)(Typeable.Typeable_char)
-module Shelve_float = Shelve_from_pickle(Pickle.Pickle_float)(Eq.Eq_float)(Typeable.Typeable_float)
-module Shelve_num = Shelve_from_pickle(Pickle.Pickle_num)(Eq.Eq_num)(Typeable.Typeable_num)
-module Shelve_string = Shelve_from_pickle(Pickle.Pickle_string)(Eq.Eq_string)(Typeable.Typeable_string) 
+module Shelve_unit : Shelve with type a = unit = Shelve_from_dump(Dump.Dump_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
+module Shelve_bool = Shelve_from_dump(Dump.Dump_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
+module Shelve_int = Shelve_from_dump(Dump.Dump_int)(Eq.Eq_int)(Typeable.Typeable_int)
+module Shelve_char = Shelve_from_dump(Dump.Dump_char)(Eq.Eq_char)(Typeable.Typeable_char)
+module Shelve_float = Shelve_from_dump(Dump.Dump_float)(Eq.Eq_float)(Typeable.Typeable_float)
+module Shelve_num = Shelve_from_dump(Dump.Dump_num)(Eq.Eq_num)(Typeable.Typeable_num)
+module Shelve_string = Shelve_from_dump(Dump.Dump_string)(Eq.Eq_string)(Typeable.Typeable_string) 
 
 module Shelve_option (V0 : Shelve) : Shelve with type a = V0.a option = Defaults(
   struct

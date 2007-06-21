@@ -14,7 +14,7 @@ SOURCES = show.ml           show.mli		\
           bounded.ml        bounded.mli		\
           enum.ml           enum.mli		\
           monad.ml          monad.mli		\
-          pickle.ml         pickle.mli		\
+          dump.ml           dump.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
           shelve.ml	    shelve.mli    	\

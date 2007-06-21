@@ -1,53 +1,51 @@
 (* Is it possible to have an interface that can include the
-   structure-sharing picklers?
-
-   NB: the structure-sharing pickler should detect cycles and fail.
+   structure-sharing serialisers?
 *)
 
-(** Pickle **)
+(** Dump **)
 
-(* TODO: we could have an additional debugging unpickling method. *)
-module type Pickle = sig
+(* TODO: we could have an additional debugging deserialisation method. *)
+module type Dump = sig
   type a
-  val pickle : Buffer.t -> a -> unit
-  val unpickle : char Stream.t -> a
-  val pickleS : a -> string
-  val unpickleS : string -> a
+  val to_buffer : Buffer.t -> a -> unit
+  val from_stream : char Stream.t -> a
+  val to_string : a -> string
+  val from_string : string -> a
 end
 
-module type SimplePickle = sig
+module type SimpleDump = sig
   type a
-  val pickle : Buffer.t -> a -> unit
-  val unpickle : char Stream.t -> a
+  val to_buffer : Buffer.t -> a -> unit
+  val from_stream : char Stream.t -> a
 end
 
-exception Unpickling_failure of string
+exception Dump_error of string
 
 let bad_tag tag stream typename =
-  raise (Unpickling_failure
+  raise (Dump_error
            (Printf.sprintf 
-              "Failure during %s unpickling at character %d; unexpected tag %d" 
+              "Dump: failure during %s deserialisation at character %d; unexpected tag %d" 
               typename (Stream.count stream) tag))
 
 module Defaults (P : sig   
 			  type a
-			  val pickle : Buffer.t -> a -> unit
-			  val unpickle : char Stream.t -> a
-			end) : Pickle with type a = P.a = 
+			  val to_buffer : Buffer.t -> a -> unit
+			  val from_stream : char Stream.t -> a
+			end) : Dump with type a = P.a = 
 struct
   include P
-  let pickleS obj = 
+  let to_string obj = 
     let buffer = Buffer.create 128 (* is there a reasonable value to use here? *) in
-      P.pickle buffer obj;
-      Buffer.sub buffer 0 (Buffer.length buffer)
+      P.to_buffer buffer obj;
+      Buffer.contents buffer
       (* should we explicitly deallocate the buffer? *)
-  and unpickleS string = P.unpickle (Stream.of_string string)
+  and from_string string = P.from_stream (Stream.of_string string)
 end
 
 
-(* Generic int pickler.  This should work for any (fixed-size) integer
+(* Generic int dumper.  This should work for any (fixed-size) integer
    type with suitable operations. *)
-module Pickle_intN (P : sig
+module Dump_intN (P : sig
                       type t
                       val zero : t
                       val logand : t -> t -> t
@@ -72,7 +70,7 @@ module Pickle_intN (P : sig
     open Char
     open P
 
-    let pickle buffer =
+    let to_buffer buffer =
       let rec aux int =
         (* are there more than 7 bits? *)
         if logand int (lognot (of_int 0x7f)) <> zero
@@ -87,7 +85,7 @@ module Pickle_intN (P : sig
         else add_char buffer (chr (to_int int))
       in aux
 
-    and unpickle stream = 
+    and from_stream stream = 
       let rec aux (int : t) shift = 
         let c = of_int (code (Stream.next stream)) in
         let int = logor int (shift_left (logand c (of_int 0x7f)) shift) in
@@ -97,36 +95,36 @@ module Pickle_intN (P : sig
   end
 )
 
-module Pickle_int32 = Pickle_intN (Int32)
-module Pickle_int64 = Pickle_intN (Int64)
-module Pickle_nativeint = Pickle_intN (Nativeint)
-module Pickle_int = Defaults (
+module Dump_int32 = Dump_intN (Int32)
+module Dump_int64 = Dump_intN (Int64)
+module Dump_nativeint = Dump_intN (Nativeint)
+module Dump_int = Defaults (
   struct
     type a = int
-    let pickle buffer int = Pickle_nativeint.pickle buffer (Nativeint.of_int int)
-    and unpickle stream = Nativeint.to_int (Pickle_nativeint.unpickle stream)
+    let to_buffer buffer int = Dump_nativeint.to_buffer buffer (Nativeint.of_int int)
+    and from_stream stream = Nativeint.to_int (Dump_nativeint.from_stream stream)
   end
 )
 
-module Pickle_char = Defaults (
+module Dump_char = Defaults (
   struct
     type a = char
-    let pickle = Buffer.add_char
-    and unpickle = Stream.next
+    let to_buffer = Buffer.add_char
+    and from_stream = Stream.next
   end
 )
 
 (* This is questionable; it doesn't preserve sharing *)
-module Pickle_string = Defaults (
+module Dump_string = Defaults (
   struct
     type a = string
-    let pickle buffer string = 
+    let to_buffer buffer string = 
       begin
-        Pickle_int.pickle buffer (String.length string);
+        Dump_int.to_buffer buffer (String.length string);
         Buffer.add_string buffer string
       end
-    and unpickle stream = 
-      let len = Pickle_int.unpickle stream in
+    and from_stream stream = 
+      let len = Dump_int.from_stream stream in
       let s = String.create len in
         for i = 0 to len - 1 do
           String.set s i (Stream.next stream) (* could use String.unsafe_set here *)
@@ -135,64 +133,65 @@ module Pickle_string = Defaults (
   end
 )
 
-module Pickle_float = Defaults (
+module Dump_float = Defaults (
   struct
     type a = float
-    let pickle buffer f = Pickle_int64.pickle buffer (Int64.bits_of_float f)
-    and unpickle stream = Int64.float_of_bits (Pickle_int64.unpickle stream)
+    let to_buffer buffer f = Dump_int64.to_buffer buffer (Int64.bits_of_float f)
+    and from_stream stream = Int64.float_of_bits (Dump_int64.from_stream stream)
   end
 )
 
 (* This should end up a bit more compact than the derived version *)
-module Pickle_list (P : SimplePickle) = Defaults (
-  (* This could perhaps be more efficient by pickling the list in
+module Dump_list (P : SimpleDump) = Defaults (
+  (* This could perhaps be more efficient by serialising the list in
      reverse: this would result in only one traversal being needed
-     during pickling, and no "reverse" being needed during unpickling.
-     (However, pickling would no longer be tail-recursive) *)
+     during serialisation, and no "reverse" being needed during
+     deserialisation.  (However, dumping would no longer be
+     tail-recursive) *)
   struct
     type a = P.a list
-    let pickle buffer items = 
+    let to_buffer buffer items = 
       begin
-        Pickle_int.pickle buffer (List.length items);
-        List.iter (P.pickle buffer) items
+        Dump_int.to_buffer buffer (List.length items);
+        List.iter (P.to_buffer buffer) items
       end
-    and unpickle stream = 
+    and from_stream stream = 
       let rec aux items = function
         | 0 -> items
-        | n -> aux (P.unpickle stream :: items) (n-1)
-      in List.rev (aux [] (Pickle_int.unpickle stream))
+        | n -> aux (P.from_stream stream :: items) (n-1)
+      in List.rev (aux [] (Dump_int.from_stream stream))
   end
 )
 
-(* Pickle_ref and Pickle_array cannot preserve sharing, so we don't
+(* Dump_ref and Dump_array cannot preserve sharing, so we don't
    provide implementations *)
 
-module Pickle_option (P : SimplePickle) = Defaults (
+module Dump_option (P : SimpleDump) = Defaults (
   struct
     type a = P.a option
-    let pickle buffer = function
-      | None   -> Pickle_int.pickle buffer 0
+    let to_buffer buffer = function
+      | None   -> Dump_int.to_buffer buffer 0
       | Some s -> 
           begin
-            Pickle_int.pickle buffer 1;
-            P.pickle buffer s
+            Dump_int.to_buffer buffer 1;
+            P.to_buffer buffer s
           end
-    and unpickle stream = 
-      match Pickle_int.unpickle stream with
+    and from_stream stream = 
+      match Dump_int.from_stream stream with
         | 0 -> None
-        | 1 -> Some (P.unpickle stream)
+        | 1 -> Some (P.from_stream stream)
         | i      -> bad_tag i stream "option"
   end
 )
 
 
-module Pickle_bool = Defaults (
+module Dump_bool = Defaults (
   struct
     type a = bool
-    let pickle buffer = function
+    let to_buffer buffer = function
       | false -> Buffer.add_char buffer '\000'
       | true  -> Buffer.add_char buffer '\001'
-    and unpickle stream =
+    and from_stream stream =
       match Stream.next stream with
         | '\000' -> false
         | '\001' -> true
@@ -200,41 +199,41 @@ module Pickle_bool = Defaults (
   end
 )
 
-module Pickle_unit = Defaults (
+module Dump_unit = Defaults (
   struct
     type a = unit
-    let pickle _ () = ()
-    and unpickle _ = ()
+    let to_buffer _ () = ()
+    and from_stream _ = ()
   end
 )
 
-module Pickle_num = Defaults (
+module Dump_num = Defaults (
   struct
-    (* TODO: a less wasteful pickler for nums.  A good start would be
+    (* TODO: a less wasteful dumper for nums.  A good start would be
        using half a byte per decimal-coded digit, instead of a whole
        byte. *)
     type a = Num.num
-    let pickle buffer n = Pickle_string.pickle buffer (Num.string_of_num n)
-    and unpickle stream = Num.num_of_string (Pickle_string.unpickle stream)
+    let to_buffer buffer n = Dump_string.to_buffer buffer (Num.string_of_num n)
+    and from_stream stream = Num.num_of_string (Dump_string.from_stream stream)
   end
 )
 
-module Pickle_unpicklable (P : sig type a val tname : string end) = Defaults ( 
+module Dump_undumpable (P : sig type a val tname : string end) = Defaults ( 
   struct 
     type a = P.a
-    let pickle _ _ = failwith ("attempt to pickle a value of unpicklable type : " ^ P.tname)
-    let unpickle _ = failwith ("attempt to unpickle a value of unpicklable type : " ^ P.tname)
+    let to_buffer _ _ = failwith ("Dump: attempt to serialise a value of unserialisable type : " ^ P.tname)
+    let from_stream _ = failwith ("Dump: attempt to deserialise a value of unserialisable type : " ^ P.tname)
   end
 )
 
-(* Uses Marshal to pickle the values that the parse-the-declarations
+(* Uses Marshal to serialise the values that the parse-the-declarations
    technique can't reach. *)
-module Pickle_via_marshal (P : sig type a end) = Defaults (
+module Dump_via_marshal (P : sig type a end) = Defaults (
 (* Rather inefficient. *)
   struct
     include P
-    let pickle buffer obj = Buffer.add_string buffer (Marshal.to_string obj [Marshal.Closures])
-    let unpickle stream = 
+    let to_buffer buffer obj = Buffer.add_string buffer (Marshal.to_string obj [Marshal.Closures])
+    let from_stream stream = 
       let readn n = 
         let s = String.create n in
           for i = 0 to n - 1 do
