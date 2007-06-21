@@ -2,9 +2,11 @@ module type Dump =
   sig
     type a
     val to_buffer : Buffer.t -> a -> unit
-    val from_stream : char Stream.t -> a
     val to_string : a -> string
+    val to_channel : out_channel -> a -> unit
+    val from_stream : char Stream.t -> a
     val from_string : string -> a
+    val from_channel : in_channel -> a
   end
 
 module Defaults

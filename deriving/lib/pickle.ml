@@ -190,18 +190,32 @@ struct
   end
 end
 
-module Run
+
+module type Pickle =
+sig
+  type a
+  module T : Typeable.Typeable with type a = a
+  module E : Eq.Eq with type a = a
+  val pickle : a -> id Write.m
+  val unpickle : id -> a Read.m
+  val to_buffer : Buffer.t -> a -> unit
+  val to_string : a -> string
+  val to_channel : out_channel -> a -> unit
+  val from_stream : char Stream.t -> a
+  val from_string : string -> a
+  val from_channel : in_channel -> a
+end
+
+module Defaults
   (S : sig
      type a
+     module T : Typeable.Typeable with type a = a
+     module E : Eq.Eq with type a = a
      val pickle : a -> id Write.m
      val unpickle : id -> a Read.m
-   end) : sig
-  type a = S.a
-  val doPickle : a -> string
-  val doUnpickle : string -> a
-end =
+   end) : Pickle with type a = S.a =
 struct
-  type a = S.a
+  include S
 
   type ids = (Id.t * Repr.t) list
       deriving (Dump, Show)
@@ -303,96 +317,52 @@ struct
   type do_pair = Id.t * discriminated_ordered 
       deriving (Show, Dump)
 
-  let write_discriminated : Id.t * (Id.t * Repr.t) list -> string
-    = fun (root,map) -> 
-      let dmap = discriminate map in 
+  let write_discriminated f
+    = fun (root,map) ->
+      let dmap = discriminate map in
       let rmap = reorder (root,dmap) in
-        (*prerr_endline ("dmap : " ^ Show_discriminated.show dmap);*)
-        Dump.to_string<do_pair> rmap
+        f rmap
 
-  let read_discriminated : string -> Id.t * (Id.t * Repr.t) list
+  let read_discriminated (f : 'b -> 'a) : 'b -> Id.t * (Id.t * Repr.t) list
     = fun s -> 
-      let rmap = Dump.from_string<do_pair> s in
+      let rmap = f s in
       let (root,dmap) = unorder rmap in
         (root, undiscriminate dmap)
 
   open Write
 
-  let decode_pickled_string : string -> Id.t * Read.s =
+  let decode_pickled_string (f : 'a -> Id.t * discriminated_ordered) : 'b -> Id.t * Read.s =
     fun s -> 
       let (id, state : dumpable) = 
-        read_discriminated s
-in
+        read_discriminated f s
+      in
         id, (List.fold_right 
                (fun (id,repr) map -> IdMap.add id (repr,None) map)
                state
                IdMap.empty)
 
-  let encode_pickled_string : id * Write.s -> string  =
+  let encode_pickled_string f =
     fun (id,state) ->
-      let input_state = 
+      let input_state =
         id, IdMap.fold (fun id repr output -> (id,repr)::output)
           state.id2rep [] in
-        write_discriminated input_state
+        write_discriminated f input_state
 
-  let rec unduplicate equal = function
-    | [] -> []
-    | elem :: elems -> (let _, others = List.partition (equal elem) elems in
-                          elem :: unduplicate equal others)
-
-  let doPickleB : id m -> Buffer.t -> unit
-    = fun m buffer ->
-      let _, {id2rep=id2rep} = runState m initial_output_state in
-      let ids : (Id.t * repr) list  = IdMap.fold (fun k v output -> (k,v)::output) id2rep [] in
-        Printf.fprintf stderr  "%d ids\n" (List.length ids);
-        let ids' = unduplicate (=) (List.map snd ids) in
-          Printf.fprintf stderr  "~ %d ids?\n" (List.length ids');
-          Dump.to_buffer<ids> buffer ids
-  let doPickleS : id Write.m -> string
-    = fun m ->
-      let buffer = Buffer.create 127 in 
-        begin
-          doPickleB m buffer;
-          Buffer.contents buffer
-        end
-  let doPickle v = 
+  let doPickle f v : 'a = 
     let id, state = runState (S.pickle v) initial_output_state in
-      encode_pickled_string (id, state)
+      encode_pickled_string f (id, state)
 
-  let doUnpickle string = 
-    let id, initial_input_state = decode_pickled_string string in  
+  let doUnpickle f input = 
+    let id, initial_input_state = decode_pickled_string f input in  
     let value, _ = Read.runState (S.unpickle id) initial_input_state in
       value
-end
 
-
-
-
-
-module type Pickle =
-sig
-  type a
-  module T : Typeable.Typeable with type a = a
-  module E : Eq.Eq with type a = a
-  val pickle : a -> id Write.m
-  val unpickle : id -> a Read.m
-  val to_string : a -> string
-  val from_string : string -> a
-end
-
-module Defaults
-  (S : sig
-     type a
-     module T : Typeable.Typeable with type a = a
-     module E : Eq.Eq with type a = a
-     val pickle : a -> id Write.m
-     val unpickle : id -> a Read.m
-   end) =
-struct
-  include S
-  module M = Run(S)
-  let to_string = M.doPickle
-  and from_string = M.doUnpickle
+  let from_channel = doUnpickle Dump.from_channel<do_pair>
+  let from_string = doUnpickle Dump.from_string<do_pair>
+  let from_stream = doUnpickle Dump.from_stream<do_pair>
+  let to_channel channel = doPickle (Dump.to_channel<do_pair> channel)
+  let to_buffer buffer = doPickle (Dump.to_buffer<do_pair> buffer)
+  let to_string = doPickle Dump.to_string<do_pair>
 end
 
 module Pickle_from_dump

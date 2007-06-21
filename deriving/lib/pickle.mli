@@ -37,8 +37,12 @@ sig
   module E : Eq.Eq with type a = a
   val pickle : a -> id Write.m
   val unpickle : id -> a Read.m
+  val to_buffer : Buffer.t -> a -> unit
   val to_string : a -> string
+  val to_channel : out_channel -> a -> unit
+  val from_stream : char Stream.t -> a
   val from_string : string -> a
+  val from_channel : in_channel -> a
 end
 
 module Defaults

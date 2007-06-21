@@ -1,16 +1,14 @@
-(* Is it possible to have an interface that can include the
-   structure-sharing serialisers?
-*)
-
 (** Dump **)
 
 (* TODO: we could have an additional debugging deserialisation method. *)
 module type Dump = sig
   type a
-  val to_buffer : Buffer.t -> a -> unit
-  val from_stream : char Stream.t -> a
-  val to_string : a -> string
-  val from_string : string -> a
+    val to_buffer : Buffer.t -> a -> unit
+    val to_string : a -> string
+    val to_channel : out_channel -> a -> unit
+    val from_stream : char Stream.t -> a
+    val from_string : string -> a
+    val from_channel : in_channel -> a
 end
 
 module type SimpleDump = sig
@@ -34,12 +32,22 @@ module Defaults (P : sig
 			end) : Dump with type a = P.a = 
 struct
   include P
+
+ (* is there a reasonable value to use here? *)
+  let buffer_size = 128
+
   let to_string obj = 
-    let buffer = Buffer.create 128 (* is there a reasonable value to use here? *) in
+    let buffer = Buffer.create buffer_size in
       P.to_buffer buffer obj;
       Buffer.contents buffer
       (* should we explicitly deallocate the buffer? *)
   and from_string string = P.from_stream (Stream.of_string string)
+  and from_channel in_channel = 
+    from_stream (Stream.of_channel in_channel)
+  and to_channel out_channel obj = 
+    let buffer = Buffer.create buffer_size in
+      P.to_buffer buffer obj;
+      Buffer.output_buffer out_channel buffer
 end
 
 
