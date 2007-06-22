@@ -108,7 +108,7 @@ and reconstruct_db_string : (string * string) -> string =
    with labels while pickling).
 *)
 type rexpr = expression
-    deriving (Show, Eq, Typeable)
+    deriving (Show)
 
 module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults(
   struct
@@ -124,13 +124,10 @@ module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults
         Syntax.Wrong (`T(Syntax.dummy_position, `Not_typed, Some label))
   end)
 
-module Shelve_rexpr = Shelve.Shelve_primtype(Pickle_rexpr)(Eq_rexpr)(Typeable_rexpr)
-
 type rdef = definition
-    deriving (Show, Eq, Typeable)
+    deriving (Show)
 
 module Pickle_rdef = Pickle.Pickle_unpicklable (struct type a = rdef let tname = "rdef"  end)
-module Shelve_rdef = Shelve.Shelve_primtype(Pickle_rdef)(Eq_rdef)(Typeable_rdef)
 
 type unop = MkColl
             | MkVariant of string
@@ -141,7 +138,7 @@ type unop = MkColl
             | Erase of string
             | Project of string
             | QueryOp of (Query.query * (* table aliases: *) string list)
-                deriving (Typeable, Show, Pickle, Eq, Shelve)
+                deriving (Show, Pickle)
 		
 let string_of_unop = Show_unop.show
 
@@ -251,7 +248,7 @@ and result = [
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
-    deriving (Typeable, Eq, Show, Pickle, Shelve)
+    deriving (Show, Pickle)
 
 let rec string_of_value_type = function
   | #primitive_value as p -> string_of_primitive_type p
@@ -627,7 +624,6 @@ let retain names env = filter (fun (x, _) -> StringSet.mem x names) env
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
 
-module Shelve_ExprEnv = Shelve.Shelve_2(Shelve_rexpr)(Shelve_environment)
 module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
 
 let marshal_continuation (c : continuation) : string

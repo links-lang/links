@@ -99,14 +99,14 @@ type 'data expression' =
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
+      deriving (Functor, Rewriter, Show)
       (* Q: Should syntax exprs be picklable or not? *)
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
+      deriving (Functor, Rewriter, Show)
 
 (* [HACK]
    programs derive Functor and Rewriter
@@ -127,7 +127,7 @@ let visit_def unit visitor def =
     | Alien _ -> unit
 
 type 'a program' = Program of ('a definition' list * 'a expression')
-  deriving (Eq, Typeable, Pickle, Shelve, Functor, Rewriter, Show)
+  deriving (Functor, Rewriter, Show)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
@@ -271,17 +271,17 @@ let string_of_program p = show_program (fun _ -> "") p
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 type definition = typed_data definition'
 and untyped_definition = untyped_data definition'
 and stripped_definition = unit definition'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 type program = typed_data program'
 and untyped_program = untyped_data program'
 and stripped_program = unit program'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 let show_label =
   function
