@@ -7,6 +7,8 @@ open Result
 open Query
 open Syntax
 
+open Unix
+
 (** {0 Environment handling} *)
 
 (** bind env var value 
@@ -166,7 +168,11 @@ let do_query globals locals query table_aliases tables =
     let result_types = query_result_types query table_defs in
     let query_string = Sql.string_of_query (normalise_query globals locals db query) in
       prerr_endline("RUNNING QUERY:\n" ^ query_string);
-      Database.execute_select result_types query_string db
+      let t = Unix.gettimeofday() in
+      let result = Database.execute_select result_types query_string db in
+      Debug.print("Query took : " ^ 
+                    string_of_float((Unix.gettimeofday() -. t)) ^ "s");
+        result
 
 (** 0 Web-related stuff *)
 let has_client_context = ref false
