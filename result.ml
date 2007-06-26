@@ -6,6 +6,10 @@ open Types
 open Syntax
 open Utility
 
+(** Set this to [true] to print the body and environment of a
+    function. When [false], functions are simply printed as "fun" *)
+let printing_functions = Settings.add_bool ("printing_functions", false, `User)
+
 exception Runtime_error of string
 
 class type otherfield = 
@@ -22,12 +26,12 @@ module Show_otherfield = Show.ShowDefaults(
 
 type db_field_type = BoolField | TextField | IntField | FloatField
 		     | SpecialField of otherfield
-    deriving (Show)
+                         deriving (Show)
 
 let string_of_db_field_type = Show_db_field_type.show
 
 type db_status = QueryOk | QueryError of string
-    deriving (Show)
+  deriving (Show)
 
 class virtual dbresult = object
   method virtual status : db_status
@@ -142,7 +146,8 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
+type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row 
+             | Syntax.comparison ]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string
@@ -237,7 +242,10 @@ type contin_frame =
 and result = [
   | `PrimitiveFunction of string
   | `ClientFunction of (string)
-  | `Function of  (string list * environment (*locals*) * unit (*globals*) * rexpr)
+  | `RecFunction of ((string * rexpr) list * 
+                       (* name, arg, body triples *)
+                     environment (*locals*) * (* closed env, common to all *)
+                     string (* the distinguished func rep'd by this value *))
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `Abs of result
@@ -249,6 +257,10 @@ and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
     deriving (Show, Pickle)
+
+let string_as_charlist s : result =
+  `List (map (fun x -> (`Char x)) (explode s))
+
 
 let rec string_of_value_type = function
   | #primitive_value as p -> string_of_primitive_type p
@@ -272,6 +284,7 @@ let prim_val_of_expr : expression -> result option = function
           | Integer i -> Some(`Int i)
           | Char ch -> Some(`Char ch)
           | Float f -> Some(`Float f)
+          | String str -> Some (string_as_charlist str)
       end
   | _ -> None
 
@@ -307,9 +320,6 @@ let recfields = function
 
 exception Match of string
 
-let string_as_charlist s : result =
-  `List (map (fun x -> (`Char x)) (explode s))
-
 let pair_as_ocaml_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
@@ -324,7 +334,9 @@ let links_project name = function
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let delay_expr expr = `Function([], [], (), expr)
+(* let delay_expr env expr : result *)
+(*     = `RecFunction(["_anonThunk", expr], env, "_anonThunk") *)
+(*   (\* FIXME: beware name clashes? *\) *)
 
 let string_of_cont = Show_continuation.show
   
@@ -347,8 +359,16 @@ and string_of_result : result -> string = function
   | `ClientFunction (name) -> name
   | `Abs result -> "abs " ^ string_of_result result
     (* Choose from fancy or simple printing of functions: *)
-(*   | `Function(formal,env,_,body) -> "fun (" ^ formal ^ ") {" ^ Syntax.string_of_expression body ^ "}[" ^ string_of_environment env ^ "]" *)
-  | `Function(formal,env,_,body) -> "fun"
+  | `RecFunction(defs, env, name) -> 
+      if Settings.get_value(printing_functions) then
+        "{ " ^ (mapstrcat " "
+                  (fun (name, Syntax.Abstr(formals, body, _)) ->
+                     "fun (" ^ String.concat "," formals ^ ") {" ^
+                       Syntax.string_of_expression body ^ "}")
+                  defs) ^
+          " " ^ name ^ " }[" ^ string_of_environment env ^ "]"
+      else
+        "fun"
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
@@ -405,12 +425,12 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
       result_f (`Abs (map_result result_f expr_f contframe_f result))
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
-  | `Function (str, locals, _globals, body) ->
-      result_f(`Function(str, 
-                         map_env result_f expr_f contframe_f locals,
-(*                         map_env result_f expr_f contframe_f globals,*)
-                         (),
-                         map_expr result_f expr_f contframe_f body))
+  | `RecFunction (defs, env, name) ->
+      let defs' = map (fun (name, Syntax.Abstr(args, body, data)) ->
+                         (name, Syntax.Abstr(args, map_expr result_f expr_f contframe_f body, data))) defs in
+      result_f(`RecFunction(defs',
+                            (map_env result_f expr_f contframe_f env),
+                            name))
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
@@ -476,8 +496,8 @@ let rec extract_code_from_result : result -> 'a expression' list =
     | `PrimitiveFunction _ -> []
     | `ClientFunction _ -> []
     | `Abs result -> extract_code_from_result result
-    | `Function (str, locals, _globals, body) ->
-        extract_code_from_env locals @ [body]
+    | `RecFunction (defs, locals, name) ->
+        extract_code_from_env locals @ map snd defs
     | `Record fields -> concat_map (snd ->- extract_code_from_result) fields
     | `Variant(tag, body) -> extract_code_from_result body
     | `List(elems) -> concat_map (extract_code_from_result) elems
@@ -550,14 +570,11 @@ let program_label_table program =
     (fun (xs, x) -> concat (xs @ [x]))
     program
   
-
 let val_label_table value =
   let exprs = extract_code_from_result value in
     concat_map expr_label_table exprs
 
-
-
-(** resolve_label
+(** [resolve_label]
     Given a label and a label table, return the expression having the
     corresponding label.
     Currently uses linear search
@@ -635,7 +652,7 @@ let marshal_continuation (c : continuation) : string
       result
     
 let marshal_exprenv : (expression * environment) -> string
-  = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
+  = (Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode)
 
 let marshal_value : result  -> string
   = Pickle_result.pickleS ->- Netencoding.Base64.encode

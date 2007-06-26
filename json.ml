@@ -74,7 +74,8 @@ let rec jsonize_result : Result.result -> string = function
   | `ClientFunction _
   | `Abs _
   | `Continuation _
-  | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
+  | `RecFunction _ as r ->
+      prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | #Result.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_result value)
   | `Record fields -> "{" ^ String.concat "," (List.map (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_result v) fields) ^ "}"

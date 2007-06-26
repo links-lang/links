@@ -110,10 +110,10 @@ let rec simplify lookup = function
   | Apply(f, a, d) -> Apply(simplify lookup f, List.map (simplify lookup) a, d)
   | expr -> expr
 
-let rec value_of_simple_expr lookup = function
-  | Variable(x, _) -> Some (lookup x)
-  | Constant _ as expr -> prim_val_of_expr expr
-  | expr -> Some(delay_expr expr)
+(* let rec value_of_simple_expr lookup = function *)
+(*   | Variable(x, _) -> Some (lookup x) *)
+(*   | Constant _ as expr -> prim_val_of_expr expr *)
+(*   | expr -> Some(delay_expr expr) *)
 
 exception UnplainResult
 

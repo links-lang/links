@@ -100,7 +100,7 @@ type contin_frame =
     | Recv of environment
 and result = [ primitive_value
 | `Continuation of continuation
-| `Function of string list * environment * unit * Syntax.expression
+| `RecFunction of ((string * Syntax.expression) list * environment * string)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `List of result list
@@ -127,7 +127,7 @@ val links_fst : [> `Record of ('a * 'b) list ] -> 'b
 val links_snd : [> `Record of ('a * 'b) list ] -> 'b
 val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
-val delay_expr : 'a -> [> `Function of string list * 'b list * unit * 'a ]
+(* val delay_expr : environment -> Syntax.expression -> result *)
 val charlist_as_string : result -> string
 val string_of_result : result -> string
 val string_of_cont : continuation -> string

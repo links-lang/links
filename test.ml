@@ -82,7 +82,7 @@ let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
 let datatype = Parse.parse_string Parse.datatype
 
 let functionp : Result.result -> Result.result m = function
-  | `Function _ as f -> Right f
+  | `RecFunction _ as f -> Right f
   | r -> Left ("Expected a function but got "^ Result.Show_result.show r)
 
 let failedp : 'a m -> string option = 
@@ -91,7 +91,7 @@ let failedp : 'a m -> string option =
     | Right _ -> None
 
 let is_function ?with_type s =
-  parse  s >>= checkTypes >>= 
+  parse s >>= checkTypes >>= 
       (match with_type with 
         | Some t -> has_type (datatype t)
         | _ -> inRight) >>= optimise >>= run >>= functionp

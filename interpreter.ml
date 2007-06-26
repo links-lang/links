@@ -11,13 +11,17 @@ open Unix
 
 (** {0 Environment handling} *)
 
-(** bind env var value 
+(** [bind env var value]
     Extends `env' with a binding of `var' to `value'.
 *)
 let bind env var value = (var, value) :: env
 
-(** trim_env env
-    remove shadowed bindings from `env'
+(** The empty environment. (As long as we're data-abstracting.) *)
+let empty_env = []
+
+(** [trim_env env] removes shadowed bindings from `env'
+    (TBD: What constitutes "shadowing"? I think it should be opposite of
+     what's here)
 *)
 let trim_env = 
   let rec trim names (env:(string * result) list) 
@@ -42,25 +46,21 @@ let lookup globals locals name =
           | Some v -> v
           | None -> Library.primitive_stub name)
   with Not_found -> 
-    raise(RuntimeUndefVar name) (* ("Internal error: variable \"" ^ name ^ "\" not in environment")*)
+    raise(RuntimeUndefVar name)
 
+
+
+(** [bind_rec env defs] extends [env] with bindings for the [defs],
+    where each one defines a function and all the functions are
+    mutually recursive. *)
 let bind_rec locals defs =
-  (* create bindings for these functions, with no local variables for now *)
-  let make_placeholder = (fun env (variable, value) ->
-                            (match value with
-                               | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, locals, () (*globals*), body))
-                               | _ -> raise (Runtime_error "TF146"))) in
-  let rec_env = trim_env (fold_left make_placeholder [] defs) in
-    (* fill in the local variables *)
-  let fill_placeholder value =
-    match value with
-      | `Function (var, fnlocals, _, body) ->
-          `Function (var, fnlocals @ (retain (freevars body) rec_env), (), body)
-      | _ -> value
-  in
-    trim_env ((alistmap fill_placeholder rec_env) @ locals)
+  let new_defs = map (fun (name, _) -> 
+                        (name, `RecFunction(defs, locals, name))) defs in
+    trim_env (new_defs @ locals)
 
+
+(** Given a label and a record, returns the value of that field in the record,
+    together with the remaining fields of the record. *)
 let rec crack_row : (string -> ((string * result) list) -> (result * (string * result) list)) = fun ref_label -> function
         | [] -> raise (Runtime_error("Internal error: no field '" ^ ref_label ^ "' in record"))
         | (label, result) :: fields when label = ref_label ->
@@ -69,6 +69,8 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
             let selected, remaining = crack_row ref_label fields in
               (selected, field :: remaining)
 
+(** Given a Links tuple, returns an Ocaml list of the Links values in that
+    tuple. *)
 let untuple : result -> result list = 
   let rec aux n output = function
     | [] -> List.rev output
@@ -79,10 +81,10 @@ let untuple : result -> result list =
   in function
     | `Record fields -> aux 1 [] fields
     | _ -> assert false
-    
+        
 
-(** [normalise_query] substitutes values for the variables in a query,
-    and performs interpolation in LIKE expressions.  *)
+(** Substitutes values for the variables in a query,
+    and performs interpolation in LIKE expressions. *)
 let rec normalise_query (globals:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
       Text (Sql_transform.like_as_string (env @ globals) l)
@@ -125,7 +127,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database) (q
         offset = normalise_expression qry.offset;
         max_rows = opt_map normalise_expression qry.max_rows}
 
-(** [get_row_field_type field row]: what type has [field] in [row]? 
+(** [row_field_type field row]: what type has [field] in [row]? 
     TBD: Factor this out.
 *)
 
@@ -200,7 +202,9 @@ let client_call_impl name cont (args:Result.result list) =
 
 exception TopLevel of (Result.environment * Result.result)
 
-(* could bundle these together with globals to get a global
+(** {0 Scheduling} *)
+
+(* could bundle these together with [globals] to get a global
    'interpreter state' that we'd then thread through the whole
    interpreter, making it re-entrant. *)
 let process_steps = ref 0
@@ -223,6 +227,8 @@ and scheduler globals state stepf =
     end
   else
     stepf()
+
+(** Apply a continuation to a result; half of the evaluator. *)
 and apply_cont (globals : environment) : continuation -> result -> result = 
   fun cont value ->
     let stepf() = 
@@ -255,12 +261,16 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	           fact a function value which will later be applied
 	        *)
                 interpret globals locals param (FuncApply (locals, value, params, [])::cont)
-            | (FuncApplyFlipped(locals, arg)) ->
+            | FuncApplyFlipped(locals, arg) ->
                 apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
             | ThunkApply locals ->
                 begin match value with
-                  | `Function ([], fnlocals, (), body) -> 
-                      interpret globals (trim_env (fnlocals @ locals)) body cont
+                  | `RecFunction (defs, fnlocals, name) -> 
+                      let Syntax.Abstr([], body, _) = assoc name defs in
+                      let recPeers = 
+                        map (fun (name, Syntax.Abstr(args, body, _)) -> 
+                               (name, `RecFunction (defs, fnlocals, name))) defs in
+                      interpret globals (trim_env (recPeers @ fnlocals @ locals)) body cont
                   | `PrimitiveFunction name ->
                       apply_cont globals cont (Library.apply_pfun name [])
                   | `ClientFunction name ->
@@ -275,28 +285,23 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                   | _, arg::args -> 
                       interpret globals locals arg
                         (FuncApply (locals, func, args, value::evaluated_args)::cont)
-                  | `Function (vars, fnlocals, (), body), [] ->
-                      (* FIXME: functional abstractions no longer capture
-                         global variables; remove the fnglobals element here. *)
-                      
-		      (* Interpret the body in the following
-		         environments: locals are augmented with
-		         function locals and function binding (binding
-		         takes precedence) toplevel environment in
-		         which the function was defined takes
-		         precedence over the real current globals. Is
-		         there a semanticist in the house? *)
-                      
-                      let locals = trim_env (fnlocals @ locals) in
-                      let locals = fold_left2 bind locals vars (List.rev (value::evaluated_args))
-                      in
+                  | `RecFunction (defs, fnlocals, name), [] ->
+                      let Syntax.Abstr(vars, body, _) = assoc name defs in
+                     
+                      let recPeers = (* recursively-defined peers *)
+                        map(fun (name, Syntax.Abstr(args, body, _)) -> 
+                              (name, `RecFunction(defs, fnlocals, name))) defs in
+                      let locals = recPeers @ fnlocals @ locals in
+                      let evaluated_args = List.rev (value::evaluated_args) in
+                      let locals = fold_left2 bind locals vars evaluated_args in
+                      let locals = trim_env locals in
                         interpret globals locals body cont
 
                   | `PrimitiveFunction name, [] ->
-                      apply_cont globals cont (Library.apply_pfun name  (List.rev (value::evaluated_args)))
+                      apply_cont globals cont (Library.apply_pfun name (List.rev (value::evaluated_args)))
 
                   | `ClientFunction name, [] ->
-                     client_call_impl name cont (List.rev (value::evaluated_args))
+                      client_call_impl name cont (List.rev (value::evaluated_args))
 	          | `Continuation (cont), [] ->
                       apply_cont globals cont value
                   | `Abs f, [] -> 
@@ -321,7 +326,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | `Bool false -> 
 	               interpret globals locals false_branch cont
                    | _ -> raise (Runtime_error("Attempt to test a non-boolean value: "
-					         ^ string_of_result value)))
+					       ^ string_of_result value)))
             | (BinopRight(locals, op, rhsExpr)) ->
 	        interpret globals locals rhsExpr
                   (BinopApply(locals, op, value) :: cont)
@@ -500,8 +505,11 @@ fun globals locals expr cont ->
       eval f (UnopApply (locals, Result.Abs)::cont)
   | Syntax.App (f, p, _) ->
       eval f (BinopRight (locals, `App, p)::cont)
-  | Syntax.Abstr (variable, body, _) ->
-      apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
+  | Syntax.Abstr (variable, body, _) as f->
+      let value = `RecFunction([("_anon", f)],
+                               retain (freevars body) locals,
+                               "_anon") in
+        apply_cont globals cont value
   | Syntax.Apply (Variable ("recv", _), [], _) ->
       apply_cont globals (Recv (locals) ::cont) (`Record [])
   | Syntax.Apply (fn, [], _) ->
@@ -515,7 +523,8 @@ fun globals locals expr cont ->
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
-      let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
+      let defs' = List.map (fun (n, v, _type) -> (n, v)) defs in
+      let new_env = bind_rec locals defs' in
         interpret globals new_env body cont
   | Syntax.Xml_node _ as xml when Forms.islform xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont

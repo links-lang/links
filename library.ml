@@ -147,7 +147,8 @@ let rec equal l r =
     | `Int l   , `Int r    -> eq_num l r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
-    | `Function _, `Function _ -> Pickle_result.pickleS l = Pickle_result.pickleS r
+    | `RecFunction _, `RecFunction _ -> 
+        Pickle_result.pickleS l = Pickle_result.pickleS r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -167,7 +168,8 @@ let rec less l r =
     | `Int l, `Int r     -> lt_num l r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
-    | `Function _ , `Function _                  -> Pickle_result.pickleS l < Pickle_result.pickleS r
+    | `RecFunction _ , `RecFunction _
+        -> Pickle_result.pickleS l < Pickle_result.pickleS r
         (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in
