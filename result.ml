@@ -208,7 +208,21 @@ let type_of_primitive : primitive_value -> datatype = function
 
 let string_of_primitive_type = type_of_primitive ->- string_of_datatype
 
-type contin_frame = 
+type result = [
+  | `PrimitiveFunction of string
+  | `ClientFunction of (string)
+  | `RecFunction of ((string * rexpr) list * 
+                       (* name, arg, body triples *)
+                     environment (*locals*) * (* closed env, common to all *)
+                     string (* the distinguished func rep'd by this value *))
+  | `Record of ((string * result) list)
+  | `Variant of (string * result)
+  | `Abs of result
+  | `List of (result list)
+  | `Continuation of continuation
+  |  primitive_value
+]
+and contin_frame = 
   | Definition of (environment * string)
   | FuncArg of (rexpr list * environment) (* FIXME: This is twiddled *)
   | FuncApply of (environment * result * rexpr list * result list)
@@ -239,20 +253,6 @@ type contin_frame =
   | Ignore of (environment * rexpr )
   | IgnoreDef of (environment * rdef)
   | Recv of (environment)
-and result = [
-  | `PrimitiveFunction of string
-  | `ClientFunction of (string)
-  | `RecFunction of ((string * rexpr) list * 
-                       (* name, arg, body triples *)
-                     environment (*locals*) * (* closed env, common to all *)
-                     string (* the distinguished func rep'd by this value *))
-  | `Record of ((string * result) list)
-  | `Variant of (string * result)
-  | `Abs of result
-  | `List of (result list)
-  | `Continuation of continuation
-  |  primitive_value
-]
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)

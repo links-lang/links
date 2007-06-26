@@ -76,7 +76,16 @@ type primitive_value =
     | `XML of xmlitem 
     | `NativeString of string
     ]
-type contin_frame =
+type result = [ primitive_value
+| `Continuation of continuation
+| `RecFunction of ((string * Syntax.expression) list * environment * string)
+| `PrimitiveFunction of string
+| `ClientFunction of string
+| `List of result list
+| `Record of (string * result) list
+| `Abs of result
+| `Variant of string * result ]
+and contin_frame =
     | Definition of (environment * string)
     | FuncArg of (Syntax.expression list * environment)
     | FuncApply of (environment * result * Syntax.expression list * result list)
@@ -98,15 +107,6 @@ type contin_frame =
     | Ignore of (environment * Syntax.expression)
     | IgnoreDef of (environment * Syntax.definition)
     | Recv of environment
-and result = [ primitive_value
-| `Continuation of continuation
-| `RecFunction of ((string * Syntax.expression) list * environment * string)
-| `PrimitiveFunction of string
-| `ClientFunction of string
-| `List of result list
-| `Record of (string * result) list
-| `Abs of result
-| `Variant of string * result ]
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Pickle)
