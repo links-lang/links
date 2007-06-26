@@ -238,9 +238,7 @@ let perform_request
     | RemoteCall(func, args) ->
         Interpreter.has_client_context := true;
         let cont, value = 
-          match args with
-            | [] -> [Result.ThunkApply []], func
-            | _::_ -> [Result.FuncApply ([], func, [], (butlast args))], (last args)
+          ApplyCont(Result.empty_env, args) :: toplevel_cont, func
         in
 	  Library.print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode

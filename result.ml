@@ -223,36 +223,39 @@ type result = [
   |  primitive_value
 ]
 and contin_frame = 
-  | Definition of (environment * string)
-  | FuncArg of (rexpr list * environment) (* FIXME: This is twiddled *)
-  | FuncApply of (environment * result * rexpr list * result list)
-  | FuncApplyFlipped of (environment * result)
-  | ThunkApply of environment
-  | LetCont of (environment * 
-		  string * rexpr)
-  | BranchCont of (environment * 
-		     rexpr * rexpr)
-  | BinopRight of (environment * 
-		     binop * rexpr)
-  | BinopApply of (environment * 
-		     binop * result)
-  | UnopApply of (environment * unop )
+(* the frame ... represents an eval'n context like ... (M is a term, V a value)*)
+  | Definition of (environment * string)          (* ??? *)
+  | FuncEvalCont of (rexpr list * environment)    (* [ ]( Ms ) *)
+      (* FIXME: order of the FuncEvalCont args is undesirable. *)
+  | ArgEvalCont of (environment * result * rexpr list * result list)
+                                                  (* V(Vs, [ ], Ms) *)
+  | ApplyCont of (environment * result list)      (* [ ](Vs) *)
+  | LetCont of (environment * string * rexpr)     (* let x = [ ] in M *)
+  | BranchCont of (environment * rexpr * rexpr)   (* if [ ] then M else N *)
+  | BinopRight of (environment * binop * rexpr)   (* [ ] `op` M *)
+  | BinopApply of (environment * binop * result)  (* V `op` [ ] *)
+  | UnopApply of (environment * unop )            (* op [ ] *)
   | RecSelect of (environment * string * string * string * rexpr)
+                                                  (* (l=x | xs) = [ ] *)
   | CollExtn of (environment * 
 		   string * rexpr * 
-		   result list list * result list)
-  | StartCollExtn of (environment *
-			string * rexpr)
+		   result list list * 
+                   result list)                   (* concat Vs ++ for x <- V in M *)
+  | StartCollExtn of (environment * string * rexpr)
+                                                  (* for x <- [ ] in M *)
   | XMLCont of (environment 
                 * string                     (* tag *)
                 * string option              (* attr name, if any *)
                 * xml                        (* child nodes *)
-                * (string * rexpr) list (* unevaluated attributes *)
-                * rexpr list            (* unevaluated elements *)
+                * (string * rexpr) list      (* unevaluated attributes *)
+                * rexpr list                 (* unevaluated elements *)
                 )
-  | Ignore of (environment * rexpr )
-  | IgnoreDef of (environment * rdef)
-  | Recv of (environment)
+                                                  (* <tag attr=[ ]>M</tag> 
+                                                       or
+                                                     <tag attrs>Vs [ ] Ms</tag>*)
+  | Ignore of (environment * rexpr)               (* let _ = [ ] in M *)
+  | IgnoreDef of (environment * rdef)             (* ??? *)
+  | Recv                                          (* receive([ ]) *)
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
@@ -381,7 +384,7 @@ and string_of_result : result -> string = function
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_xresult elems
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
-  | `Continuation cont -> string_of_cont cont
+  | `Continuation cont -> "Continuation" ^ string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
@@ -436,23 +439,23 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
 and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
-  | Recv (env) -> contframe_f(Recv(map_env result_f expr_f contframe_f env))
+  | Recv -> contframe_f(Recv)
   | Definition (env, s) ->
       contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
-  | FuncArg(args, env) -> 
+  | FuncEvalCont(args, env) -> 
       contframe_f 
-        (FuncArg (map (map_expr result_f expr_f contframe_f) args,
+        (FuncEvalCont (map (map_expr result_f expr_f contframe_f) args,
                   map_env result_f expr_f contframe_f env))
-  | ThunkApply env ->
-      contframe_f (ThunkApply (map_env result_f expr_f contframe_f env))
-  | FuncApply(env, f, args, eargs) ->
-      contframe_f( FuncApply(map_env result_f expr_f contframe_f env,
+(*   | ThunkApply env -> *)
+(*       contframe_f (ThunkApply (map_env result_f expr_f contframe_f env)) *)
+  | ArgEvalCont(env, f, args, eargs) ->
+      contframe_f( ArgEvalCont(map_env result_f expr_f contframe_f env,
                              map_result result_f expr_f contframe_f f,
                              map (map_expr result_f expr_f contframe_f) args,
                              map (map_result result_f expr_f contframe_f) eargs))
-  | FuncApplyFlipped(env, a) -> 
-      contframe_f(FuncApplyFlipped((map_env result_f expr_f contframe_f) env,
-                  (map_result result_f expr_f contframe_f) a))
+  | ApplyCont(env, args) -> 
+      contframe_f(ApplyCont((map_env result_f expr_f contframe_f) env,
+                                   map (map_result result_f expr_f contframe_f) args))
   | LetCont(env, var, body) -> 
       contframe_f(LetCont((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
   | BranchCont(env, tru, fls) -> 
@@ -508,19 +511,18 @@ and extract_code_from_cont kappa =
   concat_map (extract_code_from_contframe) kappa
 and extract_code_from_contframe = 
   function
-    | Recv (env) -> extract_code_from_env env
+    | Recv -> []
     | Definition (env, s) ->
         extract_code_from_env env
-    | FuncArg(args, env) ->
+    | FuncEvalCont(args, env) ->
         args @ extract_code_from_env env
-    | FuncApply(env, f, args, eargs) -> 
+    | ArgEvalCont(env, f, args, eargs) -> 
         extract_code_from_env env
         @ extract_code_from_result f
         @ args
         @ concat_map extract_code_from_result eargs
-    | ThunkApply env -> extract_code_from_env env
-    | FuncApplyFlipped(env, a) -> 
-        extract_code_from_result a @ extract_code_from_env env
+    | ApplyCont(env, args) -> 
+        concat_map extract_code_from_result args @ extract_code_from_env env
     | LetCont(env, var, body) ->
         extract_code_from_env env @ [body]
     | BranchCont(env, tru, fls) -> 
@@ -687,3 +689,31 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
 
 let unmarshal_value : string -> result =
   Netencoding.Base64.decode ->- Pickle_result.unpickleS
+
+
+(** {0 Environment handling} *)
+
+(** [bind env var value]
+    Extends `env' with a binding of `var' to `value'.
+*)
+let bind env var value = (var, value) :: env
+
+(** The empty environment. (As long as we're data-abstracting.) *)
+let empty_env = []
+
+(** [trim_env env] removes shadowed bindings from `env'
+    (TBD: What constitutes "shadowing"? I think it should be opposite of
+     what's here)
+*)
+let trim_env = 
+  let rec trim names (env:(string * result) list) 
+      = match env with
+        | [] -> []
+        | (k, v) :: rest -> 
+            if mem k names then trim names rest
+            else (k, v) :: (trim (k :: names) rest) in
+    trim []
+      
+(** Remove toplevel bindings from an environment *)
+let remove_toplevel_bindings toplevel env = 
+  filter (fun pair -> mem pair toplevel) env

@@ -268,7 +268,7 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (p1 (fun f ->
          let new_pid = fresh_pid () in
            Hashtbl.add messages new_pid (Queue.create ());
-           Queue.push ((ThunkApply([]) :: [], f), new_pid) suspended_processes;
+           Queue.push ((ApplyCont(empty_env, []) :: toplevel_cont, f), new_pid) suspended_processes;
            (`Int (num_of_int new_pid))),
    (*
      a: spawn's mailbox type (ignored, since spawn doesn't recv)

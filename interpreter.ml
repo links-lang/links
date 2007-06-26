@@ -9,32 +9,6 @@ open Syntax
 
 open Unix
 
-(** {0 Environment handling} *)
-
-(** [bind env var value]
-    Extends `env' with a binding of `var' to `value'.
-*)
-let bind env var value = (var, value) :: env
-
-(** The empty environment. (As long as we're data-abstracting.) *)
-let empty_env = []
-
-(** [trim_env env] removes shadowed bindings from `env'
-    (TBD: What constitutes "shadowing"? I think it should be opposite of
-     what's here)
-*)
-let trim_env = 
-  let rec trim names (env:(string * result) list) 
-      = match env with
-        | [] -> []
-        | (k, v) :: rest -> 
-            if mem k names then trim names rest
-            else (k, v) :: (trim (k :: names) rest) in
-    trim []
-      
-(** Remove toplevel bindings from an environment *)
-let remove_toplevel_bindings toplevel env = 
-  filter (fun pair -> mem pair toplevel) env
 
 exception RuntimeUndefVar of string
 
@@ -238,8 +212,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	         else switch_context globals)
         | (frame::cont) -> match frame with
 	    | (Definition(env, name)) -> 
-	        apply_cont (bind env name value) cont value
-            | Recv (locals) ->
+	        apply_cont (Result.bind env name value) cont value
+            | Recv  ->
                 (* If there are any messages, take the first one and
                    apply the continuation to it.  Otherwise, suspend
                    the continuation (in the blocked_processes table)
@@ -252,73 +226,64 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                     begin
                       Hashtbl.add Library.blocked_processes
                         !Library.current_pid
-                        ((Recv locals::cont, value), !Library.current_pid);
+                        ((Recv::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | FuncArg([], _) -> assert false
-            | FuncArg(param::params, locals) ->
+            | FuncEvalCont([], locals) -> 
+                apply_cont globals (ApplyCont(locals, [])::cont) value
+            | FuncEvalCont(param::params, locals) ->
 	        (* Just evaluate the first parameter; "value" is in
 	           fact a function value which will later be applied
 	        *)
-                interpret globals locals param (FuncApply (locals, value, params, [])::cont)
-            | FuncApplyFlipped(locals, arg) ->
-                apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
-            | ThunkApply locals ->
+                interpret globals locals param
+                  (ArgEvalCont(locals, value, params, [])::cont)
+            | ApplyCont(locals, args_rev) ->
+                let args = List.rev args_rev in
                 begin match value with
-                  | `RecFunction (defs, fnlocals, name) -> 
-                      let Syntax.Abstr([], body, _) = assoc name defs in
-                      let recPeers = 
-                        map (fun (name, Syntax.Abstr(args, body, _)) -> 
-                               (name, `RecFunction (defs, fnlocals, name))) defs in
-                      interpret globals (trim_env (recPeers @ fnlocals @ locals)) body cont
-                  | `PrimitiveFunction name ->
-                      apply_cont globals cont (Library.apply_pfun name [])
-                  | `ClientFunction name ->
-                      client_call_impl name cont []
-                  | `Abs f ->
-                      apply_cont globals (FuncApply (locals, f, [], [])::cont) (`Record [])
-                  | _ -> raise (Runtime_error ("error applying zero-argument function "^
-                                                 string_of_result value))
-                end
-            | FuncApply(locals, func, unevaluated_args, evaluated_args) ->  
-                begin match func, unevaluated_args with
-                  | _, arg::args -> 
-                      interpret globals locals arg
-                        (FuncApply (locals, func, args, value::evaluated_args)::cont)
-                  | `RecFunction (defs, fnlocals, name), [] ->
-                      let Syntax.Abstr(vars, body, _) = assoc name defs in
+                  | `RecFunction (defs, fnlocals, name) ->
+                      let Syntax.Abstr(vars, body, _data) = assoc name defs in
                      
                       let recPeers = (* recursively-defined peers *)
                         map(fun (name, Syntax.Abstr(args, body, _)) -> 
                               (name, `RecFunction(defs, fnlocals, name))) defs in
                       let locals = recPeers @ fnlocals @ locals in
-                      let evaluated_args = List.rev (value::evaluated_args) in
-                      let locals = fold_left2 bind locals vars evaluated_args in
+                      let locals = fold_left2 Result.bind locals vars args in
                       let locals = trim_env locals in
                         interpret globals locals body cont
 
-                  | `PrimitiveFunction name, [] ->
-                      apply_cont globals cont (Library.apply_pfun name (List.rev (value::evaluated_args)))
+                  | `PrimitiveFunction name ->
+                      apply_cont globals cont (Library.apply_pfun name args)
 
-                  | `ClientFunction name, [] ->
-                      client_call_impl name cont (List.rev (value::evaluated_args))
-	          | `Continuation (cont), [] ->
-                      apply_cont globals cont value
-                  | `Abs f, [] -> 
-                      apply_cont globals (FuncApply (locals, f, [], [])::cont) 
+                  | `ClientFunction name ->
+                      client_call_impl name cont args
+	          | `Continuation cont ->
+                      assert (length args == 1);
+                      apply_cont globals cont (List.hd(args))
+                  | `Abs f -> 
+                      apply_cont globals (ArgEvalCont (locals, f, [], [])::cont) 
                         (`Record
                            (snd 
                               (List.fold_right
                                  (fun field (n,tuple) ->
                                     (n+1,
                                      (string_of_int n, field)::tuple))
-                                 (value::evaluated_args)
+                                 args_rev
                                  (1, []))))
                   | _ -> raise (Runtime_error ("Applied non-function value: "^
-                                                 string_of_result func))
+                                                 string_of_result value))
                 end
+            | ArgEvalCont(locals, func, unevaluated_args, evaluated_args) ->  
+                let evaluated_args = value :: evaluated_args in
+                  begin match unevaluated_args with
+                      [] ->
+                        apply_cont globals 
+                          (ApplyCont(locals, evaluated_args) :: cont) func
+                    | next_expr :: exprs ->
+                        interpret globals locals next_expr 
+                          (ArgEvalCont(locals, func, exprs, evaluated_args)::cont)
+                  end
             | (LetCont(locals, variable, body)) ->
-	        interpret globals (bind locals variable value) body cont
+	        interpret globals (Result.bind locals variable value) body cont
             | (BranchCont(locals, true_branch, false_branch)) ->
 	        (match value with
                    | `Bool true  -> 
@@ -362,10 +327,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | `App -> 
                          begin match untuple value with
                            | [] -> 
-                               apply_cont globals (ThunkApply locals ::cont) lhsVal
+                               apply_cont globals (ApplyCont(locals, [])::cont) lhsVal
                            | _::_ as v -> 
                                let firsts, last = unsnoc v in
-                                 apply_cont globals (FuncApply (locals, lhsVal, [], firsts)::cont) last
+                                 apply_cont globals (ArgEvalCont (locals, lhsVal, [], firsts)::cont) last
                          end
                   end
 	        in
@@ -380,9 +345,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | VrntSelect(case_label, case_variable, case_body, variable, body) ->
 	               (match value with
                           | `Variant (label, value) when label = case_label ->
-                              (interpret globals (bind locals case_variable value) case_body cont)
+                              (interpret globals (Result.bind locals case_variable value) case_body cont)
                           | `Variant (_) as value ->
-		              (interpret globals (bind locals (valOf variable) value)
+		              (interpret globals (Result.bind locals (valOf variable) value)
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
@@ -410,7 +375,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	        )
             | RecSelect (locals, label, label_var, variable, body) ->
 	        let field, remaining = crack_row label (recfields value) in
-                let new_env = trim_env (bind (bind locals variable
+                let new_env = trim_env (Result.bind (Result.bind locals variable
 					        (`Record remaining))
 				          label_var field) in
                   interpret globals new_env body cont
@@ -422,7 +387,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		            [] -> apply_cont globals cont (`List [])
 	                  | (first_elem::other_elems) ->
 	                      (* bind 'var' to the first element, save the others for later *)
-		              interpret globals (bind locals variable first_elem) expr
+		              interpret globals (Result.bind locals variable first_elem) expr
 		                (CollExtn(locals, variable, expr, [], other_elems) :: cont))
 	           | x -> raise (Runtime_error ("TF197 : " ^ string_of_result x)))
 	          
@@ -439,7 +404,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		         apply_cont globals cont (`List (List.rev (List.concat rslts)))
 		     | (next_input_expr::inputs) ->
 		         (* Evaluate next input, continuing with given results: *)
-		         interpret globals (bind locals var next_input_expr) expr
+		         interpret globals (Result.bind locals var next_input_expr) expr
 		           (CollExtn(locals, var, expr, 
 				     rslts, inputs) :: cont)
 	        )
@@ -511,11 +476,9 @@ fun globals locals expr cont ->
                                "_anon") in
         apply_cont globals cont value
   | Syntax.Apply (Variable ("recv", _), [], _) ->
-      apply_cont globals (Recv (locals) ::cont) (`Record [])
-  | Syntax.Apply (fn, [], _) ->
-      eval fn (ThunkApply locals::cont)
+      apply_cont globals (Recv::cont) (`Record [])
   | Syntax.Apply (fn, params, _) ->
-      eval fn (FuncArg (params, locals)::cont)
+      eval fn (FuncEvalCont (params, locals)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
@@ -596,7 +559,7 @@ fun globals locals expr cont ->
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
   | Syntax.Call_cc(arg, _) ->
       let cc = `Continuation cont in
-        eval arg (FuncApplyFlipped(locals, cc) :: cont)
+        eval arg (ApplyCont(locals, [cc]) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->
       eval (Apply (Variable ("sortBy", d), [byExpr; list], d)) cont
   | Syntax.Wrong (_) ->

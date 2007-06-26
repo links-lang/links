@@ -87,10 +87,9 @@ type result = [ primitive_value
 | `Variant of string * result ]
 and contin_frame =
     | Definition of (environment * string)
-    | FuncArg of (Syntax.expression list * environment)
-    | FuncApply of (environment * result * Syntax.expression list * result list)
-    | FuncApplyFlipped of (environment * result)
-    | ThunkApply of environment
+    | FuncEvalCont of (Syntax.expression list * environment)
+    | ArgEvalCont of (environment * result *Syntax.expression list * result list)
+    | ApplyCont of (environment * result list)
     | LetCont of (environment * string * Syntax.expression)
     | BranchCont of (environment * Syntax.expression * Syntax.expression)
     | BinopRight of (environment * binop * Syntax.expression)
@@ -106,7 +105,7 @@ and contin_frame =
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
     | IgnoreDef of (environment * Syntax.definition)
-    | Recv of environment
+    | Recv 
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Pickle)
@@ -159,3 +158,6 @@ val unmarshal_value : string -> result
 val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
 val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
 
+val bind : environment -> string -> result -> environment
+val empty_env : environment
+val trim_env : environment -> environment
