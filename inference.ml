@@ -322,7 +322,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                   match lalias, ralias with
                     | `Primitive `Abstract, `Primitive `Abstract ->
                         raise (Unify_failure
-                                 ("Cannot unify abstract type '"^ls^"' with abstract type '"^rs^"'"))
+                                 ("Cannot unify abstract type '"^string_of_datatype t1^
+                                    "' with abstract type '"^string_of_datatype t2^"'"))
                     | `Primitive `Abstract, _ ->
                         unify' rec_env (t1, instantiate_alias (rvars, ralias) rts)
                     | _, `Primitive `Abstract ->
@@ -337,7 +338,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                   match alias with
                     | `Primitive `Abstract ->
                         raise (Unify_failure
-                                 ("Cannot unify abstract type '"^s^"' with type '"^string_of_datatype t^"'"))
+                                 ("Cannot unify abstract type '"^
+                                    string_of_datatype (`Application (s, ts)) ^"' with type '"^string_of_datatype t^"'"))
                     | _ ->
                         unify' rec_env (instantiate_alias (vars, alias) ts, t)
                 end
