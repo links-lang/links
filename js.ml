@@ -134,6 +134,7 @@ let optimise e =
       (RewriteCode.all [remove_renamings; concat_lits] e)
   else e
 
+
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
 
@@ -157,9 +158,8 @@ let optimise e =
 
   _start(tree)
     Replace the current page with `tree'.
-  _registerFormEventHandlers(handlers)
-    Register some event handler functions; return a "_key" attribute to 
-    uniquely identify the element to the handler-registration system.
+  _registerFormAction(continuation)
+    Register a continuation function; return an id.
   _continuations
     Table of continuation functions, indexed by id.
 
@@ -211,20 +211,16 @@ let rec show : code -> string =
     | c -> "(" ^ show c ^ ")" in
   let show_def = function
       | name, (Fn _ as f) -> show_func name f
-      | name, Bind (v, (Fn _ as f), Var v') when v = v' -> 
-          show_func (*name*) v f ^ "\nvar " ^ name ^ " = " ^ v
+      | name, Bind (v, (Fn _ as f), Var v') when v = v'  -> show_func (*name*) v f ^ "\nvar " ^ name ^ " = " ^ v
       | name, value -> "var " ^ name ^ "; " ^ show value ^ ";" in
     function
       | Var s -> s
       | Lit s -> s
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
-      | Call (Var "LINKS.project", [label; record]) -> 
-          (paren record) ^ "[" ^ show label ^ "]"
-      | Call (Var "hd", [list;kappa]) -> 
-          Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
-      | Call (Var "tl", [list;kappa]) -> 
-          Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
+      | Call (Var "LINKS.project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+      | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
+      | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
@@ -240,8 +236,8 @@ let rec show : code -> string =
 open PP
 
 (** Pretty-print a Code value as a JavaScript string. *)
-let rec format_code c =
-  let rec show_func_pp name (Fn (vars, body)) : PP.doc = 
+let rec format_code c : PP.doc =
+  let rec show_func_pp name (Fn (vars, body)) = 
     let names = local_names body in
     let local_decls = 
       if names = [] then DocNil
@@ -830,18 +826,19 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
       | _ -> []
   in
     
-  let handlers_ast, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
+  let handlers, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
   let vars = Syntax.lname_bound_vars xml in
 
   let make_code_for_handler (evName, code) = 
-    (strip_lcolon evName,
-     (fold_left
-        (fun expr var ->
-           Bind (var, Call (Var "LINKS.fieldVal", [strlit var]), expr))
-        (end_thread(generate global_names code))
-        vars)) in
-  let handlers = map make_code_for_handler handlers_ast in
-  let attrs_cps = pair_fresh_names (alistmap (generate global_names) attrs) in 
+    strip_lcolon evName, (fold_left
+                            (fun expr var ->
+                               Bind (var, Call (Var "LINKS.fieldVal", [strlit var]), expr))
+                            (end_thread(generate global_names code))
+                            vars) in
+  let handlers_ast = handlers in
+  let handlers = map make_code_for_handler handlers in
+  let attrs_cps = alistmap (generate global_names) attrs in 
+  let attrs_cps = pair_fresh_names attrs_cps in
   let children_cps = pair_fresh_names (map (generate global_names) children) in
   let key_attr = 
     match handlers with
@@ -1160,34 +1157,22 @@ let words =
 
 let symbols = List.map fst words
 
-(* FIXME: we should actually be more delicate about which symbols
- *must* be translated away, not just translating the ones we can
- * translate. *)
+let wordify x = 
+  catch_notfound_l "wordify"
+    (lazy("_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)))
+
 let symbolp name =
-  List.exists (not -<- Utility.Char.isWord) (explode name) &&
-    (if Settings.get_value js_rename_builtins then true (* why would we not want to rename these? *)
+  List.for_all (flip List.mem symbols) (explode name) &&
+    (if Settings.get_value js_rename_builtins then true
      else (not (Library.is_primitive name)))
 
-let wordify name = 
-  if symbolp name then 
-    try
-    ("_" ^ 
-       mapstrcat "_" 
-       (fun ch ->
-          if (Utility.Char.isWord ch) then String.make 1 ch else
-            List.assoc ch words
-       )
-       (Utility.explode name))
-    with
-        Not_found -> failwith("Internal error: unknown symbol character")
-  else name
-
 let wordify_rewrite : RewriteSyntax.rewriter = function
-  | Variable (name, d) -> Some (Variable (wordify name, d))
-  | Let (name, rhs, body, d) -> 
-      Some (Let (wordify name, rhs, body, d))
-  | Rec (bindings, body, d) -> 
-      let rename (nm, body, t) = (wordify nm, body, t) in
+  | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
+  | Let (name, rhs, body, d) when symbolp name -> Some (Let (wordify name, rhs, body, d))
+  | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
+      let rename (x,y,z) =
+        ((if symbolp x then wordify x 
+          else x), y, z) in
         Some (Rec (List.map rename bindings, body, d))
   | _ -> None
 
@@ -1196,12 +1181,7 @@ let rename_symbol_operators exp =
 
 let rename_symbol_operators_def def =
   match def with
-    | Define (name, b, l, t) -> 
-        Define (wordify name, rename_symbol_operators b, l, t)
-    | Alias (name, args, t, data) ->
-        Alias (wordify name, args, t, data)
-    | Alien (name, b, l, t) when symbolp name ->
-        assert false (* I don't know what's supposed to happen here. *)
+    | Define (name, b,l,t) when symbolp name -> Define (wordify name, rename_symbol_operators b, l, t)
     | _ -> def
 
 (* Remove "units" that get inserted into the environment as a result
@@ -1228,15 +1208,14 @@ let get_alien_names defs =
 (* Note: the body is not really used here. *)
 let generate_program_defs (Program(defs,body)) root_names =
   let aliens = get_alien_names defs in
-  let defs = map rename_symbol_operators_def defs in
-  let body = rename_symbol_operators body in
+  let defs = List.map rename_symbol_operators_def defs
+  and body = rename_symbol_operators body in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
-      Optimiser.inline(Optimiser.inline(Optimiser.inline(Program(defs, body))))
+      Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body)
   in
   let library_names = aliens @ (List.map fst (fst Library.typing_env)) in
-(*     Debug.print(mapstrcat "\n" string_of_definition defs); *)
   let defs =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names
@@ -1246,9 +1225,8 @@ let generate_program_defs (Program(defs,body)) root_names =
     map (gen_def global_names ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
-  let expr = rename_symbol_operators expr in
-  let defs = map rename_symbol_operators_def defs in
   let js_defs = generate_program_defs (Program(defs,expr)) (Syntax.freevars expr) in
+  let expr = rename_symbol_operators expr in
   let library_names = List.map fst (fst Library.typing_env) in
 (*   let env = remove_nulls (butlast env) in *)
   let global_names = Syntax.defined_names defs @ library_names in

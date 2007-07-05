@@ -86,8 +86,7 @@ let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
 (*
   [NOTE]
   
-  We use Map.fold and Set.fold too often to support OCaml versions
-  prior to 3.08.4
+  We use Map.fold and Set.fold too often to support OCaml versions prior to 3.08.4
 *)
 let _ =
   if not (ocaml_version_atleast [3; 8; 4]) then
@@ -95,7 +94,7 @@ let _ =
   else
     ()
 
-(** {0 Type ops} *)
+(* type ops stuff *)
   let empty_field_env = FieldEnv.empty
   let closed_row_var = Unionfind.fresh `Closed
 
@@ -114,8 +113,7 @@ let _ =
                 | `Rigid _
                 | `Flexible _ -> false
                 | `Recursive (var, row) ->
-                    ((TypeVarSet.mem var rec_vars) or
-                       (is_closed (TypeVarSet.add var rec_vars) row))
+                    ((TypeVarSet.mem var rec_vars) or (is_closed (TypeVarSet.add var rec_vars) row))
                 | `Body row ->
                     is_closed rec_vars row
             end
@@ -181,8 +179,7 @@ let free_type_vars, free_row_type_vars =
       | `Not_typed               -> S.empty
       | `Primitive _             -> S.empty
       | `Function (f, m, t)      ->
-          S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars m; 
-                       free_type_vars' rec_vars t]
+          S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars m; free_type_vars' rec_vars t]
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
       | `Table (r, w)            -> S.union (free_type_vars' rec_vars r) (free_type_vars' rec_vars w)
@@ -259,8 +256,7 @@ let is_rigid_row : row -> bool =
       | `Rigid _ -> true
       | `Flexible _ -> false
       | `Recursive (var, row) ->
-          ((TypeVarSet.mem var rec_vars) or 
-             (is_rigid (TypeVarSet.add var rec_vars) row))
+          ((TypeVarSet.mem var rec_vars) or (is_rigid (TypeVarSet.add var rec_vars) row))
       | `Body row ->
           is_rigid rec_vars row
   in
@@ -277,8 +273,7 @@ let is_rigid_row_with_var : int -> row -> bool =
         | `Flexible _ -> false
         | `Rigid var' -> var=var'
         | `Recursive (var', row) ->
-            ((TypeVarSet.mem var' rec_vars) or
-               (is_rigid (TypeVarSet.add var' rec_vars) row))
+            ((TypeVarSet.mem var' rec_vars) or (is_rigid (TypeVarSet.add var' rec_vars) row))
         | `Body row ->
             is_rigid rec_vars row
     in
@@ -308,8 +303,7 @@ let is_empty_row : row -> bool =
           | `Rigid _
           | `Flexible _ -> true
           | `Recursive (var, _) when TypeVarSet.mem var rec_vars -> true
-          | `Recursive (var, rec_row) -> 
-              is_empty (TypeVarSet.add var rec_vars) rec_row
+          | `Recursive (var, rec_row) -> is_empty (TypeVarSet.add var rec_vars) rec_row
           | `Body row -> is_empty rec_vars row
       end
   in
@@ -590,7 +584,8 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
         | `Function (args, mailbox_type, t) ->
 	    let arrow =
 	      match concrete_type mailbox_type with
-	        | `Application ("Mailbox", [t]) -> string_of_mailbox_arrow (t)
+	        | `Application ("Mailbox", [t]) ->
+		    string_of_mailbox_arrow (t)
 	        | _ -> "->"
 	    in begin match concrete_type args with
               | `Record row when is_tuple ~allow_onetuples:true row ->

@@ -373,10 +373,6 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (client_only_1 "textContent", datatype "(a) -> String");
   (* FIXME: textContent should be from a type like DomNode, right? *)
 
-  "attachEventHandlers",
-  (client_only_1 "attachEventHandlers",
-   datatype "(Xml, [(evName:String, handler:((Event) -> ()))]) -> Xml");
-
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
    datatype "(String) -> ()");
