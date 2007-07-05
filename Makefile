@@ -51,7 +51,7 @@ OCAMLDOCFLAGS=-pp deriving
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli
+OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                		\
           utility.ml            		\
