@@ -23,6 +23,8 @@ type operator = [ unary_op | binop | `Project of name ]
 
 type pposition = Lexing.position * Lexing.position (* start * end *)
 
+type event_name = string
+
 type location = Syntax.location
 type datatype = 
   | TypeVar of string
@@ -98,7 +100,7 @@ and phrasenode =
   | Xml of (name * (string * (phrase list)) list * phrase list)
   | XmlForest of (phrase list)
   | TextNode of (string)
-  | Formlet of (phrase * phrase)
+  | Formlet of (phrase * phrase * handle_clause list)
   | FormBinding of (phrase * ppattern)
 and phrase = phrasenode * pposition
 and binder = ppattern * phrase
@@ -116,6 +118,7 @@ and regex' = | Range of (char * char)
 	     | Replace of (regex' * [`ReplaceLiteral of string | `ReplaceSplice of phrase])
 and regexflags = RegexList | RegexNative | RegexGlobal
 and regex = regex' * (regexflags list)
+and handle_clause = Catch of (event_name * phrase)
 	 
 and rawgeneratorphrase = ppattern * phrase
 and generatorphrase = [ `List of rawgeneratorphrase | `Table of rawgeneratorphrase ]

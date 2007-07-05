@@ -505,6 +505,7 @@ struct
   include Char
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
   let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
+  let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
   let isLower = function 'a'..'z' -> true | _ -> false
   let isUpper = function 'A'..'Z' -> true | _ -> false
   let isDigit = function '0'..'9' -> true | _ -> false

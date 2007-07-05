@@ -27,7 +27,9 @@ let parseRegexFlags f =
       List.rev l
     else
       asList f (i+1) ((String.get f i)::l) in
-    List.map (function 'l' -> RegexList | 'n' -> RegexNative | 'g' -> RegexGlobal) (asList f 0 [])
+    List.map (function 'l' -> RegexList | 'n' -> RegexNative | 'g' -> RegexGlobal
+                | ch -> failwith("Unknown regex flag " ^ (String.make 1 ch)))
+      (asList f 0 [])
 %}
 
 %token END
@@ -489,7 +491,18 @@ escape_expression:
 handlewith_expression:
 | escape_expression                                            { $1 }
 | HANDLE exp WITH VARIABLE RARROW exp                          { HandleWith ($2, $4, $6), pos() }
-| FORMLET xml YIELDS exp                                       { Formlet($2, $4), pos() }
+| FORMLET xml perhaps_yields handlers                          { Formlet($2, $3, $4), pos() }
+
+perhaps_yields:
+|  /* empty */                                                 { RecordLit ([], None), pos() }
+|  YIELDS exp                                                  { $2 }
+
+handlers:
+| /* empty */                                                  { [] }
+| event_name RARROW exp handlers                               { Catch($1, $3) :: $4 }
+
+event_name:
+| VARIABLE                                                     { $1 }
 
 table_expression:
 | handlewith_expression                                        { $1 }

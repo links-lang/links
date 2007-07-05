@@ -784,6 +784,8 @@ module Desugarer =
            | `List b
            | `Table b -> btv b in
          let ftv (_, e) = etv e in
+         let ctv (Catch(_, e)) = etv e in
+         let ctvs cs = flatten (List.map ctv cs) in
          let ftvs = flatten -<- (List.map ftv)
          in
            match s with
@@ -837,7 +839,7 @@ module Desugarer =
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
              | XmlForest es -> etvs es
              | TextNode _ -> empty
-             | Formlet (e1, e2) -> flatten [etv e1; etv e2]
+             | Formlet (e1, e2, clauses) -> flatten [etv e1; etv e2] @ ctvs clauses
              | FormBinding (e, p) -> flatten [etv e; ptv p]
      and get_pattern_type_vars (p, _) = (* fold *)
        match p with 
@@ -1260,33 +1262,49 @@ module Desugarer =
                              map desugar (coalesce subnodes), pos)
            | XmlForest []  -> HasType(Nil pos, Types.xml_type, pos)
            | XmlForest [x] -> HasType(desugar x, Types.xml_type, pos)
-           | XmlForest (x::xs) -> Concat (desugar x, desugar (XmlForest xs, pos'), pos)
+           | XmlForest (x::xs) -> Concat(desugar x, desugar (XmlForest xs, pos'),
+                                         pos)
 
-           | Formlet (formExpr, formHandler) ->
-               let formHandlerSyntax = desugar formHandler in
+           | Formlet (formExpr, yieldsClause, eventHandlers) ->
+               let formHandlerSyntax = desugar yieldsClause in
                let XmlForest trees, trees_ppos = formExpr in
-               let result, _ = forest_to_form_expr trees (Some formHandler) pos trees_ppos in
-                 result
+               let handlerFormlets =
+                 map (function Catch(evName, body) -> 
+                        Apply(Variable("liftHandler", pos),
+                              [Record_intro(Utility.StringMapUtils.from_alist["evName", Constant(String evName, pos);
+                                                                             "handler", Abstr(["event"], desugar body, pos)],
+                                           None,
+                                           pos)],
+                             pos)
+                     ) eventHandlers in
+               let handlerFormlet = fold_right
+                 (fun fmlt rslt ->
+                    Apply(Variable("@@>>", pos), [fmlt; rslt], pos)
+                 ) handlerFormlets (Variable("emptyFormlet", pos)) in
+               let result, _bindings =
+                 forest_to_formlet_expr trees (Some yieldsClause) pos trees_ppos
+               in
+                 Apply(Variable("@@>>", pos), [handlerFormlet; result], pos)
            | Definition _
            | TypeDeclaration _
            | Foreign _ -> assert false
 
-     and forest_to_form_expr trees yieldsClause 
+     and forest_to_formlet_expr trees yieldsClause 
          (pos:Syntax.untyped_data) 
          (trees_ppos:Sugartypes.pposition)
          : (Syntax.untyped_expression * Sugartypes.ppattern list list) = 
        (* We pass over the forest finding the bindings and construct a
           term-context representing all of the form/yields expression
-          except the `yields' part (the handler). Here bindings
-          is a list of lists, each list representing a tuple returned
-          from an inner instance of forest_to_form_expr--or, if it's a
-          singleton, a single value as bound by a binder.  *)
+          except the `yields' part. Here bindings is a list of lists,
+          each list representing a tuple returned from an inner
+          instance of forest_to_formlet_expr--or, if it's a singleton,
+          a single value as bound by a binder. *)
        let ctxt, bindings =
          fold_right
            (fun l (ctxt, bs) -> 
               let l_unsugared, bindings = desugar_form_expr l in
-                (fun r -> appPrim pos "@@@"  [l_unsugared; ctxt r]),
-              bindings @ bs) 
+                ((fun r -> appPrim pos "@@@"  [l_unsugared; ctxt r]),
+                 bindings @ bs))
            trees
            (identity, []) in
          (* Next we construct the handler body from the yieldsClause,
@@ -1301,8 +1319,12 @@ module Desugarer =
              Some formHandler -> 
                formHandler, bindings, ([]:Sugartypes.ppattern list list)
            | None ->
-               let fresh_bindings = map (map (fun (_, ppos) -> `Variable (unique_name ()), ppos)) bindings in
-               let variables = map (fun (`Variable x, ppos) -> Var x, ppos) (flatten fresh_bindings) in
+               let fresh_bindings = 
+                 map (map (fun (_, ppos) -> 
+                             `Variable (unique_name ()), ppos)) bindings in
+               let variables = 
+                 map (fun (`Variable x, ppos) -> Var x, ppos) 
+                   (flatten fresh_bindings) in
                  ((TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos)),
                   fresh_bindings,
                   [flatten bindings])
@@ -1317,11 +1339,15 @@ module Desugarer =
        let handlerFunc =  FunLit (None,
                                   map (function
                                          | [b] -> [b]
-                                         | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
+                                         | bs -> [`Tuple bs, trees_ppos])
+                                    (rev bindings),
                                   handlerBody), trees_ppos in
-         ctxt (Apply(Variable("pure", pos), [desugar' lookup_pos handlerFunc], pos)), returning_bindings
+         (ctxt (Apply(Variable("pure", pos), 
+                     [desugar' lookup_pos handlerFunc], pos)), 
+          returning_bindings)
            
-     and desugar_form_expr (formExpr, ppos) : untyped_expression * ppattern list list =
+     and desugar_form_expr (formExpr, ppos) 
+         : untyped_expression * ppattern list list =
        let pos = `U(lookup_pos ppos) 
        and desugar = desugar' lookup_pos in
        let appPrim = appPrim pos in
@@ -1329,13 +1355,14 @@ module Desugarer =
          Apply (Variable("xml", pos), [desugar (formExpr,ppos)], pos), [[]]
        else
          match formExpr with
-           | XmlForest trees -> forest_to_form_expr trees None pos ppos
+           | XmlForest trees -> forest_to_formlet_expr trees None pos ppos
            | FormBinding (phrase, ppattern) -> desugar phrase, [[ppattern]]
-           | Xml ("#", [], contents) -> forest_to_form_expr contents None pos ppos
-           | Xml ("#", _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
-                                                      "XML forest literals cannot have attributes"))
+           | Xml ("#", [], contents) -> forest_to_formlet_expr contents None pos ppos
+           | Xml ("#", _, _) ->  
+               raise(ASTSyntaxError(Syntax.data_position pos,
+                                    "XML forest literals cannot have attributes"))
            | Xml(tag, attrs, contents) ->
-               let form, bindings = forest_to_form_expr contents None pos ppos in
+               let form, bindings = forest_to_formlet_expr contents None pos ppos in
                let attrs' = alistmap (map desugar ->- make_links_list pos) attrs in
                  (appPrim "plug" [make_xml_context tag attrs' pos; form],
                   bindings)
@@ -1418,8 +1445,9 @@ module Desugarer =
              else
                `Variant (l, (`Constant (unit_expression pos), pos)), pos
                (* 
-                  When cons_unit_hack is enabled (the default), elimination of A is identified with
-                  elimination of A(x:()) which allows us to have programs such as:
+                  When cons_unit_hack is enabled (the default), elimination of A 
+                  is identified with elimination of A(x:()) which allows us to 
+                  have programs such as:
 
                     (-)  switch (A) {case A -> B; case x -> x;}
 
