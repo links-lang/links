@@ -1191,8 +1191,11 @@ and
         let expr = type_check (inner_env, alias_env) expr in
           match type_of_expression expr with
             | `Function _ as f  ->
-		unify alias_env (snd (assoc name var_env), f);
-		(name, expr, t) :: result
+		unify alias_env (f, snd (assoc name var_env));
+                let expr = opt_app (fun t ->
+                                      unify alias_env (f, t);
+                                      set_node_datatype (expr, t)) expr t in
+		  (name, expr, t) :: result
             | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
       let defns = fold_left type_check [] defns in

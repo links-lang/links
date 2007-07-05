@@ -602,6 +602,12 @@ let set_program_data : ('b -> 'a program' -> 'b program') =
 let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 let def_datatype : (definition -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- definition_data
 
+let set_node_datatype : (expression * Types.datatype) -> expression =
+  fun (e, t) ->
+    let `T(pos, _, label) = expression_data e
+    in
+      set_data (`T(pos, t, label)) e
+
 let position e = data_position (expression_data e)
 
 let no_expr_data = `T(dummy_position, `Not_typed, None)

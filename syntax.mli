@@ -139,6 +139,8 @@ val strip_data : 'a expression' -> stripped_expression
 val node_datatype : expression -> Types.datatype
 val def_datatype : definition -> Types.datatype
 
+val set_node_datatype : (expression * Types.datatype) -> expression
+
 type data = [untyped_data | typed_data]
 
 val data_position : [<data] -> position
