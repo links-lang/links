@@ -55,8 +55,10 @@ let read_and_optimise_program prelude typenv filename =
   let tenv, program = lazy(Inference.type_program typenv program)
     <|measure_as|> "type" in
   let tenv, program = 
-    tenv, lazy((Optimiser.optimise_program(tenv, with_prelude prelude program)))
-      <|measure_as|> "optimise" in
+    (* The prelude is already optimized (via loader.ml) so we don't run 
+       it through again. *)
+    tenv, with_prelude prelude (lazy((Optimiser.optimise_program(tenv, program)))
+       <|measure_as|> "optimise") in
   let tenv, program = tenv, Syntax.labelize program in
     tenv, program
               
