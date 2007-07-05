@@ -170,6 +170,10 @@ let data_position = function
   | `T (pos, _, _)
   | `U pos -> pos
 
+let show_pos : position -> string = 
+  fun ((pos : Lexing.position), _, _) ->
+    Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
+
 let is_symbolic_ident name = 
   (Str.string_match (Str.regexp "^[!$%&*+/<=>?@\\^-.|_]+$") name 0)
 

@@ -64,6 +64,8 @@ type 'a program' = Program of ('a definition' list * 'a expression')
 
 type position = Lexing.position * string * string
 
+val show_pos : position -> string
+
 type untyped_data = [`U of position]
 type typed_data = [`T of (position * Types.datatype * label option)]
 

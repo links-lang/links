@@ -2,6 +2,7 @@ open Types
 open Syntax
 open Sugar
 open Lexing
+open Utility
 
 type synerrspec = {filename : string; linespec : string; 
                    message : string; linetext : string;
@@ -10,7 +11,7 @@ type synerrspec = {filename : string; linespec : string;
 exception NoMainExpr
 exception ManyMainExprs of Syntax.expression list
 exception Type_error of (Syntax.position * string)
-exception MultiplyDefinedToplevelNames of ((Syntax.position list) Utility.stringmap)
+exception MultiplyDefinedToplevelNames of ((Syntax.position list) stringmap)
 exception RichSyntaxError of synerrspec
 
 exception WrongArgumentTypeError of (Syntax.position *
@@ -23,7 +24,7 @@ exception MistypedSendError of (Syntax.position *
                                        string list * Types.datatype list *
 				       Types.datatype option)
 
-exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype * 
+exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype *
 					string list * Types.datatype list *
 					Types.datatype option)
 
@@ -64,15 +65,18 @@ let nested_def pos var
   
   
 let letrec_nonfunction pos (form, _)
-    = raise (ASTSyntaxError (pos, "Invalid form:\n  The values bound by letrec (and defrec) must be function forms,"
-                              ^"\n  but `" ^ string_of_expression form 
-                              ^"' is not a function form"))
+    = raise(ASTSyntaxError
+              (pos, "Invalid form:\n  The values bound by letrec must be function forms,"
+                 ^"\n  but `" ^ string_of_expression form 
+                 ^"' is not a function form"))
 
 let invalid_name pos name message = 
   raise (ASTSyntaxError (pos, "`"^ name ^"' is an invalid name: " ^ message))
 
 let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
+
+let indent n str = String.make n ' ' ^ str
 
 let get_mailbox_msg add_code_tags =
   let wrap =
@@ -97,16 +101,18 @@ let rec format_exception = function
       Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expressions `" ^ String.concat ", " pexpr ^ "' have types \n    " ^ 
-        String.concat ", " (List.map string_of_datatype paramtype) ^ (get_mailbox_msg false mb) ^
+      let msg = "The expressions `" ^ 
+        String.concat ", " pexpr ^ "' have types\n    " ^ 
+        mapstrcat "\n" (indent 2 -<- string_of_datatype) paramtype ^ 
+        (get_mailbox_msg false mb)^
         "\nand cannot be passed to function `"^ fexpr ^
-        "', which has type \n    "^ string_of_datatype fntype
+        "', which expects arguments of type\n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression `"^ fexpr ^"', which has type\n    "^ 
         string_of_datatype fntype ^
-        ", cannot be applied to `"^ String.concat ", " pexpr ^"'of types\n    " ^ 
-        String.concat ", " (List.map string_of_datatype paramtype) ^ (get_mailbox_msg false mb)
+        ", cannot be applied to `"^ String.concat ", " pexpr ^"'of types\n    " ^
+        mapstrcat ", " string_of_datatype paramtype ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
   | Result.Runtime_error s -> "*** Runtime error: " ^ s
   | ASTSyntaxError ((pos,_,expr), s) -> 
@@ -118,16 +124,14 @@ let rec format_exception = function
   | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
       Printf.sprintf
         "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s" 
-        pos.pos_fname pos.pos_lnum name (Utility.xml_escape pattern) (Utility.xml_escape expr)
+        pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedToplevelNames duplicates ->
-    let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
-      Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
-    in
       "Duplicate top-level bindings\n" ^
-        (Utility.StringMap.fold (fun name positions message ->
-                                   message^" "^name^":\n  "^
-			             (String.concat "\n  " (List.map show_pos (List.rev positions)))) duplicates "")
+        StringMap.fold (fun name positions message ->
+                          message^" "^name^":\n  "^
+			    (mapstrcat "\n  " show_pos (List.rev positions)))
+          duplicates ""
   | NoMainExpr -> "Syntax Error: No \"main\" expression at end of file"
   | ManyMainExprs _ -> "Syntax Error: More than one \"main\" expression at end of file"
   | Sys.Break -> "Caught interrupt"
@@ -138,36 +142,44 @@ let rec format_exception_html = function
   | RichSyntaxError s ->
       ("<h1>Links Syntax Error</h1>\n<p>Syntax error in <code>" ^ s.filename ^ "</code> line "
        ^ s.linespec ^ ":</p><p>"
-       ^ s.message ^ "</p><pre>" ^ Utility.xml_escape s.linetext ^ "\n"
+       ^ s.message ^ "</p><pre>" ^ xml_escape s.linetext ^ "\n"
        ^ s.marker ^ "</pre>")
   | Getopt.Error s -> s
   | Type_error ((pos,_,expr), s) -> 
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
-        pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
-  | MistypedSendError(pos, fexpr, fntype, pexpr, ([`Application("Mailbox", [mbType]); msgType] as paramtypes), mb)
+        pos.pos_fname pos.pos_lnum s (xml_escape expr)
+  | MistypedSendError(pos, fexpr, fntype, pexpr,
+                      ([`Application("Mailbox", [mbType]); msgType] as paramtypes),
+                      mb)
     ->
-      let msg = "The expressions <code class=\"typeError\">" ^ String.concat ", " (List.map Utility.xml_escape pexpr) ^ (get_mailbox_msg true mb) ^
-        "</code> have type <code class=\"typeError\">" ^ Utility.xml_escape (String.concat ", " (List.map string_of_datatype paramtypes)) ^
-        "</code> and cannot be passed to function <code class=\"typeError\">"^ Utility.xml_escape(fexpr) ^
-        "</code>which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>" ^ " (this tries to send a message of type " ^ string_of_datatype msgType ^ " to a process expecting message of type " ^ string_of_datatype mbType ^ ")"
+      let msg = "The expressions <code class=\"typeError\">" ^ 
+        mapstrcat "\n" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
+        "</code> have type <code class=\"typeError\">" ^ 
+        xml_escape (mapstrcat ", " string_of_datatype paramtypes) ^
+        "</code> and cannot be passed to function <code class=\"typeError\">"^ xml_escape(fexpr) ^
+        "</code>which has type <code class=\"typeError\">"^ xml_escape(string_of_datatype fntype) ^ "</code>" ^ " (this tries to send a message of type " ^ string_of_datatype msgType ^ " to a process expecting message of type " ^ string_of_datatype mbType ^ ")"
       in
         format_exception_html(Type_error(pos, msg))
      
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expressions <code class=\"typeError\">" ^ String.concat ", " (List.map Utility.xml_escape pexpr) ^ (get_mailbox_msg true mb) ^
-        "</code> have type <code class=\"typeError\">" ^ Utility.xml_escape (String.concat ", " (List.map string_of_datatype paramtype)) ^
-        "</code> and cannot be passed to function <code class=\"typeError\">"^ Utility.xml_escape(fexpr) ^
-        "</code>which has type <code class=\"typeError\">"^ Utility.xml_escape(string_of_datatype fntype) ^ "</code>"
+      let msg = "The expression(s) <code class=\"typeError\">" ^ 
+        mapstrcat "<br />" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
+        "</code> have type(s) <code class=\"typeError\">" ^ 
+        mapstrcat "<br />" (indent 2 -<- xml_escape -<- string_of_datatype) paramtype ^
+        "</code> and cannot be passed to function <code class=\"typeError\">"^ xml_escape(fexpr) ^
+        (* TBD: report the error in terms of argument types ? *)
+        "</code>which has type <code class=\"typeError\">"^ 
+        xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
 
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression <code class=\"typeError\">"^ 
-        Utility.xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
+        xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
         string_of_datatype fntype ^
         "</code> cannot be applied to <code class=\"typeError\">"^ 
-        Utility.xml_escape (String.concat ", " pexpr) ^"</code>, of types <code class=\"typeError\">" ^ 
-        String.concat ", " (List.map string_of_datatype paramtype) ^ "</code>" ^ (get_mailbox_msg true mb)
+        xml_escape (String.concat ", " pexpr) ^"</code>, of types <code class=\"typeError\">" ^ 
+        mapstrcat ", " string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
 
@@ -176,25 +188,26 @@ let rec format_exception_html = function
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
       in
         "<h1>Links Syntax Error</h1><p>Duplicate top-level bindings:</p><ul>" ^
-          (Utility.StringMap.fold (fun name positions message -> message ^ "<li>" ^ 
+          (StringMap.fold (fun name positions message -> message ^ "<li>" ^ 
                                      name ^ ":<ul>" ^
-			             (String.concat "\n" 
-                                        (List.map (fun l -> "<li>" ^ l ^ "</li>")
-                                           (List.map show_pos (List.rev positions))))
+			             (mapstrcat "\n" 
+                                        (fun l -> "<li>" ^ l ^ "</li>")
+                                        (List.map show_pos (List.rev positions)))
                                      ^ "</ul></li>\n")
              duplicates "") ^ "</ul>"
           
   | Result.Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
   | ASTSyntaxError ((pos,_,expr), s) -> 
       Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
-        pos.pos_fname pos.pos_lnum s (Utility.xml_escape expr)
+        pos.pos_fname pos.pos_lnum s (xml_escape expr)
   | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
       Printf.sprintf
         "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
-        pos.pos_fname pos.pos_lnum name (Utility.xml_escape pattern) (Utility.xml_escape expr)
+        pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | NoMainExpr -> "<h1>Links Syntax Error</h1>\nNo \"main\" expression at end of file"
-  | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ String.concat "<br/>" (List.map Syntax.string_of_expression es)
+  | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ 
+      mapstrcat "<br/>" Syntax.string_of_expression es
   | Result.UnrealizableContinuation ->
       "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>"
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
