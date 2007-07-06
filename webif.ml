@@ -216,7 +216,7 @@ let perform_request
 (*                       Syntax.string_of_expression expr); *)
 (*         Debug.print("Given env:\n" ^ Result.string_of_environment env); *)
 (*         Debug.print("undef'd variables: " ^ *)
-(*                       String.concat "," (difference (Syntax.freevars expr) *)
+(*                       String.concat "," (difference (Syntax.freevars_list expr) *)
 (*                                            (dom globals @ dom env @ dom (fst Library.typing_env))) *)
 (*                    ); *)
         (* This assertion failing indicates that not everything needed
@@ -238,7 +238,12 @@ let perform_request
           (Utility.base64encode 
              result_json)
     | RemoteCall(func, args) ->
+(*         Debug.print("Remote call to apply " ^ *)
+(*                       string_of_result func); *)
+(*         Debug.print("to args: " ^ mapstrcat ", " string_of_result args); *)
+
         Interpreter.has_client_context := true;
+        let args = List.rev args in
         let cont, value = 
           ApplyCont(Result.empty_env, args) :: toplevel_cont, func
         in
