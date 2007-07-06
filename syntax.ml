@@ -477,6 +477,9 @@ let freevars (expression : 'a expression') : StringSet.t =
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
 
+let freevars_list expr : (* 'a expression' -> *) string list
+  = StringSet.elements (freevars expr)
+
 let freevars_def def = visit_def StringSet.empty freevars def
 
 let freevars_program (Program (defs, body)) =
