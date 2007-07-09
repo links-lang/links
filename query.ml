@@ -58,14 +58,14 @@ and query = {distinct_only : bool;
             }
 
 and sorting = [`Asc of (string * string) | `Desc of (string * string)]
-and column = {table_renamed : string;
+and column = {table_alias : string;
               name : string;
-              renamed : string; (* TBD: call this `alias' *)
+              col_alias : string; (* TBD: call this `alias' *)
               col_type : Types.datatype}
 and col_or_expr = (column, expression) either
     deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 (* Simple accessors *)
-let get_renaming col = col.renamed
 
 let add_sorting query col = 
   {query with
@@ -75,7 +75,7 @@ let owning_table of_col qry =
   match (List.find (function
                               | Left c -> c.name = of_col
                               | Right _ -> false) qry.result_cols) with
-    | Left col_rec -> col_rec.table_renamed
+    | Left col_rec -> col_rec.table_alias
     | Right _ -> assert false
 
 let rec freevars {condition = condition;

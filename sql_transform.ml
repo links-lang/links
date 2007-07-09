@@ -24,11 +24,11 @@ let rec project (projs:string list) (query:query) : query =
   let rec filter_selects projs cols =
     match cols, projs with 
       | [], [] -> []
-      | [], _ -> failwith "ST022"
-      | Left col :: result_cols, projs when mem col.renamed projs ->
-	  Left col :: (filter_selects (filter ((<>) col.renamed) projs) result_cols)
+      | [], _ -> assert false
+      | Left col :: result_cols, projs when mem col.col_alias projs ->
+	  Left col :: (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
       | Left col :: result_cols, projs ->
-          (filter_selects (filter ((<>) col.renamed) projs) result_cols)
+          (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
       | Right expr :: result_cols, projs -> 
           Right expr :: (filter_selects projs result_cols)
   in
@@ -92,8 +92,8 @@ let query_field_for_var query field =
   try
   find ((<>) `Unavailable)
     (map (function
-            | Left col when col.renamed = field ->
-                `Table_field (col.table_renamed, col.name)
+            | Left col when col.col_alias = field ->
+                `Table_field (col.table_alias, col.name)
             | Left _ -> `Unavailable
             | Right _ -> `Unavailable)
        query.result_cols)
@@ -390,11 +390,11 @@ let append_uniquely
     (left : col_or_expr list)
     (right : col_or_expr list) : (col_or_expr list * (column * string) list) =
   let rename = function
-    | Left col -> [(col, {col with renamed = col_unique_name ()})]
+    | Left col -> [(col, {col with col_alias = col_unique_name ()})]
     | Right expr -> [] in
   let (right : (Query.column *Query.column) list) = concat_map rename right in
     (left @ map (snd ->- inLeft) right,
-     concat_map (fun (x, y) -> [(x, get_renaming y)]) right)
+     concat_map (fun (x, y) -> [(x, y.col_alias)]) right)
   
 (** join
     Joins two queries into one, over the given condtions. If the

@@ -120,7 +120,7 @@ let query_result_types (query : query) (table_defs : (string * Types.row) list)
       row_field_type col_name (assoc table_alias table_defs) 
     in
       concat_map (function
-                    | Left col -> [col.renamed, col_type col.table_renamed col.name]
+                    | Left col -> [col.col_alias, col_type col.table_alias col.name]
                     | Right _ -> []) query.Query.result_cols
   with NoSuchField field ->
     failwith ("Field " ^ field ^ " from " ^ 

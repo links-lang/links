@@ -33,9 +33,9 @@ and query = {
 }
 and sorting = [ `Asc of string * string | `Desc of string * string ]
 and column = {
-  table_renamed : string;
+  table_alias : string;
   name : string;
-  renamed : string;
+  col_alias : string;
   col_type : Types.datatype;
 } 
 and col_or_expr = (column, expression) Utility.either
@@ -44,7 +44,6 @@ deriving (Eq, Typeable, Show, Pickle, Shelve)
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string
 val query_replace_var : string -> expression -> query -> query
-val get_renaming : column -> string
 val add_sorting : query -> sorting -> query
 val freevars : query -> string list
 val occurs_free : string -> query -> bool

@@ -30,7 +30,7 @@ and string_of_query (qry:query) : string =
 	  | [] -> "NULL as null"
 	  | _ -> (Utility.mapstrcat ", " 
                     (function 
-                       | Utility.Left col -> col.table_renamed ^"."^ col.name ^" AS "^ col.renamed
+                       | Utility.Left col -> col.table_alias ^"."^ col.name ^" AS "^ col.col_alias
                        | Utility.Right expr -> string_of_expression expr)
                     qry.result_cols))
      ^ " FROM " ^ (Utility.mapstrcat ", " 

@@ -440,14 +440,14 @@ let substitute_projections' new_src renamings bindings expr =
   let subst_projection (from, to') : RewriteSyntax.rewriter = function
     | Record_selection (label, label_var, etc_var, Variable (src, d), body, 
                         data) as orig
-        when from.Query.renamed = label ->
+        when from.Query.col_alias = label ->
         Debug.if_set show_optimisation
-          (fun () -> "Renaming " ^ from.Query.renamed ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
+          (fun () -> "Renaming " ^ from.Query.col_alias ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
         (match trace_variable src bindings with
-	   | `Table query when mem from.Query.table_renamed (map snd query.Query.tables) ->
+	   | `Table query when mem from.Query.table_alias (map snd query.Query.tables) ->
                Some(Record_selection(to', label_var, etc_var, 
                                      Variable (new_src, d), body, data))
-           | `Table_field (table_as, _) when from.Query.table_renamed = table_as ->
+           | `Table_field (table_as, _) when from.Query.table_alias = table_as ->
                (* NOTE: I think this case never occurs *)
                Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
            | `Unavailable -> Debug.if_set show_optimisation
@@ -493,9 +493,9 @@ let sql_aslist : RewriteSyntax.rewriter =
         in
         let table_alias = gensym ~prefix:"Table_" () in
 	let rowFieldToTableCol colName = function
-	  | `Present fieldType -> {Query.table_renamed = table_alias; 
+	  | `Present fieldType -> {Query.table_alias = table_alias; 
                                    Query.name = colName; 
-				   Query.renamed = colName; 
+				   Query.col_alias = colName; 
                                    Query.col_type = fieldType}
 	  | _ -> failwith "Internal Error: missing field in row"
 	in
