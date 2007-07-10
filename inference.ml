@@ -55,17 +55,22 @@ let type_of_expression : expression -> datatype =
 let pos_of_expression : expression -> position =
   fun exp -> let `T (pos, _, _) = expression_data exp in pos
 
-let rec extract_row : datatype -> row = fun t ->
+type typing_environment = environment * alias_environment
+
+let rec extract_row : typing_environment -> datatype -> row = fun ((env, alias_env) as typing_env) t ->
   match t with
     | `Record row -> row
     | `Variant row -> row
     | `MetaTypeVar point ->
         begin
           match Unionfind.find point with
-            | `Body t -> extract_row t
+            | `Body t -> extract_row typing_env t
             | _ -> failwith
                 ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
         end
+    | `Application (s, ts) ->
+        let vars, alias = lookup_alias (s, ts) alias_env in
+          extract_row typing_env (instantiate_alias (vars, alias) ts)
     | _ -> failwith
         ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
@@ -825,8 +830,6 @@ let generalise : environment -> datatype -> assumption =
       Debug.if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t) 
 
-type typing_environment = environment * alias_environment
-
 let constant_type = function
   | Boolean _ -> `Primitive `Bool
   | Integer _ -> `Primitive `Int
@@ -978,7 +981,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                   
                   unify(rtype, `Record (absent_field_env, fresh_row_variable()));
                   
-                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
+                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row typing_env rtype) in
                     
                   (* attempt to extend field_env with the labels from rfield_env
                      i.e. all the labels belonging to the record r
@@ -1008,7 +1011,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let label_variable_type = fresh_type_variable () in
 	unify (type_of_expression value, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
 
-	let value_row = extract_row (type_of_expression value) in
+	let value_row = extract_row typing_env (type_of_expression value) in
 	let label_var_equiv = label_variable, ([], label_variable_type) in
 	let var_equiv = variable, ([], `Record (row_with (label, `Absent) value_row)) in
 	  
@@ -1023,7 +1026,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         Project (expr, label, `T (pos, label_variable_type, None))
   | Erase (value, label, `U pos) ->
       let value = type_check typing_env value in
-      let value_row = extract_row (type_of_expression value) in
+      let value_row = extract_row typing_env (type_of_expression value) in
         Erase (value, label, `T (pos, `Record (row_with (label, `Absent) value_row), None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
