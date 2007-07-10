@@ -7,7 +7,7 @@ fun remove(item, items) {
 }
 
 
-fun todo(items) {
+fun todo(items) client {
 <html>
  <body>
   <form l:onsubmit="{todo(item::items)}" method="POST">
