@@ -83,7 +83,7 @@ fun showAuthorInfo(author) server {
    {header(author.name)}
    <body>
     <h1>{stringToXml(author.name)}</h1>
-    <form l:onsubmit="{updateAuthor((id=author.id, name=authorName))}" method="POST">
+    <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
       <input type="text" class="input" l:name="authorName" value="{author.name}"/>
       <button type="submit">update name</button>
     </form>
@@ -132,7 +132,7 @@ fun showPaperInfo(paper) server {
    {header(paper.title)}
    <body>
     <h1>{stringToXml(paper.title)}</h1>
-    <form l:onsubmit="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
+    <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
       <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
       <button type="submit">update title</button>
     </form>
