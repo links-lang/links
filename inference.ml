@@ -1192,13 +1192,23 @@ and
       let inner_env = var_env @ env in
       let type_check result (name, expr, t) =
         let expr = type_check (inner_env, alias_env) expr in
-          match type_of_expression expr with
+        let t' = type_of_expression expr in
+          match t' with
             | `Function _ as f  ->
-		unify alias_env (f, snd (assoc name var_env));
-                let expr = opt_app (fun t ->
-                                      unify alias_env (f, t);
-                                      set_node_datatype (expr, t)) expr t in
-		  (name, expr, t) :: result
+                let t'' = snd (assoc name var_env) in
+		  unify alias_env (f, t'');
+                  (* [HACK]
+
+                     This allows aliases to persist providing no
+                     mailbox types have been instantiated.
+                  *)
+                  let expr = 
+                    if (Types.is_mailbox_free alias_env t') then
+                      set_node_datatype (expr, t'')
+                    else
+                      expr
+                  in
+		    (name, expr, t) :: result
             | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
       let defns = fold_left type_check [] defns in
@@ -1245,7 +1255,7 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
               (generalise env (type_of_expression value))
             else [], type_of_expression value in
               (((variable, value_type) :: env), alias_env),
-    	       Define (variable, value, loc, `T (pos, type_of_expression value, None))
+    	    Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),

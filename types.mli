@@ -170,6 +170,9 @@ type type_alias_set = Utility.StringSet.t
 val free_alias_check : alias_environment -> datatype -> unit
 val free_alias_check_row : alias_environment -> row -> unit
 
+val is_mailbox_free : alias_environment -> datatype -> bool
+val is_mailbox_free_row : alias_environment -> row -> bool
+
 val type_aliases : datatype -> type_alias_set
 val row_type_aliases : row -> type_alias_set
 
