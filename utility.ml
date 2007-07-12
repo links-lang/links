@@ -73,6 +73,16 @@ struct
     try Some (M.find item map) 
     with Not_found -> None
 
+
+  let partition f m =
+    M.fold
+      (fun i v (p, q) ->
+         if (f i v) then
+           (M.add i v p, q)
+         else
+           (p, M.add i v q))
+      m (M.empty, M.empty)
+
   exception Not_disjoint of M.key
 
   let union_disjoint a b = 

@@ -1184,14 +1184,6 @@ let rename_symbol_operators_def def =
     | Define (name, b,l,t) when symbolp name -> Define (wordify name, rename_symbol_operators b, l, t)
     | _ -> def
 
-(* Remove "units" that get inserted into the environment as a result
-   of declarations.  This doesn't really belong here.  It should
-   disappear naturally when we have a better IR type. *)
-let remove_nulls = filter
-  (function 
-     | Record_intro (fields, None, _) when fields = StringMap.empty -> false
-     | _ -> true)
-
 let make_boiler_page ?(onload="") ?(body="") defs =
   boiler_1 ()
   ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
@@ -1205,11 +1197,11 @@ let get_alien_names defs =
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
       
-(* Note: the body is not really used here. *)
-let generate_program_defs (Program(defs,body)) root_names =
+let generate_program_defs defs root_names =
   let aliens = get_alien_names defs in
-  let defs = List.map rename_symbol_operators_def defs
-  and body = rename_symbol_operators body in
+  let defs = List.map rename_symbol_operators_def defs in
+  (* [NOTE] body is just a placeholder *)
+  let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
@@ -1220,15 +1212,13 @@ let generate_program_defs (Program(defs,body)) root_names =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names
      else defs) in
-(*   let defs = remove_nulls defs in *)
   let global_names = Syntax.defined_names defs @ library_names in
     map (gen_def global_names ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
-  let js_defs = generate_program_defs (Program(defs,expr)) (Syntax.freevars expr) in
+  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
   let expr = rename_symbol_operators expr in
   let library_names = List.map fst (fst Library.typing_env) in
-(*   let env = remove_nulls (butlast env) in *)
   let global_names = Syntax.defined_names defs @ library_names in
   let js_root_expr = 
     (gen
