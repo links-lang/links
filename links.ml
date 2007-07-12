@@ -200,7 +200,7 @@ let options : opt list =
     ('O',     "optimize",            set Optimiser.optimising true,    None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
-    ('e',     "evaluate",            None,                             Some (fun str -> push cmd_line_actions (`Evaluate str)));
+    ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "working-tests",               Some (run_tests Tests.working_tests),                   None);
@@ -210,7 +210,7 @@ let options : opt list =
 
 let main () =
   let file_list = ref [] in
-  Errors.display_fatal_l (lazy (parse_cmdline options (push file_list)));
+  Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
   (* load prelude: *)
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in

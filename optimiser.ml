@@ -500,7 +500,7 @@ let sql_aslist : RewriteSyntax.rewriter =
 	  | _ -> failwith "Internal Error: missing field in row"
 	in
 	let fields, _ = th_row in
-	let columns = StringMapUtils.zip_with rowFieldToTableCol fields in
+	let columns = StringMap.to_list rowFieldToTableCol fields in
         let th_var = match th with
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in

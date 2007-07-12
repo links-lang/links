@@ -186,7 +186,7 @@ let likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_
       | Record_intro (fields, None, _)
         when StringMap.mem "1" fields
             && StringMap.mem "2" fields
-            && StringMapUtils.size fields == 2
+            && StringMap.size fields == 2
         -> Some (StringMap.find "1" fields, StringMap.find "2" fields)
     | _ -> None in
   let rec unlist = function

@@ -4,20 +4,9 @@
 *)
 
 open Utility
+open List
 
-let map = List.map
-
-
-(* Utility bits for hashtables and mutable lists *)
-let push elem list = 
-  list := elem :: !list;
-  list
-
-let pushnew elem list = 
-  if not (List.mem elem !list) then
-    push elem list
-  else list
-
+(* Utility function for hashtables *)
 let hashfind_dflt table elem def = 
   try Hashtbl.find table elem
   with Not_found -> def
@@ -29,8 +18,6 @@ let hashfind_dflt table elem def =
      if [k] is not set.
    [table *+> k ++= newVal] cons'es newVal onto the list stored 
      under k
-
-  It's hard to know what symbols OCaml will accept as an operator.
 *)
 
 let ( *->!) table k v = Hashtbl.replace table k v

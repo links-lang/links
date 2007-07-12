@@ -158,7 +158,7 @@ let rec is_value : 'a expression' -> bool = function
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
   | Record_intro (bs, e, _) ->
-      StringMapUtils.for_all (is_value) bs && opt_app is_value true e
+      StringMap.for_all (is_value) bs && opt_app is_value true e
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
@@ -222,7 +222,7 @@ let rec show t : 'a expression' -> string = function
   | Record_intro (bs, r, data) ->
       "(" ^
         String.concat ","
-        (StringMapUtils.zip_with (fun label e -> label ^ "=" ^ (show t e)) bs) ^
+        (StringMap.to_list (fun label e -> label ^ "=" ^ (show t e)) bs) ^
         (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
@@ -339,7 +339,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_selection (e1, _, _, e2, _, e3, _) ->
                    [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
                | Record_intro (bs, r, _) ->
-                   (StringMapUtils.zip_with (fun _ e -> visitor visit_children e) bs) @
+                   (StringMap.to_list (fun _ e -> visitor visit_children e) bs) @
                      (opt_app (fun e -> [visitor visit_children e]) [] r)
                | Apply (e, es, _) -> visitor visit_children e :: map (visitor visit_children) es
                | Rec (b, e, _) -> map (fun (_, e, _) -> visitor visit_children e) b @ [visitor visit_children e]

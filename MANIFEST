@@ -36,6 +36,9 @@ pg_database.ml
 
 callgraph.ml
 utility.ml
+basicsettings.ml
+ir.mli
+compileir.ml
 settings.mli
 settings.ml
 debug.mli
@@ -200,6 +203,7 @@ examples/progress.links
 examples/todo.links
 examples/todo-db.links
 examples/wine.links
+examples/wine.css
 examples/factorials.sql
 examples/cart_off.jpg
 examples/cart_on.jpg

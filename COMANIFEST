@@ -17,6 +17,8 @@ examples/mandelopt.links
 examples/mandelopt.html
 examples/mandeltest.links
 examples/multiple.links
+examples/href-test.links
+examples/test-prims.links
 examples/nbe.links
 examples/regex.links
 examples/sleep.links
@@ -41,16 +43,12 @@ examples/varrec.links
 examples/xml_typing.links
 
 links.el
-links.el-gilles
+links-mode.el
 
 checkfiles
 make_release
 
-monadic_pickle.mli
-monadic_pickle.ml
 sort.ml
-
-tests.links
 
 tests/selenium-tests
 tests/selenium-tests/selenium-suite.html
