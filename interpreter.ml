@@ -164,9 +164,10 @@ let client_call_impl name cont (args:Result.result list) =
     if (not !has_client_context) then 
       begin
         let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
+        let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
             (Js.make_boiler_page ~onload:start_script
-               (Js.generate_program_defs (!program_source) (StringSet.singleton name)))
+               (Js.generate_program_defs defs (StringSet.singleton name)))
           ; exit 0
       end
     else begin
