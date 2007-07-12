@@ -68,7 +68,7 @@ let lookup = fun x -> List.assoc x
 let concat_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
-    (types1 @ types2, superimpose aliases1 aliases2)
+    (types1 @ types2, StringMap.superimpose aliases1 aliases2)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -591,7 +591,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
     let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
       match Unionfind.find rowvar with
         | `Closed ->
-            let n = StringMapUtils.size field_env in
+            let n = StringMap.size field_env in
             let b =
               n = 0
               ||

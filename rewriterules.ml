@@ -61,7 +61,7 @@ struct
       if input = StringMap.empty then Some (List.rev output)
       else
         try 
-          let item, rest = StringMapUtils.pop (string_of_int n) input in
+          let item, rest = StringMap.pop (string_of_int n) input in
             aux (n+1) rest (item::output)
         with Not_found -> None
     in fun map -> aux 1 map []
@@ -196,7 +196,7 @@ end =
 struct
   type var = string deriving (Show)
 
-  module Env:
+  module Env :
   sig
     (* map table/field pairs to variable names (essentially an
        implementation of the "normalize" rule) *)
@@ -211,22 +211,19 @@ struct
   struct
     type field = {var : var; label : string} deriving (Show)
     type key =  field deriving (Show)
-    module C = (struct type t = key let compare = Pervasives.compare end)
+    module C = (struct type t = key let compare = Pervasives.compare module Show_t = Show_key end)
     module Mfield = Map.Make(C) 
     module Mvar = StringMap
-    module Utils = MapUtils(Mfield)
-    module Utils' = MapUtils(Mvar)
     type t = var Mfield.t * baseexpr Mvar.t
-    module Show_t
+    module Show_t : Show.Show with type a = t
       = Show.Show_2
-      (Show.Show_map(C)
-         (Show_key)(Show_var))
+      (Mfield.Show_t(Show_var))
       (Show_stringmap(Show_baseexpr))
      let empty = Mfield.empty, Mvar.empty
      let bindf f v (m,n) = (Mfield.add f v m, n)
-     let lookupf f (m,_) = Utils.lookup f m
+     let lookupf f (m,_) = Mfield.lookup f m
      let bindv k v (m,n) = (m, Mvar.add k v n)
-     let lookupv f (_,n) = Utils'.lookup f n
+     let lookupv f (_,n) = Mvar.lookup f n
   end
 
   open Syntax
@@ -405,7 +402,7 @@ struct
     let bindf name f = StringMap.add name (`F f)
     let binde name e = StringMap.add name (`E e)
     let lookup name env = 
-      match StringMapUtils.lookup name env with
+      match StringMap.lookup name env with
         | Some s -> s
         | None -> `Absent
   end

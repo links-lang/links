@@ -1,8 +1,11 @@
 (** Monadic IR *)
 
+
+type scope = [ `Local | `Global ]
+
 (* term variables *)
 type var = int
-type var_info = Types.datatype * string
+type var_info = Types.datatype * string * scope
 type binder = var * var_info
 
 (* type variables *)
@@ -12,6 +15,8 @@ type tyname = string
 
 type name = string
 type 'a name_map = 'a Utility.StringMap.t
+
+type language = string
 
 (*
 type constant =
@@ -24,6 +29,8 @@ type constant =
 
 type constant = Syntax.constant
 
+type location = Syntax.location
+
 type value =
   [ `Constant of constant
   | `Variable of var
@@ -33,8 +40,10 @@ type value =
 
   | `Nil
   | `Cons of (value * value)
+  | `Concat of (value * value)
   | `XmlNode of (name * value name_map * value list)
-  | `Coerce of (value * Types.datatype * Types.datatype)
+
+  | `Coerce of (value * Types.datatype)
   | `Abs of value
   ]
 and tail_computation =
@@ -48,8 +57,10 @@ and tail_computation =
   ]
 and binding =
   [ `Let of (binder * tail_computation)
-  | `Abs of (binder * binder list * computation)
-  | `Rec of (binder * binder list * computation) list
+  | `Fun of (binder * binder list * computation * location)
+  | `Rec of (binder * binder list * computation * location) list
+  | `Alien of (binder * language * Types.assumption)
+  | `Alias of (tyname * tyvar list * Types.datatype)
   | `For of (binder * value) ]
 and special =
   [ `App of value * value
@@ -61,10 +72,4 @@ and special =
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
 
-type definition =
-  [ `Define of (binder * computation * Syntax.location)
-  | `Alias of (tyname * tyvar list * Types.datatype)
-  | `Alien of (binder * string * Types.assumption)
-  ]
-
-type program = definition list * computation
+type program = computation

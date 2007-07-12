@@ -87,7 +87,9 @@ SOURCES = $(OPC)                		\
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
-          js.mli js.ml          		\
+          ir.mli                                \
+          compileir.ml                          \
+          irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
           rewriterules.ml                       \
           loader.ml                             \
@@ -95,8 +97,9 @@ SOURCES = $(OPC)                		\
           test.ml                               \
           tests.ml                              \
           links.ml              		\
-          ir.mli                                \
-          compileir.ml                          \
+
+#          js.mli js.ml          		\
+
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

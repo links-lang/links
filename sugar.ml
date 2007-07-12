@@ -170,7 +170,7 @@ module PatternCompiler =
      let partition_variant_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
-         StringMapUtils.to_alist
+         StringMap.to_alist
            (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -190,7 +190,7 @@ module PatternCompiler =
      let partition_record_equations
          : equation list -> (string * ((string * string) * annotated_equation list)) list =
        fun equations ->
-         StringMapUtils.to_alist
+         StringMap.to_alist
            (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -211,7 +211,7 @@ module PatternCompiler =
      let partition_constant_equations
          : equation list -> (string * (untyped_expression * annotated_equation list)) list =
        fun equations ->
-         StringMapUtils.to_alist
+         StringMap.to_alist
           (List.fold_right
               (fun (ps, body) env ->
                  match ps with
@@ -1134,7 +1134,7 @@ module Desugarer =
                in
                  Database (desugar e, pos)
            | RecordLit (fields, r) ->
-               Record_intro (StringMapUtils.from_alist (alistmap desugar fields),
+               Record_intro (StringMap.from_alist (alistmap desugar fields),
                              opt_map desugar r,
                              pos) 
            | TupleLit [field] -> desugar field

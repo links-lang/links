@@ -3,22 +3,27 @@ open Syntax
 open Ir
 
 (* type stuff *)
-let info_type (t, _) = t
-let info_of_type t = (t, "")
-let make_info info = info
+let info_type (t, _, _) = t
+let info_of_type t = (t, "", `Local)
+
+let make_local_info (t, name) = (t, name, `Local)
+let make_global_info (t, name) = (t, name, `Global)
 
 type datatype = Types.datatype
+type assumption = Types.assumption
 
 (* to be moved into Types*)
-let arg_types  =
-  function
-    | `Function (ts, _, _) -> ts
-    | _ -> failwith "Attempt to take arg types of non-function"
+let arg_types =
+  Types.concrete_type ->-
+    (function
+       | `Function (ts, _, _) -> ts
+       | t -> failwith ("Attempt to take arg types of non-function" ^ Types.string_of_datatype t))
         
 let return_type =
-  function
-    | `Function (_, _, t) -> t
-    | _ -> failwith "Attempt to take return type of non-function"
+  Types.concrete_type ->-
+    (function
+       | `Function (_, _, t) -> t
+       | t -> failwith ("Attempt to take return type of non-function" ^ Types.string_of_datatype t))
 
 (*
  [BUG]
@@ -44,6 +49,11 @@ let fresh_var : var_info -> binder * var =
     incr variable_counter;
     let var = !variable_counter in
       (var, info), var
+
+let fresh_raw_var : unit -> var =
+  fun info ->
+    incr variable_counter;
+    !variable_counter
 
 module type MONAD =
 sig
@@ -81,11 +91,12 @@ sig
   val apply : (value sem * (value sem) list) -> tail_computation sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 (* comparison? *)
-  val lam : datatype * var_info list * (var list -> tail_computation sem) -> value sem
+  val lam : datatype * var_info list * (var list -> tail_computation sem) * location -> value sem
   val comp : var_info * tail_computation sem * (var -> tail_computation sem) -> tail_computation sem
   val recursive : 
-    (var_info * var_info list * (var list -> var list -> tail_computation sem)) list *
+    (var_info * var_info list * (var list -> var list -> tail_computation sem) * location) list *
     (var list -> tail_computation sem) -> tail_computation sem
+
   val xmlnode : string * (value sem) StringMap.t * (value sem) list -> value sem
   val record : (value sem) StringMap.t * (value sem) option * datatype -> value sem
 (* record_selection? *)
@@ -98,8 +109,8 @@ sig
     tail_computation sem
   val bottom : datatype * value sem -> tail_computation sem
   val nil : datatype -> value sem
-(* listof? *)
-(* concat? *)
+  val listof : value sem -> value sem
+  val concat : (value sem * value sem) -> value sem
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
   val database : value sem -> tail_computation sem
   val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
@@ -107,6 +118,13 @@ sig
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem
   val wrong : datatype -> tail_computation sem
+
+  val letfun :
+    var_info * var_info list * (var list -> tail_computation sem) * location *
+    (var -> tail_computation sem) ->
+    tail_computation sem
+  val alias : tyname * tyvar list * datatype * (unit -> tail_computation sem) -> tail_computation sem
+  val alien : var_info * language * assumption * (var -> tail_computation sem) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -174,9 +192,16 @@ struct
     val lift_stringmap : ('a sem) StringMap.t -> ('a StringMap.t) M.sem
 
     val comp_binding : var_info * tail_computation -> var M.sem
-    val abs_binding : var_info * var_info list * (var list -> tail_computation sem) -> var M.sem
-    val rec_binding : (var_info * var_info list * (var list -> var list -> tail_computation sem)) list -> (var list) M.sem
+    val fun_binding :
+      var_info * var_info list * (var list -> tail_computation sem) * location ->
+      var M.sem
+    val rec_binding :
+      (var_info * var_info list * (var list -> var list -> tail_computation sem) * location) list ->
+      (var list) M.sem
     val for_binding : var_info * value -> var M.sem
+
+    val alias_binding : tyname * tyvar list * datatype -> unit M.sem
+    val alien_binding : var_info * language * assumption -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -219,10 +244,10 @@ struct
       let xb, x = fresh_var x_info in
         lift_binding (`Let (xb, e)) x
           
-    let abs_binding (f_info, xs_info, body) =
+    let fun_binding (f_info, xs_info, body, location) =
       let fb, f = fresh_var f_info in
       let xsb, xs = List.split (List.map fresh_var xs_info) in
-        lift_binding (`Abs (fb, xsb, reify (body xs))) f
+        lift_binding (`Fun (fb, xsb, reify (body xs), location)) f
           
     let for_binding (x_info, v) =
       let xb, x = fresh_var x_info in
@@ -231,17 +256,24 @@ struct
     let rec_binding defs =
       let defs, fs =
         List.fold_right
-          (fun (f_info, xs_info, body) (defs, fs) ->
+          (fun (f_info, xs_info, body, location) (defs, fs) ->
              let fb, f = fresh_var f_info in
              let xsb, xs = List.split (List.map fresh_var xs_info) in
-               ((fb, (xsb, xs), body) :: defs, f :: fs))
+               ((fb, (xsb, xs), body, location) :: defs, f :: fs))
           defs ([], [])
       in
         lift_binding
           (`Rec
              (List.map 
-                (fun (fb, (xsb, xs), body) ->
-                   (fb, xsb, reify (body fs xs))) defs)) fs
+                (fun (fb, (xsb, xs), body, location) ->
+                   (fb, xsb, reify (body fs xs), location)) defs)) fs
+
+    let alias_binding (typename, quantifiers, datatype) =
+      lift_binding (`Alias (typename, quantifiers, datatype)) ()
+
+    let alien_binding (x_info, language, assumption) =
+      let xb, x = fresh_var x_info in
+        lift_binding (`Alien (xb, language, assumption)) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (`Variable x, t))
@@ -281,8 +313,8 @@ struct
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
-  let lam (t, xs_info, body) =
-    value_of_untyped_var (abs_binding (info_of_type t, xs_info, body), t)
+  let lam (t, xs_info, body, location) =
+    value_of_untyped_var (fun_binding (info_of_type t, xs_info, body, location), t)
   let comp (x_info, s, body) =
     bind s
       (fun e ->
@@ -311,6 +343,10 @@ struct
                  M.bind s'
                    (fun field_map -> lift (`Extend (field_map, Some r), t)))
 
+  (* [BUG] the type should be the projection of sem_type s at name
+
+     The same bug is repeated in several places.
+  *)
   let project (name, s) =
     bind s (fun v -> lift (`Project (name, v), sem_type s))
 
@@ -336,6 +372,12 @@ struct
               lift (`Case (v, StringMap.empty, None), t))
 
   let nil t = lift (`Nil, t)
+  let listof s =
+    bind s (fun v -> lift (`Cons (v, `Nil), sem_type s))
+  let concat (s, s') =
+    bind s (fun v ->
+              bind s' (fun v' -> lift (`Concat (v, v'), sem_type s)))
+
   let comprehension (x_info, s, body) =
     bind s
       (fun e ->
@@ -357,29 +399,53 @@ struct
   let callcc (s, t) = bind s (fun v -> lift (`Special (`CallCC v), t))
   let wrong t = lift (`Special `Wrong, t)
 
+  let lam (t, xs_info, body, location) =
+    value_of_untyped_var (fun_binding (info_of_type t, xs_info, body, location), t)
+
+
+  let letfun (f_info, xs_info, body, location, rest) =
+     M.bind (fun_binding (f_info, xs_info, body, location)) rest
+(*    M.bind (lam (t, xs_info, body, location)) rest *)
+
+  let alien (x_info, language, assumption, rest) =
+    M.bind (alien_binding (x_info, language, assumption)) rest
+
+  let alias (typename, quantifiers, datatype, rest) =
+    M.bind (alias_binding (typename, quantifiers, datatype)) rest
+
+  let comp (x_info, s, body) =
+    bind s
+      (fun e ->
+         M.bind (comp_binding (x_info, e))
+           (fun x -> body x))
+end
+
+
+module Env :
+sig
+  type env = var StringMap.t
+
+  val empty : env
+  val extend : env -> string list -> var list -> env
+  val lookup : env -> string -> var
+end =
+struct
+  type env = var StringMap.t
+
+  let empty = StringMap.empty
+  let extend env xs vs =
+    List.fold_right2 (fun x v env ->
+                        StringMap.add x v env)
+      xs vs env
+  let lookup env x =
+    if (StringMap.mem x env) then
+      StringMap.find x env
+    else
+      failwith ("(compileir): variable " ^ x ^ " not in environment")
 end
 
 module Eval(I : INTERPRETATION) =
 struct
-  module Env :
-  sig
-    type env
-
-    val empty : env
-    val extend : env -> string list -> var list -> env
-    val lookup : env -> string -> var
-  end =
-  struct
-    type env = var StringMap.t
-
-    let empty = StringMap.empty
-    let extend env xs vs =
-      List.fold_right2 (fun x v env ->
-                          StringMap.add x v env)
-        xs vs StringMap.empty
-    let lookup env x = StringMap.find x env
-  end
-
   let rec eval : Env.env -> Syntax.expression -> tail_computation I.sem = fun env e ->
     let cofv = I.comp_of_value in
     let ec = eval env in
@@ -398,10 +464,10 @@ struct
               (* cofv (comparison (ev e1, c, ev e2))*)
         | Abstr (xs, body, _) as e ->
             let ft = node_datatype e in
-            let xs_info = List.map (fun x -> make_info (arg_types ft, x)) xs in
-              cofv (I.lam (ft, xs_info, fun vs -> eval (Env.extend env xs vs) body))
+            let xs_info = List.map (fun x -> make_local_info (arg_types ft, x)) xs in
+              cofv (I.lam (ft, xs_info, (fun vs -> eval (Env.extend env xs vs) body), `Unknown))
         | Let (x, e1, e2, _) ->
-            I.comp (make_info (node_datatype e, x), ec e1, fun v -> eval (Env.extend env [x] [v]) e2)
+            I.comp (make_local_info (node_datatype e, x), ec e1, fun v -> eval (Env.extend env [x] [v]) e2)
         | Rec (defs, e, _) ->
             let defs, fs =
               List.fold_right
@@ -413,15 +479,15 @@ struct
               List.map
                 (fun (f, e) ->
                    let ft = node_datatype e in
-                   let f_info = make_info (ft, f) in
+                   let f_info = make_local_info (ft, f) in
                    let xs_info, body = 
                      match e with
                        | Abstr (xs, body, _) ->
-                           (List.map (fun x -> make_info (arg_types ft, x)) xs,
+                           (List.map (fun x -> make_local_info (arg_types ft, x)) xs,
                             fun gs -> fun vs -> eval (Env.extend env (fs @ xs) (gs @ vs)) body)
                        | _ -> assert false
                    in
-                     (f_info, xs_info, body))
+                     (f_info, xs_info, body, `Unknown))
                 defs
             in
               I.recursive (defs, fun gs -> eval (Env.extend env fs gs) e)
@@ -459,11 +525,11 @@ struct
             let default =
               match dbody with
                 | Variant_selection_empty _ -> None
-                | _ -> Some (make_info (dt, dvar), fun v -> eval (Env.extend env [dvar] [v]) dbody)
+                | _ -> Some (make_local_info (dt, dvar), fun v -> eval (Env.extend env [dvar] [v]) dbody)
             in
               I.case (ev e,
                       cname,
-                      (make_info (ct, cvar),
+                      (make_local_info (ct, cvar),
                        fun v -> eval (Env.extend env [cvar] [v]) cbody),
                       default)
         | Variant_selection_empty (e', _) ->
@@ -471,11 +537,11 @@ struct
         | Nil _ ->
             cofv (I.nil (node_datatype e))
         | List_of (elem, _) ->
-            failwith "eval (List_of _) not implemented yet"
+            cofv (I.listof (ev elem))
         | Concat (left, right, _) ->
-            failwith "eval (Concat _) not implemented yet"
+            cofv (I.concat (ev left, ev right))
         | For (e, x, body, _) ->
-            I.comprehension (make_info (node_datatype e, x),
+            I.comprehension (make_local_info (node_datatype e, x),
                              ev e,
                              fun v -> eval (Env.extend env [x] [v]) body)
         | Database (e, _) ->
@@ -501,12 +567,98 @@ struct
   and evalv env e =
     I.value_of_comp (eval env e)
 
-  let compile e =
-    let s = eval Env.empty e
+  let rec eval_defs env defss rest =
+    match defss with
+      | [] -> eval env rest
+      | defs :: defss ->
+          let def1 = List.hd defs in
+            match def1 with     
+              | Define (_, Rec _, _, _) ->
+                  let defs, fs =
+                    List.fold_right
+                      (fun (Define (f, Rec([_, e, _], _, _), location, _)) (defs, fs) ->
+                         (f, e, location) :: defs, f :: fs)
+                      defs ([], []) in
+                    
+                  let defs =
+                    List.map
+                      (fun (f, e, location) ->
+                         let ft = node_datatype e in
+                         let f_info = make_global_info (ft, f) in
+                         let xs_info, body =
+                           match e with
+                             | Abstr (xs, body, _) ->
+                                 (List.map (fun x -> make_local_info (arg_types ft, x)) xs,
+                                  fun gs -> fun vs -> eval (Env.extend env (fs @ xs) (gs @ vs)) body)
+                             | _ -> assert false
+                         in
+                           (f_info, xs_info, body, location))
+                      defs
+                  in
+                    I.recursive (defs, fun gs -> eval_defs (Env.extend env fs gs) defss rest)
+              | Define (f, (Abstr (xs, body, _) as e), location, _) -> 
+                  let ft = node_datatype e in
+                  let xs_info = List.map (fun x -> make_local_info (arg_types ft, x)) xs in
+                    I.letfun (make_global_info (ft, f),
+                              xs_info,
+                              (fun vs -> eval (Env.extend env xs vs) body),
+                              location,
+                              fun v -> eval_defs (Env.extend env [f] [v]) defss rest)
+              | Define (x, e, _, _) ->
+                  I.comp (make_global_info (node_datatype e, x),
+                          eval env e,
+                          fun v -> eval_defs (Env.extend env [x] [v]) defss rest)
+              | Alias (typename, quantifiers, datatype, _) ->
+                  I.alias (typename, quantifiers, datatype,
+                           fun () -> eval_defs env defss rest)
+              | Alien (language, name, assumption, _) ->
+                  let x_info = make_global_info (snd assumption, name) in
+                    I.alien (x_info, language, assumption,
+                             fun v -> eval_defs (Env.extend env [name] [v]) defss rest)
+
+  let eval_program env (Program (defs, body)) =
+    let bothdefs l r = match l, r with
+      | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
+      | _ ->  false in
+    let defss = groupBy bothdefs defs
     in
+      eval_defs env defss body
+
+  let add_globals_to_env : Env.env -> binding list -> Env.env = fun env ->
+    List.fold_left
+      (fun env ->
+         function
+           | `Let ((x, (_, x_name, `Global)), _) ->
+               Env.extend env [x_name] [x]
+           | `Fun ((f, (_, f_name, `Global)), _, _, _) ->
+               Env.extend env [f_name] [f]
+           | `Rec defs ->
+               List.fold_left
+                 (fun env ((f, (_, f_name, scope)), _, _, _) ->
+                    match scope with
+                      | `Global -> Env.extend env [f_name] [f]
+                      | `Local -> env)
+                 env defs
+           | `Alien ((f, (_, f_name, `Global)), _, _) ->
+               Env.extend env [f_name] [f]
+           | _ -> env)
+      env
+
+  let make_initial_env : string list -> Env.env =
+    List.fold_left
+      (fun env f_name ->
+         Env.extend env [f_name] [fresh_raw_var ()])
+      Env.empty
+
+  let compile env p =
+    let s = eval_program env p in
       I.reify s, I.sem_type s
 end
 
 module C = Eval(Interpretation(BindingListMonad))
 
-let compile_expression : expression -> computation * datatype = C.compile
+let compile_program : Env.env -> Syntax.program -> computation * datatype = C.compile
+
+let make_initial_env : string list -> Env.env = C.make_initial_env
+let add_globals_to_env : Env.env -> binding list -> Env.env = C.add_globals_to_env
+

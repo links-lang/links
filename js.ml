@@ -950,7 +950,7 @@ and generate_direct_style global_names : 'a expression' -> code =
   (* Records *)
   | Record_intro (bs, r, _) ->
       let dict =
-        Dict (StringMapUtils.zip_with (fun label e -> label, 
+        Dict (StringMap.to_list (fun label e -> label, 
                                          generate global_names e) bs)
       in
         begin
