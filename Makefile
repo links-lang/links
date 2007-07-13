@@ -87,11 +87,11 @@ SOURCES = $(OPC)                		\
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
-          ir.mli                                \
+          ir.ml ir.mli                          \
           compileir.ml                          \
+          rewriterules.ml                       \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
-          rewriterules.ml                       \
           loader.ml                             \
           webif.mli webif.ml           		\
           test.ml                               \

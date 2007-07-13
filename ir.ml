@@ -5,20 +5,26 @@ type scope = [ `Local | `Global ]
   deriving (Show)
 (* term variables *)
 type var = int
+  deriving (Show)
 type var_info = Types.datatype * string * scope
+  deriving (Show)
 type binder = var * var_info
+  deriving (Show)
 
 (* type variables *)
 type tyvar = int
+  deriving (Show)
 type tyname = string
+  deriving (Show)
 (* type tybinder = tyvar * var_info *)
 
 type name = string
+  deriving (Show)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
 type language = string
-
+  deriving (Show)
 (*
 type constant =
   | Boolean of bool
@@ -32,6 +38,7 @@ type constant = Syntax.constant
   deriving (Show)
 
 type location = Syntax.location
+  deriving (Show)
 
 type value =
   [ `Constant of constant
@@ -81,4 +88,12 @@ and computation = binding list * tail_computation
 
 type program = computation
 
-val is_atom : value -> bool
+let is_atom =
+  function
+    | `Constant (Syntax.Boolean _)
+    | `Constant (Syntax.Integer _)
+    | `Constant (Syntax.Char _)
+    | `Constant (Syntax.Float _)
+    | `Variable _
+    | `Nil -> true
+    | _ -> false

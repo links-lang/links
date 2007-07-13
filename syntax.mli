@@ -9,6 +9,7 @@ type constant =
   | Char of char
   | String of string
   | Float of float
+deriving (Show)
 
 (*
   [TODO]
