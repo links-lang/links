@@ -429,8 +429,7 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
   | `RecFunction (defs, env, name) ->
-      let defs' = map (fun (name, Syntax.Abstr(args, body, data)) ->
-                         (name, Syntax.Abstr(args, map_expr result_f expr_f contframe_f body, data))) defs in
+      let defs' = map (fun (name, f) -> (name, map_expr result_f expr_f contframe_f f)) defs in
       result_f(`RecFunction(defs',
                             (map_env result_f expr_f contframe_f env),
                             name))

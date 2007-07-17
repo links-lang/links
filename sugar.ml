@@ -835,7 +835,6 @@ module Desugarer =
 
              | `Xml (_, attrs, subnodes) ->
                  flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
-             | `XmlForest es -> etvs es
              | `TextNode _ -> empty
              | `Formlet (e1, e2) -> flatten [etv e1; etv e2]
              | `FormBinding (e, p) -> flatten [etv e; ptv p]
@@ -1248,18 +1247,9 @@ module Desugarer =
                  else
                    Xml_node (tag, alistmap desugar_attr attrs,
                              map desugar (coalesce subnodes), pos)
-           | `XmlForest []  -> HasType(Nil pos, Types.xml_type, pos)
-           | `XmlForest [x] -> HasType(desugar x, Types.xml_type, pos)
-           | `XmlForest (x::xs) -> Concat (desugar x, desugar (`XmlForest xs, pos'), pos)
 
            | `Formlet (formExpr, formHandler) ->
-               let formHandlerSyntax = desugar formHandler in
-                 begin match formExpr with
-                   | `XmlForest trees, trees_ppos ->
-                       let result, _ = forest_to_form_expr trees (Some formHandler) pos trees_ppos in
-                         result
-                   | _ -> assert false
-                 end
+               fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
            | `Definition _
            | `TypeDeclaration _
            | `FormBinding _
@@ -1326,7 +1316,6 @@ module Desugarer =
          Apply (Variable("xml", pos), [desugar (formExpr,ppos)], pos), [[]]
        else
          match formExpr with
-           | `XmlForest trees -> forest_to_form_expr trees None pos ppos
            | `FormBinding (phrase, ppattern) -> desugar phrase, [[ppattern]]
            | `Xml ("#", [], contents) -> forest_to_form_expr contents None pos ppos
            | `Xml ("#", _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
@@ -1342,8 +1331,7 @@ module Desugarer =
            | _ -> assert false
 
      and has_form_binding = function
-       | `Xml (_, _, subnodes),_
-       | `XmlForest subnodes,_ -> exists has_form_binding subnodes
+       | `Xml (_, _, subnodes),_ -> exists has_form_binding subnodes
        | `FormBinding _,_      -> true
        |  _                    -> false
 

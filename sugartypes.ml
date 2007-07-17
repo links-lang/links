@@ -107,7 +107,6 @@ module type Phrase = sig
   | `DBInsert of (P.phrase * P.phrase)
   | `DBUpdate of (P.binder * P.phrase option * (name * P.phrase) list)
   | `Xml of (name * (string * (P.phrase list)) list * P.phrase list)
-  | `XmlForest of (P.phrase list)
   | `TextNode of (string)
   | `Formlet of (P.phrase * P.phrase)
   | `FormBinding of (P.phrase * P.ppattern) ]

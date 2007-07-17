@@ -391,13 +391,9 @@ db_expression:
          perhaps_where
          SET LPAREN labeled_exps RPAREN                        { `DBUpdate($3, $5, $8), pos() }
 
-xml:
-| xml_forest                                                   { `XmlForest $1, pos() }
-
 /* XML */
-xml_forest:
-| xml_tree                                                     { [$1] }
-| xml_tree xml_forest                                          { $1 :: $2 }
+xml:
+| xml_tree                                                     { $1 }
 
 xmlid: 
 | VARIABLE                                                     { $1 }
