@@ -12,7 +12,11 @@ let make_global_info (t, name) = (t, name, `Global)
 type datatype = Types.datatype
 type assumption = Types.assumption
 
-(* to be moved into Types*)
+(*** To be moved into Types ***)
+(* [BUG]
+
+   These functions don't handle aliases.
+*)
 let arg_types =
   Types.concrete_type ->-
     (function
@@ -25,22 +29,54 @@ let return_type =
        | `Function (_, _, t) -> t
        | t -> failwith ("Attempt to take return type of non-function" ^ Types.string_of_datatype t))
 
-(*
- [BUG]
+let split_row name row =
+  let (field_env, row_var) = fst (Types.unwrap_row row) in
+  let t =
+    if StringMap.mem name field_env then
+      match (StringMap.find name field_env) with
+        | `Present t -> t
+        | `Absent ->
+            failwith ("Attempt to split row "^Types.string_of_row row ^" on absent field" ^ name)
+    else
+      failwith ("Attempt to split row "^Types.string_of_row row ^" on absent field" ^ name)
+  in
+    t, (StringMap.remove name field_env, row_var)
 
-  need to be a bit more principled here
-  e.g. need to make sure name is actually present
-  and take into account that the row may not have been flattened
-*)
 let split_variant_type name =
-  function
-    | `Variant (field_map, row_var) ->
-        if StringMap.mem name field_map then
-          (`Variant (StringMap.add name (StringMap.find name field_map) StringMap.empty, row_var),
-           `Variant (StringMap.remove name field_map, row_var))
-        else
-          failwith "Attempt to split variant on absent constructor"
-    | _ -> failwith "Attempt to split non-variant type"
+  Types.concrete_type ->-
+    (function
+       | `Variant row ->
+           let t, row = split_row name row in
+             `Variant (Types.make_singleton_closed_row (name, `Present t)), `Variant row
+       | t -> failwith ("Attempt to split non-variant type "^Types.string_of_datatype t))
+
+let project_type name =
+  Types.concrete_type ->-
+    (function
+       | `Record row ->
+           let t, _ = split_row name row in
+             t
+       | t -> failwith ("Attempt to project non-record type "^Types.string_of_datatype t))
+
+
+let erase_type name =
+  Types.concrete_type ->-
+    (function
+       | `Record row ->
+           let t, row = split_row name row in
+             `Record row
+       | t -> failwith ("Attempt to erase field from non-record type "^Types.string_of_datatype t))
+
+
+let inject_type name t =
+  `Variant (Types.make_singleton_open_row (name, `Present t))
+
+let make_list_type t =
+  `Application ("List", [t])
+
+let bool_type = `Primitive `Bool
+(******************************)
+
 
 (* Generation of fresh variables *)
 let variable_counter = ref 0
@@ -89,6 +125,7 @@ sig
   val abs : value sem -> value sem
   val app : value sem * value sem -> tail_computation sem
   val apply : (value sem * (value sem) list) -> tail_computation sem
+  val applyprim : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 (* comparison? *)
   val comparison : (value sem * Syntax.comparison * value sem) -> value sem
@@ -102,19 +139,19 @@ sig
   val xmlnode : string * (value sem) StringMap.t * (value sem) list -> value sem
   val record : (value sem) StringMap.t * (value sem) option * datatype -> value sem
 (* record_selection? *)
-  val project : name * value sem -> value sem
+  val project : name * value sem * datatype -> value sem
 (* erase? *)
-  val erase : name * value sem -> value sem
+  val erase :  name * value sem * datatype -> value sem
 
-  val inject : name * value sem -> value sem
+  val inject : name * value sem * datatype -> value sem
   val case :
     value sem * string * (var_info * (var -> tail_computation sem)) *
     (var_info * (var -> tail_computation sem)) option ->
     tail_computation sem
-  val bottom : datatype * value sem -> tail_computation sem
+  val case_zero : value sem * datatype -> tail_computation sem
   val nil : datatype -> value sem
-  val listof : value sem -> value sem
-  val concat : (value sem * value sem) -> value sem
+  val listof : value sem * datatype -> value sem
+  val concat : (value sem * value sem * datatype) -> value sem
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
   val database : value sem -> tail_computation sem
   val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
@@ -314,6 +351,16 @@ struct
         (fun v ->
            M.bind ss
              (fun vs -> lift (`Apply (v, vs), t)))
+
+  let applyprim (s, ss) =
+    let t = return_type (sem_type s) in
+    let ss = lift_list ss
+    in
+      bind s
+        (fun v ->
+           M.bind ss
+             (fun vs -> lift (`ApplyPrim (v, vs), t)))
+
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
@@ -347,19 +394,15 @@ struct
                  M.bind s'
                    (fun field_map -> lift (`Extend (field_map, Some r), t)))
 
-  (* [BUG] the type should be the projection of sem_type s at name
+  let project (name, s, t) =
+    bind s (fun v -> lift (`Project (name, v), t))
 
-     The same bug is repeated in several places.
-  *)
-  let project (name, s) =
-    bind s (fun v -> lift (`Project (name, v), sem_type s))
-
-  let erase (name, s) =
-    bind s (fun v -> lift (`Erase (name, v), sem_type s))
+  let erase (name, s, t) =
+    bind s (fun v -> lift (`Erase (name, v), t))
 
 
-  let inject (name, s) =
-    bind s (fun v -> lift (`Inject (name, v), sem_type s))
+  let inject (name, s, t) =
+    bind s (fun v -> lift (`Inject (name, v), t))
   let case (s, name, (cinfo, cbody), default) =
     bind s (fun v ->
               let cb, c = fresh_var cinfo in
@@ -375,20 +418,20 @@ struct
                           StringMap.add name (cb, reify cbody') StringMap.empty,
                           default), t))
 
-  let bottom (t, s) =
+  let case_zero (s, t) =
     bind s (fun v ->
               lift (`Case (v, StringMap.empty, None), t))
 
   let comparison (s, c, s') =
     bind s (fun v ->
-              bind s' (fun v' -> lift (`Comparison (v, c, v'), sem_type s)))
+              bind s' (fun v' -> lift (`Comparison (v, c, v'), bool_type)))
 
   let nil t = lift (`Nil, t)
-  let listof s =
-    bind s (fun v -> lift (`Cons (v, `Nil), sem_type s))
-  let concat (s, s') =
+  let listof (s, t) =
+    bind s (fun v -> lift (`Cons (v, `Nil), t))
+  let concat (s, s', t) =
     bind s (fun v ->
-              bind s' (fun v' -> lift (`Concat (v, v'), sem_type s)))
+              bind s' (fun v' -> lift (`Concat (v, v'), t)))
 
   let comprehension (x_info, s, body) =
     bind s
@@ -411,13 +454,8 @@ struct
   let callcc (s, t) = bind s (fun v -> lift (`Special (`CallCC v), t))
   let wrong t = lift (`Special `Wrong, t)
 
-  let lam (t, xs_info, body, location) =
-    value_of_untyped_var (fun_binding (info_of_type t, xs_info, body, location), t)
-
-
   let letfun (f_info, xs_info, body, location, rest) =
      M.bind (fun_binding (f_info, xs_info, body, location)) rest
-(*    M.bind (lam (t, xs_info, body, location)) rest *)
 
   let alien (x_info, language, assumption, rest) =
     M.bind (alien_binding (x_info, language, assumption)) rest
@@ -456,6 +494,10 @@ struct
       failwith ("(compileir): variable " ^ x ^ " not in environment")
 end
 
+let builtins = ["+"; "+."; "-"; "-."; "*"; "*."; "/"; "/."]
+let cps_prims = ["recv"; "sleep"]
+
+
 module Eval(I : INTERPRETATION) =
 struct
   let rec eval : Env.env -> Syntax.expression -> tail_computation I.sem = fun env e ->
@@ -469,6 +511,9 @@ struct
         | Variable (x, _) -> cofv (I.var (Env.lookup env x, t))
         | Abs (e, _) -> cofv (I.abs (ev e))
         | App (e1, e2, _) -> I.app (ev e1, ev e2)
+        | Apply (Variable (f, _) as e, es, _)
+            when (List.mem f builtins || (Library.is_primitive f && not (List.mem f cps_prims)))
+              -> cofv (I.applyprim(I.var (Env.lookup env f, node_datatype e), evs es))
         | Apply (e, es, _) -> I.apply (ev e, evs es)
         | Condition (p, e1, e2, _) -> I.condition (ev p, ec e1, ec e2)
         | Comparison (e1, c, e2, _) ->
@@ -532,13 +577,13 @@ struct
 *)
             failwith "eval (Record_selection _) not implemented yet"
         | Project (e, name, _) ->
-            cofv (I.project (name, ev e))
+            cofv (I.project (name, ev e, t))
         | Erase (e, name, _) ->
-            cofv (I.erase (name, ev e))
+            cofv (I.erase (name, ev e, t))
 (*            failwith "eval (Erase _) not implemented yet"*)
               (* coerce (forall rho\f . (f:A | rho) -> (rho)) *)
         | Variant_injection (name, e, _) ->
-            cofv (I.inject (name, ev e))
+            cofv (I.inject (name, ev e, t))
         | Variant_selection (e, cname, cvar, cbody, dvar, dbody, _) ->
             let t = node_datatype e in
             let ct, dt = split_variant_type cname t in
@@ -554,13 +599,13 @@ struct
                        fun v -> eval (Env.extend env [cvar] [v]) cbody),
                       default)
         | Variant_selection_empty (e', _) ->
-            I.bottom (node_datatype e, ev e')
+            I.case_zero (ev e', t)
         | Nil _ ->
-            cofv (I.nil (node_datatype e))
+            cofv (I.nil t)
         | List_of (elem, _) ->
-            cofv (I.listof (ev elem))
+            cofv (I.listof (ev elem, t))
         | Concat (left, right, _) ->
-            cofv (I.concat (ev left, ev right))
+            cofv (I.concat (ev left, ev right, t))
         | For (e, x, body, _) ->
             I.comprehension (make_local_info (node_datatype e, x),
                              ev e,
@@ -646,7 +691,7 @@ struct
 
   let compile env p =
     let s = eval_program env p in
-      I.reify s, I.sem_type s
+      (Inline.program (I.reify s)), I.sem_type s
 
   let add_globals_to_env : Env.env -> binding list -> Env.env = fun env ->
     List.fold_left

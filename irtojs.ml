@@ -22,9 +22,9 @@ let get_js_lib_url () = Settings.get_value js_lib_url
 (* Intermediate language *)
 type code = | Var    of string
             | Lit    of string
-
+            | DeclareVar of string
             | Fn     of (string list * code)
-            | LetDef of (string * code * code)
+
             | LetFun of ((string * string list * code * location) * code)
             | LetRec of ((string * string list * code * location) list * code)
             | Call   of (code * code list)
@@ -34,10 +34,6 @@ type code = | Var    of string
             | Dict   of ((string * code) list)
             | Lst    of (code list)
 
-            (*[NOTE]
-              Not used currently, but probably will be when the direct-style version of the compiler is
-              re-done
-            *)
             | Bind   of (string * code * code)
             | Seq    of (code * code)
 
@@ -162,34 +158,10 @@ let optimise e =
 
 let jsthunk expr = Fn([], expr)
 
-(* local_names
-
-   Retrieve all let bindings within a function.  Don't descend into
-   inner function scopes.
-*)
-let rec local_names : code -> string list = function
-  | Var _
-  | Lit _
-  | Fn _
-  | Die _
-  | Nothing -> []
-  | Call (c, cs) -> local_names c @ List.concat (map local_names cs)
-  | If (a, b, c) -> local_names a @ local_names b @ local_names c
-  | Dict cs -> List.concat (map (local_names -<- snd) cs)
-  | Lst  cs -> List.concat (map local_names cs)
-  | Binop (l, _, r)
-  | Seq (l, r) -> local_names l @ local_names r
-  | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
-
 (* Generate code from intermediate language *) 
 let rec show : code -> string = fun code ->
   let show_func name (Fn (vars, body)) = 
-    "function "^ name ^"("^ String.concat ", " vars ^")"
-    ^"{ "^
-      (let names = String.concat ", " (local_names body) in
-	if names = "" then "" else "var " ^ names ^ ";\n")
-    ^" "^ show body 
-    ^"; }" 
+    "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }" 
   and arglist args = String.concat ", " (map show args) 
   and paren = function
     | Var _
@@ -202,22 +174,22 @@ let rec show : code -> string = fun code ->
     | Die _
     | Nothing as c -> show c
     | c -> "(" ^ show c ^ ")" in
-  let show_case (l:string) ((x:string), (e:code)) =
-    "case " ^ l ^ ":{var " ^ x ^ "=v._value;" ^ show e ^ "break;}\n" in
-  let show_cases : (string * code) stringmap -> string =
+  let show_case v (l:string) ((x:string), (e:code)) =
+    "case " ^ l ^ ":{var " ^ x ^ "=" ^ v ^"._value;" ^ show e ^ "break;}\n" in
+  let show_cases v : (string * code) stringmap -> string =
     fun cases ->
       StringMap.fold (fun l c s ->
-                        s ^ show_case l c)
+                        s ^ show_case v l c)
         cases "" in
-  let show_default = opt_app
+  let show_default v = opt_app
     (fun (x, e) ->
-       "default:{var " ^ x ^ "=v._value;" ^ show e ^ "break;}") "" in
+       "default:{var " ^ x ^ "=" ^ v ^ "._value;" ^ show e ^ "break;}") "" in
     match code with
       | Var s -> s
       | Lit s -> s
       | Fn _ as f -> show_func "" f
-      | LetDef (name, body, rest) ->
-          "var " ^ name ^ "; " ^ show body ^ ";" ^ show rest
+      | DeclareVar x -> "var "^x
+
       | LetFun ((name, vars, body, location), rest) ->
           (show_func name (Fn (vars, body))) ^ show rest
       | LetRec (defs, rest) ->
@@ -229,19 +201,15 @@ let rec show : code -> string = fun code ->
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | If (cond, e1, e2) ->
           "if (" ^ show cond ^ ") {" ^ show e1 ^ "} else {" ^ show e2 ^ "}"
-      | Case (x, cases, default) ->
-          "switch (" ^ x ^ "._label) {" ^ show_cases cases ^ show_default default ^ "}"
+      | Case (v, cases, default) ->
+          "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
       | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
       | Lst [] -> "[]"
       | Lst elems -> "[" ^ arglist elems ^ "]"
-      | Bind (name, value, body) -> "("^ name ^" = "^
-          show value ^", "^ show body ^")"
-(*       | Bind (name, value, body) -> "var "^ name ^" = "^  *)
-(*           show value ^"; "^ show body ^ "\n" *)
-      | Seq (l, r) -> "(" ^ show l ^", "^ show r ^ ")"
+      | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
+      | Seq (l, r) -> show l ^"; "^ show r
       | Nothing -> ""
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
-
 
 
 module PP =
@@ -251,18 +219,23 @@ struct
   (** Pretty-print a Code value as a JavaScript string. *)
   let rec format_code c : PP.doc =
     let rec show_func_pp name (Fn (vars, body)) = 
-(*       let names = local_names body in *)
-(*       let local_decls =  *)
-(*         if names = [] then DocNil *)
-(*         else *)
-(*           PP.text "var" ^+^ hsep (punctuate "," (map PP.text names)) ^^ PP.text ";" ^^ break *)
-(*       in *)
-      let body = (* local_decls ^^ *) format_code body in
-        PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
-                  ^+^  (braces
-                          (break ^^ group(nest 2 body) ^+^ PP.text ";" ^^ break))
-                 )
-    and maybe_parenize = function
+      PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
+                ^+^  (braces
+                        (break ^^ group(nest 2 (format_code body)) ^+^ PP.text ";" ^^ break))) in
+    let show_case v l (x, e) =
+      PP.text "case" ^+^ PP.text l ^^
+        PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
+                                  format_code e ^+^ PP.text "break;") ^^ break in
+    let show_cases v =
+      fun cases ->
+        StringMap.fold (fun l c s ->
+                          s ^+^ show_case v l c)
+          cases DocNil in
+    let show_default v = opt_app
+      (fun (x, e) ->
+         PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^
+                                          PP.text (v^"._value;") ^+^ format_code e ^+^ PP.text "break;") ^^ break) PP.DocNil in
+    let maybe_parenize = function
       | Var _
       | Lit _
       | Call _
@@ -277,12 +250,12 @@ struct
       match c with
         | Var x -> PP.text x
         | Nothing -> PP.text ""
+
+        | DeclareVar x -> PP.text "var" ^+^ PP.text x
+
         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
         | Lit literal -> PP.text literal
 
-        | LetDef (name, body, rest) ->
-            PP.text "var" ^+^ PP.text (name^";") ^+^ (format_code body) ^^ PP.text ";" ^^
-              break ^^ format_code rest
         | LetFun ((name, vars, body, location), rest) ->
             (show_func_pp name (Fn (vars, body))) ^^ break ^^ format_code rest
         | LetRec (defs, rest) ->
@@ -300,17 +273,16 @@ struct
         | Call (fn, args) -> maybe_parenize fn ^^ 
             (PP.arglist (map format_code args))
         | Binop (l, op, r) -> (maybe_parenize l) ^+^ PP.text op ^+^ (maybe_parenize r)
-            (*     | If (if_, then_, else_) ->  *)
-            (*         PP.parens(PP.trinop (format_code if_) "?" *)
-            (*                     (format_code then_) ":" *)
-            (*                     (format_code else_)) *)
         | If (cond, c1, c2) ->
             PP.group (PP.text "if (" ^+^ format_code cond ^+^ PP.text ")"
                       ^+^  (braces
                               (break ^^ group(nest 2 (format_code c1)) ^^ break))
-                      ^+^ PP.text " else "
+                      ^+^ PP.text "else"
                       ^+^  (braces
                               (break ^^ group(nest 2 (format_code c2)) ^^ break)))
+        | Case (v, cases, default) ->
+            PP.group (PP.text "switch" ^+^ (parens (PP.text v)) ^+^
+                        (braces ((show_cases v cases) ^+^ (show_default v default))))
         | Dict (elems) -> 
             PP.braces (hsep (punctuate ","
                                (map (fun (name, value) -> 
@@ -322,11 +294,9 @@ struct
             parens ((PP.text name ^+^ PP.text "=" ^+^ 
                        (format_code value)) ^^ PP.text "," ^^ break ^^
                       format_code body)
-        | Seq (l, r) -> parens(vsep [(format_code l ^^ PP.text ","); format_code r])
+        | Seq (l, r) -> vsep [(format_code l ^^ PP.text ";"); format_code r]
         | Ret e -> PP.text("return ") ^| parens(format_code e)
 
-(*       | Case (x, cases, default) -> *)
-(*           "switch (" ^ x ^ "._label) {" ^ show_cases cases ^ show_default default ^ "}" *)
 
   let show_pp = format_code ->- PP.pretty 144
 end
@@ -439,11 +409,11 @@ let cps_prims = ["recv"; "sleep"]
 (** {0 Code generation} *)
 
 
-(*let name_var x = (name_of_binder x, var_of_binder x)*)
-
 let name_binder (x, info) =
   match info with
     | (_, "", `Local) -> (x, "_" ^ string_of_int x)
+    | (_, name, `Local) when (Str.string_match (Str.regexp "^_g[0-9]") name 0) ->
+        (x, "_" ^ string_of_int x) (* make the generated names slightly less ridiculous in some cases *)
     | (_, name, `Local) -> (x, name ^ "_" ^ string_of_int x)
     | (_, name, `Global) -> (x, name)
 
@@ -478,7 +448,7 @@ let is_input : value -> bool = function
 let bind_continuation kappa body =
   match kappa with
     | Var _ -> body kappa
-    | _ -> LetDef ("_kappa", kappa, body (Var "_kappa"))
+    | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
 
 
 (** generate
@@ -516,7 +486,8 @@ let rec generate_value env : value -> code =
       | `Project (name, v) ->
           Call (Var "LINKS.project", [strlit name; gv v])
       | `Erase (name, v) ->
-          Call (Var "LINKS.remove", [gv v; strlit name])
+          gv v
+(*          Call (Var "LINKS.remove", [gv v; strlit name])*)
       | `Inject (name, v) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
@@ -536,6 +507,14 @@ let rec generate_value env : value -> code =
 (*      | `XmlNode _ as xml when is_input xml -> lname_transformation' env xml*)
       | `XmlNode (name, attributes, children) ->
           make_xml env name attributes children
+
+      | `ApplyPrim (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins ->
+          Binop (gv l, binop_name (Env.lookup env op), gv r)
+      | `ApplyPrim (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) ->
+          Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)
+      | `ApplyPrim (v, vs) ->
+          Call (gv v, List.map gv vs)
+
       | `Coerce (v, _) ->
           gv v
       | `Abs v ->
@@ -686,25 +665,24 @@ let generate_remote_call f_name xs_names =
             xs_names
         )])
 
-let apply_yielding' (f, args) =
+let apply_yielding (f, args) =
   Call(Var "_yield", f :: args)
 
-let callk_yielding' kappa arg =
+let callk_yielding kappa arg =
   Call(Var "_yieldCont", [kappa; arg]) 
 
 let rec generate_tail_computation env : tail_computation -> code -> code = fun tc kappa ->
   let gv v = generate_value env v in
   let gc c kappa = snd (generate_computation env c kappa) in
     match tc with
-      | `Return v ->
-          callk_yielding' kappa (gv v)
-      | `Apply (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins ->
-          callk_yielding' kappa (Binop (gv l, binop_name (Env.lookup env op), gv r))
-      | `Apply (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) ->
-          Call (kappa, [Call (Var ("_" ^ (Env.lookup env f)),
-                                   List.map gv vs)])
+      | `Return v ->           
+          callk_yielding kappa (gv v)
+(*       | `Apply (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins -> *)
+(*           callk_yielding kappa (Binop (gv l, binop_name (Env.lookup env op), gv r)) *)
+(*       | `Apply (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) -> *)
+(*           Call (kappa, [Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)]) *)
       | `Apply (v, vs) ->
-          apply_yielding' (gv v, [Lst (map gv vs); kappa])
+          apply_yielding (gv v, [Lst (map gv vs); kappa])
       | `Special special ->
           generate_special env special kappa
       | `Case (v, cases, default) ->
@@ -714,7 +692,7 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
               | Var x -> (fun e -> e), x
               | _ ->
                   let x = gensym ~prefix:"x" () in
-                    (fun e -> LetDef (x, v, e)), x
+                    (fun e -> Bind (x, v, e)), x
           in
             bind_continuation kappa
               (fun kappa ->
@@ -737,11 +715,11 @@ and generate_special env : special -> code -> code = fun sp kappa ->
                 Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
       | `Wrong -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
-          callk_yielding' kappa (Dict [("_db", gv v)])
+          callk_yielding kappa (Dict [("_db", gv v)])
       | `TableQuery _ ->
           failwith ("Cannot (yet?) generate JavaScript code for `TableQuery")
       | `TableHandle (db, table_name, (readtype, writetype)) ->
-          callk_yielding' kappa
+          callk_yielding kappa
             (Dict [("_table",
                     Dict [("db", gv db);
                           ("name", gv table_name);
@@ -751,7 +729,7 @@ and generate_special env : special -> code -> code = fun sp kappa ->
           failwith ("Cannot (yet?) generate JavaScript code for `SortBy")
       | `CallCC v ->
           bind_continuation kappa
-            (fun kappa -> apply_yielding' (gv v, [Lst [kappa]; kappa]))
+            (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
 
 and generate_computation env : computation -> code -> (Env.env * code) = fun (bs, tc) kappa -> 
   let rec gbs env c =
@@ -831,7 +809,8 @@ and generate_defs env : binding list -> (Env.env * code) =
                     let env' = Env.extend env [(x, x_name)] in
                     let c' =
                       (fun code ->
-                         LetDef (x_name, generate_tail_computation env tc (Fn (["__x"], Binop(Var x_name, "=", Var "__x"))), code))
+                         Seq (DeclareVar (x_name),
+                             Seq (generate_tail_computation env tc (Fn (["__x"], Binop(Var x_name, "=", Var "__x"))), code)))
                     in
                       gbs env' (c -<- c') bs
                 | _ ->

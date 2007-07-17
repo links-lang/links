@@ -1027,8 +1027,3 @@ let make_tuple_type (ts : datatype list) : datatype =
           (1, make_empty_closed_row ())
           ts))
 
-let arg_types = function
-  | `Function (`Record ((field_env, _) as row), _, _) ->
-      assert (is_closed_row row);
-      FieldEnv.fold (fun _ t ts -> t :: ts) field_env []
-  | _ -> assert false

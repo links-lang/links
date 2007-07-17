@@ -43,6 +43,8 @@ type value =
 
   | `XmlNode of (name * value name_map * value list)
 
+  | `ApplyPrim of (value * value list)
+
   (* should really be implemented as constants *)
   | `Nil
   | `Cons of (value * value)
@@ -82,3 +84,8 @@ and computation = binding list * tail_computation
 type program = computation
 
 val is_atom : value -> bool
+
+module Inline :
+sig
+  val program : program -> program
+end
