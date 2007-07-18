@@ -900,6 +900,7 @@ and alias_env : Types.alias_environment =
     (fun (name, assumption) env ->
        StringMap.add name assumption env)
     [
+      "DomNode", ([], `Primitive `Abstract);
       "Event", ([], `Primitive `Abstract);
       "List", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
