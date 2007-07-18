@@ -29,13 +29,6 @@ let is_client_program (Syntax.Program (defs, _) as program) =
                         | Syntax.Define (n, _, _, _) -> [n]
                         | _ -> [])) defs
   and is_client_prim p = 
-    (* Syntax.freevars is currently broken: it doesn't take l:name
-       bindings into account.  It's tricky to fix, because the Syntax
-       module doesn't know about l:name.  The problem that arises here
-       is that anything bound by l:name ends up looking like a
-       primitive (because analysis indicates that it's free in the
-       program).  When l:name goes away this problem will, too.  
-       Let's just work around it for now. *)
     try 
       (Library.primitive_location ->- (=) `Client) p
     with Not_found ->  false

@@ -2,9 +2,11 @@
 
 fun radioGroupVertical(items) {
   for(var (key, label) <- items)
+    <#>
     <label>
       {key} {stringToXml(label)}
     </label> <br/>
+    </#>
 }
 
 var theFormlet = 

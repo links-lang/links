@@ -66,7 +66,7 @@ SOURCES = $(OPC)                		\
           sql.mli sql.ml               		\
           syntax.mli syntax.ml        		\
           regex.ml                              \
-          sugartypes.mli                        \
+          sugartypes.ml                         \
           sugar.mli sugar.ml    		\
           result.mli result.ml         		\
           errors.mli errors.ml                  \

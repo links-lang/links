@@ -540,7 +540,6 @@ let rec generate global_names : 'a expression' -> code =
                                               Call(e_cps, [Var "__kappa"]));
                                            Var "__b";
                                            Var "__kappa"]))]))
-  | Xml_node _ as xml when isinput xml -> lname_transformation global_names xml
   | Xml_node _ as xml -> laction_transformation global_names xml
 
   (* Functions *)
@@ -827,14 +826,10 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
   in
     
   let handlers, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
-  let vars = Syntax.lname_bound_vars xml in
 
   let make_code_for_handler (evName, code) = 
-    strip_lcolon evName, (fold_left
-                            (fun expr var ->
-                               Bind (var, Call (Var "LINKS.fieldVal", [strlit var]), expr))
-                            (end_thread(generate global_names code))
-                            vars) in
+    strip_lcolon evName, (end_thread(generate global_names code)) in
+
   let handlers_ast = handlers in
   let handlers = map make_code_for_handler handlers in
   let attrs_cps = alistmap (generate global_names) attrs in 
@@ -878,19 +873,6 @@ and laction_transformation global_names (Xml_node (tag, attrs, children, _) as x
     make_xml_cps attrs_cps (key_attr @ href_attr
                             @ essentialAttrs)
       children_cps [] tag
-      
-and lname_transformation global_names (Xml_node (tag, attrs, children, d)) = 
-  (* 1. Remove l:name from the attrs
-     2. Add appropriate id and name to the attrs
-     3. Add onFocus handlers
-   *)
-  let name, attrs = (assoc "l:name" attrs, remove_assoc "l:name" attrs) in 
-  let attrs = 
-    ("onfocus", Syntax.Constant (Syntax.String "_focused = this.id", Syntax.no_expr_data))
-    :: ("id", name)
-    :: ("name", name)
-    :: attrs in
-    generate global_names (Xml_node (tag, attrs, children, Syntax.no_expr_data))
       
 (* generate direct style code *)
 and generate_direct_style global_names : 'a expression' -> code =

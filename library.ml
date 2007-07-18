@@ -532,6 +532,9 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getCharCode",
   (`Client, datatype "(Event) -> Char");
 
+  "getInputValue",
+  (`Client, datatype "(String) -> String");
+
   "event",
   (`Client, datatype "Event");
 

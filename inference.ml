@@ -923,31 +923,18 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let best_typing_env, vars = type_check_mutually typing_env variables in
       let body = type_check best_typing_env body in
 	Rec (vars, body, `T (pos, type_of_expression body, None))
-  | Xml_node (tag, atts, cs, `U pos) as xml -> 
+  | Xml_node (tag, atts, cs, `U pos) -> 
       let separate = partition (is_special -<- fst) in
       let (special_attrs, nonspecial_attrs) = separate atts in
-      let bindings = 
-(*         try *)
-          lname_bound_vars xml 
-(*         with InvalidLNameExpr ->  *)
-(*           raise UndefinedVariable "Invalid l:name parameter " ^ string_of_expression  *)
-      in
         (* "event" is always in scope for the event handlers *)
       let attr_env = ("event", ([], `Application ("Event", []))) :: env in
-(* should now use alien javascript jslib : ... to import library functions *)
-(*      let attr_env = ("jslib", ([], `Record(make_empty_open_row()))) :: attr_env in *)
         (* extend the env with each l:name bound variable *)
-      let attr_env = 
-	("_MAILBOX_", ([], fresh_type_variable ())) ::
-          fold_right (fun s env -> (s, ([], string_type)) :: env) bindings attr_env in
+      let attr_env = ("_MAILBOX_", ([], fresh_type_variable ())) :: attr_env in
       let special_attrs = map (fun (name, expr) -> (name, type_check (attr_env, alias_env) expr)) special_attrs in
         (* Check that the bound expressions have type 
            <strike>XML</strike> unit. *)
-(*      let _ =
-	List.iter (fun (_, expr) -> unify(type_of_expression expr, fresh_type_variable ()(*Types.xml*))) special_attrs in*)
       let contents = map (type_check typing_env) cs in
       let nonspecial_attrs = map (fun (k,v) -> k, type_check typing_env v) nonspecial_attrs in
-(*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
       let attr_type = string_type in
         (* force contents to be XML, attrs to be strings *)
       let _ = List.iter (fun node -> unify (type_of_expression node, xml_type)) contents in
