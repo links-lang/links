@@ -490,13 +490,8 @@ fun globals locals expr cont ->
       let defs' = List.map (fun (n, v, _type) -> (n, v)) defs in
       let new_env = bind_rec locals defs' in
         interpret globals new_env body cont
-  | Syntax.Xml_node _ as xml when Forms.islform xml ->
+  | Syntax.Xml_node _ as xml when Forms.islform xml || Forms.islhref xml ->
       eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 

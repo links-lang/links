@@ -1,7 +1,4 @@
-(* Special functionality for HTML forms:  l:action/l:name *)
-
-(* Needs serious attention to decide which bits work on typed and
-   untyped data *)
+(* Special functionality for HTML forms:  l:action etc. *)
 
 (* What are the changes in a form transformation?
 
@@ -14,8 +11,6 @@
 
    2. Replacement of l:action={code} with action='...' and moving the serialised 
       l:action code into a hidden field in the body of the form.
-
-   3. Something with l:name-bound names ?
 *)
 open List
 open Num
@@ -37,12 +32,6 @@ let islform : 'data expression' -> bool = function
 let islhref : 'data expression' -> bool = function
   | Xml_node ("a", attrs, _, _) 
       when exists (fun (k,_) -> start_of k ~is:"l:") attrs -> true
-  | _ -> false
-
-(* Is an expression an <input l:name ...> expression? *)
-let isinput : 'data expression' -> bool = function
-  | Xml_node (("input"|"textarea"|"select"), attrs, _, _)
-      when mem_assoc "l:name" attrs -> true
   | _ -> false
 
 let add_attrs new_attrs = function
@@ -110,11 +99,6 @@ let rec simplify lookup = function
   | Apply(f, a, d) -> Apply(simplify lookup f, List.map (simplify lookup) a, d)
   | expr -> expr
 
-(* let rec value_of_simple_expr lookup = function *)
-(*   | Variable(x, _) -> Some (lookup x) *)
-(*   | Constant _ as expr -> prim_val_of_expr expr *)
-(*   | expr -> Some(delay_expr expr) *)
-
 exception UnplainResult
 
 let plain_serialise_result = function  
@@ -154,28 +138,9 @@ let xml_transform env lookup eval : expression -> expression =
                     new_field @ contents, 
                     data)
 
-    | Xml_node (("input"|"textarea"|"select") as tag, attrs, contents, data) as input ->
-         let rec extract = function
-           | HasType (e, _, _) -> extract e
-           | Constant(String name, _) -> 
-               let attrs = (("name", string name) :: 
-                              filter (attrname ->- (=) "l:name" ->- not) attrs) in
-               Xml_node (tag, attrs, contents, data)
-           | e -> failwith ("Internal error transforming xml (no l:name found on " ^ tag
-                           ^ "(expression: " ^ string_of_expression e ^ ")")
-         in
-           (try extract (assoc "l:name" attrs)
-            with Not_found -> input)
-
     | Xml_node ("a", attrs, contents, data) ->
         let href_expr = assoc "l:href" attrs in
         let href_val = 
-(*           if is_simple_apply href_expr then *)
-(*             let (Variable (func, _)::args) = list_of_appln href_expr in *)
-(*             let arg_vals = map (value_of_simple_expr lookup) args in *)
-(*               String.concat "/" (func :: map (plain_serialise_result -<- valOf) arg_vals) *)
-(*                 (\*               ^ "?environment%=" ^ ser_env *\) *)
-(*           else *)
           "?_k=" ^ serialise_exprenv href_expr env
         in
         let attrs = (("href", string href_val)

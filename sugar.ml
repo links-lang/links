@@ -8,6 +8,82 @@ open Sugartypes
 exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
 exception PatternDuplicateNameError of (position * string * string)
 
+module LName : sig
+  val has_lnames : phrasenode -> bool
+  val replace_lname : phrase -> phrase
+end = 
+struct
+
+  let apply pos name args = `FnAppl ((`Var name,pos), (args,pos)), pos
+
+  let server_use name pos = 
+    apply pos "assoc" [(`StringLit name, pos);
+                       apply pos"environment" []]
+  let client_use id pos = 
+    apply pos "getInputValue" [(`StringLit id, pos)]
+
+  let fresh_names = 
+    let counter = ref 0 in
+      (fun () -> 
+         incr counter;
+         ("_lnameid_" ^ string_of_int !counter,
+          "lname_" ^ string_of_int !counter))
+
+  let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t = 
+    let lnames = ref StringMap.empty in
+    let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
+    let attr : string * phrase list -> (string * phrase list) list = function
+      | "l:name", ([`StringLit v, pos] as rhs) -> 
+          let id, name = fresh_names () in
+            add v (id,name);
+            [("name", [`StringLit name, pos]); ("id", [`StringLit id, pos])]
+      | "l:name", _ -> failwith ("Invalid l:name binding")
+      | a -> [a] in
+    let rec aux (p,pos as node : phrase) = match p with
+      | `Xml (tag, attrs, children) ->
+          let attrs = concat_map attr attrs
+          and children = List.map aux children in
+            `Xml (tag, attrs, children), pos
+      | _ -> node
+    in 
+      let p' = aux p in
+        p', !lnames
+
+  let rec has_lnames : phrasenode -> bool = function
+    | `Xml (_, attrs, children) ->
+        List.mem_assoc "l:name" attrs || List.exists (fst ->- has_lnames) children
+    | _ -> false
+
+  let let_in pos name rhs body = 
+    `Block
+      ([`Binding ((`Variable name, pos), rhs), pos], body),
+    pos
+
+  let bind_lname_vars pos lnames = function
+    | "l:action" as attr, es -> 
+        attr, (List.map (StringMap.fold 
+                           (fun var (_,name) -> let_in pos var (server_use name pos))
+                           lnames) 
+                 es)
+    | attr, es when start_of attr ~is:"l:on" -> 
+      attr, (List.map (StringMap.fold
+                         (fun var (id,_) -> let_in pos var (client_use id pos))
+                         lnames)
+               es)
+    | attr -> attr
+
+  let replace_lname = function
+    | `Xml (("form"|"FORM") as form, attrs, children), pos ->
+        let children, lnames = List.split (List.map desugar_lnames children) in
+        let lnames = 
+          try List.fold_left StringMap.union_disjoint StringMap.empty lnames 
+          with StringMap.Not_disjoint (item, _) ->
+            raise (ConcreteSyntaxError ("Duplicate l:name binding: " ^ item, pos)) in
+        let attrs = List.map (bind_lname_vars pos lnames) attrs in
+          `Xml (form, attrs, children), pos
+    | e -> e
+end
+
 (* Internal representation for patterns. 
 
    This is slightly easier for the pattern compiler to work with than
@@ -1217,6 +1293,8 @@ module Desugarer =
                CDATA. Where's a good place to do so? 
            *)
            | `TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
+           | `Xml (("form"|"FORM"), _, _) as x when LName.has_lnames x ->
+               desugar (LName.replace_lname (x, pos'))
            | `Xml (tag, attrs, subnodes) -> 
 
                let rec coalesce : (Sugartypes.phrase list -> Sugartypes.phrase list)

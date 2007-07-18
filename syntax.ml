@@ -423,29 +423,6 @@ let rec stringlit_value = function
   | Constant(String name, _) -> name
   | _ -> assert false
 
-(* Walk the XML tree, looking for <input l:name> bindings that are
-   inside the top <form> element, with no intervening <form>s.
-*)
-let lname_bound_vars : 'a expression' -> string list = 
-  let rec lnames = function
-    | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
-        (try 
-          let lname_attr = assoc "l:name" attrs in 
-            (try
-               [stringlit_value(lname_attr)]
-             with
-               | Match_failure _ ->failwith("l:name attribute was not a string: "
-                                           ^ string_of_expression lname_attr))
-        with Not_found -> concat (map lnames contents))
-    | Xml_node ("form", _, _, _) -> (* new scope *) []
-    | Xml_node (_, _, contents, _) -> concat (map lnames contents)
-    | Concat (l, r, _) -> lnames l @ lnames r
-    | _ -> [] 
-  in function
-    | Xml_node ("form", _, contents, _)  ->
-        concat (map lnames contents)
-    | Xml_node (_, _, _, _)  -> []
-        
 let freevars (expression : 'a expression') : StringSet.t =
   let module S = StringSet in
   let fromList l = List.fold_right S.add l S.empty in
@@ -467,12 +444,6 @@ let freevars (expression : 'a expression') : StringSet.t =
               (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
               (fromList vars)
       | TableQuery (_, query, _) -> fromList (Query.freevars query)
-      | Xml_node (_, attrs, children, _) as x -> 
-          S.diff 
-            (S.union
-               (List.fold_right (fun (_,attrval) -> S.union (aux attrval)) attrs S.empty)
-               (List.fold_right (fun elem -> S.union (aux elem)) children S.empty))
-            (fromList (lname_bound_vars x))
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression

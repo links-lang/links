@@ -158,9 +158,6 @@ val no_expr_data : typed_data
 val is_closed : expression -> bool
 val is_closed_wrt : expression -> Utility.StringSet.t -> bool
 
-(** Which variables are l:name-bound? *)
-val lname_bound_vars : 'a expression' -> string list
-
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
 
