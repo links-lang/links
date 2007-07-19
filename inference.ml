@@ -1267,8 +1267,10 @@ let type_program : Types.typing_environment -> untyped_program -> (Types.typing_
             let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
                                    name, expr, t) defparts in
             let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
-            let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
-                                Define(name, expr, location, expression_data expr))
+            let defs = (map2 (fun (name, Rec ([(_, _, t)], _, _), location, _) (_, expr, _) ->
+                                let ed = expression_data expr in
+                                let expr = Rec ([(name, expr, t)], Variable (name, ed), ed) in
+                                  Define(name, expr, location, ed))
 			  defparts defs) in
               typing_env, typed_defs @ defs
 
