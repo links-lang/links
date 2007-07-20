@@ -343,6 +343,7 @@ struct
            (fun v2 ->
               let t = return_type (sem_type s1) in
                 lift (`Special (`App (v1, v2)), t)))
+
   let apply (s, ss) =
     let t = return_type (sem_type s) in
     let ss = lift_list ss
@@ -438,6 +439,8 @@ struct
       (fun e ->
          M.bind (for_binding (x_info, e))
            (fun x -> body x))
+
+
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
   let table_query (tables, query, t) =
@@ -548,10 +551,24 @@ struct
             in
               I.recursive (defs, fun gs -> eval (Env.extend env fs gs) e)
         | Xml_node (name, attributes, children, _) ->
+            let eval_attribute name e =
+              if start_of name ~is:"l:" then
+                let xt = `Application ("Event", []) in
+                  (* [HACK]
+                     
+                     x is global in order to ensure that it is assigned the name "event"
+                     rather than "event_<number>" during JS generation
+                  *)
+                let x_info = make_global_info (xt, "event") in
+                let ft = `Function (`Application ("Event", []), Types.fresh_type_variable(), node_datatype e) in
+                  I.lam (ft, [x_info], (fun [v] -> eval (Env.extend env ["name"] [v]) e), `Unknown)
+              else
+                ev e in
+
             let attributes =
               List.fold_right
                 (fun (name, e) attributes ->
-                   StringMap.add name (ev e) attributes)
+                   StringMap.add name (eval_attribute name e) attributes)
                 attributes StringMap.empty in
             let children =
               List.map ev children
@@ -606,10 +623,28 @@ struct
             cofv (I.listof (ev elem, t))
         | Concat (left, right, _) ->
             cofv (I.concat (ev left, ev right, t))
-        | For (e, x, body, _) ->
+        | For (body, x, e, _) ->
+            (*
+              compile comprehensions into map
+            *)
+            let xt = node_datatype e in
+            let ft = `Function (xt, Types.fresh_type_variable(), t) in
+
+            let map_type = `Function (Types.make_tuple_type [ft; make_list_type xt],
+                                      Types.fresh_type_variable (),
+                                      make_list_type t) in
+
+            let x_info = make_local_info (xt, x) in
+            let map = I.var (Env.lookup env "map", map_type) in
+
+            let f = I.lam (ft, [x_info], (fun [v] -> eval (Env.extend env [x] [v]) body), `Unknown) in
+              I.apply (map, [f; ev e])
+
+(*
             I.comprehension (make_local_info (node_datatype e, x),
                              ev e,
                              fun v -> eval (Env.extend env [x] [v]) body)
+*)
         | Database (e, _) ->
             I.database (ev e)
         | TableHandle (database, table, ts, _) ->
@@ -642,6 +677,7 @@ struct
                 let defs, fs, fs' =
                   List.fold_right
                     (fun (Define (f, Rec([f', e, _], _, _), location, _)) (defs, fs, fs') ->
+
                        (f, e, location) :: defs, f :: fs, f' :: fs')
                     defs ([], [], []) in
                   
@@ -686,7 +722,6 @@ struct
       | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
       | _ ->  false in
     let defss = groupBy bothdefs defs in
-    let _ = Debug.print ("defs: "^String.concat "\n" (List.map string_of_definition defs)) in
       eval_defs env defss body
 
   let compile env p =

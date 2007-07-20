@@ -183,7 +183,7 @@ let rec show : code -> string = fun code ->
         cases "" in
   let show_default v = opt_app
     (fun (x, e) ->
-       "default:{var " ^ x ^ "=" ^ v ^ "._value;" ^ show e ^ "break;}") "" in
+       "default:{var " ^ x ^ "=" ^ v ^ ";" ^ show e ^ ";" ^ "break;}") "" in
     match code with
       | Var s -> s
       | Lit s -> s
@@ -221,11 +221,11 @@ struct
     let rec show_func_pp name (Fn (vars, body)) = 
       PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
                 ^+^  (braces
-                        (break ^^ group(nest 2 (format_code body)) ^+^ PP.text ";" ^^ break))) in
+                        (break ^^ group(nest 2 (format_code body)) ^^ break))) in
     let show_case v l (x, e) =
-      PP.text "case" ^+^ PP.text l ^^
+      PP.text "case" ^+^ PP.text("'"^l^"'") ^^
         PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
-                                  format_code e ^+^ PP.text "break;") ^^ break in
+                                  format_code e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
     let show_cases v =
       fun cases ->
         StringMap.fold (fun l c s ->
@@ -233,8 +233,8 @@ struct
           cases DocNil in
     let show_default v = opt_app
       (fun (x, e) ->
-         PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^
-                                          PP.text (v^"._value;") ^+^ format_code e ^+^ PP.text "break;") ^^ break) PP.DocNil in
+         PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
+                                          format_code e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
     let maybe_parenize = function
       | Var _
       | Lit _
@@ -281,7 +281,7 @@ struct
                       ^+^  (braces
                               (break ^^ group(nest 2 (format_code c2)) ^^ break)))
         | Case (v, cases, default) ->
-            PP.group (PP.text "switch" ^+^ (parens (PP.text v)) ^+^
+            PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
                         (braces ((show_cases v cases) ^+^ (show_default v default))))
         | Dict (elems) -> 
             PP.braces (hsep (punctuate ","
@@ -291,9 +291,8 @@ struct
                                   elems)))
         | Lst elems -> brackets(hsep(punctuate "," (map format_code elems)))
         | Bind (name, value, body) ->
-            parens ((PP.text name ^+^ PP.text "=" ^+^ 
-                       (format_code value)) ^^ PP.text "," ^^ break ^^
-                      format_code body)
+            PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ format_code value ^^ PP.text ";" ^^
+              break ^^ format_code body
         | Seq (l, r) -> vsep [(format_code l ^^ PP.text ";"); format_code r]
         | Ret e -> PP.text("return ") ^| parens(format_code e)
 
@@ -468,7 +467,12 @@ let rec generate_value env : value -> code =
               | Char v     -> chrlit v
               | String v   -> chrlistlit v
           end
-      | `Variable var -> Var (Env.lookup env var)
+      | `Variable var ->
+          let name = Env.lookup env var in
+            if name = "map" then
+              Var ("LINKS.accum")
+            else
+              Var name
       | `Extend (field_map, rest) ->
           let dict =
             Dict
@@ -506,7 +510,7 @@ let rec generate_value env : value -> code =
           Binop(gv v, comparison_name op, gv w)
 (*      | `XmlNode _ as xml when is_input xml -> lname_transformation' env xml*)
       | `XmlNode (name, attributes, children) ->
-          make_xml env name attributes children
+          generate_xml env name attributes children
 
       | `ApplyPrim (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins ->
           Binop (gv l, binop_name (Env.lookup env op), gv r)
@@ -575,66 +579,61 @@ and make_xml env tag attrs children =
  * scope is broken.  (This will need more care for less simple cases,
  * e.g. where there are let bindings)
  *)
-(* and laction_transformation' global_names (Xml_node (tag, attrs, children, _) as xml) =  *)
-(*   (\* *)
-(*      laction_transformation needs the global names in order to strip them *)
-(*      out of any environment that it captures. *)
-(*   *\) *)
-(*   let essentialAttrs =  *)
-(*     match tag with *)
-(*         "form" -> StringMapUtils.from_alist ["action", chrlistlit "#"; "method", chrlistlit "post"] *)
-(*       | _ -> StringMap.empty *)
-(*   in *)
-    
-(*   let handlers, attrs = StringMapUtils.partition (fun name _ -> start_of attr ~is:"l:") attrs in *)
-(*   let vars = Syntax.lname_bound_vars xml in *)
+(* and laction_transformation' global_names (Xml_node (tag, attrs, children, _) as xml) = *)
 
-(*   let make_code_for_handler (evName, code) =  *)
-(*     strip_lcolon evName, (fold_left *)
-(*                             (fun expr var -> *)
-(*                                Bind (var, Call (Var "LINKS.fieldVal", [strlit var]), expr)) *)
-(*                             (end_thread(generate global_names code)) *)
-(*                             vars) in *)
-(*   let handlers_ast = handlers in *)
-(*   let handlers = map make_code_for_handler handlers in *)
+and generate_xml env tag attrs children =
+  (*
+     laction_transformation needs the global names in order to strip them
+     out of any environment that it captures.
+  *)
+  let essential_attrs =
+    match tag with
+        "form" -> StringMap.from_alist ["action", chrlistlit "#"; "method", chrlistlit "post"]
+      | _ -> StringMap.empty in  
+  let gv = generate_value env in
+  
+  let handlers, plain_attrs =
+    StringMap.fold
+      (fun name v (handlers, plain_attrs) ->
+         if start_of name ~is:"l:" then
+           (strip_lcolon name, Call (gv v, [Var "event"; idy_js])) :: handlers, plain_attrs
+         else
+           handlers, StringMap.add name (gv v) plain_attrs)
+      attrs ([], StringMap.empty) in
 
-(*   let attrs_cps = alistmap (generate global_names) attrs in  *)
-(*   let attrs_cps = pair_fresh_names attrs_cps in *)
-(*   let children_cps = pair_fresh_names (map (generate global_names) children) in *)
+  let children = List.map gv children in
 
-(*   let key_attr =  *)
-(*     match handlers with *)
-(*       | [] -> [] *)
-(*       | handlers -> let handlers = remove_assoc "href" handlers in *)
-(*             ["key",  *)
-(*              Call(Var "_registerFormEventHandlers", *)
-(*                   [Lst (map (fun (evName, code) ->  *)
-(*                                Dict(["evName", strlit evName; *)
-(*                                      "handler", Fn (["event"], code)])) *)
-(*                           handlers)]); *)
-(*             ] in *)
+  let key_attr =
+    match handlers with
+      | [] -> StringMap.empty
+      | handlers ->
+          let handlers = remove_assoc "href" handlers in
+            StringMap.singleton
+              "key"
+              (Call(Var "_registerFormEventHandlers",
+                    [Lst (map (fun (evName, code) ->
+                                 Dict(["evName", strlit evName;
+                                       "handler", Fn (["event"], code)]))
+                            handlers)])) in
 
+  let all_attrs =
+    StringMap.union_disjoint plain_attrs (StringMap.union_disjoint key_attr essential_attrs)
 
-
-(*     Fn(["__kappa"], *)
-(*        Call(Var "LINKS.XML", *)
-(*             [strlit tag; *)
-(*              Dict (StringMap.fold *)
-(*                      (fun name v bs -> *)
-(*                         (name, generate_value env v) :: bs) *)
-(*                      attrs []); *)
-(*              Lst (List.map (generate_value env) children); *)
-(*              Var "__kappa" *)
-(*             ])) *)
+  in
+    Call(Var "LINKS.XML",
+         [strlit tag;
+          Dict (StringMap.to_alist all_attrs);
+          Lst children])
 
 
-(*     (\* make_var_list pairs each variable name (as a string) with the *)
-(*        variable itself. At runtime this is like pairing the variable *)
-(*        names with their values, effectively capturing the environment. *\) *)
+    (* make_var_list pairs each variable name (as a string) with the
+       variable itself. At runtime this is like pairing the variable
+       names with their values, effectively capturing the environment. *)
 (*   let make_var_list = map (fun v -> Lst [chrlistlit v ; Var v]) in *)
+
 (*   let href_attr = *)
 (*     if (tag <> "a") then [] else *)
-(*     try  *)
+(*     try *)
 (*       let href_hdlr_ast = (assoc "l:href" handlers_ast) in *)
 (*       let code_ptr = Result.marshal_exprenv (href_hdlr_ast, []) in *)
 (*       let href_hdlr = (assoc "href" handlers) in *)
@@ -651,8 +650,8 @@ and make_xml env tag attrs children =
 (*                                   [Lst(make_var_list (StringSet.elements local_vars))])])])] *)
 (*     with Not_found -> ["href", chrlistlit "#"] in *)
     
-(*     make_xml_cps attrs_cps (key_attr @ href_attr *)
-(*                             @ essentialAttrs) *)
+(*     make_xml_cps *)
+(* attrs_cps (key_attr @ href_attr @ essentialAttrs) *)
 (*       children_cps [] tag *)
 
 
@@ -793,6 +792,7 @@ and generate_binding env : binding -> (Env.env * (code -> code)) = fun binding -
                         location) :: defs, code)
                   defs ([], code)))
     | `For _ -> assert false (* should be compiled away to map! *)
+
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
@@ -922,6 +922,8 @@ let invert_env env =
     env IntMap.empty
 
 let generate_program_defs defs root_names =
+  let _ = Debug.print ("defs: "^String.concat "\n" (List.map (Syntax.Show_definition.show) (* string_of_definition *) defs)) in
+
   let aliens = get_alien_names defs in
   let defs = List.map rename_symbol_operators_def defs in
   (* [NOTE] body is just a placeholder *)
@@ -931,7 +933,7 @@ let generate_program_defs defs root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body)
   in
-  let library_names = List.map fst (fst Library.typing_env) in
+  let library_names = "map" :: List.map fst (fst Library.typing_env) in
   let elim_free_names = aliens @ library_names in
   let defs =
     (if Settings.get_value elim_dead_defs then

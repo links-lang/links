@@ -37,6 +37,16 @@ module type Map =
 sig
   include Map.S
   exception Not_disjoint of key * string
+
+  val singleton : key -> 'a -> 'a t 
+  (** create a singleton map *)
+
+  val filter : ('a -> bool) -> 'a t -> 'a t
+  (** filter by value *)
+
+  val filteri : (key -> 'a -> bool) -> 'a t -> 'a t
+  (** filter by key and value *)
+
   val for_all : ('a -> bool) -> 'a t -> bool
   (** return true if p holds for all values in the range of m *)
 
@@ -96,6 +106,19 @@ struct
   module type S = Map
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
+
+    let singleton i v =
+      add i v empty
+
+    let filter f map =
+      fold (fun name v map ->
+              if f v then add name v map
+              else map) map empty
+
+    let filteri f map =
+      fold (fun name v map ->
+              if f name v then add name v map
+              else map) map empty
 
     let find elem map = 
       try find elem map 
