@@ -103,7 +103,6 @@ val labelled_string_of_program : program -> string
 val stringlit_value : 'a expression' -> string
 
 val freevars : 'a expression' -> Utility.StringSet.t
-val freevars_list : 'a expression' -> string list
 val freevars_def : 'a definition' -> Utility.StringSet.t
 val freevars_program : 'a program' -> Utility.StringSet.t
 

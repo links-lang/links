@@ -508,6 +508,9 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   "getTargetElement",
   (`Client, datatype "(Event) -> DomNode");
 
+  "registerEventHandlers",
+  (`Client, datatype "([(String,(Event)->())]) -> String");
+
   (* getPageX : (Event) -> Int *)
   "getPageX",
   (`Client, datatype "(Event) -> Int");
@@ -854,14 +857,18 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	             | _  -> failwith "Internal error: Bad coercion from native string")),
 	 (datatype ("(NativeString) -> String"))));	
 	
+  ("pickleCont",
+   (`Server (p1 (marshal_value ->- box_string)),
+    datatype "(([(String,String)])->Xml) -> String"));
+
   (* Serialize values to DB *)
   ("pickle_value", 
-     (`Server(p1 (fun v -> (box_string (marshal_value v)))),
-	datatype "(a) -> String"));     
+   (`Server (p1 (fun v -> (box_string (marshal_value v)))),
+    datatype "(a) -> String"));     
 
   ("unpickle_value",
-     (`Server(p1 (fun v -> unmarshal_value (unbox_string v))),
-	datatype "(String) -> a"))
+   (`Server (p1 (fun v -> broken_unmarshal_value (unbox_string v))),
+    datatype "(String) -> a"));
 ]
 
 let impl : located_primitive -> primitive option = function

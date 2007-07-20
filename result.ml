@@ -649,14 +649,16 @@ let marshal_continuation (c : continuation) : string
   let pickle = Pickle_continuation.pickleS c in
     Debug.print("marshalled continuation size: " ^ 
                   string_of_int(String.length pickle));
-    let result = Netencoding.Base64.encode pickle in
+    let result = base64encode pickle in
       result
     
 let marshal_exprenv : (expression * environment) -> string
-  = (Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode)
+  = (Pickle_ExprEnv.pickleS ->- base64encode)
 
 let marshal_value : result  -> string
-  = Pickle_result.pickleS ->- Netencoding.Base64.encode
+  = Pickle_result.pickleS ->- base64encode
+
+let marshal_result = marshal_value
 
 exception UnrealizableContinuation
 
@@ -666,7 +668,7 @@ let unmarshal_continuation valenv program : string -> continuation
      from the valenv, since placeholders may make reference to them. *)
   let table = (program_label_table program
                  @ concat_map val_label_table valenv) in
-    Netencoding.Base64.decode
+    base64decode
     ->- Pickle_continuation.unpickleS
     ->- resolve_placeholders_cont table 
 
@@ -682,13 +684,21 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
                     labelled_string_of_expression expr);
       raise UnrealizableContinuation
  in
-  Netencoding.Base64.decode
+  base64decode
   ->- Pickle_ExprEnv.unpickleS
   ->- resolve
 
-let unmarshal_value : string -> result =
-  Netencoding.Base64.decode ->- Pickle_result.unpickleS
+let unmarshal_result valenv program : string -> result
+  =
+  let table = program_label_table program @ concat_map val_label_table valenv  in
+    base64decode
+    ->- Pickle_result.unpickleS
+    ->- resolve_placeholders_result table
 
+
+(* Note: this is broken: it doesn't resolve placeholders *)
+let broken_unmarshal_value : string -> result =
+  base64decode ->- Pickle_result.unpickleS
 
 (** {0 Environment handling} *)
 

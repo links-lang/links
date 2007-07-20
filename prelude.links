@@ -95,7 +95,6 @@ fun filter(p, l) {
   for (var x <- l) where (p(x)) [x]
 }
 
-
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }

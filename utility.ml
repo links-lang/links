@@ -664,7 +664,7 @@ let base64decode s =
   with Invalid_argument "Netencoding.Base64.decode" 
       -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
 
-and base64encode s = Netencoding.Base64.encode s
+and base64encode = Netencoding.Base64.encode
 
 (*** ocaml versions ***)
 let ocaml_version_number = (List.map int_of_string
