@@ -425,15 +425,14 @@ let rec stringlit_value = function
 
 let freevars (expression : 'a expression') : StringSet.t =
   let module S = StringSet in
-  let fromList l = List.fold_right S.add l S.empty in
   let rec aux' default v = 
     let aux = aux' default in match v with
       | Variable (name, _) -> S.add name S.empty
       | For (body, var, generator, _) -> S.union (aux generator) (S.remove var (aux body))
       | Let (var, value, body, _) -> S.union (aux value) (S.remove var (aux body))
-      | Abstr (vars, body, _) -> S.diff (aux body) (fromList vars)
+      | Abstr (vars, body, _) -> S.diff (aux body) (S.from_list vars)
       | Record_selection (_, labvar, var, value, body, _) ->
-          S.union (aux value) (S.diff (aux body) (fromList [var;labvar]))
+          S.union (aux value) (S.diff (aux body) (S.from_list [var;labvar]))
       | Variant_selection (value, _, cvar, cbody, var, body, _) ->
           S.union (aux value)
             (S.union (S.remove cvar (aux cbody))
@@ -442,8 +441,11 @@ let freevars (expression : 'a expression') : StringSet.t =
           let vars, vals = List.split (map (fun (n,v,_) -> (n,v)) bindings) in
             S.diff
               (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
-              (fromList vars)
-      | TableQuery (_, query, _) -> fromList (Query.freevars query)
+              (S.from_list vars)
+      | TableQuery (ts, query, _) ->
+          S.union
+            (S.union_all (List.map (fun (_, e) -> aux e) ts))
+            (S.from_list (Query.freevars query))
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
