@@ -73,7 +73,6 @@ SOURCES = $(OPC)                		\
           sql_transform.mli sql_transform.ml	\
           parser.mly            		\
           $(DB_CODE)            		\
-          forms.mli forms.ml    		\
           database.mli database.ml 		\
           lexer.mll             		\
           parse.mli parse.ml    		\

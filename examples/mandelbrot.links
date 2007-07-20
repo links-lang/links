@@ -85,7 +85,7 @@ var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
 <html>
  <body>
-  <select l:onchange="{spawn{iterate(getTargetValue(event))}}"
+  <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"
 	style="display: block">
     {for (var colour <- colours)
        <option>{stringToXml(colour)}</option>}

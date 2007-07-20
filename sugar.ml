@@ -8,17 +8,18 @@ open Sugartypes
 exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
 exception PatternDuplicateNameError of (position * string * string)
 
-module LName : sig
-  val has_lnames : phrasenode -> bool
-  val replace_lname : phrase -> phrase
+module LAttrs : sig
+  val has_lattrs : phrasenode -> bool
+  val replace_lattrs : phrase -> phrase
 end = 
 struct
+  (* See http://frege/wiki/LAttributeSugar *)
 
-  let apply pos name args = `FnAppl ((`Var name,pos), (args,pos)), pos
+  let apply pos name args : phrase = `FnAppl ((`Var name,pos), (args,pos)), pos
 
   let server_use name pos = 
     apply pos "assoc" [(`StringLit name, pos);
-                       apply pos"environment" []]
+                       `Var "_env", pos]
   let client_use id pos = 
     apply pos "getInputValue" [(`StringLit id, pos)]
 
@@ -29,11 +30,64 @@ struct
          ("_lnameid_" ^ string_of_int !counter,
           "lname_" ^ string_of_int !counter))
 
+  let desugar_lhref : phrase -> phrase = function
+    | `Xml (("a"|"A") as a, attrs, children), pos
+        when mem_assoc "l:href" attrs -> 
+        let attrs =
+          match partition (fst ->- (=)"l:href") attrs with
+            | [_,[href]], rest ->
+                (("href",
+                  [`StringLit "?_k=", pos;
+                    apply pos "pickleCont" [`FunLit (None, [[`Any,pos]], href), pos]]))
+                :: rest 
+            | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
+        in 
+          `Xml (a, attrs, children), pos
+    | e -> e
+
+  let desugar_laction : phrase -> phrase = function
+    | `Xml (("form"|"FORM") as form, attrs, children), pos 
+        when mem_assoc "l:action" attrs ->
+        begin match partition (fst ->- (=)"l:action") attrs with
+          | [_,[laction]], rest ->
+              let hidden : phrase = 
+                `Xml ("input",
+                      ["type",  [`StringLit "hidden", pos];
+                       "name",  [`StringLit "_k", pos];
+                       "value", [apply pos "pickleCont"
+                                   [`FunLit (None, [[`Variable "_env",pos]], laction), pos]]],
+                      []), pos
+              and action = ("action", [`StringLit "#", pos]) 
+              in 
+                `Xml (form, action::rest, hidden::children), pos
+          | _ -> assert false (* multiple l:actions, or an invalid rhs *)
+        end
+    | e -> e
+
+
+  let desugar_lonevent : phrase -> phrase = 
+    let pair pos = function
+      | (name, [rhs]) ->
+          let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
+            `TupleLit [`StringLit event, pos;
+                       `FunLit (None, [[`Variable "event", pos]], rhs), pos], pos
+      | _ -> assert false
+    in function
+      | `Xml (tag, attrs, children), pos
+          when exists (fst ->- start_of ~is:"l:on") attrs ->
+          let lons, others = partition (fst ->- start_of ~is:"l:on") attrs in
+          let idattr =
+            ("key", 
+             [apply pos "registerEventHandlers" 
+                [`ListLit (List.map (pair pos) lons), pos]]) in
+            `Xml (tag, idattr::others, children), pos
+      | e -> e
+
   let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t = 
     let lnames = ref StringMap.empty in
     let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
     let attr : string * phrase list -> (string * phrase list) list = function
-      | "l:name", ([`StringLit v, pos] as rhs) -> 
+      | "l:name", [`StringLit v, pos] -> 
           let id, name = fresh_names () in
             add v (id,name);
             [("name", [`StringLit name, pos]); ("id", [`StringLit id, pos])]
@@ -49,9 +103,8 @@ struct
       let p' = aux p in
         p', !lnames
 
-  let rec has_lnames : phrasenode -> bool = function
-    | `Xml (_, attrs, children) ->
-        List.mem_assoc "l:name" attrs || List.exists (fst ->- has_lnames) children
+  let rec has_lattrs : phrasenode -> bool = function
+    | `Xml (_, attrs, _) -> exists (fst ->- start_of ~is:"l:") attrs
     | _ -> false
 
   let let_in pos name rhs body = 
@@ -72,7 +125,7 @@ struct
                es)
     | attr -> attr
 
-  let replace_lname = function
+  let desugar_form = function
     | `Xml (("form"|"FORM") as form, attrs, children), pos ->
         let children, lnames = List.split (List.map desugar_lnames children) in
         let lnames = 
@@ -82,6 +135,8 @@ struct
         let attrs = List.map (bind_lname_vars pos lnames) attrs in
           `Xml (form, attrs, children), pos
     | e -> e
+
+  let replace_lattrs = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent
 end
 
 (* Internal representation for patterns. 
@@ -1293,8 +1348,8 @@ module Desugarer =
                CDATA. Where's a good place to do so? 
            *)
            | `TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
-           | `Xml (("form"|"FORM"), _, _) as x when LName.has_lnames x ->
-               desugar (LName.replace_lname (x, pos'))
+           | `Xml _ as x when LAttrs.has_lattrs x ->
+               desugar (LAttrs.replace_lattrs (x, pos'))
            | `Xml (tag, attrs, subnodes) -> 
 
                let rec coalesce : (Sugartypes.phrase list -> Sugartypes.phrase list)

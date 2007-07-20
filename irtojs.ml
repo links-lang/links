@@ -8,7 +8,6 @@ open Netencoding
 open List
 
 open Pickle
-open Forms
 open Utility
 open Syntax
 open Ir
@@ -595,7 +594,7 @@ and generate_xml env tag attrs children =
   let handlers, plain_attrs =
     StringMap.fold
       (fun name v (handlers, plain_attrs) ->
-         if start_of name ~is:"l:" then
+         if false then (*start_of name ~is:"l:" then*)
            (strip_lcolon name, Call (gv v, [Var "event"; idy_js])) :: handlers, plain_attrs
          else
            handlers, StringMap.add name (gv v) plain_attrs)
@@ -922,8 +921,6 @@ let invert_env env =
     env IntMap.empty
 
 let generate_program_defs defs root_names =
-  let _ = Debug.print ("defs: "^String.concat "\n" (List.map (Syntax.Show_definition.show) (* string_of_definition *) defs)) in
-
   let aliens = get_alien_names defs in
   let defs = List.map rename_symbol_operators_def defs in
   (* [NOTE] body is just a placeholder *)
@@ -941,15 +938,16 @@ let generate_program_defs defs root_names =
      else defs) in
   let initial_env = Compileir.make_initial_env library_names in
   let ((defs', _) as p, _) = Compileir.compile_program initial_env (Program (defs, body)) in
-  let _ = Debug.print (Show_computation.show p) in
+(*  let _ = Debug.print (Show_computation.show p) in*)
   let env = Compileir.add_globals_to_env initial_env defs' in
   let env' = invert_env env in
-  let _ = Debug.print ("env': "^Env.Show_env.show env') in
+(*  let _ = Debug.print ("env': "^Env.Show_env.show env') in*)
   let env', js_defs = gen_defs env' defs' in
   let js_defs = [show_pp js_defs] in
     (env, env'), js_defs
 
 let generate_program ?(onload = "") (Program (defs, body)) =
+  let _ = Debug.print ("defs: "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in
   let (Program (defs, body)) = rewrite_program
     (Syntax.RewriteSyntax.all [Rewriterules.Prepare.NormalizeProjections.normalize_projections])
     (Program (defs, body)) in
@@ -958,11 +956,8 @@ let generate_program ?(onload = "") (Program (defs, body)) =
   let body = rename_symbol_operators body in
  
   let (e, _) = Compileir.compile_program env (Program ([], body)) in 
-  let _ = Debug.print (Show_computation.show e) in
-  let _ = Debug.print ("A") in
-  let js_root_expr =
-    snd (gen env' e) in
-  let _ = Debug.print ("B") in
+(*  let _ = Debug.print (Show_computation.show e) in*)
+  let js_root_expr = snd (gen env' e) in
     (make_boiler_page ~body:(show_pp js_root_expr) js_defs)
 
 let generate_program_defs defs root_names =

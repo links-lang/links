@@ -565,6 +565,8 @@ struct
               else
                 ev e in
 
+            let eval_attribute name e = ev e in
+
             let attributes =
               List.fold_right
                 (fun (name, e) attributes ->

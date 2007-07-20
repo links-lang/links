@@ -4,11 +4,9 @@
 *)
 
 open Num
-open Netencoding
 open List
 
 open Pickle
-open Forms
 open Utility
 open Syntax
 
@@ -398,6 +396,27 @@ let rename_builtins name =
   try assoc name builtins
   with Not_found -> name
 
+let href_rewrite globals : RewriteSyntax.rewriter = function
+  | Apply (Variable ("pickleCont",_), 
+           [Abstr ([_], e, _) as abs], data) ->
+      let fv = StringSet.diff (freevars e) globals 
+      and `T (_,_,Some label) = expression_data e in
+      let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f"))
+      and json_args = Apply (Variable ("stringifyB64", data),
+                             [Record_intro (StringSet.fold 
+                                              (fun k r -> StringMap.add k (Variable (k, data)) r)
+                                              fv StringMap.empty,
+                                            None, data)], data) in
+        Some (Concat (Constant (String (pickled_label^ "&_jsonArgs="), data),
+                      json_args, data))
+  | _ -> None
+
+let fixup_hrefs globals e = fromOption e (RewriteSyntax.bottomup (href_rewrite globals) e)
+
+let fixup_hrefs_def globals = function
+  | Define (name, b,l,t) -> Define (name, fixup_hrefs globals b, l, t)
+  | d -> d
+
 (* Convert colons in qualified names to triple-underscores *) 
 let rename_prefixed name = Str.global_replace (Str.regexp ":") "___" name
 
@@ -540,7 +559,23 @@ let rec generate global_names : 'a expression' -> code =
                                               Call(e_cps, [Var "__kappa"]));
                                            Var "__b";
                                            Var "__kappa"]))]))
-  | Xml_node _ as xml -> laction_transformation global_names xml
+  | Xml_node (tag, attrs, children, _) as xml ->
+(
+    
+  let attrs_cps = alistmap (generate global_names) attrs in 
+  let attrs_cps = pair_fresh_names attrs_cps in
+  let children_cps = pair_fresh_names (map (generate global_names) children) in
+  let key_attr = []
+
+    (* make_var_list pairs each variable name (as a string) with the
+       variable itself. At runtime this is like pairing the variable
+       names with their values, effectively capturing the environment. *)
+  and href_attr = [] in
+    make_xml_cps attrs_cps (key_attr @ href_attr)
+      children_cps [] tag
+
+)
+
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
@@ -793,87 +828,6 @@ and generate_def global_names : 'a definition' -> code =
     | Alias _ 
     | Alien _ -> Nothing
 
-(* Specialness: 
-   * Modify the l:action to pass the continuation to the top-level boilerplate
-   * lift the continuation out of the form.
-
-        def f(x) {
-          <form name="form1" l:action={foo(x)}>...</form>
-        }
-
-     is translated as 
-        _continuation_form1 = null;
-        function f(x) { 
-           return (_continuation_form1 = function () { foo(x) },
-                   '<form name="form1" action="#" onSubmit="_start(_continuation_form1()); return false">...</form>')
-        }
-
-   The continuation can't be left in the action attribute because it
-   might refer to lexical bindings and action is just a string, so
-   scope is broken.  (This will need more care for less simple cases,
-   e.g. where there are let bindings)
-*)
-and laction_transformation global_names (Xml_node (tag, attrs, children, _) as xml) = 
-  (*
-     laction_transformation needs the global names in order to strip them
-     out of any environment that it captures.
-  *)
-  let essentialAttrs = 
-    match tag with
-        "form" -> ["action", chrlistlit "#";
-                   "method", chrlistlit "post"]
-      | _ -> []
-  in
-    
-  let handlers, attrs = partition (fun (attr, _) -> start_of attr ~is:"l:") attrs in
-
-  let make_code_for_handler (evName, code) = 
-    strip_lcolon evName, (end_thread(generate global_names code)) in
-
-  let handlers_ast = handlers in
-  let handlers = map make_code_for_handler handlers in
-  let attrs_cps = alistmap (generate global_names) attrs in 
-  let attrs_cps = pair_fresh_names attrs_cps in
-  let children_cps = pair_fresh_names (map (generate global_names) children) in
-  let key_attr = 
-    match handlers with
-      | [] -> []
-      | handlers -> let handlers = remove_assoc "href" handlers in
-            ["key", 
-             Call(Var "_registerFormEventHandlers",
-                  [Lst (map (fun (evName, code) -> 
-                               Dict(["evName", strlit evName;
-                                     "handler", Fn (["event"], code)]))
-                          handlers)]);
-            ] in
-
-    (* make_var_list pairs each variable name (as a string) with the
-       variable itself. At runtime this is like pairing the variable
-       names with their values, effectively capturing the environment. *)
-  let make_var_list = map (fun v -> Lst [chrlistlit v ; Var v]) in
-  let href_attr =
-    if (tag <> "a") then [] else
-    try 
-      let href_hdlr_ast = (assoc "l:href" handlers_ast) in
-      let code_ptr = Result.marshal_exprenv (href_hdlr_ast, []) in
-      let href_hdlr = (assoc "href" handlers) in
-      (* [NOTE]
-
-         The following relies on the invariant that global names are distinct from local names, which
-         is established by Syntax.uniquify_names.
-      *)
-      let local_vars = StringSet.diff (Syntax.freevars href_hdlr_ast) (StringSet.from_list global_names) in
-        ["href", Call(Var "LINKS.stringToCharlist",
-                      [Call(Var "LINKS.jsStrConcat",
-                            [strlit("?_k=" ^ code_ptr ^ "&_jsonArgs=");
-                             Call(Var "JSON.stringifyB64",
-                                  [Lst(make_var_list (StringSet.elements local_vars))])])])]
-    with Not_found -> ["href", chrlistlit "#"] in
-    
-    make_xml_cps attrs_cps (key_attr @ href_attr
-                            @ essentialAttrs)
-      children_cps [] tag
-      
 (* generate direct style code *)
 and generate_direct_style global_names : 'a expression' -> code =
   let gcps = generate global_names in
@@ -1195,7 +1149,7 @@ let generate_program_defs defs root_names =
        Callgraph.elim_dead_defs library_names defs root_names
      else defs) in
   let global_names = Syntax.defined_names defs @ library_names in
-    map (gen_def global_names ->- show_pp) defs
+    map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def global_names ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
   let js_defs = generate_program_defs defs (Syntax.freevars expr) in
@@ -1205,7 +1159,7 @@ let generate_program ?(onload = "") (Program(defs,expr)) =
   let js_root_expr = 
     (gen
        ~pre_opt:(fun expr -> Call(expr, [Var "_start"]))
-       global_names expr)
+       global_names (fixup_hrefs (StringSet.from_list global_names) expr))
   in
     (make_boiler_page ~body:(show_pp js_root_expr) js_defs)
      

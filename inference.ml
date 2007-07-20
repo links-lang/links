@@ -4,7 +4,6 @@ open List
 open Utility
 open Syntax
 open Types
-open Forms
 open Errors
 open Instantiate
 open Typevarcheck
@@ -924,29 +923,11 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let body = type_check best_typing_env body in
 	Rec (vars, body, `T (pos, type_of_expression body, None))
   | Xml_node (tag, atts, cs, `U pos) -> 
-      let separate = partition (is_special -<- fst) in
-      let (special_attrs, nonspecial_attrs) = separate atts in
-        (* "event" is always in scope for the event handlers *)
-      let attr_env = ("event", ([], `Application ("Event", []))) :: env in
-        (* extend the env with each l:name bound variable *)
-      let attr_env = ("_MAILBOX_", ([], fresh_type_variable ())) :: attr_env in
-      let special_attrs = map (fun (name, expr) -> (name, type_check (attr_env, alias_env) expr)) special_attrs in
-        (* Check that the bound expressions have type 
-           <strike>XML</strike> unit. *)
       let contents = map (type_check typing_env) cs in
-      let nonspecial_attrs = map (fun (k,v) -> k, type_check typing_env v) nonspecial_attrs in
-      let attr_type = string_type in
-        (* force contents to be XML, attrs to be strings *)
-      let _ = List.iter (fun node -> unify (type_of_expression node, xml_type)) contents in
-      let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
-      let trimmed_node =
-        Xml_node (tag, 
-                  nonspecial_attrs,         (* +--> up here I mean *)
-                  contents,                 (* | *)
-                  `T (pos, xml_type, None))
-      in                                    (* | *)
-        (* could just tack these on up there --^ *)
-        add_attrs special_attrs trimmed_node
+      let atts = map (fun (k,v) -> k, type_check typing_env v) atts in
+        List.iter (fun node -> unify (type_of_expression node, xml_type)) contents;
+        List.iter (fun (_, node) -> unify (type_of_expression node, string_type)) atts;
+        Xml_node (tag, atts, contents, `T (pos, xml_type, None))
   | Record_intro (bs, r, `U pos) ->
       let bs, field_env, absent_field_env =
         StringMap.fold (fun label e (bs, field_env, absent_field_env)  ->

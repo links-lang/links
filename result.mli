@@ -153,10 +153,12 @@ val retain : Utility.StringSet.t -> (string * 'b) list -> (string * 'b) list
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
 val marshal_value : result -> string
-val unmarshal_value : string -> result
+val broken_unmarshal_value : string -> result
+val marshal_result : result -> string
 
 val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
 val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
+val unmarshal_result : result list -> Syntax.program -> string -> result
 
 val bind : environment -> string -> result -> environment
 val empty_env : environment

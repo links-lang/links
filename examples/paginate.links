@@ -25,7 +25,7 @@ fun page(n, c) {
    <h1>{title}</h1>
    <dl>
     {for (var result <- query(n, c))
-    <dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd>}
+    <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
    </dl>
    {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
    <a l:href="{page(n+1,c)}">next</a>
