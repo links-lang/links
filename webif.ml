@@ -122,9 +122,10 @@ let expr_eval_req valenv program params =
                          None, data) in
     match Result.unmarshal_result (rng valenv) program  (List.assoc "_k" params) with
       | `RecFunction ([(_,f)],locals,_) ->
-          let json_args = (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
-                             | `Record fields -> fields
-                             | _ -> assert false) in
+          let json_args = try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
+                                 | `Record fields -> fields
+                                 | _ -> assert false) 
+          with Not_found -> [] in
           let env = List.filter (not -<- is_special_param) params in
           let env = (List.fold_right
                        (fun pair env -> 
