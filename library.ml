@@ -91,43 +91,51 @@ type primitive =  [
   Result.result
 | `PFun of result list -> Result.result ]
 
+type pure = PURE | IMPURE
+
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
 let datatype = Parse.parse_string Parse.datatype
 
-let int_op impl : located_primitive * Types.assumption = 
+let int_op impl pure : located_primitive * Types.assumption * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
-  datatype "(Int, Int) -> Int"
+  datatype "(Int, Int) -> Int",
+  pure
 
-let float_op impl : located_primitive * Types.assumption = 
+let float_op impl pure : located_primitive * Types.assumption * pure = 
   `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
-  datatype "(Float, Float) -> Float"
+  datatype "(Float, Float) -> Float",
+  pure
     
-let conversion_op' ~unbox ~conv ~(box :'a->result) : result list -> result =
+let conversion_op' ~unbox ~conv ~(box :'a->result): result list -> result =
   fun [x] -> (box (conv (unbox x)))
 
 let make_type_variable = Types.make_type_variable
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into : located_primitive * Types.assumption =
-  (`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box),
-   let a = Types.fresh_raw_variable () in
-     ([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)))
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_primitive * Types.assumption * pure =
+  ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
+   (let a = Types.fresh_raw_variable () in
+     (([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.assumption)),
+   pure)
 
 let string_to_xml : result -> result = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
-let char_test_op fn = 
+let char_test_op fn pure = 
   (`PFun (fun [c] -> (`Bool (fn (unbox_char c)))),
-   datatype "(Char) -> Bool")
+   datatype "(Char) -> Bool",
+  pure)
 
-let char_conversion fn = 
+let char_conversion fn pure = 
   (`PFun (fun [c] ->  (box_char (fn (unbox_char c)))),
-   datatype "(Char) -> Char")
+   datatype "(Char) -> Char",
+  pure)
 
-let float_fn fn = 
+let float_fn fn pure = 
   (`PFun (fun [c] ->  (box_float (fn (unbox_float c)))),
-   datatype "(Float) -> Float")
+   datatype "(Float) -> Float",
+  pure)
 
 let p1 fn = 
   `PFun (fun ([a]) -> fn a)
@@ -191,46 +199,50 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
-let env : (string * (located_primitive * Types.assumption)) list = [
-  "+", int_op (+/);
-  "-", int_op (-/);
-  "*", int_op ( */);
-  "/", int_op (fun x y -> integer_num (x // y));
-  "^", int_op ( **/ );
-  "mod", int_op mod_num;
-  "+.", float_op (+.);
-  "-.", float_op (-.);
-  "*.", float_op ( *.);
-  "/.", float_op (/.);
-  "^.", float_op ( ** );
+let env : (string * (located_primitive * Types.assumption * pure)) list = [
+  "+", int_op (+/) PURE;
+  "-", int_op (-/) PURE;
+  "*", int_op ( */) PURE;
+  "/", int_op (fun x y -> integer_num (x // y)) IMPURE;
+  "^", int_op ( **/ ) PURE;
+  "mod", int_op mod_num IMPURE;
+  "+.", float_op (+.) PURE;
+  "-.", float_op (-.) PURE;
+  "*.", float_op ( *.) PURE;
+  "/.", float_op (/.) PURE;
+  "^.", float_op ( ** ) PURE;
 
   (** Conversions (any missing?) **)
-  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int);
-  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float);
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type;
-  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type;
-  "stringToFloat",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float);
+  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
+  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float) PURE;
+  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type PURE;
+  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type PURE;
+  "stringToFloat",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
   "stringToXml",
   ((p1 string_to_xml),
-   datatype "(String) -> Xml");
+   datatype "(String) -> Xml",
+  PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_int ~conv:(string_of_num) ~box:box_string)),
-   datatype "(Int) -> Xml");
+   datatype "(Int) -> Xml",
+  PURE);
   
   "floatToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float) ~box:box_string)),
-   datatype "(Float) -> Xml");
+   datatype "(Float) -> Xml",
+  PURE);
   
   "exit",
   (`Continuation Result.toplevel_cont,
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.: 
      if (test) exit(1) else 42 *)
-   datatype "(a) -> b");
+   datatype "(a) -> b",
+  IMPURE);
 
   "send",
   (p2 (fun pid msg -> 
@@ -246,11 +258,13 @@ let env : (string * (located_primitive * Types.assumption)) list = [
               Hashtbl.remove blocked_processes pid
             with Not_found -> ());
            `Record []),
-   datatype "(Mailbox (a), a) -{b}-> ()");
+   datatype "(Mailbox (a), a) -{b}-> ()",
+  IMPURE);
 
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "() -{a}-> Mailbox (a)");
+   datatype "() -{a}-> Mailbox (a)",
+  IMPURE);
 
   "recv",
   (* this function is not used, as its application is a special case
@@ -261,7 +275,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (p1 (fun _ -> assert false),
-     datatype "() -{a}-> (a)");
+     datatype "() -{a}-> (a)",
+  IMPURE);
 
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
@@ -276,39 +291,46 @@ let env : (string * (located_primitive * Types.assumption)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "(() -{b}-> d) -> Mailbox (b)");
+   datatype "(() -{b}-> d) -> Mailbox (b)",
+  IMPURE);
 (*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
   "_MAILBOX_",
   (`Int (num_of_int 0),
-   let u = fresh_type_variable () in
-     (* Deliberately non-quantified type.  Mailboxes are
-        non-polymorphic, so this is a so-called "weak type
-        variable". *)
-     ([], u));
+   (let u = fresh_type_variable () in
+      (* Deliberately non-quantified type.  Mailboxes are
+         non-polymorphic, so this is a so-called "weak type
+         variable". *)
+      ([], u)),
+   PURE);
 
   (** Lists and collections **)
   "hd",
   (p1 (unbox_list ->- List.hd),
-   datatype "([a]) -> a");
+   datatype "([a]) -> a",
+  IMPURE);
 
   "tl", 
   (p1 (unbox_list ->- List.tl ->- box_list),
-   datatype "([a]) -> [a]");
+   datatype "([a]) -> [a]",
+  IMPURE);
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
-   datatype "([a]) -> Int");
+   datatype "([a]) -> Int",
+  PURE);
 
   "take",
   (p2 (fun n l ->
          box_list (Utility.take (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) -> [a]");
+   datatype "(Int, [a]) -> [a]",
+  PURE);
 
   "drop",
   (p2 (fun n l ->
          box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) -> [a]");
+   datatype "(Int, [a]) -> [a]",
+  PURE);
 
   "max",
   (p1 (let max2 x y = if less x y then y else x in
@@ -316,7 +338,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
            | _ -> failwith "Internal error: non-list passed to max"),
-   datatype "([a]) -> [|Some:a | None:()|]");
+   datatype "([a]) -> [|Some:a | None:()|]",
+  PURE);
 
   "min",
   (p1 (let min2 x y = if less x y then x else y in
@@ -324,7 +347,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
            | _ -> failwith "Internal error: non-list passed to min"),
-   datatype "([a]) -> [|Some:a | None:()|]");
+   datatype "([a]) -> [|Some:a | None:()|]",
+  PURE);
 
   (** XML **)
   "childNodes",
@@ -333,10 +357,12 @@ let env : (string * (located_primitive * Types.assumption)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   datatype "(Xml) -> Xml");
+   datatype "(Xml) -> Xml",
+  IMPURE);
 
   "objectType",
-  (`Client, datatype "(a) -> String");
+  (`Client, datatype "(a) -> String",
+  IMPURE);
 
   "attribute",
   (p2 (let none = `Variant ("None", `Record []) in
@@ -352,46 +378,57 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                         | _ -> failwith "Internal error in `attribute'"
                       with Not_found -> none)
                | _ -> none),
-   datatype "(Xml,String) -> [|Some:String | None:()|]");
+   datatype "(Xml,String) -> [|Some:String | None:()|]",
+  PURE);
   
   "alertDialog",
   (client_only_1 "alertDialog",
-   datatype "(String) -> ()");
+   datatype "(String) -> ()",
+  IMPURE);
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
                       `Record []),
-   datatype "(String) -> ()");
+   datatype "(String) -> ()",
+  IMPURE);
 
   "debugObj",
-  (client_only_1 "debugObj", datatype "(a) -> ()");
+  (client_only_1 "debugObj", datatype "(a) -> ()",
+  IMPURE);
   
   "dump",
-  (client_only_1 "dump", datatype "(a) -> ()");
+  (client_only_1 "dump", datatype "(a) -> ()",
+  IMPURE);
   
   "textContent",
-  (client_only_1 "textContent", datatype "(a) -> String");
-  (* FIXME: textContent should be from a type like DomNode, right? *)
+  (client_only_1 "textContent", datatype "(DomNode) -> String",
+  IMPURE);
 
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
-   datatype "(String) -> ()");
+   datatype "(String) -> ()",
+  IMPURE);
 
   "javascript",
-  (`Bool false, datatype "Bool");
+  (`Bool false, datatype "Bool",
+  PURE);
 
   "not", 
   (p1 (unbox_bool ->- not ->- box_bool),
-   datatype "(Bool) -> Bool");
+   datatype "(Bool) -> Bool",
+  PURE);
   
   "negate", 
-  (p1 (unbox_int ->- minus_num ->- box_int), datatype "(Int) -> Int");
+  (p1 (unbox_int ->- minus_num ->- box_int), datatype "(Int) -> Int",
+  PURE);
 
   "negatef", 
-  (p1 (fun f -> box_float (-. (unbox_float f))), datatype "(Float) -> Float");
+  (p1 (fun f -> box_float (-. (unbox_float f))), datatype "(Float) -> Float",
+  PURE);
 
   "error",
-  (p1 (unbox_string ->- failwith), datatype "(String) -> a");
+  (p1 (unbox_string ->- failwith), datatype "(String) -> a",
+  IMPURE);
   
   (* HACK *)
   (*   [DEACTIVATED] *)
@@ -401,7 +438,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (* DOM API *)
 
   "isElementNode",
-  (`Client, datatype "(DomNode) -> Bool");
+  (`Client, datatype "(DomNode) -> Bool",
+  PURE);
 
 
   (* [DEACTIVATED] *)
@@ -411,135 +449,175 @@ let env : (string * (located_primitive * Types.assumption)) list = [
   (*    datatype "(a) -> ()"); *)
 
   "insertBefore",
-  (`Client, datatype "(Xml, DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()",
+  IMPURE);
 
   "appendChildren",
-  (`Client, datatype "(Xml, DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()",
+  IMPURE);
 
   "replaceNode",
-  (`Client, datatype "(Xml, DomNode) -> ()"); 
+  (`Client, datatype "(Xml, DomNode) -> ()",
+  IMPURE); 
 
   "replaceDocument",
-  (`Client, datatype "(Xml) -> ()"); 
+  (`Client, datatype "(Xml) -> ()",
+  IMPURE); 
 
   "domInsertBeforeRef",
-  (`Client, datatype "(DomNode, DomNode) -> ()");
+  (`Client, datatype "(DomNode, DomNode) -> ()",
+  IMPURE);
 
   "domAppendChildRef",
-  (`Client, datatype "(DomNode, DomNode) -> ()");
+  (`Client, datatype "(DomNode, DomNode) -> ()",
+  IMPURE);
 
   "removeNode",
-  (`Client, datatype "(DomNode) -> ()");
+  (`Client, datatype "(DomNode) -> ()",
+  IMPURE);
 
   "replaceChildren",
-  (`Client, datatype "(Xml, DomNode) -> ()");
+  (`Client, datatype "(Xml, DomNode) -> ()",
+  IMPURE);
 
   "swapNodes",
-  (`Client, datatype "(DomNode, DomNode) -> ()");
+  (`Client, datatype "(DomNode, DomNode) -> ()",
+  IMPURE);
 
   "getDocumentNode",
-  (`Client, datatype "() -> DomNode");
+  (`Client, datatype "() -> DomNode",
+  IMPURE);
 
   "getNodeById",
-  (`Client, datatype "(String) -> DomNode");
+  (`Client, datatype "(String) -> DomNode",
+  IMPURE);
 
   "getValue",
-  (`Client, datatype "(DomNode) -> Xml");
+  (`Client, datatype "(DomNode) -> Xml",
+  IMPURE);
 
   "isNull",
-  (`Client, datatype "(DomNode) -> Bool");
+  (`Client, datatype "(DomNode) -> Bool",
+  PURE);
 
   (* Section: Accessors for XML *)
   "getTagName",
-  (`Client, datatype "(Xml) -> String");
+  (`Client, datatype "(Xml) -> String",
+  IMPURE);
 
   "getTextContent",
-  (`Client, datatype "(Xml) -> String");
+  (`Client, datatype "(Xml) -> String",
+  IMPURE);
 
   "getAttributes",
-  (`Client, datatype "(Xml) -> [(String,String)]");
+  (`Client, datatype "(Xml) -> [(String,String)]",
+  IMPURE);
 
   "hasAttribute",
-  (`Client, datatype "(Xml, String) -> Bool");
+  (`Client, datatype "(Xml, String) -> Bool",
+  PURE);
 
   "getAttribute",
-  (`Client, datatype "(Xml, String) -> String");
+  (`Client, datatype "(Xml, String) -> String",
+  IMPURE);
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "(Xml) -> Xml");
+  (`Client, datatype "(Xml) -> Xml",
+  PURE);
 
   (* Section: Accessors for DomNodes *)
   "domGetNodeValueFromRef",
-  (`Client, datatype "(DomNode) -> String");
+  (`Client, datatype "(DomNode) -> String",
+  IMPURE);
 
   "domGetTagNameFromRef",
-  (`Client, datatype "(DomNode) -> String");
+  (`Client, datatype "(DomNode) -> String",
+  IMPURE);
 
   "domGetAttributeFromRef",
-  (`Client, datatype "(DomNode, String) -> String");
+  (`Client, datatype "(DomNode, String) -> String",
+  IMPURE);
 
   "domSetAttributeFromRef",
-  (`Client, datatype "(DomNode, String, String) -> String");
+  (`Client, datatype "(DomNode, String, String) -> String",
+  IMPURE);
 
   "domGetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String) -> String");
+  (`Client, datatype "(DomNode, String) -> String",
+  IMPURE);
 
   "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String, String) -> String");
+  (`Client, datatype "(DomNode, String, String) -> String",
+  IMPURE);
 
   (* Section:  Navigation for DomNodes *)
   "parentNode",
-  (`Client, datatype "(DomNode) -> DomNode");
+  (`Client, datatype "(DomNode) -> DomNode",
+  IMPURE);
 
   "firstChild",
-  (`Client, datatype "(DomNode) -> DomNode");
-
+  (`Client, datatype "(DomNode) -> DomNode",
+  IMPURE);
+  
   "nextSibling",
-  (`Client, datatype "(DomNode) -> DomNode");
+  (`Client, datatype "(DomNode) -> DomNode",
+  IMPURE);
 
   (* Section: DOM Event API *)
   "getTarget",
-  (`Client, datatype "(Event) -> DomNode");
+  (`Client, datatype "(Event) -> DomNode",
+  PURE);
 
   "getTargetValue",
-  (`Client, datatype "(Event) -> String");
+  (`Client, datatype "(Event) -> String",
+  PURE);
 
   "getTargetElement",
-  (`Client, datatype "(Event) -> DomNode");
+  (`Client, datatype "(Event) -> DomNode",
+  PURE);
 
   "registerEventHandlers",
-  (`Client, datatype "([(String,(Event)->())]) -> String");
+  (`Client, datatype "([(String,(Event)->())]) -> String",
+  IMPURE);
 
   (* getPageX : (Event) -> Int *)
   "getPageX",
-  (`Client, datatype "(Event) -> Int");
+  (`Client, datatype "(Event) -> Int",
+  PURE);
 
   (* getPageY : (Event) -> Int *)
   "getPageY",
-  (`Client, datatype "(Event) -> Int");
+  (`Client, datatype "(Event) -> Int",
+  PURE);
 
   (* getFromElement : (Event) -> DomNode *)
   "getFromElement",
-  (`Client, datatype "(Event) -> DomNode");
+  (`Client, datatype "(Event) -> DomNode",
+  PURE);
 
   (* getToElement : (Event) -> DomNode *)
   "getToElement",
-  (`Client, datatype "(Event) -> DomNode");
+  (`Client, datatype "(Event) -> DomNode",
+  PURE);
 
   (* getTime : (Event) -> Int *)
   "getTime",
-  (`Client, datatype "(Event) -> Int");
+  (`Client, datatype "(Event) -> Int",
+  PURE);
 
   (* getCharCode : (Event) -> Char *)
   "getCharCode",
-  (`Client, datatype "(Event) -> Char");
+  (`Client, datatype "(Event) -> Char",
+  PURE);
 
   "getInputValue",
-  (`Client, datatype "(String) -> String");
+  (`Client, datatype "(String) -> String",
+  PURE);
 
   "event",
-  (`Client, datatype "Event");
+  (`Client, datatype "Event",
+  PURE);
 
   (* Yahoo UI library functions we don't implement: *)
   (* # stopEvent : ??? *)
@@ -556,7 +634,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            `Record []
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
-   datatype "(String, String) -> unit");
+   datatype "(String, String) -> unit",
+  IMPURE);
 
   "getCookie",
   (p1 (fun cookieName -> 
@@ -572,7 +651,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                     box_string (snd (find (fun (nm, _) -> nm = cookieName) 
                                        cookies)))
              | None -> `List []),
-   datatype "(String) -> String");
+   datatype "(String) -> String",
+  IMPURE);
 
   (* getCommandOutput disabled for now; possible security risk. *)
   (*
@@ -588,8 +668,10 @@ let env : (string * (located_primitive * Types.assumption)) list = [
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
            `Record []
-      ), datatype "(String) -> ()");   (* Should this function really return? 
-                                        I think not --ez*)
+      ), datatype "(String) -> ()",
+  IMPURE);
+  (* Should this function really return? 
+     I think not --ez*)
 
   (** reifyK: I choose an obscure name, for an obscure function, until
       a better one can be though up. It just turns a continuation into its
@@ -602,16 +684,19 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                 | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
-   datatype "((a) -> b) -> String"); (* arg type should actually be limited
-                                      to continuations, but we don't have
-                                      any way of specifying that in the 
-                                      type system. *)
+   datatype "((a) -> b) -> String",
+  IMPURE);
+  (* arg type should actually be limited
+     to continuations, but we don't have
+     any way of specifying that in the 
+     type system. *)
 
   "sleep",
   (* FIXME: This isn't right : it freezes all threads *)
   (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
          `Record []),
-   datatype "(Int) -> ()");
+   datatype "(Int) -> ()",
+  IMPURE);
 
 
   (* [TODO]
@@ -620,12 +705,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
        so we shouldn't use that)
   *)
   "getCurrentTime",
-  (`Client, datatype "() -> Int");
+  (`Client, datatype "() -> Int",
+  IMPURE);
 
   (** Database functions **)
   "asList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
-   datatype "(TableHandle(r, w)) -> [r]");
+   datatype "(TableHandle(r, w)) -> [r]",
+  IMPURE);
 
   "insertrows",
   (`Server 
@@ -639,7 +726,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                     (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w), [w]) -> ()");
+   datatype "(TableHandle(r, w), [w]) -> ()",
+  IMPURE);
 
   "updaterows", 
   (`Server
@@ -657,7 +745,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                                  ignore (Database.execute_command query_string db))
                     rows;
                   `Record [])),
-   datatype "(TableHandle(r, w), [(r, w)]) -> ()");
+   datatype "(TableHandle(r, w), [(r, w)]) -> ()",
+  IMPURE);
 
   "deleterows", 
   (`Server
@@ -671,7 +760,8 @@ let env : (string * (located_primitive * Types.assumption)) list = [
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
                     (Database.execute_command query_string db)
               | _ -> failwith "Internal error: delete row from non-database")),
-   datatype "(TableHandle(r, w), [r]) -> ()");
+   datatype "(TableHandle(r, w), [r]) -> ()",
+  IMPURE);
 
   "getDatabaseConfig",
   (`PFun
@@ -683,44 +773,48 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	  else
 	    `Record(["driver", string_as_charlist driver;
 		     "args", string_as_charlist args])),
-   datatype "() -> (driver:String, args:String)");
+   datatype "() -> (driver:String, args:String)",
+  IMPURE);
   
   (** some char functions **)
-  "isAlpha",  char_test_op Char.isAlpha;
-  "isAlnum",  char_test_op Char.isAlnum;
-  "isLower",  char_test_op Char.isLower;
-  "isUpper",  char_test_op Char.isUpper;
-  "isDigit",  char_test_op Char.isDigit;
-  "isXDigit", char_test_op Char.isXDigit;
-  "isBlank",  char_test_op Char.isBlank;
+  "isAlpha",  char_test_op Char.isAlpha PURE;
+  "isAlnum",  char_test_op Char.isAlnum PURE;
+  "isLower",  char_test_op Char.isLower PURE;
+  "isUpper",  char_test_op Char.isUpper PURE;
+  "isDigit",  char_test_op Char.isDigit PURE;
+  "isXDigit", char_test_op Char.isXDigit PURE;
+  "isBlank",  char_test_op Char.isBlank PURE;
   (* isCntrl, isGraph, isPrint, isPunct, isSpace *)
   
-  "toUpper", char_conversion Char.uppercase;
-  "toLower", char_conversion Char.lowercase;
+  "toUpper", char_conversion Char.uppercase PURE;
+  "toLower", char_conversion Char.lowercase PURE;
 
   "ord",
   (p1 (fun c -> box_int (num_of_int (Char.code (unbox_char c)))), 
-   datatype "(Char) -> Int");
+   datatype "(Char) -> Int",
+  PURE);
 
   "chr",
   (p1 (fun n -> (box_char (Char.chr (int_of_num (unbox_int n))))), 
-   datatype "(Int) -> Char");
+   datatype "(Int) -> Char",
+  PURE);
 
   (* some trig functions *)
-  "floor",   float_fn floor;
-  "ceiling", float_fn ceil;
-  "cos",     float_fn cos;
-  "sin",     float_fn sin;
-  "tan",     float_fn tan;
-  "log",     float_fn log;
-  "sqrt",    float_fn sqrt;
+  "floor",   float_fn floor PURE;
+  "ceiling", float_fn ceil PURE;
+  "cos",     float_fn cos PURE;
+  "sin",     float_fn sin PURE;
+  "tan",     float_fn tan PURE;
+  "log",     float_fn log PURE;
+  "sqrt",    float_fn sqrt PURE;
 
   ("environment",
-     (`PFun (fun [] -> 
-        let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
-        let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-        `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
-	datatype "() -> [(String,String)]"));
+   (`PFun (fun [] -> 
+             let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
+             let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
+               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+    datatype "() -> [(String,String)]",
+    IMPURE));
 
   (* regular expression matching *)
   ("tilde",
@@ -728,13 +822,14 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
-    let qs, regex = datatype Linksregex.Regex.datatype in
-    let mb = Types.fresh_raw_variable () in
-    let arg_type = `Record (Types.row_with ("1", `Present string_type)
-                              (Types.row_with ("2", `Present regex)
-                                 (Types.make_empty_closed_row ()))) in
-      ((`TypeVar mb) :: qs,
-       `Function (arg_type, make_type_variable mb, `Primitive `Bool))));
+    (let qs, regex = datatype Linksregex.Regex.datatype in
+     let mb = Types.fresh_raw_variable () in
+     let arg_type = `Record (Types.row_with ("1", `Present string_type)
+                               (Types.row_with ("2", `Present regex)
+                                  (Types.make_empty_closed_row ()))) in
+       ((`TypeVar mb) :: qs,
+        `Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    PURE));
 
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
   ("ntilde",
@@ -742,14 +837,15 @@ let env : (string * (located_primitive * Types.assumption)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
-	let qs, regex = datatype Linksregex.Regex.datatype in
-	let mb = Types.fresh_raw_variable () in
-	let arg_type = 
-	`Record (Types.row_with ("1", `Present native_string_type)
-                (Types.row_with ("2", `Present regex)
-                (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, `Primitive `Bool))));
+    (let qs, regex = datatype Linksregex.Regex.datatype in
+     let mb = Types.fresh_raw_variable () in
+     let arg_type = 
+       `Record (Types.row_with ("1", `Present native_string_type)
+                  (Types.row_with ("2", `Present regex)
+                     (Types.make_empty_closed_row ()))) in
+       ((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    PURE));
 
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
@@ -769,17 +865,18 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-	let qs, regex = datatype Linksregex.Regex.datatype in
-	let mb = Types.fresh_raw_variable () in
-	let arg_type = 
+     (let qs, regex = datatype Linksregex.Regex.datatype in
+      let mb = Types.fresh_raw_variable () in
+      let arg_type = 
 	`Record (Types.row_with ("1", `Present string_type)
-                (Types.row_with ("2", `Present regex)
-                (Types.make_empty_closed_row ()))) in
+                   (Types.row_with ("2", `Present regex)
+                      (Types.make_empty_closed_row ()))) in
 	((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
+	 `Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+   PURE));
 
   ("lntilde",	
-    (`Server (p2 (fun s r ->
+   (`Server (p2 (fun s r ->
         let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	let regex = Regex.compile_ocaml re in
@@ -795,14 +892,15 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-	let qs, regex = datatype Linksregex.Regex.datatype in
-	let mb = Types.fresh_raw_variable () in
-	let arg_type = 
-	`Record (Types.row_with ("1", `Present native_string_type)
-                (Types.row_with ("2", `Present regex)
-                (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))));
+    (let qs, regex = datatype Linksregex.Regex.datatype in
+     let mb = Types.fresh_raw_variable () in
+     let arg_type = 
+       `Record (Types.row_with ("1", `Present native_string_type)
+                  (Types.row_with ("2", `Present regex)
+                     (Types.make_empty_closed_row ()))) in
+       ((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
@@ -811,14 +909,15 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
-	let qs, regex = datatype Linksregex.Regex.datatype in
-	let mb = Types.fresh_raw_variable () in
-	let arg_type = 
-	`Record (Types.row_with ("1", `Present string_type)
-                (Types.row_with ("2", `Present regex)
-                (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, string_type))));
+    (let qs, regex = datatype Linksregex.Regex.datatype in
+     let mb = Types.fresh_raw_variable () in
+     let arg_type = 
+       `Record (Types.row_with ("1", `Present string_type)
+                  (Types.row_with ("2", `Present regex)
+                     (Types.make_empty_closed_row ()))) in
+       ((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, string_type))),
+    PURE));
 	
   ("sntilde",	
    (`Server (p2 (fun s r ->
@@ -826,49 +925,57 @@ let env : (string * (located_primitive * Types.assumption)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
-	let qs, regex = datatype Linksregex.Regex.datatype in
-	let mb = Types.fresh_raw_variable () in
-	let arg_type = 
-	`Record (Types.row_with ("1", `Present native_string_type)
-        (Types.row_with ("2", `Present regex)
-        (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, native_string_type))));
-
+    (let qs, regex = datatype Linksregex.Regex.datatype in
+     let mb = Types.fresh_raw_variable () in
+     let arg_type = 
+       `Record (Types.row_with ("1", `Present native_string_type)
+                  (Types.row_with ("2", `Present regex)
+                     (Types.make_empty_closed_row ()))) in
+       ((`TypeVar mb) :: qs,
+	`Function (arg_type, make_type_variable mb, native_string_type))),
+    PURE));
+   
   (* NativeString utilities *)
   ("char_at",
-	(`Server (p2 (fun ((`NativeString ss) : result) ((`Int ix):result) -> `Char (ss.[Num.int_of_num ix]))),
-	(datatype ("(NativeString, Int) -> Char"))));
+   (`Server (p2 (fun ((`NativeString ss) : result) ((`Int ix):result) -> `Char (ss.[Num.int_of_num ix]))),
+    (datatype ("(NativeString, Int) -> Char")),
+    IMPURE));
 
   ("strlen",
-     (`Server (p1 (fun s -> match s with
+   (`Server (p1 (fun s -> match s with
                      `NativeString ss -> `Int (Num.num_of_int (String.length ss))
-	            |  _ -> failwith "Internal error: char_at got wrong arguments")),
-	(datatype ("(NativeString) -> Int "))));
+	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
+    (datatype ("(NativeString) -> Int ")),
+    PURE));
 
   ("to_native_string",
-	(`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
-	 (datatype ("(String) -> NativeString"))));
+   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
+    (datatype ("(String) -> NativeString")),
+    PURE));
 	
   ("from_native_string",
-	(`Server (p1 
-	           (fun s-> match s with  
-	             (`NativeString ss) -> box_string ss
-	             | _  -> failwith "Internal error: Bad coercion from native string")),
-	 (datatype ("(NativeString) -> String"))));	
+   (`Server (p1 
+	       (fun s-> match s with  
+	            (`NativeString ss) -> box_string ss
+	          | _  -> failwith "Internal error: Bad coercion from native string")),
+    (datatype ("(NativeString) -> String")),
+    PURE));
 	
   ("pickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(([(String,String)])->Xml) -> String"));
+    datatype "(([(String,String)])->Xml) -> String",
+    IMPURE));
 
   (* Serialize values to DB *)
   ("pickle_value", 
    (`Server (p1 (fun v -> (box_string (marshal_value v)))),
-    datatype "(a) -> String"));     
+    datatype "(a) -> String",
+    IMPURE));     
 
   ("unpickle_value",
    (`Server (p1 (fun v -> broken_unmarshal_value (unbox_string v))),
-    datatype "(String) -> a"));
+    datatype "(String) -> a",
+  IMPURE));
 ]
 
 let impl : located_primitive -> primitive option = function
@@ -878,14 +985,14 @@ let impl : located_primitive -> primitive option = function
 
 let value_env = 
   ref (List.fold_right
-    (fun (name, (p,_)) env -> 
+    (fun (name, (p,_,_)) env -> 
        match impl p with
          | None -> env
          | Some p -> StringMap.add name p env)
     env
     StringMap.empty)
 
-let primitive_location (name:string) = match fst (assoc name env) with
+let primitive_location (name:string) = match fst3 (assoc name env) with
   | `Client ->  `Client
   | `Server _ -> `Server
   | #primitive -> `Unknown
@@ -901,7 +1008,7 @@ let apply_pfun name args =
     | `PFun p -> p args
         
 let type_env : Types.environment =
-  List.map (fun (n, (_,t)) -> (n,t)) env
+  List.map (fun (n, (_,t,_)) -> (n,t)) env
 and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->
