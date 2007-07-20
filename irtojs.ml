@@ -675,10 +675,10 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
     match tc with
       | `Return v ->           
           callk_yielding kappa (gv v)
-(*       | `Apply (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins -> *)
-(*           callk_yielding kappa (Binop (gv l, binop_name (Env.lookup env op), gv r)) *)
-(*       | `Apply (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) -> *)
-(*           Call (kappa, [Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)]) *)
+      | `Apply (`Variable op, [l; r]) when mem_assoc (Env.lookup env op) builtins ->
+         callk_yielding kappa (Binop (gv l, binop_name (Env.lookup env op), gv r))
+      | `Apply (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) ->
+         Call (kappa, [Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)])
       | `Apply (v, vs) ->
           apply_yielding (gv v, [Lst (map gv vs); kappa])
       | `Special special ->

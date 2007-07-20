@@ -32,6 +32,7 @@ type primitive = [
 | `PFun of result list -> result
 ]
 val is_primitive : string -> bool
+val is_pure_primitive : string -> bool
 val value_env : primitive Utility.StringMap.t ref
 val type_env : Types.environment
 val alias_env : Types.alias_environment

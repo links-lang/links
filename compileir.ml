@@ -21,13 +21,13 @@ let arg_types =
   Types.concrete_type ->-
     (function
        | `Function (ts, _, _) -> ts
-       | t -> failwith ("Attempt to take arg types of non-function" ^ Types.string_of_datatype t))
+       | t -> failwith ("Attempt to take arg types of non-function: " ^ Types.string_of_datatype t))
         
 let return_type =
   Types.concrete_type ->-
     (function
        | `Function (_, _, t) -> t
-       | t -> failwith ("Attempt to take return type of non-function" ^ Types.string_of_datatype t))
+       | t -> failwith ("Attempt to take return type of non-function: " ^ Types.string_of_datatype t))
 
 let split_row name row =
   let (field_env, row_var) = fst (Types.unwrap_row row) in
@@ -515,7 +515,7 @@ struct
         | Abs (e, _) -> cofv (I.abs (ev e))
         | App (e1, e2, _) -> I.app (ev e1, ev e2)
         | Apply (Variable (f, _) as e, es, _)
-            when (List.mem f builtins || (Library.is_primitive f && not (List.mem f cps_prims)))
+            when (Library.is_pure_primitive f)
               -> cofv (I.applyprim(I.var (Env.lookup env f, node_datatype e), evs es))
         | Apply (e, es, _) -> I.apply (ev e, evs es)
         | Condition (p, e1, e2, _) -> I.condition (ev p, ec e1, ec e2)
