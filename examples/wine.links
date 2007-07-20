@@ -209,8 +209,10 @@ fun logout() {
 }
 
 fun errorPage(msg) {
+ <#>
   <h1>Sorry, an error occured</h1>
   <p>{stringToXml(msg)}</p>
+ </#>
 }
 
 fun customerName(cust_id) {

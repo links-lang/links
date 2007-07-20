@@ -44,13 +44,13 @@ fun suggest(authorPrefix, paperPrefix) client {
 sig formatAuthorList : ([Author]) -> Xml
 fun formatAuthorList(authors) server {
   for (var a <- authors)
-    <a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/>
+    <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
 }
 
 sig formatPaperList : ([Paper]) -> Xml
 fun formatPaperList(papers) server {
   for (var p <- papers)
-    <a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/>
+    <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
 }
 
 sig getPapersAndCollaborators : (Author) -> ([Paper], [Author])
