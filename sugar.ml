@@ -136,7 +136,15 @@ struct
           `Xml (form, attrs, children), pos
     | e -> e
 
-  let replace_lattrs = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent
+  let replace_lattrs = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-
+    (fun (xml, pos) ->
+       if (has_lattrs xml) then
+         match xml with
+           | `Xml (tag, attributes, _) ->
+               raise (ConcreteSyntaxError ("Illegal l: attribute in XML node", pos))
+           | _ -> assert false
+       else
+         xml, pos)
 end
 
 (* Internal representation for patterns. 
@@ -1373,9 +1381,12 @@ module Desugarer =
                      if List.length attrs != 0 then
                        raise (ASTSyntaxError (Syntax.data_position pos, "XML forest literals cannot have attributes"))
                      else
-                       List.fold_right
-                         (fun node nodes ->
-                            Concat (desugar node, nodes, pos)) subnodes (HasType (Nil pos, Types.xml_type, pos))
+                       HasType (
+                         List.fold_right
+                           (fun node nodes ->
+                              Concat (desugar node, nodes, pos)) subnodes (Nil pos),
+                         Types.xml_type,
+                         pos)
                    end
                  else
                    Xml_node (tag, alistmap desugar_attr attrs,
