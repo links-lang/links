@@ -36,7 +36,7 @@ and column = {
   col_type : Types.datatype;
 } 
 and col_or_expr = (column, expression) Utility.either
-deriving (Eq, Typeable, Show, Pickle, Shelve)
+deriving (Eq, Typeable, Show, Dump, Pickle)
 
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string

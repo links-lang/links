@@ -10,7 +10,7 @@
 (* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
 
 type 'a stringmap = 'a Utility.StringMap.t
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Eq, Dump, Typeable, Show, Pickle)
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
@@ -19,22 +19,22 @@ module TypeVarSet : Utility.INTSET
 type 'a point = 'a Unionfind.point 
 
 module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
-module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
+module Dump_point (A : Dump.Dump) : Dump.Dump with type a = A.a Unionfind.point
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract | `NativeString]
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Dump)
 
 type 't meta_type_var_basis =
     [ `Flexible of int
     | `Rigid of int
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Dump, Typeable, Pickle)
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Dump, Typeable, Pickle)
 
 type datatype =
     [ `Not_typed
@@ -51,23 +51,23 @@ and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+    deriving (Eq, Show, Dump, Typeable, Pickle)
 
 val concrete_type : datatype -> datatype
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Dump)
 type quantifier = type_variable
-    deriving (Typeable, Show, Pickle)
+    deriving (Typeable, Show, Dump)
 
 type assumption = ((quantifier list) * datatype)
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+    deriving (Eq, Show, Dump, Typeable, Pickle)
 type environment = ((string * assumption) list)
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 type alias_environment = assumption stringmap
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 
 (* useful types *)
 val unit_type : datatype

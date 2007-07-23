@@ -30,23 +30,23 @@ module StringMap = Map.Make(String)
 type 'a stringmap = 'a StringMap.t
 
 module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Typeable_defaults(struct
+Typeable.Defaults(struct
   type a = A.a stringmap
-  let typeRep = 
-    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
-    in fun _ -> t
+  let type_rep = Typeable.TypeRep.mkFresh "stringmap" [A.type_rep]
 end)
-module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap = Show.Show_map(String)(Primitives.Show_string)(A)
-module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap = Show.Show_map(String)(Show.Show_string)(A)
+module Dump_stringmap (A : Dump.Dump) = Dump.Dump_undumpable (struct type a = A.a stringmap let tname ="stringmap"  end)
 module Functor_stringmap = Functor.Functor_map(String)
 module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
-module Shelve_stringmap (S : Shelve.Shelve) = 
-struct
-  module Typeable = Typeable_stringmap(S.Typeable)
-  module Eq = Eq_stringmap(S.Eq)
+module Pickle_stringmap (S : Pickle.Pickle) 
+  : Pickle.Pickle with type a = S.a stringmap = 
+Pickle.Defaults(struct
+  module T = Typeable_stringmap(S.T)
+  module E = Eq_stringmap(S.E)
   type a = S.a stringmap
-  let shelve  _ = failwith "shelve stringmap nyi"
-end
+  let pickle  _ = failwith "pickle stringmap nyi"
+  and unpickle _ = failwith "pickle stringmap nyi"
+end)
 
 module MapUtils(M : Map.S) =
 struct
@@ -92,7 +92,6 @@ module type SET =
 sig
   include Set.S
   
-  val singleton : elt -> t
   val union_all : t list -> t
   val from_list : elt list -> t
 
@@ -106,14 +105,13 @@ module Set (Ord : sig include Set.OrderedType
 SET with type elt = Ord.t =
 struct
   include Set.Make(Ord)
-  let singleton s = add s empty
   let union_all sets = List.fold_right union sets empty
   let from_list l = List.fold_right add l empty
   module Show = Show.Show_set(Ord)(Ord.Show)
 end
 
 module type STRINGSET = SET with type elt = string
-module StringSet : STRINGSET = Set(struct include String module Show = Primitives.Show_string end)
+module StringSet : STRINGSET = Set(struct include String module Show = Show.Show_string end)
 
 (*** int environments ***)
 module OrderedInt =
@@ -124,7 +122,7 @@ end
 module IntMap = Map.Make(OrderedInt)
 
 module type INTSET = SET with type elt = int
-module IntSet : INTSET = Set(struct include OrderedInt module Show = Primitives.Show_int end)
+module IntSet : INTSET = Set(struct include OrderedInt module Show = Show.Show_int end)
 
 let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
 
@@ -135,7 +133,7 @@ struct
     let rec aux f t result = 
       if f = t then result
       else aux (f+1) t (f::result)
-    in if t < f then raise (Invalid_argument "fromTo")
+    in if (f > t) then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
 
   (** [all_equiv rel list]: given an equiv. rel'n [rel], determine
@@ -412,7 +410,7 @@ let mem_assoc3 key : ('a * 'b * 'c) list -> bool =
 
 (*** either type ***)
 type ('a, 'b) either = Left of 'a | Right of 'b
-  deriving (Show, Eq, Typeable, Pickle, Shelve)
+  deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let inLeft l = Left l
 let inRight r = Right r
@@ -648,4 +646,3 @@ let catch_notfound_l msg e =
 (** left-associative *)
 let ( <| ) arg f = f arg
 let ( |> ) f arg = f arg
-

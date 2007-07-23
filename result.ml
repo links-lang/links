@@ -13,7 +13,7 @@ object
   method show : string
 end
 
-module Show_otherfield = Show.ShowDefaults(
+module Show_otherfield = Show.Defaults(
   struct
     type a = otherfield
     let format formatter obj = Format.pp_print_string formatter (obj # show)
@@ -51,20 +51,27 @@ class virtual database = object
 end
 
 module Eq_database = Eq.Eq_mutable(struct type a = database end)
-module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)
+(*module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)*)
+module Typeable_database = Typeable.Defaults(
+  struct 
+    type a = database
+    let type_rep () = failwith "type_rep : database"
+end
+)
 module Show_database = Show_unprintable (struct type a = database end)
 
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
    deserialisation *)
-module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Result.database" end)
-module Shelve_database : Shelve.Shelve with type a = database = 
-struct
-  module Typeable = Typeable_database
-  module Eq = Eq_database
+module Dump_database = Dump.Dump_undumpable (struct type a = database let tname = "Result.database" end)
+module Pickle_database : Pickle.Pickle with type a = database = 
+Pickle.Defaults(struct
+  module T = Typeable_database
+  module E = Eq_database
   type a = database
-  let shelve _ = failwith "shelve database nyi"
-end
+  let pickle _ = failwith "pickle database nyi"
+  and unpickle _ = failwith "unpickle database nyi"
+end)
 
 type db_constructor = string -> (database * string)
 
@@ -110,27 +117,27 @@ and reconstruct_db_string : (string * string) -> string =
 type rexpr = expression
     deriving (Show, Eq, Typeable)
 
-module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults(
+module Dump_rexpr : Dump.Dump with type a = rexpr = Dump.Defaults(
   struct
     type a = rexpr
-    let pickle buffer e = 
+    let to_buffer buffer e = 
       match expression_data e with
-        | `T(_, _, Some l) -> Syntax.Pickle_label.pickle buffer l
+        | `T(_, _, Some l) -> Dump.to_buffer<Syntax.label> buffer l
         | _             -> failwith ("Not labeled: " ^ string_of_expression e)
-    and unpickle stream = 
-      let label = Syntax.Pickle_label.unpickle stream in
+    and from_stream stream = 
+      let label = Dump.from_stream<Syntax.label> stream in
         (* sadly, we can't do resolution here at present because there's
            no way to pass in the table *)
         Syntax.Wrong (`T(Syntax.dummy_position, `Not_typed, Some label))
   end)
 
-module Shelve_rexpr = Shelve.Shelve_primtype(Pickle_rexpr)(Eq_rexpr)(Typeable_rexpr)
+module Pickle_rexpr = Pickle.Pickle_from_dump(Dump_rexpr)(Eq_rexpr)(Typeable_rexpr)
 
 type rdef = definition
     deriving (Show, Eq, Typeable)
 
-module Pickle_rdef = Pickle.Pickle_unpicklable (struct type a = rdef let tname = "rdef"  end)
-module Shelve_rdef = Shelve.Shelve_primtype(Pickle_rdef)(Eq_rdef)(Typeable_rdef)
+module Dump_rdef = Dump.Dump_undumpable (struct type a = rdef let tname = "rdef"  end)
+module Pickle_rdef = Pickle.Pickle_from_dump(Dump_rdef)(Eq_rdef)(Typeable_rdef)
 
 type unop = MkColl
             | MkVariant of string
@@ -141,18 +148,18 @@ type unop = MkColl
             | Erase of string
             | Project of string
             | QueryOp of (Query.query * (* table aliases: *) string list)
-                deriving (Typeable, Show, Pickle, Eq, Shelve)
+                deriving (Typeable, Show, Dump, Eq, Pickle)
 		
 let string_of_unop = Show_unop.show
 
 type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
-                 deriving (Typeable, Show, Pickle, Eq, Shelve)
+                 deriving (Typeable, Show, Dump, Eq, Pickle)
 
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Pickle, Eq, Shelve)
+    deriving (Typeable, Show, Dump, Eq, Pickle)
 
 let is_attr = function
   | Attr _ -> true
@@ -179,7 +186,7 @@ and string_of_item : xmlitem -> string =
                      ^ "</" ^ tag ^ ">")
 
 type table = (database * string) * string * Types.row
-   deriving (Show, Pickle, Eq, Typeable, Shelve)
+   deriving (Show, Dump, Eq, Typeable, Pickle)
 
 
 type primitive_value = [
@@ -192,7 +199,7 @@ type primitive_value = [
 | `XML of xmlitem
 | `NativeString of string
                 ]
-    deriving (Typeable, Show, Pickle, Eq, Shelve)
+    deriving (Typeable, Show, Dump, Eq, Pickle)
 
 let type_of_primitive : primitive_value -> datatype = function
   | `Bool _ -> `Primitive `Bool
@@ -251,7 +258,7 @@ and result = [
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
-    deriving (Typeable, Eq, Show, Pickle, Shelve)
+    deriving (Typeable, Eq, Show, Dump, Pickle)
 
 let rec string_of_value_type = function
   | #primitive_value as p -> string_of_primitive_type p
@@ -627,22 +634,22 @@ let retain names env = filter (fun (x, _) -> StringSet.mem x names) env
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
 
-module Shelve_ExprEnv = Shelve.Shelve_2(Shelve_rexpr)(Shelve_environment)
-module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
+(*module Dump_ExprEnv = Dump.Dump_2(Dump_rexpr)(Dump_environment)
+module Dump_ExprEnv = Dump.Dump_2(Dump_rexpr)(Dump_environment)*)
 
 let marshal_continuation (c : continuation) : string
   = (* Debug.print("marshaling:"^ string_of_cont c); *)
-  let pickle = Pickle_continuation.pickleS c in
+  let pickle = Dump_continuation.to_string c in
     Debug.print("marshalled continuation size: " ^ 
                   string_of_int(String.length pickle));
     let result = Netencoding.Base64.encode pickle in
       result
     
 let marshal_exprenv : (expression * environment) -> string
-  = Pickle_ExprEnv.pickleS ->- Netencoding.Base64.encode
+  = Dump.to_string<(rexpr * environment)> ->- Netencoding.Base64.encode
 
 let marshal_value : result  -> string
-  = Pickle_result.pickleS ->- Netencoding.Base64.encode
+  = Dump_result.to_string ->- Netencoding.Base64.encode
 
 exception UnrealizableContinuation
 
@@ -653,7 +660,7 @@ let unmarshal_continuation valenv program : string -> continuation
   let table = (program_label_table program
                  @ concat_map val_label_table valenv) in
     Netencoding.Base64.decode
-    ->- Pickle_continuation.unpickleS
+    ->- Dump_continuation.from_string
     ->- resolve_placeholders_cont table 
 
 let unmarshal_exprenv valenv program : string -> (expression * environment)
@@ -669,8 +676,8 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
       raise UnrealizableContinuation
  in
   Netencoding.Base64.decode
-  ->- Pickle_ExprEnv.unpickleS
+  ->- Dump.from_string<(rexpr * environment)>
   ->- resolve
 
 let unmarshal_value : string -> result =
-  Netencoding.Base64.decode ->- Pickle_result.unpickleS
+  Netencoding.Base64.decode ->- Dump_result.from_string

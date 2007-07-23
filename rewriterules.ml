@@ -200,7 +200,7 @@ struct
   sig
     (* map table/field pairs to variable names (essentially an
        implementation of the "normalize" rule) *)
-    type t deriving (Show)
+    type t
     type field = {var : var; label : string} deriving (Show)
     val empty : t
     val bindf : field -> var -> t -> t
@@ -217,11 +217,6 @@ struct
     module Utils = MapUtils(Mfield)
     module Utils' = MapUtils(Mvar)
     type t = var Mfield.t * baseexpr Mvar.t
-    module Show_t
-      = Show.Show_2
-      (Show.Show_map(C)
-         (Show_key)(Show_var))
-      (Show_stringmap(Show_baseexpr))
      let empty = Mfield.empty, Mvar.empty
      let bindf f v (m,n) = (Mfield.add f v m, n)
      let lookupf f (m,_) = Utils.lookup f m
@@ -296,7 +291,7 @@ struct
         begin match Env.lookupf {Env.var=v;Env.label=label} env with
           | Some v -> `Var v
           | None   -> 
-              debug ("env : " ^ Env.Show_t.show env);
+              (*debug ("env : " ^ Env.Show_t.show env);*)
               uncompilable e
         end
     | Record_intro (fields, None, _) ->

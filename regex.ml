@@ -14,7 +14,7 @@ and  regex = | Range of (char * char)
 	     | Group of regex 
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
-	          deriving (Show, Pickle, Eq, Typeable, Shelve)
+	          deriving (Show, Dump, Eq, Typeable, Pickle)
 
 
 let compile_ocaml : regex -> Str.regexp = 

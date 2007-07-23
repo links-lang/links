@@ -29,14 +29,14 @@ let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
 exception ASTSyntaxError of position * string
 
 type location = [`Client | `Server | `Native | `Unknown]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 
 type label = string
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
     (* Q: Can I write my own show for these? I want to base64 it *)
 
 type comparison = [`Less | `LessEq | `Equal | `NotEq]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 
 let string_of_comparison = function
   | `Less   -> "<"
@@ -50,7 +50,7 @@ type constant =
   | Char of char
   | String of string
   | Float of float
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+      deriving (Eq, Typeable, Show, Dump, Pickle)
 
 type 'data expression' =
   | Constant of (constant * 'data)
@@ -99,14 +99,14 @@ type 'data expression' =
   | Call_cc of ('data expression' * 'data)
   | Wrong of 'data
   | HasType of ('data expression' * Types.datatype * 'data)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
+      deriving (Eq, Typeable, Dump, Functor, Rewriter, Pickle, Show)
       (* Q: Should syntax exprs be picklable or not? *)
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.assumption * 'a)
-      deriving (Eq, Typeable, Pickle, Functor, Rewriter, Shelve, Show)
+      deriving (Eq, Typeable, Dump, Functor, Rewriter, Pickle, Show)
 
 (* [HACK]
    programs derive Functor and Rewriter
@@ -127,7 +127,7 @@ let visit_def unit visitor def =
     | Alien _ -> unit
 
 type 'a program' = Program of ('a definition' list * 'a expression')
-  deriving (Eq, Typeable, Pickle, Shelve, Functor, Rewriter, Show)
+  deriving (Eq, Typeable, Dump, Pickle, Functor, Rewriter, Show)
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 

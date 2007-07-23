@@ -1126,7 +1126,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let ths = alistmap (type_check typing_env) ths
       in
         Utility.for_each ths 
-          (fun _, th -> 
+          (fun (_, th) -> 
              unify (type_of_expression th, `Table (`Record rrow, `Record wrow)));
 	unify_rows (row, rrow);
         TableQuery (ths, query, `T (pos, datatype, None))

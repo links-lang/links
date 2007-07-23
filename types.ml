@@ -3,32 +3,32 @@ open Utility
 
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Eq, Dump, Typeable, Show, Pickle)
 
 (* type var sets *)
 module TypeVarSet = Utility.IntSet
 
 (* points *)
-type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
+type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Pickle, Show)
 
 (* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
-module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
+module Dump_point (S : Dump.Dump) = Dump.Dump_undumpable(struct type a = S.a point let tname = "point" end)
 
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract | `NativeString ]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 
 type 't meta_type_var_basis =
     [ `Flexible of int
     | `Rigid of int
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Dump, Typeable, Pickle)
 
 type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Dump, Typeable, Pickle)
 
 type datatype =
     [ `Not_typed
@@ -45,21 +45,21 @@ and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+    deriving (Eq, Show, Dump, Typeable, Pickle)
 
 type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 type quantifier = type_variable
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 
 type assumption = ((quantifier list) * datatype)
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+    deriving (Eq, Show, Dump, Typeable, Pickle)
 type environment = ((string * assumption) list)
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 type alias_environment = assumption stringmap
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show, Dump)
 
 (* Functions on environments *)
 let environment_values = fun env -> snd (List.split env)

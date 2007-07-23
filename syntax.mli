@@ -1,7 +1,7 @@
 (*pp deriving *)
 type location = [ `Client | `Native | `Server | `Unknown ]
-type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle, Eq, Shelve)
-type label deriving (Typeable, Show, Pickle)
+type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Dump, Eq, Pickle)
+type label deriving (Typeable, Show, Dump)
 
 type constant =
   | Boolean of bool
