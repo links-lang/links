@@ -12,7 +12,7 @@ fun dateToRawDate(Date (day, month)) { Date(intToString(day), intToString(month)
 
 typename Value(a,b) = [|Value:a | Error:(b, String)|];
 
-sig isInt : String -> Bool
+sig isInt : (String) -> Bool
 fun isInt(s) {
   switch (s) {
     case [] -> false
@@ -33,7 +33,7 @@ fun intValueInRange(s, label, frm, to) {
   }
 }
 
-sig inputPerson : String -> Formlet(Value(String, String))
+sig inputPerson : (String) -> Formlet(Value(String, String))
 fun inputPerson(person) {
   formlet
     <#>{ inputValue(person) -> person }</#>
@@ -44,7 +44,7 @@ fun inputPerson(person) {
     }
 }
 
-sig inputAge : String -> Formlet(Value(Int, String))
+sig inputAge : (String) -> Formlet(Value(Int, String))
 fun inputAge(age) {
   formlet
     <#>{ inputValue(age) -> age }</#>
@@ -56,7 +56,7 @@ fun inputAge(age) {
   }
 }
  
-sig inputDate : RawDate -> Formlet(Value(Date, RawDate))
+sig inputDate : (RawDate) -> Formlet(Value(Date, RawDate))
 fun inputDate(Date(day, month)) {
   formlet
     <#>{ inputValue(day) -> day } / { inputValue(month) -> month }</#>
@@ -72,7 +72,7 @@ fun inputDate(Date(day, month)) {
   }
 }
 
-sig labelledInput : (String, b -> Formlet(Value(a,b)), a -> b, Value(a,b)) -> Formlet (Value(a,b))  
+sig labelledInput : (String, (b) -> Formlet(Value(a,b)), (a) -> b, Value(a,b)) -> Formlet (Value(a,b))  
 fun labelledInput(label, inputter, outputter, initialValue) {
   var (initialValue, err) =
     switch (initialValue) {
@@ -94,8 +94,8 @@ typename TravelRecord = (person:Value(String,String),
                          arrival:Value(Date,RawDate),
                          departure:Value(Date,RawDate));
 
-sig travelForm : TravelRecord -> Formlet(TravelRecord)
-fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
+sig travelForm : (TravelRecord) -> Formlet(TravelRecord)
+fun travelForm((person=p, age=a, arrival=arr, departure=dep)) {
   formlet
     <table>
        { labelledInput("Person", inputPerson, id, p) -> person }
@@ -108,7 +108,7 @@ fun travelForm(person=p, age=a, arrival=arr, departure=dep) {
     (person=person, age=age, arrival=arr, departure=dep)
 }
 
-sig hasError : TravelRecord -> Bool
+sig hasError : (TravelRecord) -> Bool
 fun hasError((person=p, age=a, arrival=arr, departure=dep)) {
   switch (p) { case Error(_) -> true case _ ->
   switch (a) { case Error(_) -> true case _ ->
@@ -117,7 +117,7 @@ fun hasError((person=p, age=a, arrival=arr, departure=dep)) {
   }}}}
 }
 
-sig getv : Value(a,b) -> a
+sig getv : (Value(a,b)) -> a
 fun getv(v) {
   switch (v) {
     case Value(v) -> v
@@ -125,7 +125,7 @@ fun getv(v) {
   }
 }
 
-sig showBookingInformation : TravelRecord -> Xml
+sig showBookingInformation : (TravelRecord) -> Xml
 fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep) as travelRecord) {
   if (hasError(travelRecord))
     showForm(travelRecord)
@@ -140,7 +140,7 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep) as trav
     </html>
 }
 
-sig showForm : TravelRecord -> Xml
+sig showForm : (TravelRecord) -> Xml
 fun showForm(travelRecord) {
   <html>
     <h1>Dates with defaults and validation</h1>

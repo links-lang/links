@@ -6,6 +6,10 @@ open Types
 open Syntax
 open Utility
 
+(** Set this to [true] to print the body and environment of a
+    function. When [false], functions are simply printed as "fun" *)
+let printing_functions = Settings.add_bool ("printing_functions", false, `User)
+
 exception Runtime_error of string
 
 class type otherfield = 
@@ -22,12 +26,12 @@ module Show_otherfield = Show.Defaults(
 
 type db_field_type = BoolField | TextField | IntField | FloatField
 		     | SpecialField of otherfield
-    deriving (Show)
+                         deriving (Show)
 
 let string_of_db_field_type = Show_db_field_type.show
 
 type db_status = QueryOk | QueryError of string
-    deriving (Show)
+  deriving (Show)
 
 class virtual dbresult = object
   method virtual status : db_status
@@ -115,7 +119,7 @@ and reconstruct_db_string : (string * string) -> string =
    with labels while pickling).
 *)
 type rexpr = expression
-    deriving (Show, Eq, Typeable)
+    deriving (Show)
 
 module Dump_rexpr : Dump.Dump with type a = rexpr = Dump.Defaults(
   struct
@@ -134,7 +138,7 @@ module Dump_rexpr : Dump.Dump with type a = rexpr = Dump.Defaults(
 module Pickle_rexpr = Pickle.Pickle_from_dump(Dump_rexpr)(Eq_rexpr)(Typeable_rexpr)
 
 type rdef = definition
-    deriving (Show, Eq, Typeable)
+    deriving (Show)
 
 module Dump_rdef = Dump.Dump_undumpable (struct type a = rdef let tname = "rdef"  end)
 module Pickle_rdef = Pickle.Pickle_from_dump(Dump_rdef)(Eq_rdef)(Typeable_rdef)
@@ -152,7 +156,8 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row | Syntax.comparison]
+type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row 
+             | Syntax.comparison ]
                  deriving (Typeable, Show, Dump, Eq, Pickle)
 
 type xmlitem =   Text of string
@@ -213,41 +218,13 @@ let type_of_primitive : primitive_value -> datatype = function
 
 let string_of_primitive_type = type_of_primitive ->- string_of_datatype
 
-type contin_frame = 
-  | Definition of (environment * string)
-  | FuncArg of (rexpr list * environment) (* FIXME: This is twiddled *)
-  | FuncApply of (environment * result * rexpr list * result list)
-  | FuncApplyFlipped of (environment * result)
-  | ThunkApply of environment
-  | LetCont of (environment * 
-		  string * rexpr)
-  | BranchCont of (environment * 
-		     rexpr * rexpr)
-  | BinopRight of (environment * 
-		     binop * rexpr)
-  | BinopApply of (environment * 
-		     binop * result)
-  | UnopApply of (environment * unop )
-  | RecSelect of (environment * string * string * string * rexpr)
-  | CollExtn of (environment * 
-		   string * rexpr * 
-		   result list list * result list)
-  | StartCollExtn of (environment *
-			string * rexpr)
-  | XMLCont of (environment 
-                * string                     (* tag *)
-                * string option              (* attr name, if any *)
-                * xml                        (* child nodes *)
-                * (string * rexpr) list (* unevaluated attributes *)
-                * rexpr list            (* unevaluated elements *)
-                )
-  | Ignore of (environment * rexpr )
-  | IgnoreDef of (environment * rdef)
-  | Recv of (environment)
-and result = [
+type result = [
   | `PrimitiveFunction of string
   | `ClientFunction of (string)
-  | `Function of  (string list * environment (*locals*) * unit (*globals*) * rexpr)
+  | `RecFunction of ((string * rexpr) list * 
+                       (* name, arg, body triples *)
+                     environment (*locals*) * (* closed env, common to all *)
+                     string (* the distinguished func rep'd by this value *))
   | `Record of ((string * result) list)
   | `Variant of (string * result)
   | `Abs of result
@@ -255,10 +232,48 @@ and result = [
   | `Continuation of continuation
   |  primitive_value
 ]
+and contin_frame = 
+(* the frame ... represents an eval'n context like ... (M is a term, V a value)*)
+  | Definition of (environment * string)          (* ??? *)
+  | FuncEvalCont of (rexpr list * environment)    (* [ ]( Ms ) *)
+      (* FIXME: order of the FuncEvalCont args is undesirable. *)
+  | ArgEvalCont of (environment * result * rexpr list * result list)
+                                                  (* V(Vs, [ ], Ms) *)
+  | ApplyCont of (environment * result list)      (* [ ](Vs) *)
+  | LetCont of (environment * string * rexpr)     (* let x = [ ] in M *)
+  | BranchCont of (environment * rexpr * rexpr)   (* if [ ] then M else N *)
+  | BinopRight of (environment * binop * rexpr)   (* [ ] `op` M *)
+  | BinopApply of (environment * binop * result)  (* V `op` [ ] *)
+  | UnopApply of (environment * unop )            (* op [ ] *)
+  | RecSelect of (environment * string * string * string * rexpr)
+                                                  (* (l=x | xs) = [ ] *)
+  | CollExtn of (environment * 
+		   string * rexpr * 
+		   result list list * 
+                   result list)                   (* concat Vs ++ for x <- V in M *)
+  | StartCollExtn of (environment * string * rexpr)
+                                                  (* for x <- [ ] in M *)
+  | XMLCont of (environment 
+                * string                     (* tag *)
+                * string option              (* attr name, if any *)
+                * xml                        (* child nodes *)
+                * (string * rexpr) list      (* unevaluated attributes *)
+                * rexpr list                 (* unevaluated elements *)
+                )
+                                                  (* <tag attr=[ ]>M</tag> 
+                                                       or
+                                                     <tag attrs>Vs [ ] Ms</tag>*)
+  | Ignore of (environment * rexpr)               (* let _ = [ ] in M *)
+  | IgnoreDef of (environment * rdef)             (* ??? *)
+  | Recv                                          (* receive([ ]) *)
 and continuation = contin_frame list
 and binding = (string * result)
 and environment = (binding list)
     deriving (Typeable, Eq, Show, Dump, Pickle)
+
+let string_as_charlist s : result =
+  `List (map (fun x -> (`Char x)) (explode s))
+
 
 let rec string_of_value_type = function
   | #primitive_value as p -> string_of_primitive_type p
@@ -282,10 +297,11 @@ let prim_val_of_expr : expression -> result option = function
           | Integer i -> Some(`Int i)
           | Char ch -> Some(`Char ch)
           | Float f -> Some(`Float f)
+          | String str -> Some (string_as_charlist str)
       end
   | _ -> None
 
-let (toplevel: continuation) = [] 
+let (toplevel_cont: continuation) = []
 
 let xmlitem_of : result -> xmlitem = function
   | `XML x -> x
@@ -317,9 +333,6 @@ let recfields = function
 
 exception Match of string
 
-let string_as_charlist s : result =
-  `List (map (fun x -> (`Char x)) (explode s))
-
 let pair_as_ocaml_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
@@ -334,7 +347,9 @@ let links_project name = function
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let delay_expr expr = `Function([], [], (), expr)
+(* let delay_expr env expr : result *)
+(*     = `RecFunction(["_anonThunk", expr], env, "_anonThunk") *)
+(*   (\* FIXME: beware name clashes? *\) *)
 
 let string_of_cont = Show_continuation.show
   
@@ -357,8 +372,16 @@ and string_of_result : result -> string = function
   | `ClientFunction (name) -> name
   | `Abs result -> "abs " ^ string_of_result result
     (* Choose from fancy or simple printing of functions: *)
-(*   | `Function(formal,env,_,body) -> "fun (" ^ formal ^ ") {" ^ Syntax.string_of_expression body ^ "}[" ^ string_of_environment env ^ "]" *)
-  | `Function(formal,env,_,body) -> "fun"
+  | `RecFunction(defs, env, name) -> 
+      if Settings.get_value(printing_functions) then
+        "{ " ^ (mapstrcat " "
+                  (fun (name, Syntax.Abstr(formals, body, _)) ->
+                     "fun (" ^ String.concat "," formals ^ ") {" ^
+                       Syntax.string_of_expression body ^ "}")
+                  defs) ^
+          " " ^ name ^ " }[" ^ string_of_environment env ^ "]"
+      else
+        "fun"
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
@@ -371,7 +394,7 @@ and string_of_result : result -> string = function
   | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_xresult elems
   | `List (elems) -> "[" ^ String.concat ", " (map string_of_result elems) ^ "]"
-  | `Continuation cont -> string_of_cont cont
+  | `Continuation cont -> "Continuation" ^ string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
@@ -415,34 +438,33 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
       result_f (`Abs (map_result result_f expr_f contframe_f result))
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
-  | `Function (str, locals, _globals, body) ->
-      result_f(`Function(str, 
-                         map_env result_f expr_f contframe_f locals,
-(*                         map_env result_f expr_f contframe_f globals,*)
-                         (),
-                         map_expr result_f expr_f contframe_f body))
+  | `RecFunction (defs, env, name) ->
+      let defs' = map (fun (name, f) -> (name, map_expr result_f expr_f contframe_f f)) defs in
+      result_f(`RecFunction(defs',
+                            (map_env result_f expr_f contframe_f env),
+                            name))
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
 and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
-  | Recv (env) -> contframe_f(Recv(map_env result_f expr_f contframe_f env))
+  | Recv -> contframe_f(Recv)
   | Definition (env, s) ->
       contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
-  | FuncArg(args, env) -> 
+  | FuncEvalCont(args, env) -> 
       contframe_f 
-        (FuncArg (map (map_expr result_f expr_f contframe_f) args,
+        (FuncEvalCont (map (map_expr result_f expr_f contframe_f) args,
                   map_env result_f expr_f contframe_f env))
-  | ThunkApply env ->
-      contframe_f (ThunkApply (map_env result_f expr_f contframe_f env))
-  | FuncApply(env, f, args, eargs) ->
-      contframe_f( FuncApply(map_env result_f expr_f contframe_f env,
+(*   | ThunkApply env -> *)
+(*       contframe_f (ThunkApply (map_env result_f expr_f contframe_f env)) *)
+  | ArgEvalCont(env, f, args, eargs) ->
+      contframe_f( ArgEvalCont(map_env result_f expr_f contframe_f env,
                              map_result result_f expr_f contframe_f f,
                              map (map_expr result_f expr_f contframe_f) args,
                              map (map_result result_f expr_f contframe_f) eargs))
-  | FuncApplyFlipped(env, a) -> 
-      contframe_f(FuncApplyFlipped((map_env result_f expr_f contframe_f) env,
-                  (map_result result_f expr_f contframe_f) a))
+  | ApplyCont(env, args) -> 
+      contframe_f(ApplyCont((map_env result_f expr_f contframe_f) env,
+                                   map (map_result result_f expr_f contframe_f) args))
   | LetCont(env, var, body) -> 
       contframe_f(LetCont((map_env result_f expr_f contframe_f) env, var, (map_expr result_f expr_f contframe_f) body))
   | BranchCont(env, tru, fls) -> 
@@ -486,8 +508,8 @@ let rec extract_code_from_result : result -> 'a expression' list =
     | `PrimitiveFunction _ -> []
     | `ClientFunction _ -> []
     | `Abs result -> extract_code_from_result result
-    | `Function (str, locals, _globals, body) ->
-        extract_code_from_env locals @ [body]
+    | `RecFunction (defs, locals, name) ->
+        extract_code_from_env locals @ map snd defs
     | `Record fields -> concat_map (snd ->- extract_code_from_result) fields
     | `Variant(tag, body) -> extract_code_from_result body
     | `List(elems) -> concat_map (extract_code_from_result) elems
@@ -498,19 +520,18 @@ and extract_code_from_cont kappa =
   concat_map (extract_code_from_contframe) kappa
 and extract_code_from_contframe = 
   function
-    | Recv (env) -> extract_code_from_env env
+    | Recv -> []
     | Definition (env, s) ->
         extract_code_from_env env
-    | FuncArg(args, env) ->
+    | FuncEvalCont(args, env) ->
         args @ extract_code_from_env env
-    | FuncApply(env, f, args, eargs) -> 
+    | ArgEvalCont(env, f, args, eargs) -> 
         extract_code_from_env env
         @ extract_code_from_result f
         @ args
         @ concat_map extract_code_from_result eargs
-    | ThunkApply env -> extract_code_from_env env
-    | FuncApplyFlipped(env, a) -> 
-        extract_code_from_result a @ extract_code_from_env env
+    | ApplyCont(env, args) -> 
+        concat_map extract_code_from_result args @ extract_code_from_env env
     | LetCont(env, var, body) ->
         extract_code_from_env env @ [body]
     | BranchCont(env, tru, fls) -> 
@@ -560,14 +581,11 @@ let program_label_table program =
     (fun (xs, x) -> concat (xs @ [x]))
     program
   
-
 let val_label_table value =
   let exprs = extract_code_from_result value in
     concat_map expr_label_table exprs
 
-
-
-(** resolve_label
+(** [resolve_label]
     Given a label and a label table, return the expression having the
     corresponding label.
     Currently uses linear search
@@ -634,22 +652,21 @@ let retain names env = filter (fun (x, _) -> StringSet.mem x names) env
 (* Pickling interface *)
 (* TODO: re-open db connections as necessary *)
 
-(*module Dump_ExprEnv = Dump.Dump_2(Dump_rexpr)(Dump_environment)
-module Dump_ExprEnv = Dump.Dump_2(Dump_rexpr)(Dump_environment)*)
-
 let marshal_continuation (c : continuation) : string
   = (* Debug.print("marshaling:"^ string_of_cont c); *)
   let pickle = Dump_continuation.to_string c in
     Debug.print("marshalled continuation size: " ^ 
                   string_of_int(String.length pickle));
-    let result = Netencoding.Base64.encode pickle in
+    let result = base64encode pickle in
       result
     
 let marshal_exprenv : (expression * environment) -> string
   = Dump.to_string<(rexpr * environment)> ->- Netencoding.Base64.encode
 
 let marshal_value : result  -> string
-  = Dump_result.to_string ->- Netencoding.Base64.encode
+  = Dump_result.to_string ->- base64encode
+
+let marshal_result = marshal_value
 
 exception UnrealizableContinuation
 
@@ -659,7 +676,7 @@ let unmarshal_continuation valenv program : string -> continuation
      from the valenv, since placeholders may make reference to them. *)
   let table = (program_label_table program
                  @ concat_map val_label_table valenv) in
-    Netencoding.Base64.decode
+    base64decode
     ->- Dump_continuation.from_string
     ->- resolve_placeholders_cont table 
 
@@ -675,9 +692,46 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
                     labelled_string_of_expression expr);
       raise UnrealizableContinuation
  in
-  Netencoding.Base64.decode
+  base64decode
   ->- Dump.from_string<(rexpr * environment)>
   ->- resolve
 
-let unmarshal_value : string -> result =
-  Netencoding.Base64.decode ->- Dump_result.from_string
+let unmarshal_result valenv program : string -> result
+  =
+  let table = program_label_table program @ concat_map val_label_table valenv  in
+    base64decode
+    ->- Pickle_result.unpickleS
+    ->- resolve_placeholders_result table
+
+
+(* Note: this is broken: it doesn't resolve placeholders *)
+let broken_unmarshal_value : string -> result =
+  base64decode ->- Pickle_result.unpickleS
+
+(** {0 Environment handling} *)
+
+(** [bind env var value]
+    Extends `env' with a binding of `var' to `value'.
+*)
+let bind env var value = (var, value) :: env
+
+(** The empty environment. (As long as we're data-abstracting.) *)
+let empty_env = []
+
+(** [trim_env env] removes shadowed bindings from `env'
+    (TBD: What constitutes "shadowing"? I think it should be opposite of
+     what's here)
+*)
+let trim_env = 
+  let rec trim names (env:(string * result) list) 
+      = match env with
+        | [] -> []
+        | (k, v) :: rest -> 
+            if mem k names then trim names rest
+            else (k, v) :: (trim (k :: names) rest) in
+    trim []
+      
+(** Remove toplevel bindings from an environment *)
+let remove_toplevel_bindings toplevel env = 
+  filter (fun pair -> mem pair toplevel) env
+

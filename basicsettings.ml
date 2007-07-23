@@ -15,9 +15,9 @@ let prelude_file = Settings.add_string ("prelude", "prelude.links", `System)
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
-"  _    __ __   __ __   __ ____
- | |   | |  \\  | |  | / // .__|
- | |   | | , \\ | |  |/ /|. `-.
- | |___| | |\\ \\  |     \\ _`.  |
- |_____|_|_| \\___|__|\\__|____/
+"  _     _ __    _ _  __  ___
+ / |   | |  \\  | | |/ / / ._\\
+ | |   | | , \\ | |   /  \\  \\
+ | |___| | |\\ \\  | |\\ \\ _\\  \\
+ |_____|_|_| \\___|_| \\_|____/
 Welcome to Links version 0.4 (Crostorfyn)", `System)

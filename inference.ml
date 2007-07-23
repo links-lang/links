@@ -4,7 +4,6 @@ open List
 open Utility
 open Syntax
 open Types
-open Forms
 open Errors
 open Instantiate
 open Typevarcheck
@@ -55,17 +54,22 @@ let type_of_expression : expression -> datatype =
 let pos_of_expression : expression -> position =
   fun exp -> let `T (pos, _, _) = expression_data exp in pos
 
-let rec extract_row : datatype -> row = fun t ->
+type typing_environment = environment * alias_environment
+
+let rec extract_row : typing_environment -> datatype -> row = fun ((env, alias_env) as typing_env) t ->
   match t with
     | `Record row -> row
     | `Variant row -> row
     | `MetaTypeVar point ->
         begin
           match Unionfind.find point with
-            | `Body t -> extract_row t
+            | `Body t -> extract_row typing_env t
             | _ -> failwith
                 ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
         end
+    | `Application (s, ts) ->
+        let vars, alias = lookup_alias (s, ts) alias_env in
+          extract_row typing_env (instantiate_alias (vars, alias) ts)
     | _ -> failwith
         ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
@@ -322,7 +326,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                   match lalias, ralias with
                     | `Primitive `Abstract, `Primitive `Abstract ->
                         raise (Unify_failure
-                                 ("Cannot unify abstract type '"^ls^"' with abstract type '"^rs^"'"))
+                                 ("Cannot unify abstract type '"^string_of_datatype t1^
+                                    "' with abstract type '"^string_of_datatype t2^"'"))
                     | `Primitive `Abstract, _ ->
                         unify' rec_env (t1, instantiate_alias (rvars, ralias) rts)
                     | _, `Primitive `Abstract ->
@@ -337,7 +342,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                   match alias with
                     | `Primitive `Abstract ->
                         raise (Unify_failure
-                                 ("Cannot unify abstract type '"^s^"' with type '"^string_of_datatype t^"'"))
+                                 ("Cannot unify abstract type '"^
+                                    string_of_datatype (`Application (s, ts)) ^"' with type '"^string_of_datatype t^"'"))
                     | _ ->
                         unify' rec_env (instantiate_alias (vars, alias) ts, t)
                 end
@@ -823,8 +829,6 @@ let generalise : environment -> datatype -> assumption =
       Debug.if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
       (quantifiers, t) 
 
-type typing_environment = environment * alias_environment
-
 let constant_type = function
   | Boolean _ -> `Primitive `Bool
   | Integer _ -> `Primitive `Int
@@ -918,43 +922,12 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let best_typing_env, vars = type_check_mutually typing_env variables in
       let body = type_check best_typing_env body in
 	Rec (vars, body, `T (pos, type_of_expression body, None))
-  | Xml_node (tag, atts, cs, `U pos) as xml -> 
-      let separate = partition (is_special -<- fst) in
-      let (special_attrs, nonspecial_attrs) = separate atts in
-      let bindings = 
-(*         try *)
-          lname_bound_vars xml 
-(*         with InvalidLNameExpr ->  *)
-(*           raise UndefinedVariable "Invalid l:name parameter " ^ string_of_expression  *)
-      in
-        (* "event" is always in scope for the event handlers *)
-      let attr_env = ("event", ([], `Application ("Event", []))) :: env in
-(* should now use alien javascript jslib : ... to import library functions *)
-(*      let attr_env = ("jslib", ([], `Record(make_empty_open_row()))) :: attr_env in *)
-        (* extend the env with each l:name bound variable *)
-      let attr_env = 
-	("_MAILBOX_", ([], fresh_type_variable ())) ::
-          fold_right (fun s env -> (s, ([], string_type)) :: env) bindings attr_env in
-      let special_attrs = map (fun (name, expr) -> (name, type_check (attr_env, alias_env) expr)) special_attrs in
-        (* Check that the bound expressions have type 
-           <strike>XML</strike> unit. *)
-(*      let _ =
-	List.iter (fun (_, expr) -> unify(type_of_expression expr, fresh_type_variable ()(*Types.xml*))) special_attrs in*)
+  | Xml_node (tag, atts, cs, `U pos) -> 
       let contents = map (type_check typing_env) cs in
-      let nonspecial_attrs = map (fun (k,v) -> k, type_check typing_env v) nonspecial_attrs in
-(*      let attr_type = if islhref xml then Types.xml else Types.string_type in *)
-      let attr_type = string_type in
-        (* force contents to be XML, attrs to be strings *)
-      let _ = List.iter (fun node -> unify (type_of_expression node, xml_type)) contents in
-      let _ = List.iter (fun (_, node) -> unify (type_of_expression node, attr_type)) nonspecial_attrs in
-      let trimmed_node =
-        Xml_node (tag, 
-                  nonspecial_attrs,         (* +--> up here I mean *)
-                  contents,                 (* | *)
-                  `T (pos, xml_type, None))
-      in                                    (* | *)
-        (* could just tack these on up there --^ *)
-        add_attrs special_attrs trimmed_node
+      let atts = map (fun (k,v) -> k, type_check typing_env v) atts in
+        List.iter (fun node -> unify (type_of_expression node, xml_type)) contents;
+        List.iter (fun (_, node) -> unify (type_of_expression node, string_type)) atts;
+        Xml_node (tag, atts, contents, `T (pos, xml_type, None))
   | Record_intro (bs, r, `U pos) ->
       let bs, field_env, absent_field_env =
         StringMap.fold (fun label e (bs, field_env, absent_field_env)  ->
@@ -976,7 +949,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                   
                   unify(rtype, `Record (absent_field_env, fresh_row_variable()));
                   
-                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
+                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row typing_env rtype) in
                     
                   (* attempt to extend field_env with the labels from rfield_env
                      i.e. all the labels belonging to the record r
@@ -1006,7 +979,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let label_variable_type = fresh_type_variable () in
 	unify (type_of_expression value, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
 
-	let value_row = extract_row (type_of_expression value) in
+	let value_row = extract_row typing_env (type_of_expression value) in
 	let label_var_equiv = label_variable, ([], label_variable_type) in
 	let var_equiv = variable, ([], `Record (row_with (label, `Absent) value_row)) in
 	  
@@ -1021,7 +994,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         Project (expr, label, `T (pos, label_variable_type, None))
   | Erase (value, label, `U pos) ->
       let value = type_check typing_env value in
-      let value_row = extract_row (type_of_expression value) in
+      let value_row = extract_row typing_env (type_of_expression value) in
         Erase (value, label, `T (pos, `Record (row_with (label, `Absent) value_row), None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
@@ -1187,10 +1160,23 @@ and
       let inner_env = var_env @ env in
       let type_check result (name, expr, t) =
         let expr = type_check (inner_env, alias_env) expr in
-          match type_of_expression expr with
+        let t' = type_of_expression expr in
+          match t' with
             | `Function _ as f  ->
-		unify alias_env (snd (assoc name var_env), f);
-		(name, expr, t) :: result
+                let t'' = snd (assoc name var_env) in
+		  unify alias_env (f, t'');
+                  (* [HACK]
+
+                     This allows aliases to persist providing no
+                     mailbox types have been instantiated.
+                  *)
+                  let expr = 
+                    if (Types.is_mailbox_free alias_env t') then
+                      set_node_datatype (expr, t'')
+                    else
+                      expr
+                  in
+		    (name, expr, t) :: result
             | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
       let defns = fold_left type_check [] defns in
@@ -1237,7 +1223,7 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
               (generalise env (type_of_expression value))
             else [], type_of_expression value in
               (((variable, value_type) :: env), alias_env),
-    	       Define (variable, value, loc, `T (pos, type_of_expression value, None))
+    	    Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype, pos) (env, alias_env)),
@@ -1262,8 +1248,10 @@ let type_program : Types.typing_environment -> untyped_program -> (Types.typing_
             let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
                                    name, expr, t) defparts in
             let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
-            let defs = (map2 (fun (name, _, location, _) (_, expr, _) -> 
-                                Define(name, expr, location, expression_data expr))
+            let defs = (map2 (fun (name, Rec ([(_, _, t)], _, _), location, _) (_, expr, _) ->
+                                let ed = expression_data expr in
+                                let expr = Rec ([(name, expr, t)], Variable (name, ed), ed) in
+                                  Define(name, expr, location, ed))
 			  defparts defs) in
               typing_env, typed_defs @ defs
 

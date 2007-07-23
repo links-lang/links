@@ -1,8 +1,15 @@
 fun enterNumbers(n) {
   <html>
     <h1>Enter {intToXml(n)} numbers:</h1>
-    {render(formlets(replicate(n, inputInt)), sum)}
+    {render(withSubmitButton(formlets(replicate(n, inputInt))), fun (xs) {<html><body>{intToXml(sum(xs))}</body></html>})}
   </html> 
+}
+
+fun withSubmitButton(f) {
+  formlet
+    <#>{f -> v}{submitButton("Submit", ()) -> _}</#>
+  yields
+    v
 }
 
 <html>

@@ -2,13 +2,16 @@
 open Num
 open Utility
 
-type like_expr = [`percent | `string of string | `variable of string | `seq of like_expr list]
+type like_expr = [ `caret | `dollar | `underscore | `percent | `string of string | `variable of string | `seq of like_expr list]
     deriving (Eq, Typeable, Show, Dump, Pickle)
 
 (* Convert a like expression to a string. *)
 let rec like_as_string : like_expr -> string =
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     function
+      |	`caret -> ""
+      |	`dollar -> ""
+      |	`underscore -> "_"
       | `percent -> "%"
       | `string s -> quote s
       | `variable v -> "VARIABLE : " ^ v
@@ -55,14 +58,14 @@ and query = {distinct_only : bool;
             }
 
 and sorting = [`Asc of (string * string) | `Desc of (string * string)]
-and column = {table_renamed : string;
+and column = {table_alias : string;
               name : string;
-              renamed : string; (* TBD: call this `alias' *)
+              col_alias : string; (* TBD: call this `alias' *)
               col_type : Types.datatype}
 and col_or_expr = (column, expression) either
     deriving (Eq, Typeable, Show, Dump, Pickle)
+
 (* Simple accessors *)
-let get_renaming col = col.renamed
 
 let add_sorting query col = 
   {query with
@@ -72,7 +75,7 @@ let owning_table of_col qry =
   match (List.find (function
                               | Left c -> c.name = of_col
                               | Right _ -> false) qry.result_cols) with
-    | Left col_rec -> col_rec.table_renamed
+    | Left col_rec -> col_rec.table_alias
     | Right _ -> assert false
 
 let rec freevars {condition = condition;

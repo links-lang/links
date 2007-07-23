@@ -43,6 +43,8 @@ struct
        | Simply : String
        | Quote : regex
        | Any
+       | StartAnchor
+       | EndAnchor
        | Seq : [regex]
        | Alternate : (regex, regex)
        | Group : regex
@@ -57,6 +59,8 @@ struct
     | Simply s           -> `Variant ("Simply", Result.box_string s)
     | Quote s           -> `Variant ("Quote", asLinks s)
     | Any                -> `Variant ("Any", unit)
+    | StartAnchor       -> `Variant ("StartAnchor", unit)
+    | EndAnchor         -> `Variant ("EndAnchor", unit)
     | Seq rs             -> `Variant ("Seq", `List (List.map asLinks rs))
     | Alternate (r1, r2)  -> `Variant ("Alternate", `Record [("1", asLinks r1);
                                                          ("2", asLinks r2)])
@@ -74,6 +78,8 @@ struct
       | `Variant ("Simply", s)     -> Simply (Result.unbox_string s), count
       | `Variant ("Quote", s)     -> Quote (fst (ofLinksCount 0 s)), count
       | `Variant ("Any", _)        -> Any, count
+      | `Variant ("StartAnchor", _)        -> StartAnchor, count
+      | `Variant ("EndAnchor", _)        -> EndAnchor, count
       | `Variant ("Seq", `List rs) ->
 	  let result = (List.map (ofLinksCount 0) rs) in
 	  let regexes = List.map fst result in

@@ -158,7 +158,7 @@ let rec is_value : 'a expression' -> bool = function
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
   | Record_intro (bs, e, _) ->
-      StringMapUtils.for_all (is_value) bs && opt_app is_value true e
+      StringMap.for_all (is_value) bs && opt_app is_value true e
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
@@ -169,6 +169,10 @@ type data = [untyped_data | typed_data] deriving (Typeable, Show)
 let data_position = function
   | `T (pos, _, _)
   | `U pos -> pos
+
+let show_pos : position -> string = 
+  fun ((pos : Lexing.position), _, _) ->
+    Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
 
 let is_symbolic_ident name = 
   (Str.string_match (Str.regexp "^[!$%&*+/<=>?@\\^-.|_]+$") name 0)
@@ -218,7 +222,7 @@ let rec show t : 'a expression' -> string = function
   | Record_intro (bs, r, data) ->
       "(" ^
         String.concat ","
-        (StringMapUtils.zip_with (fun label e -> label ^ "=" ^ (show t e)) bs) ^
+        (StringMap.to_list (fun label e -> label ^ "=" ^ (show t e)) bs) ^
         (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
   | Record_selection (label, label_variable, variable, value, body, data) ->
@@ -271,17 +275,17 @@ let string_of_program p = show_program (fun _ -> "") p
 type expression = typed_data  expression'
 and untyped_expression = untyped_data expression'
 and stripped_expression = unit expression'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 type definition = typed_data definition'
 and untyped_definition = untyped_data definition'
 and stripped_definition = unit definition'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 type program = typed_data program'
 and untyped_program = untyped_data program'
 and stripped_program = unit program'
-  deriving (Eq, Typeable, Show)
+  deriving (Show)
 
 let show_label =
   function
@@ -335,7 +339,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Variant_selection (e1, _, _, e2, _, e3, _) ->
                    [visitor visit_children e1; visitor visit_children e2; visitor visit_children e3]
                | Record_intro (bs, r, _) ->
-                   (StringMapUtils.zip_with (fun _ e -> visitor visit_children e) bs) @
+                   (StringMap.to_list (fun _ e -> visitor visit_children e) bs) @
                      (opt_app (fun e -> [visitor visit_children e]) [] r)
                | Apply (e, es, _) -> visitor visit_children e :: map (visitor visit_children) es
                | Rec (b, e, _) -> map (fun (_, e, _) -> visitor visit_children e) b @ [visitor visit_children e]
@@ -419,40 +423,16 @@ let rec stringlit_value = function
   | Constant(String name, _) -> name
   | _ -> assert false
 
-(* Walk the XML tree, looking for <input l:name> bindings that are
-   inside the top <form> element, with no intervening <form>s.
-*)
-let lname_bound_vars : 'a expression' -> string list = 
-  let rec lnames = function
-    | Xml_node (("input"|"textarea"|"select"), attrs, contents, _) ->
-        (try 
-          let lname_attr = assoc "l:name" attrs in 
-            (try
-               [stringlit_value(lname_attr)]
-             with
-               | Match_failure _ ->failwith("l:name attribute was not a string: "
-                                           ^ string_of_expression lname_attr))
-        with Not_found -> concat (map lnames contents))
-    | Xml_node ("form", _, _, _) -> (* new scope *) []
-    | Xml_node (_, _, contents, _) -> concat (map lnames contents)
-    | Concat (l, r, _) -> lnames l @ lnames r
-    | _ -> [] 
-  in function
-    | Xml_node ("form", _, contents, _)  ->
-        concat (map lnames contents)
-    | Xml_node (_, _, _, _)  -> []
-        
 let freevars (expression : 'a expression') : StringSet.t =
   let module S = StringSet in
-  let fromList l = List.fold_right S.add l S.empty in
   let rec aux' default v = 
     let aux = aux' default in match v with
       | Variable (name, _) -> S.add name S.empty
       | For (body, var, generator, _) -> S.union (aux generator) (S.remove var (aux body))
       | Let (var, value, body, _) -> S.union (aux value) (S.remove var (aux body))
-      | Abstr (vars, body, _) -> S.diff (aux body) (fromList vars)
+      | Abstr (vars, body, _) -> S.diff (aux body) (S.from_list vars)
       | Record_selection (_, labvar, var, value, body, _) ->
-          S.union (aux value) (S.diff (aux body) (fromList [var;labvar]))
+          S.union (aux value) (S.diff (aux body) (S.from_list [var;labvar]))
       | Variant_selection (value, _, cvar, cbody, var, body, _) ->
           S.union (aux value)
             (S.union (S.remove cvar (aux cbody))
@@ -461,14 +441,11 @@ let freevars (expression : 'a expression') : StringSet.t =
           let vars, vals = List.split (map (fun (n,v,_) -> (n,v)) bindings) in
             S.diff
               (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
-              (fromList vars)
-      | TableQuery (_, query, _) -> fromList (Query.freevars query)
-      | Xml_node (_, attrs, children, _) as x -> 
-          S.diff 
-            (S.union
-               (List.fold_right (fun (_,attrval) -> S.union (aux attrval)) attrs S.empty)
-               (List.fold_right (fun elem -> S.union (aux elem)) children S.empty))
-            (fromList (lname_bound_vars x))
+              (S.from_list vars)
+      | TableQuery (ts, query, _) ->
+          S.union
+            (S.union_all (List.map (fun (_, e) -> aux e) ts))
+            (S.from_list (Query.freevars query))
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
@@ -601,6 +578,12 @@ let set_program_data : ('b -> 'a program' -> 'b program') =
 
 let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 let def_datatype : (definition -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- definition_data
+
+let set_node_datatype : (expression * Types.datatype) -> expression =
+  fun (e, t) ->
+    let `T(pos, _, label) = expression_data e
+    in
+      set_data (`T(pos, t, label)) e
 
 let position e = data_position (expression_data e)
 

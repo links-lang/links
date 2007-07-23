@@ -76,12 +76,20 @@ type primitive_value =
     | `XML of xmlitem 
     | `NativeString of string
     ]
-type contin_frame =
+type result = [ primitive_value
+| `Continuation of continuation
+| `RecFunction of ((string * Syntax.expression) list * environment * string)
+| `PrimitiveFunction of string
+| `ClientFunction of string
+| `List of result list
+| `Record of (string * result) list
+| `Abs of result
+| `Variant of string * result ]
+and contin_frame =
     | Definition of (environment * string)
-    | FuncArg of (Syntax.expression list * environment)
-    | FuncApply of (environment * result * Syntax.expression list * result list)
-    | FuncApplyFlipped of (environment * result)
-    | ThunkApply of environment
+    | FuncEvalCont of (Syntax.expression list * environment)
+    | ArgEvalCont of (environment * result *Syntax.expression list * result list)
+    | ApplyCont of (environment * result list)
     | LetCont of (environment * string * Syntax.expression)
     | BranchCont of (environment * Syntax.expression * Syntax.expression)
     | BinopRight of (environment * binop * Syntax.expression)
@@ -97,19 +105,11 @@ type contin_frame =
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
     | IgnoreDef of (environment * Syntax.definition)
-    | Recv of environment
-and result = [ primitive_value
-| `Continuation of continuation
-| `Function of string list * environment * unit * Syntax.expression
-| `PrimitiveFunction of string
-| `ClientFunction of string
-| `List of result list
-| `Record of (string * result) list
-| `Abs of result
-| `Variant of string * result ]
+    | Recv 
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Dump)
+val toplevel_cont : continuation
 val expr_of_prim_val : result -> Syntax.expression option
 val prim_val_of_expr : Syntax.expression -> result option
 val xmlitem_of : result -> xmlitem
@@ -126,7 +126,7 @@ val links_fst : [> `Record of ('a * 'b) list ] -> 'b
 val links_snd : [> `Record of ('a * 'b) list ] -> 'b
 val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
-val delay_expr : 'a -> [> `Function of string list * 'b list * unit * 'a ]
+(* val delay_expr : environment -> Syntax.expression -> result *)
 val charlist_as_string : result -> string
 val string_of_result : result -> string
 val string_of_cont : continuation -> string
@@ -153,8 +153,13 @@ val retain : Utility.StringSet.t -> (string * 'b) list -> (string * 'b) list
 val marshal_continuation : continuation -> string
 val marshal_exprenv : (Syntax.expression * environment) -> string
 val marshal_value : result -> string
-val unmarshal_value : string -> result
+val broken_unmarshal_value : string -> result
+val marshal_result : result -> string
 
 val unmarshal_continuation : result list -> Syntax.program -> string -> continuation
 val unmarshal_exprenv : result list -> Syntax.program -> string -> (Syntax.expression * environment)
+val unmarshal_result : result list -> Syntax.program -> string -> result
 
+val bind : environment -> string -> result -> environment
+val empty_env : environment
+val trim_env : environment -> environment

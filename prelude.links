@@ -95,7 +95,6 @@ fun filter(p, l) {
   for (var x <- l) where (p(x)) [x]
 }
 
-
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }
@@ -245,25 +244,20 @@ fun last(list) {
   }
 }
 
+
 # lines :: String -> [String]
 # unlines :: [String] -> String
 # unwords :: [String] -> String
 # words :: String -> [String]
 
+### Defined internally to Links:
 # ceiling :: Float -> Int
-# cos :: Float -> Float
-# exp :: Float -> Float
 # floor :: Float -> Int
-# fromInt :: Int -> Float
+# cos :: Float -> Float
 # log :: Float -> Float
-# pi :: Float
-# round :: Float -> Int
-# signumFloat :: Float -> Int
 # sin :: Float -> Float
 # sqrt :: Float -> Float
 # tan :: Float -> Float
-# truncate :: Float -> Int
-# (**.) :: Float -> Float -> Float
 # (*.) :: Float -> Float -> Float
 # (/.) :: Float -> Float -> Float
 # (+.) :: Float -> Float -> Float
@@ -272,12 +266,12 @@ fun last(list) {
 # (/=.) :: Float -> Float -> Bool
 # (==.) :: Float -> Float -> Bool
 
-
+# (**.) :: Float -> Float -> Float
+# exp :: Float -> Float
 # pi :: Float
 # signumFloat :: Float -> Int
 # round :: Float -> Int
 # truncate :: Float -> Int
-
 
 # Option types
 typename Maybe (a) = [|Nothing | Just:a|];
@@ -546,7 +540,7 @@ sig render : (Formlet (a), (a) -> Xml) -> Xml
 fun render(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
    <form enctype="application/x-www-form-urlencoded"
-         l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+         l:action="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
@@ -556,7 +550,7 @@ fun render(frm, continuation) {
 sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
 fun renderMultipart(frm, continuation) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="multipart/form-data" l:onsubmit="{continuation(extractor(environment()))}" method="POST">
+   <form enctype="multipart/form-data" l:action="{continuation(extractor(environment()))}" method="POST">
      {xml}
    </form>
 
@@ -712,4 +706,9 @@ fun choices (items) {
 
      }
   }
+}
+
+sig choicesNone : ([(a, String)]) -> Formlet ([a])
+fun choicesNone (items) {
+  choices (map (fun ((v, name)) {(v, name, false)}, items))
 }

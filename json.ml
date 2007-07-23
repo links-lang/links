@@ -27,7 +27,8 @@ let js_dq_escape_string str =
        (Str.global_replace (Str.regexp_string "\\") "\\\\"
           str))
 
-let js_dq_escape_char = (* escape for placement in double-quoted string *)
+(** Escape the argument for inclusion in a double-quoted string. *)
+let js_dq_escape_char =
   function
     '"' -> "\\\""
   | '\\' -> "\\\\"
@@ -59,7 +60,7 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
-  | `Char c -> "\"" ^ (Char.escaped c) ^"\""
+  | `Char c -> "\"" ^ (js_dq_escape_char c) ^"\""
 (* [Q] what does Char.escape do?
    [A] the wrong things!
 *)
@@ -73,7 +74,8 @@ let rec jsonize_result : Result.result -> string = function
   | `ClientFunction _
   | `Abs _
   | `Continuation _
-  | `Function _ as r -> prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
+  | `RecFunction _ as r ->
+      prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
   | #Result.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_result value)
   | `Record fields -> "{" ^ String.concat "," (List.map (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_result v) fields) ^ "}"
@@ -98,6 +100,7 @@ let jsonize_result result =
       (fun () -> "jsonize_result <= " ^ rv);
     rv
 
-let parse_json str = Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
+let parse_json str =
+  Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
 
 let parse_json_b64 str = parse_json(Utility.base64decode str)

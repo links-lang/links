@@ -1,5 +1,5 @@
 (*pp deriving *)
-type location = [ `Client | `Native | `Server | `Unknown ]
+type location = [ `Client | `Native | `Server | `Unknown ] deriving (Show)
 type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Dump, Eq, Pickle)
 type label deriving (Typeable, Show, Dump)
 
@@ -48,7 +48,8 @@ type 'a expression' =
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
   | TableQuery of ((string * 'a expression') list * Query.query * 'a)
-  | TableHandle of ('a expression' * 'a expression' * (Types.datatype * Types.datatype) * 'a)
+  | TableHandle of ('a expression' * 'a expression' * 
+                      (Types.datatype * Types.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
   | Call_cc of ('a expression' * 'a)
   | Wrong of 'a
@@ -63,18 +64,20 @@ type 'a program' = Program of ('a definition' list * 'a expression')
 
 type position = Lexing.position * string * string
 
+val show_pos : position -> string
+
 type untyped_data = [`U of position]
 type typed_data = [`T of (position * Types.datatype * label option)]
 
-type expression = typed_data expression' deriving (Typeable, Show, Eq)
+type expression = typed_data expression' deriving (Show)
 type untyped_expression = untyped_data expression'
 type stripped_expression = unit expression' deriving (Show)
 
-type definition = typed_data definition' deriving (Typeable, Show, Eq)
+type definition = typed_data definition' deriving (Show)
 type untyped_definition = untyped_data definition'
 type stripped_definition = unit definition'
 
-type program = typed_data program' deriving (Typeable, Eq, Show)
+type program = typed_data program' deriving (Show)
 type untyped_program = untyped_data program' deriving (Show)
 type stripped_program = unit program' deriving (Show)
 
@@ -138,6 +141,8 @@ val strip_data : 'a expression' -> stripped_expression
 val node_datatype : expression -> Types.datatype
 val def_datatype : definition -> Types.datatype
 
+val set_node_datatype : (expression * Types.datatype) -> expression
+
 type data = [untyped_data | typed_data]
 
 val data_position : [<data] -> position
@@ -151,9 +156,6 @@ val no_expr_data : typed_data
 
 val is_closed : expression -> bool
 val is_closed_wrt : expression -> Utility.StringSet.t -> bool
-
-(** Which variables are l:name-bound? *)
-val lname_bound_vars : 'a expression' -> string list
 
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression

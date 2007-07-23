@@ -68,7 +68,7 @@ let lookup = fun x -> List.assoc x
 let concat_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
-    (types1 @ types2, superimpose aliases1 aliases2)
+    (types1 @ types2, StringMap.superimpose aliases1 aliases2)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -501,6 +501,61 @@ let free_alias_check alias_env = free_alias_check alias_env TypeVarSet.empty
 let free_alias_check_row alias_env = free_alias_check_row alias_env TypeVarSet.empty
 
 
+
+let rec is_mailbox_free alias_env = fun rec_vars t ->
+  let imb = is_mailbox_free alias_env rec_vars in
+  let imbr = is_mailbox_free_row alias_env rec_vars in
+    match t with
+      | `Not_typed -> true
+      | `Primitive p -> true
+      | `Function (f, m, t) -> imb f && imb m && imb t
+      | `Record row
+      | `Variant row -> imbr row
+      | `Table (r, w) -> imb r && imb w
+      | `Application ("Mailbox", _) -> false
+      | `Application (s, ts) ->
+          if StringMap.mem s alias_env then
+            List.for_all imb ts
+          else
+            raise (UndefinedAlias ("Unbound alias: "^s))
+      | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Flexible _
+              | `Rigid _ -> true
+              | `Recursive (var, t) ->
+                  (TypeVarSet.mem var rec_vars) ||
+                    (is_mailbox_free alias_env (TypeVarSet.add var rec_vars) t)
+              | `Body t -> imb t
+          end
+and is_mailbox_free_field_spec alias_env = fun rec_vars ->
+  function
+    | `Present t -> is_mailbox_free alias_env rec_vars t
+    | `Absent -> true
+and is_mailbox_free_field_spec_map alias_env = fun rec_vars field_env ->
+  FieldEnv.fold (fun _ field_spec b ->
+                   b && is_mailbox_free_field_spec alias_env rec_vars field_spec)
+    field_env true
+and is_mailbox_free_row alias_env = fun rec_vars row ->
+  let field_env, row_var = row
+  in
+    (is_mailbox_free_field_spec_map alias_env rec_vars field_env) &&
+      (match Unionfind.find row_var with
+         | `Closed
+         | `Flexible _
+         | `Rigid _ -> true
+         | `Recursive (var, rec_row) ->
+             (TypeVarSet.mem var rec_vars) ||
+               (is_mailbox_free_row alias_env (TypeVarSet.add var rec_vars) rec_row)
+         | `Body row ->
+             is_mailbox_free_row alias_env rec_vars row)
+
+
+(* interface *)
+let is_mailbox_free alias_env = is_mailbox_free alias_env TypeVarSet.empty
+let is_mailbox_free_row alias_env = is_mailbox_free_row alias_env TypeVarSet.empty
+
+
 (* whether to display mailbox annotations on arrow types
    [NOTE]
       unused mailbox parameters are never shown
@@ -536,7 +591,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
     let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
       match Unionfind.find rowvar with
         | `Closed ->
-            let n = StringMapUtils.size field_env in
+            let n = StringMap.size field_env in
             let b =
               n = 0
               ||
@@ -590,7 +645,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
 	    in begin match concrete_type args with
               | `Record row when is_tuple ~allow_onetuples:true row ->
                   string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
-              | t ->      "*" ^ sd t  ^ " " ^arrow ^ " " ^ sd t
+              | t' ->     "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t
               end
         | `Record row      ->
             let row = unwrap row in

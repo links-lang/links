@@ -7,28 +7,8 @@ open Result
 open Query
 open Syntax
 
-(** {0 Environment handling} *)
+open Unix
 
-(** bind env var value 
-    Extends `env' with a binding of `var' to `value'.
-*)
-let bind env var value = (var, value) :: env
-
-(** trim_env env
-    remove shadowed bindings from `env'
-*)
-let trim_env = 
-  let rec trim names (env:(string * result) list) 
-      = match env with
-        | [] -> []
-        | (k, v) :: rest -> 
-            if mem k names then trim names rest
-            else (k, v) :: (trim (k :: names) rest) in
-    trim []
-      
-(** Remove toplevel bindings from an environment *)
-let remove_toplevel_bindings toplevel env = 
-  filter (fun pair -> mem pair toplevel) env
 
 exception RuntimeUndefVar of string
 
@@ -40,25 +20,21 @@ let lookup globals locals name =
           | Some v -> v
           | None -> Library.primitive_stub name)
   with Not_found -> 
-    raise(RuntimeUndefVar name) (* ("Internal error: variable \"" ^ name ^ "\" not in environment")*)
+    raise(RuntimeUndefVar name)
 
+
+
+(** [bind_rec env defs] extends [env] with bindings for the [defs],
+    where each one defines a function and all the functions are
+    mutually recursive. *)
 let bind_rec locals defs =
-  (* create bindings for these functions, with no local variables for now *)
-  let make_placeholder = (fun env (variable, value) ->
-                            (match value with
-                               | Syntax.Abstr (var, body, _) ->
-                                   bind env variable (`Function (var, locals, () (*globals*), body))
-                               | _ -> raise (Runtime_error "TF146"))) in
-  let rec_env = trim_env (fold_left make_placeholder [] defs) in
-    (* fill in the local variables *)
-  let fill_placeholder value =
-    match value with
-      | `Function (var, fnlocals, _, body) ->
-          `Function (var, fnlocals @ (retain (freevars body) rec_env), (), body)
-      | _ -> value
-  in
-    trim_env ((alistmap fill_placeholder rec_env) @ locals)
+  let new_defs = map (fun (name, _) -> 
+                        (name, `RecFunction(defs, locals, name))) defs in
+    trim_env (new_defs @ locals)
 
+
+(** Given a label and a record, returns the value of that field in the record,
+    together with the remaining fields of the record. *)
 let rec crack_row : (string -> ((string * result) list) -> (result * (string * result) list)) = fun ref_label -> function
         | [] -> raise (Runtime_error("Internal error: no field '" ^ ref_label ^ "' in record"))
         | (label, result) :: fields when label = ref_label ->
@@ -67,6 +43,8 @@ let rec crack_row : (string -> ((string * result) list) -> (result * (string * r
             let selected, remaining = crack_row ref_label fields in
               (selected, field :: remaining)
 
+(** Given a Links tuple, returns an Ocaml list of the Links values in that
+    tuple. *)
 let untuple : result -> result list = 
   let rec aux n output = function
     | [] -> List.rev output
@@ -77,10 +55,10 @@ let untuple : result -> result list =
   in function
     | `Record fields -> aux 1 [] fields
     | _ -> assert false
-    
+        
 
-(** [normalise_query] substitutes values for the variables in a query,
-    and performs interpolation in LIKE expressions.  *)
+(** Substitutes values for the variables in a query,
+    and performs interpolation in LIKE expressions. *)
 let rec normalise_query (globals:environment) (env:environment) (db:database) (qry:query) : query =
   let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
       Text (Sql_transform.like_as_string (env @ globals) l)
@@ -123,16 +101,17 @@ let rec normalise_query (globals:environment) (env:environment) (db:database) (q
         offset = normalise_expression qry.offset;
         max_rows = opt_map normalise_expression qry.max_rows}
 
-(** [get_row_field_type field row]: what type has [field] in [row]? 
+(** [row_field_type field row]: what type has [field] in [row]? 
     TBD: Factor this out.
 *)
-exception NotFound of string
+
+exception NoSuchField of string
 
 let row_field_type field : Types.row -> Types.datatype = 
   fun (fields, _) ->
     match StringMap.find field fields with
       | `Present t -> t
-      | `Absent -> raise (NotFound field)
+      | `Absent -> raise (NoSuchField field)
 
 let query_result_types (query : query) (table_defs : (string * Types.row) list)
     : (string * Types.datatype) list =
@@ -141,12 +120,35 @@ let query_result_types (query : query) (table_defs : (string * Types.row) list)
       row_field_type col_name (assoc table_alias table_defs) 
     in
       concat_map (function
-                    | Left col -> [col.renamed, col_type col.table_renamed col.name]
+                    | Left col -> [col.col_alias, col_type col.table_alias col.name]
                     | Right _ -> []) query.Query.result_cols
-  with NotFound field -> failwith ("Field " ^ field ^ " from " ^ 
-                                     Sql.string_of_query query ^
-                                     " was not found in tables " ^ 
-                                     mapstrcat "," fst table_defs ^ ".")
+  with NoSuchField field ->
+    failwith ("Field " ^ field ^ " from " ^ 
+                Sql.string_of_query query ^
+                " was not found in tables " ^ 
+                mapstrcat "," fst table_defs ^ ".")
+
+let do_query globals locals query table_aliases tables = 
+  let (dbs, table_defs) = 
+    split(map(function `Table((db, params), _table_name, row) -> (db, row)
+                | _ -> assert false) 
+            tables) in
+    
+    if(not (all_equiv (=) dbs)) then
+      failwith ("Cannot join across different databases");
+    
+    let table_defs = combine table_aliases table_defs in
+    let db = hd(dbs) in
+      (* TBD: factor this stuff out into
+         a module that processes queries *)
+    let result_types = query_result_types query table_defs in
+    let query_string = Sql.string_of_query (normalise_query globals locals db query) in
+      prerr_endline("RUNNING QUERY:\n" ^ query_string);
+      let t = Unix.gettimeofday() in
+      let result = Database.execute_select result_types query_string db in
+      Debug.print("Query took : " ^ 
+                    string_of_float((Unix.gettimeofday() -. t)) ^ "s");
+        result
 
 (** 0 Web-related stuff *)
 let has_client_context = ref false
@@ -161,10 +163,11 @@ let client_call_impl name cont (args:Result.result list) =
   in
     if (not !has_client_context) then 
       begin
-        let start_script = "_invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
+        let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
+        let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
             (Js.make_boiler_page ~onload:start_script
-               (Js.generate_program_defs (!program_source) (StringSet.singleton name)))
+               (Js.generate_program_defs defs (StringSet.singleton name)))
           ; exit 0
       end
     else begin
@@ -174,7 +177,9 @@ let client_call_impl name cont (args:Result.result list) =
 
 exception TopLevel of (Result.environment * Result.result)
 
-(* could bundle these together with globals to get a global
+(** {0 Scheduling} *)
+
+(* could bundle these together with [globals] to get a global
    'interpreter state' that we'd then thread through the whole
    interpreter, making it re-entrant. *)
 let process_steps = ref 0
@@ -197,6 +202,8 @@ and scheduler globals state stepf =
     end
   else
     stepf()
+
+(** Apply a continuation to a result; half of the evaluator. *)
 and apply_cont (globals : environment) : continuation -> result -> result = 
   fun cont value ->
     let stepf() = 
@@ -206,8 +213,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	         else switch_context globals)
         | (frame::cont) -> match frame with
 	    | (Definition(env, name)) -> 
-	        apply_cont (bind env name value) cont value
-            | Recv (locals) ->
+	        apply_cont (Result.bind env name value) cont value
+            | Recv  ->
                 (* If there are any messages, take the first one and
                    apply the continuation to it.  Otherwise, suspend
                    the continuation (in the blocked_processes table)
@@ -220,74 +227,64 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                     begin
                       Hashtbl.add Library.blocked_processes
                         !Library.current_pid
-                        ((Recv locals::cont, value), !Library.current_pid);
+                        ((Recv::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | FuncArg([], _) -> assert false
-            | FuncArg(param::params, locals) ->
+            | FuncEvalCont([], locals) -> 
+                apply_cont globals (ApplyCont(locals, [])::cont) value
+            | FuncEvalCont(param::params, locals) ->
 	        (* Just evaluate the first parameter; "value" is in
 	           fact a function value which will later be applied
 	        *)
-                interpret globals locals param (FuncApply (locals, value, params, [])::cont)
-            | (FuncApplyFlipped(locals, arg)) ->
-                apply_cont globals (FuncApply(locals, value, [], []) :: cont) arg
-            | ThunkApply locals ->
+                interpret globals locals param
+                  (ArgEvalCont(locals, value, params, [])::cont)
+            | ApplyCont(locals, args_rev) ->
+                let args = List.rev args_rev in
                 begin match value with
-                  | `Function ([], fnlocals, (), body) -> 
-                      interpret globals (trim_env (fnlocals @ locals)) body cont
-                  | `PrimitiveFunction name ->
-                      apply_cont globals cont (Library.apply_pfun name [])
-                  | `ClientFunction name ->
-                      client_call_impl name cont []
-                  | `Abs f ->
-                      apply_cont globals (FuncApply (locals, f, [], [])::cont) (`Record [])
-                  | _ -> raise (Runtime_error ("error applying zero-argument function "^
-                                                 string_of_result value))
-                end
-            | FuncApply(locals, func, unevaluated_args, evaluated_args) ->  
-                begin match func, unevaluated_args with
-                  | _, arg::args -> 
-                      interpret globals locals arg
-                        (FuncApply (locals, func, args, value::evaluated_args)::cont)
-                  | `Function (vars, fnlocals, (), body), [] ->
-                      (* FIXME: functional abstractions no longer capture
-                         global variables; remove the fnglobals element here. *)
-                      
-		      (* Interpret the body in the following
-		         environments: locals are augmented with
-		         function locals and function binding (binding
-		         takes precedence) toplevel environment in
-		         which the function was defined takes
-		         precedence over the real current globals. Is
-		         there a semanticist in the house? *)
-                      
-                      let locals = trim_env (fnlocals @ locals) in
-                      let locals = fold_left2 bind locals vars (List.rev (value::evaluated_args))
-                      in
+                  | `RecFunction (defs, fnlocals, name) ->
+                      let Syntax.Abstr(vars, body, _data) = assoc name defs in
+                     
+                      let recPeers = (* recursively-defined peers *)
+                        map(fun (name, Syntax.Abstr(args, body, _)) -> 
+                              (name, `RecFunction(defs, fnlocals, name))) defs in
+                      let locals = recPeers @ fnlocals @ locals in
+                      let locals = fold_left2 Result.bind locals vars args in
+                      let locals = trim_env locals in
                         interpret globals locals body cont
 
-                  | `PrimitiveFunction name, [] ->
-                      apply_cont globals cont (Library.apply_pfun name  (List.rev (value::evaluated_args)))
+                  | `PrimitiveFunction name ->
+                      apply_cont globals cont (Library.apply_pfun name args)
 
-                  | `ClientFunction name, [] ->
-                     client_call_impl name cont (List.rev (value::evaluated_args))
-	          | `Continuation (cont), [] ->
-                      apply_cont globals cont value
-                  | `Abs f, [] -> 
-                      apply_cont globals (FuncApply (locals, f, [], [])::cont) 
+                  | `ClientFunction name ->
+                      client_call_impl name cont args
+	          | `Continuation cont ->
+                      assert (length args == 1);
+                      apply_cont globals cont (List.hd(args))
+                  | `Abs f -> 
+                      apply_cont globals (ArgEvalCont (locals, f, [], [])::cont) 
                         (`Record
                            (snd 
                               (List.fold_right
                                  (fun field (n,tuple) ->
                                     (n+1,
                                      (string_of_int n, field)::tuple))
-                                 (value::evaluated_args)
+                                 args_rev
                                  (1, []))))
                   | _ -> raise (Runtime_error ("Applied non-function value: "^
-                                                 string_of_result func))
+                                                 string_of_result value))
                 end
+            | ArgEvalCont(locals, func, unevaluated_args, evaluated_args) ->  
+                let evaluated_args = value :: evaluated_args in
+                  begin match unevaluated_args with
+                      [] ->
+                        apply_cont globals 
+                          (ApplyCont(locals, evaluated_args) :: cont) func
+                    | next_expr :: exprs ->
+                        interpret globals locals next_expr 
+                          (ArgEvalCont(locals, func, exprs, evaluated_args)::cont)
+                  end
             | (LetCont(locals, variable, body)) ->
-	        interpret globals (bind locals variable value) body cont
+	        interpret globals (Result.bind locals variable value) body cont
             | (BranchCont(locals, true_branch, false_branch)) ->
 	        (match value with
                    | `Bool true  -> 
@@ -295,7 +292,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | `Bool false -> 
 	               interpret globals locals false_branch cont
                    | _ -> raise (Runtime_error("Attempt to test a non-boolean value: "
-					         ^ string_of_result value)))
+					       ^ string_of_result value)))
             | (BinopRight(locals, op, rhsExpr)) ->
 	        interpret globals locals rhsExpr
                   (BinopApply(locals, op, value) :: cont)
@@ -331,10 +328,10 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      | `App -> 
                          begin match untuple value with
                            | [] -> 
-                               apply_cont globals (ThunkApply locals ::cont) lhsVal
+                               apply_cont globals (ApplyCont(locals, [])::cont) lhsVal
                            | _::_ as v -> 
                                let firsts, last = unsnoc v in
-                                 apply_cont globals (FuncApply (locals, lhsVal, [], firsts)::cont) last
+                                 apply_cont globals (ArgEvalCont (locals, lhsVal, [], firsts)::cont) last
                          end
                   end
 	        in
@@ -349,9 +346,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                    | VrntSelect(case_label, case_variable, case_body, variable, body) ->
 	               (match value with
                           | `Variant (label, value) when label = case_label ->
-                              (interpret globals (bind locals case_variable value) case_body cont)
+                              (interpret globals (Result.bind locals case_variable value) case_body cont)
                           | `Variant (_) as value ->
-		              (interpret globals (bind locals (valOf variable) value)
+		              (interpret globals (Result.bind locals (valOf variable) value)
 		                 (valOf body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
@@ -372,30 +369,14 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        let result = 
                          match value with
                            | `List(tbls) ->
-                               let (dbs, table_defs) = 
-                                 split(map(function `Table((db, params), _table_name, row) 
-                                               -> (db, row)
-                                             | _ -> failwith "THX1138") 
-                                         tbls) in
-
-                                 if(not (all_equiv (=) dbs)) then
-                                   failwith ("Cannot join across different databases");
-
-                                 let table_defs = combine table_aliases table_defs in
-                                 let db = hd(dbs) in
-                                   (* TBD: factor this stuff out into
-                                      a module that processes queries *)
-                                 let result_types = query_result_types query table_defs in
-       	                         let query_string = Sql.string_of_query (normalise_query globals locals db query) in
-                                   prerr_endline("RUNNING QUERY:\n" ^ query_string);
-		                   Database.execute_select result_types query_string db
-                           | x -> raise (Runtime_error ("TF309 : " ^ string_of_result x))
+                               do_query globals locals query table_aliases tbls
+                           | _ -> assert false
                        in
                          apply_cont globals cont result
 	        )
             | RecSelect (locals, label, label_var, variable, body) ->
 	        let field, remaining = crack_row label (recfields value) in
-                let new_env = trim_env (bind (bind locals variable
+                let new_env = trim_env (Result.bind (Result.bind locals variable
 					        (`Record remaining))
 				          label_var field) in
                   interpret globals new_env body cont
@@ -407,7 +388,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		            [] -> apply_cont globals cont (`List [])
 	                  | (first_elem::other_elems) ->
 	                      (* bind 'var' to the first element, save the others for later *)
-		              interpret globals (bind locals variable first_elem) expr
+		              interpret globals (Result.bind locals variable first_elem) expr
 		                (CollExtn(locals, variable, expr, [], other_elems) :: cont))
 	           | x -> raise (Runtime_error ("TF197 : " ^ string_of_result x)))
 	          
@@ -424,7 +405,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 		         apply_cont globals cont (`List (List.rev (List.concat rslts)))
 		     | (next_input_expr::inputs) ->
 		         (* Evaluate next input, continuing with given results: *)
-		         interpret globals (bind locals var next_input_expr) expr
+		         interpret globals (Result.bind locals var next_input_expr) expr
 		           (CollExtn(locals, var, expr, 
 				     rslts, inputs) :: cont)
 	        )
@@ -490,14 +471,15 @@ fun globals locals expr cont ->
       eval f (UnopApply (locals, Result.Abs)::cont)
   | Syntax.App (f, p, _) ->
       eval f (BinopRight (locals, `App, p)::cont)
-  | Syntax.Abstr (variable, body, _) ->
-      apply_cont globals cont (`Function (variable, retain (freevars body) locals, () (*globals*), body))
+  | Syntax.Abstr (variable, body, _) as f->
+      let value = `RecFunction([("_anon", f)],
+                               retain (freevars body) locals,
+                               "_anon") in
+        apply_cont globals cont value
   | Syntax.Apply (Variable ("recv", _), [], _) ->
-      apply_cont globals (Recv (locals) ::cont) (`Record [])
-  | Syntax.Apply (fn, [], _) ->
-      eval fn (ThunkApply locals::cont)
+      apply_cont globals (Recv::cont) (`Record [])
   | Syntax.Apply (fn, params, _) ->
-      eval fn (FuncArg (params, locals)::cont)
+      eval fn (FuncEvalCont (params, locals)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
@@ -505,15 +487,9 @@ fun globals locals expr cont ->
   | Syntax.Let (variable, value, body, _) ->
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
-      let new_env = bind_rec locals (List.map (fun (n,v,_) -> (n,v)) defs) in
+      let defs' = List.map (fun (n, v, _type) -> (n, v)) defs in
+      let new_env = bind_rec locals defs' in
         interpret globals new_env body cont
-  | Syntax.Xml_node _ as xml when Forms.islform xml ->
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.isinput xml -> 
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-  | Syntax.Xml_node _ as xml when Forms.islhref xml ->
-      eval (Forms.xml_transform locals (lookup globals locals) (interpret_safe globals locals) xml) cont
-
   | Syntax.Xml_node (tag, [], [], _) -> 
       apply_cont globals cont (listval [xmlnodeval (tag, [])])
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
@@ -577,7 +553,7 @@ fun globals locals expr cont ->
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
   | Syntax.Call_cc(arg, _) ->
       let cc = `Continuation cont in
-        eval arg (FuncApplyFlipped(locals, cc) :: cont)
+        eval arg (ApplyCont(locals, [cc]) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->
       eval (Apply (Variable ("sortBy", d), [byExpr; list], d)) cont
   | Syntax.Wrong (_) ->
@@ -596,7 +572,7 @@ let run_program (globals : environment) locals (Program (defs, body)) : (environ
   try (
     (match defs with
        | [] ->
-           interpret globals locals body []
+           interpret globals locals body toplevel_cont
        | def :: defs ->
            interpret_definition globals locals def
              (map (fun def -> IgnoreDef([], def)) defs @ [Ignore([], body)]));

@@ -27,6 +27,11 @@ Mutually recurisve nested functions
 stdout : true : Bool
 exit : 0
         
+Mutually recurisve nested functions returned outside their scope
+{fun f() { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even } f()(7) }
+stdout : false : Bool
+exit : 0
+        
 Closures using anonymous functions
 fun addn(n) { fun(x) { x + n } } addn(3)(4)
 stdout : 7 : Int

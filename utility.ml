@@ -23,108 +23,195 @@ struct
 end    
 include Functional
 
-(*** string environments ***)
-module type STRINGMAP = Map.S with type key = string
-module StringMap = Map.Make(String)
-
-type 'a stringmap = 'a StringMap.t
-
-module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Defaults(struct
-  type a = A.a stringmap
-  let type_rep = Typeable.TypeRep.mkFresh "stringmap" [A.type_rep]
-end)
-module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap = Show.Show_map(String)(Show.Show_string)(A)
-module Dump_stringmap (A : Dump.Dump) = Dump.Dump_undumpable (struct type a = A.a stringmap let tname ="stringmap"  end)
-module Functor_stringmap = Functor.Functor_map(String)
-module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
-module Pickle_stringmap (S : Pickle.Pickle) 
-  : Pickle.Pickle with type a = S.a stringmap = 
-Pickle.Defaults(struct
-  module T = Typeable_stringmap(S.T)
-  module E = Eq_stringmap(S.E)
-  type a = S.a stringmap
-  let pickle  _ = failwith "pickle stringmap nyi"
-  and unpickle _ = failwith "pickle stringmap nyi"
-end)
-
-module MapUtils(M : Map.S) =
-struct
-  (* return true if p holds for all values in the range of m *)
-  let for_all p m =
-    M.fold (fun _ v b -> b && p v) m true
-
-  let size m =
-    M.fold (fun _ _ n -> n+1) m 0
-
-  let to_alist map =
-    List.rev (M.fold (fun x y l -> (x, y) :: l) map [])
-
-  let zip_with f map =
-    List.rev (M.fold (fun x y l -> (f x y) :: l) map [])
-
-  let from_alist l =
-    List.fold_right (uncurry M.add) l M.empty 
-
-  let pop item map = 
-    (M.find item map, M.remove item map)
-
-  let lookup item map =
-    try Some (M.find item map) 
-    with Not_found -> None
-
-  exception Not_disjoint of M.key
-
-  let union_disjoint a b = 
-  M.fold
-    (fun k v r -> 
-      if (M.mem k r) then raise (Not_disjoint k) 
-      else
-        M.add k v r) b a
-
+(* Maps and sets *)
+module type OrderedShow = sig
+  type t
+  val compare : t -> t -> int
+  module Show_t : Show.Show 
+    with type a = t
 end
-module StringMapUtils = MapUtils(StringMap)
 
-let superimpose a b = 
-  StringMap.fold StringMap.add b a
+exception NotFound of string
 
-module type SET =
+module type Map = 
+sig
+  include Map.S
+  exception Not_disjoint of key * string
+  val for_all : ('a -> bool) -> 'a t -> bool
+  (** return true if p holds for all values in the range of m *)
+
+  val size : 'a t -> int
+  (** the number of distinct keys in the map *)
+
+  val to_alist : 'a t -> (key * 'a) list
+  (** convert the map to an association list *)
+
+  val from_alist : (key * 'a) list -> 'a t
+  (** construct a map from an association list *)
+
+  val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
+  (** construct a new map from two existing maps *)
+
+  val pop : key -> 'a t -> ('a * 'a t)
+  (** remove the item with the given key from the map and return the remainder. *)
+
+  val lookup : key -> 'a t -> 'a option
+  (** as `find', but return an option instead of raising an exception *)
+
+  val union_disjoint : 'a t -> 'a t -> 'a t
+  (** disjoint union *)
+
+  val superimpose : 'a t -> 'a t -> 'a t
+  (** Extend the second map with the first *)
+
+  val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
+  (** divide the map by a predicate *)
+
+  module Show_t (V : Show.Show) :
+    Show.Show with type a = V.a t
+
+  module Functor_t : 
+    Functor.Functor with type 'a f = 'a t
+end
+
+module String = struct
+  include String
+  module Show_t = Primitives.Show_string
+end
+
+module Int = struct
+  type t = int
+  let compare = Pervasives.compare
+  module Show_t = Primitives.Show_int
+end
+
+module Map :
+sig
+  module type OrderedType = OrderedShow
+  module type S = Map
+  module Make (Ord : OrderedType) : S with type key = Ord.t
+end = 
+struct
+  module type OrderedType = OrderedShow
+  module type S = Map
+  module Make (Ord : OrderedType) = struct
+    include Map.Make(Ord)
+
+    let find elem map = 
+      try find elem map 
+      with Not_found -> raise (NotFound (Ord.Show_t.show elem))
+      
+    let for_all p m =
+      fold (fun _ v b -> b && p v) m true
+        
+    let size m =
+      fold (fun _ _ n -> n+1) m 0
+        
+    let to_alist map =
+      List.rev (fold (fun x y l -> (x, y) :: l) map [])
+        
+    let to_list f map =
+      List.rev (fold (fun x y l -> (f x y) :: l) map [])
+        
+    let from_alist l =
+      List.fold_right (uncurry add) l empty 
+        
+    let pop item map = 
+      (find item map, remove item map)
+        
+    let lookup item map =
+      try Some (find item map) 
+      with NotFound _ -> None
+        
+    exception Not_disjoint of key * string
+      
+    let union_disjoint a b = 
+      fold
+        (fun k v r -> 
+           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
+           else
+             add k v r) b a
+
+    let superimpose a b = fold add b a
+
+    let partition f m =
+      fold
+        (fun i v (p, q) ->
+           if (f i v) then
+             add i v p, q
+           else
+             p, add i v q)
+        m (empty, empty)
+
+    module Show_t (V : Show.Show) = Show.Show_map(Ord)(Ord.Show_t)(V)
+
+    module Functor_t =
+    struct
+      type 'a f = 'a t
+      let map = map
+    end
+  end
+end
+
+module type Set =
 sig
   include Set.S
   
   val union_all : t list -> t
+  (** Take the union of a collection of sets *)
+
   val from_list : elt list -> t
+  (** Construct a set from a list *)
 
-
-  module Show : Show.Show
+  module Show_t : Show.Show
     with type a = t
 end
 
-module Set (Ord : sig include Set.OrderedType 
-                      module Show : Show.Show with type a = t end) :
-SET with type elt = Ord.t =
+module Set :
+sig
+  module type OrderedType = OrderedShow
+  module type S = Set
+  module Make (Ord : OrderedType) : S with type elt = Ord.t
+end =
 struct
-  include Set.Make(Ord)
-  let union_all sets = List.fold_right union sets empty
-  let from_list l = List.fold_right add l empty
-  module Show = Show.Show_set(Ord)(Ord.Show)
+  module type OrderedType = OrderedShow
+  module type S = Set
+  module Make (Ord : OrderedType) = struct
+    include Set.Make(Ord)
+    let union_all sets = List.fold_right union sets empty
+    let from_list l = List.fold_right add l empty
+    module Show_t = Show.Show_set(Ord)(Ord.Show_t)
+  end
 end
 
-module type STRINGSET = SET with type elt = string
-module StringSet : STRINGSET = Set(struct include String module Show = Show.Show_string end)
+module type INTSET = Set with type elt = int
+module IntSet : INTSET = Set.Make(Int)
+module IntMap = Map.Make(Int)
 
-(*** int environments ***)
-module OrderedInt =
+module type STRINGMAP = Map with type key = string
+module StringSet = Set.Make(String)
+module StringMap : STRINGMAP = Map.Make(String)
+
+type 'a stringmap = 'a StringMap.t
+    deriving (Show)
+
+module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
+Typeable.Typeable_defaults(struct
+  type a = A.a stringmap
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
+end)
+module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Functor_stringmap = StringMap.Functor_t
+module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
+module Shelve_stringmap (S : Shelve.Shelve) = 
 struct
-  type t = int
-  let compare : int -> int -> int = compare
+  module Typeable = Typeable_stringmap(S.Typeable)
+  module Eq = Eq_stringmap(S.Eq)
+  type a = S.a stringmap
+  let shelve  _ = failwith "shelve stringmap nyi"
 end
-module IntMap = Map.Make(OrderedInt)
-
-module type INTSET = SET with type elt = int
-module IntSet : INTSET = Set(struct include OrderedInt module Show = Show.Show_int end)
-
-let intset_of_list l = List.fold_right IntSet.add l IntSet.empty
 
 (** {1 Lists} *)
 module ListUtils = 
@@ -255,8 +342,8 @@ struct
     
   let for_each l f = List.iter f l
 
-  let push list f = list := !list @ [f]
-  let unshift list f = list := f :: !list
+  let push_back f list = list := !list @ [f]
+  let push_front f list = list := f :: !list
 end
 include ListUtils
   
@@ -576,7 +663,7 @@ let base64decode s =
   with Invalid_argument "Netencoding.Base64.decode" 
       -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
 
-and base64encode s = Netencoding.Base64.encode s
+and base64encode = Netencoding.Base64.encode
 
 (*** ocaml versions ***)
 let ocaml_version_number = (List.map int_of_string
@@ -589,15 +676,6 @@ let rec version_atleast a b =
     | [], _ -> false
     | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
-
-
-let split3 (s :  ('a * 'b * 'c) list):  'a list * 'b list * 'c list
-  =  List.fold_right (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z::zs))  s ([],[],[])
-
-let rec combine3 : 'a list * 'b list * 'c list ->  ('a * 'b * 'c) list = function
-  | [], [], [] -> []
-  | x::xs, y::ys, z::zs -> (x,y,z) :: combine3 (xs,ys,zs)
-  | _          -> invalid_arg "combine3"
 
 (* Any two calls to `gensym' return distinct strings.  The optional
    `prefix' argument can be used to supply a prefix for the string.
@@ -620,6 +698,9 @@ let pair_fresh_names ?prefix:pfx list =
        | Some pfx -> (fun _ -> gensym ~prefix:pfx ())
        | None     -> (fun _ -> gensym ()))
     list 
+
+let refresh_names = 
+  graph_func (fun x -> gensym ~prefix:x ())
 
 let any_true = List.exists identity
 
