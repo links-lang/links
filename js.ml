@@ -132,7 +132,6 @@ let optimise e =
       (RewriteCode.all [remove_renamings; concat_lits] e)
   else e
 
-
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
 
@@ -1060,22 +1059,34 @@ let words =
 
 let symbols = List.map fst words
 
-let wordify x = 
-  catch_notfound_l "wordify"
-    (lazy("_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)))
-
 let symbolp name =
-  List.for_all (flip List.mem symbols) (explode name) &&
-    (if Settings.get_value js_rename_builtins then true
+  List.exists (not -<- Utility.Char.isWord) (explode name) &&
+    (if Settings.get_value js_rename_builtins then true (* why would we not want to rename these? *)
      else (not (Library.is_primitive name)))
 
+let wordify name = 
+  if symbolp name then 
+    try
+    ("_" ^ 
+       mapstrcat "_" 
+       (fun ch ->
+          if (Utility.Char.isWord ch) then String.make 1 ch else
+            List.assoc ch words
+       )
+       (Utility.explode name))
+      (* TBD: it would be better if this split to chunks maximally matching
+         (\w+)|(\W)
+         then we would not split apart words in partly-symbolic idents. *)
+    with
+        Not_found -> failwith("Internal error: unknown symbol character")
+  else name
+
 let wordify_rewrite : RewriteSyntax.rewriter = function
-  | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
-  | Let (name, rhs, body, d) when symbolp name -> Some (Let (wordify name, rhs, body, d))
-  | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
-      let rename (x,y,z) =
-        ((if symbolp x then wordify x 
-          else x), y, z) in
+  | Variable (name, d) -> Some (Variable (wordify name, d))
+  | Let (name, rhs, body, d) -> 
+      Some (Let (wordify name, rhs, body, d))
+  | Rec (bindings, body, d) -> 
+      let rename (nm, body, t) = (wordify nm, body, t) in
         Some (Rec (List.map rename bindings, body, d))
   | _ -> None
 
@@ -1084,7 +1095,12 @@ let rename_symbol_operators exp =
 
 let rename_symbol_operators_def def =
   match def with
-    | Define (name, b,l,t) when symbolp name -> Define (wordify name, rename_symbol_operators b, l, t)
+    | Define (name, b, l, t) -> 
+        Define (wordify name, rename_symbol_operators b, l, t)
+    | Alias (name, args, t, data) ->
+        Alias (wordify name, args, t, data)
+    | Alien (name, b, l, t) when symbolp name ->
+        assert false (* I don't know what's supposed to happen here. *)
     | _ -> def
 
 let make_boiler_page ?(onload="") ?(body="") defs =
@@ -1100,14 +1116,14 @@ let get_alien_names defs =
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
       
-let generate_program_defs defs root_names =
+(* Note: the body is not really used here. *)
+let generate_program_defs (Program(defs,body)) root_names =
   let aliens = get_alien_names defs in
-  let defs = List.map rename_symbol_operators_def defs in
-  (* [NOTE] body is just a placeholder *)
-  let body = Syntax.unit_expression Syntax.no_expr_data in
+  let defs = map rename_symbol_operators_def defs in
+  let body = rename_symbol_operators body in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
-      Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
+      Optimiser.inline(Optimiser.inline(Optimiser.inline(Program(defs, body))))
     else Program (defs, body)
   in
   let library_names = aliens @ (List.map fst (fst Library.typing_env)) in
@@ -1119,8 +1135,9 @@ let generate_program_defs defs root_names =
     map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
-  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
   let expr = rename_symbol_operators expr in
+  let defs = map rename_symbol_operators_def defs in
+  let js_defs = generate_program_defs (Program(defs,expr)) (Syntax.freevars expr) in
   let library_names = List.map fst (fst Library.typing_env) in
   let global_names = Syntax.defined_names defs @ library_names in
   let js_root_expr = 

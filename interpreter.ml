@@ -22,8 +22,6 @@ let lookup globals locals name =
   with Not_found -> 
     raise(RuntimeUndefVar name)
 
-
-
 (** [bind_rec env defs] extends [env] with bindings for the [defs],
     where each one defines a function and all the functions are
     mutually recursive. *)
@@ -31,7 +29,6 @@ let bind_rec locals defs =
   let new_defs = map (fun (name, _) -> 
                         (name, `RecFunction(defs, locals, name))) defs in
     trim_env (new_defs @ locals)
-
 
 (** Given a label and a record, returns the value of that field in the record,
     together with the remaining fields of the record. *)
@@ -164,10 +161,9 @@ let client_call_impl name cont (args:Result.result list) =
     if (not !has_client_context) then 
       begin
         let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
-        let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
             (Js.make_boiler_page ~onload:start_script
-               (Js.generate_program_defs defs (StringSet.singleton name)))
+               (Js.generate_program_defs (!program_source) (StringSet.singleton name)))
           ; exit 0
       end
     else begin
