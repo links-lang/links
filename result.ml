@@ -225,8 +225,7 @@ type result = [
 and contin_frame = 
 (* the frame ... represents an eval'n context like ... (M is a term, V a value)*)
   | Definition of (environment * string)          (* ??? *)
-  | FuncEvalCont of (rexpr list * environment)    (* [ ]( Ms ) *)
-      (* FIXME: order of the FuncEvalCont args is undesirable. *)
+  | FuncEvalCont of (environment * rexpr list)    (* [ ]( Ms ) *)
   | ArgEvalCont of (environment * result * rexpr list * result list)
                                                   (* V(Vs, [ ], Ms) *)
   | ApplyCont of (environment * result list)      (* [ ](Vs) *)
@@ -437,16 +436,15 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
   | `Continuation kappa -> result_f(`Continuation ((map_cont result_f expr_f contframe_f) kappa))
-and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = function
+and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame = 
+  function
   | Recv -> contframe_f(Recv)
   | Definition (env, s) ->
       contframe_f(Definition(map_env result_f expr_f contframe_f env, s))
-  | FuncEvalCont(args, env) -> 
+  | FuncEvalCont(env, args) -> 
       contframe_f 
-        (FuncEvalCont (map (map_expr result_f expr_f contframe_f) args,
-                  map_env result_f expr_f contframe_f env))
-(*   | ThunkApply env -> *)
-(*       contframe_f (ThunkApply (map_env result_f expr_f contframe_f env)) *)
+        (FuncEvalCont (map_env result_f expr_f contframe_f env,
+                       map (map_expr result_f expr_f contframe_f) args))
   | ArgEvalCont(env, f, args, eargs) ->
       contframe_f( ArgEvalCont(map_env result_f expr_f contframe_f env,
                              map_result result_f expr_f contframe_f f,
@@ -513,7 +511,7 @@ and extract_code_from_contframe =
     | Recv -> []
     | Definition (env, s) ->
         extract_code_from_env env
-    | FuncEvalCont(args, env) ->
+    | FuncEvalCont(env, args) ->
         args @ extract_code_from_env env
     | ArgEvalCont(env, f, args, eargs) -> 
         extract_code_from_env env
