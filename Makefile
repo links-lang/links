@@ -69,6 +69,7 @@ SOURCES = $(OPC)                		\
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
           result.mli result.ml         		\
+          value.mli value.ml                    \
           errors.mli errors.ml                  \
           sql_transform.mli sql_transform.ml	\
           parser.mly            		\
@@ -91,6 +92,7 @@ SOURCES = $(OPC)                		\
           rewriterules.ml                       \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
+          evalir.ml                             \
           loader.ml                             \
           webif.mli webif.ml           		\
           test.ml                               \

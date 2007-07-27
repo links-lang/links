@@ -36,47 +36,45 @@ type location = Syntax.location
 type value =
   [ `Constant of constant
   | `Variable of var
-  | `Extend of (value name_map * value option)
-  | `Project of (name * value)
-  | `Erase of (name * value)
-  | `Inject of (name * value)
+  | `Extend of value name_map * value option
+  | `Project of name * value
+  | `Erase of name * value
+  | `Inject of name * value
 
-  | `XmlNode of (name * value name_map * value list)
+  | `XmlNode of name * value name_map * value list
 
-  | `ApplyPrim of (value * value list)
+  | `ApplyPrim of value * value list
 
   (* should really be implemented as constants *)
   | `Nil
-  | `Cons of (value * value)
-  | `Concat of (value * value)
-  | `Comparison of (value * Syntax.comparison * value)
+  | `Cons of value * value
+  | `Concat of value * value
+  | `Comparison of value * Syntax.comparison * value
 
-  | `Coerce of (value * Types.datatype)
+  | `Coerce of value * Types.datatype
   | `Abs of value
   ]
 and tail_computation =
-  [ `Return of (value)
-  | `Apply of (value * value list)
-
+  [ `Return of value
+  | `Apply of value * value list
   | `Special of special
-
-  | `Case of (value * (binder * computation) name_map * (binder * computation) option)
-  | `If of (value * computation * computation)
+  | `Case of value * (binder * computation) name_map * (binder * computation) option
+  | `If of value * computation * computation
   ]
 and binding =
-  [ `Let of (binder * tail_computation)
-  | `Fun of (binder * binder list * computation * location)
+  [ `Let of binder * tail_computation
+  | `Fun of binder * binder list * computation * location
   | `Rec of (binder * binder list * computation * location) list
-  | `Alien of (binder * language * Types.assumption)
-  | `Alias of (tyname * tyvar list * Types.datatype) ]
+  | `Alien of binder * language * Types.assumption
+  | `Alias of tyname * tyvar list * Types.datatype ]
 and special =
   [ `App of value * value
   | `Wrong
-  | `Database of (value)
-  | `TableQuery of (value name_map * Query.query)
-  | `TableHandle of (value * value * (Types.datatype * Types.datatype))
-  | `SortBy of (value * value)
-  | `CallCC of (value) ]
+  | `Database of value
+  | `TableQuery of value name_map * Query.query
+  | `TableHandle of value * value * (Types.datatype * Types.datatype)
+  | `SortBy of value * value
+  | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show)  
 
