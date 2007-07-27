@@ -85,7 +85,7 @@ SOURCES = $(OPC)                		\
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\
-          rewriterules.ml                       \
+          sqlcompile.ml                         \
           optimiser.mli optimiser.ml    	\
           js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\

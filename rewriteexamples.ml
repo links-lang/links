@@ -1,7 +1,7 @@
 open Utility
 open List
 
-open Rewriterules
+open Sqlcompile
 
 
 let examples : (string * string) list = [

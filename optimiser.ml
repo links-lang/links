@@ -774,14 +774,9 @@ let rewriters env = [
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
 (*   RewriteSyntax.topdown (sql_sort); *)
-(*   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins); *)
-(*   RewriteSyntax.bottomup sql_selections; *)
-(*   RewriteSyntax.bottomup unused_variables; *)
-(*   RewriteSyntax.bottomup (sql_projections env); *)
 (*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
-(*   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop); *)
 ]
 
 let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
@@ -792,7 +787,7 @@ let optimise' env expr =
     None
   else
     let expr' = fromOption expr (run_optimisers env expr) in
-    let expr' = Rewriterules.sql_compile expr' in
+    let expr' = Sqlcompile.sql_compile expr' in
     let _ =
         match expr' with
             None -> Debug.if_set_l show_optimisation
