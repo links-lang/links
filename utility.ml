@@ -95,6 +95,20 @@ module Int = struct
   module Show_t = Primitives.Show_int
 end
 
+module Char = 
+struct
+  include Char
+  module Show_t = Primitives.Show_char
+  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
+  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
+  let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
+  let isLower = function 'a'..'z' -> true | _ -> false
+  let isUpper = function 'A'..'Z' -> true | _ -> false
+  let isDigit = function '0'..'9' -> true | _ -> false
+  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
+  let isBlank = function ' '|'\t' -> true | _ -> false
+end
+
 module Map :
 sig
   module type OrderedType = OrderedShow
@@ -214,6 +228,10 @@ module IntMap = Map.Make(Int)
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
+
+module type CHARSET = Set with type elt = char
+module CharSet : CHARSET = Set.Make(Char)
+module CharMap = Map.Make(Char)
 
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
@@ -608,18 +626,6 @@ struct
     in aux [] e
 end
 include OptionUtils
-
-module Char = 
-struct
-  include Char
-  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
-  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
-  let isLower = function 'a'..'z' -> true | _ -> false
-  let isUpper = function 'A'..'Z' -> true | _ -> false
-  let isDigit = function '0'..'9' -> true | _ -> false
-  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
-  let isBlank = function ' '|'\t' -> true | _ -> false
-end
 
 (*** character encoding ***)
 

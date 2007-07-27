@@ -120,9 +120,15 @@ struct
              
     (* Don't bind the result of a projection to a variable; just use it
        in place *)
+    (*
+       [NOTE]
+    
+       It's unsound to remove the binding as var may appear free
+       inside a query.
+    *)
     let inline_projections : rewriter = function
-      | Let (var, (Project (Variable _, _, _) as p), body, _) ->
-          Some (subst_fast var p body)
+      | Let (var, (Project (Variable _, _, _) as p), body, pos) ->
+          Some (Let (var, p, subst_fast var p body, pos))
       | _ -> None
           
     (* check post conditions hold (not really a rewriter) *)

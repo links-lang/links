@@ -17,6 +17,8 @@ type assumption = Types.assumption
 
    These functions don't handle aliases.
 *)
+exception Type_mismatch
+
 let arg_types =
   Types.concrete_type ->-
     (function
@@ -27,7 +29,8 @@ let return_type =
   Types.concrete_type ->-
     (function
        | `Function (_, _, t) -> t
-       | t -> failwith ("Attempt to take return type of non-function: " ^ Types.string_of_datatype t))
+       | t -> t)
+(*           failwith ("Attempt to take return type of non-function: " ^ Types.string_of_datatype t))*)
 
 let split_row name row =
   let (field_env, row_var) = fst (Types.unwrap_row row) in
@@ -152,7 +155,7 @@ sig
   val nil : datatype -> value sem
   val listof : value sem * datatype -> value sem
   val concat : (value sem * value sem * datatype) -> value sem
-  val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
+(*  val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem *)
   val database : value sem -> tail_computation sem
   val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
@@ -239,7 +242,7 @@ struct
     val rec_binding :
       (var_info * var_info list * (var list -> var list -> tail_computation sem) * location) list ->
       (var list) M.sem
-    val for_binding : var_info * value -> var M.sem
+(*    val for_binding : var_info * value -> var M.sem*)
 
     val alias_binding : tyname * tyvar list * datatype -> unit M.sem
     val alien_binding : var_info * language * assumption -> var M.sem
@@ -290,10 +293,12 @@ struct
       let xsb, xs = List.split (List.map fresh_var xs_info) in
         lift_binding (`Fun (fb, xsb, reify (body xs), location)) f
           
+(*
     let for_binding (x_info, v) =
       let xb, x = fresh_var x_info in
         lift_binding (`For (xb, v)) x
-          
+*)
+        
     let rec_binding defs =
       let defs, fs =
         List.fold_right
@@ -434,12 +439,14 @@ struct
     bind s (fun v ->
               bind s' (fun v' -> lift (`Concat (v, v'), t)))
 
+(*
   let comprehension (x_info, s, body) =
     bind s
       (fun e ->
          M.bind (for_binding (x_info, e))
            (fun x -> body x))
 
+*)
 
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
@@ -708,6 +715,7 @@ struct
                             location,
                             fun v -> eval_defs (Env.extend env [f] [v]) defss rest)
             | Define (x, e, _, _) ->
+                Debug.print("compiling def: " ^ x);
                 I.comp (make_global_info (node_datatype e, x),
                         eval env e,
                         fun v -> eval_defs (Env.extend env [x] [v]) defss rest)

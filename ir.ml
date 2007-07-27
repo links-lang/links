@@ -77,8 +77,7 @@ and binding =
   | `Fun of (binder * binder list * computation * location)
   | `Rec of (binder * binder list * computation * location) list
   | `Alien of (binder * language * Types.assumption)
-  | `Alias of (tyname * tyvar list * Types.datatype)
-  | `For of (binder * value) ]
+  | `Alias of (tyname * tyvar list * Types.datatype) ]
 and special =
   [ `App of value * value
   | `Wrong
@@ -175,7 +174,7 @@ struct
       | `Fun (f, xs, c, l) -> `Fun (f, xs, computation env c, l)
       | `Rec (defs) -> `Rec (List.map (fun (f, xs, c, l) -> (f, xs, computation env c, l)) defs)
       | (`Alien _ | `Alias _) as b -> b
-      | `For (x, v) -> `For (x, value env v)
+(*      | `For (x, v) -> `For (x, value env v) *)
 
   and bindings env =
     function
