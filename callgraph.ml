@@ -39,8 +39,11 @@ let group_and_order_bindings_by_callgraph
   let call_graph = make_callgraph bindings in
     Graph.topo_sort_cliques call_graph
 
-let defs_to_bindings l = 
+let deflist_to_alist l = 
   map (fun (Define (name, body, _, _)) -> name, body) l
+
+let deflist_defined_names l = 
+  map (fun (Define (name, body, _, _)) -> name) l
 
 let rec defn_of symbol = function
   | Define(n, _, _, _) as expr :: _ when n = symbol -> expr
@@ -55,9 +58,10 @@ let find_defn_in x y = defn_of y x
     bindings are only determined within the original groupings; how
     does this work with redefined function names that are part of
     mut-rec call groups? )*)
-let refine_def_groups (def_lists : 'a definition' list list) : 'a definition' list list = 
+let refine_def_groups (def_lists : 'a definition' list list) 
+    : 'a definition' list list = 
   let regroup_defs defs = 
-    let bindings = defs_to_bindings defs in
+    let bindings = deflist_to_alist defs in
     let cliques = group_and_order_bindings_by_callgraph bindings in
       map (map (find_defn_in defs)) cliques 
   in
@@ -68,10 +72,8 @@ let refine_def_groups (def_lists : 'a definition' list list) : 'a definition' li
                   | Define _ :: _ as defs -> regroup_defs defs
                   | e                     -> [e]) def_lists
       
-
 (** Removes defs from [env] that aren't used by [expr]. *)
-module DeadCode =
-struct
+module DeadCode = struct
   type clique = {
     free_names : string list;
     exposed_names : string list;
@@ -79,14 +81,16 @@ struct
   }
 
   let elim_dead_defs globals defs root_names =
-    let filter_globals s = filter (fun name -> not (mem name globals)) (StringSet.elements s) in
-    let defs, other = either_partition  (function Define _ as d -> Left d | e -> Right e) defs in
+    let remove_globals s = difference (StringSet.elements s) globals in
+    let defs, other = either_partition  (function Define _ as d -> Left d 
+                                           | e -> Right e) defs in
     let groupings = refine_def_groups [defs] in
     let clique_info = map (fun defs ->
-                             {free_names = filter_globals  (StringSet.union_all (List.map freevars_def defs));
-                              exposed_names = map fst (defs_to_bindings defs);
-                              defs = defs}) groupings
-    and expr_info = { free_names = filter_globals root_names;
+                             {free_names = remove_globals (StringSet.union_all (List.map freevars_def defs));
+                              exposed_names = deflist_defined_names defs;
+                              defs = defs})
+                        groupings
+    and expr_info = { free_names = remove_globals root_names;
                       exposed_names = [];
                       defs = [] } in
     let rec close env =
@@ -96,16 +100,21 @@ struct
               let defines name {exposed_names = names} = List.mem name names in
               let defining_cliques =  
  		List.map (fun name -> 
-			    try
-			      List.find (defines name) clique_info
-			    with Not_found -> (* useful in debugging to include the symbol name *)
-			      failwith ("Not_found in elim_dead_defs: " ^ name)) names in
-		close (List.fold_right (fun clique env ->
-                                          let exposed_names = env.exposed_names @ clique.exposed_names in
-                                            { free_names = List.filter (fun name -> not (List.mem name exposed_names))
-                                                (env.free_names @ clique.free_names);
-                                              exposed_names = exposed_names;
-                                              defs = clique.defs @ env.defs}) defining_cliques env)
+                            try
+                              List.find (defines name) clique_info
+                            with Not_found ->
+                              failwith("Internal error: missing definition in elim_dead_defs: " ^ name)) 
+                  names 
+              in
+                close (List.fold_right
+                         (fun clique env ->
+                            let exposed_names = env.exposed_names @ clique.exposed_names in
+                              { free_names = 
+                                  difference (env.free_names @ clique.free_names)
+                                    exposed_names;
+                                exposed_names = exposed_names;
+                                defs = clique.defs @ env.defs})
+                         defining_cliques env)
     in
     try
       other @ (close expr_info).defs

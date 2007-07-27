@@ -59,7 +59,7 @@ SOURCES = $(OPC)                		\
           basicsettings.ml                      \
           debug.mli debug.ml    		\
           rewrite.ml            		\
-          performance.ml        		\
+          performance.mli performance.ml	\
           graph.ml              		\
           types.mli types.ml 	                \
           query.mli query.ml          		\

@@ -230,9 +230,9 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                         ((Recv::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | FuncEvalCont([], locals) -> 
+            | FuncEvalCont(locals, []) -> 
                 apply_cont globals (ApplyCont(locals, [])::cont) value
-            | FuncEvalCont(param::params, locals) ->
+            | FuncEvalCont(locals, param::params) ->
 	        (* Just evaluate the first parameter; "value" is in
 	           fact a function value which will later be applied
 	        *)
@@ -337,7 +337,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	        in
 	          apply_cont globals cont result
             | UnopApply (locals, op) ->
-                (match op with
+                begin
+                  match op with
                      MkColl -> apply_cont globals cont (`List [(value)])
 	           | MkVariant(label) -> 
 	               apply_cont globals cont (`Variant (label, value))
@@ -373,7 +374,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                            | _ -> assert false
                        in
                          apply_cont globals cont result
-	        )
+	        end
             | RecSelect (locals, label, label_var, variable, body) ->
 	        let field, remaining = crack_row label (recfields value) in
                 let new_env = trim_env (Result.bind (Result.bind locals variable
@@ -479,7 +480,7 @@ fun globals locals expr cont ->
   | Syntax.Apply (Variable ("recv", _), [], _) ->
       apply_cont globals (Recv::cont) (`Record [])
   | Syntax.Apply (fn, params, _) ->
-      eval fn (FuncEvalCont (params, locals)::cont)
+      eval fn (FuncEvalCont (locals, params)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
       eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->

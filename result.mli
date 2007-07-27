@@ -87,7 +87,7 @@ type result = [ primitive_value
 | `Variant of string * result ]
 and contin_frame =
     | Definition of (environment * string)
-    | FuncEvalCont of (Syntax.expression list * environment)
+    | FuncEvalCont of (environment * Syntax.expression list)
     | ArgEvalCont of (environment * result *Syntax.expression list * result list)
     | ApplyCont of (environment * result list)
     | LetCont of (environment * string * Syntax.expression)
