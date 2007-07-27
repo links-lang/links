@@ -500,7 +500,15 @@ and free_alias_check_row alias_env = fun rec_vars row ->
 let free_alias_check alias_env = free_alias_check alias_env TypeVarSet.empty
 let free_alias_check_row alias_env = free_alias_check_row alias_env TypeVarSet.empty
 
-
+let is_flexible t =
+  match concrete_type t with
+    | `MetaTypeVar point ->
+        begin
+          match Unionfind.find point with
+            | `Flexible _ -> true
+            | _ -> false
+        end
+    | _ -> false
 
 let rec is_mailbox_free alias_env = fun rec_vars t ->
   let imb = is_mailbox_free alias_env rec_vars in
