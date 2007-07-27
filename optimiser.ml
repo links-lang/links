@@ -20,33 +20,6 @@ let no_project_erase : RewriteSyntax.rewriter = function
   | Erase _ -> assert false
   | _ -> None
 
-(** [pure]
-
-    Checkes whether the evaluation of an expression is known to be free
-    from side effects
-*)
-let pure : expression -> bool = 
-  (* Everything is pure except the application of certain primitive
-     functions and of any functions which call those.  For now, we'll
-     just punt when we see a function application.  Eventually the
-     type system will help us out.
-
-     NB: continuation invocation is impure in the sense that we can't
-     replace `x = f(3); 4' with `4' if `f' is a continuation.
-  *)
-  let rec pure default = function 
-      (* TBD: annotate ALL prim funcs as to pureness *)
-    | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
-      -> for_all (pure default) arg
-    | Apply _    -> false
-    | App _       -> false
-    | TableQuery _ -> false
-        (* Is callCC pure? *)
-    | e       -> default e
-  and all_true l = fold_right (&&) l true in
-    reduce_expression pure (all_true -<- snd)
-
-
 (** Inlining **)
 
 (* Number of nodes in a syntax tree *)
@@ -71,7 +44,7 @@ let size_limit = 150
 let is_inline_candidate' = function
   | Define (_, (Rec _ as e), _, _) -> 
       not (recursivep e) && contains_no_extrefs e && countNodes e < size_limit
-  | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && pure e
+  | Define (_, e, _, _) when Syntax.is_value e -> contains_no_extrefs e && Syntax.pure e
   | _ -> false
 
 let find_inline_candidates es : (string * expression * location) list = 
@@ -265,8 +238,8 @@ let unused_variables : RewriteSyntax.rewriter = function
     (* This'd be quite a bit more efficient bottom-up, passing the
        list of free variables outwards rather than searching the body
        every time we find a let. *)
-  | Let (var, expr, body, _) when pure expr 
-                               && not (StringSet.mem var (freevars body)) -> Some body
+  | Let (var, expr, body, _) 
+      when pure expr && not (StringSet.mem var (freevars body)) -> Some body
   | _ -> None
       (* FIXME: this ignores variables that are hidden inside queries *)
 
@@ -489,7 +462,7 @@ let sql_aslist : RewriteSyntax.rewriter =
         let th_type = Types.concrete_type (node_datatype th) in
         let th_row = match th_type with
           |  `Table (`Record th_row, _) -> th_row
-          | _ -> failwith "Internal Error: tables must have table type"
+          | _ -> failwith "Internal Error: tables must have concrete table type"
         in
         let table_alias = gensym ~prefix:"Table_" () in
 	let rowFieldToTableCol colName = function
@@ -504,19 +477,21 @@ let sql_aslist : RewriteSyntax.rewriter =
         let th_var = match th with
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
-	let select_all = {Query.distinct_only = false;
-			  Query.result_cols = List.map inLeft columns;
-			  Query.tables = [(`TableVariable th_var,
-                                           table_alias)];
+          (* With the new SQL compiler, this no longer serves a purpose. *)
+	let select_all = {Query.result_cols = 
+                            List.map (fun x -> `Column x) columns;
+			  Query.tables = [(`TableVariable th_var, table_alias)];
 			  Query.condition = Query.Boolean true;
 			  Query.sortings = [];
 			  Query.max_rows = None;
 			  Query.offset = Query.Integer (Num.Int 0)} in
         let th_list_type = `Application ("List", [`Record(th_row)]) in
-        let table_query = TableQuery ([table_alias, 
-                                       Variable (th_var, `T (pos, th_type, None))],
-                                      select_all,
-                                      `T (pos, th_list_type, None))
+          (* With the new SQL compiler, this TableQuery is needed only
+             to hold the variable and the generated alias. *)
+        let table_query = TableQuery([table_alias, 
+                                      Variable(th_var, `T(pos, th_type, None))],
+                                     select_all,
+                                     `T (pos, th_list_type, None))
         in
           (match th with
              | Variable _ -> Some table_query
@@ -788,7 +763,7 @@ let print_definition of_name ?msg:msg def =
 
 
 let rewriters env = [
-  uniquify_names; 
+  uniquify_names;
   RewriteSyntax.bottomup no_project_erase;  
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
@@ -798,38 +773,41 @@ let rewriters env = [
   RewriteSyntax.topdown simplify_regex;
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
-  RewriteSyntax.topdown (sql_sort);
-  RewriteSyntax.loop (RewriteSyntax.topdown sql_joins);
-  RewriteSyntax.bottomup sql_selections;
+(*   RewriteSyntax.topdown (sql_sort); *)
+(*   RewriteSyntax.loop (RewriteSyntax.topdown sql_joins); *)
+(*   RewriteSyntax.bottomup sql_selections; *)
 (*   RewriteSyntax.bottomup unused_variables; *)
-  RewriteSyntax.bottomup (sql_projections env);
+(*   RewriteSyntax.bottomup (sql_projections env); *)
 (*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
-  RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop);
+(*   RewriteSyntax.topdown (RewriteSyntax.both simplify_takedrop push_takedrop); *)
 ]
 
 let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise' env expr =
-  if Settings.get_value optimising then 
-    let expr' = run_optimisers env expr in
+  if not (Settings.get_value optimising) then 
+    None
+  else
+    let expr' = fromOption expr (run_optimisers env expr) in
+    let expr' = Rewriterules.sql_compile expr' in
     let _ =
         match expr' with
-            None -> Debug.if_set show_optimisation (fun () -> "Optimization had no effect")
-          | Some expr' -> Debug.if_set show_optimisation
-              (fun () ->
-                 (if (Settings.get_value show_opt_verbose) then 
-                    "Before optimization : " ^ 
-                      Show_stripped_expression.show (strip_data expr) 
-                  else "") ^ 
-		   "\nAfter optimization  : " ^
-                   Show_stripped_expression.show (strip_data expr'))
+            None -> Debug.if_set_l show_optimisation
+              (lazy "Optimization had no effect")
+          | Some expr' -> 
+              Debug.if_set_l show_optimisation
+                (lazy(
+                  (if (Settings.get_value show_opt_verbose) then 
+                     "Before optimization : " ^ 
+                       Show_stripped_expression.show (strip_data expr)
+                   else "")
+		  ^ "\nAfter optimization  : " ^
+                    Show_stripped_expression.show (strip_data expr')))
     in
       expr'
-  else
-    None
     
 let optimise env expr = fromOption expr (optimise' env expr)
 

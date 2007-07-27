@@ -25,12 +25,12 @@ let rec project (projs:string list) (query:query) : query =
     match cols, projs with 
       | [], [] -> []
       | [], _ -> assert false
-      | Left col :: result_cols, projs when mem col.col_alias projs ->
-	  Left col :: (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
-      | Left col :: result_cols, projs ->
+      | `Column col :: result_cols, projs when mem col.col_alias projs ->
+	  `Column col :: (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
+      | `Column col :: result_cols, projs ->
           (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
-      | Right expr :: result_cols, projs -> 
-          Right expr :: (filter_selects projs result_cols)
+      | `Expr expr :: result_cols, projs -> 
+          `Expr expr :: (filter_selects projs result_cols)
   in
     {query with result_cols = filter_selects projs query.result_cols}
 
@@ -92,10 +92,10 @@ let query_field_for_var query field =
   try
   find ((<>) `Unavailable)
     (map (function
-            | Left col when col.col_alias = field ->
+            | `Column col when col.col_alias = field ->
                 `Table_field (col.table_alias, col.name)
-            | Left _ -> `Unavailable
-            | Right _ -> `Unavailable)
+            | `Column _ -> `Unavailable
+            | `Expr _ -> `Unavailable)
        query.result_cols)
   with Not_found -> raise(ColumnNotInQuery(field))
     
@@ -200,7 +200,7 @@ let likify_regex bindings (e : 'a Syntax.expression') : (like_expr * projection_
            | Some (Variant_injection ("Star", _, _), Variant_injection ("Any", _, _)) ->  
 	       Some (`percent, [])
            | _ -> None)
-    | Variant_injection ("Any", _, _) -> Some(`underscore, [])
+    | Variant_injection ("Any", _, _) -> Some(`underscore, [])  (* FIXME: shouldn't this be "dot"? *)
     | Variant_injection ("StartAnchor", _, _) -> Some(`caret, [])
     | Variant_injection ("EndAnchor", _, _) -> Some(`dollar, [])
     | Variant_injection ("Simply", HasType(Constant(String s, _), _, _),  _) 
@@ -271,8 +271,6 @@ let make_binop_sql oper left_value right_value =
     | `NotEq -> Binary_op ("<>", left_value, right_value)
     | `Tilde  -> Binary_op ("like", left_value, right_value)
 
-
-        
 (** Convert a LIKE expression to a string. *)
 let rec like_as_string env le = 
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
@@ -390,10 +388,10 @@ let append_uniquely
     (left : col_or_expr list)
     (right : col_or_expr list) : (col_or_expr list * (column * string) list) =
   let rename = function
-    | Left col -> [(col, {col with col_alias = col_unique_name ()})]
-    | Right expr -> [] in
+    | `Column col -> [(col, {col with col_alias = col_unique_name ()})]
+    | `Expr expr -> [] in
   let (right : (Query.column *Query.column) list) = concat_map rename right in
-    (left @ map (snd ->- inLeft) right,
+    (left @ map (snd ->- (fun x -> `Column x)) right,
      concat_map (fun (x, y) -> [(x, y.col_alias)]) right)
   
 (** join
@@ -414,24 +412,21 @@ let append_uniquely
 let join condns
     ((left, right) : query * query)
     : ((column * string) list * query) =
-  if (left.distinct_only <> right.distinct_only) then failwith "TR167"
-  else 
-    let where_clause = simplify(conjunction(left.condition :: right.condition :: condns))
-    in
-      let (columns, col_renamings) = append_uniquely left.result_cols right.result_cols in
-      (col_renamings,
-       {distinct_only = left.distinct_only;
-        result_cols   = columns;
-        tables        = left.tables @ right.tables;
-        condition     = where_clause;
-        sortings      = left.sortings @ right.sortings;
-        max_rows      = (match left.max_rows, right.max_rows with
-                           | None, None -> None
-                           | _ -> failwith "Not yet implemented: take/drop for joined tables");
-        offset        = (match left.offset, right.offset with
-                           | Integer (Num.Int 0), Integer (Num.Int 0) -> Integer (Num.Int 0)
-                           | _ -> failwith "Not yet implemented: take/drop for joined tables")})
-        
+  let where_clause = simplify(conjunction(left.condition :: right.condition :: condns))
+  in
+  let (columns, col_renamings) = append_uniquely left.result_cols right.result_cols in
+    (col_renamings,
+     {result_cols   = columns;
+      tables        = left.tables @ right.tables;
+      condition     = where_clause;
+      sortings      = left.sortings @ right.sortings;
+      max_rows      = (match left.max_rows, right.max_rows with
+                         | None, None -> None
+                         | _ -> failwith "Not yet implemented: take/drop for joined tables");
+      offset        = (match left.offset, right.offset with
+                         | Integer (Num.Int 0), Integer (Num.Int 0) -> Integer (Num.Int 0)
+                         | _ -> failwith "Not yet implemented: take/drop for joined tables")})
+      
 (** Projects the query on the empty set.
     @param query The query to nullify.
     @return The nullified query. *)

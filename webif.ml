@@ -11,11 +11,12 @@ let cache_programs = Settings.add_bool ("cache_programs", false, `User)
 
 type query_params = (string * result) list deriving (Show)
 
-type web_request = ExprEval of Syntax.expression * environment
-                 | ClientReturn of continuation * result
-                 | RemoteCall of result * result list
-                 | CallMain
-                     deriving (Show)
+type web_request = ContInvoke of continuation * query_params
+                   | ExprEval of Syntax.expression * environment
+                   | ClientReturn of continuation * result
+                   | RemoteCall of result * result list
+                   | CallMain
+                       deriving (Show)
 
 (* Does at least one of the functions have to run on the client? *)
 let is_client_program (Syntax.Program (defs, _) as program) =
@@ -107,10 +108,19 @@ let decode_continuation (cont : string) : Result.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let is_special_param (k, _) =
-  List.mem k ["_k"; "_jsonArgs"]
+  List.mem k ["_cont"; "_k"; "_jsonArgs"]
 
 let string_dict_to_charlist_dict =
   alistmap Result.string_as_charlist
+
+(* Extract continuation from the parameters passed in over CGI.*)
+let contin_invoke_req valenv program params =
+  let pickled_continuation = List.assoc "_cont" params in
+  let params = List.filter (not -<- is_special_param) params in
+  let params = string_dict_to_charlist_dict params in
+    (* TBD: create a debug setting for printing webif modes. *)
+(*     Debug.print("Invoking " ^ string_of_cont(unmarshal_continuation valenv program pickled_continuation)); *)
+    ContInvoke(unmarshal_continuation valenv program pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req valenv program params =
@@ -144,6 +154,9 @@ let is_func_appln params =
 let is_client_call_return params = 
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
+let is_contin_invocation params = 
+  List.mem_assoc "_cont" params
+
 let is_expr_request = List.exists is_special_param
         
 let client_return_req cgi_args = 
@@ -169,6 +182,10 @@ let perform_request
     program (* orig. src.: only used for gen'ing js *)
     globals main req =
   match req with
+    | ContInvoke (cont, params) ->
+        Library.print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result 
+             (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
@@ -222,6 +239,8 @@ let serve_request prelude (valenv, typenv) filename =
         get_remote_call_args defs cgi_args
       else if is_client_call_return cgi_args then
         client_return_req cgi_args
+      else if (is_contin_invocation cgi_args) then
+        contin_invoke_req (rng valenv) program cgi_args
       else if (is_expr_request cgi_args) then
         expr_eval_req valenv program cgi_args
       else

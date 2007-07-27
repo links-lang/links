@@ -23,6 +23,12 @@ struct
 end    
 include Functional
 
+(** {0 Simulating infix function words (a la Haskell backticks)} *)
+
+(** left-associative *)
+let ( <| ) arg f = f arg
+let ( |> ) f arg = f arg
+
 (* Maps and sets *)
 module type OrderedShow = sig
   type t
@@ -52,9 +58,10 @@ sig
   val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
   (** construct a new map from two existing maps *)
 
+  val megamap : (key * 'a -> key * 'b) -> 'a t -> 'b t
+
   val pop : key -> 'a t -> ('a * 'a t)
   (** remove the item with the given key from the map and return the remainder. *)
-
   val lookup : key -> 'a t -> 'a option
   (** as `find', but return an option instead of raising an exception *)
 
@@ -116,6 +123,8 @@ struct
     let from_alist l =
       List.fold_right (uncurry add) l empty 
         
+    let megamap f m = from_alist (List.map f (to_alist m))
+
     let pop item map = 
       (find item map, remove item map)
         
@@ -252,17 +261,17 @@ struct
   (** [groupByPred pred] partitions [list] into chunks where all
       elements in the chunk give the same value under [pred]. *)
   let groupByPred pred list = 
-  let rec group state result = function
-    | [] -> List.rev (List.map List.rev result)
-    | x::etc -> let predx = pred x in
-      let new_result = (if (predx = state) then
+    let rec group state result = function
+      | [] -> List.rev (List.map List.rev result)
+      | x::etc -> let predx = pred x in
+        let new_result = (if (predx = state) then
                             (x::List.hd result) :: List.tl result
-                        else
+                          else
                             [x] :: result)
-      in
-        group predx new_result etc
-  in if (list == []) then [] else  group (pred (List.hd list)) [] list
-      
+        in
+          group predx new_result etc
+    in if (list == []) then [] else  group (pred (List.hd list)) [] list
+
   (** [groupByPred']: Alternate implementation of groupByPred. *)
   let groupByPred' pred : 'a list -> 'a list list = 
     let rec group = function
@@ -419,6 +428,11 @@ struct
       else explode' (string.[n] :: list) (n + 1) string
     in List.rev -<- (explode' [] 0)
       
+  let is_numeric str = 
+    List.for_all
+      (fun ch -> ch <|List.mem|> ['0';'1';'2';'3';'4';'5';'6';'7';'8';'9']) 
+      (explode str)
+
   let implode : char list -> string = 
     (String.concat "") -<- (List.map (String.make 1))
 
@@ -722,11 +736,4 @@ let catch_notfound_l msg e =
   try
     Lazy.force e
   with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
-
-
-(** {0 Simulating infix function words (a la Haskell backticks)} *)
-
-(** left-associative *)
-let ( <| ) arg f = f arg
-let ( |> ) f arg = f arg
 

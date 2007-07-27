@@ -23,7 +23,6 @@ type expression =
   | Unary_op of (string * expression)
   | Query of query
 and query = {
-  distinct_only : bool;
   result_cols : col_or_expr list;
   tables : table_instance list;
   condition : expression;
@@ -38,8 +37,8 @@ and column = {
   col_alias : string;
   col_type : Types.datatype;
 } 
-and col_or_expr = (column, expression) Utility.either
-deriving (Eq, Typeable, Show, Pickle, Shelve)
+and col_or_expr = [`Column of column | `Expr of (expression * string)]
+     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 val like_as_string : like_expr -> string
 val owning_table : string -> query -> string

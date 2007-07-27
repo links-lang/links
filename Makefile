@@ -44,7 +44,7 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae
+OCAMLFLAGS=-dtypes -w ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -60,7 +60,7 @@ SOURCES = $(OPC)                		\
           debug.mli debug.ml    		\
           rewrite.ml            		\
           performance.mli performance.ml	\
-          graph.ml              		\
+          graph.ml                              \
           types.mli types.ml 	                \
           query.mli query.ml          		\
           sql.mli sql.ml               		\
@@ -85,17 +85,18 @@ SOURCES = $(OPC)                		\
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\
+          rewriterules.ml                       \
           optimiser.mli optimiser.ml    	\
           js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
-          rewriterules.ml                       \
           loader.ml                             \
-          webif.mli webif.ml           		\
+          webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
           links.ml              		\
           ir.mli                                \
           compileir.ml                          \
+          rewriteexamples.ml                    \
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links
@@ -136,6 +137,10 @@ quick-help:
 
 docs-clean:
 	cd doc && make clean
+
+prelude.links.cache: prelude.links
+	@echo "Pre-compiling prelude..."
+	@./links -e 'print("Prelude compiled OK.")'
 
 cache-clean:
 	-rm -f prelude.links.cache

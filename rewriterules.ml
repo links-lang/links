@@ -1,5 +1,13 @@
 (*pp deriving *)
 
+(* TODO
+   1. sort (?) -
+   2. tests
+   2. length (count), max, min, average -
+   3. projection (via typing trick).
+   4. rearranging queries to maximise compilability.
+*)
+
 open Utility
 open List
 open Num
@@ -8,14 +16,15 @@ let debugging = ref false
 
 type name = string deriving (Show)
 type label = name deriving (Show)
-type op = [Syntax.comparison| `And | `Or]deriving (Show)
+type op = [Syntax.comparison | `And | `Or] deriving (Show)
 type pat = (label * name) list
-type literal = [`True | `False | `Str of string | `N of num]deriving (Show)
+type literal = [`True | `False | `Str of string | `N of num] deriving (Show)
+
 type like_expr = [
-|`Percent
+| `Percent
 | `Seq of like_expr list
 | `Str of string
-| `Var of name ]deriving (Show)
+| `Var of name ] deriving (Show)
 type baseexpr = [
 |`Op  of op * baseexpr * baseexpr
 |`Let of name * baseexpr * baseexpr (* not in the paper, but an easy extension *)
@@ -28,13 +37,14 @@ type simpleExpr = [
 |`For    of pat * simpleExpr * simpleExpr
 |`Where  of baseexpr * simpleExpr
 |`Let    of name * baseexpr * simpleExpr
-|`Table  of (name * Types.datatype) list * string
+|`Table  of (name * Types.datatype) list * string * string
 |`Return of baseexpr]
 type expr = [
 |`Take of num * expr
 |`Drop of num * expr
 | simpleExpr]
-type field = {table:name;column:name} deriving (Show)
+
+type field = {table:name; column:name; ty:Types.datatype} deriving (Show)
 type sqlexpr = [
 | literal
 |`Rec of (name * sqlexpr) list
@@ -45,12 +55,41 @@ type sqlexpr = [
 |`V   of name]
 type ninf = I of num | Inf
 type sqlQuery = {
-  cols : (sqlexpr*name) list;
-  tabs : (name * name) list;
+  cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
+  tabs : (string * name) list;
+  (* (x, a) means "from x as a", and x is a free variable representing a table.*)
   cond : sqlexpr list;
   most : ninf;
   from : num;
 }
+
+(* [sqlable_primtype ty] is true if [ty] corresponds to a primitive
+   SQL type. *)
+let sqlable_primtype ty = 
+  match Types.concrete_type ty with
+      `Primitive ty' -> (match ty' with 
+                            `Bool | `Int | `Char | `Float -> true
+                          | _ -> Debug.print("non-sqlable primitive: " ^ 
+                                             Types.string_of_datatype ty);
+                              false)
+    | `Application ("String", []) -> true
+    | `Application ("List", [`Primitive `Char]) -> true
+    | _ -> Debug.print("non-primitive in record was " ^ 
+                         Types.string_of_datatype ty);
+        false
+
+(* [sqlable_record ty] is true if [ty] is a record type that
+   corresponds to a valid SQL result--that is, it is essentially 
+   flat with fields types that are SQL primitive types. *)
+let sqlable_record =
+  function
+    | `Record (fields, _) -> 
+        StringMap.for_all (function
+                             | `Absent -> true
+                             | `Present ty ->
+                                 sqlable_primtype ty) fields
+    | _ -> false
+
 
 module Prepare =
 struct
@@ -67,12 +106,10 @@ struct
     in fun map -> aux 1 map []
 
   let remove_unused_variables : RewriteSyntax.rewriter = function
-    | Let (var, expr, body, _) when Optimiser.pure expr && not (StringSet.mem var (freevars body))
+    | Let (var, expr, body, _) when Syntax.pure expr
+                                    && not (StringSet.mem var (freevars body))
         -> Some body
     | _ -> None
-
-
-
 
     (* This module will go away once we stop using Record_selection *)
   module NormalizeProjections : 
@@ -80,13 +117,14 @@ struct
     val normalize_projections : RewriteSyntax.rewriter
   end =
   struct
-    (* The purpose of this set of rewrite rules is to replace all
-       occurrences of Record_selection with Project and Erase
-       (minimising the number of times Erase occurs.) *)
+    (** The purpose of this set of rewrite rules is to replace all
+        occurrences of Record_selection with Project and Erase
+        (minimising the number of times Erase occurs.) *)
     
     open RewriteSyntax
       
-    (* eliminate all occurrences of Record_selection in favour of Project and Erase *)
+    (** eliminate all occurrences of Record_selection in favour of
+        Project and Erase *)
     let convert_projections : rewriter = function
       | Record_selection (label, labelvar, etcvar, (Variable _ as v), body, data) ->
           Some (Let (labelvar, Project (v, label, data),
@@ -94,14 +132,14 @@ struct
                           body, data), data))
       | Record_selection (label, labelvar, etcvar, value, body, data) ->
           let name = gensym ~prefix:"recordvar" () in
-            Some (Let (name, value, 
-                       Let (labelvar, Project (Variable (name, data), label, data),
-                            Let (etcvar, Erase (Variable (name, data), label, data),
-                                 body, data), data), data))
+            Some(Let(name, value, 
+                     Let(labelvar, Project (Variable (name, data), label, data),
+                         Let(etcvar, Erase (Variable (name, data), label, data),
+                             body, data), data), data))
       | _ -> None
           
-    (* replace projection from an etc. var with projection from the
-       record var wherever possible *)
+    (** Replace projection from an etc. var with projection from the
+        record var wherever possible *)
     type env = (string * string) list
     let replace_erase : rewriter =
       fun expr ->
@@ -118,20 +156,20 @@ struct
           Syntax.set_subnodes exp (List.map (fun e -> e env) subnodes)
         in Some (reduce_expression aux combiner expr [])
              
-    (* Don't bind the result of a projection to a variable; just use it
-       in place *)
+    (** Don't bind the result of a projection to a variable; just use it
+        in place *)
     let inline_projections : rewriter = function
       | Let (var, (Project (Variable _, _, _) as p), body, _) ->
           Some (subst_fast var p body)
       | _ -> None
           
-    (* check post conditions hold (not really a rewriter) *)
+    (** Check post conditions hold (not really a rewriter) *)
     let check_projections : rewriter = function
       | Project (Variable _, _, _) -> None
       | Project  _
       | Record_selection _         -> assert false
       | _                          -> None
-          
+
     let normalize_projections = bottomup (all [
                                             convert_projections;
                                             replace_erase;
@@ -168,26 +206,53 @@ struct
     
   (* Not sound! *)
   let simplify_table_query : Syntax.RewriteSyntax.rewriter = function
-    | Syntax.Let (_, Syntax.TableHandle _, (Syntax.TableQuery _ as t),_) -> Some t
+    | Syntax.Let (_, Syntax.TableHandle _,(Syntax.TableQuery _ as t),_) -> Some t
     | _ -> None
         
+  let lift_nonrecord_compn : RewriteSyntax.rewriter = function
+      For(List_of(elem, data_body), var, src, data_for) 
+        when sqlable_primtype(node_datatype elem)
+          -> 
+            Debug.print("lifting non-record in comp'n body");
+
+            let ty = Types.concrete_type(node_datatype elem) in
+            let recd_ty = Types.make_record_type[("a", ty)] in
+            let field_name = "a" in
+            let elem_record = 
+              set_node_datatype(Record_intro(StringMap.from_alist
+                                               [(field_name, elem)], 
+                                             None, data_body), recd_ty) in
+            let proj = Abstr(["x"], Project(Variable("x", data_for), field_name,
+                                            data_for), 
+                             data_for) in
+            let result = Apply(Variable("map", data_for),
+                               [proj;
+                                For(List_of(elem_record, 
+                                            data_body),
+                                    var, src, data_for)], data_for) in
+              Debug.print(" to: " ^
+                            string_of_expression(result));
+              Some result
+    | _ -> None
+
   let normalize : Syntax.expression -> Syntax.expression =
     let rules = [
       NormalizeProjections.normalize_projections;
+      Syntax.RewriteSyntax.bottomup lift_nonrecord_compn;
       Simplify.simplify;
-      Syntax.RewriteSyntax.topdown Optimiser.renaming;
-      Syntax.RewriteSyntax.topdown Optimiser.sql_aslist;
       Syntax.RewriteSyntax.topdown simplify_table_query;
-      Syntax.RewriteSyntax.topdown Optimiser.unused_variables;
+      Syntax.RewriteSyntax.topdown remove_unused_variables;
     ] in
-      fun e -> fromOption e (Syntax.RewriteSyntax.all rules e)
+      fun e -> fromOption (Variable("FUD", Syntax.no_expr_data)) (Syntax.RewriteSyntax.all rules e)
         
   let normalize e = 
     let r = normalize e in
       (if !trace_normalize then
-         prerr_endline ("normalize output : " ^ Syntax.Show_stripped_expression.show (Syntax.strip_data e)));
+         prerr_endline ("normalize output : " ^ 
+         Syntax.Show_stripped_expression.show (Syntax.strip_data r)));
       r
 end
+
 
 module Compile:
 sig
@@ -231,19 +296,17 @@ struct
   exception Uncompilable of expression
   let uncompilable e = raise (Uncompilable e)
 
-  let resolve_type = Types.concrete_type
-
   let present_fields fields = 
     StringMap.fold (fun name spec fields ->
                       match spec with 
                         | `Present t -> (name,t)::fields
                         | `Absent -> assert false) fields []
 
-  
+      
   let counter = ref 0 
 
   let debug msg = 
-    if !debugging then prerr_endline msg
+    if !debugging then prerr_endline (Lazy.force msg)
     else ()
 
   let trycompile =
@@ -251,14 +314,16 @@ struct
         let i = !counter in
           incr counter;
           try 
-            debug (string_of_int i ^ " " ^ msg ^ " attempting to compile : " ^ Syntax.Show_stripped_expression.show (Syntax.strip_data e));
+            debug(lazy(string_of_int i ^ " " ^ msg ^ 
+                         " attempting to compile : " ^ 
+                         Syntax.Show_stripped_expression.show 
+                         (Syntax.strip_data e)));
             let r = f env e in
-              debug (string_of_int i ^ " success!");
+              debug(lazy(string_of_int i ^ " success!"));
               r
           with (Uncompilable _) as ex -> 
-            debug (string_of_int i ^ " " ^ msg ^ " failure!");
+            debug(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
             raise ex
-
 
   let compileRegex (e : 'a Syntax.expression') : like_expr = 
     let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
@@ -283,7 +348,7 @@ struct
   let rec compileB (env : Env.t) : expression -> baseexpr = function
     | Apply (Variable ("not", _), [b], _)  -> `Not ((trycompile "B" compileB) env b)
     | Apply (Variable ("~", _), [b; regex], _)  -> `Like ((trycompile "B" compileB) env b,
-                                                                   compileRegex regex)
+                                                          compileRegex regex)
     | Variable (v, _)                    -> 
         begin match Env.lookupv v env with
           | Some b -> b
@@ -293,12 +358,12 @@ struct
         begin match Env.lookupf {Env.var=v;Env.label=label} env with
           | Some v -> `Var v
           | None   -> 
-              debug ("env : " ^ Env.Show_t.show env);
+              debug(lazy("env : " ^ Env.Show_t.show env));
               uncompilable e
         end
     | Record_intro (fields, None, _) ->
         `Rec (StringMap.fold (fun label expr output ->
-                          (label, (trycompile "B" compileB) env expr)::output) fields [])
+                                (label, (trycompile "B" compileB) env expr)::output) fields [])
     | Constant(Boolean true, _)      -> `True
     | Constant(Boolean false, _)     -> `False
     | Constant(Integer n, _)         -> `N n
@@ -313,59 +378,67 @@ struct
     | e                      -> uncompilable e
 
   let rec compileS env : expression -> simpleExpr = function
-    | For (body, var, expr, _) as e -> 
-        debug "attempting to compile comprehension!";
-        begin match resolve_type (node_datatype expr) with
+    | For (body, var, src, _) as e -> 
+        debug(lazy("attempting to compile comprehension!"));
+        begin match Types.concrete_type (node_datatype src) with
           | `Application ("List",[r]) ->
-              begin match resolve_type r with 
+              begin match Types.concrete_type r with 
                 | `Record (row,_) ->
                     let fields = present_fields row in
                     let fieldinfo = 
                       List.map (fun (label, _) -> 
                                   (
                                     (let l = {Env.var = var; Env.label = label} in
-                                      debug ("binding : " ^ Env.Show_field.show l);
-                                      l), gensym())) fields in
+                                       debug(lazy("binding : " ^ Env.Show_field.show l));
+                                       l), gensym())) fields in
                     let env' = fold_right (uncurry Env.bindf) fieldinfo env in
                     let env' = Env.bindv var (`Rec (List.map (fun (f,v) -> f.Env.label, `Var v) fieldinfo)) env' in
                       begin
-                        let s = (trycompile "S" compileS) env expr
+                        let s = (trycompile "S" compileS) env src
                         and t = (trycompile "S" compileS) env' body in
-                          debug "successfully compiled comprehension";
-                          `For ((List.map (fun (field, fname) -> (field.Env.label, fname)) fieldinfo), s, t)
+                          debug(lazy "SUCCESSFULLY compiled comprehension");
+                          `For((List.map (fun (field, fname) -> 
+                                            (field.Env.label, fname))
+                                  fieldinfo), s, t)
                       end
-                | t -> failwith ("comprehension source: wrong inner type : " ^Types.Show_datatype.show t);
+                | _ -> uncompilable e
               end
           | t -> 
-              debug ("comprehension source: wrong type : " ^Types.Show_datatype.show t);
+              debug(lazy ("comprehension source: wrong type : " ^
+                            Types.Show_datatype.show t));
               uncompilable e
         end
 
-    | TableQuery (_, q, `T (_,t,_)) as e ->
-        debug "attempting to compile table query!";
-        begin match q, resolve_type t with 
-          | {Query.distinct_only = false;
-	     Query.result_cols = _;
-	     Query.tables = [(`TableVariable th_var, _)]; (* need a table name to do a proper translation *)
+    | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
+        debug(lazy("attempting to compile table query!"));
+        begin match q, Types.concrete_type ty with 
+          | {Query.result_cols = _;
+	     Query.tables = [(`TableVariable _, _)];
 	     Query.condition = Query.Boolean true;
 	     Query.sortings = [];
 	     Query.max_rows = None;
 	     Query.offset = Query.Integer (Int 0)},
             t ->
-              let fields = (match t with
+              let fields = (match ty with
                               | `Application ("List", [`Record (fields,_)]) -> fields
                               | s -> failwith ("unexpected type:"^Types.Show_datatype.show s)) in
-              (`Table (present_fields fields, th_var))
+                `Table(present_fields fields, th_var, table_alias)
           | _ -> 
-              debug "could not compile table query";
+              debug(lazy "could not compile table query");
               uncompilable e
         end
+    | TableQuery _ -> failwith "Unexpected form of TableQuery"
     | Condition (c, t, Nil _, _) ->
         `Where ((trycompile "B" compileB) env c, (trycompile "S" compileS) env t)
     | Condition (c, Nil _, t, _) ->
         `Where (`Not ((trycompile "B" compileB) env c), (trycompile "S" compileS) env t)
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "S" compileS) env s)
-    | List_of (b, _) -> `Return ((trycompile "B" compileB) env b)
+    | List_of (b, _) as e -> 
+        if (sqlable_record(Types.concrete_type (node_datatype b))) then 
+          `Return ((trycompile "B" compileB) env b)
+        else (debug(lazy("List_of body was not a tuple, it was: " ^ 
+                           Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
+              uncompilable e)
     | e -> uncompilable e
 
   let rec compileE env : expression -> expr = function
@@ -377,7 +450,6 @@ struct
     | e -> ((trycompile "S" compileS) env e :> expr)
 
   let compile e = 
-    debug "NEW!";
     try Some ((trycompile "E" compileE) Env.empty e)
     with Uncompilable _ -> None
 end
@@ -420,17 +492,17 @@ struct
 
     let fresh_table_name = Utility.gensym ~prefix:"Table"
   end
-    
-  let rec rename tabs : sqlexpr -> sqlexpr =
+
+  let rec subst_tabnames substs : sqlexpr -> sqlexpr =
     function 
       | #literal as l -> l
       |`V _ as v -> v
-      |`Rec bindings -> `Rec (map (fun (l,r) -> (l, rename tabs r)) bindings)
-      |`Op (op, l, r) -> `Op (op, rename tabs l, rename tabs r)
-      |`Not e -> `Not (rename tabs e)
-      |`Like (e,l) -> `Like (rename tabs e,l)
-      |`F ({table=t}as f) when mem_assoc t tabs ->
-         `F {f with table=assoc t tabs}
+      |`Rec bindings -> `Rec (map (fun (l,r) -> (l, subst_tabnames substs r)) bindings)
+      |`Op (op, l, r) -> `Op (op, subst_tabnames substs l, subst_tabnames substs r)
+      |`Not e -> `Not (subst_tabnames substs e)
+      |`Like (e,l) -> `Like (subst_tabnames substs e,l)
+      |`F ({table=t} as f) when mem_assoc t substs ->
+         `F {f with table=assoc t substs}
       |`F _ as f -> f
 
   let rec evalb env : baseexpr -> sqlexpr = function
@@ -448,10 +520,12 @@ struct
   let rec evalS env : simpleExpr -> sqlQuery = function
     | `For (fields, s, t) -> 
         let q1 = evalS env s in
-        let tabs = map (fun (t,oldas) -> (t, oldas,Auxiliary.fresh_table_name ())) q1.tabs in
-        let q1 = {q1 with tabs = map (fun (t,_,newas) -> t,newas) tabs
-                    ; cond = map (rename (map (fun (_,oldas,newas) -> (oldas,newas)) tabs)) q1.cond} in
-        (* (substitute expressions: see join-up rule) *)
+        let tab_map = map (fun (t,oldas) -> (t, oldas, Auxiliary.fresh_table_name ())) q1.tabs in
+        let tab_alias_map = map (fun (_,oldas,newas) -> (oldas,newas)) tab_map in
+        let q1 = {q1 with cols = map (fun (expr, alias) -> (subst_tabnames tab_alias_map expr, alias)) q1.cols
+                        ; tabs = map (fun (t,_,newas) -> t, newas) tab_map
+                        ; cond = map (subst_tabnames tab_alias_map) q1.cond} in
+        (* (substitute expressions: see JOIN rule) *)
         let env' = (fold_right
                       (fun (l,v) -> Env.binde v (Auxiliary.find_output_column q1 l))
                       fields
@@ -467,16 +541,17 @@ struct
         let cond = evalb env b
         and q = evalS env s in
           {q with cond = cond :: q.cond}
-    | `Table (cols, tablename) ->
-        { cols = map (fun (col,_) -> (`F {table=tablename;column=col},col)) cols;
-          tabs = [tablename,tablename];
+    | `Table (cols, table_var, table_alias) ->
+        { cols = map (fun (col,ty) ->
+                        (`F {table=table_alias; column=col; ty=ty}, col)) cols;
+          tabs = [table_var, table_alias];
           cond = [];
           most = Inf;
           from = num_of_int 0 }
     | `Return b ->
         begin match evalb env b with
           | `Rec fields -> 
-              { cols = List.map (fun (x,y)->(y,x)) fields;
+              { cols = List.map (fun (alias,expr)->(expr,alias)) fields;
                 tabs = [];
                 cond = [];
                 most = Inf;
@@ -498,10 +573,155 @@ struct
   let eval = evalE
 end
 
-(* TODO
-   1. sort (?)
-   2. tests
-   2. length (count), max, min, average
-   3. projection (via typing trick).
-   4. rearranging queries to maximise compilability.
-*)
+(* For now, we're translating the Rewriterules.sqlQuery expression into
+   the Query.query datatype. Soon we'll get rid of Query.query. *)
+
+let rec translateCol : (sqlexpr * name) -> Query.col_or_expr =
+  function
+      (`F{table=tab; column=col; ty=ty}, alias) ->
+        `Column{Query.table_alias=tab; name=col; col_alias=alias;
+             col_type = ty}
+    | (expr, alias) -> `Expr (translateExpr expr, alias)
+
+and translateLikeExpr : like_expr -> Query.like_expr = function
+  | `Percent -> `percent
+  | `Var x -> `variable x
+  | `Str str-> `string str
+  | `Seq exprs -> `seq (map translateLikeExpr exprs)
+      
+and translateOp : op -> string = function
+  | `And -> "AND"
+  | `Or -> "OR"
+  | `Less -> "<"
+  | `LessEq -> "<="
+  | `Equal -> "="
+  | `NotEq -> "<>"
+      
+and translateExpr : sqlexpr -> Query.expression = function 
+  | `V x -> Query.Variable x
+  | `F{table=table; column=col} -> Query.Field (table, col)
+  | `Like (expr, like_expr) ->
+      Query.Binary_op("~", translateExpr expr, Query.LikeExpr(translateLikeExpr like_expr))
+  | `Not expr -> Query.Unary_op("NOT", translateExpr expr)
+  | `Op (op, lhs, rhs) -> Query.Binary_op(translateOp op, translateExpr lhs, translateExpr rhs)
+  | `Rec fields -> assert false
+  | `True -> Query.Boolean true
+  | `False -> Query.Boolean false
+  | `Str str -> Query.Text str
+  | `N n -> Query.Integer n
+
+and translateTable : (string * name) -> Query.table_instance =
+  fun (var, alias) -> (`TableVariable var, alias)
+
+and translateNinf : ninf -> Query.expression option
+  = function
+      I n -> Some(Query.Integer n)
+    | Inf -> None
+
+and translateNum : num -> Query.expression
+  = fun n -> Query.Integer n
+
+and translateQuery : sqlQuery -> Query.query =
+  fun {cols=cols; tabs=tabs; cond=conds; most=most; from=from} ->
+  { Query.result_cols = map translateCol cols;
+    tables = map translateTable tabs;
+    condition = Sql.conjunction (map translateExpr conds);
+    sortings = [];
+    max_rows = translateNinf most;
+    offset = translateNum from
+  }
+
+(* For now, we have to reconstruct the pairings of the 
+   aliases with the variables that hold the actual table 
+   value *)
+let table_names {cols=cols; tabs=tabs; cond=conds; most=most; from=from} =
+  map (fun (x, alias) -> 
+         alias, (Syntax.Variable(x, (Syntax.no_expr_data)))) tabs
+
+let is_underscore_numeric str = 
+  String.get str 0 == '_' &&
+    is_numeric(String.sub str 1 (String.length str - 1))
+
+let deunderscore_numeric str = 
+  let butlast = String.sub str 1 (String.length str - 1) in
+  if (String.get str 0 == '_' && is_numeric butlast) then
+    butlast else str
+
+let dealphafy_tuples = function
+    Syntax.Project(expr, field, data) ->
+      Some(Syntax.Project(expr, deunderscore_numeric field, data))
+  | Syntax.Record_intro(fields, expr, data) ->
+      let alphafy (field, expr) = (deunderscore_numeric field, expr) in
+        Some(Syntax.Record_intro(StringMap.megamap alphafy fields, expr,
+                                 data))
+  | _ -> None
+
+let deunderscore_numeric_col_or_expr = function
+    `Expr _ as e -> e
+  | `Column c -> `Column {c with Query.name = deunderscore_numeric c.Query.name}
+
+let deunderscore_numeric_query q = 
+  {q with Query.result_cols = 
+      map deunderscore_numeric_col_or_expr q.Query.result_cols}
+
+let underscore_numeric_names cols =
+  map (fun (expr, col) ->
+         if is_numeric col then
+           (col, "_" ^ col) 
+         else
+           (col, col) )
+    cols
+
+let rename_cols renamings q =
+  {q with cols = 
+      map (fun (e, name) ->
+             (e, try assoc name renamings with Not_found -> name))
+        q.cols}
+    
+(** Inject a query as a Links expression. 
+    Also handles the renaming of numeric column names. 
+    (TODO: move this renaming to a different phase, such a compilation.) *)
+let injectQuery q data =
+  let names = table_names q in
+  let needs_renaming = exists (snd ->- is_numeric) q.cols in
+  let renamings = underscore_numeric_names q.cols in
+  let renamer =
+    let fields = map
+      (fun (expr, name) ->
+         (name,
+          (Syntax.Project(Syntax.Variable("row", Syntax.no_expr_data),
+                          (try List.assoc name renamings
+                           with Not_found -> name),
+                          Syntax.no_expr_data))))
+      q.cols in
+    let record = Syntax.record_expr fields Syntax.no_expr_data in
+      Syntax.Abstr(["row"],
+                   record,
+                   Syntax.no_expr_data)
+  in
+  let q = if needs_renaming then rename_cols renamings q else q in
+  let q = translateQuery q in
+    if needs_renaming then
+      Syntax.Apply(Syntax.Variable("map", Syntax.no_expr_data),
+                   [renamer;
+                    Syntax.TableQuery(names, q, data)],
+                   Syntax.no_expr_data)
+    else
+      Syntax.TableQuery(names, q, data)
+      
+let sql_compile_prepared (expr : Syntax.expression) : Syntax.expression option =
+  let expr_data = Syntax.expression_data expr in
+  match Compile.compile expr with
+      None -> None
+    | Some qexpr ->
+        let evaled = Eval.eval qexpr in
+          (* a bit hackish; compile is too aggressive, making queries
+             out of simple expressions. an easy heuristic is that if no
+             tables are involved, it's not really a query: *)
+          if evaled.tabs == [] then None else
+            Some (injectQuery evaled expr_data)
+                                                   
+let sql_compile (expr : Syntax.expression) : Syntax.expression option =
+  let expr = Prepare.normalize expr in
+    Syntax.RewriteSyntax.maxonce_td sql_compile_prepared expr
+

@@ -62,6 +62,9 @@ type 'a definition' =
 
 type 'a program' = Program of ('a definition' list * 'a expression')
 
+val program_body :'a program' -> 'a expression'
+val program_defs :'a program' -> 'a definition' list
+
 type position = Lexing.position * string * string
 
 val show_pos : position -> string
@@ -84,8 +87,8 @@ type stripped_program = unit program' deriving (Show)
 exception ASTSyntaxError of position * string
 
 val unit_expression : 'a -> 'a expression'
-
 val list_expr : 'a -> 'a expression' list -> 'a expression'
+val record_expr : (string * 'a expression') list -> 'a -> 'a expression'
 
 val is_value : 'a expression' -> bool
 
@@ -103,12 +106,16 @@ val labelled_string_of_program : program -> string
 val stringlit_value : 'a expression' -> string
 
 val freevars : 'a expression' -> Utility.StringSet.t
+val freevars_all : 'a expression' list -> Utility.StringSet.t
 val freevars_def : 'a definition' -> Utility.StringSet.t
 val freevars_program : 'a program' -> Utility.StringSet.t
 
 val free_bound_type_vars : 'a expression' -> Types.TypeVarSet.t
 val free_bound_type_vars_def : 'a definition' -> Types.TypeVarSet.t
 val free_bound_type_vars_program : 'a program' -> Types.TypeVarSet.t
+
+(** {0 Effect analysis} *)
+val pure : expression -> bool
 
 (** {0 Variable-substitution functions} 
     TBD: gen'ize these for typed & other exprs as well *)

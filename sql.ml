@@ -22,22 +22,19 @@ let rec string_of_expression : expression -> string = function
   | Unary_op (symbol, expr)  -> "("^ symbol ^" "^ (string_of_expression expr) ^")"
   | Query query              -> "("^ string_of_query query ^")"
 and string_of_query (qry:query) : string =
-   let {distinct_only = distinct; result_cols = selects;
-	tables = tables; condition = where; sortings = order} = qry 
-   in
-     "SELECT "^ (if distinct then "DISTINCT " else "")
-     ^ (match selects with
+    "SELECT "
+     ^ (match qry.result_cols with
 	  | [] -> "NULL as null"
 	  | _ -> (Utility.mapstrcat ", " 
                     (function 
-                       | Utility.Left col -> col.table_alias ^"."^ col.name ^" AS "^ col.col_alias
-                       | Utility.Right expr -> string_of_expression expr)
+                       | `Column col -> col.table_alias ^"."^ col.name ^" AS "^ col.col_alias
+                       | `Expr(expr, alias) -> string_of_expression expr ^ " AS " ^ alias)
                     qry.result_cols))
      ^ " FROM " ^ (Utility.mapstrcat ", " 
                      (fun (table, rename) ->
-                        string_of_table_spec table ^ " AS " ^ rename) tables) ^
-       string_of_condition where
-     ^ (match order with
+                        string_of_table_spec table ^ " AS " ^ rename) qry.tables) ^
+       string_of_condition qry.condition
+     ^ (match qry.sortings with
 	  | [] -> "" 
 	  | orders -> " ORDER BY " ^ Utility.mapstrcat ", " sorting_to_sql orders)
      ^ (match qry.max_rows with

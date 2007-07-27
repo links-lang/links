@@ -117,8 +117,9 @@ let query_result_types (query : query) (table_defs : (string * Types.row) list)
       row_field_type col_name (assoc table_alias table_defs) 
     in
       concat_map (function
-                    | Left col -> [col.col_alias, col_type col.table_alias col.name]
-                    | Right _ -> []) query.Query.result_cols
+                    | `Column col -> [col.col_alias, col_type col.table_alias col.name]
+                    | `Expr(expr, _alias) -> failwith("Internal error: no type info for sql expression " 
+                                                      ^ Sql.string_of_expression expr)) query.Query.result_cols
   with NoSuchField field ->
     failwith ("Field " ^ field ^ " from " ^ 
                 Sql.string_of_query query ^
@@ -131,15 +132,18 @@ let do_query globals locals query table_aliases tables =
                 | _ -> assert false) 
             tables) in
     
+    assert (dbs <> []);
+
     if(not (all_equiv (=) dbs)) then
       failwith ("Cannot join across different databases");
     
     let table_defs = combine table_aliases table_defs in
     let db = hd(dbs) in
-      (* TBD: factor this stuff out into
-         a module that processes queries *)
+      (* TBD: factor this stuff out into a module that processes
+         queries *)
     let result_types = query_result_types query table_defs in
     let query_string = Sql.string_of_query (normalise_query globals locals db query) in
+
       prerr_endline("RUNNING QUERY:\n" ^ query_string);
       let t = Unix.gettimeofday() in
       let result = Database.execute_select result_types query_string db in
@@ -468,7 +472,7 @@ fun globals locals expr cont ->
       eval f (UnopApply (locals, Result.Abs)::cont)
   | Syntax.App (f, p, _) ->
       eval f (BinopRight (locals, `App, p)::cont)
-  | Syntax.Abstr (variable, body, _) as f->
+  | Syntax.Abstr (variable, body, _) as f ->
       let value = `RecFunction([("_anon", f)],
                                retain (freevars body) locals,
                                "_anon") in
@@ -476,12 +480,18 @@ fun globals locals expr cont ->
   | Syntax.Apply (Variable ("recv", _), [], _) ->
       apply_cont globals (Recv::cont) (`Record [])
   | Syntax.Apply (fn, params, _) ->
-      eval fn (FuncEvalCont (locals, params)::cont)
+      let locals = retain (freevars_all params) locals in
+        eval fn (FuncEvalCont (locals, params)::cont)
   | Syntax.Condition (condition, if_true, if_false, _) ->
-      eval condition (BranchCont(locals, if_true, if_false) :: cont)
+      let locals = retain (StringSet.union
+                             (freevars if_true)
+                             (freevars if_false)) locals in
+        eval condition (BranchCont(locals, if_true, if_false) :: cont)
   | Syntax.Comparison (l, oper, r, _) ->
+      let locals = retain (freevars r) locals in
       eval l (BinopRight(locals, (oper :> Result.binop), r) :: cont)
   | Syntax.Let (variable, value, body, _) ->
+      let locals = retain (freevars body) locals in
       eval value (LetCont(locals, variable, body) :: cont)
   | Syntax.Rec (defs, body, _) ->
       let defs' = List.map (fun (n, v, _type) -> (n, v)) defs in
@@ -492,18 +502,28 @@ fun globals locals expr cont ->
   | Syntax.Xml_node (tag, (k, v)::attrs, elems, _) -> 
       eval v (XMLCont (locals, tag, Some k, [], attrs, elems) :: cont)
   | Syntax.Xml_node (tag, [], (child::children), _) -> 
+      let locals = retain (freevars_all children) locals in
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
 
   | Syntax.Record_intro (fields, None, _) ->
+      let fvss = (StringMap.fold (fun _label value fvs ->
+                                    freevars value :: fvs) 
+                    fields []) in
+      let fvs = StringSet.union_all fvss in
       apply_cont
         globals
         (StringMap.fold (fun label value cont ->
                            BinopRight(locals, `RecExt label, value) :: cont) fields cont)
         (`Record [])
   | Syntax.Record_intro (fields, Some record, _) ->
+      let fvss = (StringMap.fold (fun _label value fvs ->
+                                    freevars value :: fvs) 
+                    fields []) in
+      let fvs = StringSet.union_all fvss in
       eval record (StringMap.fold (fun label value cont ->
                                      BinopRight(locals, `RecExt label, value) :: cont) fields cont)
   | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
+      let locals = retain (freevars body) locals in
         eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Project (expr, label, _) ->
       eval expr (UnopApply (locals, Result.Project label) :: cont)
@@ -522,8 +542,8 @@ fun globals locals expr cont ->
   | Syntax.Concat (l, r, _) ->
       eval l (BinopRight(locals, `Union, r) :: cont)
 
-  | Syntax.For (expr, var, value, _) ->
-      eval value (StartCollExtn(locals, var, expr) :: cont)
+  | Syntax.For (body, var, src, _) ->
+      eval src (StartCollExtn(locals, var, body) :: cont)
   | Syntax.Database (params, _) ->
       eval params (UnopApply(locals, MkDatabase) :: cont)
 	(* FIXME: the datatype should be explicit in the type-erased TableHandle *)
@@ -549,6 +569,7 @@ fun globals locals expr cont ->
         eval (Syntax.list_expr d th_exprs)
           (UnopApply(locals, QueryOp(query, aliases)) :: cont)
   | Syntax.Call_cc(arg, _) ->
+      let locals = [] in
       let cc = `Continuation cont in
         eval arg (ApplyCont(locals, [cc]) :: cont)
   | Syntax.SortBy (list, byExpr, d) ->

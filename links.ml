@@ -218,9 +218,7 @@ let main () =
   (* make sure the fresh type variable counter does not clash with any type variables from
      the prelude
 
-     [BUG]
-     
-     we should really do something similar for term variables
+     BUG: we should really do something similar for term variables
   *)
   let _ =
     Types.bump_variable_counter

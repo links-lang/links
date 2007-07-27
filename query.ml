@@ -2,7 +2,9 @@
 open Num
 open Utility
 
-type like_expr = [ `caret | `dollar | `underscore | `percent | `string of string | `variable of string | `seq of like_expr list]
+type like_expr = [ `caret | `dollar | `underscore | `percent
+                 | `string of string | `variable of string
+                 | `seq of like_expr list]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (* Convert a like expression to a string. *)
@@ -40,7 +42,6 @@ type expression =
       
 (** query:
     A query to a database. The elements in the record type are in order: {ol
-      {li True if no duplicates should be returned, false otherwise.}
       {li A set of all columns to be returned formated as (table renaming, column name, renaming, SLinks kind).
         If this list is empty, the SQL 'NULL' value will be returned for every row.}
       {li A list of tables to query formated as (table name, table renaming).}
@@ -48,8 +49,7 @@ type expression =
       {li A list of colums to be ordered formated as `Asc (table renaming, column name) for ascending ordering,
          `Desc (table renaming, column name) for descending ordering. If the list is empty, no ordering is done.}}
     @version 1.0 *)
-and query = {distinct_only : bool;
-             result_cols : col_or_expr list;
+and query = {result_cols : col_or_expr list;
              tables : table_instance list;
              condition : expression;
              sortings : sorting list;
@@ -60,9 +60,9 @@ and query = {distinct_only : bool;
 and sorting = [`Asc of (string * string) | `Desc of (string * string)]
 and column = {table_alias : string;
               name : string;
-              col_alias : string; (* TBD: call this `alias' *)
+              col_alias : string;
               col_type : Types.datatype}
-and col_or_expr = (column, expression) either
+and col_or_expr = [`Column of column | `Expr of (expression * string)]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 (* Simple accessors *)
@@ -73,10 +73,10 @@ let add_sorting query col =
 
 let owning_table of_col qry =
   match (List.find (function
-                              | Left c -> c.name = of_col
-                              | Right _ -> false) qry.result_cols) with
-    | Left col_rec -> col_rec.table_alias
-    | Right _ -> assert false
+                      | `Column c -> c.name = of_col
+                      | `Expr _ -> false) qry.result_cols) with
+    | `Column col_rec -> col_rec.table_alias
+    | `Expr _ -> assert false
 
 let rec freevars {condition = condition;
                   offset = offset;
@@ -94,8 +94,8 @@ and qexpr_freevars = function
   | Query q -> freevars q
   | _ -> []
 and colorexpr_freevars = function
-  | Left _ -> []
-  | Right e -> qexpr_freevars e
+  | `Column _ -> []
+  | `Expr(e, _) -> qexpr_freevars e
 
 let rec replace_var name expr = function
   | Variable var when var = name -> expr

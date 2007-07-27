@@ -84,9 +84,11 @@ type 'data expression' =
   | List_of of ('data expression' * 'data)
   | Concat of ('data expression' * 'data expression' * 'data)
   | For of ('data expression' * string * 'data expression' * 'data)
+      (* For(body, var, src, _data) *)
   | Database of ('data expression' * 'data)
   | TableQuery of
-      ((* the tables: *) (string * 'data expression') list *
+      ((* the tables: *) (string (* alias *) 
+                          * 'data expression' (* variable whose value is the corresponding table *)) list *
        (* the query: *) Query.query *
         'data)
   | TableHandle of ((* the database: *) 'data expression' 
@@ -129,6 +131,12 @@ let visit_def unit visitor def =
 type 'a program' = Program of ('a definition' list * 'a expression')
   deriving (Functor, Rewriter, Show)
 
+let program_body :'a program' -> 'a expression' =
+  function Program(_defs, body) -> body
+
+let program_defs :'a program' -> 'a definition' list =
+  function Program(defs, _body) -> defs
+
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
 let defined_names exprs = 
@@ -162,17 +170,10 @@ let rec is_value : 'a expression' -> bool = function
   | Rec (bs, e, _) -> List.for_all (is_value -<- (fun (_,x,_) -> x)) bs && is_value e
   | _ -> false
 
+
 type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show)
 type untyped_data = [`U of position] deriving (Eq, Typeable, Show)
 type data = [untyped_data | typed_data] deriving (Typeable, Show)
-
-let data_position = function
-  | `T (pos, _, _)
-  | `U pos -> pos
-
-let show_pos : position -> string = 
-  fun ((pos : Lexing.position), _, _) ->
-    Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
 
 let is_symbolic_ident name = 
   (Str.string_match (Str.regexp "^[!$%&*+/<=>?@\\^-.|_]+$") name 0)
@@ -450,6 +451,8 @@ let freevars (expression : 'a expression') : StringSet.t =
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
 
+let freevars_all expr = StringSet.union_all (map freevars expr)
+
 let freevars_def def = visit_def StringSet.empty freevars def
 
 let freevars_program (Program (defs, body)) =
@@ -492,10 +495,6 @@ let free_bound_type_vars_program (Program (defs, body))=
     S.union
       (S.union_all (List.map free_bound_type_vars_def defs))
       (free_bound_type_vars body)
-
-let rec list_expr data = function
-    [] -> Nil(data)
-  | expr::etc -> Concat(List_of(expr, data), list_expr data etc, data)
 
 let expression_data : ('a expression' -> 'a) = function 
   | HasType (_, _, data) -> data
@@ -553,6 +552,8 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | Record_intro (a, b,_) -> Record_intro (a, b,data)
     | Record_selection (a, b, c, d, e, _) -> 
         Record_selection (a, b, c, d, e,data)
+    | Project (a,b,_) -> Project(a,b,data)
+    | Erase (a,b,_) -> Erase(a,b,data)
     | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
     | Variant_selection (a, b, c, d, e, f, _) ->
         Variant_selection (a, b, c, d, e, f, data)
@@ -574,7 +575,14 @@ let set_definition_data : ('b -> 'a definition' -> 'b definition') =
     | Alien (a, b, c,_) -> Alien (a, b, c,data)
 let set_program_data : ('b -> 'a program' -> 'b program') =
   fun data (Program (ds, body)) -> Program (ds, set_data data body)
-      
+
+let data_position = function
+  | `T (pos, _, _)
+  | `U pos -> pos
+
+let position e = data_position (expression_data e)
+
+let no_expr_data = `T(dummy_position, `Not_typed, None)      
 
 let node_datatype : (expression -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- expression_data
 let def_datatype : (definition -> Types.datatype) = (fun (`T(_, datatype, _)) -> datatype) -<- definition_data
@@ -585,12 +593,38 @@ let set_node_datatype : (expression * Types.datatype) -> expression =
     in
       set_data (`T(pos, t, label)) e
 
-let position e = data_position (expression_data e)
-
-let no_expr_data = `T(dummy_position, `Not_typed, None)
+let show_pos : position -> string = 
+  fun ((pos : Lexing.position), _, _) ->
+    Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
 
 module RewriteSyntax = Rewrite_expression'(struct type a = typed_data end)
 module RewriteUntypedExpression = Rewrite_expression'(struct type a = untyped_data end)
+
+(** [pure]
+
+    Checkes whether the evaluation of an expression is known to be free
+    from side effects
+*)
+let pure : expression -> bool = 
+  (* Everything is pure except the application of certain primitive
+     functions and of any functions which call those.  For now, we'll
+     just punt when we see a function application.  Eventually the
+     type system will help us out.
+
+     NB: continuation invocation is impure in the sense that we can't
+     replace `x = f(3); 4' with `4' if `f' is a continuation.
+  *)
+  let rec pure default = function 
+      (* TBD: annotate ALL prim funcs as to pureness *)
+    | Apply((Variable("take", _) | Variable("drop", _)), arg, _)
+      -> for_all (pure default) arg
+    | Apply _    -> false
+    | App _       -> false
+    | TableQuery _ -> false
+        (* Is callCC pure? *)
+    | e       -> default e
+  and all_true l = fold_right (&&) l true in
+    reduce_expression pure (all_true -<- snd)
 
 (* apply a transformer (map) on expressions to a definition *)
 let transform_def transformer def =
@@ -703,6 +737,17 @@ let labelize =
        (fun expr -> 
           Some(set_label expr (Some(label_for_expr expr)))))
 
+(** {0 Utilities to construct various kinds of expressions given 
+    sub-expressions} *)
+
+let rec list_expr data = function
+    [] -> Nil(data)
+  | expr::etc -> Concat(List_of(expr, data), list_expr data etc, data)
+
+let record_expr alist data = 
+  let fields = StringMap.from_alist alist in
+    Record_intro(fields, None, data)
+
 (** {0 Skeleton} *)
 
 (** [skeleton] has a case for each of the [Syntax] constructors, and
@@ -763,6 +808,7 @@ let definition_skeleton = function
       Define(name, expr, loc_annotation, d)
   | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
   | Alias(typename, quantifiers, datatype, d) -> Alias(typename, quantifiers, datatype, d)
+
 let program_skeleton =
   fun (ds, body) ->
     (List.map definition_skeleton ds, skeleton body)

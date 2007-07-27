@@ -1090,8 +1090,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	(List.fold_right
 	   (fun col env -> 
               match col with 
-                | Left col -> StringMap.add col.Query.name (`Present col.Query.col_type) env
-                | Right _ -> env)
+                | `Column col -> StringMap.add col.Query.name (`Present col.Query.col_type) env
+                | `Expr _ -> env)
 	   query.Query.result_cols StringMap.empty, Unionfind.fresh `Closed) in
       let datatype =  `Application ("List", [`Record row]) in
       let rrow = make_empty_open_row () in
