@@ -395,20 +395,20 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	          
             | CollExtn (locals, var, expr, rslts, inputs) ->
                 (let new_results = match value with
-                     (* Check that value's a collection, and extract its contents: *)
+                     (* Check that value is a collection, and extract its
+                        contents: *)
                    | `List (expr_elems) -> expr_elems
-                   | r -> raise (Runtime_error ("TF183 : " ^ string_of_result r))
+                   | _ -> assert false
 	         in
 	           (* Extend rslts with the newest list of results. *)
-                   let rslts = (List.rev new_results) :: rslts in
+                 let rslts = (List.rev new_results) :: rslts in
 	           match inputs with
 		       [] -> (* no more inputs, collect results & continue *)
 		         apply_cont globals cont (`List (List.rev (List.concat rslts)))
-		     | (next_input_expr::inputs) ->
-		         (* Evaluate next input, continuing with given results: *)
-		         interpret globals (Result.bind locals var next_input_expr) expr
-		           (CollExtn(locals, var, expr, 
-				     rslts, inputs) :: cont)
+		     | (next_input::inputs) ->
+		         (* Eval next input, continue with given results: *)
+		         interpret globals (Result.bind locals var next_input) expr
+		           (CollExtn(locals, var, expr, rslts, inputs) :: cont)
 	        )
                   
             | XMLCont (locals, tag, attrtag, children, attrs, elems) ->
