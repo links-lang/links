@@ -75,6 +75,7 @@ module type Phrase = sig
   | `Var of (name)
   | `FunLit of (name option * P.ppattern list list * P.phrase)
   | `Spawn of P.phrase
+  | `SpawnWait of P.phrase
   | `ListLit of (P.phrase list)
   | `Definition of (name * P.phrase * location)
   | `Iteration of ([ `List of P.binder | `Table of P.binder ] * P.phrase * (*where:*)P.phrase option 

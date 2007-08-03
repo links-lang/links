@@ -465,7 +465,7 @@ let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag =
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"]
 
 (** {0 Code generation} *)
 

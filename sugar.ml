@@ -936,6 +936,7 @@ module Desugarer =
              | `FunLit (_, patterns, body) -> 
                  flatten (concat_map (List.map ptv) patterns @ [etv body])
              | `Spawn e -> etv e
+             | `SpawnWait e -> etv e
              | `ListLit es -> etvs es
              | `Definition (_, e, _) -> etv e
              | `Iteration (generator, body, filter, sort) ->
@@ -1149,6 +1150,8 @@ module Desugarer =
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
                (`FnAppl ((`Var "spawn", pos'), ([`FunLit (None, [[]], e),  pos'], pos')), pos')
+           | `SpawnWait e -> desugar 
+               (`FnAppl ((`Var "spawnWait", pos'), ([`FunLit (None, [[]], e),  pos'], pos')), pos')
 
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)

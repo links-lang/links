@@ -295,6 +295,10 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   IMPURE);
 (*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
+  "spawnWait",
+  (`Client, datatype "(() -{b}-> d) -> d",
+  IMPURE);
+
   "_MAILBOX_",
   (`Int (num_of_int 0),
    (let u = fresh_type_variable () in
