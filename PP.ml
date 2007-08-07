@@ -99,8 +99,8 @@ let binop left op right = group (nest 2
                                 )
 let trinop left op1 middle op2 right =
   group (nest 2
-           ( left ^| group (text op1 ^+^ middle)
-               ^| group (text op2 ^+^ right)
+           ( left ^| group (nest 2 (text op1 ^+^ middle))
+               ^| group (nest 2 (text op2 ^+^ right))
            )
         )
 
