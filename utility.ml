@@ -613,15 +613,18 @@ struct
   let isBlank = function ' '|'\t' -> true | _ -> false
 end
 
-(*** character encoding ***)
+(** {0 Character Encoding} **)
 
-(* Read a three-digit octal escape sequence and return the
-   corresponding char *)
+(** Read a three-digit octal escape sequence and return the
+    corresponding char *)
+
 let read_octal c =
   let octal_char = function
     | '0' -> 0 | '1' -> 1 | '2' -> 2 | '3' -> 3
     | '4' -> 4 | '5' -> 5 | '6' -> 6 | '7' -> 7 | _ -> invalid_arg "read_octal"
-  in Char.chr ((octal_char c.[0]) * 64 + (octal_char c.[1]) * 8 + (octal_char c.[2]))
+  in Char.chr((octal_char c.[0]) * 64 +
+              (octal_char c.[1]) * 8 +
+              (octal_char c.[2]))
 
 let read_hex c =
   let hex_char = function
@@ -635,8 +638,8 @@ let read_hex c =
     | 'f' | 'F' -> 15 | _ -> invalid_arg "read_hex"
   in Char.chr ((hex_char c.[0]) * 16 + (hex_char c.[1]))
 
-(* Handle escape sequences in string literals.
-
+(**Handle escape sequences in string literals.*)
+(*
    I would describe them here but the O'Caml lexer gets too confused,
    even though they're in a comment.
 
@@ -657,12 +660,12 @@ let decode_escapes s =
         | "\\n" -> "\n"
         | "\\r" -> "\r"
         | "\\t" -> "\t"
-        | other when other.[1] = 'x' || other.[1] = 'X' -> String.make 1 (read_hex (String.sub other 2 2)) 
+        | other when other.[1] = 'x' || other.[1] = 'X' ->
+            String.make 1 (read_hex (String.sub other 2 2)) 
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Str.global_substitute escape_regexp unquoter s
 
-(** xml_escape
-    xml_unescape
+(** [xml_escape], [xml_unescape]
     Escape/unescape for XML escape sequences (e.g. &amp;)
 *)
 let xml_escape s = 
@@ -673,7 +676,7 @@ let xml_unescape s =
   Str.global_replace (Str.regexp "&amp;") "&"
     (Str.global_replace (Str.regexp "&lt;") "<" s)
 
-(* base64 *)
+(** (0 base64 Routines) *)
 let base64decode s = 
   try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
   with Invalid_argument "Netencoding.Base64.decode" 
@@ -681,7 +684,7 @@ let base64decode s =
 
 and base64encode = Netencoding.Base64.encode
 
-(*** ocaml versions ***)
+(** (0 Ocaml Version Comparison) ***)
 let ocaml_version_number = (List.map int_of_string
                               (split_string Sys.ocaml_version '.'))
 
@@ -693,8 +696,8 @@ let rec version_atleast a b =
     | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
-(* Any two calls to `gensym' return distinct strings.  The optional
-   `prefix' argument can be used to supply a prefix for the string.
+(** Any two calls to [gensym] return distinct strings.  The optional
+    [prefix] argument can be used to supply a prefix for the string.
 *)
 let gensym = 
   let counter = ref 0 in
@@ -704,9 +707,10 @@ let gensym =
         pref ^ "_g" ^ string_of_int !counter
       end
 
-(** gensyms a new symbol for each item in the list and returns the
-    pairs of each item with its new name.
-    The "graph" of the gensym function, if you will.
+(** gensym a new symbol for each item in the list and return the pairs
+    of each item with its new name, always using the optional [prefix]
+    argument as the prefix if given. The "graph" of the gensym function, 
+    if you will.
 *)
 let pair_fresh_names ?prefix:pfx list = 
   graph_func
@@ -715,17 +719,24 @@ let pair_fresh_names ?prefix:pfx list =
        | None     -> (fun _ -> gensym ()))
     list 
 
+(** Given a list of names, generate a fresh name for each and pair the
+    old name with the new one. *)
 let refresh_names = 
   graph_func (fun x -> gensym ~prefix:x ())
 
+(** Return [true] if any element of the given list is [true] *)
 let any_true = List.exists identity
 
+(** {0 System interaction} *)
+
+(** Get an environment variable, return [Some x] if it is defined as
+    x, or [None] if it is not in the environment. *)
 let getenv : string -> string option =
   fun name ->
     try Some (Sys.getenv name)
     with Not_found -> None
 
-(* {0 Exception-handling helpers} *)
+(** {0 Exception-handling helpers} *)
 
 let catch_notfound msg f a =
   try
