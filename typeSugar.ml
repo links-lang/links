@@ -186,17 +186,11 @@ let type_check lookup_pos =
             let ft = Types.make_formlet_type a in
               unify (typ e) ft;
               unify (typ pattern) a;
-
-        (* declarations *)
-        | `TypeDeclaration _ -> assert false
-        | `Definition _ ->      assert false
-        | `Foreign _ ->         assert false
-        | `InfixDecl ->         assert false
+              `FormBinding (e, pattern), Types.xml_type
 
         (* various expressions *)
         | `Iteration _ ->       assert false
         | `Escape _ ->          assert false
-        | `HandleWith _ ->      assert false
         | `Conditional (i,t,e) ->
             let i = type_check typing_env i
             and t = type_check typing_env t
@@ -218,3 +212,25 @@ let type_check lookup_pos =
         | `Switch _ ->          assert false
     in e, (pos, t)
   in type_check
+
+let type_top_level lookup_pos =
+  let rec type_top_level ((env, alias_env) as typing_env) (def, pos) =
+    let unify = Utils.unify alias_env
+    and unify_rows = Utils.unify_rows alias_env 
+    and typ (_,(_,t)) = t 
+    and type_pattern = type_pattern lookup_pos in
+    let def, t =
+      match (def : Untyped.toplevel') with
+        (* declarations *)
+        | `VarDefinition _   -> assert false
+        | `FunDefinition _   -> assert false
+        | `Foreign _         -> assert false
+        | `TypeDeclaration _ -> assert false
+        | `InfixDecl         -> assert false
+        | #phrasenode as e ->
+            type_check lookup_pos typing_env (e, pos)
+    in
+      def, (pos, t)
+  in
+    type_top_level
+    
