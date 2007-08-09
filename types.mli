@@ -72,6 +72,7 @@ type typing_environment = environment * alias_environment
 (* useful types *)
 val unit_type : datatype
 val string_type : datatype
+val database_type : datatype
 val xml_type : datatype
 val native_string_type : datatype
 

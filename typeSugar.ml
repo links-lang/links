@@ -1,3 +1,5 @@
+
+
 open Utility
 open Sugartypes
 
@@ -33,8 +35,17 @@ let constant_type = function
   | `Char _   -> `Primitive `Char
   | `String _ ->  Types.string_type
 
-let rec type_check : Types.typing_environment -> Untyped.phrase -> Typed.phrase =
-  fun ((env, alias_env) as typing_env) (expr, pos) ->
+let type_section env (`Section s as s') = s', match s with
+    `Minus         -> Utils.instantiate env "-"
+  | `FloatMinus    -> Utils.instantiate env "-."
+  | `Project label ->
+      let f = Types.fresh_type_variable () in
+      let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
+        `Function (r, mailbox_type env, f)
+  | `Name var      -> Utils.instantiate env var
+
+let type_check lookup_pos = 
+  let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
     and typ (_,(_,t)) = t in
@@ -74,6 +85,24 @@ let rec type_check : Types.typing_environment -> Untyped.phrase -> Typed.phrase 
             and args   = opt_map (type_check typing_env) args
             and name   = type_check typing_env name in
               `DatabaseLit (name, (driver, args)), `Primitive `DB
+
+        | `TableLit (tname, dtype, constraints, db) ->
+            let tname = type_check typing_env tname 
+            and db = type_check typing_env db in
+            let _ = unify (typ tname) Types.string_type
+            and _ = unify (typ db) Types.database_type in
+            let read_row = match dtype with
+              | RecordType row ->
+                  row
+              | UnitType ->
+                  raise (Syntax.ASTSyntaxError(lookup_pos pos, "Tables must have at least one field"))
+              | _ ->
+                  raise (Syntax.ASTSyntaxError(lookup_pos pos, "Tables must take a non-empty record type")) in
+            let write_row = Sugar.make_write_row read_row constraints  in
+              `TableLit (tname, dtype, constraints, db), 
+              `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
+                      snd (Sugar.desugar_datatype (RecordType write_row)))
+
         | `TableLit _ ->        assert false
         | `DBDelete (generator,None) ->
             assert false
@@ -151,11 +180,4 @@ let rec type_check : Types.typing_environment -> Untyped.phrase -> Typed.phrase 
         | `TypeAnnotation _ ->  assert false
         | `Switch _ ->          assert false
     in e, (pos, t)
-and type_section env (`Section s as s') = s', match s with
-    `Minus         -> Utils.instantiate env "-"
-  | `FloatMinus    -> Utils.instantiate env "-."
-  | `Project label ->
-      let f = Types.fresh_type_variable () in
-      let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
-        `Function (r, mailbox_type env, f)
-  | `Name var      -> Utils.instantiate env var
+  in type_check

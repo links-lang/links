@@ -1624,14 +1624,27 @@ module Desugarer =
      in
        desugar
 
-   let desugar_datatype = generalize ->- desugar_assumption
+   let make_write_row (fields, rest : row) (constraints : (string * fieldconstraint list) list) : row  =
+     let rec mr =
+       function
+         | [] -> []
+         | ((name, body) :: fields) ->
+             if List.mem_assoc name constraints
+               && List.exists (function
+                                 | `Readonly -> true) (List.assoc name constraints) then
+                 mr fields
+             else
+               (name, body) :: mr fields
+     in (mr fields, rest)
 
+   let desugar_datatype = generalize ->- desugar_assumption
  end : 
   sig 
     val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
     val desugar_definitions : (pposition -> Syntax.position) -> toplevel list -> Syntax.untyped_definition list
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
     val fresh_type_variable : unit -> Sugartypes.datatype
+    val make_write_row : row -> (string * fieldconstraint list) list -> row
   end)
 
 include Desugarer
