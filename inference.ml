@@ -1291,8 +1291,6 @@ let check_for_duplicate_defs
     if not (StringMap.is_empty duplicates) then
       raise (Errors.MultiplyDefinedToplevelNames duplicates)
 
-(* [HACKS] *)
-(* two pass typing: yuck! *)
 let type_program typing_env (Program (defs, _) as program) =
   check_for_duplicate_defs typing_env defs;
   Debug.if_set (show_typechecking) (fun () -> "Typechecking program...");

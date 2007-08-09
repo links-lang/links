@@ -163,7 +163,6 @@ let keywords = [
  "for"      , FOR;
  "from"     , FROM; 
  "fun"      , FUN; 
- "handle"   , HANDLE; 
  "formlet"  , FORMLET;
  "if"       , IF; 
  "in"       , IN; 

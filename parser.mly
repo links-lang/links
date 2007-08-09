@@ -9,17 +9,21 @@ let ensure_match (start, finish) (opening : string) (closing : string) = functio
   | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
                                            (start, finish)))
 
-let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
+let pos () : Sugartypes.pposition = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 let default_fixity = Num.num_of_int 9
 
-let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
-  if signame <> name then 
+let annotate (signame, datatype) ((name, phrase, location), dpos) : toplevel =
+  assert false
+(*  if signame <> name then 
     raise (Sugar.ConcreteSyntaxError
              ("Signature for `" ^ signame ^ "' should precede definition of `"
               ^ signame ^ "', not `"^ name ^"'.",
               pos ()));
-  `TypeAnnotation ((`Definition defbit, dpos),datatype), pos()
+  `Definition (name,phrase,location,Some datatype), dpos
+*)
+
+let annotate _ _ = assert false
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -39,7 +43,7 @@ let parseRegexFlags f =
 %token LPAREN RPAREN
 %token LBRACE RBRACE ELBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW HANDLE WHERE FORMLET
+%token FOR LARROW LLARROW WHERE FORMLET
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
@@ -80,13 +84,23 @@ let parseRegexFlags f =
 %start interactive
 %start file
 
-%type <Sugartypes.phrase list * Sugartypes.phrase option> file
+%type <Sugartypes.toplevel list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex'> regex_pattern_alternate
+%type <Sugartypes.regex'> regex_pattern
 %type <Sugartypes.regex' list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
+%type <Sugartypes.block> block
+%type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.pposition> tlfunbinding
+%type <Sugartypes.phrase> postfix_expression
+%type <Sugartypes.phrase> primary_expression
+%type <Sugartypes.phrase> atomic_expression
+%type <Sugartypes.constant * Sugartypes.pposition> constant
+%type <(string * Sugartypes.phrase list) list> attr_list
+%type <Sugartypes.phrase list> attr_val
+%type <Sugartypes.binding> binding
 
 %%
 
@@ -124,35 +138,35 @@ declarations:
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration { $1 }
-| nofun_declaration { $1 }
+| fun_declaration                                              { $1 }
+| nofun_declaration                                            { $1 }
 
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
                                                                    (`InfixDecl, pos()) }
-| tlvarbinding SEMICOLON                                       { let d, pos = $1 in `Definition d, pos }
+| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `VarDefinition (d,p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
 
 fun_declarations:
-| fun_declarations fun_declaration { $1 @ [$2] }
-| fun_declaration { [$1] }
+| fun_declarations fun_declaration                             { $1 @ [$2] }
+| fun_declaration                                              { [$1] }
 
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { let d, pos = $1 in `Definition d, pos }
+| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `FunDefinition (d,p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 $2 }
 
 tlfunbinding:
-| FUN VARIABLE arg_lists perhaps_location block                { ($2, (`FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| OP pattern op pattern perhaps_location block                 { ($3, (`FunLit (Some $3, [[$2; $4]], $6), pos()), $5), pos() }
-| OP PREFIXOP pattern perhaps_location block                   { ($2, (`FunLit (Some $2, [[$3]], $5), pos()), $4), pos() }
-| OP pattern POSTFIXOP perhaps_location block                  { ($3, (`FunLit (Some $3, [[$2]], $5), pos()), $4), pos() }
+| FUN VARIABLE arg_lists perhaps_location block                { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
+| OP pattern op pattern perhaps_location block                 { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
+| OP PREFIXOP pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
+| OP pattern POSTFIXOP perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { ($2, $5, $3), pos() }
@@ -186,16 +200,16 @@ perhaps_location:
 | /* empty */                                                  { `Unknown }
 
 constant:
-| UINTEGER                                                     { `IntLit $1    , pos() }
-| UFLOAT                                                       { `FloatLit $1  , pos() }
-| STRING                                                       { `StringLit $1 , pos() }
-| TRUE                                                         { `BoolLit true , pos() }
-| FALSE                                                        { `BoolLit false, pos() }
-| CHAR                                                         { `CharLit $1   , pos() }
+| UINTEGER                                                     { `Int $1    , pos() }
+| UFLOAT                                                       { `Float $1  , pos() }
+| STRING                                                       { `String $1 , pos() }
+| TRUE                                                         { `Bool true , pos() }
+| FALSE                                                        { `Bool false, pos() }
+| CHAR                                                         { `Char $1   , pos() }
 
 atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
-| constant                                                     { $1 }
+| constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 
 primary_expression:
@@ -203,7 +217,7 @@ primary_expression:
 | LBRACKET RBRACKET                                            { `ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { `ListLit $2, pos() } 
 | xml                                                          { $1 }
-| FUN arg_lists block                                          { `FunLit (None, $2, $3), pos() }
+| FUN arg_lists block                                          { `FunLit ($2, (`Block $3, pos ())), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None), pos() }
@@ -258,8 +272,8 @@ op:
 postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (`Name $2, $1), pos() }
-| block                                                        { $1 }
-| SPAWN block                                                  { `Spawn $2, pos() }
+| block                                                        { `Block $1, pos () }
+| SPAWN block                                                  { `Spawn (`Block $2, pos()), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
@@ -403,13 +417,13 @@ attr_list:
 | attr_list attr                                               { $2 :: $1 }
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
-| xmlid EQ LQUOTE RQUOTE                                       { ($1, [`StringLit "", pos()]) }
+| xmlid EQ LQUOTE RQUOTE                                       { ($1, [(`Constant (`String ""), pos() : Sugartypes.phrase)]) }
 
 attr_val:
-| block                                                        { [$1] }
-| STRING                                                       { [`StringLit $1, pos()] }
-| block attr_val                                               { $1 :: $2 }
-| STRING attr_val                                              { (`StringLit $1, pos()) :: $2}
+| block                                                        { [`Block $1, pos ()] }
+| STRING                                                       { [`Constant (`String $1), pos()] }
+| block attr_val                                               { (`Block $1, pos ()) :: $2 }
+| STRING attr_val                                              { (`Constant (`String $1), pos()) :: $2}
 
 xml_tree:
 | LXML SLASHRXML                                               { `Xml ($1, [], []), pos() } 
@@ -424,7 +438,7 @@ xml_contents_list:
 | xml_contents xml_contents_list                               { $1 :: $2 }
 
 xml_contents:
-| block                                                        { $1 }
+| block                                                        { `Block $1, pos () }
 | form_binding                                                 { $1 }
 | xml_tree                                                     { $1 }
 | CDATA                                                        { `TextNode (Utility.xml_unescape $1), pos() }
@@ -482,13 +496,12 @@ escape_expression:
 | iteration_expression                                         { $1 }
 | ESCAPE VARIABLE IN postfix_expression                        { `Escape ($2, $4), pos() }
 
-handlewith_expression:
+formlet_expression:
 | escape_expression                                            { $1 }
-| HANDLE exp WITH VARIABLE RARROW exp                          { `HandleWith ($2, $4, $6), pos() }
 | FORMLET xml YIELDS exp                                       { `Formlet($2, $4), pos() }
 
 table_expression:
-| handlewith_expression                                        { $1 }
+| formlet_expression                                           { $1 }
 | TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, $4, $5, $7), pos()} 
 
 perhaps_table_constraints:
@@ -519,21 +532,21 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Binding ($2, $4), pos() }
-| exp SEMICOLON                                                { $1 }
-| FUN VARIABLE arg_lists block                                 { `FunLit (Some $2, $3, $4), pos() }
+| VAR pattern EQ exp SEMICOLON                                 { `Binder ($2, $4) }
+| exp SEMICOLON                                                { `Exp $1 }
+| FUN VARIABLE arg_lists block                                 { `Funbind ($2, ($3, (`Block $4, pos ()))) }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
 
 block:
-| LBRACE block_contents RBRACE                                 { `Block $2, pos() }
+| LBRACE block_contents RBRACE                                 { $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [$2], (`RecordLit ([], None), pos())) }
+| bindings exp SEMICOLON                                       { ($1 @ [`Exp $2], (`RecordLit ([], None), pos())) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([$1], (`RecordLit ([], None), pos())) }
+| exp SEMICOLON                                                { ([`Exp $1], (`RecordLit ([], None), pos())) }
 | exp                                                          { [], $1 }
 | perhaps_semi                                                 { ([], (`TupleLit [], pos())) }
 
@@ -655,7 +668,7 @@ regex_flags_opt:
 regex_replace:
 | /* empty */                                                  { `Literal ""}
 | REGEXREPL                                                    { `Literal $1}
-| block                                                        { `Splice $1}
+| block                                                        { `Splice (`Block $1, pos ()) }
 
 regex_pattern:
 | RANGE                                                        { `Range $1 }
@@ -668,7 +681,7 @@ regex_pattern:
 | regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice $1 }
+| block                                                        { `Splice (`Block $1, pos ()) }
 
 regex_pattern_alternate:
 | regex_pattern_sequence                                       { `Seq $1 }
@@ -708,7 +721,7 @@ parenthesized_pattern:
 primary_pattern:
 | VARIABLE                                                  { `Variable $1, pos() }
 | UNDERSCORE                                                { `Any, pos() }
-| constant                                                  { `Constant $1, pos() }
+| constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }
 | LBRACKET patterns RBRACKET                                { `List $2, pos() }
 | parenthesized_pattern                                     { $1 }

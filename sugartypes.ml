@@ -46,103 +46,117 @@ type fieldconstraint = [ `Readonly ]
 module type PhraseArgs = sig
   type ppattern
   type phrase
-  type binder
+   type toplevel
 end
 
 module type Phrase = sig
   module P : PhraseArgs
 
+  type phrase = P.phrase
+  type ppattern = P.ppattern
+  type toplevel = P.toplevel
+
+  type binder  = ppattern * phrase
+
+  type constant = [
+  | `Float of float
+  | `Int of Num.num
+  | `String of string
+  | `Bool of bool
+  | `Char of char ]
+
   type pattern = [
   | `Any
   | `Nil
-  | `Cons of (P.ppattern * P.ppattern)
-  | `List of (P.ppattern list)
-  | `Variant of (string * P.ppattern option)
-  | `Record of ((string * P.ppattern) list * P.ppattern option)
-  | `Tuple of (P.ppattern list)
-  | `Constant of P.phrase
+  | `Cons of (ppattern * ppattern)
+  | `List of (ppattern list)
+  | `Variant of (string * ppattern option)
+  | `Record of ((string * ppattern) list * ppattern option)
+  | `Tuple of (ppattern list)
+  | `Constant of constant
   | `Variable of string
-  | `As of (string * P.ppattern)
-  | `HasType of P.ppattern * datatype
+  | `As of (string * ppattern)
+  | `HasType of ppattern * datatype
   ]
       
   type phrasenode = [
-  | `FloatLit of (float)
-  | `IntLit of (Num.num)
-  | `StringLit of (string)
-  | `BoolLit of (bool)
-  | `CharLit of (char)
+  | `Constant of constant
   | `Var of (name)
-  | `FunLit of (name option * P.ppattern list list * P.phrase)
-  | `Spawn of P.phrase
-  | `ListLit of (P.phrase list)
-  | `Definition of (name * P.phrase * location)
-  | `Iteration of ([ `List of P.binder | `Table of P.binder ] * P.phrase * (*where:*)P.phrase option 
-                  * (*orderby:*)P.phrase option)
-  | `Escape of (name * P.phrase)
-  | `HandleWith of (P.phrase * name * P.phrase)
+  | `FunLit of funlit
+  | `Spawn of phrase
+  | `ListLit of (phrase list)
+  | `Iteration of ([ `List of binder | `Table of binder ] * phrase * (*where:*)phrase option 
+                  * (*orderby:*)phrase option)
+  | `Escape of (name * phrase)
   | `Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
-  | `Conditional of (P.phrase * P.phrase * P.phrase)
-  | `Binding of P.binder
-  | `Block of (P.phrase list * P.phrase)
-  | `Foreign of (name * name * datatype)
-  | `InfixDecl
-  | `InfixAppl of (binop * P.phrase * P.phrase)
+  | `Conditional of (phrase * phrase * phrase)
+  | `Block of block
+  | `InfixAppl of (binop * phrase * phrase)
   | `Regex of (regex)
-  | `UnaryAppl of (unary_op * P.phrase)
-  | `FnAppl of (P.phrase * (P.phrase list * pposition))
-  | `TupleLit of (P.phrase list)
-  | `RecordLit of ((name * P.phrase) list * P.phrase option)
-  | `Projection of (P.phrase * name)
-  | `With of (P.phrase * (name * P.phrase) list)
-  | `SortBy_Conc of (P.ppattern * P.phrase * P.phrase)
-  | `TypeAnnotation of (P.phrase * datatype)
-  | `TypeDeclaration of (name * name list * datatype)
-  | `ConstructorLit of (name * P.phrase option)
-  | `Switch of (P.phrase * P.binder list)
-  | `Receive of P.binder list
-  | `DatabaseLit of (P.phrase * (P.phrase option * P.phrase option))
-  | `TableLit of (P.phrase * datatype * (string * fieldconstraint list) list * P.phrase)
-  | `DBDelete of (P.binder * P.phrase option)
-  | `DBInsert of (P.phrase * P.phrase)
-  | `DBUpdate of (P.binder * P.phrase option * (name * P.phrase) list)
-  | `Xml of (name * (string * (P.phrase list)) list * P.phrase list)
+  | `UnaryAppl of (unary_op * phrase)
+  | `FnAppl of (phrase * (phrase list * pposition))
+  | `TupleLit of (phrase list)
+  | `RecordLit of ((name * phrase) list * phrase option)
+  | `Projection of (phrase * name)
+  | `With of (phrase * (name * phrase) list)
+  | `TypeAnnotation of (phrase * datatype)
+  | `ConstructorLit of (name * phrase option)
+  | `Switch of (phrase * binder list)
+  | `Receive of binder list
+  | `DatabaseLit of (phrase * (phrase option * phrase option))
+  | `TableLit of (phrase * datatype * (string * fieldconstraint list) list * phrase)
+  | `DBDelete of (binder * phrase option)
+  | `DBInsert of (phrase * phrase)
+  | `DBUpdate of (binder * phrase option * (name * phrase) list)
+  | `Xml of (name * (string * (phrase list)) list * phrase list)
   | `TextNode of (string)
-  | `Formlet of (P.phrase * P.phrase)
-  | `FormBinding of (P.phrase * P.ppattern) ]
-and regex' = [ `Range of (char * char)
-             | `Simply of string
-             | `Quote of regex'
-             | `Any
-             | `StartAnchor
-             | `EndAnchor
-             | `Seq of regex' list
-             | `Alternate of (regex' * regex')
-             | `Group of regex'
-             | `Repeat of (Regex.repeat * regex')
-             | `Splice of P.phrase
-	     | `Replace of (regex' * [`Literal of string | `Splice of P.phrase]) ]
-and regexflags = [`RegexList | `RegexNative | `RegexGlobal]
-and regex = regex' * (regexflags list)
+  | `Formlet of (phrase * phrase)
+  | `FormBinding of (phrase * ppattern) ]
+  and block = binding list * phrase
+  and binding = [`Binder of binder | `Funbind of name * funlit | `Exp of phrase]
+  and funlit = ppattern list list * phrase
+  and regex' = [
+  | `Range of (char * char)
+  | `Simply of string
+  | `Quote of regex'
+  | `Any
+  | `StartAnchor
+  | `EndAnchor
+  | `Seq of regex' list
+  | `Alternate of (regex' * regex')
+  | `Group of regex'
+  | `Repeat of (Regex.repeat * regex')
+  | `Splice of phrase
+  | `Replace of (regex' * [`Literal of string | `Splice of phrase]) ]
+  and regexflags = [`RegexList | `RegexNative | `RegexGlobal]
+  and regex = regex' * (regexflags list)
+
+  type toplevel' = [
+  | `VarDefinition of (name * phrase * location * datatype option)
+  | `FunDefinition of (name * funlit * location * datatype option)
+  | `Foreign of (name * name * datatype)
+  | `TypeDeclaration of (name * name list * datatype)
+  | `InfixDecl
+  | phrasenode
+  ]
 end
 
-module rec UntypedSyntax
+module rec Untyped
  : Phrase with module P = UntypedArgs
- = UntypedSyntax
+ = Untyped
 and UntypedArgs : sig
-  type binder  = ppattern * phrase
-  and phrase   = UntypedSyntax.phrasenode * pposition
-  and ppattern = UntypedSyntax.pattern * pposition
+  type phrase   = Untyped.phrasenode * pposition
+  type ppattern = Untyped.pattern * pposition
+  type toplevel = Untyped.toplevel' * pposition
 end
   = UntypedArgs
 
-include UntypedSyntax
-include UntypedArgs
+include Untyped
 
 type directive = string * string list
 
 type sentence = [ 
-  `Definitions of phrase list
+  `Definitions of toplevel list
 | `Expression of phrase
 | `Directive of directive ]
       

@@ -73,7 +73,6 @@ and special =
   | `Database of value
   | `TableQuery of value name_map * Query.query
   | `TableHandle of value * value * (Types.datatype * Types.datatype)
-  | `SortBy of value * value
   | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show)  

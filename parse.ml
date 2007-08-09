@@ -175,7 +175,7 @@ let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = {
   }
   
 let program : (Syntax.untyped_program,
-               (Sugartypes.phrase list * Sugartypes.phrase option)) grammar = {
+               (Sugartypes.toplevel list * Sugartypes.phrase option)) grammar = {
   desugar = (fun code (defs, body) ->
                let pos = lookup code in
                  Syntax.Program

@@ -84,7 +84,6 @@ and special =
   | `Database of (value)
   | `TableQuery of (value name_map * Query.query)
   | `TableHandle of (value * value * (Types.datatype * Types.datatype))
-  | `SortBy of (value * value)
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show)  
@@ -165,7 +164,6 @@ struct
         | `TableQuery (vmap, q) -> `TableQuery (StringMap.map iv vmap, q)
             (* [WARNING] perhaps we need to look inside the query *)
         | `TableHandle (v, w, t) -> `TableHandle (iv v, iv w, t)
-        | `SortBy (v, w) -> `SortBy (iv v, iv w)
         | `CallCC v -> `CallCC (iv v)
     
   and binding env =

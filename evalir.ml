@@ -181,7 +181,6 @@ module Eval = struct
            | `Database (db, params), name, `Record row ->
                `Table ((db, params), unbox_string name, row)
            | _ -> eval_error "Error evaluating table handle")
-    | `SortBy _                   -> assert false
     | `CallCC f                   -> 
         apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 

@@ -607,8 +607,6 @@ and generate_special env : special -> code -> code = fun sp kappa ->
                           ("name", gv table_name);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
-      | `SortBy _ ->
-          failwith ("Cannot (yet?) generate JavaScript code for `SortBy")
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))

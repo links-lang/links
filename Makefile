@@ -68,11 +68,11 @@ SOURCES = $(OPC)                		\
           regex.ml                              \
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
+          parser.mly            		\
           result.mli result.ml         		\
           value.mli value.ml                    \
           errors.mli errors.ml                  \
           sql_transform.mli sql_transform.ml	\
-          parser.mly            		\
           $(DB_CODE)            		\
           database.mli database.ml 		\
           lexer.mll             		\
