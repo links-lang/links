@@ -63,12 +63,15 @@ type typing_environment = environment * alias_environment
 
 (* Functions on environments *)
 let environment_values = fun env -> snd (List.split env)
-let lookup = fun x -> List.assoc x
+let lookup = List.assoc
+let bind k v e = (k,v) :: e
 
-let concat_environment
+let concat_typing_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
     (types1 @ types2, StringMap.superimpose aliases1 aliases2)
+let empty_environment = []
+let concat_environments = (@)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -1029,4 +1032,4 @@ let make_tuple_type (ts : datatype list) : datatype =
           ts))
 
 let make_formlet_type t = `Application ("Formlet", [t])
-
+let make_list_type t = `Application ("List", [t])

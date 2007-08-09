@@ -44,26 +44,82 @@ let type_section env (`Section s as s') = s', match s with
         `Function (r, mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let type_pattern lookup_pos : Types.typing_environment -> Untyped.ppattern -> Typed.ppattern =
-  let rec type_pattern ((env, alias_env) as typing_env) (pattern, pos) =
+let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
+  let rec type_pattern  (pattern, pos) : Typed.ppattern =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and typ (_,(_,t)) = t in
-    let p, t =
+    and typ (_,(_,(_,t))) = t
+    and env (_,(_,(e,_))) = e 
+    and (++) = Types.concat_environments in
+    let (p, e, t : Typed.pattern * Types.environment * Types.datatype) =
       match (pattern : Untyped.pattern) with
-        | `Any                   -> assert false
-        | `Nil                   -> assert false
-        | `Cons (p1, p2)         -> assert false
-        | `List (ps)             -> assert false
-        | `Variant (name, p)     -> assert false
-        | `Record (ps, default)  -> assert false
-        | `Tuple ps              -> assert false
-        | `Constant c            -> assert false
-        | `Variable x            -> assert false
-        | `As (x, p)             -> assert false
-        | `HasType (p, t)        -> assert false
+        | `Any                   -> `Any,
+            Types.empty_environment, Types.fresh_type_variable ()
+        | `Nil                   -> `Nil,
+            Types.empty_environment, (Types.make_list_type
+                                        (Types.fresh_type_variable ()))
+        | `Constant c as c'      -> c', Types.empty_environment, constant_type c
+        | `Variable x            -> 
+            let xtype = Types.fresh_type_variable () in
+              (`Variable x,
+               (Types.bind x ([], xtype) Types.empty_environment),
+               xtype)
+        | `Cons (p1, p2)         -> 
+            let p1 = type_pattern p1
+            and p2 = type_pattern p2 in
+            let _ = unify (Types.make_list_type (typ p1)) (typ p2) in
+              `Cons (p1, p2), env p1 ++ env p2, typ p2
+        | `List ps               -> 
+            let ps' = List.map type_pattern ps in
+            let env' = List.fold_right (env ->- (++)) ps' Types.empty_environment in
+            let element_type = 
+              match ps' with
+                | [] -> Types.fresh_type_variable ()
+                | p::ps -> 
+                    let _ = List.iter (typ ->- unify (typ p)) ps in
+                      typ p
+            in `List ps', env', Types.make_list_type element_type
+        | `Variant (name, None)       -> 
+            let vtype = `Variant (Types.make_singleton_open_row (name, `Present Types.unit_type)) in
+              `Variant (name, None), Types.empty_environment, vtype
+        | `Variant (name, Some p)     -> 
+            let p = type_pattern p in
+            let vtype = `Variant (Types.make_singleton_open_row (name, `Present (typ p))) in
+              `Variant (name, Some p), env p, vtype
+        | `Record (ps, default)  -> 
+            let ps = alistmap type_pattern ps
+            and default = opt_map type_pattern default in
+            let initial, denv = match default with
+              | None -> (Types.make_empty_closed_row (),
+                         Types.empty_environment)
+              | Some r -> 
+                  (match typ r with
+                     | `Record row -> row, env r
+                     | _ -> raise (Errors.Type_error 
+                                     (lookup_pos pos, 
+                                      "The pattern being extended does not have record type"))) in
+            let rtype = 
+              `Record (List.fold_right
+                         (fun (l, f) -> Types.row_with (l, `Present (typ f)))
+                         ps initial)
+            and penv = 
+              List.fold_right (snd ->- env ->- (++)) ps Types.empty_environment in
+              `Record (ps, default), penv ++ denv, rtype
+        | `Tuple ps              -> 
+            let ps' = List.map type_pattern ps in
+            let env' = List.fold_right (env ->- (++)) ps' Types.empty_environment in
+            let typ' = Types.make_tuple_type (List.map typ ps') in
+              `Tuple ps', env', typ'
+        | `As (x, p)             -> 
+            let p = type_pattern p in
+            let env' = Types.bind x ([], typ p) (env p) in
+              `As (x, p), env', (typ p)
+        | `HasType (p, t)        -> 
+            let p = type_pattern p in
+            let _ = unify (typ p) (snd (Sugar.desugar_datatype t)) in
+              `HasType (p, t), env p, typ p
     in
-      p, (pos, t)
+      p, (pos, (e,t))
   in
     type_pattern
 
@@ -128,7 +184,6 @@ let type_check lookup_pos =
               `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
                       snd (Sugar.desugar_datatype (RecordType write_row)))
 
-        | `TableLit _ ->        assert false
         | `DBDelete (generator,None) ->
             assert false
         | `DBDelete (generator,Some where) ->
@@ -170,7 +225,6 @@ let type_check lookup_pos =
         (* xml *)
         | `Xml (tag,attrs,children) ->
             assert false
-        | `XmlForest _ ->       assert false
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = type_check typing_env body
@@ -182,7 +236,7 @@ let type_check lookup_pos =
               assert false
         | `FormBinding (e, pattern) ->
             let e = type_check typing_env e
-            and pattern = type_pattern typing_env pattern in
+            and pattern = type_pattern alias_env pattern in
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
               unify (typ e) ft;
@@ -199,7 +253,6 @@ let type_check lookup_pos =
               unify (typ i) (`Primitive `Bool);
               unify (typ t) (typ e);
               `Conditional (i,t,e), (typ t)
-        | `Binding _ ->         assert false
         | `Block _ ->           assert false
         | `Regex _ ->           assert false
         | `Projection (r,l) ->

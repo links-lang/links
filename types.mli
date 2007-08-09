@@ -129,6 +129,7 @@ val closed_row_var : row_var
 val make_formlet_type : datatype -> datatype
 
 val make_tuple_type : datatype list -> datatype
+val make_list_type : datatype -> datatype
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
@@ -186,9 +187,12 @@ type inference_type_map =
 (*type context = environment * inference_type_map*)
 
 (* environments *)
-val concat_environment : typing_environment -> typing_environment -> typing_environment
+val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
 val environment_values : environment -> assumption list
 val lookup : string -> environment -> assumption
+val empty_environment : environment
+val bind : string -> assumption -> environment -> environment
+val concat_environments : environment -> environment -> environment
 
 (* mailboxes *)
 val show_mailbox_annotations : bool Settings.setting

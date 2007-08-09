@@ -230,7 +230,7 @@ let main () =
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 
          (stdvalenv @ prelude_compiled,
-          Types.concat_environment stdtypeenv prelude_types));
+          Types.concat_typing_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in !stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)
