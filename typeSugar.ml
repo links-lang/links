@@ -8,7 +8,7 @@ module rec Typed
   = Typed
 and TypedArgs : sig
   type phrase   = Typed.phrasenode * (pposition * Types.datatype)
-  type ppattern = Typed.pattern * (pposition * Types.datatype)
+  type ppattern = Typed.pattern * (pposition * (Types.environment * Types.datatype))
   type toplevel = Typed.toplevel' * (pposition * Types.datatype)
 end
   = TypedArgs
@@ -44,7 +44,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (r, mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let type_pattern lookup_pos =
+let type_pattern lookup_pos : Types.typing_environment -> Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern ((env, alias_env) as typing_env) (pattern, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
@@ -72,6 +72,7 @@ let type_check lookup_pos =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
     and typ (_,(_,t)) = t 
+    and pattern_typ (_, (_,(_,t))) = t
     and type_pattern = type_pattern lookup_pos in
     let e, t =
       match (expr : Untyped.phrasenode) with
@@ -185,7 +186,7 @@ let type_check lookup_pos =
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
               unify (typ e) ft;
-              unify (typ pattern) a;
+              unify (pattern_typ pattern) a;
               `FormBinding (e, pattern), Types.xml_type
 
         (* various expressions *)
