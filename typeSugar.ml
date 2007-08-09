@@ -93,11 +93,9 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
               | None -> (Types.make_empty_closed_row (),
                          Types.empty_environment)
               | Some r -> 
-                  (match typ r with
-                     | `Record row -> row, env r
-                     | _ -> raise (Errors.Type_error 
-                                     (lookup_pos pos, 
-                                      "The pattern being extended does not have record type"))) in
+                  let row = Types.make_empty_open_row () in
+                  let _ = unify (`Record row) (typ r) in
+                    row, env r in
             let rtype = 
               `Record (List.fold_right
                          (fun (l, f) -> Types.row_with (l, `Present (typ f)))
