@@ -1028,3 +1028,5 @@ let make_tuple_type (ts : datatype list) : datatype =
           (1, make_empty_closed_row ())
           ts))
 
+let make_formlet_type t = `Application ("Formlet", [t])
+

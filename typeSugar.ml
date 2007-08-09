@@ -44,11 +44,35 @@ let type_section env (`Section s as s') = s', match s with
         `Function (r, mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
+let type_pattern lookup_pos =
+  let rec type_pattern ((env, alias_env) as typing_env) (pattern, pos) =
+    let unify = Utils.unify alias_env
+    and unify_rows = Utils.unify_rows alias_env 
+    and typ (_,(_,t)) = t in
+    let p, t =
+      match (pattern : Untyped.pattern) with
+        | `Any                   -> assert false
+        | `Nil                   -> assert false
+        | `Cons (p1, p2)         -> assert false
+        | `List (ps)             -> assert false
+        | `Variant (name, p)     -> assert false
+        | `Record (ps, default)  -> assert false
+        | `Tuple ps              -> assert false
+        | `Constant c            -> assert false
+        | `Variable x            -> assert false
+        | `As (x, p)             -> assert false
+        | `HasType (p, t)        -> assert false
+    in
+      p, (pos, t)
+  in
+    type_pattern
+
 let type_check lookup_pos = 
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and typ (_,(_,t)) = t in
+    and typ (_,(_,t)) = t 
+    and type_pattern = type_pattern lookup_pos in
     let e, t =
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
@@ -147,8 +171,21 @@ let type_check lookup_pos =
             assert false
         | `XmlForest _ ->       assert false
         | `TextNode _ as t -> t, Types.xml_type
-        | `Formlet _ ->         assert false
-        | `FormBinding _ ->     assert false
+        | `Formlet (body, yields) ->
+            let body = type_check typing_env body
+            and yields = type_check typing_env yields in
+              unify (typ body) Types.xml_type;
+              (* TODO: extract the bindings from body
+                 and put them in the typing environment for
+                 yields *)
+              assert false
+        | `FormBinding (e, pattern) ->
+            let e = type_check typing_env e
+            and pattern = type_pattern typing_env pattern in
+            let a = Types.fresh_type_variable () in
+            let ft = Types.make_formlet_type a in
+              unify (typ e) ft;
+              unify (typ pattern) a;
 
         (* declarations *)
         | `TypeDeclaration _ -> assert false

@@ -126,6 +126,8 @@ val row_with : (string * field_spec) -> row -> row
 val empty_field_env : field_spec_map
 val closed_row_var : row_var
 
+val make_formlet_type : datatype -> datatype
+
 val make_tuple_type : datatype list -> datatype
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
