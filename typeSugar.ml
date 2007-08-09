@@ -26,6 +26,13 @@ end
 let mailbox = "_MAILBOX_"
 let mailbox_type env = Utils.instantiate env mailbox
 
+let constant_type = function
+  | `Float _  -> `Primitive `Float
+  | `Int _    -> `Primitive `Int
+  | `Bool _   -> `Primitive `Bool
+  | `Char _   -> `Primitive `Char
+  | `String _ ->  Types.string_type
+
 let rec type_check : Types.typing_environment -> Untyped.phrase -> Typed.phrase =
   fun ((env, alias_env) as typing_env) (expr, pos) ->
     let unify = Utils.unify alias_env
@@ -38,11 +45,7 @@ let rec type_check : Types.typing_environment -> Untyped.phrase -> Typed.phrase 
 
 
         (* literals *)
-        | `FloatLit _ as f  -> f, `Primitive `Float
-        | `IntLit _ as i    -> i, `Primitive `Int
-        | `BoolLit _ as b   -> b, `Primitive `Bool
-        | `CharLit _ as c   -> c, `Primitive `Char
-        | `StringLit _ as s -> s, Types.string_type
+        | `Constant c as c' -> c', constant_type c
         | `TupleLit ps ->
             let ps = List.map (type_check typing_env) ps in
               `TupleLit ps, Types.make_tuple_type (List.map typ ps)

@@ -84,6 +84,7 @@ SOURCES = $(OPC)                		\
           instantiate.mli instantiate.ml        \
           typevarcheck.mli typevarcheck.ml      \
           inference.mli inference.ml 		\
+typeSugar.ml \
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
