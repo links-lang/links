@@ -91,9 +91,9 @@ let parseRegexFlags f =
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
-%type <Sugartypes.regex'> regex_pattern_alternate
-%type <Sugartypes.regex'> regex_pattern
-%type <Sugartypes.regex' list> regex_pattern_sequence
+%type <Sugartypes.regex> regex_pattern_alternate
+%type <Sugartypes.regex> regex_pattern
+%type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
 %type <Sugartypes.block> block
 %type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.pposition> tlfunbinding
@@ -348,7 +348,7 @@ infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5                                  { `InfixAppl (`Name $2, $1, $3), pos() }
 | infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixr_5 TILDE     regex                                     { `InfixAppl (`RegexMatch, $1, $3), pos() }
+| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (`RegexMatch flags, $1, r), pos() }
 
 infixl_4:
 | infixr_4                                                     { $1 }
@@ -660,9 +660,9 @@ row_variable:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex ($2, $3), pos()) }
-| SLASH regex_flags_opt                                                          { (`Regex (`Simply "", $2), pos()) }
-| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4), $5), pos())} 
+| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex ($2), pos()), $3 }
+| SLASH regex_flags_opt                                                          { (`Regex (`Simply ""), pos()), $2 }
+| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4)), pos()), $5 }
 
 regex_flags_opt:
 | SLASH                                                        {[]}

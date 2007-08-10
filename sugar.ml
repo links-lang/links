@@ -1114,12 +1114,12 @@ module Desugarer =
                let `U (a,b,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
            | `InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | `InfixAppl (`RegexMatch, e1, (`Regex((`Replace(_,_) as r), flags), _)) -> 
+           | `InfixAppl (`RegexMatch flags, e1, (`Regex((`Replace(_,_) as r)), _)) -> 
 	       let libfn = 
 		 if(List.exists (function `RegexNative -> true | _ -> false) flags) then "sntilde" else "stilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch, e1, (`Regex(r, flags), _)) -> 
+           | `InfixAppl (`RegexMatch flags, e1, (`Regex r, _)) -> 
 	       let native = (List.exists (function `RegexNative -> true | _ -> false) flags) in
 	       let libfn = 
 		 if (List.exists (function `RegexList -> true | _ -> false) flags) then 
@@ -1128,7 +1128,7 @@ module Desugarer =
 		   if native then "ntilde" else "tilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
+           | `InfixAppl (`RegexMatch _, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | `InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | `InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
            | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
@@ -1454,7 +1454,7 @@ module Desugarer =
        | Regex.Star      -> `ConstructorLit ("Star", None)
        | Regex.Plus      -> `ConstructorLit ("Plus", None)
        | Regex.Question  -> `ConstructorLit ("Question", None)
-     and desugar_regex pos : regex' -> phrasenode = 
+     and desugar_regex pos : regex -> phrasenode = 
        (* Desugar a regex, making sure that only variables are embedded
           within.  Any expressions that are spliced into the regex must be
           let-bound beforehand.  *)
@@ -1465,7 +1465,7 @@ module Desugarer =
              exprs := (v, e) :: !exprs;
              `Var v, pos
            end in
-       let rec aux : regex' -> phrasenode = 
+       let rec aux : regex -> phrasenode = 
          function
            | `Range (f, t)    -> `ConstructorLit ("Range", Some (`TupleLit [`Constant (`Char f), pos; `Constant (`Char t), pos], pos))
            | `Simply s        -> `ConstructorLit ("Simply", Some (`Constant (`String s), pos))

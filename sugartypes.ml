@@ -16,8 +16,9 @@ type unary_op = [
 | `Name of name
 | `Abs
 ]
+type regexflag = [`RegexList | `RegexNative | `RegexGlobal]
 type logical_binop = [`And | `Or ]
-type binop = [ `Minus | `FloatMinus | `RegexMatch | logical_binop | `Cons | `Name of name | `App ]
+type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name | `App ]
 
 type operator = [ unary_op | binop | `Project of name ]
 
@@ -115,22 +116,19 @@ module type Phrase = sig
   and block = binding list * phrase
   and binding = [`Binder of binder | `Funbind of name * funlit | `Exp of phrase]
   and funlit = ppattern list list * phrase
-  and regex' = [
+  and regex = [
   | `Range of (char * char)
   | `Simply of string
-  | `Quote of regex'
+  | `Quote of regex
   | `Any
   | `StartAnchor
   | `EndAnchor
-  | `Seq of regex' list
-  | `Alternate of (regex' * regex')
-  | `Group of regex'
-  | `Repeat of (Regex.repeat * regex')
+  | `Seq of regex list
+  | `Alternate of (regex * regex)
+  | `Group of regex
+  | `Repeat of (Regex.repeat * regex)
   | `Splice of phrase
-  | `Replace of (regex' * [`Literal of string | `Splice of phrase]) ]
-  and regexflags = [`RegexList | `RegexNative | `RegexGlobal]
-  and regex = regex' * (regexflags list)
-
+  | `Replace of (regex * [`Literal of string | `Splice of phrase]) ]
   type toplevel' = [
   | `VarDefinition of (name * phrase * location * datatype option)
   | `FunDefinition of (name * funlit * location * datatype option)

@@ -53,14 +53,21 @@ let type_unary_op env = function
     | `Abs        -> assert false 
 
 let type_binary_op env = function
-  | `Minus      -> datatype "(Int,Int) -> Int"
-  | `FloatMinus -> datatype "(Float,Float) -> Float"
-  | `RegexMatch -> assert false
+  | `Minus        -> datatype "(Int,Int) -> Int"
+  | `FloatMinus   -> datatype "(Float,Float) -> Float"
+  | `RegexMatch flags -> 
+      let nativep = List.exists ((=) `RegexNative) flags
+      and listp   = List.exists ((=) `RegexList)   flags in
+        (match listp, nativep with
+           | true,  true  -> assert false
+           | true,  false -> assert false
+           | false, true  -> assert false
+           | false, false -> assert false)
   | `And
-  | `Or         -> datatype "(Bool,Bool) -> Bool"
-  | `Cons       -> datatype "(a, [a]) -> [a]"
-  | `Name n     -> Utils.instantiate env n
-  | `App        -> assert false
+  | `Or           -> datatype "(Bool,Bool) -> Bool"
+  | `Cons         -> datatype "(a, [a]) -> [a]"
+  | `Name n       -> Utils.instantiate env n
+  | `App          -> assert false
 
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern  (pattern, pos) : Typed.ppattern =
