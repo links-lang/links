@@ -445,12 +445,15 @@ let idy_js = Var("_idy")
 let thread_end_k = idy_js
 let end_thread expr = Call(expr, [idy_js])
 
-let make_xml_cps attrs_cps attrs_noncps children_cps children_noncps tag = 
+(** make a cps term that constructs XML from XML-typed
+    sub-expressions, including direct-style and CPS sub-expressions
+    (note anomalous arg order.) *)
+let make_xml_cps attrs_cps attrs_direct children_cps children_direct tag = 
   let innermost_expr = 
     Call(Var "LINKS.XML",
          [strlit tag;
-          Dict (attrs_noncps @ map (fun ((k, _), n) -> (k, Var n)) attrs_cps);
-          Lst (children_noncps @ map (fun (_, n) -> Var n) children_cps);
+          Dict (attrs_direct @ map (fun ((k, _), n) -> (k, Var n)) attrs_cps);
+          Lst (children_direct @ map (fun (_, n) -> Var n) children_cps);
           Var "__kappa"
          ])
   in
@@ -553,7 +556,8 @@ let rec generate : 'a expression' -> code =
   (* Functions *)
   | Abstr (arglist, body, _) ->
       Fn(["__kappa"], 
-         callk_yielding (Fn (arglist@ ["__kappa"], Call(generate' body, [Var "__kappa"]))))
+         callk_yielding (Fn (arglist@ ["__kappa"],
+                             Call(generate' body, [Var "__kappa"]))))
 
   | Abs (p, d) ->
       Fn(["__kappa"], 
@@ -704,26 +708,24 @@ let rec generate : 'a expression' -> code =
       let case_body_cps = generate' case_body in
       let else_body_cps = generate' else_body in
       let k = gensym ~prefix:("_case") ()
-        (*
-          [NOTE]
-
-          need to make sure this abstraction isn't treated as
-          part of an administrative redex as the continuation is duplicated
+        (* Note: need to make sure this abstraction isn't treated as
+           part of an administrative redex as the continuation is
+           duplicated.
         *)
       in
         Fn([k],
-          Call(src_cps, [Fn(["__src"],
-                            Cond(Binop(Call(Var "LINKS.vrntLbl", [Var "__src"]),
-                                       "==",
-                                       strlit case_label),
-                                 Bind(case_var,
-                                      Call(Var "LINKS.vrntVal", [Var "__src"]),
-                                      Call(case_body_cps, [Var k])),
-                                 Bind(else_var,
-                                      Var "__src",
-                                      Call(else_body_cps, [Var k]))
-                                )
-                           )]))
+           Call(src_cps, [Fn(["__src"],
+                             Cond(Binop(Call(Var "LINKS.vrntLbl", [Var "__src"]),
+                                        "==",
+                                        strlit case_label),
+                                  Bind(case_var,
+                                       Call(Var "LINKS.vrntVal", [Var "__src"]),
+                                       Call(case_body_cps, [Var k])),
+                                  Bind(else_var,
+                                       Var "__src",
+                                       Call(else_body_cps, [Var k]))
+                                 )
+                            )]))
   | Call_cc (e, _) -> 
       let k = gensym ~prefix:("_cc") ()
         (*
@@ -1061,7 +1063,7 @@ let symbols = List.map fst words
 
 let symbolp name =
   List.exists (not -<- Utility.Char.isWord) (explode name) &&
-    (if Settings.get_value js_rename_builtins then true (* why would we not want to rename these? *)
+    (if Settings.get_value js_rename_builtins then true (* FIXME: this is a horrible hack. *)
      else (not (Library.is_primitive name)))
 
 let wordify name = 
