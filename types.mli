@@ -133,6 +133,13 @@ val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
 val make_mailbox_type : datatype -> datatype
 
+val make_row : (string * datatype) list -> row
+
+val make_record_type  : (string * datatype) list -> datatype
+val make_variant_type : (string * datatype) list -> datatype
+
+val make_table_type : datatype * datatype -> datatype
+
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
 val contains_present_fields : field_spec_map -> bool

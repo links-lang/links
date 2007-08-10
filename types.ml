@@ -1035,3 +1035,14 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_formlet_type t = `Application ("Formlet", [t])
 let make_list_type t = `Application ("List", [t])
 let make_mailbox_type t = `Application ("Mailbox", [t])
+
+let make_row ts =
+  (List.fold_left
+     (fun row (name, t) -> row_with (name, `Present t) row)
+     (make_empty_closed_row ())
+     ts)
+
+let make_record_type ts = `Record (make_row ts)
+let make_variant_type ts = `Variant (make_row ts)
+
+let make_table_type (r, w) =`Table (r, w)

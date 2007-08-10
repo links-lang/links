@@ -71,6 +71,9 @@ sig
   val union_disjoint : 'a t -> 'a t -> 'a t
   (** disjoint union *)
 
+  val union_all : ('a t) list -> 'a t
+  (** disjoint union of a list of maps *)
+
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
 
@@ -168,6 +171,8 @@ struct
            if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
            else
              add k v r) b a
+
+    let union_all ms = List.fold_right union_disjoint ms empty
 
     let superimpose a b = fold add b a
 

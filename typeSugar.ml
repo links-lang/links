@@ -81,7 +81,8 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
     and typ (_,(_,(_,t))) = t
-    and env (_,(_,(e,_))) = e 
+    and env (_,(_,(e,_))) = e
+    (* TODO: check for duplicate bindings *)
     and (++) = Types.concat_environments in
     let (p, e, t : Typed.pattern * Types.environment * Types.datatype) =
       match (pattern : Untyped.pattern) with
@@ -153,6 +154,14 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   in
     type_pattern
 
+let rec extract_formlet_bindings (expr, pos) =
+  let pattern_env  (_,(_,(e,_))) = e in
+    match expr with
+      | `FormBinding (f, pattern) -> pattern_env pattern
+      | `Xml (_, _, children) ->
+          concat_map extract_formlet_bindings children
+      | _ -> []
+          
 let type_check lookup_pos = 
   (* Currently alias_env can't change within this function (since type
      aliases can only be bound at top level), so we needn't actually
@@ -160,11 +169,12 @@ let type_check lookup_pos =
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and (++) (env, alias_env) env' = (Types.concat_environments env env', alias_env)
+    and (++) env' (env, alias_env) = (Types.concat_environments env' env, alias_env)
     and typ (_,(_,t)) = t 
     and pattern_typ (_, (_,(_,t))) = t
     and pattern_env (_, (_,(e,_))) = e
-    and type_pattern = type_pattern lookup_pos alias_env in
+    and type_pattern = type_pattern lookup_pos alias_env
+    and tc = type_check typing_env in
     let e, t =
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
@@ -199,7 +209,7 @@ let type_check lookup_pos =
             end
         | `FunLit (pats, body) ->
             let pats = List.map (List.map type_pattern) pats in
-            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
             let env', aliases = List.fold_left fold_in_envs typing_env pats in
             let body = type_check (Types.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
             let ftype = 
@@ -251,7 +261,7 @@ let type_check lookup_pos =
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ from) (`Table (read, write))
             and _ = unify (pattern_typ pat) write in
-            let where = opt_map (type_check (typing_env ++ (pattern_env pat))) where in
+            let where = opt_map (type_check ((pattern_env pat) ++ typing_env)) where in
             let _     = opt_iter (typ ->- unify Types.bool_type) where in
               `DBDelete ((pat, from), where), Types.unit_type
         | `DBInsert (into, values) ->
@@ -269,7 +279,7 @@ let type_check lookup_pos =
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ from) (`Table (read, write))
             and _ = unify (pattern_typ pat) write in
-            let typing_env' = typing_env ++ (pattern_env pat) in
+            let typing_env' = (pattern_env pat) ++ typing_env in
             let where = opt_map (type_check typing_env') where in
             let _     = opt_iter (typ ->- unify Types.bool_type) where in
             let set = List.map 
@@ -294,7 +304,7 @@ let type_check lookup_pos =
               List.fold_right
                 (fun (pat, cont) binders ->
                    let pat = type_pattern pat in
-                   let cont = type_check (typing_env ++ pattern_env pat) cont in
+                   let cont = type_check (pattern_env pat ++ typing_env) cont in
                    let _ = unify (pattern_typ pat) mbtype 
                    and _ = unify (typ cont) rtype in
                      (pat,cont)::binders)
@@ -334,13 +344,11 @@ let type_check lookup_pos =
               `Xml (tag, attrs, children), Types.xml_type
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
-            let body = type_check typing_env body
-            and yields = type_check typing_env yields in
+            let body = type_check typing_env body in
+            let typing_env = (extract_formlet_bindings body) ++ typing_env in
+            let yields = type_check typing_env yields in
               unify (typ body) Types.xml_type;
-              (* TODO: extract the bindings from body
-                 and put them in the typing environment for
-                 yields *)
-              assert false
+              `Formlet (body, yields), Types.make_formlet_type (typ yields)
         | `FormBinding (e, pattern) ->
             let e = type_check typing_env e
             and pattern = type_pattern pattern in
@@ -351,7 +359,32 @@ let type_check lookup_pos =
               `FormBinding (e, pattern), Types.xml_type
 
         (* various expressions *)
-        | `Iteration _ ->       assert false
+        | `Iteration (binder, body, where, orderby) ->            
+            let binder, typing_env =
+              let a = Types.fresh_type_variable () in
+              let lt = Types.make_list_type a in
+                match binder with
+                | `List (pattern, e) ->
+                    let pattern = type_pattern pattern
+                    and e = tc e in             
+                      unify lt (typ e);
+                      unify lt (pattern_typ pattern);
+                      `List (pattern, e), pattern_env pattern ++ typing_env
+                | `Table (pattern, e) ->
+                    let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
+                    let pattern = type_pattern pattern
+                    and e = tc e in
+                      unify tt (typ e);
+                      unify lt (pattern_typ pattern);
+                      `Table (pattern, e), pattern_env pattern ++ typing_env in
+            let tc = type_check typing_env in
+            let body = tc body in
+            let where = opt_map tc where in
+            let orderby = opt_map tc orderby in
+              unify (Types.make_list_type (Types.fresh_type_variable ())) (typ body);
+              opt_iter (fun where -> unify (Types.bool_type) (typ where)) where;
+              `Iteration (binder, body, where, orderby), (typ body)
+
         | `Escape _ ->          assert false
         | `Conditional (i,t,e) ->
             let i = type_check typing_env i
@@ -368,9 +401,38 @@ let type_check lookup_pos =
 	      unify (typ r) (`Record (Types.make_singleton_open_row 
                                         (l, `Present fieldtype)));
               `Projection (r, l), fieldtype
-        | `With _ ->            assert false
-        | `TypeAnnotation _ ->  assert false
-        | `Switch _ ->          assert false
+        | `With (r, fields) ->
+            let r = tc r
+            and fields = alistmap tc fields in
+            let rtype = typ r 
+            and fields_type =
+              `Record (List.fold_right
+                         (fun (lab, rhs) row ->
+                            Types.row_with (lab, `Present (typ rhs)) row)
+                         fields (Types.make_empty_open_row ())) in
+                unify fields_type rtype;
+                `With (r, fields), rtype
+        | `TypeAnnotation (e, t) ->
+            let e = tc e
+            and t = snd (Sugar.desugar_datatype t) in
+              unify (typ e) t;
+              `TypeAnnotation (e, t), t
+        | `Switch (e, binders) ->
+            let e = tc e in
+            let et = typ e
+            and t = Types.fresh_type_variable () in
+            let binders = 
+              List.fold_right
+                (fun (pat, cont) binders ->
+                   let pat = type_pattern pat in
+                   let cont = type_check (pattern_env pat ++ typing_env) cont in
+                   let _ = unify (pattern_typ pat) et 
+                   and _ = unify (typ cont) t in
+                     (pat,cont)::binders)
+                binders [] in
+              `Switch (e, binders), t
+
+
     in e, (pos, t)
   in type_check
 
