@@ -16,7 +16,7 @@ type unary_op = [
 | `Name of name
 | `Abs
 ]
-type regexflag = [`RegexList | `RegexNative | `RegexGlobal]
+type regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
 type logical_binop = [`And | `Or ]
 type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name | `App ]
 

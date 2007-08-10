@@ -660,9 +660,9 @@ row_variable:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex ($2), pos()), $3 }
+| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex $2, pos()), $3 }
 | SLASH regex_flags_opt                                                          { (`Regex (`Simply ""), pos()), $2 }
-| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4)), pos()), $5 }
+| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4)), pos()), `RegexReplace :: $5 }
 
 regex_flags_opt:
 | SLASH                                                        {[]}
