@@ -50,7 +50,9 @@ let type_unary_op env = function
     | `Minus      -> datatype "(Int) -> Int"
     | `FloatMinus -> datatype "(Float) -> Float"
     | `Name n     -> Utils.instantiate env n
-    | `Abs        -> assert false 
+    | `Abs        -> (* Probably doesn't parse at present.
+                        See the typing rules given in the note for r975. *)
+                     datatype "(((|a)) -> b) -> *(|a) -> b"
 
 let type_binary_op env = function
   | `Minus        -> datatype "(Int,Int) -> Int"
@@ -70,7 +72,9 @@ let type_binary_op env = function
   | `Or           -> datatype "(Bool,Bool) -> Bool"
   | `Cons         -> datatype "(a, [a]) -> [a]"
   | `Name n       -> Utils.instantiate env n
-  | `App          -> assert false
+  | `App          -> (* Probably doesn't parse at present.  
+                        See the typing rules given in the note for r975. *)
+                     datatype "(*(|a) -> b) -> ((|a)) -> b"
 
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern  (pattern, pos) : Typed.ppattern =
