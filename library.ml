@@ -822,13 +822,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = `Record (Types.row_with ("1", `Present string_type)
-                               (Types.row_with ("2", `Present regex)
-                                  (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-        `Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    datatype "(String, Regex) -> Bool",
     PURE));
 
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
@@ -837,14 +831,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    datatype "(NativeString, Regex) -> Bool",
     PURE));
 
   (* regular expression matching with grouped matched results as a list *)
@@ -865,14 +852,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-     (let qs, regex = datatype Linksregex.Regex.datatype in
-      let mb = Types.fresh_raw_variable () in
-      let arg_type = 
-	`Record (Types.row_with ("1", `Present string_type)
-                   (Types.row_with ("2", `Present regex)
-                      (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	 `Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+     datatype "(String, Regex) -> [String]",
    PURE));
 
   ("lntilde",	
@@ -892,14 +872,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+    datatype "(NativeString, Regex) -> [String]",
     PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -909,14 +882,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, string_type))),
+    datatype "(String, Regex) -> String",
     PURE));
 	
   ("sntilde",	
@@ -925,14 +891,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, native_string_type))),
+    datatype "(NativeString, Regex) -> NativeString",
     PURE));
    
   (* NativeString utilities *)
@@ -1019,7 +978,8 @@ and alias_env : Types.alias_environment =
       "List", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
       "Xml", ([], `Application ("List", [`Primitive `XmlItem]));
-      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract)
+      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "Regex", datatype Linksregex.Regex.datatype;
     ]
     StringMap.empty
 
