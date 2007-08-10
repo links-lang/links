@@ -1033,3 +1033,4 @@ let make_tuple_type (ts : datatype list) : datatype =
 
 let make_formlet_type t = `Application ("Formlet", [t])
 let make_list_type t = `Application ("List", [t])
+let make_mailbox_type t = `Application ("Mailbox", [t])

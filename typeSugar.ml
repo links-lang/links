@@ -44,6 +44,24 @@ let type_section env (`Section s as s') = s', match s with
         `Function (r, mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
+let datatype = Parse.parse_string Parse.datatype ->- snd
+
+let type_unary_op env = function
+    | `Minus      -> datatype "(Int) -> Int"
+    | `FloatMinus -> datatype "(Float) -> Float"
+    | `Name n     -> Utils.instantiate env n
+    | `Abs        -> assert false 
+
+let type_binary_op env = function
+  | `Minus      -> datatype "(Int,Int) -> Int"
+  | `FloatMinus -> datatype "(Float,Float) -> Float"
+  | `RegexMatch -> assert false
+  | `And
+  | `Or         -> datatype "(Bool,Bool) -> Bool"
+  | `Cons       -> datatype "(a, [a]) -> [a]"
+  | `Name n     -> Utils.instantiate env n
+  | `App        -> assert false
+
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern  (pattern, pos) : Typed.ppattern =
     let unify = Utils.unify alias_env
@@ -122,12 +140,17 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
     type_pattern
 
 let type_check lookup_pos = 
+  (* Currently alias_env can't change within this function (since type
+     aliases can only be bound at top level), so we needn't actually
+     thread it through. *)
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
+    and (++) (env, alias_env) env' = (Types.concat_environments env env', alias_env)
     and typ (_,(_,t)) = t 
     and pattern_typ (_, (_,(_,t))) = t
-    and type_pattern = type_pattern lookup_pos in
+    and pattern_env (_, (_,(e,_))) = e
+    and type_pattern = type_pattern lookup_pos alias_env in
     let e, t =
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
@@ -139,7 +162,20 @@ let type_check lookup_pos =
         | `TupleLit ps ->
             let ps = List.map (type_check typing_env) ps in
               `TupleLit ps, Types.make_tuple_type (List.map typ ps)
-        | `RecordLit _ ->       assert false
+        | `RecordLit (fields, rest) ->
+            let rest = opt_map (type_check typing_env) rest in
+            let row = Types.make_empty_open_row () in
+            let _ = match rest with
+              | None -> ()
+              | Some r -> unify (`Record row) (typ r) in
+            let fields = alistmap (type_check typing_env) fields in
+            let rtype =
+              `Record (List.fold_right
+                         (fun (lab, rhs) row ->
+                            Types.row_with (lab, `Present (typ rhs)) row)
+                         fields row) in
+                `RecordLit (fields, rest), rtype
+                         
         | `ListLit es ->
             begin match List.map (type_check typing_env) es with
               | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
@@ -147,7 +183,19 @@ let type_check lookup_pos =
                   List.iter (typ ->- unify (typ e)) es;
                   `ListLit es, `Application ("List", [typ e])
             end
-        | `FunLit _ ->          assert false
+        | `FunLit (pats, body) ->
+            let pats = List.map (List.map type_pattern) pats in
+            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+            let env', aliases = List.fold_left fold_in_envs typing_env pats in
+            let body = type_check (Types.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
+            let ftype = 
+              List.fold_right
+                (fun pat rtype ->
+                   let args = Types.make_tuple_type (List.map pattern_typ pat) in
+                     `Function (args, Types.fresh_type_variable (), rtype))
+                pats (typ body) in
+              `FunLit (pats, body), ftype
+
         | `ConstructorLit (c, None) ->
             let type' = `Variant (Types.make_singleton_open_row 
                                     (c, `Present Types.unit_type)) in
@@ -182,36 +230,52 @@ let type_check lookup_pos =
               `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
                       snd (Sugar.desugar_datatype (RecordType write_row)))
 
-        | `DBDelete (generator,None) ->
+        | `DBDelete ((pat, from), None) ->
             assert false
-        | `DBDelete (generator,Some where) ->
+        | `DBDelete ((pat, from),Some where) ->
             assert false
-        | `DBInsert _ ->        assert false
-        | `DBUpdate _ ->        assert false
+        | `DBInsert (values, into) ->
+            assert false
+        | `DBUpdate (table, where, set) ->
+            assert false
 
         (* concurrency *)
         | `Spawn p ->
             (* (() -{b}-> d) -> Mailbox (b) *)
-            assert false
-        | `Receive _ -> 
-            assert false
+            let pid_type = Types.fresh_type_variable () in
+            let typing_env' = Types.bind mailbox ([], pid_type) env, alias_env in
+            let p = type_check typing_env' p in
+              `Spawn p, Types.make_mailbox_type pid_type
+        | `Receive binders ->
+            let mbtype = mailbox_type env 
+            and rtype = Types.fresh_type_variable () in
+            let binders = 
+              List.fold_right
+                (fun (pat, cont) binders ->
+                   let pat = type_pattern pat in
+                   let cont = type_check (typing_env ++ pattern_env pat) cont in
+                   let _ = unify (pattern_typ pat) mbtype 
+                   and _ = unify (typ cont) rtype in
+                     (pat,cont)::binders)
+                binders [] in
+              `Receive binders, rtype
 
         (* applications of various sorts *)
         | `UnaryAppl (op, p) -> 
-            let op = assert false
+            let op = op, (pos, type_unary_op env op)
             and p = type_check typing_env p
             and rettyp = Types.fresh_type_variable () in
               unify (typ op) (`Function (Types.make_tuple_type [typ p], 
                                          mailbox_type env, rettyp));
-              `UnaryAppl (assert false, p), rettyp
+              `UnaryAppl (op, p), rettyp
         | `InfixAppl (op, l, r) ->
-            let op = assert false
+            let op = op, (pos, type_binary_op env op)
             and l = type_check typing_env l
             and r = type_check typing_env r 
             and rettyp = Types.fresh_type_variable () in
               unify (typ op) (`Function (Types.make_tuple_type [typ l; typ r], 
                                          mailbox_type env, rettyp));
-              `InfixAppl (assert false, l, r), rettyp
+              `InfixAppl (op, l, r), rettyp
         | `FnAppl (f, (ps, pos')) ->
             let f = type_check typing_env f
             and ps = List.map (type_check typing_env) ps
@@ -221,8 +285,12 @@ let type_check lookup_pos =
               `FnAppl (f, (ps, pos')), rettyp
 
         (* xml *)
-        | `Xml (tag,attrs,children) ->
-            assert false
+        | `Xml (tag, attrs, children) ->
+            let attrs = alistmap (List.map (type_check typing_env)) attrs
+            and children = List.map (type_check typing_env) children in
+            let _ = List.iter (snd ->- List.iter (typ ->- unify Types.string_type)) attrs
+            and _ = List.iter (typ ->- unify Types.xml_type) children in
+              `Xml (tag, attrs, children), Types.xml_type
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = type_check typing_env body
@@ -234,7 +302,7 @@ let type_check lookup_pos =
               assert false
         | `FormBinding (e, pattern) ->
             let e = type_check typing_env e
-            and pattern = type_pattern alias_env pattern in
+            and pattern = type_pattern pattern in
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
               unify (typ e) ft;
