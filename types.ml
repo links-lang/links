@@ -388,6 +388,7 @@ let unwrap_row : row -> (row * row_var option) =
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
+let bool_type = `Primitive `Bool
 let xml_type = `Application ("Xml", [])
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString

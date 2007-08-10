@@ -230,14 +230,41 @@ let type_check lookup_pos =
               `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
                       snd (Sugar.desugar_datatype (RecordType write_row)))
 
-        | `DBDelete ((pat, from), None) ->
-            assert false
-        | `DBDelete ((pat, from),Some where) ->
-            assert false
-        | `DBInsert (values, into) ->
-            assert false
-        | `DBUpdate (table, where, set) ->
-            assert false
+        | `DBDelete ((pat, from), where) ->
+            let pat  = type_pattern pat 
+            and from = type_check typing_env from
+            and read  = `Record (Types.make_empty_open_row ())
+            and write = `Record (Types.make_empty_open_row ()) in
+            let _ = unify (typ from) (`Table (read, write))
+            and _ = unify (pattern_typ pat) write in
+            let where = opt_map (type_check (typing_env ++ (pattern_env pat))) where in
+            let _     = opt_iter (typ ->- unify Types.bool_type) where in
+              `DBDelete ((pat, from), where), Types.unit_type
+        | `DBInsert (into, values) ->
+            let into   = type_check typing_env into
+            and values = type_check typing_env values
+            and read  = `Record (Types.make_empty_open_row ())
+            and write = `Record (Types.make_empty_open_row ()) in
+            let _ = unify (typ into) (`Table (read, write))
+            and _ = unify write (Types.make_list_type write) in
+              `DBInsert (into, values), Types.unit_type
+        | `DBUpdate ((pat, from), where, set) ->
+            let pat  = type_pattern pat
+            and from = type_check typing_env from
+            and read =  `Record (Types.make_empty_open_row ())
+            and write = `Record (Types.make_empty_open_row ()) in
+            let _ = unify (typ from) (`Table (read, write))
+            and _ = unify (pattern_typ pat) write in
+            let typing_env' = typing_env ++ (pattern_env pat) in
+            let where = opt_map (type_check typing_env') where in
+            let _     = opt_iter (typ ->- unify Types.bool_type) where in
+            let set = List.map 
+              (fun (name, exp) ->
+                 let exp = type_check typing_env exp in
+                 let _ = unify write (`Record (Types.make_singleton_open_row
+                                                 (name, `Present (typ exp)))) in
+                   (name, exp)) set in
+              `DBUpdate ((pat, from), where, set), Types.unit_type
 
         (* concurrency *)
         | `Spawn p ->

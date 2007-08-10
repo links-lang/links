@@ -596,6 +596,8 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_iter f = opt_map f ->- ignore
+
   let fromOption default = function
     | None -> default
     | Some x -> x
