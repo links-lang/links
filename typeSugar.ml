@@ -76,6 +76,21 @@ let type_binary_op env = function
                         See the typing rules given in the note for r975. *)
                      datatype "(*(|a) -> b) -> ((|a)) -> b"
 
+let type_regex typing_env : Untyped.regex -> Typed.regex = function
+  | `Range _       -> assert false
+  | `Simply _      -> assert false
+  | `Quote _       -> assert false
+  | `Any           -> assert false 
+  | `StartAnchor   -> assert false
+  | `EndAnchor     -> assert false
+  | `Seq _         -> assert false
+  | `Alternate _   -> assert false
+  | `Group _       -> assert false
+  | `Repeat _      -> assert false
+  | `Splice _      -> assert false
+  | `Replace _     -> assert false
+
+
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern  (pattern, pos) : Typed.ppattern =
     let unify = Utils.unify alias_env
@@ -162,18 +177,19 @@ let rec extract_formlet_bindings (expr, pos) =
           concat_map extract_formlet_bindings children
       | _ -> []
           
-let type_check lookup_pos = 
+let type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
   (* Currently alias_env can't change within this function (since type
      aliases can only be bound at top level), so we needn't actually
      thread it through. *)
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
+    let type_pattern = type_pattern lookup_pos in
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
     and (++) env' (env, alias_env) = (Types.concat_environments env' env, alias_env)
     and typ (_,(_,t)) = t 
     and pattern_typ (_, (_,(_,t))) = t
     and pattern_env (_, (_,(e,_))) = e
-    and type_pattern = type_pattern lookup_pos alias_env
+    and tp = type_pattern alias_env
     and tc = type_check typing_env in
     let e, t =
       match (expr : Untyped.phrasenode) with
@@ -208,7 +224,7 @@ let type_check lookup_pos =
                   `ListLit es, `Application ("List", [typ e])
             end
         | `FunLit (pats, body) ->
-            let pats = List.map (List.map type_pattern) pats in
+            let pats = List.map (List.map tp) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
             let env', aliases = List.fold_left fold_in_envs typing_env pats in
             let body = type_check (Types.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
@@ -255,7 +271,7 @@ let type_check lookup_pos =
                       snd (Sugar.desugar_datatype (RecordType write_row)))
 
         | `DBDelete ((pat, from), where) ->
-            let pat  = type_pattern pat 
+            let pat  = tp pat 
             and from = type_check typing_env from
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
@@ -273,7 +289,7 @@ let type_check lookup_pos =
             and _ = unify write (Types.make_list_type write) in
               `DBInsert (into, values), Types.unit_type
         | `DBUpdate ((pat, from), where, set) ->
-            let pat  = type_pattern pat
+            let pat  = tp pat
             and from = type_check typing_env from
             and read =  `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
@@ -303,7 +319,7 @@ let type_check lookup_pos =
             let binders = 
               List.fold_right
                 (fun (pat, cont) binders ->
-                   let pat = type_pattern pat in
+                   let pat = tp pat in
                    let cont = type_check (pattern_env pat ++ typing_env) cont in
                    let _ = unify (pattern_typ pat) mbtype 
                    and _ = unify (typ cont) rtype in
@@ -318,7 +334,7 @@ let type_check lookup_pos =
             and rettyp = Types.fresh_type_variable () in
               unify (typ op) (`Function (Types.make_tuple_type [typ p], 
                                          mailbox_type env, rettyp));
-              `UnaryAppl (op, p), rettyp
+              `UnaryAppl (fst op, p), rettyp
         | `InfixAppl (op, l, r) ->
             let op = op, (pos, type_binary_op env op)
             and l = type_check typing_env l
@@ -326,7 +342,7 @@ let type_check lookup_pos =
             and rettyp = Types.fresh_type_variable () in
               unify (typ op) (`Function (Types.make_tuple_type [typ l; typ r], 
                                          mailbox_type env, rettyp));
-              `InfixAppl (op, l, r), rettyp
+              `InfixAppl (fst op, l, r), rettyp
         | `FnAppl (f, (ps, pos')) ->
             let f = type_check typing_env f
             and ps = List.map (type_check typing_env) ps
@@ -351,7 +367,7 @@ let type_check lookup_pos =
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
         | `FormBinding (e, pattern) ->
             let e = type_check typing_env e
-            and pattern = type_pattern pattern in
+            and pattern = tp pattern in
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
               unify (typ e) ft;
@@ -365,14 +381,14 @@ let type_check lookup_pos =
               let lt = Types.make_list_type a in
                 match binder with
                 | `List (pattern, e) ->
-                    let pattern = type_pattern pattern
+                    let pattern = tp pattern
                     and e = tc e in             
                       unify lt (typ e);
                       unify lt (pattern_typ pattern);
                       `List (pattern, e), pattern_env pattern ++ typing_env
                 | `Table (pattern, e) ->
                     let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
-                    let pattern = type_pattern pattern
+                    let pattern = tp pattern
                     and e = tc e in
                       unify tt (typ e);
                       unify lt (pattern_typ pattern);
@@ -385,7 +401,8 @@ let type_check lookup_pos =
               opt_iter (fun where -> unify (Types.bool_type) (typ where)) where;
               `Iteration (binder, body, where, orderby), (typ body)
 
-        | `Escape _ ->          assert false
+        | `Escape (name, e) ->
+            assert false
         | `Conditional (i,t,e) ->
             let i = type_check typing_env i
             and t = type_check typing_env t
@@ -393,8 +410,33 @@ let type_check lookup_pos =
               unify (typ i) (`Primitive `Bool);
               unify (typ t) (typ e);
               `Conditional (i,t,e), (typ t)
-        | `Block _ ->           assert false
-        | `Regex _ ->           assert false
+        | `Block (bindings, e) ->
+            let type_binding ((env, alias_env) as typing_env) =
+              function
+                | `Binder (pattern, body) ->
+                    let pattern = type_pattern alias_env pattern
+                    and body = type_check typing_env body in
+                      (* TODO: generalisation *)
+                      `Binder (pattern, body), pattern_env pattern
+                | `Funbind (name, (pss, body)) ->
+                    (* TODO: callgraph analysis, yuck! *)
+                    assert false
+                | `Exp body  ->
+                    let body = type_check typing_env body in
+                      unify (typ body) (Types.unit_type);
+                      `Exp body, [] in
+            let rec type_bindings typing_env =
+              function
+                | [] -> [], typing_env
+                | b :: bs ->
+                    let b, env = type_binding typing_env b in
+                    let bs, typing_env = type_bindings (env ++ typing_env) bs in
+                      b :: bs, typing_env in
+            let bindings, typing_env = type_bindings typing_env bindings in
+            let e = type_check typing_env e in
+              `Block (bindings, e), typ e
+        | `Regex r ->
+            `Regex (type_regex typing_env r), `Application ("Regex", [])
         | `Projection (r,l) ->
             let r = type_check typing_env r in
             let fieldtype = Types.fresh_type_variable () in
@@ -414,9 +456,9 @@ let type_check lookup_pos =
                 `With (r, fields), rtype
         | `TypeAnnotation (e, t) ->
             let e = tc e
-            and t = snd (Sugar.desugar_datatype t) in
-              unify (typ e) t;
-              `TypeAnnotation (e, t), t
+            and t' = snd (Sugar.desugar_datatype t) in
+              unify (typ e) t';
+              `TypeAnnotation (e, t), t'
         | `Switch (e, binders) ->
             let e = tc e in
             let et = typ e
@@ -424,7 +466,7 @@ let type_check lookup_pos =
             let binders = 
               List.fold_right
                 (fun (pat, cont) binders ->
-                   let pat = type_pattern pat in
+                   let pat = tp pat in
                    let cont = type_check (pattern_env pat ++ typing_env) cont in
                    let _ = unify (pattern_typ pat) et 
                    and _ = unify (typ cont) t in
@@ -436,24 +478,31 @@ let type_check lookup_pos =
     in e, (pos, t)
   in type_check
 
-let type_top_level lookup_pos =
+let type_top_level lookup_pos : Types.typing_environment -> Untyped.toplevel -> (Typed.toplevel * Types.typing_environment) =
   let rec type_top_level ((env, alias_env) as typing_env) (def, pos) =
+    let type_check = type_check lookup_pos
+    and type_pattern = type_pattern lookup_pos in
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and typ (_,(_,t)) = t 
-    and type_pattern = type_pattern lookup_pos in
-    let def, t =
+    and typ (_,(_,t)) = t
+    and tc = type_check typing_env
+    and tp = type_pattern alias_env in
       match (def : Untyped.toplevel') with
         (* declarations *)
-        | `VarDefinition _   -> assert false
+        | `VarDefinition (name, body, location, t) ->
+            let body = tc body in
+            let bt = typ body in
+            let _ = opt_iter (fun t -> unify bt (snd (Sugar.desugar_datatype t))) t in
+            let env = Types.bind name ([], typ body) env in
+              (* TODO: generalisation *)
+            let typing_env = (env, alias_env) in
+              (`VarDefinition (name, body, location, t), (pos, bt)), typing_env
         | `FunDefinition _   -> assert false
         | `Foreign _         -> assert false
         | `TypeDeclaration _ -> assert false
         | `InfixDecl         -> assert false
         | #phrasenode as e ->
-            type_check lookup_pos typing_env (e, pos)
-    in
-      def, (pos, t)
+            (tc (e, pos) :> Typed.toplevel), typing_env
   in
     type_top_level
     
