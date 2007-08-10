@@ -86,7 +86,7 @@ let perform_function_inlining location name var rhs (Program (defs, body)) =
 let inline (Program (defs, body) as program) = 
   let valuedefp = function
     | _, Rec _, _ -> false
-    | _        -> true
+    | _           -> true
   in
   let candidates = find_inline_candidates defs in
   let value_candidates, fn_candidates = List.partition valuedefp candidates in
@@ -357,8 +357,8 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
                    | Abstr _ ->
                        (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
                           | Abstr (_, _, `T (_, datatype, _)) -> datatype
-                          | _ -> failwith "OP442")
-                   | _ -> failwith "OP437")
+                          | _ -> assert false)
+                   | _ -> assert false)
             in
               begin
                 match t with
@@ -370,7 +370,7 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
 		      in
 		        merge_needed [Fields fields]
                   | `MetaTypeVar _ -> All
-                  | _ -> failwith "OP448"
+                  | _ -> assert false
               end
         | Record_selection (label, _, variable, Variable (name, _), body, _) when name = var ->
             (* Note change of variable *)
@@ -533,9 +533,7 @@ let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
                        Condition (condition, t, e, data))
 	     | None -> None)
       | For (expr, variable, TableQuery(th, query, _), _) ->
-          (* TODO: Test whether both tables come from the same database. *)
           (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
-               (*  ([], _, _) -> None *)
 	     | (condns, expr, origin) ->
                    Some (condns, th, query, 
                          origin, variable, expr))
@@ -563,7 +561,7 @@ let rec sql_joins : RewriteSyntax.rewriter =
                              [`Table_loop(inner_var, inner_query)] body) in
                let expr = For(body,
                               outer_var, 
-                              TableQuery (inner_ths @ outer_ths, query, tdata), 
+                              TableQuery(inner_ths @ outer_ths, query, tdata), 
                               data) in
 (*                (\* finally, wrap the whole expression in the  *)
 (*                   projections returned from check_join; *)
@@ -618,24 +616,22 @@ let is_atom = function
   | Variable _ | Constant(Integer _, _) -> true
   | _ -> false
 
-(* if e is not an atom then bind it to a variable by extending the
-   continuation k return the new continuation and an atomic expression
-   representing e
+(** if [e] is not an atom then bind it to a variable by extending the
+    continuation [k] return the new continuation and an atomic expression
+    representing [e].
  *)
 let lift_let data e k =
   if is_atom e then
-    (fun body -> k body), e
+    k, e
   else
     let x = gensym () in
       (fun body -> k (Let (x, e, body, data))), Variable (x, expression_data e)
 
-
-
 (** (1 take/drop optimization).
     Push calls to take and drop that surround queries into the query.
-    [N.B. these rewrite rules play fast and loose with the `data'
+    (N.B. these rewrite rules play fast and loose with the `data'
     component of expression nodes.  Don't assume anything about the
-    data after these have run.]
+    data after these have run.)
 *)
 
 (** [simplify_takedrop]
@@ -647,15 +643,15 @@ let lift_let data e k =
     (Not performed if e1 is a variable or integer literal)
 *)
 let simplify_takedrop : RewriteSyntax.rewriter = function
-  | Apply (Variable ("take"|"drop" as f, d1), [e1; e2]
-             (*Record_intro (fields1, None, d2)*), d3) ->
+  | Apply (Variable ("take"|"drop" as f, d1), [e1; e2], d3) ->
       let k, e1 = lift_let d3 e1 identity in
         begin
           match f, e2 with
-            | "take", Apply (Variable ("drop", d4), [e2; e3] (* Record_intro(fields2, None, d5) *), d6) ->
+            | "take", Apply (Variable ("drop", d4), [e2; e3], d6) ->
                 let k, e2 = lift_let d3 e2 k in
                   Some(k (Apply (Variable ("take", d1),
-                                 [e1; Apply (Variable ("drop", d4), [e2; e3], d6)], d3)))
+                                 [e1; Apply (Variable ("drop", d4),
+                                             [e2; e3], d6)], d3)))
             | _ -> Some (k (Apply (Variable (f, d1), [e1; e2], d3)))
         end
   | _ -> None
@@ -674,51 +670,52 @@ let push_takedrop : RewriteSyntax.rewriter =
     | Variable (v, _) -> Query.Variable v
     | Constant(Integer  n, _) -> Query.Integer n
     | _ -> failwith "Internal error during take optimization" in 
-  function
-    | Apply (Variable ("take", _) as takef, [take_args1; take_args2], calltaked) ->
-        if is_atom take_args1 then
+    function
+      | Apply(Variable ("take", _) as takef, [take_n; take_src], calltaked) 
+          when is_atom take_n ->
           begin
-            match take_args2 with
+            match take_src with
               | TableQuery (e2, q, d) ->
-	          Some (TableQuery (e2, {q with Query.max_rows = Some (queryize take_args1)}, d))
-              | Apply (Variable ("drop", _) as dropf, [drop_args1; drop_args2], calldropd) ->
-                  if is_atom drop_args1 then
-                    begin
-                      match drop_args2 with
-                        | TableQuery(ths, q, d) ->
-                            Some(TableQuery(ths,
-                                            {q with
-                                               Query.max_rows = Some (queryize take_args1);
-                                               Query.offset   = queryize drop_args1}, d))
-                        | _ -> None
-                    end
-                  else None
-              | For(List_of(expr, ldata) as body, var, src, ford) 
+                  let q = {q with Query.max_rows = Some (queryize take_n)} in
+	          Some (TableQuery (e2, q, d))
+              | Apply(Variable("drop",_) as dropf, [drop_n; drop_src], calldropd)
+                    when is_atom drop_n ->
+                  begin
+                    match drop_src with
+                      | TableQuery(ths, q, d) ->
+                          let q = {q with
+                                     Query.max_rows = Some (queryize take_n);
+                                     Query.offset   = queryize drop_n} in
+                          Some(TableQuery(ths, q, d))
+                      | _ -> None
+                  end
+              | For(List_of(expr, _) as body, var, src, ford) 
                   when pure(expr) ->
                   Some (For(body, var,
-                            Apply (takef,
-                                   [take_args1; src],
-                                   calltaked), 
+                            Apply (takef, [take_n; src], calltaked), 
                             ford))
               | _ -> None
           end
-        else None
-    | Apply (Variable ("drop", _) as dropf, [drop_arg1; drop_arg2], d2) ->
-        if is_atom drop_arg1 then
+
+      | Apply (Variable ("drop", _) as dropf, [drop_n; drop_src], calldropd) 
+          when is_atom drop_n ->
           begin
-            match drop_arg2 with
+            match drop_src with
               | TableQuery (ths, q, d) ->
-  	          Some (TableQuery(ths, {q with Query.offset = queryize drop_arg1}, d))
-              | For(List_of(expr, ldata) as body, var, src, fordata) 
+                  let q = {q with Query.offset = queryize drop_n} in
+  	          Some(TableQuery(ths, q, d))
+              | For(List_of(expr, _) as body, var, src, forData) 
                   when pure(expr) ->
                   Some (For(body, var,
-                            Apply (dropf,
-                                   [drop_arg1; src], 
-                                   d2), 
-                            fordata))
+                            Apply (dropf, [drop_n; src], calldropd), 
+                            forData))
               | _ -> None
           end
-        else None
+    | Apply(Variable("drop", _), _, d)
+    | Apply(Variable("take", _), _, d) ->
+        Debug.print("unoptimisable take/drop at " ^ 
+                      Syntax.show_pos(data_position d)); None
+              
     | _ -> None
 
 let remove_trivial_extensions : RewriteSyntax.rewriter = function
