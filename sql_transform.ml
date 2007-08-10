@@ -26,7 +26,7 @@ let rec project (projs:string list) (query:query) : query =
       | [], [] -> []
       | [], _ -> assert false
       | `Column col :: result_cols, projs when mem col.col_alias projs ->
-	  `Column col :: (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
+          `Column col :: (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
       | `Column col :: result_cols, projs ->
           (filter_selects (filter ((<>) col.col_alias) projs) result_cols)
       | `Expr expr :: result_cols, projs -> 
@@ -172,7 +172,7 @@ let rec sep_assgmts (bindings:bindings) (expr:Syntax.expression) : (bindings * S
 let rec is_free var expr = mem var (freevars expr)
 
 
-(* Compile a regular expression to a string suitable for passing to
+(** Compile a regular expression to a string suitable for passing to
    the SQL "like" operator.
 
    (NB: this assumes that '%' can be quoted as '\\%' in a like
@@ -257,7 +257,7 @@ let make_sql bindings expr =
 	   | `Table_field (table, field) ->
 	       Some (Field (table, field), [])
 	   | `Earlier (rename, origin) ->
-	       Some (Variable rename, origin) (*where origins come from*)
+	       Some (Variable rename, origin) (* where origins come from *)
 	   | `Table _
 	   | `Unavailable ->
 	       None)
@@ -345,11 +345,13 @@ let rec condition_to_sql (expr:Syntax.expression) (bindings:bindings)
     @return The query with the added origin. *)
 let select_by_origin origin expr = 
   fold_left (fun expr origin -> 
-               Syntax.Record_selection(origin.field_name, origin.field_var,
+               Syntax.Record_selection(origin.field_name, 
+                                       origin.field_var,
                                        origin.etc_var, 
                                        Syntax.Variable(origin.source_var,
                                                        Syntax.no_expr_data),
-                                       expr, Syntax.no_expr_data)
+                                       expr,
+                                       Syntax.no_expr_data)
             ) expr origin
 
 (** pos_and_neg
@@ -378,11 +380,11 @@ let rec select condns (query:query) : query =
   let where = conjunction (query.condition :: condns)
   in {query with condition = where}
          
-(** rename_uniquely
-    Takes two lists of column names and produces a list of
-    unique names, along with the substitutions required to make them
-    distinct. Only the `right` argument needs renamings, since the
-    `left` values are already distinct anyway.
+(** append_uniquely
+    Takes two lists of column names and produces a list of unique names,
+    along with the substitutions required to make them distinct. Only
+    the `right` argument needs renamings, since the values within each
+    list (hence within the left list) are already distinct anyway.
 *)
 let append_uniquely
     (left : col_or_expr list)
@@ -393,20 +395,20 @@ let append_uniquely
   let (right : (Query.column *Query.column) list) = concat_map rename right in
     (left @ map (snd ->- (fun x -> `Column x)) right,
      concat_map (fun (x, y) -> [(x, y.col_alias)]) right)
-  
+      
 (** join
     Joins two queries into one, over the given condtions. If the
     {! Sql_transform.selectable} method is called on every positive and
     negative condition provided, this function should not fail.
     @param positives Conditions that whould be satisfied by any element of 
-       the result.
+           the result.
     @param negatives Conditions that should not be satisfied by any element 
-       of the result.
+           of the result.
     @param left_query The first original query.
     @param left_query The second original query.
     @return The join between queries with the added conditions.
     @raise Failure A general programming error has occured. Passing 
-        conditions that where not selectable with 
+           conditions that where not selectable with 
     {! Sql_transform.selectable} might cause such exceptions. *)
 (* FIXME: This ought to uniquely rename the tables (as well as the columns) *)
 let join condns
