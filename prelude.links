@@ -384,7 +384,7 @@ fun sortBy (f, l) {
 sig freshResource : () -> ()
 fun freshResource() {
   escape esc in {
-    redirectNow("?_cont=" ++ reifyK(esc))
+    redirect("?_cont=" ++ reifyK(esc)); exit(0)
   }
 }
 
