@@ -1,4 +1,4 @@
-fun all(p, l) { 
+fun all(p, l) {
    switch (l) {
      case []    -> true
      case x::xs -> p(x) && all(p, xs)
@@ -311,6 +311,15 @@ fun fromJust(x) {
   }
 }
 
+sig fromMaybe : (Maybe (a), a) -> a
+fun fromMaybe(x, y) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> y
+  }
+}
+
+
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
 sig memassoc : (a,[(a,b)]) -> Bool
@@ -350,6 +359,7 @@ fun assocAll(x,l) {
   }
 }
 
+# TBD: rename this 'sortOn' to follow Haskell usage?
 sig sortBy : ((a) -> b, [a]) -> [a]
 fun sortBy (f, l) {
   switch (l) {
@@ -370,10 +380,11 @@ fun sortBy (f, l) {
 # action (e.g. database updates) then reloading and the back button 
 # are made "safe": the visible URL does not refer to the action, but 
 # only to what follows the freshResource call.
+# Note: doesn't presently work in client context, but could.
 sig freshResource : () -> ()
 fun freshResource() {
   escape esc in {
-    exit(redirect("?_cont=" ++ reifyK(esc)))
+    redirectNow("?_cont=" ++ reifyK(esc))
   }
 }
 
@@ -390,8 +401,9 @@ fun sendSuspend(xmlf) {
 }
 
 
-#### FORMS ABSTRACTION ####
-#### Ultimately needs to be moved to a different namespaced module
+#### FORMLETS ####
+####   A library of functions supporting the 'formlet ... yields ...' syntax
+####   TBD: move to a namespaced module
 
 typename Env = [(String,String)];
 typename Names = Int;
@@ -457,10 +469,20 @@ op m @@@ k {
   retern((x++y, fun(e){ f(e)(c(e)) }))}}
 }
 
+# x @@=> f
+#   Returns a formlet that post-processes the formlet x by running its
+#   output through f. (This definition is significantly more efficient
+#   than the simpler one below.)  (This is fmap for the Formlet functor.)
 sig @@=> : (Formlet(a), (a) -> b) -> Formlet(b)
 op m @@=> f {
-  m @@@ pure(f)
+  m >>= fun((x,c)) {
+  retern((x, fun (e) { f(c(e)) } )) }
 }
+
+# Definition of @@=> in terms of @@@ and pure.
+#op m @@=> f {
+#  m @@@ pure(f)
+#}
 
 sig xml : (Xml) -> Formlet (())
 fun xml(x) { retern ( (x, fun (e) { () })) }
@@ -477,36 +499,77 @@ sig makeName : (Int) -> String
 fun makeName(i) { "input_" ++ intToString(i) }
 
 sig nextName : State (Int,String)
-var nextName = 
-   get >>= fun (i) {
-   var name = makeName(i);
-   put (i+1) >>
-   retern (name)};
+var nextName = State(fun (i) { (makeName(i), i+1) });
 
+## Alt. def. of nextName
+# var nextName = 
+#    get >>= fun (i) {
+#    var name = makeName(i);
+#    put (i+1) >>
+#    retern (name)};
+
+#sig formlets : ([Formlet (a)]) -> Formlet ([a])
+fun formlets(fs) { 
+  switch (fs) {
+    case [] -> pure ([])
+    case [x] -> x @@=> fun (x) { [x] }
+    case (x::xs) -> x @@@ (formlets(xs) @@=> fun(ls)(l) { l::ls } )
+  }
+}
+
+# A formlet is rendered to become a form, and a handler applied, using the 
+# render function
+sig render : (Formlet (a), (a) -> Xml) -> Xml
+fun render(frm, nextPage) {
+   var ((xml, extractor),_) = runState(frm)(0);
+   <form enctype="application/x-www-form-urlencoded"
+         l:action="{nextPage(extractor(environment()))}" method="POST">
+     {xml}
+   </form>
+}
+
+# Render formlet to a multipart form, which allows file-upload inputs
+# (using [inputFile])
+sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
+fun renderMultipart(frm, nextPage) {
+   var ((xml, extractor),_) = runState(frm)(0);
+   <form enctype="multipart/form-data"
+         l:action="{nextPage(extractor(environment()))}" method="POST">
+     {xml}
+   </form>
+}
 
 # Types of input we need to handle:
-#   text
-#   password
-#   checkbox
-#   radio
-#   submit
-#   reset
-#   file
-#   hidden
+#   text (done)
+#   password (done)
+#   checkbox (done)
+#   radio (done)
+#   submit (done)
+#   reset (done)
+#   file (done)
+#   hidden (done)
 #   image
-#   button
+#   button (done)
 
-# A one element formlet can be constructed using the input function.
+# A one element String-type formlet can be constructed using the [input]
+# function.
 sig input : Formlet (String)
 var input = 
    nextName >>= fun (name) {
    (retern ((<input name="{name}"/>,
-             fun (env) { assoc(name, env)})))};
+             fun (env) { assoc(name, env) })))};
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPassword : Formlet (String)
+var inputPassword = 
+   nextName >>= fun (name) {
+   (retern ((<input type="password" name="{name}"/>,
+             fun (env) { assoc(name, env) })))};
 
 sig emptyFormlet : (a) -> Formlet ([b])
 fun emptyFormlet(_) { pure([]) }
 
-# A one-element formlet with an initial value
+# A one-element formlet populated with an initial value
 sig inputValue : (String) -> Formlet (String)
 fun inputValue(v) { 
    nextName >>= fun (name) {
@@ -514,7 +577,8 @@ fun inputValue(v) {
              fun (env) { assoc(name, env)})))}
 }
 
-# A hidden formlet
+# A hidden String formlet; shoudln't normally be needed since you can capture 
+# free variables in a [yields] expression
 sig hidden : (String) -> Formlet (String)
 fun hidden(v) { 
    nextName >>= fun (name) {
@@ -522,6 +586,7 @@ fun hidden(v) {
             fun (env) { assoc(name, env)})))}
 }
 
+# A hidden formlet that produces an Int value.
 fun hiddenInt(val) {
   formlet <#>{ hidden(intToString(val)) -> rslt }</#>
   yields { stringToInt(rslt) }
@@ -535,49 +600,20 @@ var inputFile =
    (retern ((<input name="{name}" type="file" />,
              fun (env) { assoc(name, env)})))};
 
-# A formlet is rendered to a form, and a handler applied, using the render function
-sig render : (Formlet (a), (a) -> Xml) -> Xml
-fun render(frm, continuation) {
-   var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="application/x-www-form-urlencoded"
-         l:action="{continuation(extractor(environment()))}" method="POST">
-     {xml}
-   </form>
-}
-
-# Render formlet to a multipart form
-sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
-fun renderMultipart(frm, continuation) {
-   var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="multipart/form-data" l:action="{continuation(extractor(environment()))}" method="POST">
-     {xml}
-   </form>
-
-}
-
-
-#sig formlets : ([Formlet (a)]) -> Formlet ([a])
-fun formlets(fs) { 
-  switch (fs) {
-    case [] -> pure ([])
-    case (x::xs) -> x @@@ (formlets(xs) @@@ pure (fun(ls)(l) { l::ls}))
-  }
-}
-
 sig inputInt : Formlet(Int)
-var inputInt = input @@@ pure(stringToInt);
+var inputInt = input @@=> stringToInt;
 
 sig inputIntValue : (Int) -> Formlet(Int)
 var inputIntValue = fun (value) { 
-  inputValue(intToString(value)) @@@ pure(stringToInt)
+  inputValue(intToString(value)) @@=> stringToInt
 };
 
 sig inputFloat : Formlet(Float)
-var inputFloat = input @@@ pure(stringToFloat);
+var inputFloat = input @@=> stringToFloat;
 
 sig textarea : (String) -> Formlet (String)
 fun textarea(value) {
-   nextName >>= fun (name) {
+  nextName >>= fun (name) {
     retern ((<textarea name="{name}">{stringToXml(value)}</textarea>,
             fun (env) { assoc(name, env) }))}
 }
@@ -661,19 +697,22 @@ sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
   switch (items) {
      case [] -> retern ((<#/>, fun (_) { [] }))
-     case item::items -> preludeOption(item, (first(item) == default))
+     case item::items -> 
+       preludeOption(item, (first(item) == default))
                      >>= fun ((xml, r1)) { preludeOptions(items, default)
-                                         >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
+                     >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
   }
 }
 
-sig preludeMultiOptions : ([(a,String,Bool)]) -> State(Names,(Xml, (String) -> [a]))
+sig preludeMultiOptions
+     : ([(a,String,Bool)]) -> State(Names,(Xml, (String) -> [a]))
 fun preludeMultiOptions(items) {
   switch (items) {
      case [] -> retern ((<#/>, fun (_) { [] }))
-     case item::items -> preludeOption((first(item),second(item)), third(item))
+     case item::items ->
+       preludeOption((first(item),second(item)), third(item))
                      >>= fun ((xml, r1)) { preludeMultiOptions(items)
-                                         >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
+                     >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
   }
 }
 
