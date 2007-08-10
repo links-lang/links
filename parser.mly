@@ -13,17 +13,20 @@ let pos () : Sugartypes.pposition = Parsing.symbol_start_pos (), Parsing.symbol_
 
 let default_fixity = Num.num_of_int 9
 
-let annotate (signame, datatype) ((name, phrase, location), dpos) : toplevel =
-  assert false
-(*  if signame <> name then 
-    raise (Sugar.ConcreteSyntaxError
-             ("Signature for `" ^ signame ^ "' should precede definition of `"
-              ^ signame ^ "', not `"^ name ^"'.",
-              pos ()));
-  `Definition (name,phrase,location,Some datatype), dpos
-*)
-
-let annotate _ _ = assert false
+let annotate (signame, datatype) : _ -> toplevel = 
+  let checksig signame name =
+    if signame <> name then 
+      raise (Sugar.ConcreteSyntaxError
+               ("Signature for `" ^ signame ^ "' should precede definition of `"
+                ^ signame ^ "', not `"^ name ^"'.",
+                pos ())) in
+    function
+      | `Fun (name, phrase, location, dpos) ->
+          let _ = checksig signame name in
+            `FunDefinition (name, phrase, location, Some datatype), dpos
+      | `Var ((name, phrase, location), dpos) ->
+          let _ = checksig signame name in
+            `VarDefinition (name, phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -147,7 +150,7 @@ nofun_declaration:
                                                                    set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
                                                                    (`InfixDecl, pos()) }
 | tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `VarDefinition (d,p,l,None), pos }
-| signature tlvarbinding SEMICOLON                             { annotate $1 $2 }
+| signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
 fun_declarations:
@@ -160,7 +163,7 @@ perhaps_uinteger:
 
 fun_declaration:
 | tlfunbinding                                                 { let (d,p,l, pos) = $1 in `FunDefinition (d,p,l,None), pos }
-| signature tlfunbinding                                       { annotate $1 $2 }
+| signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 tlfunbinding:
 | FUN VARIABLE arg_lists perhaps_location block                { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
