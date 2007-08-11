@@ -23,10 +23,10 @@ let annotate (signame, datatype) : _ -> toplevel =
     function
       | `Fun (name, phrase, location, dpos) ->
           let _ = checksig signame name in
-            `FunDefinition (name, phrase, location, Some datatype), dpos
+            `Fun (name, phrase, location, Some datatype), dpos
       | `Var ((name, phrase, location), dpos) ->
           let _ = checksig signame name in
-            `VarDefinition (name, phrase, location, Some datatype), dpos
+            `Val ((`Variable name, dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -148,8 +148,8 @@ nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
-                                                                   (`InfixDecl, pos()) }
-| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `VarDefinition (d,p,l,None), pos }
+                                                                   (`Infix, pos()) }
+| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable d, pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -162,7 +162,7 @@ perhaps_uinteger:
 | UINTEGER                                                     { Some $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `FunDefinition (d,p,l,None), pos }
+| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `Fun (d,p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 tlfunbinding:
@@ -179,7 +179,7 @@ signature:
 | SIG op COLON datatype                                        { $2, $4 }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `TypeDeclaration ($2, $3, $5), pos()  }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `Type ($2, $3, $5), pos()  }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -535,9 +535,9 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Binder ($2, $4) }
+| VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None) }
 | exp SEMICOLON                                                { `Exp $1 }
-| FUN VARIABLE arg_lists block                                 { `Funbind ($2, ($3, (`Block $4, pos ()))) }
+| FUN VARIABLE arg_lists block                                 { `Fun ($2, ($3, (`Block $4, pos ())), `Unknown, None) }
 
 bindings:
 | binding                                                      { [$1] }

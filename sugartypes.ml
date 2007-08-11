@@ -57,7 +57,7 @@ module type Phrase = sig
   type ppattern = P.ppattern
   type toplevel = P.toplevel
 
-  type binder  = ppattern * phrase
+  type binder = ppattern * phrase
 
   type constant = [
   | `Float of float
@@ -114,7 +114,14 @@ module type Phrase = sig
   | `Formlet of (phrase * phrase)
   | `FormBinding of (phrase * ppattern) ]
   and block = binding list * phrase
-  and binding = [`Binder of binder | `Funbind of name * funlit | `Exp of phrase]
+  and binding = [
+  | `Val of ppattern * phrase * location * datatype option
+  | `Fun of name * funlit * location * datatype option
+  | `Funs of (name * funlit * location * datatype option) list
+  | `Foreign of name * name * datatype
+  | `Type of (name * name list * datatype)
+  | `Infix
+  | `Exp of phrase ]
   and funlit = ppattern list list * phrase
   and regex = [
   | `Range of (char * char)
@@ -129,14 +136,14 @@ module type Phrase = sig
   | `Repeat of (Regex.repeat * regex)
   | `Splice of phrase
   | `Replace of (regex * [`Literal of string | `Splice of phrase]) ]
-  type toplevel' = [
+  type toplevel' = binding (*[
   | `VarDefinition of (name * phrase * location * datatype option)
   | `FunDefinition of (name * funlit * location * datatype option)
   | `Foreign of (name * name * datatype)
   | `TypeDeclaration of (name * name list * datatype)
   | `InfixDecl
   | phrasenode
-  ]
+  ]*)
 end
 
 module rec Untyped

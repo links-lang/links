@@ -413,18 +413,20 @@ let type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.
         | `Block (bindings, e) ->
             let type_binding ((env, alias_env) as typing_env) =
               function
-                | `Binder (pattern, body) ->
+                | `Val (pattern, body, location, datatype) ->
+                    (* TODO: use datatype, if any *)
                     let pattern = type_pattern alias_env pattern
                     and body = type_check typing_env body in
                       (* TODO: generalisation *)
-                      `Binder (pattern, body), pattern_env pattern
-                | `Funbind (name, (pss, body)) ->
+                      (`Val (pattern, body, location, datatype)), pattern_env pattern
+                | `Fun (name, (pss, body), location, datatype) ->
                     (* TODO: callgraph analysis, yuck! *)
                     assert false
                 | `Exp body  ->
                     let body = type_check typing_env body in
                       unify (typ body) (Types.unit_type);
-                      `Exp body, [] in
+                      `Exp body, [] 
+                | _ -> assert false in
             let rec type_bindings typing_env =
               function
                 | [] -> [], typing_env
@@ -489,20 +491,24 @@ let type_top_level lookup_pos : Types.typing_environment -> Untyped.toplevel -> 
     and tp = type_pattern alias_env in
       match (def : Untyped.toplevel') with
         (* declarations *)
-        | `VarDefinition (name, body, location, t) ->
+        | `Val ((`Variable name, vpos as vpat), body, location, t) ->
             let body = tc body in
+            let vpat = tp vpat in
             let bt = typ body in
             let _ = opt_iter (fun t -> unify bt (snd (Sugar.desugar_datatype t))) t in
             let env = Types.bind name ([], typ body) env in
               (* TODO: generalisation *)
             let typing_env = (env, alias_env) in
-              (`VarDefinition (name, body, location, t), (pos, bt)), typing_env
-        | `FunDefinition _   -> assert false
+              (`Val (vpat, body, location, t), (pos, bt)), typing_env
+        | `Val _ -> assert false
+        | `Fun _   -> assert false
+        | `Funs _ -> assert false
         | `Foreign _         -> assert false
-        | `TypeDeclaration _ -> assert false
-        | `InfixDecl         -> assert false
-        | #phrasenode as e ->
-            (tc (e, pos) :> Typed.toplevel), typing_env
+        | `Type _ -> assert false
+        | `Infix         -> assert false
+        | `Exp e ->
+            let e = tc e in
+              (`Exp e, (pos, typ e)), typing_env
   in
     type_top_level
     
