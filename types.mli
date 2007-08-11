@@ -64,7 +64,7 @@ type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 type environment = assumption Env.t
     deriving (Show, Pickle)
-type alias_environment = assumption stringmap
+type alias_environment = assumption Env.t
     deriving (Show, Pickle)
 type typing_environment = environment * alias_environment
     deriving (Show, Pickle)
@@ -195,8 +195,6 @@ type inference_type_map =
 
 (*type context = environment * inference_type_map*)
 
-(* alias environments *)
-val empty_alias_environment : alias_environment
 (* environments *)
 val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
 

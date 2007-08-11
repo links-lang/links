@@ -971,7 +971,7 @@ let type_env : Types.environment =
 and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->
-       StringMap.add name assumption env)
+       Env.bind name assumption env)
     [
       "DomNode", ([], `Primitive `Abstract);
       "Event", ([], `Primitive `Abstract);
@@ -981,7 +981,7 @@ and alias_env : Types.alias_environment =
       "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "Regex", datatype Linksregex.Regex.datatype;
     ]
-    StringMap.empty
+    Env.empty
 
 let typing_env = (type_env, alias_env)
 

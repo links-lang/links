@@ -494,7 +494,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Ty
         | `Infix         -> assert false
         | `Exp e ->
             let e = tc e in
-              (`Exp e, (pos, typ e)), (Env.empty, Types.empty_alias_environment)
+              (`Exp e, (pos, typ e)), (Env.empty, Env.empty)
   in
     type_top_level
     

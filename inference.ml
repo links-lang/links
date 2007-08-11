@@ -1198,16 +1198,16 @@ let mutually_type_defs
 
 let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
   let _ =
-    if StringMap.mem typename alias_env then
+    if Env.has alias_env typename then
       failwith ("Duplicate typename: "^typename) in
   let aliases = Types.type_aliases datatype in
   let free_aliases =
-    StringSet.filter (fun alias -> not (StringMap.mem alias alias_env)) aliases
+    StringSet.filter (fun alias -> not (Env.has alias_env alias)) aliases
   in
     if not (StringSet.is_empty free_aliases) then
       failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
     else
-      StringMap.add typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
+      Env.bind typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
 
 let type_expression : Types.typing_environment -> untyped_expression -> (Types.typing_environment * expression) =
   fun typing_env exp ->

@@ -56,18 +56,16 @@ type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 type environment = assumption Env.t
     deriving (Show, Pickle)
-type alias_environment = assumption stringmap
+type alias_environment = assumption Env.t
     deriving (Show, Pickle)
 type typing_environment = environment * alias_environment
     deriving (Show, Pickle)
-
-let empty_alias_environment = StringMap.empty
 
 (* Functions on environments *)
 let concat_typing_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
-    (Env.extend types1 types2, StringMap.superimpose aliases1 aliases2)
+    (Env.extend types1 types2, Env.extend aliases1 aliases2)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -458,7 +456,7 @@ let rec free_alias_check alias_env = fun rec_vars ->
       | `Variant row -> free_alias_check_row alias_env rec_vars row
       | `Table (r, w) -> fac rec_vars r; fac rec_vars w
       | `Application (s, ts) ->
-          if StringMap.mem s alias_env then
+          if Env.has alias_env s then
             List.iter (fac rec_vars) ts
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
@@ -514,7 +512,7 @@ let rec is_mailbox_free alias_env = fun rec_vars t ->
       | `Table (r, w) -> imb r && imb w
       | `Application ("Mailbox", _) -> false
       | `Application (s, ts) ->
-          if StringMap.mem s alias_env then
+          if Env.has alias_env s then
             List.for_all imb ts
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
@@ -1012,8 +1010,8 @@ exception AliasMismatch of string
 
 let lookup_alias (s, ts) alias_env =
   let vars, alias =
-    if StringMap.mem s alias_env then
-      StringMap.find s alias_env
+    if Env.has alias_env s then
+      Env.find s alias_env
     else
       raise (AliasMismatch ("Unbound typename "^s))
   in
