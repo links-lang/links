@@ -429,7 +429,7 @@ let name_binder (x, info) =
     | (_, name, `Local) -> (x, name ^ "_" ^ string_of_int x)
     | (_, name, `Global) -> (x, name)
 
-module Env :
+module Env' :
 sig
   type env = string IntMap.t
     deriving (Show)
@@ -477,7 +477,7 @@ let rec generate_value env : value -> code =
       | `Variable var ->
           (* [HACK] *)
           begin
-            match (Env.lookup env var) with
+            match (Env'.lookup env var) with
               | "map" -> Var ("LINKS.accum")
               | name ->
                   if Binop.is name then
@@ -518,10 +518,10 @@ let rec generate_value env : value -> code =
       | `XmlNode (name, attributes, children) ->
           generate_xml env name attributes children
 
-      | `ApplyPrim (`Variable op, [l; r]) when Binop.is (Env.lookup env op) ->
-          Binop (gv l, Binop.js_name (Env.lookup env op), gv r)
-      | `ApplyPrim (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) ->
-          Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)
+      | `ApplyPrim (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
+          Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)
+      | `ApplyPrim (`Variable f, vs) when Library.is_primitive (Env'.lookup env f) && not (mem (Env'.lookup env f) cps_prims) ->
+          Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)
       | `ApplyPrim (v, vs) ->
           Call (gv v, List.map gv vs)
 
@@ -559,10 +559,10 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
     match tc with
       | `Return v ->           
           callk_yielding kappa (gv v)
-      | `Apply (`Variable op, [l; r]) when Binop.is (Env.lookup env op) ->
-          callk_yielding kappa (Binop (gv l, Binop.js_name (Env.lookup env op), gv r))
-      | `Apply (`Variable f, vs) when Library.is_primitive (Env.lookup env f) && not (mem (Env.lookup env f) cps_prims) ->
-          Call (kappa, [Call (Var ("_" ^ (Env.lookup env f)), List.map gv vs)])
+      | `Apply (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
+          callk_yielding kappa (Binop (gv l, Binop.js_name (Env'.lookup env op), gv r))
+      | `Apply (`Variable f, vs) when Library.is_primitive (Env'.lookup env f) && not (mem (Env'.lookup env f) cps_prims) ->
+          Call (kappa, [Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)])
       | `Apply (v, vs) ->
           apply_yielding (gv v, [Lst (map gv vs); kappa])
       | `Special special ->
@@ -580,7 +580,7 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
               (fun kappa ->
                  let gen_cont (xb, c) =
                    let (x, x_name) = name_binder xb in
-                     x_name, (snd (generate_computation (Env.extend env [(x, x_name)]) c kappa)) in
+                     x_name, (snd (generate_computation (Env'.extend env [(x, x_name)]) c kappa)) in
                  let cases = StringMap.map gen_cont cases in
                  let default = opt_map gen_cont default in
                    k (Case (x, cases, default)))
@@ -611,7 +611,7 @@ and generate_special env : special -> code -> code = fun sp kappa ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
 
-and generate_computation env : computation -> code -> (Env.env * code) = fun (bs, tc) kappa -> 
+and generate_computation env : computation -> code -> (Env'.env * code) = fun (bs, tc) kappa -> 
   let rec gbs env c =
     function
       | [] ->
@@ -622,18 +622,18 @@ and generate_computation env : computation -> code -> (Env.env * code) = fun (bs
   in
     gbs env (fun code -> code) bs
 
-and generate_binding env : binding -> (Env.env * (code -> code)) = fun binding ->
+and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding ->
   match binding with
     | `Let (b, tc) ->
         let (x, x_name) = name_binder b in
-        let env' = Env.extend env [(x, x_name)] in
+        let env' = Env'.extend env [(x, x_name)] in
           env', (fun code -> generate_tail_computation env tc (Fn ([x_name], code)))
     | `Fun (fb, xsb, body, location) ->
         let (f, f_name) = name_binder fb in
         let bs = List.map name_binder xsb in
         let xs, xs_names = List.split bs in
-        let body_env = Env.extend env bs in
-        let env' = Env.extend env [(f, f_name)] in
+        let body_env = Env'.extend env bs in
+        let env' = Env'.extend env [(f, f_name)] in
           (env',
            fun code ->
              let body =
@@ -650,7 +650,7 @@ and generate_binding env : binding -> (Env.env * (code -> code)) = fun binding -
                   code))        
     | `Rec defs ->
         let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
-        let env' = Env.extend env fs in
+        let env' = Env'.extend env fs in
           (env',
            fun code ->
              LetRec
@@ -659,7 +659,7 @@ and generate_binding env : binding -> (Env.env * (code -> code)) = fun binding -
                      let (f, f_name) = name_binder fb in
                      let bs = List.map name_binder xsb in
                      let _, xs_names = List.split bs in
-                     let body_env = Env.extend env (fs @ bs) in
+                     let body_env = Env'.extend env (fs @ bs) in
                      let body =
                        match location with
                          | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
@@ -674,7 +674,7 @@ and generate_binding env : binding -> (Env.env * (code -> code)) = fun binding -
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
-and generate_defs env : binding list -> (Env.env * code) =
+and generate_defs env : binding list -> (Env'.env * code) =
   fun bs ->
     let rec gbs env c =
       function
@@ -684,7 +684,7 @@ and generate_defs env : binding list -> (Env.env * code) =
               match b with
                 | `Let (b, tc) ->
                     let (x, x_name) = name_binder b in
-                    let env' = Env.extend env [(x, x_name)] in
+                    let env' = Env'.extend env [(x, x_name)] in
                     let c' =
                       (fun code ->
                          Seq (DeclareVar (x_name),
@@ -698,7 +698,7 @@ and generate_defs env : binding list -> (Env.env * code) =
     in
       gbs env (fun code -> code) bs
 
-and generate_prog env : computation -> (Env.env * code) = fun c ->
+and generate_prog env : computation -> (Env'.env * code) = fun c ->
   generate_computation env c (Var "_start")
 
 let gen_defs env defs =
@@ -825,8 +825,8 @@ let elim_defs defs root_names =
       defs [] in
 
   let aliens = get_alien_names defs in
-  let library_names = List.map fst (fst Library.typing_env) in
-  let elim_free_names = aliens @ library_names @ ["stringifyB64"] in
+  let library_names = Env.domain (fst Library.typing_env) in
+  let elim_free_names = "stringifyB64" :: aliens @ (StringSet.elements library_names) in
   let defs = Callgraph.elim_dead_defs elim_free_names defs root_names in
 
   let defMap =
@@ -852,7 +852,7 @@ let generate_program_defs defs root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
 
-  let library_names = List.map fst (fst Library.typing_env) in
+  let library_names = StringSet.elements (Env.domain (fst Library.typing_env)) in
   let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ library_names))) defs in
 
   let _ = Debug.print ("defs(1): "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in
@@ -863,7 +863,7 @@ let generate_program_defs defs root_names =
      else defs) in
 
   let initial_env = Compileir.make_initial_env ("map" :: "stringifyB64" :: library_names) in
-  let _ = Debug.print ("initial_env: "^Env.Show_env.show (invert_env initial_env)) in
+  let _ = Debug.print ("initial_env: "^Env'.Show_env.show (invert_env initial_env)) in
 
   let _ = Debug.print ("defs(2): "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in
     Debug.print ("hmm... "^string_of_bool(Library.is_primitive "+"));
@@ -873,7 +873,7 @@ let generate_program_defs defs root_names =
 
   let env = Compileir.add_globals_to_env initial_env defs' in
   let env' = invert_env env in
-  let _ = Debug.print ("env': "^Env.Show_env.show env') in
+  let _ = Debug.print ("env': "^Env'.Show_env.show env') in
   let env', js_defs = gen_defs env' defs' in
   let js_defs = [show js_defs] in
     (env, env'), js_defs

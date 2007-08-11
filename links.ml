@@ -10,9 +10,15 @@ let ps1 = "links> "
 (* Types of built-in primitives.  TODO: purge. *)
 let stdenvs = ref([], Library.typing_env)
 
+type envs = Result.environment * Types.typing_environment
+
 (** Definition of the various repl directives *)
-let rec directives = 
-  let ignore_envs fn envs arg = let _ = fn arg in envs in lazy
+let rec directives 
+    : (string
+     * ((envs ->  string list -> envs)
+        * string)) list Lazy.t =
+
+  let ignore_envs fn (envs : envs) arg = let _ = fn arg in envs in lazy
   (* lazy so we can have applications on the rhs *)
 [
     "directives", 
@@ -36,10 +42,10 @@ let rec directives =
     "builtins",
     (ignore_envs 
        (fun _ ->
-          iter (fun (n, k) ->
+          StringSet.iter (fun n ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (snd k)))
-          Library.type_env),
+                         n (Types.string_of_datatype (snd (Env.find n Library.type_env))))
+            (Env.domain Library.type_env)),
      "list builtin functions and values");
 
     "quit",
@@ -47,12 +53,12 @@ let rec directives =
 
     "typeenv",
     ((fun ((_, (typeenv, _)) as envs) _ ->
-        iter (fun (v, k) ->
-                     Printf.fprintf stderr " %-16s : %s\n"
-                       v (Types.string_of_datatype (snd k)))
-          (filter (not -<- (flip mem_assoc Library.type_env) -<- fst) typeenv);
+        StringSet.iter (fun k ->
+                Printf.fprintf stderr " %-16s : %s\n"
+                  k (Types.string_of_datatype (snd (Env.find k typeenv))))
+          (StringSet.diff (Env.domain typeenv) (Env.domain Library.type_env));
         envs),
-    "display the current type environment");
+     "display the current type environment");
 
     "env",
     ((fun ((valenv, _) as envs) _ ->
@@ -64,17 +70,17 @@ let rec directives =
      "display the current value environment");
 
     "load",
-    ((fun envs args ->
+    ((fun (envs : Result.environment * Types.typing_environment) args ->
         match args with
           | [filename] ->
               let library_types, libraries =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program = Parse.parse_file Parse.program filename in
-              let typingenv, program = Inference.type_program library_types program in
+              let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
               let program = Syntax.labelize program in
-                (fst ((Interpreter.run_program libraries []) program), typingenv)
+                (fst ((Interpreter.run_program libraries []) program), (typingenv : Types.typing_environment))
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
 
@@ -83,16 +89,18 @@ let rec directives =
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let _,t = Parse.parse_string Parse.datatype (String.concat " " args) in
-              ListLabels.iter tenv
-                ~f:(fun (id,(_,t')) -> 
+              StringSet.iter
+                (fun id -> 
                       if id <> "_MAILBOX_" then
                         (try begin
+                           let _, t' = Env.find id tenv in
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
                            let t' = Instantiate.instantiate_datatype fresh_envs t' in 
                              Inference.unify alias_env (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))
+                (Env.domain tenv)
               ; envs),
      "search for functions that match the given type");
 

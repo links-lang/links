@@ -59,7 +59,7 @@ let countNodes e =
 
 (* Inline small, non-recursive functions *)
 let contains_no_extrefs : Syntax.expression -> bool =
-  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- StringSet.elements -<- freevars
+  (=) [] -<- List.filter (not -<- Env.has Library.type_env) -<- StringSet.elements -<- freevars
 
 let recursivep : Syntax.expression -> bool = function
   | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 
@@ -380,7 +380,7 @@ let sql_projections ((env, alias_env):(Types.environment * Types.alias_environme
             let t =
               Types.concrete_type
                 (match apply with
-                   | Variable (name, _) -> snd (assoc name env)
+                   | Variable (name, _) -> snd (Env.find name env)
                    | Abstr _ ->
                        (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
                           | Abstr (_, _, `T (_, datatype, _)) -> datatype

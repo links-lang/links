@@ -173,10 +173,12 @@ let perform_request
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
         assert(Syntax.is_closed_wrt expr 
-                 (StringSet.from_list (dom globals @ dom env @ dom (fst Library.typing_env))));
-          Library.print_http_response [("Content-type", "text/html")]
-            (Result.string_of_result 
-               (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
+                 (StringSet.union
+                    (StringSet.from_list (dom globals @ dom env))
+                    (Env.domain (fst Library.typing_env))));
+        Library.print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result 
+             (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
     | ClientReturn(cont, value) ->
         Interpreter.has_client_context := true;
         let result_json = (Json.jsonize_result 

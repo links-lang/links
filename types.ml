@@ -54,7 +54,7 @@ type quantifier = type_variable
 
 type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = ((string * assumption) list)
+type environment = assumption Env.t
     deriving (Show, Pickle)
 type alias_environment = assumption stringmap
     deriving (Show, Pickle)
@@ -64,16 +64,10 @@ type typing_environment = environment * alias_environment
 let empty_alias_environment = StringMap.empty
 
 (* Functions on environments *)
-let environment_values = fun env -> snd (List.split env)
-let lookup = List.assoc
-let bind k v e = (k,v) :: e
-
 let concat_typing_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
-    (types1 @ types2, StringMap.superimpose aliases1 aliases2)
-let empty_environment = []
-let concat_environments = (@)
+    (Env.extend types1 types2, StringMap.superimpose aliases1 aliases2)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -122,7 +116,6 @@ let _ =
                 | `Body row ->
                     is_closed rec_vars row
             end
-        | _ -> assert false
     in
       is_closed TypeVarSet.empty
 
@@ -953,7 +946,12 @@ let string_of_assumption = function
   | [], datatype -> string_of_datatype datatype
   | assums, datatype -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_datatype datatype
 let string_of_environment env =
-  "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
+  let module M = Env.Show_t(Show.ShowDefaults(struct
+                                                type a = assumption
+                                                let format fmt a = 
+                                                  Format.pp_print_string fmt (string_of_assumption a)
+                                              end)) in
+    M.show env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in

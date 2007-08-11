@@ -967,7 +967,7 @@ let apply_pfun name args =
     | `PFun p -> p args
         
 let type_env : Types.environment =
-  List.map (fun (n, (_,t,_)) -> (n,t)) env
+  List.fold_right (fun (n, (_,t,_)) -> Env.bind n t) env Env.empty
 and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->

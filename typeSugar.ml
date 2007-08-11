@@ -98,19 +98,19 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
     and typ (_,(_,(_,t))) = t
     and env (_,(_,(e,_))) = e
     (* TODO: check for duplicate bindings *)
-    and (++) = Types.concat_environments in
+    and (++) = Env.extend in
     let (p, e, t : Typed.pattern * Types.environment * Types.datatype) =
       match (pattern : Untyped.pattern) with
         | `Any                   -> `Any,
-            Types.empty_environment, Types.fresh_type_variable ()
+            Env.empty, Types.fresh_type_variable ()
         | `Nil                   -> `Nil,
-            Types.empty_environment, (Types.make_list_type
-                                        (Types.fresh_type_variable ()))
-        | `Constant c as c'      -> c', Types.empty_environment, constant_type c
+            Env.empty, (Types.make_list_type
+                          (Types.fresh_type_variable ()))
+        | `Constant c as c'      -> c', Env.empty, constant_type c
         | `Variable x            -> 
             let xtype = Types.fresh_type_variable () in
               (`Variable x,
-               (Types.bind x ([], xtype) Types.empty_environment),
+               (Env.bind x ([], xtype) Env.empty),
                xtype)
         | `Cons (p1, p2)         -> 
             let p1 = type_pattern p1
@@ -119,7 +119,7 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
               `Cons (p1, p2), env p1 ++ env p2, typ p2
         | `List ps               -> 
             let ps' = List.map type_pattern ps in
-            let env' = List.fold_right (env ->- (++)) ps' Types.empty_environment in
+            let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let element_type = 
               match ps' with
                 | [] -> Types.fresh_type_variable ()
@@ -129,7 +129,7 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
             in `List ps', env', Types.make_list_type element_type
         | `Variant (name, None)       -> 
             let vtype = `Variant (Types.make_singleton_open_row (name, `Present Types.unit_type)) in
-              `Variant (name, None), Types.empty_environment, vtype
+              `Variant (name, None), Env.empty, vtype
         | `Variant (name, Some p)     -> 
             let p = type_pattern p in
             let vtype = `Variant (Types.make_singleton_open_row (name, `Present (typ p))) in
@@ -139,7 +139,7 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
             and default = opt_map type_pattern default in
             let initial, denv = match default with
               | None -> (Types.make_empty_closed_row (),
-                         Types.empty_environment)
+                         Env.empty)
               | Some r -> 
                   let row = Types.make_empty_open_row () in
                   let _ = unify (`Record row) (typ r) in
@@ -149,16 +149,16 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
                          (fun (l, f) -> Types.row_with (l, `Present (typ f)))
                          ps initial)
             and penv = 
-              List.fold_right (snd ->- env ->- (++)) ps Types.empty_environment in
+              List.fold_right (snd ->- env ->- (++)) ps Env.empty in
               `Record (ps, default), penv ++ denv, rtype
         | `Tuple ps              -> 
             let ps' = List.map type_pattern ps in
-            let env' = List.fold_right (env ->- (++)) ps' Types.empty_environment in
+            let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let typ' = Types.make_tuple_type (List.map typ ps') in
               `Tuple ps', env', typ'
         | `As (x, p)             -> 
             let p = type_pattern p in
-            let env' = Types.bind x ([], typ p) (env p) in
+            let env' = Env.bind x ([], typ p) (env p) in
               `As (x, p), env', (typ p)
         | `HasType (p, t)        -> 
             let p = type_pattern p in
@@ -174,8 +174,11 @@ let rec extract_formlet_bindings (expr, pos) =
     match expr with
       | `FormBinding (f, pattern) -> pattern_env pattern
       | `Xml (_, _, children) ->
-          concat_map extract_formlet_bindings children
-      | _ -> []
+          List.fold_right
+            (fun child env ->
+               Env.extend env (extract_formlet_bindings child))
+            children Env.empty
+      | _ -> Env.empty
           
 let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
   (* Currently alias_env can't change within this function (since type
@@ -185,7 +188,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
     let type_pattern = type_pattern lookup_pos in
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and (++) env' (env, alias_env) = (Types.concat_environments env' env, alias_env)
+    and (++) env' (env, alias_env) = (Env.extend env' env, alias_env)
     and typ (_,(_,t)) = t 
     and pattern_typ (_, (_,(_,t))) = t
     and pattern_env (_, (_,(e,_))) = e
@@ -227,7 +230,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let pats = List.map (List.map tp) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
             let env', aliases = List.fold_left fold_in_envs typing_env pats in
-            let body = type_check (Types.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
+            let body = type_check (Env.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
             let ftype = 
               List.fold_right
                 (fun pat rtype ->
@@ -310,7 +313,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
         | `Spawn p ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
-            let typing_env' = Types.bind mailbox ([], pid_type) env, alias_env in
+            let typing_env' = Env.bind mailbox ([], pid_type) env, alias_env in
             let p = type_check typing_env' p in
               `Spawn p, Types.make_mailbox_type pid_type
         | `Receive binders ->
@@ -410,7 +413,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
               unify (typ i) (`Primitive `Bool);
               unify (typ t) (typ e);
               `Conditional (i,t,e), (typ t)
-        | `Block (((bindings : Untyped.binding list), (e : Untyped.phrase)) : block) ->
+        | `Block (bindings, e) ->
             let rec type_bindings typing_env =
               function
                 | [] -> [], typing_env
@@ -419,8 +422,8 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                     let bs, typing_env = type_bindings (Types.concat_typing_environment typing_env' typing_env) bs in
                       b :: bs, typing_env in
             let bindings, typing_env = type_bindings typing_env bindings in
-            let (e : Typed.phrase) = type_check typing_env e in
-              `Block ((bindings : Typed.binding list), e), typ e
+            let e = type_check typing_env e in
+              `Block (bindings, e), typ e
         | `Regex r ->
             `Regex (type_regex typing_env r), `Application ("Regex", [])
         | `Projection (r,l) ->
@@ -479,7 +482,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Ty
             let vpat = tp vpat in
             let bt = typ body in
             let _ = opt_iter (fun t -> unify bt (snd (Sugar.desugar_datatype t))) t in
-            let env = Types.bind name ([], typ body) env in
+            let env = Env.bind name ([], typ body) env in
               (* TODO: generalisation *)
             let typing_env = (env, alias_env) in
               (`Val (vpat, body, location, t), (pos, bt)), typing_env
@@ -491,7 +494,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Ty
         | `Infix         -> assert false
         | `Exp e ->
             let e = tc e in
-              (`Exp e, (pos, typ e)), ([], Types.empty_alias_environment)
+              (`Exp e, (pos, typ e)), (Env.empty, Types.empty_alias_environment)
   in
     type_top_level
     
