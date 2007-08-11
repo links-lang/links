@@ -506,11 +506,13 @@ let rec generate_value env : value -> code =
       | `Inject (name, v) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
+(*
       | `Nil -> Lst []
       | `Cons (v, vs) ->
           Call (Var "LINKS.concat", [Lst [gv v]; gv vs])
       | `Concat (v, w) ->
           Call (Var "LINKS.concat", [gv v; gv w])
+*)
       | `Comparison (v, `Equal, w) ->
           Call(Var "LINKS.eq", [gv v; gv w])
       | `Comparison (v, op, w) ->

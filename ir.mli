@@ -38,18 +38,12 @@ type value =
   | `Variable of var
   | `Extend of value name_map * value option
   | `Project of name * value
-  | `Erase of name * value
+  | `Erase of name * value    (* should be implemented using coerce *) 
   | `Inject of name * value
 
   | `XmlNode of name * value name_map * value list
-
   | `ApplyPrim of value * value list
-
-  (* should really be implemented as constants *)
-  | `Nil
-  | `Cons of value * value
-  | `Concat of value * value
-  | `Comparison of value * Syntax.comparison * value
+  | `Comparison of value * Syntax.comparison * value    (* should really be implemented as constants *)
 
   | `Coerce of value * Types.datatype
   | `Abs of value

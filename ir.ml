@@ -55,9 +55,6 @@ type value =
   | `ApplyPrim of (value * value list)
 
   (* should really be implemented as constants *)
-  | `Nil
-  | `Cons of (value * value)
-  | `Concat of (value * value)
   | `Comparison of (value * Syntax.comparison * value)
 
   | `Coerce of (value * Types.datatype)
@@ -94,8 +91,7 @@ let rec is_atom =
     | `Constant (Syntax.Integer _)
     | `Constant (Syntax.Char _)
     | `Constant (Syntax.Float _)
-    | `Variable _
-    | `Nil -> true
+    | `Variable _ -> true
     | `Erase (_, v)
     | `Coerce (v, _)
     | `Abs v -> is_atom v
@@ -130,15 +126,13 @@ struct
     let iv = value env in
       match v with
         | `Variable var when IntMap.mem var env -> IntMap.find var env
-        | `Constant _ | `Variable _ | `Nil -> v
+        | `Constant _ | `Variable _ -> v
         | `Extend (vmap, vopt) -> `Extend (StringMap.map iv vmap, opt_map iv vopt)
         | `Project (name, v) -> `Project (name, iv v)
         | `Erase (name, v) -> `Erase (name, iv v)
         | `Inject (name, v) -> `Inject (name, iv v)
         | `XmlNode (name, vmap, vs) -> `XmlNode (name, StringMap.map iv vmap, List.map iv vs)
         | `ApplyPrim (v, vs) -> `ApplyPrim (iv v, List.map iv vs)
-        | `Cons (v, w) -> `Cons (iv v, iv w)
-        | `Concat (v, w) -> `Concat (iv v, iv w)
         | `Comparison (v, c, w) -> `Comparison (iv v, c, iv w)
         | `Coerce (v, t) -> `Coerce (iv v, t)
         | `Abs v -> `Abs (iv v)

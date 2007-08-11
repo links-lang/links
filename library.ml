@@ -305,6 +305,28 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    PURE);
 
   (** Lists and collections **)
+  "nil",
+  (`List [],
+   datatype "[a]",
+   PURE);
+
+  "cons",
+  (p2 (fun x xs ->
+         box_list (x :: (unbox_list xs))),
+   datatype "(a, [a]) -> [a]",
+   PURE);
+
+  (*
+     This is called 'append' because 'concat' is already taken
+     by the prelude for the function that
+     concatenates a list of lists.
+  *)
+  "append",
+  (p2 (fun xs ys ->
+         box_list (unbox_list xs @ unbox_list ys)),
+   datatype "([a], [a]) -> [a]",
+   PURE);
+
   "hd",
   (p1 (unbox_list ->- List.hd),
    datatype "([a]) -> a",

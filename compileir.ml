@@ -77,6 +77,11 @@ let inject_type name t =
 let make_list_type t =
   `Application ("List", [t])
 
+let element_type t =
+  match Types.concrete_type t with
+    | `Application ("List", [t]) -> t
+    | _ -> assert false
+
 let bool_type = `Primitive `Bool
 (******************************)
 
@@ -152,10 +157,12 @@ sig
     (var_info * (var -> tail_computation sem)) option ->
     tail_computation sem
   val case_zero : value sem * datatype -> tail_computation sem
+(*
   val nil : datatype -> value sem
   val listof : value sem * datatype -> value sem
   val concat : (value sem * value sem * datatype) -> value sem
-(*  val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem *)
+  val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
+*)
   val database : value sem -> tail_computation sem
   val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
@@ -432,12 +439,14 @@ struct
     bind s (fun v ->
               bind s' (fun v' -> lift (`Comparison (v, c, v'), bool_type)))
 
+(*
   let nil t = lift (`Nil, t)
   let listof (s, t) =
     bind s (fun v -> lift (`Cons (v, `Nil), t))
   let concat (s, s', t) =
     bind s (fun v ->
               bind s' (fun v' -> lift (`Concat (v, v'), t)))
+*)
 
 (*
   let comprehension (x_info, s, body) =
@@ -627,11 +636,20 @@ struct
         | Variant_selection_empty (e', _) ->
             I.case_zero (ev e', t)
         | Nil _ ->
-            cofv (I.nil t)
+            cofv (I.var (Env.lookup env "nil", t))
         | List_of (elem, _) ->
-            cofv (I.listof (ev elem, t))
+            let nil = I.var (Env.lookup env "nil", t)
+            and cons = Env.lookup env "cons"
+            and elem_type = element_type t in
+            let cons_type = `Function (Types.make_tuple_type [elem_type; t],
+                                       Types.fresh_type_variable (),
+                                       t) in
+              cofv (I.applyprim(I.var (cons, cons_type), [ev elem; nil]))
         | Concat (left, right, _) ->
-            cofv (I.concat (ev left, ev right, t))
+            let concat_type = `Function (Types.make_tuple_type [t; t],
+                                         Types.fresh_type_variable (),
+                                         t) in
+              cofv (I.applyprim(I.var (Env.lookup env "append", concat_type), [ev left; ev right]))
         | For (body, x, e, _) ->
             (*
               compile comprehensions into map
