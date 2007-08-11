@@ -9,7 +9,7 @@ module rec Typed
 and TypedArgs : sig
   type phrase   = Typed.phrasenode * (pposition * Types.datatype)
   type ppattern = Typed.pattern * (pposition * (Types.environment * Types.datatype))
-  type toplevel = Typed.toplevel' * (pposition * Types.datatype)
+  type binding = Typed.binding' * (pposition * Types.datatype)
 end
   = TypedArgs
 
@@ -177,7 +177,7 @@ let rec extract_formlet_bindings (expr, pos) =
           concat_map extract_formlet_bindings children
       | _ -> []
           
-let type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
+let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
   (* Currently alias_env can't change within this function (since type
      aliases can only be bound at top level), so we needn't actually
      thread it through. *)
@@ -410,33 +410,17 @@ let type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.
               unify (typ i) (`Primitive `Bool);
               unify (typ t) (typ e);
               `Conditional (i,t,e), (typ t)
-        | `Block (bindings, e) ->
-            let type_binding ((env, alias_env) as typing_env) =
-              function
-                | `Val (pattern, body, location, datatype) ->
-                    (* TODO: use datatype, if any *)
-                    let pattern = type_pattern alias_env pattern
-                    and body = type_check typing_env body in
-                      (* TODO: generalisation *)
-                      (`Val (pattern, body, location, datatype)), pattern_env pattern
-                | `Fun (name, (pss, body), location, datatype) ->
-                    (* TODO: callgraph analysis, yuck! *)
-                    assert false
-                | `Exp body  ->
-                    let body = type_check typing_env body in
-                      unify (typ body) (Types.unit_type);
-                      `Exp body, [] 
-                | _ -> assert false in
+        | `Block (((bindings : Untyped.binding list), (e : Untyped.phrase)) : block) ->
             let rec type_bindings typing_env =
               function
                 | [] -> [], typing_env
                 | b :: bs ->
-                    let b, env = type_binding typing_env b in
-                    let bs, typing_env = type_bindings (env ++ typing_env) bs in
+                    let b, typing_env' = type_binding lookup_pos typing_env b in
+                    let bs, typing_env = type_bindings (Types.concat_typing_environment typing_env' typing_env) bs in
                       b :: bs, typing_env in
             let bindings, typing_env = type_bindings typing_env bindings in
-            let e = type_check typing_env e in
-              `Block (bindings, e), typ e
+            let (e : Typed.phrase) = type_check typing_env e in
+              `Block ((bindings : Typed.binding list), e), typ e
         | `Regex r ->
             `Regex (type_regex typing_env r), `Application ("Regex", [])
         | `Projection (r,l) ->
@@ -479,8 +463,7 @@ let type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.
 
     in e, (pos, t)
   in type_check
-
-let type_top_level lookup_pos : Types.typing_environment -> Untyped.toplevel -> (Typed.toplevel * Types.typing_environment) =
+and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Typed.binding * Types.typing_environment) =
   let rec type_top_level ((env, alias_env) as typing_env) (def, pos) =
     let type_check = type_check lookup_pos
     and type_pattern = type_pattern lookup_pos in
@@ -489,7 +472,7 @@ let type_top_level lookup_pos : Types.typing_environment -> Untyped.toplevel -> 
     and typ (_,(_,t)) = t
     and tc = type_check typing_env
     and tp = type_pattern alias_env in
-      match (def : Untyped.toplevel') with
+      match (def : Untyped.binding') with
         (* declarations *)
         | `Val ((`Variable name, vpos as vpat), body, location, t) ->
             let body = tc body in
@@ -508,7 +491,7 @@ let type_top_level lookup_pos : Types.typing_environment -> Untyped.toplevel -> 
         | `Infix         -> assert false
         | `Exp e ->
             let e = tc e in
-              (`Exp e, (pos, typ e)), typing_env
+              (`Exp e, (pos, typ e)), ([], Types.empty_alias_environment)
   in
     type_top_level
     

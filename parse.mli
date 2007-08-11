@@ -8,7 +8,7 @@ val datatype    :  (Types.assumption, Sugartypes.datatype) grammar
 val interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar
 (* Grammar for programs stored in files etc. *)
 val program : (Syntax.untyped_program,
-               (Sugartypes.toplevel list * Sugartypes.phrase option)) grammar
+               (Sugartypes.binding list * Sugartypes.phrase option)) grammar
 
 
 val parse_string  : ('a,'b) grammar -> string -> 'a

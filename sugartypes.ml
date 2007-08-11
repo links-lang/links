@@ -47,7 +47,7 @@ type fieldconstraint = [ `Readonly ]
 module type PhraseArgs = sig
   type ppattern
   type phrase
-   type toplevel
+  type binding
 end
 
 module type Phrase = sig
@@ -55,7 +55,7 @@ module type Phrase = sig
 
   type phrase = P.phrase
   type ppattern = P.ppattern
-  type toplevel = P.toplevel
+  type binding = P.binding
 
   type binder = ppattern * phrase
 
@@ -114,7 +114,7 @@ module type Phrase = sig
   | `Formlet of (phrase * phrase)
   | `FormBinding of (phrase * ppattern) ]
   and block = binding list * phrase
-  and binding = [
+  and binding' = [
   | `Val of ppattern * phrase * location * datatype option
   | `Fun of name * funlit * location * datatype option
   | `Funs of (name * funlit * location * datatype option) list
@@ -136,14 +136,6 @@ module type Phrase = sig
   | `Repeat of (Regex.repeat * regex)
   | `Splice of phrase
   | `Replace of (regex * [`Literal of string | `Splice of phrase]) ]
-  type toplevel' = binding (*[
-  | `VarDefinition of (name * phrase * location * datatype option)
-  | `FunDefinition of (name * funlit * location * datatype option)
-  | `Foreign of (name * name * datatype)
-  | `TypeDeclaration of (name * name list * datatype)
-  | `InfixDecl
-  | phrasenode
-  ]*)
 end
 
 module rec Untyped
@@ -152,7 +144,7 @@ module rec Untyped
 and UntypedArgs : sig
   type phrase   = Untyped.phrasenode * pposition
   type ppattern = Untyped.pattern * pposition
-  type toplevel = Untyped.toplevel' * pposition
+  type binding = Untyped.binding' * pposition
 end
   = UntypedArgs
 
@@ -161,7 +153,7 @@ include Untyped
 type directive = string * string list
 
 type sentence = [ 
-  `Definitions of toplevel list
+  `Definitions of binding list
 | `Expression of phrase
 | `Directive of directive ]
       

@@ -13,7 +13,7 @@ let pos () : Sugartypes.pposition = Parsing.symbol_start_pos (), Parsing.symbol_
 
 let default_fixity = Num.num_of_int 9
 
-let annotate (signame, datatype) : _ -> toplevel = 
+let annotate (signame, datatype) : _ -> binding = 
   let checksig signame name =
     if signame <> name then 
       raise (Sugar.ConcreteSyntaxError
@@ -87,7 +87,7 @@ let parseRegexFlags f =
 %start interactive
 %start file
 
-%type <Sugartypes.toplevel list * Sugartypes.phrase option> file
+%type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
@@ -535,9 +535,9 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None) }
-| exp SEMICOLON                                                { `Exp $1 }
-| FUN VARIABLE arg_lists block                                 { `Fun ($2, ($3, (`Block $4, pos ())), `Unknown, None) }
+| VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
+| exp SEMICOLON                                                { `Exp $1, pos () }
+| FUN VARIABLE arg_lists block                                 { `Fun ($2, ($3, (`Block $4, pos ())), `Unknown, None), pos () }
 
 bindings:
 | binding                                                      { [$1] }
@@ -547,9 +547,9 @@ block:
 | LBRACE block_contents RBRACE                                 { $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [`Exp $2], (`RecordLit ([], None), pos())) }
+| bindings exp SEMICOLON                                       { ($1 @ [`Exp $2, pos ()], (`RecordLit ([], None), pos())) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([`Exp $1], (`RecordLit ([], None), pos())) }
+| exp SEMICOLON                                                { ([`Exp $1, pos ()], (`RecordLit ([], None), pos())) }
 | exp                                                          { [], $1 }
 | perhaps_semi                                                 { ([], (`TupleLit [], pos())) }
 

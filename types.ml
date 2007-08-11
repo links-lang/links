@@ -61,6 +61,8 @@ type alias_environment = assumption stringmap
 type typing_environment = environment * alias_environment
     deriving (Show, Pickle)
 
+let empty_alias_environment = StringMap.empty
+
 (* Functions on environments *)
 let environment_values = fun env -> snd (List.split env)
 let lookup = List.assoc

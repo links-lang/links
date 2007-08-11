@@ -195,6 +195,8 @@ type inference_type_map =
 
 (*type context = environment * inference_type_map*)
 
+(* alias environments *)
+val empty_alias_environment : alias_environment
 (* environments *)
 val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
 val environment_values : environment -> assumption list
