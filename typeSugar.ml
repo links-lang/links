@@ -31,7 +31,89 @@ struct
   let generalise _ = assert false
   let register_alias _ = assert false
 
-  let is_generalisable _ = assert false
+  let rec opt_generalisable o = opt_app is_generalisable true o
+  and is_generalisable (p, _) = match p with
+    | `Constant _
+    | `Var _
+    | `FunLit _
+    | `TextNode _
+    | `Section _ -> true
+
+    | `ListLit ps
+    | `TupleLit ps -> List.for_all is_generalisable ps
+    | `Projection (p, _)
+    | `TypeAnnotation (p, _)
+    | `Escape (_, p) -> is_generalisable p
+    | `ConstructorLit (_, p) -> opt_generalisable p
+    | `RecordLit (fields, p) ->
+        List.for_all (snd ->- is_generalisable) fields && opt_generalisable p
+    | `With (p, fields) ->
+        List.for_all (snd ->- is_generalisable) fields && is_generalisable p
+    | `Block (bindings, e) -> 
+        List.for_all is_generalisable_binding bindings && is_generalisable e
+    | `Conditional (p1, p2, p3) ->
+        is_generalisable p1 
+     && is_generalisable p2
+     && is_generalisable p3 
+    | `Xml (_, attrs, children) -> 
+        List.for_all (snd ->- List.for_all is_generalisable) attrs
+     && List.for_all (is_generalisable) children
+    | `Formlet (p1, p2) ->
+        is_generalisable p1 && is_generalisable p2
+    | `Regex r -> is_generalisable_regex r
+    | `Iteration _ (* could do a little better in some of these cases *)
+    | `UnaryAppl _
+    | `FormBinding _
+    | `InfixAppl _
+    | `Spawn _
+    | `FnAppl _
+    | `Switch _
+    | `Receive _
+    | `DatabaseLit _
+    | `TableLit _
+    | `DBDelete _
+    | `DBInsert _
+    | `DBUpdate _ -> false
+  and is_generalisable_binding (bind, _ : Typed.binding) = match bind with
+      (* need to check that pattern matching cannot fail *) 
+    | `Fun _
+    | `Funs _
+    | `Infix
+    | `Type _
+    | `Foreign _ -> true
+    | `Exp p -> is_generalisable p
+    | `Val (pat, rhs, _, _) ->
+        is_safe_pattern pat && is_generalisable rhs
+  and is_safe_pattern (pat, _) = match pat with
+      (* safe patterns cannot fail *)
+    | `Nil 
+    | `Cons _
+    | `List _ 
+    | `Constant _
+    | `Variant _ -> false
+    | `Any
+    | `Record _
+    | `Variable _
+    | `Tuple _ -> true
+    | `HasType (p, _)
+    | `As (_, p) -> is_safe_pattern p
+  and is_generalisable_regex = function 
+      (* don't check whether it can fail; just check whether it
+         contains non-generilisable sub-expressions *)
+    | `Range _
+    | `Simply _
+    | `Any
+    | `StartAnchor
+    | `EndAnchor -> true
+    | `Group r
+    | `Repeat (_, r)
+    | `Quote r -> is_generalisable_regex r
+    | `Seq rs -> List.for_all is_generalisable_regex rs
+    | `Alternate (r1, r2) -> is_generalisable_regex r1 && is_generalisable_regex r2
+    | `Splice p -> is_generalisable p
+    | `Replace (r, `Literal _) -> is_generalisable_regex r
+    | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
+
   let quantify_env _ = assert false
 end
 
@@ -57,11 +139,11 @@ let type_section env (`Section s as s') = s', match s with
 let datatype = Parse.parse_string Parse.datatype ->- snd
 
 let type_unary_op env = function
-    | `Minus      -> datatype "(Int) -> Int"
-    | `FloatMinus -> datatype "(Float) -> Float"
-    | `Name n     -> Utils.instantiate env n
-    | `Abs        -> (* Probably doesn't parse at present.
-                        See the typing rules given in the note for r975. *)
+  | `Minus      -> datatype "(Int) -> Int"
+  | `FloatMinus -> datatype "(Float) -> Float"
+  | `Name n     -> Utils.instantiate env n
+  | `Abs        -> (* Probably doesn't parse at present.
+                      See the typing rules given in the note for r975. *)
                      datatype "(((|a)) -> b) -> *(|a) -> b"
 
 let type_binary_op env = function
