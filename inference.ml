@@ -717,12 +717,14 @@ let unify alias_env (t1, t2) =
 and unify_rows alias_env (row1, row2) =
   unify_rows' (IntMap.empty, IntMap.empty, alias_env) (row1, row2)
 
+module Env = Env.String
+
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
   try
-    let quantifiers, t = Env.find var env in
+    let quantifiers, t = Env.lookup env var in
       if quantifiers = [] then
 	t
       else
@@ -905,9 +907,9 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let mapping = map2 (fun n v -> (string_of_int n, v, fresh_type_variable ())) (fromTo 1 (1 + List.length variables)) variables in
       let body_env = 
         fold_right
-          (fun (_,v, vtype) env -> Env.bind v ([], vtype) env)
+          (fun (_,v, vtype) env -> Env.bind env (v, ([], vtype)))
           mapping
-          (Env.bind "_MAILBOX_" ([], mb_type) env) in          
+          (Env.bind env ("_MAILBOX_", ([], mb_type))) in          
       let body = type_check (body_env, alias_env) body in
       let tuple = make_tuple_type (List.map thd3 mapping) in
       let type' = `Function (tuple, mb_type, type_of_expression body) in
@@ -916,7 +918,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let value = type_check typing_env value in
       let vtype = (if is_value value then (generalise env (type_of_expression value))
                    else ([], type_of_expression value)) in
-      let body = type_check (Env.bind variable vtype env, alias_env) body in        
+      let body = type_check (Env.bind env (variable, vtype), alias_env) body in        
 	Let (variable, value, body, `T (pos, type_of_expression body, None))
   | Rec (variables, body, `U pos) ->
       let best_typing_env, vars = type_check_mutually typing_env variables in
@@ -980,9 +982,9 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 	unify (type_of_expression value, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
 
 	let value_row = extract_row typing_env (type_of_expression value) in
-	let body_env = (Env.bind label_variable ([], label_variable_type)
-                          (Env.bind variable ([], `Record (row_with (label, `Absent) value_row)) 
-                             env)) in
+	let body_env = (Env.bind
+                          (Env.bind env (variable, ([], `Record (row_with (label, `Absent) value_row))))
+                          (label_variable, ([], label_variable_type))) in
 	let body = type_check (body_env, alias_env) body in
 	let body_type = type_of_expression body in
 	  Record_selection (label, label_variable, variable, value, body, `T (pos, body_type, None))
@@ -1008,7 +1010,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let variant_type = `Variant (row_with (case_label, `Present case_var_type) body_row) in
 	unify (variant_type, value_type);
 
-	let case_body = type_check ((Env.bind case_variable ([], case_var_type) env), alias_env) case_body in
+	let case_body = type_check ((Env.bind env (case_variable, ([], case_var_type))), alias_env) case_body in
 
 	(*
            We take advantage of absence information to give a more refined type when
@@ -1033,7 +1035,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
            which clearly doesn't!
         *)
 	let body_var_type = `Variant (row_with (case_label, `Absent) body_row) in
-	let body = type_check ((Env.bind variable ([], body_var_type) env), alias_env) body in
+	let body = type_check ((Env.bind env (variable, ([], body_var_type))), alias_env) body in
 
 	let case_type = type_of_expression case_body in
 	let body_type = type_of_expression body in
@@ -1063,7 +1065,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let expr_tvar = fresh_type_variable () in
       let value = type_check typing_env value in
 	unify (type_of_expression value, `Application ("List", [value_tvar]));
-	let expr_env = Env.bind var ([], value_tvar) env in
+	let expr_env = Env.bind env (var, ([], value_tvar)) in
 	let expr = type_check (expr_env, alias_env) expr in
 	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
@@ -1150,11 +1152,11 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 *)
 and
     type_check_mutually (env, alias_env) (defns : (string * untyped_expression * Types.datatype option) list) =
-      let var_env = (fold_right (fun (name, _, t) ->
-                                   Env.bind name 
+      let var_env = (fold_right (fun (name, _, t) env ->
+                                   Env.bind env (name,
                                      (match t with
                                         | Some t -> (generalise env t)
-                                        | None -> ([], fresh_type_variable ())))
+                                        | None -> ([], fresh_type_variable ()))))
 		       defns Env.empty) in
       let inner_env = Env.extend env var_env in
       let type_check result (name, expr, t) =
@@ -1162,7 +1164,7 @@ and
         let t' = type_of_expression expr in
           match t' with
             | `Function _ as f  ->
-                let t'' = snd (Env.find name var_env) in
+                let t'' = snd (Env.lookup var_env name) in
 		  unify alias_env (f, t'');
                   (* [HACK]
 
@@ -1182,8 +1184,8 @@ and
       let defns = rev defns in
 
       let env = Env.extend env 
-        (List.fold_right (fun (name, value,_) -> 
-		            Env.bind name (generalise env (type_of_expression value))) defns Env.empty)
+        (List.fold_right (fun (name, value,_) env -> 
+		            Env.bind env (name, (generalise env (type_of_expression value)))) defns Env.empty)
 	
       in
         (env, alias_env), defns     
@@ -1207,7 +1209,7 @@ let register_alias (typename, vars, datatype, pos) (typing_env, alias_env) =
     if not (StringSet.is_empty free_aliases) then
       failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
     else
-      Env.bind typename ((List.map (fun var -> `TypeVar var) vars), datatype) alias_env
+      Env.bind alias_env (typename, ((List.map (fun var -> `TypeVar var) vars), datatype))
 
 let type_expression : Types.typing_environment -> untyped_expression -> (Types.typing_environment * expression) =
   fun typing_env exp ->
@@ -1222,7 +1224,7 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
 	    let value_type = if is_value value then 
               (generalise env (type_of_expression value))
             else [], type_of_expression value in
-              ((Env.bind variable value_type env), alias_env),
+              ((Env.bind env (variable, value_type)), alias_env),
     	    Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
@@ -1231,7 +1233,7 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
         | Alien (language, name, assumption, `U pos)  ->
             let (qs, k) = assumption
             in
-              ((Env.bind name (qs, k) env), alias_env), Alien (language, name, assumption, `T (pos, k, None))
+              ((Env.bind env (name, (qs, k))), alias_env), Alien (language, name, assumption, `T (pos, k, None))
     in
       (env', alias_env'), def'
 

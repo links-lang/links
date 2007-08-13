@@ -44,8 +44,8 @@ let rec directives
        (fun _ ->
           StringSet.iter (fun n ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (snd (Env.find n Library.type_env))))
-            (Env.domain Library.type_env)),
+                         n (Types.string_of_datatype (snd (Env.String.lookup Library.type_env n))))
+            (Env.String.domain Library.type_env)),
      "list builtin functions and values");
 
     "quit",
@@ -55,8 +55,8 @@ let rec directives
     ((fun ((_, (typeenv, _)) as envs) _ ->
         StringSet.iter (fun k ->
                 Printf.fprintf stderr " %-16s : %s\n"
-                  k (Types.string_of_datatype (snd (Env.find k typeenv))))
-          (StringSet.diff (Env.domain typeenv) (Env.domain Library.type_env));
+                  k (Types.string_of_datatype (snd (Env.String.lookup typeenv k))))
+          (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Library.type_env));
         envs),
      "display the current type environment");
 
@@ -93,14 +93,14 @@ let rec directives
                 (fun id -> 
                       if id <> "_MAILBOX_" then
                         (try begin
-                           let _, t' = Env.find id tenv in
+                           let _, t' = Env.String.lookup tenv id in
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
                            let t' = Instantiate.instantiate_datatype fresh_envs t' in 
                              Inference.unify alias_env (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))
-                (Env.domain tenv)
+                (Env.String.domain tenv)
               ; envs),
      "search for functions that match the given type");
 

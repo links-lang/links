@@ -175,7 +175,7 @@ let perform_request
         assert(Syntax.is_closed_wrt expr 
                  (StringSet.union
                     (StringSet.from_list (dom globals @ dom env))
-                    (Env.domain (fst Library.typing_env))));
+                    (Env.String.domain (fst Library.typing_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))

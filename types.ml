@@ -52,14 +52,16 @@ type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
 type quantifier = type_variable
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
+module Env = Env.String
+
 type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 type environment = assumption Env.t
-    deriving (Show, Pickle)
+    deriving (Show)
 type alias_environment = assumption Env.t
-    deriving (Show, Pickle)
+    deriving (Show)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show)
 
 (* Functions on environments *)
 let concat_typing_environment
@@ -1010,10 +1012,9 @@ exception AliasMismatch of string
 
 let lookup_alias (s, ts) alias_env =
   let vars, alias =
-    if Env.has alias_env s then
-      Env.find s alias_env
-    else
-      raise (AliasMismatch ("Unbound typename "^s))
+    match Env.find alias_env s with
+      | Some s -> s
+      | None -> raise (AliasMismatch ("Unbound typename "^s))
   in
     if List.length vars <> List.length ts then
       raise (AliasMismatch

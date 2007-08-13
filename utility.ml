@@ -227,7 +227,7 @@ struct
 end
 
 module type INTSET = Set with type elt = int
-module IntSet : INTSET = Set.Make(Int)
+module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
 module type STRINGMAP = Map with type key = string

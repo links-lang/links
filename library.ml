@@ -987,13 +987,15 @@ let apply_pfun name args =
   match StringMap.find name (!value_env) with
     | #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
     | `PFun p -> p args
+
+module Env = Env.String
         
 let type_env : Types.environment =
-  List.fold_right (fun (n, (_,t,_)) -> Env.bind n t) env Env.empty
+  List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
 and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->
-       Env.bind name assumption env)
+       Env.bind env (name, assumption))
     [
       "DomNode", ([], `Primitive `Abstract);
       "Event", ([], `Primitive `Abstract);

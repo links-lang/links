@@ -95,6 +95,8 @@ let type_regex typing_env : Untyped.regex -> Typed.regex = function
   | `Replace _     -> assert false
 
 
+module Env = Env.String
+
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let rec type_pattern  (pattern, pos) : Typed.ppattern =
     let unify = Utils.unify alias_env
@@ -114,7 +116,7 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
         | `Variable x            -> 
             let xtype = Types.fresh_type_variable () in
               (`Variable x,
-               (Env.bind x ([], xtype) Env.empty),
+               (Env.bind Env.empty (x, ([], xtype))),
                xtype)
         | `Cons (p1, p2)         -> 
             let p1 = type_pattern p1
@@ -162,7 +164,7 @@ let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
               `Tuple ps', env', typ'
         | `As (x, p)             -> 
             let p = type_pattern p in
-            let env' = Env.bind x ([], typ p) (env p) in
+            let env' = Env.bind (env p) (x, ([], typ p)) in
               `As (x, p), env', (typ p)
         | `HasType (p, t)        -> 
             let p = type_pattern p in
@@ -231,7 +233,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let pats = List.map (List.map tp) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
             let env', aliases = List.fold_left fold_in_envs typing_env pats in
-            let body = type_check (Env.bind mailbox ([], Types.fresh_type_variable ()) env', aliases) body in
+            let body = type_check (Env.bind env' (mailbox, ([], Types.fresh_type_variable ())), aliases) body in
             let ftype = 
               List.fold_right
                 (fun pat rtype ->
@@ -314,7 +316,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
         | `Spawn p ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
-            let typing_env' = Env.bind mailbox ([], pid_type) env, alias_env in
+            let typing_env' = Env.bind env (mailbox, ([], pid_type)), alias_env in
             let p = type_check typing_env' p in
               `Spawn p, Types.make_mailbox_type pid_type
         | `Receive binders ->
@@ -432,7 +434,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             and t = Types.fresh_type_variable ()
             and m = Types.fresh_type_variable () in
             let cont_type = `Function (Types.make_tuple_type [f], m, t) in
-            let typing_env' = Env.bind name ([], cont_type) env, alias_env in
+            let typing_env' = Env.bind env (name, ([], cont_type)), alias_env in
             let e = type_check typing_env' e in
             let _ = unify f (typ e) in
               `Escape (name, e), (typ e)
@@ -519,7 +521,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
         | `Foreign (language, name, datatype) ->
             let assumption = Sugar.desugar_datatype datatype in
               (`Foreign (language, name, datatype),
-               (Env.bind name assumption env, alias_env))
+               (Env.bind env (name, assumption), alias_env))
         | `Type (typename, args, datatype) as t ->
             let _, dtype = Sugar.desugar_datatype datatype in
               (t, (env, Utils.register_alias (typename, args, dtype) alias_env))

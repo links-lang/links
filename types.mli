@@ -62,12 +62,12 @@ type quantifier = type_variable
 
 type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = assumption Env.t
-    deriving (Show, Pickle)
-type alias_environment = assumption Env.t
-    deriving (Show, Pickle)
+type environment = assumption Env.String.t
+    deriving (Show)
+type alias_environment = assumption Env.String.t
+    deriving (Show)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show)
 
 (* useful types *)
 val unit_type : datatype

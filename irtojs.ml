@@ -827,7 +827,7 @@ let elim_defs defs root_names =
       defs [] in
 
   let aliens = get_alien_names defs in
-  let library_names = Env.domain (fst Library.typing_env) in
+  let library_names = Env.String.domain (fst Library.typing_env) in
   let elim_free_names = "stringifyB64" :: aliens @ (StringSet.elements library_names) in
   let defs = Callgraph.elim_dead_defs elim_free_names defs root_names in
 
@@ -854,7 +854,7 @@ let generate_program_defs defs root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
 
-  let library_names = StringSet.elements (Env.domain (fst Library.typing_env)) in
+  let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ library_names))) defs in
 
   let _ = Debug.print ("defs(1): "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in

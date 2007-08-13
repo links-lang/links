@@ -1,46 +1,65 @@
 (** Environments. *)
 
-type 'a t
-(** The type of environments. *)
+module type S = 
+sig
+  type name
+  (** The type of names. *)
 
-type name = string
-(** The type of names. *)
+  type 'a t
+  (** The type of environments. *)
+    
+  val empty : 'a t
+  (** The empty environment. *)
 
-val empty : 'a t
-(** The empty environment. *)
+  val bind : 'a t -> name * 'a -> 'a t
+  (** Extend an environment with a new entry. *)
 
-val bind : name -> 'a -> 'a t -> 'a t
-(** Bind a name in an environment *)
+  val extend : 'a t -> 'a t -> 'a t
+  (** Extend an environment with another.  Bindings from the right
+      shadow bindings from the left. *)
 
-val has : 'a t -> name -> bool
-(** Whether a particular name is in an environment *)
+  val has : 'a t -> name -> bool
+  (** Whether a particular name is in an environment *)
+    
+  val lookup : 'a t -> name -> 'a
+  (** Look up a name in an environment.  Raise [NotFound name] if the
+     name is not present. *)
+    
+  val find : 'a t -> name -> 'a option
+  (** Look up a name in an environment.  Return [None] if the name
+      is not present. *)
 
-val find : name -> 'a t -> 'a
-(** Look up a name in an environment.  Raise [NotFound name] if the
-    name is not present. *)
+  module Dom : Utility.Set.S
+  (** Sets of names. *)
 
-val lookup : name -> 'a t -> 'a option
-(** Look up a name in an environment.  Return [None] if the 
-    name is not present. *)
+  val domain : 'a t -> Dom.t
+  (** The domain of an environment *)
 
-val extend : 'a t -> 'a t -> 'a t
-(** Extend an environment with another.  Bindings from the right
-    shadow bindings from the left. *)
+  val range : 'a t -> 'a list
+  (** The range of an environment *)
 
-val domain : 'a t -> Utility.StringSet.t
-(** The domain of an environment *)
+  module Show_t (A : Show.Show) 
+    : Show.Show with type a = A.a t
+  (** Printing for environments *)
+end
+(** Output signature of the functor {!Env.Make}. *)
 
-val range : 'a t -> 'a list
-(** The range of an environment *)
+module Make (Ord : Utility.OrderedShow) 
+: S with type name = Ord.t
+    and module Dom = Utility.Set.Make(Ord)
+(** Functor building an implementation of the env structure given a
+    totally-ordered, showable type. *)
 
-module Show_t (A : Show.Show) 
-  : Show.Show with type a = A.a t
-(** Printing for environments *)
+(** Some pre-built environments with common key types *)
 
-module Pickle_t (A : Pickle.Pickle) 
-  : Pickle.Pickle with type a = A.a t
-(** Serialisation for environments *)
+module String : S 
+  with type name = string
+  and module Dom = Utility.Set.Make(Utility.String)
+  and module Dom = Utility.StringSet
+(** Pre-built environment with strings for names *)
 
-module Typeable_t (A : Typeable.Typeable) 
-  : Typeable.Typeable with type a = A.a t
-(** Dynamic typing for environments *)
+module Int : S 
+  with type name = int
+  and module Dom = Utility.Set.Make(Utility.Int)
+  and module Dom = Utility.IntSet
+(** Pre-built environment with integers for names *)
