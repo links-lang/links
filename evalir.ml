@@ -87,9 +87,6 @@ module Eval = struct
     | `Coerce (v, _) -> value env v
     | `Abs v         -> `Abs (value env v)
     (* Unnecessary *)
-    | `Nil
-    | `Cons _
-    | `Concat _
     | `Comparison _  -> assert false
 
   let rec apply cont env : Value.t * Value.t list -> Value.t = function

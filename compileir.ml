@@ -636,10 +636,10 @@ struct
         | Variant_selection_empty (e', _) ->
             I.case_zero (ev e', t)
         | Nil _ ->
-            cofv (I.var (Env.lookup env "nil", t))
+            cofv (I.var (Env.lookup env "Nil", t))
         | List_of (elem, _) ->
-            let nil = I.var (Env.lookup env "nil", t)
-            and cons = Env.lookup env "cons"
+            let nil = I.var (Env.lookup env "Nil", t)
+            and cons = Env.lookup env "Cons"
             and elem_type = element_type t in
             let cons_type = `Function (Types.make_tuple_type [elem_type; t],
                                        Types.fresh_type_variable (),
@@ -649,7 +649,7 @@ struct
             let concat_type = `Function (Types.make_tuple_type [t; t],
                                          Types.fresh_type_variable (),
                                          t) in
-              cofv (I.applyprim(I.var (Env.lookup env "append", concat_type), [ev left; ev right]))
+              cofv (I.applyprim(I.var (Env.lookup env "Concat", concat_type), [ev left; ev right]))
         | For (body, x, e, _) ->
             (*
               compile comprehensions into map

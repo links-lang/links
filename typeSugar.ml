@@ -80,21 +80,6 @@ let type_binary_op env = function
                         See the typing rules given in the note for r975. *)
                      datatype "(*(|a) -> b) -> ((|a)) -> b"
 
-let type_regex typing_env : Untyped.regex -> Typed.regex = function
-  | `Range _       -> assert false
-  | `Simply _      -> assert false
-  | `Quote _       -> assert false
-  | `Any           -> assert false 
-  | `StartAnchor   -> assert false
-  | `EndAnchor     -> assert false
-  | `Seq _         -> assert false
-  | `Alternate _   -> assert false
-  | `Group _       -> assert false
-  | `Repeat _      -> assert false
-  | `Splice _      -> assert false
-  | `Replace _     -> assert false
-
-
 module Env = Env.String
 
 let type_pattern lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
@@ -457,7 +442,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let e = type_check typing_env e in
               `Block (bindings, e), typ e
         | `Regex r ->
-            `Regex (type_regex typing_env r), `Application ("Regex", [])
+            `Regex (type_regex lookup_pos typing_env r), `Application ("Regex", [])
         | `Projection (r,l) ->
             let r = type_check typing_env r in
             let fieldtype = Types.fresh_type_variable () in
@@ -532,4 +517,16 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
     in (typed, pos), env
   in
     type_top_level
+and type_regex lookup_pos typing_env : Untyped.regex -> Typed.regex =
+  let tr = type_regex lookup_pos typing_env in
+    function
+      | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> r
+      | `Quote r -> `Quote (tr r)
+      | `Seq rs -> `Seq (List.map tr rs)
+      | `Alternate (r1, r2) -> `Alternate (tr r1, tr r2)
+      | `Group r -> `Group (tr r)
+      | `Repeat (repeat, r) -> `Repeat (repeat, tr r)
+      | `Splice e -> `Splice (type_check lookup_pos typing_env e)
+      | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
+      | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (type_check lookup_pos typing_env e))
     
