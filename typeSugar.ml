@@ -18,11 +18,13 @@ module Utils : sig
   val unify : Types.alias_environment -> Types.datatype -> Types.datatype -> unit
   val unify_rows : Types.alias_environment -> Types.row -> Types.row -> unit
   val instantiate : Types.environment -> string -> Types.datatype
+  val generalise : Types.environment -> Types.datatype -> Types.assumption
 end =
 struct
   let unify _ = failwith ""
   let unify_rows _ = failwith ""
   let instantiate _ = failwith ""
+  let generalise _ = failwith ""
 end
 
 let mailbox = "_MAILBOX_"
@@ -405,7 +407,36 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
               `Iteration (binder, body, where, orderby), (typ body)
 
         | `Escape (name, e) ->
-            assert false
+            (* There's a question here whether to generalise the
+               return type of continuations.  With `escape'
+               continuations are let-bound, so generalising the return
+               type is sound.  With `call/cc' continuations are
+               lambda-bound so the return type cannot be generalised.
+               If we do generalise here then we can accept more valid
+               programs, since the continuation can then be used in
+               any context, e.g.:
+               
+                 escape y in {
+                   var _ = y(1) == "";
+                   var _ = y(1) == true;
+                   2
+                 }
+
+               However, currently we desugar escape to call/cc, so
+               generalising will mean accepting programs that have an
+               invalid type in the IR (although they're guaranteed not
+               to "go wrong".)
+
+               (Also, should the mailbox type be generalised?)
+            *)
+            let f = Types.fresh_type_variable ()
+            and t = Types.fresh_type_variable ()
+            and m = Types.fresh_type_variable () in
+            let cont_type = `Function (Types.make_tuple_type [f], m, t) in
+            let typing_env' = Env.bind name ([], cont_type) env, alias_env in
+            let e = type_check typing_env' e in
+            let _ = unify f (typ e) in
+              `Escape (name, e), (typ e)
         | `Conditional (i,t,e) ->
             let i = type_check typing_env i
             and t = type_check typing_env t
