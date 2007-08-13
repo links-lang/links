@@ -151,13 +151,13 @@ To use a database with Links, follow these steps:
      instance. Normally this is called 'links-config' and consists of a
      list of settings such as
 
-       database_driver=postgres
+       database_driver=postgresql
 
      To configure database access, the settings 'database_driver' and
      'database_args' should be set. 'database_driver' can take the
      values:
 
-       postgres, mysql or sqlite
+       postgresql, mysql or sqlite
 
       'database_args' is only relevant for postgres and mysql. It
       takes the form
