@@ -281,8 +281,8 @@ postfix_expression:
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
 arg_spec:
-| LPAREN RPAREN                                                { [], pos() }
-| LPAREN exps RPAREN                                           { $2, pos() }
+| LPAREN RPAREN                                                { [] }
+| LPAREN exps RPAREN                                           { $2 }
 
 exps:
 | exp COMMA exps                                               { $1 :: $3 }
@@ -403,10 +403,10 @@ typed_expression:
 db_expression:
 | typed_expression                                             { $1 }
 | INSERT exp VALUES exp                                        { `DBInsert ($2, $4), pos() }
-| DELETE LPAREN table_generator RPAREN perhaps_where           { `DBDelete ($3, $5), pos() }
+| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in `DBDelete (pat, phrase, $5), pos() }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { `DBUpdate($3, $5, $8), pos() }
+         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in `DBUpdate(pat, phrase, $5, $8), pos() }
 
 /* XML */
 xml:

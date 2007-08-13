@@ -15,7 +15,7 @@ end =
 struct
   (* See http://frege/wiki/LAttributeSugar *)
 
-  let apply pos name args : phrase = `FnAppl ((`Var name,pos), (args,pos)), pos
+  let apply pos name args : phrase = `FnAppl ((`Var name,pos), args), pos
 
   let server_use name pos = 
     apply pos "assoc" [(`Constant (`String name), pos);
@@ -939,7 +939,7 @@ module Desugarer =
              | `InfixAppl (_, e1, e2) -> flatten [phrase e1; phrase e2]
              | `Regex _ -> empty
              | `UnaryAppl (_, e) -> phrase e
-             | `FnAppl (fn, (ps, _)) -> flatten [phrase fn; phrases ps]
+             | `FnAppl (fn, ps) -> flatten [phrase fn; phrases ps]
              | `TupleLit fields -> phrases fields
              | `RecordLit (fields, e) ->
                  flatten ((List.map (fun (_, field) -> phrase field) fields) @ [opt_phrase e])
@@ -954,8 +954,8 @@ module Desugarer =
              | `DatabaseLit (name, (opt_driver, opt_args)) -> flatten [phrase name; opt_phrase opt_driver; opt_phrase opt_args]
              | `TableLit (_, datatype, _, db) -> flatten [tv datatype; phrase db]
              | `DBInsert (e1, e2) -> flatten [phrase e1; phrase e2]
-             | `DBDelete ((p, e1), e2) -> flatten [ptv p; phrase e1; opt_phrase e2]
-             | `DBUpdate ((p, e1), e2, fs) -> flatten [ptv p; phrase e1; opt_phrase e2; ftvs fs]
+             | `DBDelete (p, e1, e2) -> flatten [ptv p; phrase e1; opt_phrase e2]
+             | `DBUpdate (p, e1, e2, fs) -> flatten [ptv p; phrase e1; opt_phrase e2; ftvs fs]
 
              | `Xml (_, attrs, subnodes) ->
                  flatten ((List.map (fun (_, es) -> phrases es) attrs) @ [phrases subnodes])
@@ -1080,7 +1080,7 @@ module Desugarer =
 
    let as_list pos = function
      | `List (p, e) -> p, e
-     | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), ([e], pos)), pos)
+     | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), [e]), pos)
 
    let desugar_constant pos = function
      | `Int v    -> Constant(Integer v, pos)
@@ -1137,7 +1137,7 @@ module Desugarer =
            | `Escape (name, e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
-               (`FnAppl ((`Var "spawn", pos'), ([`FunLit ([[]], e),  pos'], pos')), pos')
+               (`FnAppl ((`Var "spawn", pos'), ([`FunLit ([[]], e),  pos'])), pos')
 
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
@@ -1197,7 +1197,7 @@ module Desugarer =
            | `UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
            | `ListLit  [] -> Nil (pos)
            | `ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es), pos'), pos)
-           | `DBDelete ((pattern, table), condition) ->
+           | `DBDelete (pattern, table, condition) ->
                let t = unique_name () in
                let r = unique_name () in
                let tv = ((`Var t), pos') in
@@ -1207,12 +1207,10 @@ module Desugarer =
                let rows = `Iteration (generator, ((`ListLit [rv]), pos'), condition, None), pos' in
                  desugar (
                    `Block (([`Val ((`Variable t, pos'), table, `Unknown, None), pos']),
-                           (`FnAppl ((`Var "deleterows", pos'),
-                                     ([tv; rows ], pos')), pos')), pos')
+                           (`FnAppl ((`Var "deleterows", pos'), [tv; rows ]), pos')), pos')
            | `DBInsert (table, rows) -> 
-               desugar (`FnAppl ((`Var "insertrows", pos'),
-                                ([table; rows], pos')), pos')
-           | `DBUpdate ((pattern, table), condition, row) ->
+               desugar (`FnAppl ((`Var "insertrows", pos'), [table; rows]), pos')
+           | `DBUpdate (pattern, table, condition, row) ->
                let t = unique_name () in
                let r = unique_name () in
 
@@ -1232,15 +1230,13 @@ module Desugarer =
                in      
                  desugar (
                    `Block ([`Val ((`Variable t, pos'), table, `Unknown, None), pos'],
-                           (`FnAppl ((`Var "updaterows", pos'),
-                                    ([tv; row_pairs], pos')), pos')), pos')
+                           (`FnAppl ((`Var "updaterows", pos'),[tv; row_pairs]), pos')), pos')
            | `DatabaseLit (name, (opt_driver, opt_args)) ->
                let e =
                  match opt_driver with
                    | None ->
                        `RecordLit ([("name", name)],
-                                  Some (`FnAppl((`Var "getDatabaseConfig", pos'),
-                                                ([], pos')), pos')), pos'
+                                  Some (`FnAppl((`Var "getDatabaseConfig", pos'), []), pos')), pos'
                    | Some driver ->
                        let args =
                          match opt_args with
@@ -1260,7 +1256,7 @@ module Desugarer =
                                                 string_of_int n, exp)
                                      fields (fromTo 1 (1 + length fields)), None), pos')
 
-           | `FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, List.map desugar ps, pos)
+           | `FnAppl (fn, ps)  -> Apply (desugar fn, List.map desugar ps, pos)
 
            | `FunLit (patterns_lists, body) -> 
                let patternized = (List.map (List.map patternize) patterns_lists) in
@@ -1330,7 +1326,7 @@ module Desugarer =
                  (pos, desugar exp, 
                   (List.map (fun (patt, body) -> ([patternize patt], desugar body)) patterns))
            | `Receive patterns -> 
-               desugar (`Switch ((`FnAppl ((`Var "recv", pos'), ([], pos')), pos'),
+               desugar (`Switch ((`FnAppl ((`Var "recv", pos'), []), pos'),
                                 patterns), pos')
 
            (*  TBD: We should die if the XML text literal has bare ampersands or

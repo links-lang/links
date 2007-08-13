@@ -57,8 +57,6 @@ module type Phrase = sig
   type ppattern = P.ppattern
   type binding = P.binding
 
-  type binder = ppattern * phrase
-
   type constant = [
   | `Float of float
   | `Int of Num.num
@@ -86,7 +84,7 @@ module type Phrase = sig
   | `FunLit of funlit
   | `Spawn of phrase
   | `ListLit of (phrase list)
-  | `Iteration of ([ `List of binder | `Table of binder ] * phrase * (*where:*)phrase option 
+  | `Iteration of ([ `List of ppattern * phrase | `Table of ppattern * phrase ] * phrase * (*where:*)phrase option 
                   * (*orderby:*)phrase option)
   | `Escape of (name * phrase)
   | `Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
@@ -95,20 +93,20 @@ module type Phrase = sig
   | `InfixAppl of (binop * phrase * phrase)
   | `Regex of (regex)
   | `UnaryAppl of (unary_op * phrase)
-  | `FnAppl of (phrase * (phrase list * pposition))
+  | `FnAppl of (phrase * phrase list)
   | `TupleLit of (phrase list)
   | `RecordLit of ((name * phrase) list * phrase option)
   | `Projection of (phrase * name)
   | `With of (phrase * (name * phrase) list)
   | `TypeAnnotation of (phrase * datatype)
   | `ConstructorLit of (name * phrase option)
-  | `Switch of (phrase * binder list)
-  | `Receive of binder list
+  | `Switch of (phrase * (ppattern * phrase) list)
+  | `Receive of (ppattern * phrase) list
   | `DatabaseLit of (phrase * (phrase option * phrase option))
   | `TableLit of (phrase * datatype * (string * fieldconstraint list) list * phrase)
-  | `DBDelete of (binder * phrase option)
+  | `DBDelete of (ppattern * phrase * phrase option)
   | `DBInsert of (phrase * phrase)
-  | `DBUpdate of (binder * phrase option * (name * phrase) list)
+  | `DBUpdate of (ppattern * phrase * phrase option * (name * phrase) list)
   | `Xml of (name * (string * (phrase list)) list * phrase list)
   | `TextNode of (string)
   | `Formlet of (phrase * phrase)
@@ -160,3 +158,134 @@ type sentence = [
 type sentence' = [ `Definitions of Syntax.untyped_definition list
 | `Expression of Syntax.untyped_expression
 | `Directive of directive ]
+
+
+module Freevars =
+struct
+  open Utility
+  open StringSet
+
+  let union_map f = union_all -<- List.map f
+  let option_map f = opt_app f empty 
+
+  let rec pattern (p, _ : ppattern) : StringSet.t = match p with
+    | `Any
+    | `Nil
+    | `Constant _ -> empty
+    | `Tuple ps
+    | `List ps -> union_map pattern ps
+    | `Cons (p1, p2) -> union (pattern p1) (pattern p2)
+    | `Variant (_, popt) -> option_map pattern popt
+    | `Record (fields, popt) ->
+        union (option_map pattern popt)
+          (union_map (snd ->- pattern) fields)
+    | `Variable v -> singleton v
+    | `As (v, pat) -> add v (pattern pat)
+    | `HasType (pat, _) -> pattern pat
+
+
+  let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
+    | `Xml (_, _, children) -> union_map formlet_bound children
+    | `FormBinding (_, pat) -> pattern pat
+    | _ -> empty 
+
+  let rec phrase (p, _ : phrase) : StringSet.t = match p with
+    | `Var v -> singleton v
+    | `Section (`Name n) -> singleton n
+
+    | `Constant _
+    | `TextNode _
+    | `Section (`Minus|`FloatMinus|`Project _) -> empty
+
+    | `Spawn p
+    | `FormBinding (p, _)
+    | `Projection (p, _)
+    | `TypeAnnotation (p, _) -> phrase p
+
+    | `ListLit ps
+    | `TupleLit ps -> union_map phrase ps
+
+    | `Escape (v, p) -> diff (phrase p) (singleton v)
+    | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
+    | `Block b -> block b
+    | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
+    | `Regex r -> regex r
+    | `UnaryAppl (_, p) -> phrase p
+    | `FnAppl (p, ps) -> union_map phrase (p::ps)
+    | `RecordLit (fields, p) ->
+        union (union_map (snd ->- phrase) fields)
+          (option_map phrase p)
+    | `With (p, fields) ->
+        union (union_map (snd ->- phrase) fields)
+          (phrase p)
+    | `ConstructorLit (_, popt) -> option_map phrase popt
+    | `DatabaseLit (p, (popt1, popt2)) ->
+        union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
+    | `DBInsert (p1, p2)
+    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
+    | `Xml (_, attrs, children) -> 
+        union (union_map (snd ->- union_map phrase) attrs)
+          (union_map phrase children)
+    | `Formlet (xml, yields) ->
+      let binds = formlet_bound xml in
+        union (phrase xml) (diff (phrase yields) binds)
+    | `FunLit fnlit -> funlit fnlit
+    | `Iteration (`List (pat, source), body, where, orderby)
+
+    | `Iteration (`Table (pat, source), body, where, orderby) -> 
+        let pat_bound = pattern pat in
+          union_all [phrase source;
+                     diff (phrase body) pat_bound;
+                     diff (option_map phrase where) pat_bound;
+                     diff (option_map phrase orderby) pat_bound]
+    | `Switch (p, cases) -> union (phrase p) (union_map case cases)
+    | `Receive cases -> union_map case cases 
+    | `DBDelete (pat, p, where) -> 
+        union (phrase p) 
+          (diff (option_map phrase where)
+             (pattern pat))
+    | `DBUpdate (pat, from, where, fields) -> 
+        let pat_bound = pattern pat in
+          union_all [phrase from;
+                     diff (option_map phrase where) pat_bound;
+                     diff (union_map (snd ->- phrase) fields) pat_bound]
+  and binding (binding,_: binding) : StringSet.t (* vars bound in the pattern *)
+                                   * StringSet.t (* free vars in the rhs *) =
+    match binding with
+    | `Val (pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Fun (name, fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Funs funs -> 
+        let names, rhss = 
+          List.fold_right
+            (fun (n, rhs, _, _) (names, rhss) ->
+               (add n names, rhs::rhss))
+            funs
+            (empty, []) in
+          names, union_map (fun rhs -> diff (funlit rhs) names) rhss
+    | `Foreign (name, _, _) -> singleton name, empty
+    | `Type _
+    | `Infix -> empty, empty
+    | `Exp p -> empty, phrase p
+  and funlit (args, body : funlit) : StringSet.t =
+    diff (phrase body) (union_map (union_map pattern) args)
+  and block (binds, expr : block) : StringSet.t = 
+    ListLabels.fold_right binds ~init:(phrase expr)
+      ~f:(fun bind bodyfree ->
+            let patbound, exprfree = binding bind in
+              union exprfree (diff bodyfree patbound))
+  and case (pat, body) : StringSet.t = diff (phrase body) (pattern pat)
+  and regex = function
+    | `Range _
+    | `Simply _
+    | `Any
+    | `StartAnchor
+    | `EndAnchor
+    | `Quote _ -> empty
+    | `Seq rs -> union_map regex rs
+    | `Alternate (r1, r2) -> union (regex r1) (regex r2)
+    | `Group r
+    | `Repeat (_, r) -> regex r
+    | `Splice p -> phrase p
+    | `Replace (r, `Literal _) -> regex r
+    | `Replace (r, `Splice p) -> union (regex r) (phrase p)
+end

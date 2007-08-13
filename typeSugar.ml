@@ -271,7 +271,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
               `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
                       snd (Sugar.desugar_datatype (RecordType write_row)))
 
-        | `DBDelete ((pat, from), where) ->
+        | `DBDelete (pat, from, where) ->
             let pat  = tpc pat 
             and from = type_check typing_env from
             and read  = `Record (Types.make_empty_open_row ())
@@ -280,7 +280,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             and _ = unify (pattern_typ pat) write in
             let where = opt_map (type_check ((pattern_env pat) ++ typing_env)) where in
             let _     = opt_iter (typ ->- unify Types.bool_type) where in
-              `DBDelete ((pat, from), where), Types.unit_type
+              `DBDelete (pat, from, where), Types.unit_type
         | `DBInsert (into, values) ->
             let into   = type_check typing_env into
             and values = type_check typing_env values
@@ -289,7 +289,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let _ = unify (typ into) (`Table (read, write))
             and _ = unify write (Types.make_list_type write) in
               `DBInsert (into, values), Types.unit_type
-        | `DBUpdate ((pat, from), where, set) ->
+        | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat
             and from = type_check typing_env from
             and read =  `Record (Types.make_empty_open_row ())
@@ -305,7 +305,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                  let _ = unify write (`Record (Types.make_singleton_open_row
                                                  (name, `Present (typ exp)))) in
                    (name, exp)) set in
-              `DBUpdate ((pat, from), where, set), Types.unit_type
+              `DBUpdate (pat, from, where, set), Types.unit_type
 
         (* concurrency *)
         | `Spawn p ->
@@ -344,13 +344,13 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
               unify (typ op) (`Function (Types.make_tuple_type [typ l; typ r], 
                                          mailbox_type env, rettyp));
               `InfixAppl (fst op, l, r), rettyp
-        | `FnAppl (f, (ps, pos')) ->
+        | `FnAppl (f, ps) ->
             let f = type_check typing_env f
             and ps = List.map (type_check typing_env) ps
             and rettyp = Types.fresh_type_variable () in
               unify (typ f) (`Function (Types.make_tuple_type (List.map typ ps), 
                                         mailbox_type env, rettyp));
-              `FnAppl (f, (ps, pos')), rettyp
+              `FnAppl (f, ps), rettyp
 
         (* xml *)
         | `Xml (tag, attrs, children) ->
