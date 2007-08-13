@@ -9,7 +9,7 @@ module rec Typed
 and TypedArgs : sig
   type phrase   = Typed.phrasenode * (pposition * Types.datatype)
   type ppattern = Typed.pattern * (pposition * (Types.environment * Types.datatype))
-  type binding = Typed.binding' * (pposition * Types.datatype)
+  type binding = Typed.binding' * pposition
 end
   = TypedArgs
 
@@ -19,12 +19,14 @@ module Utils : sig
   val unify_rows : Types.alias_environment -> Types.row -> Types.row -> unit
   val instantiate : Types.environment -> string -> Types.datatype
   val generalise : Types.environment -> Types.datatype -> Types.assumption
+  val register_alias : name * name list * Types.datatype -> Types.alias_environment -> Types.alias_environment
 end =
 struct
-  let unify _ = failwith ""
-  let unify_rows _ = failwith ""
-  let instantiate _ = failwith ""
-  let generalise _ = failwith ""
+  let unify _ = assert false
+  let unify_rows _ = assert false
+  let instantiate _ = assert false
+  let generalise _ = assert false
+  let register_alias _ = assert false
 end
 
 let mailbox = "_MAILBOX_"
@@ -183,9 +185,6 @@ let rec extract_formlet_bindings (expr, pos) =
       | _ -> Env.empty
           
 let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
-  (* Currently alias_env can't change within this function (since type
-     aliases can only be bound at top level), so we needn't actually
-     thread it through. *)
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let type_pattern = type_pattern lookup_pos in
     let unify = Utils.unify alias_env
@@ -497,7 +496,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
 
     in e, (pos, t)
   in type_check
-and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Typed.binding * Types.typing_environment) =
+and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typed.binding * Types.typing_environment =
   let rec type_top_level ((env, alias_env) as typing_env) (def, pos) =
     let type_check = type_check lookup_pos
     and type_pattern = type_pattern lookup_pos in
@@ -505,27 +504,30 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> (Ty
     and unify_rows = Utils.unify_rows alias_env 
     and typ (_,(_,t)) = t
     and tc = type_check typing_env
-    and tp = type_pattern alias_env in
-      match (def : Untyped.binding') with
-        (* declarations *)
-        | `Val ((`Variable name, vpos as vpat), body, location, t) ->
+    and tp = type_pattern alias_env
+    and pattern_env  (_,(_,(e,_))) = e in
+    let typed, env = match (def : Untyped.binding') with
+        | `Val (pat, body, location, datatype) -> 
             let body = tc body in
-            let vpat = tp vpat in
-            let bt = typ body in
-            let _ = opt_iter (fun t -> unify bt (snd (Sugar.desugar_datatype t))) t in
-            let env = Env.bind name ([], typ body) env in
+            let pat = tp pat in
+            let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify (typ body)) datatype in
               (* TODO: generalisation *)
-            let typing_env = (env, alias_env) in
-              (`Val (vpat, body, location, t), (pos, bt)), typing_env
-        | `Val _ -> assert false
+              (`Val (pat, body, location, datatype), 
+               (Env.extend env (pattern_env pat), alias_env))
         | `Fun _   -> assert false
         | `Funs _ -> assert false
-        | `Foreign _         -> assert false
-        | `Type _ -> assert false
-        | `Infix         -> assert false
+        | `Foreign (language, name, datatype) ->
+            let assumption = Sugar.desugar_datatype datatype in
+              (`Foreign (language, name, datatype),
+               (Env.bind name assumption env, alias_env))
+        | `Type (typename, args, datatype) as t ->
+            let _, dtype = Sugar.desugar_datatype datatype in
+              (t, (env, Utils.register_alias (typename, args, dtype) alias_env))
+        | `Infix -> `Infix, typing_env
         | `Exp e ->
             let e = tc e in
-              (`Exp e, (pos, typ e)), (Env.empty, Env.empty)
+              `Exp e, (Env.empty, Env.empty)
+    in (typed, pos), env
   in
     type_top_level
     
