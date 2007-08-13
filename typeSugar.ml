@@ -490,9 +490,11 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
     and typ (_,(_,t)) = t
+    and pattern_typ (_, (_,(_,t))) = t
     and tc = type_check typing_env
     and tp = type_pattern alias_env
-    and pattern_env  (_,(_,(e,_))) = e in
+    and pattern_env  (_,(_,(e,_))) = e
+    and (++) env' (env, alias_env) = (Env.extend env' env, alias_env) in
     let typed, env = match (def : Untyped.binding') with
         | `Val (pat, body, location, datatype) -> 
             let body = tc body in
@@ -501,8 +503,48 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
               (* TODO: generalisation *)
               (`Val (pat, body, location, datatype), 
                (Env.extend env (pattern_env pat), alias_env))
-        | `Fun _   -> assert false
-        | `Funs _ -> assert false
+        | `Fun (name, (pats, body), location, t) ->
+            let pats = List.map (List.map tp) pats in
+            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+            let body_env, alias_env = List.fold_left fold_in_envs typing_env pats in
+            let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
+            let ft =
+                List.fold_right
+                  (fun pat rtype ->
+                     let args = Types.make_tuple_type (List.map pattern_typ pat) in
+                       `Function (args, Types.fresh_type_variable (), rtype))
+                  pats (typ body) in
+            let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify ft) t in
+              (`Fun (name, (pats, body), location, t),
+               (Env.bind env (name, Utils.generalise env ft), alias_env))
+        | `Funs (defs) ->
+            let fbs, patss =
+              List.split 
+                (List.map
+                   (fun (name, (pats, body), _, t) ->
+                      let pats = List.map (List.map tp) pats in
+                      let ft =
+                        List.fold_right
+                          (fun pat rtype ->
+                             let args = Types.make_tuple_type (List.map pattern_typ pat) in
+                               `Function (args, Types.fresh_type_variable (), rtype))
+                          pats (Types.fresh_type_variable ()) in
+                      let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify ft) t in
+                        ((name, ft), pats)) defs) in
+            let fbs = List.map (fun (name, t) -> name, Utils.generalise env t) fbs in
+            let env = List.fold_left (fun env (name, t) -> Env.bind env (name, t)) env fbs in
+            let typing_env = env, alias_env in
+            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+
+            let defs =
+              List.rev
+                (List.fold_left2
+                   (fun defs (name, (_, body), location, t) pats ->
+                      let body_env, alias_env = List.fold_left fold_in_envs typing_env pats in
+                      let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
+                        (name, (pats, body), location, t) :: defs) [] defs patss)
+            in
+              (`Funs defs, typing_env)
         | `Foreign (language, name, datatype) ->
             let assumption = Sugar.desugar_datatype datatype in
               (`Foreign (language, name, datatype),
