@@ -53,7 +53,8 @@ fun map_comprehension(f, l) {
 }
 
 fun range(n) {
-  if (n==0) [0] else
+  if (n < 0) error("range: argument less than zero")
+  else if (n==0) [0] else
   range(n-1) ++ [n]
 }
 
