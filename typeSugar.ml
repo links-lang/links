@@ -701,3 +701,23 @@ and type_regex lookup_pos typing_env : Untyped.regex -> Typed.regex =
       | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
       | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (type_check lookup_pos typing_env e))
 
+let type_bindings lookup_pos typing_env bindings = 
+  List.fold_left
+    (fun (env, binds) bind ->
+       let bind, env' = type_binding lookup_pos env bind in
+         Types.concat_typing_environment env' env, bind::binds)
+    (typing_env, []) bindings
+
+let sentence lookup_pos typing_env : Sugartypes.sentence -> Typed.sentence = 
+  function
+    | `Definitions binds -> 
+        let _, binds = type_bindings lookup_pos typing_env binds in
+          `Definitions binds
+    | `Expression p -> `Expression (type_check lookup_pos typing_env p)
+    | `Directive d -> `Directive d
+
+let file lookup_pos typing_env : (Sugartypes.binding list * Sugartypes.phrase option)
+    -> (Typed.binding list * Typed.phrase option) =
+  fun (binds, p) -> 
+    let env', binds = type_bindings lookup_pos typing_env binds in 
+      binds, opt_map (type_check lookup_pos env') p

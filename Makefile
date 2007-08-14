@@ -87,9 +87,10 @@ SOURCES = $(OPC)                		\
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
           inference.mli inference.ml 		\
-typeSugar.ml \
+          typeSugar.ml                          \
           linksregex.ml                         \
           library.mli library.ml 		\
+          sugartest.mli sugartest.ml            \
           sqlcompile.ml                         \
           optimiser.mli optimiser.ml    	\
           ir.ml ir.mli                          \
@@ -101,7 +102,7 @@ typeSugar.ml \
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
-          links.ml              		\
+#          links.ml              		\
           rewriteexamples.ml                    \
 
 #          js.mli js.ml          		\

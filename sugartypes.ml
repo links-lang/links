@@ -141,6 +141,13 @@ module type Phrase = sig
   | `Repeat of (Regex.repeat * regex)
   | `Splice of phrase
   | `Replace of (regex * [`Literal of string | `Splice of phrase]) ]
+
+  type directive = string * string list
+
+  type sentence = [ 
+    `Definitions of binding list
+  | `Expression of phrase
+  | `Directive of directive ]
 end
 
 module rec Untyped
@@ -155,13 +162,7 @@ end
 
 include Untyped
 
-type directive = string * string list
 
-type sentence = [ 
-  `Definitions of binding list
-| `Expression of phrase
-| `Directive of directive ]
-      
 type sentence' = [ `Definitions of Syntax.untyped_definition list
 | `Expression of Syntax.untyped_expression
 | `Directive of directive ]
