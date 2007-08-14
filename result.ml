@@ -428,10 +428,10 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
   | `RecFunction (defs, env, name) ->
-      let defs' = map (fun (name, f) -> (name, map_expr result_f expr_f contframe_f f)) defs in
-      result_f(`RecFunction(defs',
-                            (map_env result_f expr_f contframe_f env),
-                            name))
+      let defs' = alistmap (map_expr result_f expr_f contframe_f) defs in
+        result_f(`RecFunction(defs',
+                              (map_env result_f expr_f contframe_f env),
+                              name))
   | `Record fields -> result_f(`Record(alistmap (map_result result_f expr_f contframe_f) fields))
   | `Variant(tag, body) -> result_f(`Variant(tag, map_result result_f expr_f contframe_f body))
   | `List(elems) -> result_f(`List(map (map_result result_f expr_f contframe_f) elems))
@@ -582,10 +582,12 @@ let resolve_label table label : 'a expression' =
   try
     assoc label table
   with
-      Not_found -> (Debug.print("label not found: ");
-                    raise Not_found)
+      Not_found -> failwith("Program point not found.")
+        (* Note: This is a serious sort of error that could arise in the
+           course of programming in Links. It would be important to
+           provide good diagnostics in this case. *)
 
-let resolve_placeholder table e =
+let resolve_placeholder table (e : expression) =
   match expression_data e with
     | `T(_, _, Some l) -> resolve_label table l
     | _ -> e

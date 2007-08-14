@@ -66,6 +66,7 @@ struct
     | `FormBinding _
     | `InfixAppl _
     | `Spawn _
+    | `SpawnWait _
     | `FnAppl _
     | `Switch _
     | `Receive _
@@ -396,6 +397,14 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let typing_env' = Env.bind env (mailbox, ([], pid_type)), alias_env in
             let p = type_check typing_env' p in
               `Spawn p, Types.make_mailbox_type pid_type
+        | `SpawnWait p ->
+            (* (() -{b}-> d) -> d *)
+            let return_type = Types.fresh_type_variable () in
+            let pid_type = Types.fresh_type_variable () in
+            let typing_env' = Env.bind env (mailbox, ([], pid_type)), alias_env in
+            let p = type_check typing_env' p in
+              unify return_type (typ p);
+              `Spawn p, return_type
         | `Receive binders ->
             let mbtype = mailbox_type env 
             and rtype = Types.fresh_type_variable () in

@@ -937,6 +937,7 @@ module Desugarer =
              | `Var _ -> empty
              | `FunLit f -> funlit f
              | `Spawn e -> phrase e
+             | `SpawnWait e -> phrase e
              | `ListLit es -> phrases es
              | `Iteration (generator, body, filter, sort) ->
                  flatten [gtv generator; phrase body; opt_phrase filter; opt_phrase sort]
@@ -1146,6 +1147,8 @@ module Desugarer =
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
                (`FnAppl ((`Var "spawn", pos'), ([`FunLit ([[]], e),  pos'])), pos')
+           | `SpawnWait e -> desugar 
+               (`FnAppl ((`Var "spawnWait", pos'), ([`FunLit ([[]], e),  pos'])), pos')
 
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)

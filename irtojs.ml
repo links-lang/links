@@ -882,7 +882,7 @@ let generate_program_defs defs root_names =
 
 let generate_program ?(onload = "") (Program (defs, body)) =
   let (Program (defs, body)) = rewrite_program
-    (Syntax.RewriteSyntax.all [Rewriterules.Prepare.NormalizeProjections.normalize_projections])
+    (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
     (Program (defs, body)) in
 
   let (env, env'), js_defs = generate_program_defs defs (Syntax.freevars body) in

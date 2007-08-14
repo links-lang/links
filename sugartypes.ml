@@ -83,6 +83,7 @@ module type Phrase = sig
   | `Var of (name)
   | `FunLit of funlit
   | `Spawn of phrase
+  | `SpawnWait of P.phrase
   | `ListLit of (phrase list)
   | `Iteration of ([ `List of ppattern * phrase | `Table of ppattern * phrase ] * phrase * (*where:*)phrase option 
                   * (*orderby:*)phrase option)
@@ -198,6 +199,7 @@ struct
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
     | `Spawn p
+    | `SpawnWait p
     | `FormBinding (p, _)
     | `Projection (p, _)
     | `TypeAnnotation (p, _) -> phrase p

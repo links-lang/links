@@ -181,6 +181,7 @@ let keywords = [
  "set"      , SET;
  "sig"      , SIG;
  "spawn"    , SPAWN;
+ "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH; 
  "table"    , TABLE; 
  "TableHandle", TABLEHANDLE; 

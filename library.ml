@@ -295,6 +295,10 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   IMPURE);
 (*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
+  "spawnWait",
+  (`Client, datatype "(() -{b}-> d) -> d",
+  IMPURE);
+
   "_MAILBOX_",
   (`Int (num_of_int 0),
    (let u = fresh_type_variable () in
@@ -323,12 +327,22 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    PURE);
 
   "hd",
-  (p1 (unbox_list ->- List.hd),
+  (p1 (fun list ->
+         try 
+           (List.hd(unbox_list list))
+         with
+             Failure "hd" -> failwith "hd() of empty list"
+      ),
    datatype "([a]) -> a",
   IMPURE);
 
   "tl", 
-  (p1 (unbox_list ->- List.tl ->- box_list),
+  (p1 (fun list ->
+         try 
+           box_list(List.tl(unbox_list list))
+         with
+             Failure "tl" -> failwith "tl() of empty list"
+      ),
    datatype "([a]) -> [a]",
   IMPURE);
   

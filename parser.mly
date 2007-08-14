@@ -42,7 +42,7 @@ let parseRegexFlags f =
 %token FUN RARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN
+%token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
 %token LPAREN RPAREN
 %token LBRACE RBRACE ELBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -277,6 +277,7 @@ postfix_expression:
 | primary_expression POSTFIXOP                                 { `UnaryAppl (`Name $2, $1), pos() }
 | block                                                        { `Block $1, pos () }
 | SPAWN block                                                  { `Spawn (`Block $2, pos()), pos () }
+| SPAWNWAIT block                                              { `SpawnWait (`Block $2, pos()), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 

@@ -153,7 +153,7 @@ let _ =
     else
       is_closed_row row
 
-  let row_with (label, f) (field_env, row_var) =
+  let row_with (label, f : string * field_spec) (field_env, row_var : field_spec_map * row_var) =
     FieldEnv.add label f field_env, row_var
 
 (*** end of type_basis ***)
@@ -1022,6 +1022,13 @@ let lookup_alias (s, ts) alias_env =
                   string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
     else
       vars, alias
+
+let make_record_type (ts : (string*datatype) list) : datatype =
+  `Record 
+    (List.fold_left
+       (fun row (name, t) -> row_with (name, `Present t) row)
+       (make_empty_closed_row ())
+       ts)
 
 let make_tuple_type (ts : datatype list) : datatype =
   `Record 
