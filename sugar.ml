@@ -1146,10 +1146,9 @@ module Desugarer =
            | `Escape (name, e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
-               (`FnAppl ((`Var "spawn", pos'), ([`FunLit ([[]], e),  pos'])), pos')
+               (`FnAppl ((`Var "spawn", pos'), [`FunLit ([[]], e),  pos']), pos')
            | `SpawnWait e -> desugar 
                (`FnAppl ((`Var "spawnWait", pos'), ([`FunLit ([[]], e),  pos'])), pos')
-
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
            | `Section (`Project name) -> (let var = unique_name () in
@@ -1241,7 +1240,7 @@ module Desugarer =
                in      
                  desugar (
                    `Block ([`Val ((`Variable t, pos'), table, `Unknown, None), pos'],
-                           (`FnAppl ((`Var "updaterows", pos'),[tv; row_pairs]), pos')), pos')
+                           (`FnAppl ((`Var "updaterows", pos'), [tv; row_pairs]), pos')), pos')
            | `DatabaseLit (name, (opt_driver, opt_args)) ->
                let e =
                  match opt_driver with
