@@ -1298,29 +1298,38 @@ module Desugarer =
                              | `Type _
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
-           | `Iteration (generator, body, None, None) ->
-               let pattern, from = as_list pos' generator
+
+           | `Iteration (generator, body, filter, None) ->
+               let body =
+                 match filter with
+                   | None -> body
+                   | Some condition ->
+                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+               and pattern, from = as_list pos' generator
                in
-                 (match patternize pattern with
-                    | `Variable var, _ -> For (desugar body, var, desugar from, pos)
-                    | pattern -> (let var = unique_name () in
-                                    For (polylet pattern pos (Variable (var, pos)) (desugar body),
-                                         var, desugar from, pos)))
-           | `Iteration (generator, body, filter_cond, Some sort_expr) -> 
-               assert false
-(*               let pattern, from = as_list pos' generator
+                 begin
+                   match patternize pattern with
+                     | `Variable var, _ -> For (desugar body, var, desugar from, pos)
+                     | pattern -> (let var = unique_name () in
+                                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
+                                          var, desugar from, pos))
+                 end
+           | `Iteration (generator, body, filter, Some sort) -> 
+               let body =
+                 match filter with
+                   | None -> body
+                   | Some condition ->
+                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+               and pattern, from = as_list pos' generator
                in
-                 desugar (`Iteration (`List (pattern, (`SortBy_Conc(pattern, from, sort_expr), pos')),
-                                     body, filter_cond, None),
-                          pos')
-*)
-           | `Iteration (generator, body, Some exp, sort_expr) ->
-               desugar (`Iteration (generator, 
-                                   (`Conditional (exp,
-                                                 body,
-                                                 (`ListLit [], pos')), pos'), 
-                                   None, sort_expr),
-                        pos')
+                 begin
+                   match patternize pattern with
+                     | `Variable var, _ ->
+                         For (desugar body, var, SortBy(desugar from, (Abstr([var], desugar sort, pos)), pos), pos)
+                     | pattern ->
+                         raise (ASTSyntaxError(data_position pos,
+                                               "orderby clause on non-simple pattern-matching for is not yet implemented."))
+                 end
            | `Switch (exp, patterns) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 
