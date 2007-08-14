@@ -14,6 +14,8 @@ end
   = TypedArgs
 
 
+module Env = Env.String
+
 module Utils : sig
   val unify : Types.alias_environment -> Types.datatype -> Types.datatype -> unit
   val unify_rows : Types.alias_environment -> Types.row -> Types.row -> unit
@@ -115,7 +117,23 @@ struct
     | `Replace (r, `Literal _) -> is_generalisable_regex r
     | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
 
-  let quantify_env _ = assert false
+  let quantify_env env quantifiers =
+    let var_of_quantifier =
+      function
+        | `RigidTypeVar var
+        | `TypeVar var
+        | `RowVar var -> var in
+      Env.map
+        (fun (_, t) ->
+           let tvs = Types.free_type_vars t in
+           let qs = 
+             concat_map
+               (fun q ->
+                  if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
+                  else []) quantifiers
+           in
+             (qs, t))
+        env
 end
 
 let mailbox = "_MAILBOX_"
@@ -168,8 +186,6 @@ let type_binary_op env = function
   | `App          -> (* Probably doesn't parse at present.  
                         See the typing rules given in the note for r975. *)
                      datatype "(*(|a) -> b) -> ((|a)) -> b"
-
-module Env = Env.String
 
 let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let make_singleton_row =

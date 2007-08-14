@@ -11,6 +11,8 @@ sig
   module Dom : Utility.Set.S
  val domain : 'a t -> Dom.t
   val range : 'a t -> 'a list
+
+  val map : ('a -> 'b) -> 'a t -> 'b t
   module Show_t (A : Show.Show) 
     : Show.Show with type a = A.a t
 end
@@ -33,6 +35,7 @@ struct
   module Dom = Utility.Set.Make(Ord)
   let domain map = M.fold (fun k _ -> Dom.add k) map Dom.empty
   let range map = M.fold (fun _ v l -> v::l) map []
+  let map = M.map
   module Show_t = M.Show_t
 end
 

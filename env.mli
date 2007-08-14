@@ -38,6 +38,8 @@ sig
   val range : 'a t -> 'a list
   (** The range of an environment *)
 
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
   module Show_t (A : Show.Show) 
     : Show.Show with type a = A.a t
   (** Printing for environments *)
