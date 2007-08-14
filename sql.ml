@@ -10,7 +10,6 @@ let sorting_to_sql = function
   
 let rec string_of_expression : expression -> string = function
   | Field (table, field)     -> table ^"."^ field
-(*   | NamedField field         -> field *)
   | Variable name            -> "VARIABLE:"^ name
   | Null                     -> "NULL"
   | Integer value            -> string_of_num value
@@ -62,27 +61,3 @@ let rec conjunction = function
 	Boolean true -> t
       | Boolean false -> Boolean false
       | rhs -> Binary_op("AND", t, rhs)
-
-let rec disjunction = function
-  | [] -> Boolean false
-  | (Boolean true :: _) -> Boolean true
-  | (Boolean false :: ts) -> disjunction ts
-  | (t :: ts) -> match disjunction ts with
-	Boolean true -> Boolean true
-      | Boolean false -> t
-      | rhs -> Binary_op("OR", t, rhs)
-
-let rec negation = function
-    Boolean true -> Boolean false
-  | Boolean false -> Boolean true
-  | Unary_op("NOT", t) -> t
-  | t -> Unary_op("NOT", t)
-
-let rec simplify = function
-  | Unary_op("NOT", Unary_op("NOT", expr)) -> simplify expr
-  | Binary_op("AND", lhs, Boolean true) -> simplify lhs
-  | Binary_op("AND", Boolean true, rhs) -> simplify rhs
-  | Binary_op("OR", lhs, Boolean false) -> simplify lhs
-  | Binary_op("OR", Boolean false, rhs) -> simplify rhs
-  | Binary_op("=", lhs, rhs) when lhs == rhs -> Boolean true
-  | expr -> expr (* really, need to descend inside *)

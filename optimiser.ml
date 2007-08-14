@@ -5,7 +5,6 @@ open List
 open Utility
 open Rewrite
 open Syntax
-open Sql_transform
 
 let optimising = Settings.add_bool("optimising", true, `User)
 let show_opt_verbose = Settings.add_bool("show_opt_verbose", false, `User)
@@ -182,16 +181,6 @@ let uniquify_names : RewriteSyntax.rewriter =
      we need to replace bindings from the inside out *)
   in RewriteSyntax.bottomup rewrite_node
 
-(*
-(** [inference_rw]
-    The type-inference function, in the form of a rewriter
-*)
-let inference_rw env : RewriteSyntax.rewriter = fun input -> 
-  let output = snd (Inference.type_expression env (erase input)) in
-    if input = output then None
-    else Some output
-*)
-
 (** {0 Renaming} *)
 
 (** renaming
@@ -263,180 +252,10 @@ let simplify_regex : RewriteSyntax.rewriter = function
       Some (Let (v, e, Apply (tilde, [lhs;rhs], d1), d2))
   | _ -> None
 
-(** {3 SQL utility values} These values are provided to ease the writing of SQL optimisers. *)
-
-(** extract_tests
-    Finds tests that can be pushed to a SQL query. Such tests are of the form '{i if cond then collection else [col] }'.
-    ¨param forbidden A list of variables that should not be used in the tests.
-    @param bindings Bindings from variables to database fields.
-    @param expr The expression from which the test must be extracted.
-    @return A tuple (positive, negative, result, origin).
-        `positive' and `negative' are query expressions. `result' is the 
-        input expression with these tests removed. `origin` is a list of 
-        record selections that need to be applied.
- *)
-(*TODO: Is there any reason why positive and negative should be kept separate? *)
-(*TODO: The calculated expression for the collection extension case
-   is not valid *)
-let rec extract_tests (bindings:bindings) (expr:expression)
-    : (Query.expression list * expression * projection_source list) =
-  match expr with
-    | Let (_, Variable (_, _), _, _) ->
-        failwith "Internal error: renaming declarations should have been removed by earlier optimisations"
-    | Let (variable, value, body, data) ->
-        let (condns, body, origin) = extract_tests (`Unavailable variable :: bindings) body in
-          (condns, Let (variable, value, body, data), origin)
-
-    | Record_selection (label, label_variable, variable, Syntax.Variable (name, vdata), body, data) ->
-        let trace_data = `Selected{field_name=label; field_var=label_variable;
-                                   etc_var = variable; source_var = name} in
-        let (condns, body, origin) = extract_tests (trace_data :: bindings) body in
-          (condns,
-	   Record_selection (label, label_variable, variable, 
-			     Syntax.Variable (name, vdata), body, data), 
-	   origin)
-    | Record_selection (label, label_variable, variable, value, body, data) ->
-        let condns, body, origin = extract_tests (`Unavailable variable :: bindings) body in
-          (condns, Record_selection (label, label_variable, variable, value, body, data), origin)
-
-    | Condition (condition, t, ((Nil _) as e), data)  ->
-        let condns, t, origin = extract_tests bindings t in
-          (match condition_to_sql condition bindings with
-             | Some (sql_condition, new_origin) ->
-                 (sql_condition:: condns, t, new_origin @ origin)
-             | None ->
-                 (condns, Condition(condition, t, e, data), origin))
-    | Condition (condition, ((Nil _) as t), e, data) ->
-        let condns, e, origin = extract_tests bindings e in
-          (match condition_to_sql condition bindings with
-             | Some (sql_condition, new_origin) ->
-                 (Sql.negation sql_condition:: condns, e, new_origin @ origin)
-             | None ->
-                 (condns, Condition(condition, t, e, data), origin))
-    | For (expr, variable, value, data) ->
-        let condns, expr, origin = 
-          extract_tests (`Calculated (variable, expr) :: bindings) expr in
-          (condns, For (expr, variable, value, data), origin)
-    | _ -> ([], expr, [])
-
 (** {3 SQL optimisers} All following values are optimiser functions
     that can be applied to an expression. Generally, they try to push
     as much calculation to the DBMS as possible. {e Beware:} some
     optimisers have dependencies with other optimisers. *)
-
-(** For every collection extension that has a table as source,
-    modifies the SQL query associated to that table to only select
-    fields that will be used in the body of the extension. {e Beware:}
-    this version of the algorithm considers a field as used if a
-    record selection operators extracts it from the record
-    representing the relation from the database, even if it is not
-    used in the selection's body. *)
-type fieldset = All
-              | Fields of (string list)
-(* FIXME: Make sure we don't throw away fields that are used in 
-   a SortBy clause. *)
-let sql_projections ((env, alias_env):(Types.environment * Types.alias_environment)) : RewriteSyntax.rewriter =
-  let merge_needed : fieldset list -> fieldset =
-    let merge2 = function
-      | All, _ | _, All -> All
-      | Fields x, Fields y -> Fields (x @ y) in
-      fold_left (curry merge2) (Fields []) in
-  let needed_fields (var:string) : expression -> fieldset =
-    let rec visitor (var:string) default : expression -> fieldset = function
-        | Variable (name, _) when name = var -> All
-        | Apply (apply, [Variable (name, _)], _) when name = var ->
-            (* [BUG]
-               This code is most probably broken.
-               In particular the `MetaTypeVar case does not distinguish different kinds of
-               `MetaTypeVar.
-            *)
-            let t =
-              Types.concrete_type
-                (match apply with
-                   | Variable (name, _) -> snd (assoc name env)
-                   | Abstr _ ->
-                       (match snd (Inference.type_expression (env, alias_env) (erase apply)) with
-                          | Abstr (_, _, `T (_, datatype, _)) -> datatype
-                          | _ -> assert false)
-                   | _ -> assert false)
-            in
-              begin
-                match t with
-                  | `Function (`Record (field_env, _), _, _) ->
-		      let fields = StringMap.fold (fun label field_spec labels ->
-						     match field_spec with
-						       | `Present _ -> label :: labels
-						       | `Absent -> labels) field_env []
-		      in
-		        merge_needed [Fields fields]
-                  | `MetaTypeVar _ -> All
-                  | _ -> assert false
-              end
-        | Record_selection (label, _, variable, Variable (name, _), body, _) when name = var ->
-            (* Note change of variable *)
-            merge_needed (Fields [label] :: (visitor var default body) :: [visitor variable default body])
-        | Record_selection (_, _, _, Variable (_, _), body, _) -> visitor var default body
-        | other -> default other
-    in reduce_expression (visitor var) (merge_needed -<- snd) in
-  let rewrite = function
-    | For (body, variable, TableQuery(th, query, tdata), data) ->
-        (match needed_fields variable body with
-           | Fields needs ->
-               Some (For (body, variable,
-                          TableQuery(th, 
-                                     (if needs = [] then null_query else project needs) query,
-                                     tdata),
-                          data))
-           | All -> None)
-    | _ -> None in
-    RewriteSyntax.bottomup rewrite
-
-(** For every collection extension that has a table as source,
-    modifies the SQL query associated to that table to add as many
-    conditions from the extension's body to the query itself as
-    possible. To be considered for optimisation, a condition must be
-    of the form '{i if cond then [] else ...}' or '{i if cond then
-    ... else []}', where '{i cond}' is a comparison between a
-    constant and a variable or between two variables (coming from the
-    database). The optimisation will stop looking for conditions in
-    the body expression if it encouters any other node than a
-    condition, a {i let}, a record selection or a collection
-    extension. *)
-let sql_selections : RewriteSyntax.rewriter = function 
-  | For (expr, variable, TableQuery(th, query, tdata), data) ->
-      let condns, expr, origin = extract_tests [`Table_loop (variable, query)] expr in
-      let table = TableQuery(th, select condns query, tdata) in
-        Some (select_by_origin origin (For (expr, variable, table, data)))
-  | _ -> None
-
-let substitute_projections' new_src renamings bindings expr =
-  let subst_projection (from, to') : RewriteSyntax.rewriter = function
-    | Record_selection (label, label_var, etc_var, Variable (src, d), body, 
-                        data) as orig
-        when from.Query.col_alias = label ->
-        Debug.if_set show_optimisation
-          (fun () -> "Renaming " ^ from.Query.col_alias ^ " to " ^ to' ^ " in " ^ string_of_expression orig);
-        (match trace_variable src bindings with
-	   | `Table query when mem from.Query.table_alias (map snd query.Query.tables) ->
-               Some(Record_selection(to', label_var, etc_var, 
-                                     Variable (new_src, d), body, data))
-           | `Table_field (table_as, _) when from.Query.table_alias = table_as ->
-               (* NOTE: I think this case never occurs *)
-               Some (Record_selection (to', label_var, etc_var, Variable (new_src, d), body, data))
-           | `Unavailable -> Debug.if_set show_optimisation
-               (fun () -> src ^ " was unavailable."); None
-           | `Earlier(str, _) -> Debug.if_set show_optimisation (fun () -> "Earlier: " ^ str); None
-           | _ -> 
-               Debug.if_set show_optimisation (fun () -> "NOT renaming after all!");
-               Some (Record_selection (label, label_var, etc_var, 
-                                       Variable (src, d), body,  (* not new_src? *)
-                                       data)))
-    | _ -> None
-  in
-    RewriteSyntax.all (List.map (fun r -> RewriteSyntax.bottomup (subst_projection r)) renamings) expr
-
-let substitute_projections new_src renamings bindings expr = 
- do_rewrite (substitute_projections' new_src renamings bindings) expr
 
 let read_proj = function
     Record_selection(field, _, _, record, 
@@ -498,95 +317,6 @@ let sql_aslist : RewriteSyntax.rewriter =
              | _ -> Some (Let (th_var, th, table_query, data)))
     | _ -> None
 
-(** check_join
-    Inspects an expression for possible collection extension
-    operators that can be joined with some outer comprhsn, the
-    variable of the outer comprhsn indicated by the `loop_var' param.
-
-    @param forbid Variables that if used in the body of an inner 
-    extension prevent the optimisation
-    @param db The name of the outter database. Only tables of the 
-           same database can be joined.
-    @param bindings Bindings of variables to rows or fields from a table.
-    @param expr The expression to inspect.
-    @return Either None or Some of a tuple containing: 
-      * positive join conditions (conditions between fields of the inner 
-        and outer table);
-      * negative join conditions;
-      * the inner query to join;
-      * the new Links-AST expression without the joinable collection extensions. 
-*)
-let rec check_join (loop_var:string) (bindings:bindings) (expr:expression)
-    =
-  let bindings, expr = sep_assgmts bindings expr in
-    match expr with
-      | Condition (condition, t, ((Nil _) as e), data)  ->
-          (match check_join loop_var bindings t with
-	     | Some (condns, th, query, projs, var, t) ->
-                 Some (condns, th, query, projs, var, 
-                       Condition (condition, t, e, data))
-	     | None -> None)
-      | Condition (condition, ((Nil _) as t), e, data) ->
-          (match check_join loop_var bindings e with
-	     | Some (condns, th, query, projs, var, e) ->
-                 Some (condns, th, query, projs, var,
-                       Condition (condition, t, e, data))
-	     | None -> None)
-      | For (expr, variable, TableQuery(th, query, _), _) ->
-          (match extract_tests (`Table_loop (variable, query) :: bindings) expr with
-	     | (condns, expr, origin) ->
-                   Some (condns, th, query, 
-                         origin, variable, expr))
-      | _ -> None
-
-(** sql_joins
-    When a collection extension has a table as source, explore the
-    body expression for other collection extensions on tables from the
-    same database. If a suitable extension is found, the query of the
-    outer extension is modified to query on a join between the union
-    of their tables, and the inner extension is removed.
-*)
-let rec sql_joins : RewriteSyntax.rewriter = 
-  function
-    | For (body, outer_var, (TableQuery (outer_ths, query, tdata)), data) ->
-        let bindings = [`Table_loop (outer_var, query)] in
-        (match check_join outer_var bindings body with
-           | Some(condns, inner_ths, inner_query, origins, inner_var, body) ->
-               let renamings, query = join condns (query, inner_query) in
-                 
-               (* Replace anything of the form inner_var.field with 
-                  outer_var.renamed_field with renamings as given by 
-                  the join operator *)
-               let body = (substitute_projections outer_var renamings 
-                             [`Table_loop(inner_var, inner_query)] body) in
-               let expr = For(body,
-                              outer_var, 
-                              TableQuery(inner_ths @ outer_ths, query, tdata), 
-                              data) in
-(*                (\* finally, wrap the whole expression in the  *)
-(*                   projections returned from check_join; *)
-(*                   TBD: Does this need to go somewhere? Inside the loop? *\) *)
-(*                let expr = select_by_origin origins expr in *)
-                 
-                 Some expr
-
-           | None -> None
-
-(*            | None ->  *)
-(*                (\* check_join returned None, so perhaps we only have one loop.  *)
-(*                   still, try to push the conditions down into SQL.  *)
-(*                   HACK ALERT; this shouldn't be a special case. the 1-join *)
-(*                   should be handled the same as 2-join, 3-join, etc. *\) *)
-(*                let (pos, neg, body, proj_srcs) = extract_tests bindings body in *)
-(*                  (\* This positive/negatives business is retarded, I think *\) *)
-(*                  if (pos <> [] || neg <> []) then *)
-(*                    let query = {query with Query.condition = pos_and_neg (query.Query.condition::pos, neg) } in *)
-(*                      Some (For(body, outer_var,  *)
-(*                                TableQuery(th, query, tdata), data)) *)
-(*                  else None *)
-        ) (* match check_join .... with *)
-    | _ -> None
-
 let lift_lets : RewriteSyntax.rewriter = function
   | For(loopbody, loopvar, Let(letvar, letval, letbody, letdata), data) 
     -> Some(Let(letvar, letval,
@@ -626,97 +356,6 @@ let lift_let data e k =
   else
     let x = gensym () in
       (fun body -> k (Let (x, e, body, data))), Variable (x, expression_data e)
-
-(** (1 take/drop optimization).
-    Push calls to take and drop that surround queries into the query.
-    (N.B. these rewrite rules play fast and loose with the `data'
-    component of expression nodes.  Don't assume anything about the
-    data after these have run.)
-*)
-
-(** [simplify_takedrop]
-    The rewritings are as follows:
-       take e1 (drop e2 e3) ~>  {x = e2; y = e1; take y (drop x e3)}
-    (Not performed if both e1 and e2 are variables or integer literals)
-       take e1 e2 ~> {x = e1; take x e2}
-       drop e1 e2 ~> {x = e1; drop x e2}
-    (Not performed if e1 is a variable or integer literal)
-*)
-let simplify_takedrop : RewriteSyntax.rewriter = function
-  | Apply (Variable ("take"|"drop" as f, d1), [e1; e2], d3) ->
-      let k, e1 = lift_let d3 e1 identity in
-        begin
-          match f, e2 with
-            | "take", Apply (Variable ("drop", d4), [e2; e3], d6) ->
-                let k, e2 = lift_let d3 e2 k in
-                  Some(k (Apply (Variable ("take", d1),
-                                 [e1; Apply (Variable ("drop", d4),
-                                             [e2; e3], d6)], d3)))
-            | _ -> Some (k (Apply (Variable (f, d1), [e1; e2], d3)))
-        end
-  | _ -> None
-
-(** [push_takedrop] actually pushes [take] and [drop] calls into a query.
-    Rewrites as follows: {[
-        take e1 (drop e2 (Table (... q ...))) ~> Table (... {q with offset = e2; limit = e1} ...)
-    }] where e1 and e2 are variables or integer literals
-    {[
-        take e1 (Table (... q ...)) ~> Table (... {q with limit  = e1} ...)
-        drop e1 (Table (... q ...)) ~> Table (... {q with offset = e1} ...)
-    }] where e1 is a variable or integer literal
-*)
-let push_takedrop : RewriteSyntax.rewriter = 
-  let queryize = function
-    | Variable (v, _) -> Query.Variable v
-    | Constant(Integer  n, _) -> Query.Integer n
-    | _ -> failwith "Internal error during take optimization" in 
-    function
-      | Apply(Variable ("take", _) as takef, [take_n; take_src], calltaked) 
-          when is_atom take_n ->
-          begin
-            match take_src with
-              | TableQuery (e2, q, d) ->
-                  let q = {q with Query.max_rows = Some (queryize take_n)} in
-	          Some (TableQuery (e2, q, d))
-              | Apply(Variable("drop",_) as dropf, [drop_n; drop_src], calldropd)
-                    when is_atom drop_n ->
-                  begin
-                    match drop_src with
-                      | TableQuery(ths, q, d) ->
-                          let q = {q with
-                                     Query.max_rows = Some (queryize take_n);
-                                     Query.offset   = queryize drop_n} in
-                          Some(TableQuery(ths, q, d))
-                      | _ -> None
-                  end
-              | For(List_of(expr, _) as body, var, src, ford) 
-                  when pure(expr) ->
-                  Some (For(body, var,
-                            Apply (takef, [take_n; src], calltaked), 
-                            ford))
-              | _ -> None
-          end
-
-      | Apply (Variable ("drop", _) as dropf, [drop_n; drop_src], calldropd) 
-          when is_atom drop_n ->
-          begin
-            match drop_src with
-              | TableQuery (ths, q, d) ->
-                  let q = {q with Query.offset = queryize drop_n} in
-  	          Some(TableQuery(ths, q, d))
-              | For(List_of(expr, _) as body, var, src, forData) 
-                  when pure(expr) ->
-                  Some (For(body, var,
-                            Apply (dropf, [drop_n; src], calldropd), 
-                            forData))
-              | _ -> None
-          end
-    | Apply(Variable("drop", _), _, d)
-    | Apply(Variable("take", _), _, d) ->
-        Debug.print("unoptimisable take/drop at " ^ 
-                      Syntax.show_pos(data_position d)); None
-              
-    | _ -> None
 
 let remove_trivial_extensions : RewriteSyntax.rewriter = function
   | For (List_of (Variable (v1, _), _), v2, e, _)
@@ -770,8 +409,6 @@ let rewriters env = [
   RewriteSyntax.topdown simplify_regex;
   RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
-(*   RewriteSyntax.topdown (sql_sort); *)
-(*   inference_rw env; *)
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
 ]

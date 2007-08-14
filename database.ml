@@ -3,7 +3,6 @@ open List
 
 open Utility
 open Result
-open Sql
 open Syntax
 
 class virtual db_args from_str = object
