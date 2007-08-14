@@ -7,6 +7,8 @@ open Utility
 type synerrspec = {filename : string; linespec : string; 
                    message : string; linetext : string;
                    marker : string}
+
+exception UndefinedVariable of string
     
 exception NoMainExpr
 exception ManyMainExprs of Syntax.expression list

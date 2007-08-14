@@ -96,7 +96,7 @@ let rec directives
                            let _, t' = Env.String.lookup tenv id in
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
-                           let t' = Instantiate.instantiate_datatype fresh_envs t' in 
+                           let t' = Instantiate.datatype fresh_envs t' in 
                              Inference.unify alias_env (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))

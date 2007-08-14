@@ -2,6 +2,7 @@ open Utility
 open Types
 
 let show_recursion = Settings.add_bool("show_recursion", false, `User)
+let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
 
 (*
   instantiation environment:
@@ -105,3 +106,31 @@ let instantiate_alias (vars, alias) ts =
                         | _ -> assert false) (ts, IntMap.empty) vars
   in
     instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
+
+(** instantiate env var
+    Get the type of `var' from the environment, and rename bound typevars.
+ *)
+let instantiate : environment -> string -> datatype = fun env var ->
+  try
+    let quantifiers, t = Env.String.lookup env var in
+      if quantifiers = [] then
+	t
+      else
+	(
+	  let _ = Debug.if_set (show_instantiation)
+	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (quantifiers, t))) in
+
+	  let tenv, renv = List.fold_left
+	    (fun (tenv, renv) -> function
+	       | `TypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
+	       | `RigidTypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
+	       | `RowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
+	    ) (IntMap.empty, IntMap.empty) quantifiers
+	  in
+	    instantiate_datatype (tenv, renv) t)
+  with Not_found ->
+    raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
+
+let var = instantiate
+and datatype = instantiate_datatype
+and alias = instantiate_alias

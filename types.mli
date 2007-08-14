@@ -180,6 +180,8 @@ exception UndefinedAlias of string
 
 type type_alias_set = Utility.StringSet.t
 
+val register_alias : string * int list * datatype -> alias_environment -> alias_environment
+
 val free_alias_check : alias_environment -> datatype -> unit
 val free_alias_check_row : alias_environment -> row -> unit
 

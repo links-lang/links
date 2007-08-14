@@ -16,22 +16,28 @@ end
 
 module Env = Env.String
 
+let var_of_quantifier =
+  function
+    | `RigidTypeVar var
+    | `TypeVar var
+    | `RowVar var -> var
+
 module Utils : sig
-  val unify : Types.alias_environment -> Types.datatype -> Types.datatype -> unit
-  val unify_rows : Types.alias_environment -> Types.row -> Types.row -> unit
+  val unify : Types.alias_environment -> Types.datatype * Types.datatype -> unit
+  val unify_rows : Types.alias_environment -> Types.row * Types.row -> unit
   val instantiate : Types.environment -> string -> Types.datatype
   val generalise : Types.environment -> Types.datatype -> Types.assumption
-  val register_alias : name * name list * Types.datatype -> Types.alias_environment -> Types.alias_environment
+  val register_alias : name * int list * Types.datatype -> Types.alias_environment -> Types.alias_environment
 
   val is_generalisable : Typed.phrase -> bool
   val quantify_env : Types.environment -> Types.quantifier list -> Types.environment
 end =
 struct
-  let unify _ = assert false
-  let unify_rows _ = assert false
-  let instantiate _ = assert false
-  let generalise _ = assert false
-  let register_alias _ = assert false
+  let unify = Unify.datatypes
+  let unify_rows = Unify.rows
+  let instantiate = Instantiate.var
+  let generalise = Generalise.generalise
+  let register_alias = Types.register_alias
 
   let rec opt_generalisable o = opt_app is_generalisable true o
   and is_generalisable (p, _) = match p with
@@ -118,22 +124,17 @@ struct
     | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
 
   let quantify_env env quantifiers =
-    let var_of_quantifier =
-      function
-        | `RigidTypeVar var
-        | `TypeVar var
-        | `RowVar var -> var in
-      Env.map
-        (fun (_, t) ->
-           let tvs = Types.free_type_vars t in
-           let qs = 
-             concat_map
-               (fun q ->
-                  if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
-                  else []) quantifiers
-           in
-             (qs, t))
-        env
+    Env.map
+      (fun (_, t) ->
+         let tvs = Types.free_type_vars t in
+         let qs = 
+           concat_map
+             (fun q ->
+                if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
+                else []) quantifiers
+         in
+           (qs, t))
+      env
 end
 
 let mailbox = "_MAILBOX_"
@@ -215,7 +216,7 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
         | `Cons (p1, p2)         -> 
             let p1 = type_pattern p1
             and p2 = type_pattern p2 in
-            let _ = unify (Types.make_list_type (typ p1)) (typ p2) in
+            let _ = unify (Types.make_list_type (typ p1), typ p2) in
               `Cons (p1, p2), env p1 ++ env p2, typ p2
         | `List ps               -> 
             let ps' = List.map type_pattern ps in
@@ -224,7 +225,7 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
               match ps' with
                 | [] -> Types.fresh_type_variable ()
                 | p::ps -> 
-                    let _ = List.iter (typ ->- unify (typ p)) ps in
+                    let _ = List.iter (fun p' -> unify (typ p, typ p')) ps in
                       typ p
             in `List ps', env', Types.make_list_type element_type
         | `Variant (name, None)       -> 
@@ -242,7 +243,7 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
                          Env.empty)
               | Some r -> 
                   let row = Types.make_empty_open_row () in
-                  let _ = unify (`Record row) (typ r) in
+                  let _ = unify (`Record row, typ r) in
                     row, env r in
             let rtype = 
               `Record (List.fold_right
@@ -262,7 +263,7 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
               `As (x, p), env', (typ p)
         | `HasType (p, t)        -> 
             let p = type_pattern p in
-            let _ = unify (typ p) (snd (Sugar.desugar_datatype t)) in
+            let _ = unify (typ p, snd (Sugar.desugar_datatype t)) in
               `HasType (p, t), env p, typ p
     in
       p, (pos, (e,t))
@@ -307,7 +308,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let row = Types.make_empty_open_row () in
             let _ = match rest with
               | None -> ()
-              | Some r -> unify (`Record row) (typ r) in
+              | Some r -> unify (`Record row, typ r) in
             let fields = alistmap (type_check typing_env) fields in
             let rtype =
               `Record (List.fold_right
@@ -320,7 +321,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             begin match List.map (type_check typing_env) es with
               | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
               | e :: es -> 
-                  List.iter (typ ->- unify (typ e)) es;
+                  List.iter (fun e' -> unify (typ e, typ e')) es;
                   `ListLit es, `Application ("List", [typ e])
             end
         | `FunLit (pats, body) ->
@@ -356,8 +357,8 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
         | `TableLit (tname, dtype, constraints, db) ->
             let tname = type_check typing_env tname 
             and db = type_check typing_env db in
-            let _ = unify (typ tname) Types.string_type
-            and _ = unify (typ db) Types.database_type in
+            let _ = unify (typ tname, Types.string_type)
+            and _ = unify (typ db, Types.database_type) in
             let read_row = match dtype with
               | RecordType row ->
                   row
@@ -375,34 +376,34 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             and from = type_check typing_env from
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let _ = unify (typ from) (`Table (read, write))
-            and _ = unify (pattern_typ pat) write in
+            let _ = unify (typ from, `Table (read, write))
+            and _ = unify (pattern_typ pat, write) in
             let where = opt_map (type_check ((pattern_env pat) ++ typing_env)) where in
-            let _     = opt_iter (typ ->- unify Types.bool_type) where in
+            let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
               `DBDelete (pat, from, where), Types.unit_type
         | `DBInsert (into, values) ->
             let into   = type_check typing_env into
             and values = type_check typing_env values
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let _ = unify (typ into) (`Table (read, write))
-            and _ = unify write (Types.make_list_type write) in
+            let _ = unify (typ into, `Table (read, write))
+            and _ = unify (write, Types.make_list_type write) in
               `DBInsert (into, values), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat
             and from = type_check typing_env from
             and read =  `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let _ = unify (typ from) (`Table (read, write))
-            and _ = unify (pattern_typ pat) write in
+            let _ = unify (typ from, `Table (read, write))
+            and _ = unify (pattern_typ pat, write) in
             let typing_env' = (pattern_env pat) ++ typing_env in
             let where = opt_map (type_check typing_env') where in
-            let _     = opt_iter (typ ->- unify Types.bool_type) where in
+            let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
             let set = List.map 
               (fun (name, exp) ->
                  let exp = type_check typing_env exp in
-                 let _ = unify write (`Record (Types.make_singleton_open_row
-                                                 (name, `Present (typ exp)))) in
+                 let _ = unify (write, `Record (Types.make_singleton_open_row
+                                                  (name, `Present (typ exp)))) in
                    (name, exp)) set in
               `DBUpdate (pat, from, where, set), Types.unit_type
 
@@ -419,7 +420,7 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let pid_type = Types.fresh_type_variable () in
             let typing_env' = Env.bind env (mailbox, ([], pid_type)), alias_env in
             let p = type_check typing_env' p in
-              unify return_type (typ p);
+              unify (return_type, typ p);
               `Spawn p, return_type
         | `Receive binders ->
             let mbtype = mailbox_type env 
@@ -429,8 +430,8 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                 (fun (pat, cont) binders ->
                    let pat = tpo pat in
                    let cont = type_check (pattern_env pat ++ typing_env) cont in
-                   let _ = unify (pattern_typ pat) mbtype 
-                   and _ = unify (typ cont) rtype in
+                   let _ = unify (pattern_typ pat, mbtype)
+                   and _ = unify (typ cont, rtype) in
                      (pat,cont)::binders)
                 binders [] in
               `Receive binders, rtype
@@ -440,46 +441,46 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let op = op, (pos, type_unary_op env op)
             and p = type_check typing_env p
             and rettyp = Types.fresh_type_variable () in
-              unify (typ op) (`Function (Types.make_tuple_type [typ p], 
-                                         mailbox_type env, rettyp));
+              unify (typ op, `Function (Types.make_tuple_type [typ p], 
+                                        mailbox_type env, rettyp));
               `UnaryAppl (fst op, p), rettyp
         | `InfixAppl (op, l, r) ->
             let op = op, (pos, type_binary_op env op)
             and l = type_check typing_env l
             and r = type_check typing_env r 
             and rettyp = Types.fresh_type_variable () in
-              unify (typ op) (`Function (Types.make_tuple_type [typ l; typ r], 
-                                         mailbox_type env, rettyp));
+              unify (typ op, `Function (Types.make_tuple_type [typ l; typ r], 
+                                        mailbox_type env, rettyp));
               `InfixAppl (fst op, l, r), rettyp
         | `FnAppl (f, ps) ->
             let f = type_check typing_env f
             and ps = List.map (type_check typing_env) ps
             and rettyp = Types.fresh_type_variable () in
-              unify (typ f) (`Function (Types.make_tuple_type (List.map typ ps), 
-                                        mailbox_type env, rettyp));
+              unify (typ f, `Function (Types.make_tuple_type (List.map typ ps), 
+                                       mailbox_type env, rettyp));
               `FnAppl (f, ps), rettyp
 
         (* xml *)
         | `Xml (tag, attrs, children) ->
             let attrs = alistmap (List.map (type_check typing_env)) attrs
             and children = List.map (type_check typing_env) children in
-            let _ = List.iter (snd ->- List.iter (typ ->- unify Types.string_type)) attrs
-            and _ = List.iter (typ ->- unify Types.xml_type) children in
+            let _ = List.iter (snd ->- List.iter (fun attr -> unify (Types.string_type, typ attr))) attrs
+            and _ = List.iter (fun child -> unify (Types.xml_type, typ child)) children in
               `Xml (tag, attrs, children), Types.xml_type
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = type_check typing_env body in
             let typing_env = (extract_formlet_bindings body) ++ typing_env in
             let yields = type_check typing_env yields in
-              unify (typ body) Types.xml_type;
+              unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
         | `FormBinding (e, pattern) ->
             let e = type_check typing_env e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
-              unify (typ e) ft;
-              unify (pattern_typ pattern) a;
+              unify (typ e, ft);
+              unify (pattern_typ pattern, a);
               `FormBinding (e, pattern), Types.xml_type
 
         (* various expressions *)
@@ -491,22 +492,22 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                 | `List (pattern, e) ->
                     let pattern = tpc pattern
                     and e = tc e in             
-                      unify lt (typ e);
-                      unify lt (pattern_typ pattern);
+                      unify (lt, typ e);
+                      unify (lt, pattern_typ pattern);
                       `List (pattern, e), pattern_env pattern ++ typing_env
                 | `Table (pattern, e) ->
                     let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
                     let pattern = tpc pattern
                     and e = tc e in
-                      unify tt (typ e);
-                      unify lt (pattern_typ pattern);
+                      unify (tt, typ e);
+                      unify (lt, pattern_typ pattern);
                       `Table (pattern, e), pattern_env pattern ++ typing_env in
             let tc = type_check typing_env in
             let body = tc body in
             let where = opt_map tc where in
             let orderby = opt_map tc orderby in
-              unify (Types.make_list_type (Types.fresh_type_variable ())) (typ body);
-              opt_iter (fun where -> unify (Types.bool_type) (typ where)) where;
+              unify (Types.make_list_type (Types.fresh_type_variable ()), typ body);
+              opt_iter (fun where -> unify (Types.bool_type, typ where)) where;
               `Iteration (binder, body, where, orderby), (typ body)
 
         | `Escape (name, e) ->
@@ -538,14 +539,14 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let cont_type = `Function (Types.make_tuple_type [f], m, t) in
             let typing_env' = Env.bind env (name, ([], cont_type)), alias_env in
             let e = type_check typing_env' e in
-            let _ = unify f (typ e) in
+            let _ = unify (f, typ e) in
               `Escape (name, e), (typ e)
         | `Conditional (i,t,e) ->
             let i = type_check typing_env i
             and t = type_check typing_env t
             and e = type_check typing_env e in
-              unify (typ i) (`Primitive `Bool);
-              unify (typ t) (typ e);
+              unify (typ i, `Primitive `Bool);
+              unify (typ t, typ e);
               `Conditional (i,t,e), (typ t)
         | `Block (bindings, e) ->
             let rec type_bindings typing_env =
@@ -563,8 +564,8 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
         | `Projection (r,l) ->
             let r = type_check typing_env r in
             let fieldtype = Types.fresh_type_variable () in
-	      unify (typ r) (`Record (Types.make_singleton_open_row 
-                                        (l, `Present fieldtype)));
+	      unify (typ r, `Record (Types.make_singleton_open_row 
+                                       (l, `Present fieldtype)));
               `Projection (r, l), fieldtype
         | `With (r, fields) ->
             let r = tc r
@@ -575,12 +576,12 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                          (fun (lab, rhs) row ->
                             Types.row_with (lab, `Present (typ rhs)) row)
                          fields (Types.make_empty_open_row ())) in
-                unify fields_type rtype;
-                `With (r, fields), rtype
+              unify (fields_type, rtype);
+              `With (r, fields), rtype
         | `TypeAnnotation (e, t) ->
             let e = tc e
             and t' = snd (Sugar.desugar_datatype t) in
-              unify (typ e) t';
+              unify (typ e, t');
               `TypeAnnotation (e, t), t'
         | `Switch (e, binders) ->
             let e = tc e in
@@ -591,8 +592,8 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
                 (fun (pat, cont) binders ->
                    let pat = tpo pat in
                    let cont = type_check (pattern_env pat ++ typing_env) cont in
-                   let _ = unify (pattern_typ pat) et 
-                   and _ = unify (typ cont) t in
+                   let _ = unify (pattern_typ pat, et) 
+                   and _ = unify (typ cont, t) in
                      (pat,cont)::binders)
                 binders [] in
               `Switch (e, binders), t
@@ -616,8 +617,8 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
             let body = tc body in
             let pat = tpc pat in
             let bt = typ body in
-            let _ = unify bt (pattern_typ pat) in
-            let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify bt) datatype in
+            let _ = unify (bt, pattern_typ pat) in
+            let _ = opt_iter (fun t -> unify (bt, snd (Sugar.desugar_datatype t))) datatype in
             let (quantifiers, bt) =
               if Utils.is_generalisable body then
                 Utils.generalise env (typ body)
@@ -637,7 +638,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
                      let args = Types.make_tuple_type (List.map pattern_typ pat) in
                        `Function (args, Types.fresh_type_variable (), rtype))
                   pats (typ body) in
-            let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify ft) t in
+            let _ = opt_iter (fun t -> unify (ft, snd (Sugar.desugar_datatype t))) in
               (`Fun (name, (pats, body), location, t),
                (Env.bind env (name, Utils.generalise env ft), alias_env))
         | `Funs (defs) ->
@@ -652,7 +653,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
                              let args = Types.make_tuple_type (List.map pattern_typ pat) in
                                `Function (args, Types.fresh_type_variable (), rtype))
                           pats (Types.fresh_type_variable ()) in
-                      let _ = opt_iter (Sugar.desugar_datatype ->- snd ->- unify ft) t in
+                      let _ = opt_iter (fun t -> unify (ft, snd (Sugar.desugar_datatype t))) in
                         ((name, ft), pats)) defs) in
             let fbs = List.map (fun (name, t) -> name, Utils.generalise env t) fbs in
             let env = List.fold_left (fun env (name, t) -> Env.bind env (name, t)) env fbs in
@@ -673,7 +674,12 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
               (`Foreign (language, name, datatype),
                (Env.bind env (name, assumption), alias_env))
         | `Type (typename, args, datatype) as t ->
-            let _, dtype = Sugar.desugar_datatype datatype in
+            (* HACK:
+               
+               This unboxing of quantifiers is silly. Something more sane should be done.
+            *)
+            let (args, dtype) = Sugar.desugar_assumption (List.map (fun arg -> `TypeVar arg) args, datatype) in
+            let args = List.map (var_of_quantifier) args in
               (t, (env, Utils.register_alias (typename, args, dtype) alias_env))
         | `Infix -> `Infix, typing_env
         | `Exp e ->

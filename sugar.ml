@@ -748,8 +748,6 @@ module PatternCompiler =
 module Desugarer =
   (* Convert a syntax tree as returned by the parser into core syntax *)
 (struct
-   type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
-
    (* Generation of fresh type variables *)
    let type_variable_counter = ref 0
    let fresh_type_variable : unit -> datatype =
@@ -1148,7 +1146,7 @@ module Desugarer =
            | `Spawn e -> desugar 
                (`FnAppl ((`Var "spawn", pos'), [`FunLit ([[]], e),  pos']), pos')
            | `SpawnWait e -> desugar 
-               (`FnAppl ((`Var "spawnWait", pos'), ([`FunLit ([[]], e),  pos'])), pos')
+               (`FnAppl ((`Var "spawnWait", pos'), [`FunLit ([[]], e),  pos']), pos')
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
            | `Section (`Project name) -> (let var = unique_name () in
@@ -1665,6 +1663,7 @@ module Desugarer =
     val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
     val desugar_definitions : (pposition -> Syntax.position) -> binding list -> Syntax.untyped_definition list
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val desugar_assumption : Sugartypes.assumption -> Types.assumption 
     val fresh_type_variable : unit -> Sugartypes.datatype
     val make_write_row : row -> (string * fieldconstraint list) list -> row
   end)

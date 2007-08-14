@@ -28,7 +28,7 @@ let rec is_guarded : TypeVarSet.t -> alias_environment -> int -> datatype -> boo
         | `Variant row -> isgr row
         | `Table (r, w) -> isg r && isg w
         | `Application (s, ts) ->
-            isg (instantiate_alias (lookup_alias (s, ts) alias_env) ts)
+            isg (Instantiate.alias (lookup_alias (s, ts) alias_env) ts)
             
 and is_guarded_row : TypeVarSet.t -> alias_environment -> int -> row -> bool =
   fun rec_vars alias_env var (field_env, row_var) ->
@@ -70,7 +70,7 @@ let rec is_negative : TypeVarSet.t -> alias_environment -> int -> datatype -> bo
         | `Variant row -> isnr row
         | `Table (r, w) -> isn r || isn w
         | `Application (s, ts) ->
-            isn (instantiate_alias (lookup_alias (s, ts) alias_env) ts)
+            isn (Instantiate.alias (lookup_alias (s, ts) alias_env) ts)
 and is_negative_row : TypeVarSet.t -> alias_environment -> int -> row -> bool =
   fun rec_vars alias_env var (field_env, row_var) ->
     is_negative_field_env rec_vars alias_env var field_env || is_negative_row_var rec_vars alias_env var row_var
@@ -117,7 +117,7 @@ and is_positive : TypeVarSet.t -> alias_environment -> int -> datatype -> bool =
         | `Variant row -> ispr row
         | `Table (r, w) -> isp r || isp w
         | `Application (s, ts) ->
-            isp (instantiate_alias (lookup_alias (s, ts) alias_env) ts)
+            isp (Instantiate.alias (lookup_alias (s, ts) alias_env) ts)
 and is_positive_row : TypeVarSet.t -> alias_environment -> int -> row -> bool =
   fun rec_vars alias_env var (field_env, row_var) ->
     is_positive_field_env rec_vars alias_env var field_env || is_positive_row_var rec_vars alias_env var row_var

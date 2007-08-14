@@ -44,6 +44,10 @@ type datatype =
 and row = (string * [`Present of datatype | `Absent]) list * row_var
 and row_var = [ `Closed | `Open of string | `Recursive of string * row ]
 
+type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
+
+type assumption = quantifier list * datatype
+
 type fieldconstraint = [ `Readonly ]
 
 module type PhraseArgs = sig

@@ -444,7 +444,6 @@ and row_skeleton = fun rec_vars row ->
   in
     field_env', row_var'
 
-
 (* check for undefined aliases *)
 exception UndefinedAlias of string
 
@@ -920,6 +919,20 @@ type type_alias_set = Utility.StringSet.t
 let type_aliases = type_aliases TypeVarSet.empty
 let row_type_aliases = row_type_aliases TypeVarSet.empty
 
+(** register an alias in a typing environment *)
+let register_alias  : string * int list * datatype -> alias_environment -> alias_environment =
+  fun (typename, vars, datatype) alias_env ->
+  let _ =
+    if Env.has alias_env typename then
+      failwith ("Duplicate typename: "^typename) in
+  let aliases = type_aliases datatype in
+  let free_aliases =
+    StringSet.filter (fun alias -> not (Env.has alias_env alias)) aliases
+  in
+    if not (StringSet.is_empty free_aliases) then
+      failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
+    else
+      Env.bind alias_env (typename, ((List.map (fun var -> `TypeVar var) vars), datatype))
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 

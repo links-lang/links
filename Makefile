@@ -83,7 +83,9 @@ SOURCES = $(OPC)                		\
           json.ml               		\
           callgraph.ml                          \
           instantiate.mli instantiate.ml        \
+          generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
+          unify.mli unify.ml                    \
           inference.mli inference.ml 		\
 typeSugar.ml \
           linksregex.ml                         \
