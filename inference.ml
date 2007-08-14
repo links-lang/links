@@ -1152,8 +1152,8 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
 *)
 and
     type_check_mutually (env, alias_env) (defns : (string * untyped_expression * Types.datatype option) list) =
-      let var_env = (fold_right (fun (name, _, t) env ->
-                                   Env.bind env (name,
+      let var_env = (fold_right (fun (name, _, t) env' ->
+                                   Env.bind env' (name,
                                      (match t with
                                         | Some t -> (generalise env t)
                                         | None -> ([], fresh_type_variable ()))))
@@ -1184,8 +1184,8 @@ and
       let defns = rev defns in
 
       let env = Env.extend env 
-        (List.fold_right (fun (name, value,_) env -> 
-		            Env.bind env (name, (generalise env (type_of_expression value)))) defns Env.empty)
+        (List.fold_right (fun (name, value,_) env' -> 
+		            Env.bind env' (name, (generalise env (type_of_expression value)))) defns Env.empty)
 	
       in
         (env, alias_env), defns     
