@@ -278,13 +278,6 @@ let rec sql_sort = function
          | _ -> None)
   | _ -> None
 
-let column_to_field col = 
-  {
-    SqlQuery.table = col.Query.table_alias;
-    SqlQuery.column = col.Query.name;
-    SqlQuery.ty = col.Query.col_type
-  }
-
 let sql_aslist : RewriteSyntax.rewriter =
   function 
     | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
@@ -295,10 +288,9 @@ let sql_aslist : RewriteSyntax.rewriter =
         in
         let table_alias = gensym ~prefix:"Table_" () in
 	let rowFieldToTableCol colName = function
-	  | `Present fieldType -> {Query.table_alias = table_alias; 
-                                   Query.name = colName; 
-				   Query.col_alias = colName; 
-                                   Query.col_type = fieldType}
+	  | `Present fieldType -> (`F{SqlQuery.table = table_alias;
+                                      SqlQuery.column = colName;
+                                      SqlQuery.ty = fieldType}, colName)
 	  | _ -> failwith "Internal Error: missing field in row"
 	in
 	let fields, _ = th_row in
@@ -307,8 +299,7 @@ let sql_aslist : RewriteSyntax.rewriter =
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
           (* With the new SQL compiler, this no longer serves a purpose. *)
-	let select_all = {SqlQuery.cols = List.map
-            (fun x -> (`F (column_to_field x), x.Query.col_alias)) columns;
+	let select_all = {SqlQuery.cols = columns;
 			  SqlQuery.tabs = [`TableVar(th_var, table_alias)];
 			  SqlQuery.cond = [`True];
 			  SqlQuery.most = SqlQuery.Inf;

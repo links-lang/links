@@ -4,7 +4,6 @@ open List
 
 open Utility
 open Result
-open Query
 open Syntax
 
 open Unix
