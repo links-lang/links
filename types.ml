@@ -554,6 +554,27 @@ and is_mailbox_free_row alias_env = fun rec_vars row ->
 let is_mailbox_free alias_env = is_mailbox_free alias_env TypeVarSet.empty
 let is_mailbox_free_row alias_env = is_mailbox_free_row alias_env TypeVarSet.empty
 
+(* precondition: the row is unwrapped *)
+let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
+  match Unionfind.find rowvar with
+    | `Closed ->
+        let n = StringMap.size field_env in
+        let b =
+          n = 0
+          ||
+          (List.for_all
+             (fun i ->
+                let name = string_of_int i in
+                  FieldEnv.mem name field_env
+                  && (match FieldEnv.find (string_of_int i) field_env with
+                        | `Present _ -> true
+                        | `Absent -> false))
+             (fromTo 1 n))
+        in
+          (* 0/1-tuples are displayed as records *)
+          b && (allow_onetuples || n <> 1)
+    | _ -> false
+
 
 (* whether to display mailbox annotations on arrow types
    [NOTE]
@@ -585,28 +606,6 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
       end in
 
     let unwrap = fst -<- unwrap_row in
-
-    (* precondition: the row is unwrapped *)
-    let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
-      match Unionfind.find rowvar with
-        | `Closed ->
-            let n = StringMap.size field_env in
-            let b =
-              n = 0
-              ||
-              (List.for_all
-                 (fun i ->
-                    let name = string_of_int i in
-                      FieldEnv.mem name field_env
-                      && (match FieldEnv.find (string_of_int i) field_env with
-                            | `Present _ -> true
-                            | `Absent -> false))
-                 (fromTo 1 n))
-            in
-              (* 0/1-tuples are displayed as records *)
-              b && (allow_onetuples || n <> 1)
-        | _ -> false
-    in
     (* precondition: the row is unwrapped *)
     let string_of_tuple (field_env, row_var) =
       let tuple_env =

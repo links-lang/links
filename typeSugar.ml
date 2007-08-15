@@ -199,6 +199,128 @@ let type_binary_op env = function
                         See the typing rules given in the note for r975. *)
                      datatype "(*(|a) -> b) -> ((|a)) -> b"
 
+(** close a pattern type relative to a list of patterns
+
+   If there are no _ or variable patterns at a variant type, then that
+   variant will be closed.
+*)
+let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.datatype = fun pats t ->
+  let cpt = close_pattern_type in
+    match t with
+      | `Record row when Types.is_tuple row->
+          let fields, row_var = fst (Types.unwrap_row row) in
+          let rec unwrap_at name p =
+            match fst p with
+              | `Variable _ | `Any | `Constant _ -> p
+              | `As (_, p) | `HasType (p, _) -> unwrap_at name p
+              | `Tuple ps ->
+                  unwrap_at name (List.nth ps ((int_of_string name)-1))
+              | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ -> assert false in
+          let fields =
+            StringMap.fold
+              (fun name ->
+                 function
+                   | `Present t ->
+                       let pats = List.map (unwrap_at name) pats in
+                         StringMap.add name (`Present (cpt pats t))
+                   | `Absent ->
+                       assert false) fields StringMap.empty in
+            `Record (fields, row_var)
+      | `Record row ->
+          let fields, row_var = fst (Types.unwrap_row row) in
+          let rec unwrap_at name p =
+            match fst p with
+              | `Variable _ | `Any | `Constant _ -> p
+              | `As (_, p) | `HasType (p, _) -> unwrap_at name p
+              | `Record (ps, default) ->
+                  if List.mem_assoc name ps then
+                    unwrap_at name (List.assoc name ps)
+                  else
+                    begin
+                      match default with
+                        | None -> assert false
+                        | Some p -> unwrap_at name p
+                    end
+              | `Nil | `Cons _ | `List _ | `Tuple _ | `Variant _ -> assert false in
+          let fields =
+            StringMap.fold
+              (fun name ->
+                 function
+                   | `Present t ->
+                       let pats = List.map (unwrap_at name) pats in
+                         StringMap.add name (`Present (cpt pats t))
+                   |  `Absent ->
+                        assert false) fields StringMap.empty in
+            `Record (fields, row_var)
+      | `Variant row ->
+          let fields, row_var = fst (Types.unwrap_row row) in
+          let rec unwrap_at : string -> Typed.ppattern -> Typed.ppattern = fun name p ->
+            match fst p with
+              | `Variable _ | `Any | `Constant _ -> p
+              | `As (_, p) | `HasType (p, _) -> unwrap_at name p
+              | `Variant (name', p) when name=name' ->
+                  opt_app
+                    (unwrap_at name)
+                    (`Any, ((Lexing.dummy_pos, Lexing.dummy_pos),(Env.empty, Types.unit_type)))
+                    p
+              | `Variant _ -> p
+              | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ -> assert false in
+          let rec are_open : Typed.ppattern list -> bool =
+            function
+              | [] -> false
+              | ((`Variable _ | `Any), _) :: _ -> true
+              | ((`As (_, p) | `HasType (p, _)), _) :: ps -> are_open (p :: ps)
+              | ((`Constant _ | `Variant _), _) :: ps -> are_open ps
+              | ((`Nil | `Cons _ | `List _ | `Tuple _ | `Record _), _) :: _ -> assert false in
+          let fields, are_open =
+            StringMap.fold
+              (fun name field_spec (env, p) ->
+                 match field_spec with
+                   | `Present t ->
+                       let p = (p || are_open pats) in
+                       let pats = List.map (unwrap_at name) pats in
+                       let t = cpt pats t in
+                         (StringMap.add name (`Present t)) env, p
+                   | `Absent ->
+                       assert false) fields (StringMap.empty, false)
+          in
+            if are_open then
+              begin
+                let row = (fields, row_var) in
+                  assert (not (Types.is_closed_row row));
+                  `Variant row
+              end
+            else
+              begin
+                match Unionfind.find row_var with
+                  | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed)
+                  | `Recursive _ | `Body _ | `Closed -> assert false
+              end
+      | `Application ("List", [t]) ->
+          let rec unwrap p =
+            match fst p with
+              | `Variable _ | `Any -> [p]
+              | `Constant _ | `Nil -> []
+              | `Cons (p1, p2) -> p1 :: unwrap p2
+              | `List ps -> ps
+              | `As (_, p) | `HasType (p, _) -> unwrap p
+              | `Variant _ | `Record _ | `Tuple _ -> assert false in
+          let pats = concat_map unwrap pats in
+            `Application ("List", [cpt pats t])
+      | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Body t -> cpt pats t
+              | `Flexible _ | `Rigid _ -> t
+              | `Recursive _ -> assert false
+          end
+      | `Not_typed
+      | `Primitive _
+      | `Function _
+      | `Table _
+       (* TODO: expand applications? *)
+      | `Application _ -> t
+
 let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppattern =
   let make_singleton_row =
     match closed with
@@ -491,17 +613,20 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
               unify (return_type, typ p);
               `Spawn p, return_type
         | `Receive binders ->
-            let mbtype = mailbox_type env 
+            let mbtype = mailbox_type env
+            and pt = Types.fresh_type_variable ()
             and rtype = Types.fresh_type_variable () in
-            let binders = 
+            let binders, pats = 
               List.fold_right
-                (fun (pat, cont) binders ->
+                (fun (pat, body) (binders, pats) ->
                    let pat = tpo pat in
-                   let cont = type_check (pattern_env pat ++ typing_env) cont in
-                   let _ = unify (pattern_typ pat, mbtype)
-                   and _ = unify (typ cont, rtype) in
-                     (pat,cont)::binders)
-                binders [] in
+                   let body = type_check (pattern_env pat ++ typing_env) body in
+                   let _ = unify (pattern_typ pat, pt)
+                   and _ = unify (typ body, rtype) in
+                     (pat, body)::binders, pat :: pats)
+                binders ([], []) in
+            let pt = close_pattern_type pats pt in
+            let _ = unify (pt, mbtype) in
               `Receive binders, rtype
 
         (* applications of various sorts *)
@@ -653,20 +778,20 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
               `TypeAnnotation (e, t), t'
         | `Switch (e, binders) ->
             let e = tc e in
-            let et = typ e
-            and t = Types.fresh_type_variable () in
-            let binders = 
+            let pt = Types.fresh_type_variable () in
+            let bt = Types.fresh_type_variable () in
+            let binders, pats = 
               List.fold_right
-                (fun (pat, cont) binders ->
+                (fun (pat, body) (binders, pats) ->
                    let pat = tpo pat in
-                   let cont = type_check (pattern_env pat ++ typing_env) cont in
-                   let _ = unify (pattern_typ pat, et) 
-                   and _ = unify (typ cont, t) in
-                     (pat,cont)::binders)
-                binders [] in
-              `Switch (e, binders), t
-
-
+                   let body = type_check (pattern_env pat ++ typing_env) body in
+                   let _ = unify (pattern_typ pat, pt) in
+                   let _ = unify (typ body, bt) in
+                     (pat, body)::binders, pat :: pats)
+                binders ([], []) in
+            let pt = close_pattern_type pats pt in
+            let _ = unify (pt, typ e) in
+              `Switch (e, binders), bt
     in e, (pos, t)
   in type_check
 and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typed.binding * Types.typing_environment =

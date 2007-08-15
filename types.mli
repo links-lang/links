@@ -117,6 +117,8 @@ val make_singleton_open_row : (string * field_spec) -> row
 val is_closed_row : row -> bool
 val is_absent_from_row : string -> row -> bool
 
+val is_tuple : ?allow_onetuples:bool -> row -> bool
+
 (* row_var retrieval *)
 val get_row_var : row -> int option
 
