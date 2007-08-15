@@ -22,5 +22,8 @@ let file  : (TypeSugar.Typed.binding list * TypeSugar.Typed.phrase option) t =
       TypeSugar.file lookup_pos Library.typing_env parsed
 
 let show_expr_type s = 
-  let (_,Some (_,(_,p))) = file s in
-  print_endline (Types.string_of_datatype p);;
+    try
+      let (_,Some (_,(_,p))) = file s in
+        print_endline (Types.string_of_datatype p)
+    with Unify.Failure e ->
+      prerr_endline ("Unify failure : " ^ e)

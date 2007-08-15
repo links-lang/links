@@ -270,6 +270,26 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
   in
     type_pattern
 
+let rec extract_row : Types.typing_environment -> Types.datatype -> Types.row
+  = fun ((env, alias_env) as typing_env) t ->
+  match t with
+    | `Record row -> row
+    | `Variant row -> row
+    | `MetaTypeVar point ->
+        begin
+          match Unionfind.find point with
+            | `Body t -> extract_row typing_env t
+            | _ -> failwith
+                ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
+                 ^ Types.string_of_datatype t)
+        end
+    | `Application (s, ts) ->
+        let vars, alias = Types.lookup_alias (s, ts) alias_env in
+          extract_row typing_env (Instantiate.alias (vars, alias) ts)
+    | _ -> failwith
+        ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
+         ^ Types.string_of_datatype t)
+
 let rec extract_formlet_bindings (expr, pos) =
   let pattern_env  (_,(_,(e,_))) = e in
     match expr with
@@ -281,7 +301,7 @@ let rec extract_formlet_bindings (expr, pos) =
             children Env.empty
       | _ -> Env.empty
           
-let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
+let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Types.typing_environment -> Untyped.phrase -> Typed.phrase = 
   let rec type_check ((env, alias_env) as typing_env) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
@@ -291,7 +311,11 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
     and pattern_env (_, (_,(e,_))) = e
     and tpc = type_pattern `Closed lookup_pos alias_env
     and tpo = type_pattern `Open lookup_pos alias_env
-    and tc = type_check typing_env in
+    and tc = type_check typing_env 
+    and expr_string_untyped (_,pos : Sugartypes.phrase) : string =
+      let (_,_,e) = lookup_pos pos in e 
+    and expr_string_typed (_,(pos,_) : Typed.phrase) : string =
+      let (_,_,e) = lookup_pos pos in e in
     let e, t =
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
@@ -304,19 +328,46 @@ let rec type_check lookup_pos : Types.typing_environment -> Untyped.phrase -> Ty
             let ps = List.map (type_check typing_env) ps in
               `TupleLit ps, Types.make_tuple_type (List.map typ ps)
         | `RecordLit (fields, rest) ->
-            let rest = opt_map (type_check typing_env) rest in
-            let row = Types.make_empty_open_row () in
-            let _ = match rest with
-              | None -> ()
-              | Some r -> unify (`Record row, typ r) in
-            let fields = alistmap (type_check typing_env) fields in
-            let rtype =
-              `Record (List.fold_right
-                         (fun (lab, rhs) row ->
-                            Types.row_with (lab, `Present (typ rhs)) row)
-                         fields row) in
-                `RecordLit (fields, rest), rtype
-                         
+            let fields, field_env, absent_field_env = 
+              List.fold_right
+                (fun (label, e) (fields, field_env, absent_field_env) ->
+                   let e = tc e in
+                   let t = typ e in
+                     ((label, e)::fields,
+                      StringMap.add label (`Present t) field_env,
+                      StringMap.add label `Absent absent_field_env))
+                fields ([], StringMap.empty, StringMap.empty) in
+              begin match rest with
+                | None ->
+                    `RecordLit (fields, None), `Record (field_env, Unionfind.fresh `Closed)
+                | Some r ->
+                    let r = tc r in
+                    let rtype = typ r in
+                    (* make sure rtype is a record type! *)
+                    let _ = unify (rtype, `Record (absent_field_env, Types.fresh_row_variable ())) in
+                    let (rfield_env, rrow_var), _ = Types.unwrap_row (extract_row typing_env rtype) in 
+                    (* attempt to extend field_env with the labels from rfield_env
+                       i.e. all the labels belonging to the record r
+                    *)
+                    let field_env' =
+                      StringMap.fold (fun label t field_env' ->
+                                        match t with
+                                          | `Absent ->
+                                              if StringMap.mem label field_env then
+                                                field_env'
+                                              else
+                                                StringMap.add label `Absent field_env'
+                                          | `Present _ ->
+                                              if StringMap.mem label field_env then
+                                                failwith ("Could not extend record "^ expr_string_typed  r^" (of type "^
+                                                            Types.string_of_datatype rtype^") with the label "^
+                                                            label^
+                                                            " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed))^
+                                                            ") because the labels overlap")
+                                              else
+                                                StringMap.add label t field_env') rfield_env field_env in
+                      `RecordLit (fields, Some r), `Record (field_env', rrow_var)
+              end
         | `ListLit es ->
             begin match List.map (type_check typing_env) es with
               | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
