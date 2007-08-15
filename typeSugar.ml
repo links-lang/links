@@ -324,6 +324,9 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
 
         (* literals *)
         | `Constant c as c' -> c', constant_type c
+        | `TupleLit [p] -> 
+            let p = tc p in
+              `TupleLit [p], typ p
         | `TupleLit ps ->
             let ps = List.map (type_check typing_env) ps in
               `TupleLit ps, Types.make_tuple_type (List.map typ ps)
@@ -605,7 +608,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
                 | [] -> [], typing_env
                 | b :: bs ->
                     let b, typing_env' = type_binding lookup_pos typing_env b in
-                    let bs, typing_env = type_bindings (Types.concat_typing_environment typing_env' typing_env) bs in
+                    let bs, typing_env = type_bindings (Types.concat_typing_environment typing_env typing_env') bs in
                       b :: bs, typing_env in
             let bindings, typing_env = type_bindings typing_env bindings in
             let e = type_check typing_env e in
