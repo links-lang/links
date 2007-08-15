@@ -182,7 +182,18 @@ let type_binary_op env = function
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool")
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
-  | `Cons         -> datatype "(a, [a]) -> [a]"
+  | `Cons         -> Utils.instantiate env "Cons"
+  | `Name "++"    -> Utils.instantiate env "Concat"
+  | `Name ">"
+  | `Name ">="
+  | `Name "=="
+  | `Name "<"
+  | `Name "<="
+  | `Name "<>"    ->
+      let a = Types.fresh_type_variable ()
+      and mb = Types.fresh_type_variable () in
+        `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool);
+  | `Name "!"     -> Utils.instantiate env "send"
   | `Name n       -> Utils.instantiate env n
   | `App          -> (* Probably doesn't parse at present.  
                         See the typing rules given in the note for r975. *)
