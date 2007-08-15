@@ -215,7 +215,7 @@ let examples : (string * string) list = [
 ]
 let get = flip List.assoc examples
 
-let compile_largest : Syntax.expression -> (Syntax.expression * expr) list = 
+let compile_largest : Syntax.expression -> (Syntax.expression * SqlQuery.expr) list = 
   let tryone default expr = 
     match Compile.compile expr with
       | Some output -> [(expr, output)]

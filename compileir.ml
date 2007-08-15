@@ -102,7 +102,7 @@ sig
 (* concat? *)
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
   val database : value sem -> tail_computation sem
-  val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
+  val table_query : (value sem) StringMap.t * SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem

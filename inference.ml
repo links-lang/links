@@ -1088,11 +1088,12 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   | TableQuery (ths, query, `U pos) ->
       let row =
 	(List.fold_right
-	   (fun col env -> 
-              match col with 
-                | `Column col -> StringMap.add col.Query.name (`Present col.Query.col_type) env
-                | `Expr _ -> env)
-	   query.Query.result_cols StringMap.empty, Unionfind.fresh `Closed) in
+	   (fun (expr, alias) env -> 
+              match expr with 
+                | `F field -> 
+                    StringMap.add alias (`Present field.SqlQuery.ty) env
+                | _ -> assert(false) (* can't handle other kinds of expressions *))
+	   query.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
       let datatype =  `Application ("List", [`Record row]) in
       let rrow = make_empty_open_row () in
       let wrow = make_empty_open_row () in

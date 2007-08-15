@@ -108,7 +108,7 @@ let inline (Program (defs, body) as program) =
       fn_candidates
   in program''
 
-(* Minimize the amount of recursion expressed in the syntax tree *)
+(** Minimize the amount of recursion expressed in the syntax tree *)
 let reduce_recursion : RewriteSyntax.rewriter = function
   | Rec (bindings, cont, data) ->
       let untyped_bindings = List.map (fun (name, expr, _) -> name, expr) bindings in
@@ -263,17 +263,27 @@ let read_proj = function
       Some(record, field)
   | _ -> None
 
+let add_sorting query col = 
+  {query with SqlQuery.sort = col :: query.SqlQuery.sort}
+
 let rec sql_sort = function
-  | SortBy(TableQuery(th, query, data1), 
+  | SortBy(TableQuery(th, query, data1),
            Abstr([loopVar], sortByExpr, _), _) ->
       (match read_proj sortByExpr with
            Some (Variable(sortByRecVar, _), sortByFld)
              when sortByRecVar = loopVar
-               -> Some(TableQuery(th, Query.add_sorting query 
-                               (`Asc(Query.owning_table sortByFld query,
-				     sortByFld)), data1))
+               -> Some(TableQuery(th, add_sorting query
+                                    (`Asc(SqlQuery.owning_table sortByFld query,
+				          sortByFld)), data1))
          | _ -> None)
   | _ -> None
+
+let column_to_field col = 
+  {
+    SqlQuery.table = col.Query.table_alias;
+    SqlQuery.column = col.Query.name;
+    SqlQuery.ty = col.Query.col_type
+  }
 
 let sql_aslist : RewriteSyntax.rewriter =
   function 
@@ -297,13 +307,13 @@ let sql_aslist : RewriteSyntax.rewriter =
           | Variable(var, _) -> var
           | _ -> gensym ~prefix:"_t" () in
           (* With the new SQL compiler, this no longer serves a purpose. *)
-	let select_all = {Query.result_cols = 
-                            List.map (fun x -> `Column x) columns;
-			  Query.tables = [(`TableVariable th_var, table_alias)];
-			  Query.condition = Query.Boolean true;
-			  Query.sortings = [];
-			  Query.max_rows = None;
-			  Query.offset = Query.Integer (Num.Int 0)} in
+	let select_all = {SqlQuery.cols = List.map
+            (fun x -> (`F (column_to_field x), x.Query.col_alias)) columns;
+			  SqlQuery.tabs = [`TableVar(th_var, table_alias)];
+			  SqlQuery.cond = [`True];
+			  SqlQuery.most = SqlQuery.Inf;
+			  SqlQuery.from = Num.Int 0;
+                          SqlQuery.sort = []} in
         let th_list_type = `Application ("List", [`Record(th_row)]) in
           (* With the new SQL compiler, this TableQuery is needed only
              to hold the variable and the generated alias. *)
@@ -413,7 +423,8 @@ let rewriters env = [
   RewriteSyntax.topdown remove_trivial_extensions;
 ]
 
-let run_optimisers : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
+let run_optimisers
+    : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise' env expr =

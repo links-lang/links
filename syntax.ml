@@ -35,9 +35,6 @@ type label = string
     deriving (Eq, Typeable, Show, Pickle, Shelve)
     (* Q: Can I write my own show for these? I want to base64 it *)
 
-type comparison = [`Less | `LessEq | `Equal | `NotEq]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
-
 let string_of_comparison = function
   | `Less   -> "<"
   | `LessEq -> "<="
@@ -62,7 +59,7 @@ type 'data expression' =
   | Apply of ('data expression' * 'data expression' list * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
-  | Comparison of ('data expression' * comparison * 'data expression' * 'data)
+  | Comparison of ('data expression' * Syntaxutils.comparison * 'data expression' * 'data)
   | Abstr of (string list * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * 'data expression' * Types.datatype option) list 
@@ -87,10 +84,12 @@ type 'data expression' =
       (* For(body, var, src, _data) *)
   | Database of ('data expression' * 'data)
   | TableQuery of
-      ((* the tables: *) (string (* alias *) 
-                          * 'data expression' (* variable whose value is the corresponding table *)) list *
-       (* the query: *) Query.query *
-        'data)
+      ((* the tables: *)
+        (string * (* alias *) 
+         'data expression' (* variable whose value is the corresponding table *)) list *
+          (* the query: *) 
+          SqlQuery.sqlQuery *
+          'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table: *) 'data expression'
       * (* the read / write (record) types of a table row: *) 
@@ -251,7 +250,7 @@ let rec show t : 'a expression' -> string = function
       "["^Types.string_of_datatype readtype^";"^Types.string_of_datatype writetype^"])" ^ t data
   | TableQuery (ths, query, data) ->
       "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
-        "["^Sql.string_of_query query^"])" ^ t data
+        "["^SqlQuery.Show_sqlQuery.show query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
@@ -446,7 +445,7 @@ let freevars (expression : 'a expression') : StringSet.t =
       | TableQuery (ts, query, _) ->
           S.union
             (S.union_all (List.map (fun (_, e) -> aux e) ts))
-            (S.from_list (Query.freevars query))
+            (SqlQuery.freevars_sqlQuery query)
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
@@ -705,7 +704,7 @@ let rename_fast name replacement expr =
   let replacer name replacement : RewriteSyntax.rewriter = function
     | Variable (n, d) when n = name -> Some (Variable(replacement, d))
     | TableQuery(th, q, data) -> 
-        let q = Query.query_replace_var name (Query.Variable replacement) q in
+        let q = SqlQuery.subst_sqlQuery name (`V replacement) q in
           Some(TableQuery(th, q, data)) 
     | _ -> None
   in

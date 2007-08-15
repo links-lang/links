@@ -1,6 +1,7 @@
 (*pp deriving *)
 type location = [ `Client | `Native | `Server | `Unknown ] deriving (Show)
-type comparison = [`Less | `LessEq | `Equal | `NotEq] deriving (Typeable, Show, Pickle, Eq, Shelve)
+(* type comparison = [`Less | `LessEq | `Equal | `NotEq]
+     deriving (Typeable, Show, Pickle, Eq, Shelve) *)
 type label deriving (Typeable, Show, Pickle)
 
 type constant =
@@ -29,7 +30,7 @@ type 'a expression' =
   | App of ('a expression' * 'a expression' * 'a)
   | Apply of ('a expression' * 'a expression' list * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)
-  | Comparison of ('a expression' * comparison * 'a expression' * 'a)
+  | Comparison of ('a expression' * Syntaxutils.comparison * 'a expression' * 'a)
   | Abstr of (string list * 'a expression' * 'a)
   | Let of (string * 'a expression' * 'a expression' * 'a)
   | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
@@ -47,7 +48,7 @@ type 'a expression' =
   | Concat of ('a expression' * 'a expression' * 'a)
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
-  | TableQuery of ((string * 'a expression') list * Query.query * 'a)
+  | TableQuery of ((string * 'a expression') list * SqlQuery.sqlQuery * 'a)
   | TableHandle of ('a expression' * 'a expression' * 
                       (Types.datatype * Types.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)

@@ -53,9 +53,9 @@ type unop = | MkColl
                    Syntax.expression option)
             | Erase of string
             | Project of string
-            | QueryOp of (Query.query * (* the table aliases: *) string list)
+            | QueryOp of (SqlQuery.sqlQuery * (* the table aliases: *) string list)
 type binop = 
-    [ Syntax.comparison
+    [ Syntaxutils.comparison
     | `Union
     | `App
     | `RecExt of string

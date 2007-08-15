@@ -55,7 +55,7 @@ and special =
   [ `App of value * value
   | `Wrong
   | `Database of (value)
-  | `TableQuery of (value name_map * Query.query)
+  | `TableQuery of (value name_map * SqlQuery.sqlQuery)
   | `TableHandle of (value * value * (Types.datatype * Types.datatype))
   | `SortBy of (value * value)
   | `CallCC of (value) ]

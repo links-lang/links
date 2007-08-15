@@ -56,47 +56,62 @@ let untuple : result -> result list =
 
 (** Substitutes values for the variables in a query,
     and performs interpolation in LIKE expressions. *)
-let rec normalise_query (globals:environment) (env:environment) (db:database) (qry:query) : query =
-  let rec normalise_like_expression (l : Query.like_expr): Query.expression = 
-      Text (Sql_transform.like_as_string (env @ globals) l)
+let rec normalise_query (globals:environment) (env:environment) (db:database) 
+    (qry:SqlQuery.sqlQuery) : SqlQuery.sqlQuery =
+
+  let rec like_as_string env le = 
+    let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+    let rec like_as_string' env =
+      function
+        | `Percent -> "%"
+        | `Str s -> quote s
+        | `Var x -> quote (Result.unbox_string (assoc x env))
+        | `Seq rs -> mapstrcat "" (like_as_string' env) rs 
+    in like_as_string' env le 
   in
-  let rec normalise_expression : Query.expression -> Query.expression = function
-      | Query.Variable name ->
-          (try
-             match lookup globals env name with
-               | `Bool value -> Query.Boolean value
-               | `Int value -> Query.Integer value
-               | `Float value -> Query.Float value
-               | `List (`Char _::_) as c  
-                 -> Query.Text (db # escape_string (charlist_as_string c))
-               | `List ([]) -> Query.Text ""
-               | r -> failwith("Internal error: variable " ^ name ^ 
-                                 " in query "^ Sql.string_of_query qry ^ 
-                                 " had unexpected type at runtime: " ^ 
-                                 string_of_result r)
-           with Not_found-> failwith("Internal error: undefined query variable '"
-                                     ^ name ^ "'"))
-      | Query.Binary_op (symbol, left, right) ->
-          Binary_op (symbol, normalise_expression left, normalise_expression right)
-      | Query.Unary_op (symbol, expr) ->
-          Unary_op (symbol, normalise_expression expr)
-      | Query.LikeExpr (like_expr) -> normalise_like_expression like_expr
-      | Query.Query qry ->
-          Query {qry with condition = normalise_expression qry.condition}
-      | expr -> expr
+  let rec normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
+    `Str (like_as_string (env @ globals) l)
   in
-  let normalise_tables  = map (function 
-                                 | `TableName t, alias -> `TableName t, alias
-                                 | `TableVariable var, alias ->
-                                     (match lookup globals env var with
-                                         `Table(_, tableName, _) -> `TableName tableName, alias
-                                       | _ -> failwith "Internal Error: table source was not a table!")
-                              ) 
+  let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
+    | `V name -> begin
+        try
+          match lookup globals env name with
+            | `Bool true -> `True
+            | `Bool false -> `False
+            | `Int value -> `N value
+(*             | `Float value -> `Float value *)
+            | `List (`Char _::_) as c  
+              -> `Str (db # escape_string (charlist_as_string c))
+            | `List ([]) -> `Str ""
+            | r -> failwith("Internal error: variable " ^ name ^ 
+                              " in query "^ SqlQuery.string_of_query qry ^ 
+                              " had unexpected type at runtime: " ^ 
+                              string_of_result r)
+        with Not_found-> failwith("Internal error: undefined query variable '"
+                                  ^ name ^ "'")
+      end
+    | `Op (symbol, left, right) ->
+        `Op(symbol, normalise_expression left, normalise_expression right)
+    | `Not expr ->
+        `Not(normalise_expression expr)
+    | `Like(lhs, regex) -> `Like(normalise_expression lhs,
+                                 normalise_like_expression regex)
+    | expr -> expr
+  in
+  let normalise_tables =
+    map (function 
+           | `TableVar(var, alias) ->
+               (match lookup globals env var with
+                    `Table(_, tableName, _) -> `TableName(tableName, alias)
+                  | _ -> failwith "Internal Error: table source was not a table!")
+           | `TableName(name, alias) -> `TableName(name, alias)
+        ) 
   in {qry with
-        tables = normalise_tables qry.tables;
-        condition = normalise_expression qry.condition;
-        offset = normalise_expression qry.offset;
-        max_rows = opt_map normalise_expression qry.max_rows}
+        SqlQuery.tabs = normalise_tables qry.SqlQuery.tabs;
+        SqlQuery.cond = map normalise_expression qry.SqlQuery.cond;
+        (* TBD: allow variables as the from/most values, normalise them here. *)
+        SqlQuery.from = qry.SqlQuery.from;
+        SqlQuery.most = qry.SqlQuery.most}
 
 (** [row_field_type field row]: what type has [field] in [row]? 
     TBD: Factor this out.
@@ -110,23 +125,24 @@ let row_field_type field : Types.row -> Types.datatype =
       | `Present t -> t
       | `Absent -> raise (NoSuchField field)
 
-let query_result_types (query : query) (table_defs : (string * Types.row) list)
+let query_result_types (query : SqlQuery.sqlQuery) (table_defs : (string * Types.row) list)
     : (string * Types.datatype) list =
   try 
     let col_type table_alias col_name =
       row_field_type col_name (assoc table_alias table_defs) 
     in
       concat_map (function
-                    | `Column col -> [col.col_alias, col_type col.table_alias col.name]
-                    | `Expr(expr, _alias) -> failwith("Internal error: no type info for sql expression " 
-                                                      ^ Sql.string_of_expression expr)) query.Query.result_cols
+                      (`F field, alias) -> 
+                        [alias, field.SqlQuery.ty (*col_type field.SqlQuery.table field.SqlQuery.column*)]
+                    | (expr, _alias) -> failwith("Internal error: no type info for sql expression " 
+                                                 ^ SqlQuery.string_of_expression expr)) query.SqlQuery.cols
   with NoSuchField field ->
     failwith ("Field " ^ field ^ " from " ^ 
-                Sql.string_of_query query ^
+                SqlQuery.string_of_query query ^
                 " was not found in tables " ^ 
                 mapstrcat "," fst table_defs ^ ".")
 
-let do_query globals locals query table_aliases tables = 
+let do_query globals locals (query : SqlQuery.sqlQuery) table_aliases tables = 
   let (dbs, table_defs) = 
     split(map(function `Table((db, params), _table_name, row) -> (db, row)
                 | _ -> assert false) 
@@ -142,7 +158,7 @@ let do_query globals locals query table_aliases tables =
       (* TBD: factor this stuff out into a module that processes
          queries *)
     let result_types = query_result_types query table_defs in
-    let query_string = Sql.string_of_query (normalise_query globals locals db query) in
+    let query_string = SqlQuery.string_of_query (normalise_query globals locals db query) in
 
       prerr_endline("RUNNING QUERY:\n" ^ query_string);
       let t = Unix.gettimeofday() in

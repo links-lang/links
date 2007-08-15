@@ -62,15 +62,15 @@ SOURCES = $(OPC)                		\
           performance.mli performance.ml	\
           graph.ml                              \
           types.mli types.ml 	                \
-          query.mli query.ml          		\
-          sql.mli sql.ml               		\
+          syntaxutils.ml                        \
+          sqlQuery.ml               		\
           syntax.mli syntax.ml        		\
+          sqlcompile.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
           result.mli result.ml         		\
           errors.mli errors.ml                  \
-          sql_transform.mli sql_transform.ml	\
           parser.mly            		\
           $(DB_CODE)            		\
           database.mli database.ml 		\
@@ -85,7 +85,6 @@ SOURCES = $(OPC)                		\
           inference.mli inference.ml 		\
           linksregex.ml                         \
           library.mli library.ml 		\
-          sqlcompile.ml                         \
           optimiser.mli optimiser.ml    	\
           js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
