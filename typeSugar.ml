@@ -253,7 +253,10 @@ let type_pattern closed lookup_pos alias_env : Untyped.ppattern -> Typed.ppatter
               | None -> (Types.make_empty_closed_row (),
                          Env.empty)
               | Some r -> 
-                  let row = Types.make_empty_open_row () in
+                  let row = 
+                    List.fold_right
+                      (fun (label, _) -> Types.row_with (label, `Absent))
+                      ps (Types.make_empty_open_row ()) in
                   let _ = unify (`Record row, typ r) in
                     row, env r in
             let rtype = 
