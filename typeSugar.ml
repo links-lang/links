@@ -214,7 +214,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | `Variable _ | `Any | `Constant _ -> p
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Tuple ps ->
-                  unwrap_at name (List.nth ps ((int_of_string name)-1))
+                  List.nth ps ((int_of_string name)-1)
               | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ -> assert false in
           let fields =
             StringMap.fold
@@ -234,7 +234,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Record (ps, default) ->
                   if List.mem_assoc name ps then
-                    unwrap_at name (List.assoc name ps)
+                    List.assoc name ps
                   else
                     begin
                       match default with
@@ -259,8 +259,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | `Variable _ | `Any | `Constant _ -> p
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Variant (name', p) when name=name' ->
-                  opt_app
-                    (unwrap_at name)
+                  fromOption
                     (`Any, ((Lexing.dummy_pos, Lexing.dummy_pos),(Env.empty, Types.unit_type)))
                     p
               | `Variant _ -> p
