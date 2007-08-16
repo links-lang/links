@@ -62,14 +62,17 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
     let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     let rec like_as_string' env =
       function
+        | `Var x -> quote (Result.unbox_string (assoc x env))
         | `Percent -> "%"
         | `Str s -> quote s
-        | `Var x -> quote (Result.unbox_string (assoc x env))
         | `Seq rs -> mapstrcat "" (like_as_string' env) rs 
     in like_as_string' env le 
   in
   let rec normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
-    `Str (like_as_string (env @ globals) l)
+    `Str (like_as_string (env @ globals) l) 
+      (* FIXME: this should not convert the like expr to a string;
+         it should just substitute for any variables. like_as_string
+         would only get called by SqlQuery.string_of_expression.*)
   in
   let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
     | `V name -> begin
@@ -93,8 +96,9 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
         `Op(symbol, normalise_expression left, normalise_expression right)
     | `Not expr ->
         `Not(normalise_expression expr)
-    | `Like(lhs, regex) -> `Like(normalise_expression lhs,
-                                 normalise_like_expression regex)
+    | `Like(lhs, regex) -> Debug.print("normalising like");
+        `Like(normalise_expression lhs,
+              normalise_like_expression regex)
     | expr -> expr
   in
   let normalise_tables =

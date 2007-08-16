@@ -53,8 +53,9 @@ type sqlexpr = [
     deriving (Show, Pickle)
 type ninf = I of num | Inf
     deriving (Show, Pickle)
-type tabSpec = [ `TableVar of (string * name)
-| `TableName of (string * string) ] 
+type tabSpec = [
+  `TableVar of (string (*real name*) * string (* alias*) )
+| `TableName of (string (*variable*) * string (* alias*) ) ] 
     deriving (Show, Pickle)
 type sqlQuery = {
   cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
@@ -67,11 +68,23 @@ type sqlQuery = {
 }
     deriving (Show, Pickle)
 
-let rec freevars_sqlExpr q = assert false
+let rec freevars_like_expr = function
+    `Var x -> StringSet.singleton x
+  | `Seq xs -> StringSet.union_all (map freevars_like_expr xs)
+  | _ -> StringSet.empty
+
+let rec freevars_sqlexpr : sqlexpr -> StringSet.t = function
+| `Rec fields -> StringSet.union_all(map (freevars_sqlexpr -<- snd) fields)
+| `Op(op, lhs, rhs) -> StringSet.union (freevars_sqlexpr lhs) 
+                                       (freevars_sqlexpr rhs)
+| `Not e -> freevars_sqlexpr e
+| `Like(e, l) -> StringSet.union (freevars_like_expr l) (freevars_sqlexpr e)
+| `V x -> StringSet.singleton x
+| _ -> StringSet.empty
 
 let freevars_sqlQuery q = 
-  StringSet.union (StringSet.union_all (freevars_sqlExpr q.cond))
-    (StringSet.union_all (map freevars_sqlExpr (map fst q.cols)))
+  StringSet.union (StringSet.union_all (map freevars_sqlexpr q.cond))
+    (StringSet.union_all (map freevars_sqlexpr (map fst q.cols)))
 
 let rec subst_likeExpr e = assert false
 
@@ -92,5 +105,66 @@ let owning_table of_col qry =
     | (`F field, name) -> field.table
     | _ -> assert false
 
-let string_of_query qry = "[some-sql-query]" (* TBD *)
-let string_of_expression expr = "[some-sql-expr]" (* TBD *)
+let sorting_to_sql = function
+  | `Asc (table, col)  -> table ^ "." ^ col ^ " ASC" 
+  | `Desc (table, col) -> table ^ "." ^ col ^ " DESC"
+
+let rec like_as_string = function 
+  | `Percent -> "%"
+  | `Seq exprs -> mapstrcat "" like_as_string exprs
+  | `Str str -> str
+  | `Var x -> "(VARIABLE:" ^ x ^ ")"
+  
+let string_of_op = function
+    `And -> "AND"
+  | `Or -> "OR"
+  | `Less -> "<"
+  | `LessEq -> "<="
+  | `Equal -> "="
+  | `NotEq -> "<>"
+
+let rec string_of_expression : sqlexpr -> string = function
+  | `F field     -> field.table ^"."^ field.column
+(*   | NamedField field         -> field *)
+  | `V name                  -> "VARIABLE:"^ name
+  | `N value                 -> string_of_num value
+(*   | Float value              -> string_of_float value *)
+  | `True                    -> "TRUE"
+  | `False                   -> "FALSE"
+  | `Like(e, l)              -> string_of_expression e ^ " LIKE '" ^ 
+                                  like_as_string l ^ "'"
+  | `Str value               -> "\'"^ value ^"\'"
+  | `Op (op, l, r)           -> "("^ string_of_expression l ^" "^ 
+                                string_of_op op ^" "^ string_of_expression r ^")"
+  | `Not expr                -> "(NOT "^ (string_of_expression expr) ^")"
+  | `Rec _                   -> assert false
+and string_of_query (qry:sqlQuery) : string =
+    "SELECT "
+     ^ (match qry.cols with
+	  | [] -> "NULL as null"
+	  | _ -> (Utility.mapstrcat ", " 
+                    (function (expr, alias) ->
+                       string_of_expression expr ^ " AS " ^ alias)
+                    qry.cols))
+     ^ " FROM " ^ (Utility.mapstrcat ", " 
+                     (function
+                          `TableName (table, alias) ->
+                            table ^ " AS " ^ alias
+                        | `TableVar(var, alias) -> 
+                            "VARIABLE:" ^ var ^ " AS " ^ alias
+                     ) qry.tabs) ^
+       string_of_condition qry.cond
+     ^ (match qry.sort with
+	  | [] -> "" 
+	  | orders -> " ORDER BY " ^ 
+                        Utility.mapstrcat ", " sorting_to_sql orders)
+     ^ (match qry.most with
+          | Inf   -> ""
+          | I m -> " limit " ^ string_of_num m 
+              (* NOTE: should allow variable here. *)
+	      ^ " offset " ^ string_of_num qry.from)
+
+and string_of_condition cond =
+  match (mapstrcat " AND " string_of_expression cond) with
+    | "" -> ""
+    | where_clause  -> " WHERE " ^ where_clause

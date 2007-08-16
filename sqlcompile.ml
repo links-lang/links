@@ -292,16 +292,24 @@ struct
                      Variant_injection ("Any", _, _)] -> `Percent
              | _ -> uncompilable e)
       | Variant_injection ("Simply", Constant(String s, _), _) -> `Str (quote s)
-      | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> `Var name
+      | Variant_injection ("Quote", (* Variables are always quoted in the
+                                       inner representation. *)
+          Variant_injection ("Simply", 
+            Syntax.Variable (name, _), _), _) -> `Var name
       | Variant_injection ("Seq", rs, _) -> `Seq (map compile (unlist rs))
+          (* FIXME: we are not properly handling the ABSENCE of anchors *)
+      | Variant_injection ("StartAnchor", _, _) -> `Seq []
+      | Variant_injection ("EndAnchor", _, _) -> `Seq []
       | e -> uncompilable e
     in compile e
 
 
   let rec compileB (env : Env.t) : expression -> baseexpr = function
-    | Apply (Variable ("not", _), [b], _)  -> `Not ((trycompile "B" compileB) env b)
-    | Apply (Variable ("~", _), [b; regex], _)  -> `Like ((trycompile "B" compileB) env b,
-                                                          compileRegex regex)
+    | Apply (Variable ("not", _), [b], _)  -> 
+        `Not ((trycompile "B" compileB) env b)
+    | Apply (Variable ("tilde", _), [b; regex], _) ->
+        `Like ((trycompile "B" compileB) env b,
+               compileRegex regex)
     | Variable (v, _)                    -> 
         begin match Env.lookupv v env with
           | Some b -> b
@@ -513,7 +521,7 @@ struct
                 most = Inf;
                 from = num_of_int 0;
                 sort = []}
-          | _ -> assert false (* fixme? *) end 
+          | _ -> assert false (* FIXME *) end
 
   let rec evalE : expr -> sqlQuery = function
     | `Take (i,e) ->
