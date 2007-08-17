@@ -328,7 +328,7 @@ struct
     | Constant(Boolean true, _)      -> `True
     | Constant(Boolean false, _)     -> `False
     | Constant(Integer n, _)         -> `N n
-    | Constant(String  s, _)       -> `Str s
+    | Constant(String  s, _)         -> `Str s
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "B" compileB) env s)
     | Comparison (l, c, r,_) -> 
         `Op ((c:>op), (trycompile "B" compileB) env l, (trycompile "B" compileB) env r)
@@ -379,10 +379,11 @@ struct
 	     most = Inf;
 	     from = Int 0;
              sort = []},
-            t ->
+            ty ->
               let fields = (match ty with
                               | `Application ("List", [`Record (fields,_)]) -> fields
-                              | s -> failwith ("unexpected type:"^Types.Show_datatype.show s)) in
+                              | s -> failwith ("Unexpected table type in:" ^
+                                               Types.Show_datatype.show s)) in
                 `Table(present_fields fields, th_var, table_alias)
           | _ -> 
               debug(lazy "could not compile table query");
@@ -396,7 +397,9 @@ struct
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "S" compileS) env s)
     | List_of (b, _) as e -> 
         if (sqlable_record(Types.concrete_type (node_datatype b))) then 
-          `Return ((trycompile "B" compileB) env b)
+          match (trycompile "B" compileB) env b with
+            | `Rec _ as b -> `Return b
+            | _ -> uncompilable e
         else (debug(lazy("List_of body was not a tuple, it was: " ^ 
                            Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
               uncompilable e)
