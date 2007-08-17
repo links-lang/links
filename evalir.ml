@@ -29,7 +29,7 @@ module Eval = struct
   let untuple : Value.t -> Value.t list =
     fun _ -> assert false
 
-  let do_query : Value.env -> Query.query -> Value.t StringMap.t -> Value.t 
+  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t StringMap.t -> Value.t 
     = fun _ _ _ -> assert false
 
   let switch_context _ = 

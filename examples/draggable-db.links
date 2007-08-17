@@ -1,6 +1,6 @@
 fun step(state, id, items) client {
  receive {
-  case GetList(pid)     -> pid ! Items(items); step(state, id, items)
+  case GetList(pid)     -> pid ! items; step(state, id, items)
   case SetList(items)   ->
    draw(id, items);
    step(state, id, items)
@@ -44,7 +44,7 @@ fun draggableList(id, items) client
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
     {for (var item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
    </ul>,
-   fun () {dragger ! GetList(self())},
+   fun () {spawnWait { dragger ! GetList(self()); receive { case v -> v} }},
    fun (items) {dragger ! SetList(items);}
    )
 }
@@ -69,23 +69,10 @@ fun main() client {
   var (bears, read, write) = draggableList("bears", load());
 
   var marshaller = spawn {
-    fun saveItems(pending) {
-      receive {
-        case msg -> switch (msg) {
-          case Items(items) ->
-            save(items);
-            ignore(for (var request <- pending)
-                     {self()!request; []})
-          case (_:[|Load|Save|]) -> saveItems(msg :: pending)
-        }
-      }
-    }
-
     fun listen() {
       receive {
         case Load -> write(load())
-        case Save -> read(); saveItems([])
-        case Items(_) -> error("unreachable")
+        case Save -> save(read())
       };
       listen()
     }

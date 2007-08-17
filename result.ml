@@ -141,13 +141,13 @@ type unop = MkColl
                                rexpr option)
             | Erase of string
             | Project of string
-            | QueryOp of (Query.query * (* table aliases: *) string list)
+            | QueryOp of (SqlQuery.sqlQuery * (* table aliases: *) string list)
                 deriving (Show, Pickle)
 		
 let string_of_unop = Show_unop.show
 
 type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row 
-             | Syntax.comparison ]
+             | Syntaxutils.comparison ]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
 type xmlitem =   Text of string

@@ -12,56 +12,9 @@ open Utility
 open List
 open Num
 
+open SqlQuery
+
 let debugging = ref false
-
-type name = string deriving (Show)
-type label = name deriving (Show)
-type op = [Syntax.comparison | `And | `Or] deriving (Show)
-type pat = (label * name) list
-type literal = [`True | `False | `Str of string | `N of num] deriving (Show)
-
-type like_expr = [
-| `Percent
-| `Seq of like_expr list
-| `Str of string
-| `Var of name ] deriving (Show)
-type baseexpr = [
-|`Op  of op * baseexpr * baseexpr
-|`Let of name * baseexpr * baseexpr (* not in the paper, but an easy extension *)
-|`Like of baseexpr * like_expr
-|`Not of baseexpr
-|`Rec of (label * baseexpr) list
-|`Var of name
-| literal] deriving (Show)
-type simpleExpr = [
-|`For    of pat * simpleExpr * simpleExpr
-|`Where  of baseexpr * simpleExpr
-|`Let    of name * baseexpr * simpleExpr
-|`Table  of (name * Types.datatype) list * string * string
-|`Return of baseexpr]
-type expr = [
-|`Take of num * expr
-|`Drop of num * expr
-| simpleExpr]
-
-type field = {table:name; column:name; ty:Types.datatype} deriving (Show)
-type sqlexpr = [
-| literal
-|`Rec of (name * sqlexpr) list
-|`Op  of op * sqlexpr * sqlexpr
-|`Not of sqlexpr
-|`Like of sqlexpr * like_expr
-|`F   of field
-|`V   of name]
-type ninf = I of num | Inf
-type sqlQuery = {
-  cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
-  tabs : (string * name) list;
-  (* (x, a) means "from x as a", and x is a free variable representing a table.*)
-  cond : sqlexpr list;
-  most : ninf;
-  from : num;
-}
 
 (* [sqlable_primtype ty] is true if [ty] corresponds to a primitive
    SQL type. *)
@@ -339,16 +292,24 @@ struct
                      Variant_injection ("Any", _, _)] -> `Percent
              | _ -> uncompilable e)
       | Variant_injection ("Simply", Constant(String s, _), _) -> `Str (quote s)
-      | Variant_injection ("Simply", Syntax.Variable (name, _), _) -> `Var name
+      | Variant_injection ("Quote", (* Variables are always quoted in the
+                                       inner representation. *)
+          Variant_injection ("Simply", 
+            Syntax.Variable (name, _), _), _) -> `Var name
       | Variant_injection ("Seq", rs, _) -> `Seq (map compile (unlist rs))
+          (* FIXME: we are not properly handling the ABSENCE of anchors *)
+      | Variant_injection ("StartAnchor", _, _) -> `Seq []
+      | Variant_injection ("EndAnchor", _, _) -> `Seq []
       | e -> uncompilable e
     in compile e
 
 
   let rec compileB (env : Env.t) : expression -> baseexpr = function
-    | Apply (Variable ("not", _), [b], _)  -> `Not ((trycompile "B" compileB) env b)
-    | Apply (Variable ("~", _), [b; regex], _)  -> `Like ((trycompile "B" compileB) env b,
-                                                          compileRegex regex)
+    | Apply (Variable ("not", _), [b], _)  -> 
+        `Not ((trycompile "B" compileB) env b)
+    | Apply (Variable ("tilde", _), [b; regex], _) ->
+        `Like ((trycompile "B" compileB) env b,
+               compileRegex regex)
     | Variable (v, _)                    -> 
         begin match Env.lookupv v env with
           | Some b -> b
@@ -367,7 +328,7 @@ struct
     | Constant(Boolean true, _)      -> `True
     | Constant(Boolean false, _)     -> `False
     | Constant(Integer n, _)         -> `N n
-    | Constant(String  s, _)       -> `Str s
+    | Constant(String  s, _)         -> `Str s
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "B" compileB) env s)
     | Comparison (l, c, r,_) -> 
         `Op ((c:>op), (trycompile "B" compileB) env l, (trycompile "B" compileB) env r)
@@ -409,19 +370,39 @@ struct
               uncompilable e
         end
 
+    | SortBy(TableQuery(th, query, data1),
+             Abstr([loopVar], sortByExpr, _), _) as e ->
+        let read_proj = function
+          | Project (record, name, _) -> Some (record, name)
+          | _ -> None in
+        let add_sorting query col = 
+          {query with SqlQuery.sort = col :: query.SqlQuery.sort}
+        in
+          begin
+            match read_proj sortByExpr with
+              | Some (Variable(sortByRecVar, _), sortByFld)
+                  when sortByRecVar = loopVar ->
+                  (trycompile "S" compileS) env
+                    (TableQuery(th, add_sorting query
+                                  (`Asc(SqlQuery.owning_table sortByFld query,
+				        sortByFld)), data1))
+              | _ -> uncompilable e
+          end
+
     | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
         debug(lazy("attempting to compile table query!"));
         begin match q, Types.concrete_type ty with 
-          | {Query.result_cols = _;
-	     Query.tables = [(`TableVariable _, _)];
-	     Query.condition = Query.Boolean true;
-	     Query.sortings = [];
-	     Query.max_rows = None;
-	     Query.offset = Query.Integer (Int 0)},
-            t ->
+          | {cols = _;
+	     tabs = [_]; (* single table *)
+	     cond = [`True];
+	     most = Inf;
+	     from = Int 0;
+             sort = _},
+            ty ->
               let fields = (match ty with
                               | `Application ("List", [`Record (fields,_)]) -> fields
-                              | s -> failwith ("unexpected type:"^Types.Show_datatype.show s)) in
+                              | s -> failwith ("Unexpected table type in:" ^
+                                               Types.Show_datatype.show s)) in
                 `Table(present_fields fields, th_var, table_alias)
           | _ -> 
               debug(lazy "could not compile table query");
@@ -435,7 +416,9 @@ struct
     | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "S" compileS) env s)
     | List_of (b, _) as e -> 
         if (sqlable_record(Types.concrete_type (node_datatype b))) then 
-          `Return ((trycompile "B" compileB) env b)
+          match (trycompile "B" compileB) env b with
+            | `Rec _ as b -> `Return b
+            | _ -> uncompilable e
         else (debug(lazy("List_of body was not a tuple, it was: " ^ 
                            Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
               uncompilable e)
@@ -520,10 +503,11 @@ struct
   let rec evalS env : simpleExpr -> sqlQuery = function
     | `For (fields, s, t) -> 
         let q1 = evalS env s in
-        let tab_map = map (fun (t,oldas) -> (t, oldas, Auxiliary.fresh_table_name ())) q1.tabs in
+        let tab_map = map (function (`TableVar(t,oldas)) -> (t, oldas, Auxiliary.fresh_table_name ())
+                             | _ ->assert false) q1.tabs in
         let tab_alias_map = map (fun (_,oldas,newas) -> (oldas,newas)) tab_map in
         let q1 = {q1 with cols = map (fun (expr, alias) -> (subst_tabnames tab_alias_map expr, alias)) q1.cols
-                        ; tabs = map (fun (t,_,newas) -> t, newas) tab_map
+                        ; tabs = map (fun (t,_,newas) -> `TableVar(t, newas)) tab_map
                         ; cond = map (subst_tabnames tab_alias_map) q1.cond} in
         (* (substitute expressions: see JOIN rule) *)
         let env' = (fold_right
@@ -535,7 +519,8 @@ struct
             tabs = q1.tabs @ q2.tabs;
             cond = q1.cond @ q2.cond;
             most = (match q1.most, q2.most with Inf, Inf -> Inf | _ -> assert false);
-            from = (match q1.from, q2.from with Int 0, Int 0 -> Int 0 | _ -> assert false) }
+            from = (match q1.from, q2.from with Int 0, Int 0 -> Int 0 | _ -> assert false);
+            sort = []}
     | `Let (v, b, e) -> evalS (Env.binde v (evalb env b) env) e
     | `Where (b, s) -> 
         let cond = evalb env b
@@ -544,10 +529,11 @@ struct
     | `Table (cols, table_var, table_alias) ->
         { cols = map (fun (col,ty) ->
                         (`F {table=table_alias; column=col; ty=ty}, col)) cols;
-          tabs = [table_var, table_alias];
+          tabs = [`TableVar(table_var, table_alias)];
           cond = [];
           most = Inf;
-          from = num_of_int 0 }
+          from = num_of_int 0;
+          sort = []}
     | `Return b ->
         begin match evalb env b with
           | `Rec fields -> 
@@ -555,8 +541,9 @@ struct
                 tabs = [];
                 cond = [];
                 most = Inf;
-                from = num_of_int 0 }
-          | _ -> assert false (* fixme? *) end 
+                from = num_of_int 0;
+                sort = []}
+          | _ -> assert false (* FIXME *) end
 
   let rec evalE : expr -> sqlQuery = function
     | `Take (i,e) ->
@@ -573,96 +560,14 @@ struct
   let eval = evalE
 end
 
-(* For now, we're translating the Rewriterules.sqlQuery expression into
-   the Query.query datatype. Soon we'll get rid of Query.query. *)
-
-let rec translateCol : (sqlexpr * name) -> Query.col_or_expr =
-  function
-      (`F{table=tab; column=col; ty=ty}, alias) ->
-        `Column{Query.table_alias=tab; name=col; col_alias=alias;
-             col_type = ty}
-    | (expr, alias) -> `Expr (translateExpr expr, alias)
-
-and translateLikeExpr : like_expr -> Query.like_expr = function
-  | `Percent -> `percent
-  | `Var x -> `variable x
-  | `Str str-> `string str
-  | `Seq exprs -> `seq (map translateLikeExpr exprs)
-      
-and translateOp : op -> string = function
-  | `And -> "AND"
-  | `Or -> "OR"
-  | `Less -> "<"
-  | `LessEq -> "<="
-  | `Equal -> "="
-  | `NotEq -> "<>"
-      
-and translateExpr : sqlexpr -> Query.expression = function 
-  | `V x -> Query.Variable x
-  | `F{table=table; column=col} -> Query.Field (table, col)
-  | `Like (expr, like_expr) ->
-      Query.Binary_op("~", translateExpr expr, Query.LikeExpr(translateLikeExpr like_expr))
-  | `Not expr -> Query.Unary_op("NOT", translateExpr expr)
-  | `Op (op, lhs, rhs) -> Query.Binary_op(translateOp op, translateExpr lhs, translateExpr rhs)
-  | `Rec fields -> assert false
-  | `True -> Query.Boolean true
-  | `False -> Query.Boolean false
-  | `Str str -> Query.Text str
-  | `N n -> Query.Integer n
-
-and translateTable : (string * name) -> Query.table_instance =
-  fun (var, alias) -> (`TableVariable var, alias)
-
-and translateNinf : ninf -> Query.expression option
-  = function
-      I n -> Some(Query.Integer n)
-    | Inf -> None
-
-and translateNum : num -> Query.expression
-  = fun n -> Query.Integer n
-
-and translateQuery : sqlQuery -> Query.query =
-  fun {cols=cols; tabs=tabs; cond=conds; most=most; from=from} ->
-  { Query.result_cols = map translateCol cols;
-    tables = map translateTable tabs;
-    condition = Sql.conjunction (map translateExpr conds);
-    sortings = [];
-    max_rows = translateNinf most;
-    offset = translateNum from
-  }
-
 (* For now, we have to reconstruct the pairings of the 
    aliases with the variables that hold the actual table 
    value *)
-let table_names {cols=cols; tabs=tabs; cond=conds; most=most; from=from} =
-  map (fun (x, alias) -> 
-         alias, (Syntax.Variable(x, (Syntax.no_expr_data)))) tabs
-
-let is_underscore_numeric str = 
-  String.get str 0 == '_' &&
-    is_numeric(String.sub str 1 (String.length str - 1))
-
-let deunderscore_numeric str = 
-  let butlast = String.sub str 1 (String.length str - 1) in
-  if (String.get str 0 == '_' && is_numeric butlast) then
-    butlast else str
-
-let dealphafy_tuples = function
-    Syntax.Project(expr, field, data) ->
-      Some(Syntax.Project(expr, deunderscore_numeric field, data))
-  | Syntax.Record_intro(fields, expr, data) ->
-      let alphafy (field, expr) = (deunderscore_numeric field, expr) in
-        Some(Syntax.Record_intro(StringMap.megamap alphafy fields, expr,
-                                 data))
-  | _ -> None
-
-let deunderscore_numeric_col_or_expr = function
-    `Expr _ as e -> e
-  | `Column c -> `Column {c with Query.name = deunderscore_numeric c.Query.name}
-
-let deunderscore_numeric_query q = 
-  {q with Query.result_cols = 
-      map deunderscore_numeric_col_or_expr q.Query.result_cols}
+let table_names q =
+  map (function
+           (`TableVar(x, alias)) -> 
+             alias, (Syntax.Variable(x, (Syntax.no_expr_data)))
+         | `TableName _ -> assert false) q.tabs
 
 let underscore_numeric_names cols =
   map (fun (expr, col) ->
@@ -679,8 +584,9 @@ let rename_cols renamings q =
         q.cols}
     
 (** Inject a query as a Links expression. 
-    Also handles the renaming of numeric column names. 
-    (TODO: move this renaming to a different phase, such a compilation.) *)
+    Also handles the renaming of numeric column names. Renaming is done
+    here because it involves both an operation on the query and also a
+    wrapping expression that projects out the needed data at the end. *)
 let injectQuery q data =
   let names = table_names q in
   let needs_renaming = exists (snd ->- is_numeric) q.cols in
@@ -700,7 +606,6 @@ let injectQuery q data =
                    Syntax.no_expr_data)
   in
   let q = if needs_renaming then rename_cols renamings q else q in
-  let q = translateQuery q in
     if needs_renaming then
       Syntax.Apply(Syntax.Variable("map", Syntax.no_expr_data),
                    [renamer;

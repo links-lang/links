@@ -1,7 +1,7 @@
 (* Values and environments *)
 
 type binop = [ 
-| Syntax.comparison
+| Syntaxutils.comparison
 | `Union
 | `App
 | `RecExt of string

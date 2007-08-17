@@ -136,7 +136,7 @@ sig
   val applyprim : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 (* comparison? *)
-  val comparison : (value sem * Syntax.comparison * value sem) -> value sem
+  val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
 
   val lam : datatype * var_info list * (var list -> tail_computation sem) * location -> value sem
   val comp : var_info * tail_computation sem * (var -> tail_computation sem) -> tail_computation sem
@@ -164,7 +164,7 @@ sig
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
 *)
   val database : value sem -> tail_computation sem
-  val table_query : (value sem) StringMap.t * Query.query * datatype -> tail_computation sem
+  val table_query : (value sem) StringMap.t * SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem

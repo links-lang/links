@@ -34,7 +34,7 @@
    '("<#>.*</#>" . font-lock-xml-face)
    ; XML tags
    '("</?[a-z][^>]*>" 0 font-lock-xml-face t)
-   ; XML escapes
+   ; XML escapes (attributes)
    '("\"{[^}]*}\"" 0 font-lock-normal-face t)
    ; declarations
    '("\\<fun\\|var\\|sig\\>" . font-lock-type-face)
@@ -54,31 +54,6 @@
    ))
 
 (defun initialize-font-lock-defaults ()
-  (make-face 'Firebrick)
-  (set-face-foreground 'Firebrick "Firebrick")
-  (make-face 'RosyBrown)
-  (set-face-foreground 'RosyBrown "RosyBrown")
-  (make-face 'Purple)
-  (set-face-foreground 'Purple "Purple")
-  (make-face 'MidnightBlue)
-  (set-face-foreground 'MidnightBlue "MidnightBlue")
-  (make-face 'DarkGoldenRod)
-  (set-face-foreground 'DarkGoldenRod "DarkGoldenRod")
-  (make-face 'DarkOliveGreen)
-  (set-face-foreground 'DarkOliveGreen "DarkOliveGreen4")
-  (make-face 'CadetBlue)
-  (set-face-foreground 'CadetBlue "CadetBlue")
-  (make-face 'Black)
-  (set-face-foreground 'Black "Black")
-  
-  (setq font-lock-comment-face 'Firebrick)
-  (setq font-lock-type-face 'Purple)
-  (setq font-lock-keyword-face 'MidnightBlue)
-  (setq font-lock-variable-name-face 'DarkGoldenRod)
-  (setq font-lock-function-name-face 'DarkOliveGreen)
-  (setq font-lock-xml-face 'RosyBrown)
-  (setq font-lock-normal-face 'Black)
-  
   (make-local-variable 'font-lock-defaults)
   (setq font-lock-defaults
         '(links-font-lock-keywords nil nil ((?' . "w") (?_ . "w"))))

@@ -63,9 +63,10 @@ SOURCES = $(OPC)                		\
           performance.mli performance.ml	\
           graph.ml                              \
           types.mli types.ml 	                \
-          query.mli query.ml          		\
-          sql.mli sql.ml               		\
+          syntaxutils.ml                        \
+          sqlQuery.ml               		\
           syntax.mli syntax.ml        		\
+          sqlcompile.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
@@ -73,7 +74,6 @@ SOURCES = $(OPC)                		\
           result.mli result.ml         		\
           value.mli value.ml                    \
           errors.mli errors.ml                  \
-          sql_transform.mli sql_transform.ml	\
           $(DB_CODE)            		\
           database.mli database.ml 		\
           lexer.mll             		\
@@ -91,7 +91,6 @@ SOURCES = $(OPC)                		\
           linksregex.ml                         \
           library.mli library.ml 		\
           sugartest.mli sugartest.ml            \
-          sqlcompile.ml                         \
           optimiser.mli optimiser.ml    	\
           ir.ml ir.mli                          \
           compileir.ml                          \
@@ -102,7 +101,7 @@ SOURCES = $(OPC)                		\
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
-#          links.ml              		\
+          links.ml              		\
           rewriteexamples.ml                    \
 
 #          js.mli js.ml          		\

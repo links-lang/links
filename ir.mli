@@ -43,7 +43,7 @@ type value =
 
   | `XmlNode of name * value name_map * value list
   | `ApplyPrim of value * value list
-  | `Comparison of value * Syntax.comparison * value    (* should really be implemented as constants *)
+  | `Comparison of value * Syntaxutils.comparison * value    (* should really be implemented as constants *)
 
   | `Coerce of value * Types.datatype
   | `Abs of value
@@ -65,7 +65,7 @@ and special =
   [ `App of value * value
   | `Wrong
   | `Database of value
-  | `TableQuery of value name_map * Query.query
+  | `TableQuery of value name_map * SqlQuery.sqlQuery
   | `TableHandle of value * value * (Types.datatype * Types.datatype)
   | `CallCC of value ]
 and computation = binding list * tail_computation

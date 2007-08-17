@@ -12,7 +12,7 @@ fun newChannel() {
               case [] -> step (v :: vs, readers)
               case (r :: readers) -> r ! v; step (vs, readers)
             }
-          case Register(r) ->
+          case Read(r) ->
             var (r :: readers) = readers ++ [r];
             switch (vs) {
               case [] -> step (vs, r :: readers)
@@ -29,7 +29,7 @@ fun newChannel() {
 
   fun read() {
     spawnWait {
-      p ! Register(self());
+      p ! Read(self());
       receive { case v -> v }
     }
   }
