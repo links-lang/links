@@ -370,6 +370,25 @@ struct
               uncompilable e
         end
 
+    | SortBy(TableQuery(th, query, data1),
+             Abstr([loopVar], sortByExpr, _), _) as e ->
+        let read_proj = function
+          | Project (record, name, _) -> Some (record, name)
+          | _ -> None in
+        let add_sorting query col = 
+          {query with SqlQuery.sort = col :: query.SqlQuery.sort}
+        in
+          begin
+            match read_proj sortByExpr with
+              | Some (Variable(sortByRecVar, _), sortByFld)
+                  when sortByRecVar = loopVar ->
+                  (trycompile "S" compileS) env
+                    (TableQuery(th, add_sorting query
+                                  (`Asc(SqlQuery.owning_table sortByFld query,
+				        sortByFld)), data1))
+              | _ -> uncompilable e
+          end
+
     | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
         debug(lazy("attempting to compile table query!"));
         begin match q, Types.concrete_type ty with 
@@ -378,7 +397,7 @@ struct
 	     cond = [`True];
 	     most = Inf;
 	     from = Int 0;
-             sort = []},
+             sort = _},
             ty ->
               let fields = (match ty with
                               | `Application ("List", [`Record (fields,_)]) -> fields

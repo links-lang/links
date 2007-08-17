@@ -257,27 +257,6 @@ let simplify_regex : RewriteSyntax.rewriter = function
     as much calculation to the DBMS as possible. {e Beware:} some
     optimisers have dependencies with other optimisers. *)
 
-let read_proj = function
-    Record_selection(field, _, _, record, 
-                     Variable _, _) ->
-      Some(record, field)
-  | _ -> None
-
-let add_sorting query col = 
-  {query with SqlQuery.sort = col :: query.SqlQuery.sort}
-
-let rec sql_sort = function
-  | SortBy(TableQuery(th, query, data1),
-           Abstr([loopVar], sortByExpr, _), _) ->
-      (match read_proj sortByExpr with
-           Some (Variable(sortByRecVar, _), sortByFld)
-             when sortByRecVar = loopVar
-               -> Some(TableQuery(th, add_sorting query
-                                    (`Asc(SqlQuery.owning_table sortByFld query,
-				          sortByFld)), data1))
-         | _ -> None)
-  | _ -> None
-
 let sql_aslist : RewriteSyntax.rewriter =
   function 
     | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->

@@ -58,21 +58,16 @@ let untuple : result -> result list =
 let rec normalise_query (globals:environment) (env:environment) (db:database) 
     (qry:SqlQuery.sqlQuery) : SqlQuery.sqlQuery =
 
-  let rec like_as_string env le = 
+  let normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
     let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
-    let rec like_as_string' env =
+    let env = env @ globals in
+    let rec nle =
       function
-        | `Var x -> quote (Result.unbox_string (assoc x env))
-        | `Percent -> "%"
-        | `Str s -> quote s
-        | `Seq rs -> mapstrcat "" (like_as_string' env) rs 
-    in like_as_string' env le 
-  in
-  let rec normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
-    `Str (like_as_string (env @ globals) l) 
-      (* FIXME: this should not convert the like expr to a string;
-         it should just substitute for any variables. like_as_string
-         would only get called by SqlQuery.string_of_expression.*)
+        | `Var x -> `Str (quote (Result.unbox_string (assoc x env)))
+        | (`Percent | `Str _) as l -> l
+        | `Seq ls -> `Seq (List.map nle ls)
+    in
+      nle l
   in
   let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
     | `V name -> begin
