@@ -76,7 +76,6 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
             | `Bool true -> `True
             | `Bool false -> `False
             | `Int value -> `N value
-(*             | `Float value -> `Float value *)
             | `List (`Char _::_) as c  
               -> `Str (db # escape_string (charlist_as_string c))
             | `List ([]) -> `Str ""
@@ -91,7 +90,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
         `Op(symbol, normalise_expression left, normalise_expression right)
     | `Not expr ->
         `Not(normalise_expression expr)
-    | `Like(lhs, regex) -> Debug.print("normalising like");
+    | `Like(lhs, regex) -> 
         `Like(normalise_expression lhs,
               normalise_like_expression regex)
     | expr -> expr
