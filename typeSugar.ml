@@ -741,6 +741,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
               unify (typ t, typ e);
               `Conditional (i,t,e), (typ t)
         | `Block (bindings, e) ->
+            let bindings = Sugartypes.refine_bindings bindings in
             let rec type_bindings typing_env =
               function
                 | [] -> [], typing_env
@@ -898,7 +899,7 @@ let type_bindings lookup_pos typing_env bindings =
     (fun (env, binds) bind ->
        let bind, env' = type_binding lookup_pos env bind in
          Types.concat_typing_environment env' env, bind::binds)
-    (typing_env, []) bindings
+    (typing_env, []) (Sugartypes.refine_bindings bindings)
 
 let sentence lookup_pos typing_env : Sugartypes.sentence -> Typed.sentence = 
   function

@@ -1,8 +1,9 @@
+(*pp deriving *)
 open Utility
 
 (** The syntax tree created by the parser. *)
 
-type name = string
+type name = string deriving (Show)
 
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
@@ -18,15 +19,25 @@ type unary_op = [
 | `Name of name
 | `Abs
 ]
-type regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
+and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
+    deriving (Show)
 type logical_binop = [`And | `Or ]
+    deriving (Show)
 type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name | `App ]
-
+deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
+deriving (Show)
 
 type pposition = Lexing.position * Lexing.position (* start * end *)
 
+module Show_pposition = Show.ShowDefaults(
+struct
+  type a = pposition
+  let format formatter _ = Format.pp_print_string formatter "..."
+end)
+
 type location = Syntax.location
+    deriving (Show)
 type datatype = 
   | TypeVar of string
   | RigidTypeVar of string
@@ -41,14 +52,19 @@ type datatype =
   | TypeApplication of (string * datatype list)
   | PrimitiveType of Types.primitive
   | DBType
-and row = (string * [`Present of datatype | `Absent]) list * row_var
+and row = (string * fieldspec) list * row_var
 and row_var = [ `Closed | `Open of string | `Recursive of string * row ]
+and fieldspec = [`Present of datatype | `Absent]
+    deriving (Show)
 
 type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
+    deriving (Show)
 
 type assumption = quantifier list * datatype
+    deriving (Show)
 
 type fieldconstraint = [ `Readonly ]
+    deriving (Show)
 
 module type PhraseArgs = sig
   type ppattern
