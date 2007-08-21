@@ -209,19 +209,19 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
     match t with
       | `Record row when Types.is_tuple row->
           let fields, row_var = fst (Types.unwrap_row row) in
-          let rec unwrap_at name p =
+          let rec unwrap_at i p =
             match fst p with
               | `Variable _ | `Any | `Constant _ -> p
-              | `As (_, p) | `HasType (p, _) -> unwrap_at name p
+              | `As (_, p) | `HasType (p, _) -> unwrap_at i p
               | `Tuple ps ->
-                  List.nth ps ((int_of_string name)-1)
+                  List.nth ps i
               | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
                  function
                    | `Present t ->
-                       let pats = List.map (unwrap_at name) pats in
+                       let pats = List.map (unwrap_at ((int_of_string name)-1)) pats in
                          StringMap.add name (`Present (cpt pats t))
                    | `Absent ->
                        assert false) fields StringMap.empty in
@@ -254,15 +254,21 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
             `Record (fields, row_var)
       | `Variant row ->
           let fields, row_var = fst (Types.unwrap_row row) in
-          let rec unwrap_at : string -> Typed.ppattern -> Typed.ppattern = fun name p ->
+          let rec unwrap_at : string -> Typed.ppattern -> Typed.ppattern list = fun name p ->
             match fst p with
-              | `Variable _ | `Any | `Constant _ -> p
+              | `Variable _ | `Any | `Constant _ -> [p]
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
-              | `Variant (name', p) when name=name' ->
-                  fromOption
-                    (`Any, ((Lexing.dummy_pos, Lexing.dummy_pos),(Env.empty, Types.unit_type)))
-                    p
-              | `Variant _ -> p
+              | `Variant (name', None) when name=name' ->
+                  let (_, ((_, end_pos), _)) = p in
+                    (*
+                      QUESTION:
+                      
+                      This indicates the position immediately after the variant pattern.
+                      How can we indicate a 0-length position in an error message?
+                    *)
+                    [(`Any, ((end_pos, end_pos), (Env.empty, Types.unit_type)))]
+              | `Variant (name', Some p) when name=name' -> [p]
+              | `Variant _ -> []
               | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ -> assert false in
           let rec are_open : Typed.ppattern list -> bool =
             function
@@ -277,7 +283,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
                  match field_spec with
                    | `Present t ->
                        let p = (p || are_open pats) in
-                       let pats = List.map (unwrap_at name) pats in
+                       let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
                          (StringMap.add name (`Present t)) env, p
                    | `Absent ->
@@ -846,21 +852,34 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
                              let args = Types.make_tuple_type (List.map pattern_typ pat) in
                                `Function (args, Types.fresh_type_variable (), rtype))
                           pats (Types.fresh_type_variable ()) in
-                      let _ = opt_iter (fun t -> unify (ft, snd (Sugar.desugar_datatype t))) in
-                        ((name, ft), pats)) defs) in
-            let fbs = List.map (fun (name, t) -> name, Utils.generalise env t) fbs in
-            let env = List.fold_left (fun env (name, t) -> Env.bind env (name, t)) env fbs in
-            let typing_env = env, alias_env in
-            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
-
+                      let fb =
+                        match t with
+                          | None -> ([], ft)
+                          | Some t ->
+                              let fb = Utils.generalise env (snd (Sugar.desugar_datatype t)) in
+                              let _ = unify (ft, snd fb) in
+                                fb
+                      in
+                        ((name, fb), pats)) defs) in
             let defs =
-              List.rev
-                (List.fold_left2
-                   (fun defs (name, (_, body), location, t) pats ->
-                      let body_env, alias_env = List.fold_left fold_in_envs typing_env pats in
-                      let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
-                        (name, (pats, body), location, t) :: defs) [] defs patss)
-            in
+              let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) env fbs in
+              let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+                List.rev
+                  (List.fold_left2
+                     (fun defs (name, (_, body), location, t) pats ->
+                        let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
+                        let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
+                        let ft =
+                          List.fold_right
+                            (fun pat rtype ->
+                               `Function (Types.fresh_type_variable (), Types.fresh_type_variable (), rtype))
+                            pats (typ body) in
+                        let _ = unify (ft, snd (Env.lookup body_env name)) in
+                          (name, (pats, body), location, t) :: defs) [] defs patss) in
+            let env =
+              List.fold_left (fun env (name, fb) ->
+                                Env.bind env (name, Utils.generalise env (snd fb))) env fbs in
+            let typing_env = env, alias_env in
               (`Funs defs, typing_env)
         | `Foreign (language, name, datatype) ->
             let assumption = Sugar.desugar_datatype datatype in
