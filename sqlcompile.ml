@@ -14,7 +14,7 @@ open Num
 
 open SqlQuery
 
-let debugging = ref false
+let debug = Settings.add_bool("debug_sqlcompile", true, `User)
 
 (* [sqlable_primtype ty] is true if [ty] corresponds to a primitive
    SQL type. *)
@@ -22,13 +22,13 @@ let sqlable_primtype ty =
   match Types.concrete_type ty with
       `Primitive ty' -> (match ty' with 
                             `Bool | `Int | `Char | `Float -> true
-                          | _ -> Debug.print("non-sqlable primitive: " ^ 
-                                             Types.string_of_datatype ty);
+                          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
+                                              Types.string_of_datatype ty));
                               false)
     | `Application ("String", []) -> true
     | `Application ("List", [`Primitive `Char]) -> true
-    | _ -> Debug.print("non-primitive in record was " ^ 
-                         Types.string_of_datatype ty);
+    | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
+                        Types.string_of_datatype ty));
         false
 
 (* [sqlable_record ty] is true if [ty] is a record type that
@@ -166,7 +166,7 @@ struct
       For(List_of(elem, data_body), var, src, data_for) 
         when sqlable_primtype(node_datatype elem)
           -> 
-            Debug.print("lifting non-record in comp'n body");
+            Debug.if_set_l debug(lazy("Lifting non-record in comp'n body"));
 
             let ty = Types.concrete_type(node_datatype elem) in
             let recd_ty = Types.make_record_type[("a", ty)] in
@@ -183,8 +183,8 @@ struct
                                 For(List_of(elem_record, 
                                             data_body),
                                     var, src, data_for)], data_for) in
-              Debug.print(" to: " ^
-                            string_of_expression(result));
+              Debug.if_set_l debug(lazy(" to: " ^
+                           string_of_expression(result)));
               Some result
     | _ -> None
 
@@ -202,6 +202,7 @@ struct
     let r = normalize e in
       (if !trace_normalize then
          prerr_endline ("normalize output : " ^ 
+(*          Syntax.Show_expression.show r)); *)
          Syntax.Show_stripped_expression.show (Syntax.strip_data r)));
       r
 end
@@ -258,24 +259,20 @@ struct
       
   let counter = ref 0 
 
-  let debug msg = 
-    if !debugging then prerr_endline (Lazy.force msg)
-    else ()
-
   let trycompile =
       fun msg f env e -> 
         let i = !counter in
           incr counter;
           try 
-            debug(lazy(string_of_int i ^ " " ^ msg ^ 
+            Debug.if_set_l debug(lazy(string_of_int i ^ " " ^ msg ^ 
                          " attempting to compile : " ^ 
                          Syntax.Show_stripped_expression.show 
                          (Syntax.strip_data e)));
             let r = f env e in
-              debug(lazy(string_of_int i ^ " success!"));
+              Debug.if_set_l debug(lazy(string_of_int i ^ " success!"));
               r
           with (Uncompilable _) as ex -> 
-            debug(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
+            Debug.if_set_l debug(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
             raise ex
 
   let compileRegex (e : 'a Syntax.expression') : like_expr = 
@@ -319,7 +316,7 @@ struct
         begin match Env.lookupf {Env.var=v;Env.label=label} env with
           | Some v -> `Var v
           | None   -> 
-              debug(lazy("env : " ^ Env.Show_t.show env));
+              Debug.if_set_l debug(lazy("env : " ^ Env.Show_t.show env));
               uncompilable e
         end
     | Record_intro (fields, None, _) ->
@@ -340,7 +337,7 @@ struct
 
   let rec compileS env : expression -> simpleExpr = function
     | For (body, var, src, _) as e -> 
-        debug(lazy("attempting to compile comprehension!"));
+        Debug.if_set_l debug(lazy("attempting to compile comprehension!"));
         begin match Types.concrete_type (node_datatype src) with
           | `Application ("List",[r]) ->
               begin match Types.concrete_type r with 
@@ -350,14 +347,14 @@ struct
                       List.map (fun (label, _) -> 
                                   (
                                     (let l = {Env.var = var; Env.label = label} in
-                                       debug(lazy("binding : " ^ Env.Show_field.show l));
+                                       Debug.if_set_l debug(lazy("binding : " ^ Env.Show_field.show l));
                                        l), gensym())) fields in
                     let env' = fold_right (uncurry Env.bindf) fieldinfo env in
                     let env' = Env.bindv var (`Rec (List.map (fun (f,v) -> f.Env.label, `Var v) fieldinfo)) env' in
                       begin
                         let s = (trycompile "S" compileS) env src
                         and t = (trycompile "S" compileS) env' body in
-                          debug(lazy "SUCCESSFULLY compiled comprehension");
+                          Debug.if_set_l debug(lazy "SUCCESSFULLY compiled comprehension");
                           `For((List.map (fun (field, fname) -> 
                                             (field.Env.label, fname))
                                   fieldinfo), s, t)
@@ -365,7 +362,7 @@ struct
                 | _ -> uncompilable e
               end
           | t -> 
-              debug(lazy ("comprehension source: wrong type : " ^
+              Debug.if_set_l debug(lazy ("comprehension source: wrong type : " ^
                             Types.Show_datatype.show t));
               uncompilable e
         end
@@ -390,7 +387,7 @@ struct
           end
 
     | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
-        debug(lazy("attempting to compile table query!"));
+        Debug.if_set_l debug(lazy("attempting to compile table query"));
         begin match q, Types.concrete_type ty with 
           | {cols = _;
 	     tabs = [_]; (* single table *)
@@ -405,7 +402,7 @@ struct
                                                Types.Show_datatype.show s)) in
                 `Table(present_fields fields, th_var, table_alias)
           | _ -> 
-              debug(lazy "could not compile table query");
+              Debug.if_set_l debug(lazy "could not compile table query");
               uncompilable e
         end
     | TableQuery _ -> failwith "Unexpected form of TableQuery"
@@ -419,7 +416,7 @@ struct
           match (trycompile "B" compileB) env b with
             | `Rec _ as b -> `Return b
             | _ -> uncompilable e
-        else (debug(lazy("List_of body was not a tuple, it was: " ^ 
+        else (Debug.if_set_l debug(lazy("List_of body was not a tuple, it was: " ^ 
                            Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
               uncompilable e)
     | e -> uncompilable e
