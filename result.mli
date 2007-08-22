@@ -126,12 +126,12 @@ val links_fst : [> `Record of ('a * 'b) list ] -> 'b
 val links_snd : [> `Record of ('a * 'b) list ] -> 'b
 val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
 val escape : string -> string
-(* val delay_expr : environment -> Syntax.expression -> result *)
 val charlist_as_string : result -> string
 val string_of_result : result -> string
 val string_of_cont : continuation -> string
 val string_of_environment : binding list -> string
 val string_of_primitive : primitive_value -> string
+
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : result -> bool
 val box_int : 'a -> [> `Int of 'a ]
@@ -148,6 +148,8 @@ val box_list : result list -> result
 val unbox_list : result -> result list
 val box_unit : unit -> result 
 val unbox_unit : result -> unit
+val unbox_pair : result -> (result * result)
+
 val retain : Utility.StringSet.t -> (string * 'b) list -> (string * 'b) list
 
 val marshal_continuation : continuation -> string

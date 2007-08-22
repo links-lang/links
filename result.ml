@@ -322,23 +322,8 @@ let recfields = function
 
 exception Match of string
 
-let pair_as_ocaml_pair = function 
-  | (`Record [(_, a); (_, b)]) -> (a, b)
-  | _ -> failwith ("Match failure in pair conversion")
-
-let links_fst x = fst (pair_as_ocaml_pair x)
-let links_snd x = snd (pair_as_ocaml_pair x)
-
-let links_project name = function
-  | (`Record fields) -> List.assoc name fields
-  | _ -> failwith ("Match failure in record projection")
-
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
-
-(* let delay_expr env expr : result *)
-(*     = `RecFunction(["_anonThunk", expr], env, "_anonThunk") *)
-(*   (\* FIXME: beware name clashes? *\) *)
 
 let string_of_cont = Show_continuation.show
   
@@ -634,6 +619,17 @@ and box_unit : unit -> result
   = fun () -> `Record []
 and unbox_unit : result -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+let unbox_pair = function 
+  | (`Record [(_, a); (_, b)]) -> (a, b)
+  | _ -> failwith ("Match failure in pair conversion")
+
+let links_fst x = fst (unbox_pair x)
+let links_snd x = snd (unbox_pair x)
+
+let links_project name = function
+  | (`Record fields) -> List.assoc name fields
+  | _ -> failwith ("Match failure in record projection")
+
 
 
 (* Retain only bindings in env named by members of `names' *)

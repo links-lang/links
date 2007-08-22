@@ -215,8 +215,8 @@ let main () =
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
-  (* make sure the fresh type variable counter does not clash with any type variables from
-     the prelude
+  (* make sure the fresh type variable counter does not clash with any
+     type variables from the prelude
 
      BUG: we should really do something similar for term variables
   *)
