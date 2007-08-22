@@ -40,7 +40,7 @@ fun (f) { switch (f) { case B(a) -> not(a) case A(b) -> b } }
 stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Variant matching : Closed case type error
-fun () { switch (C (3)) { case A a -> a case B b -> b } }
+fun () { switch (C (3)) { case A (a) -> a case B (b) -> b } }
 stderr : @..*
 exit : 1
 
