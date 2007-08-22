@@ -896,6 +896,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
         | `Infix -> `Infix, typing_env
         | `Exp e ->
             let e = tc e in
+            let _ = unify (typ e, Types.unit_type) in
               `Exp e, (Env.empty, Env.empty)
     in (typed, pos), env
   in
