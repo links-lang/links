@@ -608,7 +608,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
             let pid_type = Types.fresh_type_variable () in
             let typing_env' = Env.bind env (mailbox, ([], pid_type)), alias_env in
             let p = type_check typing_env' p in
-              `Spawn p, Types.make_mailbox_type pid_type
+              `Spawn p, pid_type
         | `SpawnWait p ->
             (* (() -{b}-> d) -> d *)
             let return_type = Types.fresh_type_variable () in
@@ -830,13 +830,18 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
             let body_env, alias_env = List.fold_left fold_in_envs typing_env pats in
-            let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
+            let mt = Types.fresh_type_variable () in
+            let body = type_check (Env.bind body_env (mailbox, ([], mt)), alias_env) body in
             let ft =
-                List.fold_right
-                  (fun pat rtype ->
-                     let args = Types.make_tuple_type (List.map pattern_typ pat) in
-                       `Function (args, Types.fresh_type_variable (), rtype))
-                  pats (typ body) in
+              let rec makeft =
+                function
+                  | [] -> typ body
+                  | [_] -> `Function (Types.fresh_type_variable (), mt, typ body)
+                  | _ :: pats -> `Function (Types.fresh_type_variable (),
+                                            Types.fresh_type_variable (),
+                                            makeft pats)
+              in
+                makeft pats in
             let _ = opt_iter (fun t -> unify (ft, snd (Sugar.desugar_datatype t))) in
               (`Fun (name, (pats, body), location, t),
                (Env.bind env (name, Utils.generalise env ft), alias_env))
@@ -868,12 +873,18 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
                   (List.fold_left2
                      (fun defs (name, (_, body), location, t) pats ->
                         let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
-                        let body = type_check (Env.bind body_env (mailbox, ([], Types.fresh_type_variable ())), alias_env) body in
+                        let mt = Types.fresh_type_variable () in
+                        let body = type_check (Env.bind body_env (mailbox, ([], mt)), alias_env) body in
                         let ft =
-                          List.fold_right
-                            (fun pat rtype ->
-                               `Function (Types.fresh_type_variable (), Types.fresh_type_variable (), rtype))
-                            pats (typ body) in
+                          let rec makeft =
+                            function
+                              | [] -> typ body
+                              | [_] -> `Function (Types.fresh_type_variable (), mt, typ body)
+                              | _ :: pats -> `Function (Types.fresh_type_variable (),
+                                                          Types.fresh_type_variable (),
+                                                          makeft pats)
+                          in
+                            makeft pats in
                         let _ = unify (ft, snd (Env.lookup body_env name)) in
                           (name, (pats, body), location, t) :: defs) [] defs patss) in
             let env =
