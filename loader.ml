@@ -32,7 +32,7 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
         (Debug.print("No precompiled " ^ filename);
          raise (Sys_error "Precompiled source file out of date."))
     with (Sys_error _| Unix.Unix_error _) ->
-      let program = measure "parse" (Parse.parse_file Parse.program) filename in
+      let program, sugar = measure "parse" (Parse.parse_file Parse.program) filename in
       let env, program = measure "type" (Inference.type_program Library.typing_env) program in
       let program = measure "optimise" Optimiser.optimise_program (env, program) in
       let program = Syntax.labelize program

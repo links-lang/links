@@ -25,7 +25,7 @@ let equals : ('a -> string) -> 'a -> 'a -> (string, 'a) either
 open Utility.EitherMonad
 
 let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
-let parse = attempt (Parse.parse_string Parse.program)
+let parse = attempt (Parse.parse_string Parse.program ->- fst)
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
 let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_value Basicsettings.prelude_file) in
                          let prelude, _ = Interpreter.run_program [] [] prelude in
@@ -79,7 +79,7 @@ let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
                  (Types.Show_datatype.show body_type)
 )
 
-let datatype = Parse.parse_string Parse.datatype
+let datatype = Parse.parse_string Parse.datatype ->- fst
 
 let functionp : Result.result -> Result.result m = function
   | `RecFunction _ as f -> Right f

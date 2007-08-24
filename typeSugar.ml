@@ -1,5 +1,3 @@
-
-
 open Utility
 open Sugartypes
 
@@ -162,7 +160,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (r, mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let datatype = Parse.parse_string Parse.datatype ->- snd
+let datatype = Parse.parse_string Parse.datatype ->- fst ->- snd
 
 let type_unary_op env = function
   | `Minus      -> datatype "(Int) -> Int"
@@ -951,3 +949,20 @@ let file lookup_pos typing_env : (Sugartypes.binding list * Sugartypes.phrase op
   fun (binds, p) -> 
     let env', binds = type_bindings lookup_pos typing_env binds in 
       binds, opt_map (type_check lookup_pos env') p
+
+let type_sugar = Settings.add_bool("type_sugar", true, `User)
+
+module Check =
+struct
+  let file env (c, lookup) = 
+    if Settings.get_value type_sugar then
+      ignore (file lookup env c)
+
+  let sentence env (c, lookup) = 
+    if Settings.get_value type_sugar then
+      ignore (sentence lookup env c)
+
+  let expression env (c, lookup) = 
+    if Settings.get_value type_sugar then
+      ignore (type_check lookup env c)
+end

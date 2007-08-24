@@ -40,8 +40,9 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude typenv filename = 
-  let program = lazy(Parse.parse_file Parse.program filename)
+  let program, sugar = lazy(Parse.parse_file Parse.program filename)
     <|measure_as|> "parse" in
+  let () = TypeSugar.Check.file typenv sugar in
   let tenv, program = lazy(Inference.type_program typenv program)
     <|measure_as|> "type" in
   let tenv, program = 

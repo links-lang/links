@@ -76,7 +76,8 @@ let rec directives
               let library_types, libraries =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
-              let program = Parse.parse_file Parse.program filename in
+              let program, sugar = Parse.parse_file Parse.program filename in
+              let () = TypeSugar.Check.file library_types sugar in
               let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
               let program = Syntax.labelize program in
@@ -88,7 +89,7 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let _,t = Parse.parse_string Parse.datatype (String.concat " " args) in
+          | _ -> let (_,t), _ = Parse.parse_string Parse.datatype (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then
@@ -124,7 +125,9 @@ let print_result rtype result =
                  else "")
 
 (** type, optimise and evaluate a program *)
-let process_program ?(printer=print_result) (valenv, typingenv) program = 
+let process_program ?(printer=print_result) (valenv, typingenv) 
+    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
+  let () = TypeSugar.Check.file typingenv sugar in
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
@@ -151,14 +154,16 @@ let interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
-           (match measure "parse" parse input with 
-              | `Definitions [] -> envs
-              | `Definitions defs -> 
+           (match (measure "parse" parse input :   Sugartypes.sentence' * (Sugartypes.sentence * (Sugartypes.pposition -> Syntax.position)))
+            with 
+              | `Definitions [], _ -> envs
+              | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =
                     process_program
                       ~printer:(fun _ _ -> ())
                       envs
-                      (Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position)))
+                      ((Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position))),
+                       ((sugar, None), lookup))
                   in
                     ListLabels.iter defs'
                        ~f:(function
@@ -170,9 +175,9 @@ let interact envs =
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
-              | `Expression expr -> 
-                  let envs, _, _ = process_program envs (Syntax.Program ([], expr)) in envs
-              | `Directive directive -> execute_directive directive envs))
+              | `Expression expr, (`Expression sexpr, lookup) -> 
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), (([], Some sexpr), lookup)) in envs 
+              | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
       interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))

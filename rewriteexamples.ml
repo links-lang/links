@@ -229,7 +229,7 @@ let bind_freevars e : Syntax.untyped_expression =
                      if StringSet.mem var library_globals then e else
                        Syntax.Abstr ([var], e, `U Syntax.dummy_position)) (StringSet.elements(Syntax.freevars e)) e
     
-let parse = Parse.parse_string Parse.program ->- Syntax.program_body
+let parse = Parse.parse_string Parse.program ->- fst ->- Syntax.program_body
 let type_e = Inference.type_expression Library.typing_env ->- snd
 
 let run = 

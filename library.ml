@@ -95,7 +95,7 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
-let datatype = Parse.parse_string Parse.datatype
+let datatype = Parse.parse_string Parse.datatype ->- fst
 
 let int_op impl pure : located_primitive * Types.assumption * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
