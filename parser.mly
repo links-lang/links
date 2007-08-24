@@ -95,7 +95,6 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.ppattern> pattern
-%type <Sugartypes.block> block
 %type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.pposition> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression

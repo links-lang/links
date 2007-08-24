@@ -919,8 +919,8 @@ module Desugarer =
          and ftv (_, e) = phrase e
          and ftvs f = flatten (List.map ftv f)
          and funlit (p, b : funlit) = (flatten (concat_map (List.map ptv) p) @ phrase b)
-         and block (bs, p : block) = flatten (List.map (fst ->- binding) bs) @ phrase p
-         and binding (b : binding') = match b with
+         and block (bs, p : binding list * phrase) = flatten (List.map (fst ->- binding) bs) @ phrase p
+         and binding (b) = match b with
              | `Fun (_, f, _, k) -> 
                  flatten [funlit f; opt_app tv [] k]
              | `Val (p, e, _, k) -> flatten [ptv p; phrase e; opt_app tv [] k]
@@ -1604,7 +1604,7 @@ module Desugarer =
      let _, ((tenv, _) as var_env) = generate_var_mapping (get_type_vars (s, pos')) in
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression lookup_pos in
-     let ds : binding' -> _ Syntax.definition' = function
+     let ds : (ppattern, phrase) binding' -> _ Syntax.definition' = function
        | `Val ((`Variable name, _), p, location, None) ->
            Define (name, desugar_expression p, location, pos)
        | `Val ((`Variable name, _), p, location, Some t) ->

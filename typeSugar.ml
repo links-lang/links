@@ -3,15 +3,21 @@
 open Utility
 open Sugartypes
 
-module rec Typed
-  : Phrase with module P = TypedArgs
-  = Typed
-and TypedArgs : sig
-  type phrase   = Typed.phrasenode * (pposition * Types.datatype)
-  type ppattern = Typed.pattern * (pposition * (Types.environment * Types.datatype))
-  type binding = Typed.binding' * pposition
+module Untyped = Sugartypes
+
+module Typed =
+struct
+  type phrase   = (ppattern, phrase, binding) phrasenode' * (pposition * Types.datatype)
+  and ppattern = ppattern pattern' * (pposition * (Types.environment * Types.datatype))
+  and binding = (ppattern, phrase) binding' * pposition
+
+  type funlit = (ppattern, phrase) funlit'
+  type sentence = (phrase, binding) sentence''
+      
+  type phrasenode = (ppattern, phrase, binding) phrasenode'
+  type regex = phrase regex'
+  type pattern = ppattern pattern'
 end
-  = TypedArgs
 
 
 module Env = Env.String
@@ -811,7 +817,7 @@ and type_binding lookup_pos : Types.typing_environment -> Untyped.binding -> Typ
     and tpc = type_pattern `Closed lookup_pos alias_env
     and pattern_env  (_,(_,(e,_))) = e
     and (++) env' (env, alias_env) = (Env.extend env' env, alias_env) in
-    let typed, env = match (def : Untyped.binding') with
+    let typed, env = match def with
         | `Val (pat, body, location, datatype) -> 
             let body = tc body in
             let pat = tpc pat in

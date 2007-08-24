@@ -66,118 +66,104 @@ type assumption = quantifier list * datatype
 type fieldconstraint = [ `Readonly ]
     deriving (Show)
 
-module type PhraseArgs = sig
-  type ppattern
-  type phrase
-  type binding
-end
+type constant = [
+| `Float of float
+| `Int of Num.num
+| `String of string
+| `Bool of bool
+| `Char of char ]
+    
+type 'ppattern pattern' = [
+| `Any
+| `Nil
+| `Cons of ('ppattern * 'ppattern)
+| `List of ('ppattern list)
+| `Variant of (string * 'ppattern option)
+| `Record of ((string * 'ppattern) list * 'ppattern option)
+| `Tuple of ('ppattern list)
+| `Constant of constant
+| `Variable of string
+| `As of (string * 'ppattern)
+| `HasType of 'ppattern * datatype
+]
+    
+type 'phrase regex' = [
+| `Range of (char * char)
+| `Simply of string
+| `Quote of 'phrase regex'
+| `Any
+| `StartAnchor
+| `EndAnchor
+| `Seq of 'phrase regex' list
+| `Alternate of ('phrase regex' * 'phrase regex')
+| `Group of 'phrase regex'
+| `Repeat of (Regex.repeat * 'phrase regex')
+| `Splice of 'phrase
+| `Replace of ('phrase regex' * [`Literal of string | `Splice of 'phrase]) ]
 
-module type Phrase = sig
-  module P : PhraseArgs
+type ('ppattern, 'phrase) funlit' = 'ppattern list list * 'phrase
 
-  type phrase = P.phrase
-  type ppattern = P.ppattern
-  type binding = P.binding
+type ('ppattern, 'phrase, 'binding) phrasenode' = [
+| `Constant of constant
+| `Var of (name)
+| `FunLit of ('ppattern, 'phrase) funlit'
+| `Spawn of 'phrase
+| `SpawnWait of 'phrase
+| `ListLit of ('phrase list)
+| `Iteration of ([ `List of 'ppattern * 'phrase | `Table of 'ppattern * 'phrase ] * 'phrase * (*where:*)'phrase option 
+                 * (*orderby:*)'phrase option)
+| `Escape of (name * 'phrase)
+| `Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
+| `Conditional of ('phrase * 'phrase * 'phrase)
+| `Block of 'binding list * 'phrase
+| `InfixAppl of (binop * 'phrase * 'phrase)
+| `Regex of ('phrase regex')
+| `UnaryAppl of (unary_op * 'phrase)
+| `FnAppl of ('phrase * 'phrase list)
+| `TupleLit of ('phrase list)
+| `RecordLit of ((name * 'phrase) list * 'phrase option)
+| `Projection of ('phrase * name)
+| `With of ('phrase * (name * 'phrase) list)
+| `TypeAnnotation of ('phrase * datatype)
+| `ConstructorLit of (name * 'phrase option)
+| `Switch of ('phrase * ('ppattern * 'phrase) list)
+| `Receive of ('ppattern * 'phrase) list
+| `DatabaseLit of ('phrase * ('phrase option * 'phrase option))
+| `TableLit of ('phrase * datatype * (string * fieldconstraint list) list * 'phrase)
+| `DBDelete of ('ppattern * 'phrase * 'phrase option)
+| `DBInsert of ('phrase * 'phrase)
+| `DBUpdate of ('ppattern * 'phrase * 'phrase option * (name * 'phrase) list)
+| `Xml of (name * (string * ('phrase list)) list * 'phrase list)
+| `TextNode of (string)
+| `Formlet of ('phrase * 'phrase)
+| `FormBinding of ('phrase * 'ppattern) ]
 
-  type constant = [
-  | `Float of float
-  | `Int of Num.num
-  | `String of string
-  | `Bool of bool
-  | `Char of char ]
+type ('ppattern, 'phrase) binding' = [
+| `Val of 'ppattern * 'phrase * location * datatype option
+| `Fun of name * ('ppattern, 'phrase) funlit' * location * datatype option
+| `Funs of (name * ('ppattern, 'phrase) funlit' * location * datatype option) list
+| `Foreign of name * name * datatype
+| `Type of (name * name list * datatype)
+| `Infix
+| `Exp of 'phrase ]
+    
+type directive = string * string list
+    
+type ('phrase, 'binding) sentence'' = [ 
+| `Definitions of 'binding list
+| `Expression of 'phrase
+| `Directive of directive ]
 
-  type pattern = [
-  | `Any
-  | `Nil
-  | `Cons of (ppattern * ppattern)
-  | `List of (ppattern list)
-  | `Variant of (string * ppattern option)
-  | `Record of ((string * ppattern) list * ppattern option)
-  | `Tuple of (ppattern list)
-  | `Constant of constant
-  | `Variable of string
-  | `As of (string * ppattern)
-  | `HasType of ppattern * datatype
-  ]
-      
-  type phrasenode = [
-  | `Constant of constant
-  | `Var of (name)
-  | `FunLit of funlit
-  | `Spawn of phrase
-  | `SpawnWait of P.phrase
-  | `ListLit of (phrase list)
-  | `Iteration of ([ `List of ppattern * phrase | `Table of ppattern * phrase ] * phrase * (*where:*)phrase option 
-                  * (*orderby:*)phrase option)
-  | `Escape of (name * phrase)
-  | `Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
-  | `Conditional of (phrase * phrase * phrase)
-  | `Block of block
-  | `InfixAppl of (binop * phrase * phrase)
-  | `Regex of (regex)
-  | `UnaryAppl of (unary_op * phrase)
-  | `FnAppl of (phrase * phrase list)
-  | `TupleLit of (phrase list)
-  | `RecordLit of ((name * phrase) list * phrase option)
-  | `Projection of (phrase * name)
-  | `With of (phrase * (name * phrase) list)
-  | `TypeAnnotation of (phrase * datatype)
-  | `ConstructorLit of (name * phrase option)
-  | `Switch of (phrase * (ppattern * phrase) list)
-  | `Receive of (ppattern * phrase) list
-  | `DatabaseLit of (phrase * (phrase option * phrase option))
-  | `TableLit of (phrase * datatype * (string * fieldconstraint list) list * phrase)
-  | `DBDelete of (ppattern * phrase * phrase option)
-  | `DBInsert of (phrase * phrase)
-  | `DBUpdate of (ppattern * phrase * phrase option * (name * phrase) list)
-  | `Xml of (name * (string * (phrase list)) list * phrase list)
-  | `TextNode of (string)
-  | `Formlet of (phrase * phrase)
-  | `FormBinding of (phrase * ppattern) ]
-  and block = binding list * phrase
-  and binding' = [
-  | `Val of ppattern * phrase * location * datatype option
-  | `Fun of name * funlit * location * datatype option
-  | `Funs of (name * funlit * location * datatype option) list
-  | `Foreign of name * name * datatype
-  | `Type of (name * name list * datatype)
-  | `Infix
-  | `Exp of phrase ]
-  and funlit = ppattern list list * phrase
-  and regex = [
-  | `Range of (char * char)
-  | `Simply of string
-  | `Quote of regex
-  | `Any
-  | `StartAnchor
-  | `EndAnchor
-  | `Seq of regex list
-  | `Alternate of (regex * regex)
-  | `Group of regex
-  | `Repeat of (Regex.repeat * regex)
-  | `Splice of phrase
-  | `Replace of (regex * [`Literal of string | `Splice of phrase]) ]
+type phrase = (ppattern, phrase, binding) phrasenode' * pposition
+and ppattern = ppattern pattern' * pposition
+and binding = (ppattern, phrase) binding' * pposition
 
-  type directive = string * string list
+type funlit = (ppattern, phrase) funlit'
+type sentence = (phrase, binding) sentence''
 
-  type sentence = [ 
-    `Definitions of binding list
-  | `Expression of phrase
-  | `Directive of directive ]
-end
-
-module rec Untyped
- : Phrase with module P = UntypedArgs
- = Untyped
-and UntypedArgs : sig
-  type phrase   = Untyped.phrasenode * pposition
-  type ppattern = Untyped.pattern * pposition
-  type binding = Untyped.binding' * pposition
-end
-  = UntypedArgs
-
-include Untyped
-
+type phrasenode = (ppattern, phrase, binding) phrasenode'
+type regex = phrase regex'
+type pattern = ppattern pattern'
 
 type sentence' = [ `Definitions of Syntax.untyped_definition list
 | `Expression of Syntax.untyped_expression
@@ -293,7 +279,7 @@ struct
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and block (binds, expr : block) : StringSet.t = 
+  and block (binds, expr : binding list * phrase) : StringSet.t = 
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->
             let patbound, exprfree = binding bind in
