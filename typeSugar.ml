@@ -663,7 +663,13 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : Type
               `FnAppl (f, ps), rettyp
 
         (* xml *)
+        | `Xml _ as x when Sugar.LAttrs.has_lattrs x ->
+            (* This doesn't belong here.  Once we've tidied things up
+               a bit this will be performed in an earlier phase *)
+            let phrase, (_, t) = type_check typing_env (Sugar.LAttrs.replace_lattrs (expr, pos)) in
+              phrase, t
         | `Xml (tag, attrs, children) ->
+
             let attrs = alistmap (List.map (type_check typing_env)) attrs
             and children = List.map (type_check typing_env) children in
             let _ = List.iter (snd ->- List.iter (fun attr -> unify (Types.string_type, typ attr))) attrs
