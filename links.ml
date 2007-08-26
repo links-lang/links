@@ -77,7 +77,9 @@ let rec directives
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let program, sugar = Parse.parse_file Parse.program filename in
-              let () = TypeSugar.Check.file library_types sugar in
+              let () =
+                if Settings.get_value type_source then
+                  TypeSugar.Check.file library_types sugar in
               let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
               let program = Syntax.labelize program in
@@ -127,7 +129,9 @@ let print_result rtype result =
 (** type, optimise and evaluate a program *)
 let process_program ?(printer=print_result) (valenv, typingenv) 
     ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
-  let () = TypeSugar.Check.file typingenv sugar in
+  let () =
+    if Settings.get_value type_source then
+      TypeSugar.Check.file typingenv sugar in
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
