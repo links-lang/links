@@ -960,8 +960,9 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
   in
     type_binding
 and type_regex lookup_pos typing_env : Untyped.regex -> Typed.regex =
+  fun m -> 
   let tr = type_regex lookup_pos typing_env in
-    function
+    match m with
       | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> r
       | `Quote r -> `Quote (tr r)
       | `Seq rs -> `Seq (List.map tr rs)
