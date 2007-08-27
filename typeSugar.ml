@@ -477,7 +477,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
   let rec type_check ({tenv = (env, alias_env)} as context) (expr, pos) =
     let unify = Utils.unify alias_env
     and unify_rows = Utils.unify_rows alias_env 
-    and (++) env' (env, alias_env) = (Env.extend env' env, alias_env)
+    and (++) (env, alias_env) env' = (Env.extend env env', alias_env)
     and typ (_,(_,t)) = t 
     and pattern_typ (_, (_,(_,t))) = t
     and pattern_env (_, (_,(e,_))) = e
@@ -552,7 +552,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             end
         | `FunLit (pats, body) ->
             let pats = List.map (List.map tpc) pats in
-            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+            let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
             let env', aliases = List.fold_left fold_in_envs context.tenv pats in
             let body = type_check {context with tenv = (Env.bind env' (mailbox, ([], Types.fresh_type_variable ())), aliases)} body in
             let ftype = 
@@ -604,7 +604,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ from, `Table (read, write))
             and _ = unify (pattern_typ pat, write) in
-            let where = opt_map (type_check {context with tenv = ((pattern_env pat) ++ context.tenv)}) where in
+            let where = opt_map (type_check {context with tenv = (context.tenv ++ pattern_env pat)}) where in
             let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
               `DBDelete (pat, from, where), Types.unit_type
         | `DBInsert (into, values) ->
@@ -622,7 +622,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ from, `Table (read, write))
             and _ = unify (pattern_typ pat, write) in
-            let context' = {context with tenv = (pattern_env pat) ++ context.tenv} in
+            let context' = {context with tenv = context.tenv ++ pattern_env pat} in
             let where = opt_map (type_check context') where in
             let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
             let set = List.map 
@@ -656,7 +656,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               List.fold_right
                 (fun (pat, body) (binders, pats) ->
                    let pat = tpo pat in
-                   let body = type_check {context with tenv = (pattern_env pat ++ context.tenv)} body in
+                   let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
                    let _ = unify (pattern_typ pat, pt)
                    and _ = unify (typ body, rtype) in
                      (pat, body)::binders, pat :: pats)
@@ -705,7 +705,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = tc body in
-            let context' = {context with tenv = (extract_formlet_bindings body) ++ context.tenv} in
+            let context' = {context with tenv = context.tenv ++ extract_formlet_bindings body} in
             let yields = type_check context' yields in
               unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
@@ -729,14 +729,14 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
                     and e = tc e in             
                       unify (lt, typ e);
                       unify (a, pattern_typ pattern);
-                      `List (pattern, e), {context with tenv = pattern_env pattern ++ context.tenv}
+                      `List (pattern, e), {context with tenv = context.tenv ++ pattern_env pattern}
                 | `Table (pattern, e) ->
                     let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
                     let pattern = tpc pattern
                     and e = tc e in
                       unify (tt, typ e);
                       unify (lt, pattern_typ pattern);
-                      `Table (pattern, e), {context with tenv = pattern_env pattern ++ context.tenv} in
+                      `Table (pattern, e), {context with tenv = context.tenv ++ pattern_env pattern} in
             let tc = type_check context in
             let body = tc body in
             let where = opt_map tc where in
@@ -828,7 +828,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               List.fold_right
                 (fun (pat, body) (binders, pats) ->
                    let pat = tpo pat in
-                   let body = type_check {context with tenv = (pattern_env pat ++ context.tenv)} body in
+                   let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
                    let _ = unify (pattern_typ pat, pt) in
                    let _ = unify (typ body, bt) in
                      (pat, body)::binders, pat :: pats)
