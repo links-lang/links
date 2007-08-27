@@ -845,7 +845,7 @@ module Desugarer =
                      (tenv, StringMap.add name
                         (Unionfind.fresh (`Flexible var)) renv))) vars ([], (StringMap.empty, StringMap.empty))
 
-   let desugar_datatype, desugar_row =
+   let desugar_datatype', desugar_row =
      let rec desugar ((tenv, renv) as var_env) =
        let lookup_type = flip StringMap.find tenv in
          function
@@ -896,7 +896,7 @@ module Desugarer =
 
    let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
      let vars, var_env = generate_var_mapping vars in
-       vars, desugar_datatype var_env k
+       vars, desugar_datatype' var_env k
 
    let rec get_type_vars : binding -> quantifier list =
      let empty = [] in
@@ -926,7 +926,10 @@ module Desugarer =
              | `Val (p, e, _, k) -> flatten [ptv p; phrase e; opt_app tv [] k]
              | `Foreign (_, _, datatype) -> tv datatype
              | `Type (_, args, datatype) -> [List.map (fun k -> `RigidTypeVar k) args] @ tv datatype
-             | `Funs _ -> assert false (* TODO *)
+             | `Funs fs -> 
+                 concat_map
+                   (fun (_, f, _, k) -> flatten [funlit f; opt_app tv [] k])
+                   fs
              | `Exp e -> phrase e
              | `Infix -> []
          and phrase (p, _) = match p with
@@ -1104,7 +1107,7 @@ module Desugarer =
        let appPrim = appPrim pos in
        let desugar = desugar' lookup_pos in
          match (s : phrasenode) with
-           | `TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
+           | `TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype' var_env k, pos)
            | `Constant p -> desugar_constant pos p
            | `Var v       -> Variable (v, pos)
            | `InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
@@ -1520,7 +1523,7 @@ module Desugarer =
                ps
                (`Nil, pos)
          | `As (name, p) -> `As (name, desugar p), pos
-         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype var_env datatype), pos
+         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype' var_env datatype), pos
          | `Variant (l, Some v) ->
              `Variant (l, desugar v), pos
          | `Variant (l, None) ->
@@ -1608,10 +1611,10 @@ module Desugarer =
        | `Val ((`Variable name, _), p, location, None) ->
            Define (name, desugar_expression p, location, pos)
        | `Val ((`Variable name, _), p, location, Some t) ->
-           Define (name, HasType (desugar_expression p, desugar_datatype var_env t, pos), location, pos)
+           Define (name, HasType (desugar_expression p, desugar_datatype' var_env t, pos), location, pos)
        | `Val _ -> assert false (* TODO: handle other patterns *)
        | `Fun (name, funlit, location, dtype) ->
-           Define (name,  Rec ([name, desugar_expression (`FunLit funlit, pos'), opt_map (desugar_datatype var_env) dtype],
+           Define (name,  Rec ([name, desugar_expression (`FunLit funlit, pos'), opt_map (desugar_datatype' var_env) dtype],
                                 Variable (name, pos),
                                pos),
                    location, pos)
@@ -1624,7 +1627,7 @@ module Desugarer =
              if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
                Alias (name,
                       List.map get_var args,
-                      desugar_datatype var_env rhs, pos)
+                      desugar_datatype' var_env rhs, pos)
              else
                failwith ("Free variable(s) in alias")
        | `Foreign (language, name, datatype) -> 
@@ -1663,9 +1666,15 @@ module Desugarer =
     val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
     val desugar_definitions : (pposition -> Syntax.position) -> binding list -> Syntax.untyped_definition list
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val desugar_datatype' : (Types.meta_type_var Utility.StringMap.t *
+                               Types.meta_row_var Utility.StringMap.t) -> Sugartypes.datatype -> Types.datatype
     val desugar_assumption : Sugartypes.assumption -> Types.assumption 
     val fresh_type_variable : unit -> Sugartypes.datatype
     val make_write_row : row -> (string * fieldconstraint list) list -> row
+    val generate_var_mapping : Sugartypes.quantifier list -> (Types.quantifier list * 
+                                                                (Types.meta_type_var Utility.StringMap.t *
+                                                                   Types.meta_row_var Utility.StringMap.t))
+    val get_type_vars : Sugartypes.binding -> Sugartypes.quantifier list
   end)
 
 include Desugarer
