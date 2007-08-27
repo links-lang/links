@@ -799,7 +799,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and fields_type =
               `Record (List.fold_right
                          (fun (lab, rhs) row ->
-                            Types.row_with (lab, `Present (typ rhs)) row)
+                            Types.row_with (lab, `Present (Types.fresh_type_variable ())) row)
                          fields (Types.make_empty_open_row ())) in
               unify (fields_type, rtype);
               `With (r, fields), rtype
