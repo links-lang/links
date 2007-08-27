@@ -79,7 +79,6 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
             | `Bool true -> `True
             | `Bool false -> `False
             | `Int value -> `N value
-(*             | `Float value -> `Float value *)
             | `List (`Char _::_) as c  
               -> `Str (db # escape_string (charlist_as_string c))
             | `List ([]) -> `Str ""
@@ -94,7 +93,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
         `Op(symbol, normalise_expression left, normalise_expression right)
     | `Not expr ->
         `Not(normalise_expression expr)
-    | `Like(lhs, regex) -> Debug.print("normalising like");
+    | `Like(lhs, regex) -> 
         `Like(normalise_expression lhs,
               normalise_like_expression regex)
     | expr -> expr
@@ -181,11 +180,16 @@ let client_call_impl name cont (args:Result.result list) =
   in
     if (not !has_client_context) then 
       begin
+        let make_boiler_page, generate_program_defs =
+          if Settings.get_value (Basicsettings.use_monadic_ir) then
+            Irtojs.make_boiler_page, Irtojs.generate_program_defs
+          else
+            Js.make_boiler_page, Js.generate_program_defs in
         let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
         let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
-            (Irtojs.make_boiler_page ~onload:start_script
-               (Irtojs.generate_program_defs defs (StringSet.singleton name)))
+            (make_boiler_page ~onload:start_script
+               (generate_program_defs defs (StringSet.singleton name)))
           ; exit 0
       end
     else begin

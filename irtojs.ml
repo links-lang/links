@@ -11,10 +11,10 @@ open Utility
 open Syntax
 open Ir
 
-let optimising = Settings.add_bool("optimise_javascript", true, `User)
-let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, `User)
-let js_lib_url = Settings.add_string("jsliburl", "lib/", `User)
-let js_pretty_print = Settings.add_bool("js_pretty_print", true, `User)
+let optimising = Basicsettings.Js.optimise
+let elim_dead_defs = Basicsettings.Js.elim_dead_defs
+let js_lib_url = Basicsettings.Js.lib_url
+let js_pretty_print = Basicsettings.Js.pp
 
 let get_js_lib_url () = Settings.get_value js_lib_url
 
@@ -847,7 +847,7 @@ let elim_defs defs root_names =
 
 let generate_program_defs defs root_names =
   let defs = List.map Symbols.rename_def defs in
-  (* [NOTE] body is just a placeholder *)
+  (* NOTE: the body is not really used here *)
   let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
@@ -857,7 +857,7 @@ let generate_program_defs defs root_names =
   let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ library_names))) defs in
 
-  let _ = Debug.print ("defs(1): "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in
+(*   let _ = Debug.print ("defs(1): "^String.concat "\n" (List.map string_of_definition defs)) in *)
 
   let defs =
     (if Settings.get_value elim_dead_defs then
@@ -865,17 +865,16 @@ let generate_program_defs defs root_names =
      else defs) in
 
   let initial_env = Compileir.make_initial_env ("map" :: "stringifyB64" :: library_names) in
-  let _ = Debug.print ("initial_env: "^Env'.Show_env.show (invert_env initial_env)) in
-
-  let _ = Debug.print ("defs(2): "^String.concat "\n" (List.map (* (Syntax.Show_definition.show) *)string_of_definition defs)) in
-    Debug.print ("hmm... "^string_of_bool(Library.is_primitive "+"));
+(*   let _ = Debug.print ("initial_env: "^Env'.Show_env.show (invert_env initial_env)) in *)
+(*   let _ = Debug.print ("defs(2): "^String.concat "\n" (List.map string_of_definition defs)) in *)
+(*     Debug.print ("hmm... "^string_of_bool(Library.is_primitive "+")); *)
 
   let ((defs', _) as p, _) = Compileir.compile_program initial_env (Program (defs, body)) in
 (*  let _ = Debug.print (Show_computation.show p) in*)
 
   let env = Compileir.add_globals_to_env initial_env defs' in
   let env' = invert_env env in
-  let _ = Debug.print ("env': "^Env'.Show_env.show env') in
+(*   let _ = Debug.print ("env': "^Env'.Show_env.show env') in *)
   let env', js_defs = gen_defs env' defs' in
   let js_defs = [show js_defs] in
     (env, env'), js_defs

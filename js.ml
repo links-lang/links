@@ -10,10 +10,10 @@ open Pickle
 open Utility
 open Syntax
 
-let optimising = Settings.add_bool("optimise_javascript", true, `User)
-let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, `User)
+let optimising = Basicsettings.Js.optimise
+let elim_dead_defs = Basicsettings.Js.elim_dead_defs
+let js_lib_url = Basicsettings.Js.lib_url
 let js_rename_builtins = Settings.add_bool("js_rename_builtins", false, `User)
-let js_lib_url = Settings.add_string("jsliburl", "lib/", `User)
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (* Intermediate language *)
@@ -131,7 +131,6 @@ let optimise e =
     fromOption e 
       (RewriteCode.all [remove_renamings; concat_lits] e)
   else e
-
 
 (*
   Runtime required (any JavaScript functions used /must/ be documented here!)
@@ -275,7 +274,6 @@ let rec format_code c : PP.doc =
     | Fn _ as f -> show_func_pp "" f
     | Call (Var "LINKS.project", [label; record]) -> 
         maybe_parenize record ^^ (brackets (format_code label))
-          (* (paren record) ^ "[" ^ show label ^ "]" *)
     | Call (Var "hd", [list;kappa]) -> 
         (maybe_parenize kappa) ^^ (parens (maybe_parenize list ^^ PP.text "[0]"))
     | Call (Var "tl", [list;kappa]) -> 
@@ -314,17 +312,6 @@ let chrlit ch = Lit(string_js_quote(string_of_char ch))
 (** [chrlistlit] produces a JS literal for the representation of a Links 
     string. *)
 let chrlistlit s  = Lst(map chrlit (explode s))
-
-(* Specialness:
-
-   * Top-level boilerplate code to replace the root element and reset the focus
-
-     The special function _start takes an html page as a string and
-     replaces the currently displayed page with that one.
-
-     Some of the other functions are equivalents to Links builtins
-     (e.g. int_of_string, xml)
- *)
 
 let script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
@@ -463,7 +450,7 @@ let end_thread expr = Call(expr, [idy_js])
     (note anomalous arg order.) *)
 let make_xml_cps attrs_cps attrs_direct children_cps children_direct tag = 
   let innermost_expr = 
-    Call(Var "LINKS.XML",
+    Call(Var "LINKS.XMLk",
          [strlit tag;
           Dict (attrs_direct @ map (fun ((k, _), n) -> (k, Var n)) attrs_cps);
           Lst (children_direct @ map (fun (_, n) -> Var n) children_cps);
@@ -490,8 +477,8 @@ let cps_prims = ["recv"; "sleep"; "spawnWait"]
     
     With CPS transform, result of generate is always : (a -> w) -> b
 *)
-let rec generate global_names : 'a expression' -> code = 
-  let generate' expr =  generate global_names expr in
+let rec generate : 'a expression' -> code = 
+  let generate' expr =  generate expr in
     function
   | HasType (e, _, _)                  -> generate' e
   | Constant (c, _)                    ->
@@ -550,9 +537,7 @@ let rec generate global_names : 'a expression' -> code =
       let content_cps = generate' e in
         Fn(["__kappa"],
            (Call(content_cps, [Fn(["__x"], callk_yielding (Lst [Var "__x"]))])))
-  | (Concat _) as c          -> 
-      generate_concat global_names c
-(*  | Concat (l, r, _)         -> Call (Var "LINKS.concat", [generate' l; generate' r])*)
+  | Concat _ as c         ->  generate_concat c
   | For (e, v, b, _)  -> 
       let b_cps = generate' b in
       let e_cps = generate' e in
@@ -563,22 +548,10 @@ let rec generate global_names : 'a expression' -> code =
                                            Var "__b";
                                            Var "__kappa"]))]))
   | Xml_node (tag, attrs, children, _) as xml ->
-(
-    
-  let attrs_cps = alistmap (generate global_names) attrs in 
-  let attrs_cps = pair_fresh_names attrs_cps in
-  let children_cps = pair_fresh_names (map (generate global_names) children) in
-  let key_attr = []
-
-    (* make_var_list pairs each variable name (as a string) with the
-       variable itself. At runtime this is like pairing the variable
-       names with their values, effectively capturing the environment. *)
-  and href_attr = [] in
-    make_xml_cps attrs_cps (key_attr @ href_attr)
-      children_cps [] tag
-
-)
-
+      let attrs_cps = alistmap generate attrs in 
+      let attrs_cps = pair_fresh_names attrs_cps in
+      let children_cps = pair_fresh_names (map generate children) in
+        make_xml_cps attrs_cps [] children_cps [] tag
 
   (* Functions *)
   | Abstr (arglist, body, _) ->
@@ -630,8 +603,6 @@ let rec generate global_names : 'a expression' -> code =
               -> 
               (* Don't yield when calling library functions.
                  In the future library functions should be "native". *)
-(*               Call(Var f_name, *)
-(*                    (map (fun name -> Var name) arg_names) @ [kappa]) *)
               Call (Var "__kappa",
                     [Call(Var("_" ^ l),
                          (map (fun name -> Var name) arg_names))])
@@ -764,9 +735,6 @@ let rec generate global_names : 'a expression' -> code =
           part of an administrative redex as the continuation is duplicated
         *)
       in
-(*         Fn([k],  *)
-(* 	   Call (Call(generate' e, [Var k]),  *)
-(* 	         [Fn (["__ignore"],Var k)])) *)
         Fn([k],
            Call(generate' e, [Fn(["_f"], 
                                  apply_yielding("_f", 
@@ -797,26 +765,24 @@ let rec generate global_names : 'a expression' -> code =
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
   | x -> failwith("Internal Error: JavaScript gen failed with unknown AST object " ^ string_of_expression x)
 
-and generate_concat global_names : 'a expression' -> code = 
+and generate_concat : 'a expression' -> code = 
     function
       | Concat (c, Nil _, _) -> 
-          generate_concat global_names c
+          generate_concat c
       | Concat (l, r, _) ->
-          let l_cps = generate global_names l in
-          let r_cps = generate global_names r in
+          let l_cps = generate l in
+          let r_cps = generate r in
             Fn(["__kappa"],
                Call(l_cps, [Fn(["__l"],
                    Call(r_cps, [Fn(["__r"],
                         callk_yielding (Call (Var "LINKS.concat", [Var "__l"; Var "__r"])))]))]))
-      | e ->          
-          (* failwith "unimpl"; *)
-          generate global_names e
+      | e ->          generate e
 
-and generate_def global_names : 'a definition' -> code = 
+and generate_def : 'a definition' -> code = 
   function
       (* Binding *)
     | Define (_, _, `Server, _) as d -> generate_server_stub d
-    | Define (_, _, `Native, _) as d -> generate_native_stub global_names d
+    | Define (_, _, `Native, _) as d -> generate_native_stub d
     | Define (n, e, (`Client|`Unknown), _) -> 
 (* [NOTE]
      Passing in _idy doesn't work because we are not in traditional CPS.
@@ -826,14 +792,14 @@ and generate_def global_names : 'a definition' -> code =
      to modify our CPS transform to produce CPS terms that explicitly return
      values.
 *)
-        Defs ([n, Call (generate global_names e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
+        Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
     | Alias _ 
     | Alien _ -> Nothing
 
 (* generate direct style code *)
-and generate_direct_style global_names : 'a expression' -> code =
-  let gcps = generate global_names in
-  let gd = generate_direct_style global_names
+and generate_direct_style : 'a expression' -> code =
+  let gcps = generate in
+  let gd = generate_direct_style
   in
     function
   | Constant (c, _)                    ->
@@ -889,13 +855,13 @@ and generate_direct_style global_names : 'a expression' -> code =
   | Record_intro (bs, r, _) ->
       let dict =
         Dict (StringMap.to_list (fun label e -> label, 
-                                         generate global_names e) bs)
+                                         generate e) bs)
       in
         begin
           match r with
             | None -> dict
             | Some r ->
-                Call (Var "LINKS.union", [dict; generate global_names r])
+                Call (Var "LINKS.union", [dict; generate r])
         end
   | Record_selection (l, lv, etcv, r, b, _) when StringSet.mem etcv (Syntax.freevars b) ->
       let name = gensym ~prefix:"_r" () in
@@ -941,18 +907,18 @@ and generate_direct_style global_names : 'a expression' -> code =
   | SortBy _
   | TableQuery _ as e -> failwith ("Cannot (yet?) generate JavaScript code for " ^ string_of_expression e)
 
-and generate_direct_style_def global_names : 'a definition' -> code = 
+and generate_direct_style_def : 'a definition' -> code = 
   function
       (* Binding *)
-    | Define _ as d -> generate_def global_names d
+    | Define _ as d -> generate_def d
     | Alias _ 
     | Alien _ -> Nothing
 
 (* Generate a native stub that calls the corresponding native function *)
-and generate_native_stub global_names = function
+and generate_native_stub = function
   | Define (n, Rec ([_, (Abstr (arg,body,_)), _], Variable _, _), `Native, _) ->
       let arglist = arg in
-        Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style global_names body))]
+        Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style body))]
   | def -> failwith ("Cannot generate native stub for " ^ string_of_definition def)
       
 let rec freevars = 
@@ -1061,14 +1027,14 @@ let simplify_completely = iterate_to_fixedpoint simplify_throughout
 let rec eliminate_admin_redexes = 
   simplify_completely
 
-let gen_def ?(pre_opt=identity) global_names =
-  generate_def global_names
+let gen_def ?(pre_opt=identity) =
+  generate_def
   ->- eliminate_admin_redexes
   ->- pre_opt
   ->- optimise
 
-let gen ?(pre_opt=identity) global_names =
-  generate global_names
+let gen ?(pre_opt=identity) =
+  generate
   ->- eliminate_admin_redexes
   ->- pre_opt
   ->- optimise
@@ -1095,22 +1061,34 @@ let words =
 
 let symbols = List.map fst words
 
-let wordify x = 
-  catch_notfound_l "wordify"
-    (lazy("_" ^ mapstrcat "_" (flip List.assoc words) (Utility.explode x)))
-
 let symbolp name =
   List.exists (not -<- Utility.Char.isWord) (explode name) &&
     (if Settings.get_value js_rename_builtins then true (* FIXME: this is a horrible hack. *)
      else (not (Library.is_primitive name)))
 
+let wordify name = 
+  if symbolp name then 
+    try
+    ("_" ^ 
+       mapstrcat "_" 
+       (fun ch ->
+          if (Utility.Char.isWord ch) then String.make 1 ch else
+            List.assoc ch words
+       )
+       (Utility.explode name))
+      (* TBD: it would be better if this split to chunks maximally matching
+         (\w+)|(\W)
+         then we would not split apart words in partly-symbolic idents. *)
+    with
+        Not_found -> failwith("Internal error: unknown symbol character")
+  else name
+
 let wordify_rewrite : RewriteSyntax.rewriter = function
-  | Variable (name, d) when symbolp name -> Some (Variable (wordify name, d))
-  | Let (name, rhs, body, d) when symbolp name -> Some (Let (wordify name, rhs, body, d))
-  | Rec (bindings, body, d) when List.exists (fst3 ->- symbolp) bindings -> 
-      let rename (x,y,z) =
-        ((if symbolp x then wordify x 
-          else x), y, z) in
+  | Variable (name, d) -> Some (Variable (wordify name, d))
+  | Let (name, rhs, body, d) -> 
+      Some (Let (wordify name, rhs, body, d))
+  | Rec (bindings, body, d) -> 
+      let rename (nm, body, t) = (wordify nm, body, t) in
         Some (Rec (List.map rename bindings, body, d))
   | _ -> None
 
@@ -1119,7 +1097,12 @@ let rename_symbol_operators exp =
 
 let rename_symbol_operators_def def =
   match def with
-    | Define (name, b,l,t) when symbolp name -> Define (wordify name, rename_symbol_operators b, l, t)
+    | Define (name, b, l, t) -> 
+        Define (wordify name, rename_symbol_operators b, l, t)
+    | Alias (name, args, t, data) ->
+        Alias (wordify name, args, t, data)
+    | Alien (name, b, l, t) when symbolp name ->
+        assert false (* I don't know what's supposed to happen here. *)
     | _ -> def
 
 let make_boiler_page ?(onload="") ?(body="") defs =
@@ -1138,30 +1121,31 @@ let get_alien_names defs =
 let generate_program_defs defs root_names =
   let aliens = get_alien_names defs in
   let defs = List.map rename_symbol_operators_def defs in
-  (* [NOTE] body is just a placeholder *)
+  (* NOTE: the body is not really used here. *)
   let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
-      Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
+      Optimiser.inline(Optimiser.inline(Optimiser.inline(Program(defs, body))))
     else Program (defs, body)
   in
-  let library_names = aliens @ (List.map fst (fst Library.typing_env)) in
+  let library_names = aliens @ StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let defs =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names
      else defs) in
   let global_names = Syntax.defined_names defs @ library_names in
-    map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def global_names ->- show_pp) defs
+    map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
-  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
   let expr = rename_symbol_operators expr in
-  let library_names = List.map fst (fst Library.typing_env) in
+  let defs = map rename_symbol_operators_def defs in
+  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
+  let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let global_names = Syntax.defined_names defs @ library_names in
   let js_root_expr = 
     (gen
        ~pre_opt:(fun expr -> Call(expr, [Var "_start"]))
-       global_names (fixup_hrefs (StringSet.from_list global_names) expr))
+       (fixup_hrefs (StringSet.from_list global_names) expr))
   in
     (make_boiler_page ~body:(show_pp js_root_expr) js_defs)
      
@@ -1179,10 +1163,10 @@ let generate_program ?(onload = "") (Program(defs,expr)) =
 
 let links2js s = 
   let Program (defs, body) =
-    (Parse.parse_string Parse.program
+    (Parse.parse_string Parse.program ->- fst
      ->- Inference.type_program Library.typing_env ->- snd) s in
-  let defs = map ((rewrite_def (Optimiser.uniquify_names)) ->- generate_def []) defs in
-  let body = ((Utility.perhaps_apply Optimiser.uniquify_names) ->- (generate [])) body in
+  let defs = map ((rewrite_def (Optimiser.uniquify_names)) ->- generate_def) defs in
+  let body = ((Utility.perhaps_apply Optimiser.uniquify_names) ->- generate) body in
     map simplify_completely (defs @ [body])
   
 let test_list = ref []
@@ -1234,11 +1218,11 @@ let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 let rhino_output linkscode =  
   let gen s =
     let Program (defs, body) =
-      (Parse.parse_string Parse.program
+      (Parse.parse_string Parse.program ->- fst
        ->- Inference.type_program Library.typing_env ->- snd) s
     in
       ((Utility.perhaps_apply Optimiser.uniquify_names)
-       ->- generate []
+       ->- generate
          ->- show) body in
   
   let tempfile = Filename.temp_file "linkstest" ".js" in

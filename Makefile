@@ -96,6 +96,7 @@ SOURCES = $(OPC)                		\
           ir.ml ir.mli                          \
           compileir.ml                          \
           irtojs.mli irtojs.ml                  \
+          js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
           evalir.ml                             \
           loader.ml                             \
@@ -105,7 +106,6 @@ SOURCES = $(OPC)                		\
           links.ml              		\
           rewriteexamples.ml                    \
 
-#          js.mli js.ml          		\
 
 
 LIBS    = unix nums str $(DB_LIBS) deriving

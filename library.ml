@@ -199,6 +199,15 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
+let add_attribute : result * result -> result -> result = 
+  fun (name,value) -> function
+    | `XML (Node (tag, children)) -> 
+        `XML (Node (tag, Attr (unbox_string name, unbox_string value) :: children)) 
+    | r -> failwith ("cannot add attribute to " ^ Result.string_of_result r)
+
+let add_attributes : (result * result) list -> result -> result =
+  List.fold_right add_attribute
+
 let env : (string * (located_primitive * Types.assumption * pure)) list = [
   "+", int_op (+/) PURE;
   "-", int_op (-/) PURE;
@@ -243,6 +252,17 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
      if (test) exit(1) else 42 *)
    datatype "(a) -> b",
   IMPURE);
+
+  (* Adds a list of attributes (represented as pairs of strings) to
+     each of the root nodes of an XML forest. *)
+  "addAttributes",
+  (p2 (fun xml attrs -> match xml, attrs with
+         | `List xmlitems, `List attrs -> 
+             let attrs = List.map (fun p -> unbox_pair p) attrs in
+               `List (List.map (add_attributes attrs) xmlitems)
+         | _ -> failwith "Internal error: addAttributes takes an XML forest and a list of attributes"),
+   datatype "(Xml, [(String, String)]) -> Xml",
+   PURE);
 
   "send",
   (p2 (fun pid msg -> 

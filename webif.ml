@@ -219,7 +219,10 @@ let perform_request
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              catch_notfound_l "generate_program"
-               (lazy(Irtojs.generate_program program))
+               (lazy(if Settings.get_value (Basicsettings.use_monadic_ir) then
+                       Irtojs.generate_program program
+                     else
+                       Js.generate_program program))
            else 
              let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
                Result.string_of_result rslt)
