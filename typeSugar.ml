@@ -716,7 +716,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
                     let pattern = tpc pattern
                     and e = tc e in             
                       unify (lt, typ e);
-                      unify (lt, pattern_typ pattern);
+                      unify (a, pattern_typ pattern);
                       `List (pattern, e), {context with tenv = pattern_env pattern ++ context.tenv}
                 | `Table (pattern, e) ->
                     let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
