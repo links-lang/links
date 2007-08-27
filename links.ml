@@ -234,8 +234,18 @@ let main () =
      BUG: we should really do something similar for term variables
   *)
   let _ =
-    Types.bump_variable_counter
-      (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+    let max_or (set : Types.TypeVarSet.t) (m : int) = 
+      if Types.TypeVarSet.is_empty set then
+        m
+      else max m (Types.TypeVarSet.max_elt set) in
+    let max_prelude_tvar =
+      List.fold_right max_or 
+        (Env.String.range (Env.String.map 
+                             (snd ->- Types.free_bound_type_vars)
+                             (fst prelude_types)))
+        (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+      Types.bump_variable_counter max_prelude_tvar
+  in
     
   let prelude_compiled = Interpreter.run_defs [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
