@@ -171,9 +171,15 @@ let type_unary_op env = function
   | `Minus      -> datatype "(Int) -> Int"
   | `FloatMinus -> datatype "(Float) -> Float"
   | `Name n     -> Utils.instantiate env n
-  | `Abs        -> (* Probably doesn't parse at present.
-                      See the typing rules given in the note for r975. *)
-                     datatype "(((|a)) -> b) -> *(|a) -> b"
+  | `Abs        -> 
+      let mb = Types.fresh_type_variable ()
+      and mb2 = Types.fresh_type_variable ()
+      and rv = Types.fresh_type_variable ()
+      and arg = Types.fresh_type_variable () in
+        `Function (Types.make_tuple_type [
+                     `Function (Types.make_tuple_type [arg], mb, rv)
+                   ], mb2,
+                   `Function (arg, mb, rv))
 
 let type_binary_op env = function
   | `Minus        -> datatype "(Int,Int) -> Int"
@@ -204,9 +210,15 @@ let type_binary_op env = function
         `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool);
   | `Name "!"     -> Utils.instantiate env "send"
   | `Name n       -> Utils.instantiate env n
-  | `App          -> (* Probably doesn't parse at present.  
-                        See the typing rules given in the note for r975. *)
-                     datatype "(*(|a) -> b) -> ((|a)) -> b"
+  | `App          -> 
+      let tup = `Record (Types.make_empty_open_row ())
+      and mb = Types.fresh_type_variable ()
+      and mb2 = Types.fresh_type_variable ()
+      and rv = Types.fresh_type_variable () in
+        `Function (Types.make_tuple_type [
+                     `Function (tup, mb, rv);
+                     tup],
+                   mb2, rv)
 
 (** close a pattern type relative to a list of patterns
 
