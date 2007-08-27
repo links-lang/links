@@ -923,12 +923,21 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
               (`Foreign (language, name, datatype),
                (Env.bind env (name, assumption), alias_env))
         | `Type (typename, args, datatype) as t ->
-            (* HACK:
-               
-               This unboxing of quantifiers is silly. Something more sane should be done.
-            *)
-            let args, dtype = Sugar.desugar_assumption (List.map (fun arg -> `TypeVar arg) args, datatype) in
-            let args = List.map var_of_quantifier args in
+            let dtype = Sugar.desugar_datatype' (context.tvars, context.rvars) datatype in
+            let args =
+              List.fold_right
+                (fun name args ->
+                   if StringMap.mem name context.tvars then
+                     match Unionfind.find (StringMap.find name context.tvars) with
+                       | `Flexible var | `Rigid var -> var :: args
+                       | _ -> args
+                   else if StringMap.mem name context.rvars then
+                     match Unionfind.find (StringMap.find name context.rvars) with
+                       | `Flexible var | `Rigid var -> var :: args
+                       | _ -> args
+                   else
+                     assert false)
+                args [] in
               t, (env, Utils.register_alias (typename, args, dtype) alias_env)
         | `Infix -> `Infix, context.tenv
         | `Exp e ->
