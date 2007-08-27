@@ -4,6 +4,7 @@ open Utility
 (** The syntax tree created by the parser. *)
 
 type name = string deriving (Show)
+type num = Num.num
 
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
@@ -68,10 +69,11 @@ type fieldconstraint = [ `Readonly ]
 
 type constant = [
 | `Float of float
-| `Int of Num.num
+| `Int of num
 | `String of string
 | `Bool of bool
 | `Char of char ]
+    deriving (Show)
     
 type 'ppattern pattern' = [
 | `Any
@@ -85,7 +87,10 @@ type 'ppattern pattern' = [
 | `Variable of string
 | `As of (string * 'ppattern)
 | `HasType of 'ppattern * datatype
-]
+] deriving (Show)
+
+type 'phrase replace_rhs = [`Literal of string | `Splice of 'phrase]
+    deriving (Show)
     
 type 'phrase regex' = [
 | `Range of (char * char)
@@ -99,9 +104,17 @@ type 'phrase regex' = [
 | `Group of 'phrase regex'
 | `Repeat of (Regex.repeat * 'phrase regex')
 | `Splice of 'phrase
-| `Replace of ('phrase regex' * [`Literal of string | `Splice of 'phrase]) ]
+| `Replace of ('phrase regex' * 'phrase replace_rhs) ]
+    deriving (Show)
 
 type ('ppattern, 'phrase) funlit' = 'ppattern list list * 'phrase
+    deriving (Show)
+
+type ('ppattern, 'phrase) iterpatt = [ `List of 'ppattern * 'phrase | `Table of 'ppattern * 'phrase ]
+    deriving (Show)
+
+type sec = [`Minus | `FloatMinus|`Project of name|`Name of name]
+    deriving (Show)
 
 type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Constant of constant
@@ -110,10 +123,10 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Spawn of 'phrase
 | `SpawnWait of 'phrase
 | `ListLit of ('phrase list)
-| `Iteration of ([ `List of 'ppattern * 'phrase | `Table of 'ppattern * 'phrase ] * 'phrase * (*where:*)'phrase option 
+| `Iteration of (('ppattern, 'phrase) iterpatt * 'phrase * (*where:*)'phrase option 
                  * (*orderby:*)'phrase option)
 | `Escape of (name * 'phrase)
-| `Section of ([`Minus | `FloatMinus|`Project of name|`Name of name])
+| `Section of (sec)
 | `Conditional of ('phrase * 'phrase * 'phrase)
 | `Block of 'binding list * 'phrase
 | `InfixAppl of (binop * 'phrase * 'phrase)
@@ -137,6 +150,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
+    deriving (Show)
 
 type ('ppattern, 'phrase) binding' = [
 | `Val of 'ppattern * 'phrase * location * datatype option
@@ -146,6 +160,7 @@ type ('ppattern, 'phrase) binding' = [
 | `Type of (name * name list * datatype)
 | `Infix
 | `Exp of 'phrase ]
+    deriving (Show)
     
 type directive = string * string list
     
@@ -157,6 +172,7 @@ type ('phrase, 'binding) sentence'' = [
 type phrase = (ppattern, phrase, binding) phrasenode' * pposition
 and ppattern = ppattern pattern' * pposition
 and binding = (ppattern, phrase) binding' * pposition
+    deriving (Show)
 
 type funlit = (ppattern, phrase) funlit'
 type sentence = (phrase, binding) sentence''
