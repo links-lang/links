@@ -162,7 +162,7 @@ let type_section env (`Section s as s') = s', match s with
   | `Project label ->
       let f = Types.fresh_type_variable () in
       let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
-        `Function (r, mailbox_type env, f)
+        `Function (Types.make_tuple_type [r], mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
 let datatype = Parse.parse_string Parse.datatype ->- fst ->- snd
