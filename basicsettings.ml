@@ -21,6 +21,3 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |___| | |\\ \\  | |\\ \\ _\\  \\
  |_____|_|_| \\___|_| \\_|____/
 Welcome to Links version 0.4 (Crostorfyn)", `System)
-
-(** Type the source. *)
-let type_source = Settings.add_bool ("type_source", false, `User)
