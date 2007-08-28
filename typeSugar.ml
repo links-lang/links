@@ -637,6 +637,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
         | `Spawn p ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
+            let _ = unify (pid_type, `Application ("Mailbox", [Types.fresh_type_variable()])) in
             let context' = {context with tenv = Env.bind env (mailbox, ([], pid_type)), alias_env} in
             let p = type_check context' p in
               `Spawn p, pid_type
@@ -649,8 +650,10 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               unify (return_type, typ p);
               `Spawn p, return_type
         | `Receive binders ->
-            let mbtype = mailbox_type env
-            and pt = Types.fresh_type_variable ()
+            let mbtype = Types.fresh_type_variable () in
+            let boxed_mbtype = mailbox_type env in
+            let _ = unify (boxed_mbtype, `Application ("Mailbox", [mbtype])) in
+            let pt = Types.fresh_type_variable ()
             and rtype = Types.fresh_type_variable () in
             let binders, pats = 
               List.fold_right
