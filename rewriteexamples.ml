@@ -222,14 +222,14 @@ let compile_largest : Syntax.expression -> (Syntax.expression * SqlQuery.expr) l
       | None -> default expr in
     Syntax.reduce_expression tryone (snd ->- List.concat)
 
-let library_globals = List.map fst (fst Library.typing_env) 
+let library_globals = Env.String.domain (fst Library.typing_env)
   
 let bind_freevars e : Syntax.untyped_expression = 
   List.fold_right (fun var e -> 
-                     if mem var library_globals then e else
+                     if StringSet.mem var library_globals then e else
                        Syntax.Abstr ([var], e, `U Syntax.dummy_position)) (StringSet.elements(Syntax.freevars e)) e
     
-let parse = Parse.parse_string Parse.program ->- Syntax.program_body
+let parse = Parse.parse_string Parse.program ->- fst ->- Syntax.program_body
 let type_e = Inference.type_expression Library.typing_env ->- snd
 
 let run = 

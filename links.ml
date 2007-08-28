@@ -10,9 +10,15 @@ let ps1 = "links> "
 (* Types of built-in primitives.  TODO: purge. *)
 let stdenvs = ref([], Library.typing_env)
 
+type envs = Result.environment * Types.typing_environment
+
 (** Definition of the various repl directives *)
-let rec directives = 
-  let ignore_envs fn envs arg = let _ = fn arg in envs in lazy
+let rec directives 
+    : (string
+     * ((envs ->  string list -> envs)
+        * string)) list Lazy.t =
+
+  let ignore_envs fn (envs : envs) arg = let _ = fn arg in envs in lazy
   (* lazy so we can have applications on the rhs *)
 [
     "directives", 
@@ -36,10 +42,10 @@ let rec directives =
     "builtins",
     (ignore_envs 
        (fun _ ->
-          iter (fun (n, k) ->
+          StringSet.iter (fun n ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (snd k)))
-          Library.type_env),
+                         n (Types.string_of_datatype (snd (Env.String.lookup Library.type_env n))))
+            (Env.String.domain Library.type_env)),
      "list builtin functions and values");
 
     "quit",
@@ -47,12 +53,12 @@ let rec directives =
 
     "typeenv",
     ((fun ((_, (typeenv, _)) as envs) _ ->
-        iter (fun (v, k) ->
-                     Printf.fprintf stderr " %-16s : %s\n"
-                       v (Types.string_of_datatype (snd k)))
-          (filter (not -<- (flip mem_assoc Library.type_env) -<- fst) typeenv);
+        StringSet.iter (fun k ->
+                Printf.fprintf stderr " %-16s : %s\n"
+                  k (Types.string_of_datatype (snd (Env.String.lookup typeenv k))))
+          (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Library.type_env));
         envs),
-    "display the current type environment");
+     "display the current type environment");
 
     "env",
     ((fun ((valenv, _) as envs) _ ->
@@ -64,17 +70,18 @@ let rec directives =
      "display the current value environment");
 
     "load",
-    ((fun envs args ->
+    ((fun (envs : Result.environment * Types.typing_environment) args ->
         match args with
           | [filename] ->
               let library_types, libraries =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
-              let program = Parse.parse_file Parse.program filename in
-              let typingenv, program = Inference.type_program library_types program in
+              let program, sugar = Parse.parse_file Parse.program filename in
+              let () = TypeSugar.Check.file library_types sugar in
+              let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
               let program = Syntax.labelize program in
-                (fst ((Interpreter.run_program libraries []) program), typingenv)
+                (fst ((Interpreter.run_program libraries []) program), (typingenv : Types.typing_environment))
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
 
@@ -82,17 +89,19 @@ let rec directives =
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let _,t = Parse.parse_string Parse.datatype (String.concat " " args) in
-              ListLabels.iter tenv
-                ~f:(fun (id,(_,t')) -> 
+          | _ -> let (_,t), _ = Parse.parse_string Parse.datatype (String.concat " " args) in
+              StringSet.iter
+                (fun id -> 
                       if id <> "_MAILBOX_" then
                         (try begin
+                           let _, t' = Env.String.lookup tenv id in
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
-                           let t' = Instantiate.instantiate_datatype fresh_envs t' in 
+                           let t' = Instantiate.datatype fresh_envs t' in 
                              Inference.unify alias_env (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))
+                (Env.String.domain tenv)
               ; envs),
      "search for functions that match the given type");
 
@@ -116,7 +125,9 @@ let print_result rtype result =
                  else "")
 
 (** type, optimise and evaluate a program *)
-let process_program ?(printer=print_result) (valenv, typingenv) program = 
+let process_program ?(printer=print_result) (valenv, typingenv) 
+    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
+  let () = TypeSugar.Check.file typingenv sugar in
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
@@ -143,14 +154,16 @@ let interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
-           (match measure "parse" parse input with 
-              | `Definitions [] -> envs
-              | `Definitions defs -> 
+           (match (measure "parse" parse input :   Sugartypes.sentence' * (Sugartypes.sentence * (Sugartypes.pposition -> Syntax.position)))
+            with 
+              | `Definitions [], _ -> envs
+              | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =
                     process_program
                       ~printer:(fun _ _ -> ())
                       envs
-                      (Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position)))
+                      ((Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position))),
+                       ((sugar, None), lookup))
                   in
                     ListLabels.iter defs'
                        ~f:(function
@@ -162,9 +175,9 @@ let interact envs =
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
-              | `Expression expr -> 
-                  let envs, _, _ = process_program envs (Syntax.Program ([], expr)) in envs
-              | `Directive directive -> execute_directive directive envs))
+              | `Expression expr, (`Expression sexpr, lookup) -> 
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), (([], Some sexpr), lookup)) in envs 
+              | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
       interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
@@ -221,14 +234,24 @@ let main () =
      BUG: we should really do something similar for term variables
   *)
   let _ =
-    Types.bump_variable_counter
-      (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+    let max_or (set : Types.TypeVarSet.t) (m : int) = 
+      if Types.TypeVarSet.is_empty set then
+        m
+      else max m (Types.TypeVarSet.max_elt set) in
+    let max_prelude_tvar =
+      List.fold_right max_or 
+        (Env.String.range (Env.String.map 
+                             (snd ->- Types.free_bound_type_vars)
+                             (fst prelude_types)))
+        (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+      Types.bump_variable_counter max_prelude_tvar
+  in
     
   let prelude_compiled = Interpreter.run_defs [] [] prelude in
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 
          (stdvalenv @ prelude_compiled,
-          Types.concat_environment stdtypeenv prelude_types));
+          Types.concat_typing_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in !stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)

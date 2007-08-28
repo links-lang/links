@@ -12,6 +12,3 @@ val make_boiler_page :
   string list -> string
 
 val script_tag : ?base:string -> string -> string
-
-val test : unit -> unit 
-val run_tests : unit -> unit 

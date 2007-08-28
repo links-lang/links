@@ -95,7 +95,7 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
-let datatype = Parse.parse_string Parse.datatype
+let datatype = Parse.parse_string Parse.datatype ->- fst
 
 let int_op impl pure : located_primitive * Types.assumption * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
@@ -329,6 +329,23 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    PURE);
 
   (** Lists and collections **)
+  "Nil",
+  (`List [],
+   datatype "[a]",
+   PURE);
+
+  "Cons",
+  (p2 (fun x xs ->
+         box_list (x :: (unbox_list xs))),
+   datatype "(a, [a]) -> [a]",
+   PURE);
+
+  "Concat",
+  (p2 (fun xs ys ->
+         box_list (unbox_list xs @ unbox_list ys)),
+   datatype "([a], [a]) -> [a]",
+   PURE);
+
   "hd",
   (p1 (fun list ->
          try 
@@ -856,13 +873,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = `Record (Types.row_with ("1", `Present string_type)
-                               (Types.row_with ("2", `Present regex)
-                                  (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-        `Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    datatype "(String, Regex) -> Bool",
     PURE));
 
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
@@ -871,14 +882,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, `Primitive `Bool))),
+    datatype "(NativeString, Regex) -> Bool",
     PURE));
 
   (* regular expression matching with grouped matched results as a list *)
@@ -899,14 +903,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-     (let qs, regex = datatype Linksregex.Regex.datatype in
-      let mb = Types.fresh_raw_variable () in
-      let arg_type = 
-	`Record (Types.row_with ("1", `Present string_type)
-                   (Types.row_with ("2", `Present regex)
-                      (Types.make_empty_closed_row ()))) in
-	((`TypeVar mb) :: qs,
-	 `Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+     datatype "(String, Regex) -> [String]",
    PURE));
 
   ("lntilde",	
@@ -926,14 +923,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	with 
 	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, (`Application ("List", [string_type]))))),
+    datatype "(NativeString, Regex) -> [String]",
     PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -943,14 +933,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, string_type))),
+    datatype "(String, Regex) -> String",
     PURE));
 	
   ("sntilde",	
@@ -959,14 +942,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
-    (let qs, regex = datatype Linksregex.Regex.datatype in
-     let mb = Types.fresh_raw_variable () in
-     let arg_type = 
-       `Record (Types.row_with ("1", `Present native_string_type)
-                  (Types.row_with ("2", `Present regex)
-                     (Types.make_empty_closed_row ()))) in
-       ((`TypeVar mb) :: qs,
-	`Function (arg_type, make_type_variable mb, native_string_type))),
+    datatype "(NativeString, Regex) -> NativeString",
     PURE));
    
   (* NativeString utilities *)
@@ -1040,26 +1016,36 @@ let apply_pfun name args =
   match StringMap.find name (!value_env) with
     | #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
     | `PFun p -> p args
+
+module Env = Env.String
         
 let type_env : Types.environment =
-  List.map (fun (n, (_,t,_)) -> (n,t)) env
+  List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
 and alias_env : Types.alias_environment =
   List.fold_right
     (fun (name, assumption) env ->
-       StringMap.add name assumption env)
+       Env.bind env (name, assumption))
     [
       "DomNode", ([], `Primitive `Abstract);
       "Event", ([], `Primitive `Abstract);
       "List", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "String", ([], `Application ("List", [`Primitive `Char]));
       "Xml", ([], `Application ("List", [`Primitive `XmlItem]));
-      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract)
+      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "Regex", datatype Linksregex.Regex.datatype;
     ]
-    StringMap.empty
+    Env.empty
 
 let typing_env = (type_env, alias_env)
 
 let is_primitive name = List.mem_assoc name env
+let is_pure_primitive name =
+  if List.mem_assoc name env then
+    match List.assoc name env with
+      | (_, _, PURE) -> true
+      | _ -> false
+  else
+    false
 
 (** Output the headers and content to stdout *)
 let print_http_response headers body =

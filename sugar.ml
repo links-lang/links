@@ -15,13 +15,13 @@ end =
 struct
   (* See http://frege/wiki/LAttributeSugar *)
 
-  let apply pos name args : phrase = `FnAppl ((`Var name,pos), (args,pos)), pos
+  let apply pos name args : phrase = `FnAppl ((`Var name,pos), args), pos
 
   let server_use name pos = 
-    apply pos "assoc" [(`StringLit name, pos);
+    apply pos "assoc" [(`Constant (`String name), pos);
                        `Var "_env", pos]
   let client_use id pos = 
-    apply pos "getInputValue" [(`StringLit id, pos)]
+    apply pos "getInputValue" [(`Constant (`String id), pos)]
 
   let fresh_names = 
     let counter = ref 0 in
@@ -37,8 +37,8 @@ struct
           match partition (fst ->- (=)"l:href") attrs with
             | [_,[href]], rest ->
                 (("href",
-                  [`StringLit "?_k=", pos;
-                    apply pos "pickleCont" [`FunLit (None, [[`Any,pos]], href), pos]]))
+                  [`Constant (`String "?_k="), pos;
+                    apply pos "pickleCont" [`FunLit ([[`Any,pos]], href), pos]]))
                 :: rest 
             | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
         in 
@@ -52,12 +52,12 @@ struct
           | [_,[laction]], rest ->
               let hidden : phrase = 
                 `Xml ("input",
-                      ["type",  [`StringLit "hidden", pos];
-                       "name",  [`StringLit "_k", pos];
+                      ["type",  [`Constant (`String "hidden"), pos];
+                       "name",  [`Constant (`String "_k"), pos];
                        "value", [apply pos "pickleCont"
-                                   [`FunLit (None, [[`Variable "_env",pos]], laction), pos]]],
+                                   [`FunLit ([[`Variable "_env",pos]], laction), pos]]],
                       []), pos
-              and action = ("action", [`StringLit "#", pos]) 
+              and action = ("action", [`Constant (`String "#"), pos]) 
               in 
                 `Xml (form, action::rest, hidden::children), pos
           | _ -> assert false (* multiple l:actions, or an invalid rhs *)
@@ -69,8 +69,8 @@ struct
     let pair pos = function
       | (name, [rhs]) ->
           let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
-            `TupleLit [`StringLit event, pos;
-                       `FunLit (None, [[`Variable "event", pos]], rhs), pos], pos
+            `TupleLit [`Constant (`String event), pos;
+                       `FunLit ([[`Variable "event", pos]], rhs), pos], pos
       | _ -> assert false
     in function
       | `Xml (tag, attrs, children), pos
@@ -87,10 +87,10 @@ struct
     let lnames = ref StringMap.empty in
     let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
     let attr : string * phrase list -> (string * phrase list) list = function
-      | "l:name", [`StringLit v, pos] -> 
+      | "l:name", [`Constant (`String v), pos] -> 
           let id, name = fresh_names () in
             add v (id,name);
-            [("name", [`StringLit name, pos]); ("id", [`StringLit id, pos])]
+            [("name", [`Constant (`String name), pos]); ("id", [`Constant (`String id), pos])]
       | "l:name", _ -> failwith ("Invalid l:name binding")
       | a -> [a] in
     let rec aux (p,pos as node : phrase) = match p with
@@ -107,10 +107,8 @@ struct
     | `Xml (_, attrs, _) -> exists (fst ->- start_of ~is:"l:") attrs
     | _ -> false
 
-  let let_in pos name rhs body = 
-    `Block
-      ([`Binding ((`Variable name, pos), rhs), pos], body),
-    pos
+  let let_in pos name rhs body : phrase = 
+    `Block ([`Val ((`Variable name, pos), rhs, `Unknown, None), pos], body), pos
 
   let bind_lname_vars pos lnames = function
     | "l:action" as attr, es -> 
@@ -750,8 +748,6 @@ module PatternCompiler =
 module Desugarer =
   (* Convert a syntax tree as returned by the parser into core syntax *)
 (struct
-   type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
-
    (* Generation of fresh type variables *)
    let type_variable_counter = ref 0
    let fresh_type_variable : unit -> datatype =
@@ -849,7 +845,7 @@ module Desugarer =
                      (tenv, StringMap.add name
                         (Unionfind.fresh (`Flexible var)) renv))) vars ([], (StringMap.empty, StringMap.empty))
 
-   let desugar_datatype, desugar_row =
+   let desugar_datatype', desugar_row =
      let rec desugar ((tenv, renv) as var_env) =
        let lookup_type = flip StringMap.find tenv in
          function
@@ -900,89 +896,89 @@ module Desugarer =
 
    let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
      let vars, var_env = generate_var_mapping vars in
-       vars, desugar_datatype var_env k
+       vars, desugar_datatype' var_env k
 
-   let rec get_type_vars : phrase -> quantifier list =
+   let rec get_type_vars : binding -> quantifier list =
      let empty = [] in
      let union = (unduplicate (=)) -<- List.concat in
-     let rec get_type_vars =
-       fun (s, _) ->
+    let rec get_type_vars (s,_: binding) : quantifier list list =
          let tv datatype = [typevars datatype] in
-         let etv = get_type_vars in
-         let etvs = flatten -<- (List.map get_type_vars) in
-         let opt_etv = function
+         let rec phrases v = flatten (List.map phrase v) 
+         and opt_phrase = function
            | None -> empty
-           | Some e -> etv e in
-         let opt_etv2 = function
+           | Some e -> phrase e
+         and opt_phrase2 = function
            | None -> empty
-           | Some (_, e) -> etv e in
-         let ptv = get_pattern_type_vars in
-         let btv (p, e) = flatten [ptv p; etv e] in
-         let btvs = flatten -<- (List.map btv) in
-         let gtv = function
+           | Some (_, e) -> phrase e
+         and ptv = get_pattern_type_vars
+         and btv (p, e) = flatten [ptv p; phrase e]
+         and btvs b = flatten (List.map btv b)
+         and gtv = function
            | `List b
-           | `Table b -> btv b in
-         let ftv (_, e) = etv e in
-         let ftvs = flatten -<- (List.map ftv)
-         in
-           match s with
-             | `FloatLit _
-             | `IntLit _
-             | `StringLit _
-             | `BoolLit _
-             | `CharLit _
+           | `Table b -> btv b
+         and ftv (_, e) = phrase e
+         and ftvs f = flatten (List.map ftv f)
+         and funlit (p, b : funlit) = (flatten (concat_map (List.map ptv) p) @ phrase b)
+         and block (bs, p : binding list * phrase) = flatten (List.map (fst ->- binding) bs) @ phrase p
+         and binding (b) = match b with
+             | `Fun (_, f, _, k) -> 
+                 flatten [funlit f; opt_app tv [] k]
+             | `Val (p, e, _, k) -> flatten [ptv p; phrase e; opt_app tv [] k]
+             | `Foreign (_, _, datatype) -> tv datatype
+             | `Type (_, args, datatype) -> [List.map (fun k -> `RigidTypeVar k) args] @ tv datatype
+             | `Funs fs -> 
+                 concat_map
+                   (fun (_, f, _, k) -> flatten [funlit f; opt_app tv [] k])
+                   fs
+             | `Exp e -> phrase e
+             | `Infix -> []
+         and phrase (p, _) = match p with
+             | `Constant _
              | `InfixDecl
              | `Var _ -> empty
-             | `FunLit (_, patterns, body) -> 
-                 flatten (concat_map (List.map ptv) patterns @ [etv body])
-             | `Spawn e -> etv e
-             | `SpawnWait e -> etv e
-             | `ListLit es -> etvs es
-             | `Definition (_, e, _) -> etv e
+             | `FunLit f -> funlit f
+             | `Spawn e -> phrase e
+             | `SpawnWait e -> phrase e
+             | `ListLit es -> phrases es
              | `Iteration (generator, body, filter, sort) ->
-                 flatten [gtv generator; etv body; opt_etv filter; opt_etv sort]
-             | `Escape (_, e) ->  etv e
-             | `HandleWith (e1, _, e2) -> flatten [etv e1; etv e2]
+                 flatten [gtv generator; phrase body; opt_phrase filter; opt_phrase sort]
+             | `Escape (_, e) ->  phrase e
              | `Section _ -> empty
-             | `Conditional (e1, e2, e3) -> flatten [etv e1; etv e2; etv e3]
-             | `Binding b -> btv b
-             | `Block (es, exp) -> flatten [etvs es; etv exp]
-             | `Foreign (_, _, datatype) -> tv datatype
-             | `InfixAppl (_, e1, e2) -> flatten [etv e1; etv e2]
+             | `Conditional (e1, e2, e3) -> flatten [phrase e1; phrase e2; phrase e3]
+             | `Block b -> block b
+             | `InfixAppl (_, e1, e2) -> flatten [phrase e1; phrase e2]
              | `Regex _ -> empty
-             | `UnaryAppl (_, e) -> etv e
-             | `FnAppl (fn, (ps, _)) -> flatten [etv fn; etvs ps]
-             | `TupleLit fields -> etvs fields
+             | `UnaryAppl (_, e) -> phrase e
+             | `FnAppl (fn, ps) -> flatten [phrase fn; phrases ps]
+             | `TupleLit fields -> phrases fields
              | `RecordLit (fields, e) ->
-                 flatten ((List.map (fun (_, field) -> etv field) fields) @ [opt_etv e])
+                 flatten ((List.map (fun (_, field) -> phrase field) fields) @ [opt_phrase e])
              | `With (e, fields) -> 
-                 flatten ((List.map (fun (_, field) -> etv field) fields) @ [etv e])
-             | `Projection (e, _) -> etv e
-             | `SortBy_Conc(pattern, expr, sort_expr) -> flatten [ptv pattern; etv expr; etv sort_expr]
-
-             | `TypeAnnotation(e, k) -> flatten [etv e; tv k]
-             | `TypeDeclaration (_, args, datatype) -> [List.map (fun k -> `RigidTypeVar k) args] @ tv datatype
-
-             | `ConstructorLit (_, e) -> opt_etv e
-             | `Switch (exp, binders) -> flatten [etv exp; btvs binders]
+                 flatten ((List.map (fun (_, field) -> phrase field) fields) @ [phrase e])
+             | `Projection (e, _) -> phrase e
+             | `TypeAnnotation(e, k) -> flatten [phrase e; tv k]
+             | `ConstructorLit (_, e) -> opt_phrase e
+             | `Switch (exp, binders) -> flatten [phrase exp; btvs binders]
              | `Receive (binders) -> btvs binders
 
-             | `DatabaseLit (name, (opt_driver, opt_args)) -> flatten [etv name; opt_etv opt_driver; opt_etv opt_args]
-             | `TableLit (_, datatype, _, db) -> flatten [tv datatype; etv db]
-             | `DBInsert (e1, e2) -> flatten [etv e1; etv e2]
-             | `DBDelete ((p, e1), e2) -> flatten [ptv p; etv e1; opt_etv e2]
-             | `DBUpdate ((p, e1), e2, fs) -> flatten [ptv p; etv e1; opt_etv e2; ftvs fs]
+             | `DatabaseLit (name, (opt_driver, opt_args)) -> flatten [phrase name; opt_phrase opt_driver; opt_phrase opt_args]
+             | `TableLit (_, datatype, _, db) -> flatten [tv datatype; phrase db]
+             | `DBInsert (e1, e2) -> flatten [phrase e1; phrase e2]
+             | `DBDelete (p, e1, e2) -> flatten [ptv p; phrase e1; opt_phrase e2]
+             | `DBUpdate (p, e1, e2, fs) -> flatten [ptv p; phrase e1; opt_phrase e2; ftvs fs]
 
              | `Xml (_, attrs, subnodes) ->
-                 flatten ((List.map (fun (_, es) -> etvs es) attrs) @ [etvs subnodes])
+                 flatten ((List.map (fun (_, es) -> phrases es) attrs) @ [phrases subnodes])
              | `TextNode _ -> empty
-             | `Formlet (e1, e2) -> flatten [etv e1; etv e2]
-             | `FormBinding (e, p) -> flatten [etv e; ptv p]
-     and get_pattern_type_vars (p, _) = (* fold *)
+             | `Formlet (e1, e2) -> flatten [phrase e1; phrase e2]
+             | `FormBinding (e, p) -> flatten [phrase e; ptv p]
+         in binding s
+     and get_pattern_type_vars (p, _ : ppattern) = (* fold *)
        match p with 
          | `Any
          | `Nil
          | `Variable _
+         | `Constant _
          | `Variant (_, None)   -> []
          | `Variant (_, Some p)
          | `As (_, p)           -> get_pattern_type_vars p
@@ -991,7 +987,6 @@ module Desugarer =
          | `Record (ps, None)   -> concat_map (snd ->- get_pattern_type_vars) ps
          | `List ps
          | `Tuple ps            -> concat_map get_pattern_type_vars ps 
-         | `Constant pn         -> get_type_vars pn
          | `HasType (p, t)      -> get_pattern_type_vars p @ [typevars t]
      in
        union -<- get_type_vars
@@ -1095,8 +1090,15 @@ module Desugarer =
 
    let as_list pos = function
      | `List (p, e) -> p, e
-     | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), ([e], pos)), pos)
+     | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), [e]), pos)
 
+   let desugar_constant pos = function
+     | `Int v    -> Constant(Integer v, pos)
+     | `Float v  -> Constant(Float v, pos)
+     | `String v -> Constant(String v, pos)
+     | `Bool v   -> Constant(Boolean v, pos)
+     | `Char v   -> Constant(Char v,  pos)
+  
    let desugar_expression' env lookup_pos (e : phrase) : untyped_expression =
      let _, ((tenv, renv) as var_env) = env in
      let rec desugar' lookup_pos ((s, pos') : phrase) : untyped_expression =
@@ -1105,12 +1107,8 @@ module Desugarer =
        let appPrim = appPrim pos in
        let desugar = desugar' lookup_pos in
          match (s : phrasenode) with
-           | `TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype var_env k, pos)
-           | `FloatLit f  -> Constant(Float f, pos)
-           | `IntLit i    -> Constant(Integer i, pos)
-           | `StringLit s -> HasType(Constant(String  s, pos), Types.string_type, pos)
-           | `BoolLit b   -> Constant(Boolean b, pos)
-           | `CharLit c   -> Constant(Char c, pos)
+           | `TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype' var_env k, pos)
+           | `Constant p -> desugar_constant pos p
            | `Var v       -> Variable (v, pos)
            | `InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
            | `InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, `LessEq, desugar e1, pos)
@@ -1124,12 +1122,12 @@ module Desugarer =
                let `U (a,b,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
            | `InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | `InfixAppl (`RegexMatch, e1, (`Regex((`Replace(_,_) as r), flags), _)) -> 
+           | `InfixAppl (`RegexMatch flags, e1, (`Regex((`Replace(_,_) as r)), _)) -> 
 	       let libfn = 
 		 if(List.exists (function `RegexNative -> true | _ -> false) flags) then "sntilde" else "stilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch, e1, (`Regex(r, flags), _)) -> 
+           | `InfixAppl (`RegexMatch flags, e1, (`Regex r, _)) -> 
 	       let native = (List.exists (function `RegexNative -> true | _ -> false) flags) in
 	       let libfn = 
 		 if (List.exists (function `RegexList -> true | _ -> false) flags) then 
@@ -1138,7 +1136,7 @@ module Desugarer =
 		   if native then "ntilde" else "tilde" in
 	       (appPrim libfn
 		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
+           | `InfixAppl (`RegexMatch _, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | `InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | `InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
            | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
@@ -1149,15 +1147,14 @@ module Desugarer =
            | `Escape (name, e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
-               (`FnAppl ((`Var "spawn", pos'), ([`FunLit (None, [[]], e),  pos'], pos')), pos')
+               (`FnAppl ((`Var "spawn", pos'), [`FunLit ([[]], e),  pos']), pos')
            | `SpawnWait e -> desugar 
-               (`FnAppl ((`Var "spawnWait", pos'), ([`FunLit (None, [[]], e),  pos'], pos')), pos')
-
+               (`FnAppl ((`Var "spawnWait", pos'), [`FunLit ([[]], e),  pos']), pos')
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
            | `Section (`Project name) -> (let var = unique_name () in
-                                           desugar (`FunLit (None, [[`Variable var, pos']], 
-                                                            ((`Projection ((`Var var, pos'), name), pos'):Sugartypes.phrase)), pos'))
+                                            desugar (`FunLit ([[`Variable var, pos']], 
+                                                              (`Projection ((`Var var, pos'), name), pos')), pos'))
            | `Section (`Name name) -> Variable (name, pos)
            | `Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | `Projection (e, name) -> (let s = unique_name ()
@@ -1211,7 +1208,7 @@ module Desugarer =
            | `UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
            | `ListLit  [] -> Nil (pos)
            | `ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es), pos'), pos)
-           | `DBDelete ((pattern, table), condition) ->
+           | `DBDelete (pattern, table, condition) ->
                let t = unique_name () in
                let r = unique_name () in
                let tv = ((`Var t), pos') in
@@ -1220,13 +1217,11 @@ module Desugarer =
                  `Table ((`As (r, pattern), pos'), tv) in
                let rows = `Iteration (generator, ((`ListLit [rv]), pos'), condition, None), pos' in
                  desugar (
-                   `Block ([(`Binding (((`Variable t), pos'), table)), pos'],
-                           (`FnAppl ((`Var "deleterows", pos'),
-                                    ([tv; rows ], pos')), pos')), pos')
+                   `Block (([`Val ((`Variable t, pos'), table, `Unknown, None), pos']),
+                           (`FnAppl ((`Var "deleterows", pos'), [tv; rows ]), pos')), pos')
            | `DBInsert (table, rows) -> 
-               desugar (`FnAppl ((`Var "insertrows", pos'),
-                                ([table; rows], pos')), pos')
-           | `DBUpdate ((pattern, table), condition, row) ->
+               desugar (`FnAppl ((`Var "insertrows", pos'), [table; rows]), pos')
+           | `DBUpdate (pattern, table, condition, row) ->
                let t = unique_name () in
                let r = unique_name () in
 
@@ -1245,20 +1240,18 @@ module Desugarer =
                let row_pairs = `Iteration (generator, body, condition, None), pos'
                in      
                  desugar (
-                   `Block ([(`Binding (((`Variable t), pos'), table)), pos'],
-                          (`FnAppl ((`Var "updaterows", pos'),
-                                   ([tv; row_pairs], pos')), pos')), pos')
+                   `Block ([`Val ((`Variable t, pos'), table, `Unknown, None), pos'],
+                           (`FnAppl ((`Var "updaterows", pos'), [tv; row_pairs]), pos')), pos')
            | `DatabaseLit (name, (opt_driver, opt_args)) ->
                let e =
                  match opt_driver with
                    | None ->
                        `RecordLit ([("name", name)],
-                                  Some (`FnAppl((`Var "getDatabaseConfig", pos'),
-                                                ([], pos')), pos')), pos'
+                                  Some (`FnAppl((`Var "getDatabaseConfig", pos'), []), pos')), pos'
                    | Some driver ->
                        let args =
                          match opt_args with
-                           | None -> `StringLit (""), pos'
+                           | None -> `Constant (`String ""), pos'
                            | Some args -> args
                        in
                          `RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos'
@@ -1273,17 +1266,10 @@ module Desugarer =
                desugar (`RecordLit (List.map2 (fun exp n ->
                                                 string_of_int n, exp)
                                      fields (fromTo 1 (1 + length fields)), None), pos')
-(*
-  Not hastily removed because it may have some value.
-           | HandleWith (e1, name, e2) -> 
-               Syntax.Call_cc(Abstr("return", 
-                                    Let (name, Syntax.Call_cc(Abstr("handler",
-                                                                    Apply (Variable ("return", pos), 
-                                                                           desugar e1, pos), pos), pos), desugar e2, pos), pos), pos)
-*)
-           | `FnAppl (fn, (ps, ppos))  -> Apply (desugar fn, List.map desugar ps, pos)
 
-           | `FunLit (None, patterns_lists, body) -> 
+           | `FnAppl (fn, ps)  -> Apply (desugar fn, List.map desugar ps, pos)
+
+           | `FunLit (patterns_lists, body) -> 
                let patternized = (List.map (List.map patternize) patterns_lists) in
                ignore (List.fold_left
                          (List.fold_left check_for_duplicate_names')
@@ -1301,57 +1287,66 @@ module Desugarer =
                              pos))
                  patternized
                  (desugar body)
-
-           | `FunLit (Some name, patterns, body) -> Rec ([name, desugar (`FunLit (None, patterns, body), pos'), None],
+(*           | `FunLit (Some name, patterns, body) -> Rec ([name, desugar (`FunLit (None, patterns, body), pos'), None],
                                                         Variable (name, pos),
-                                                        pos)
-           | `Block (es, exp) -> let es = 
-               List.map (function (* pattern * untyped_expression * position * recursivep *)
-                           | `Binding (p, e), pos -> 
-                               (patternize p, desugar e, `U (lookup_pos pos), false)
-                           | `FunLit (Some n, patts, body), fpos -> 
-                               ((`Variable n, pos), 
-                                desugar (`FunLit (None, patts, body), fpos), 
-                                `U (lookup_pos fpos), 
-                                true)
-                           | expr, epos -> 
-                               (`HasType ((`Variable "__", pos), Types.unit_type), pos), 
-                               desugar (expr, epos),
-                               `U (lookup_pos epos), false) es in
-               polylets es (desugar exp)
-           | `SortBy_Conc(patt, expr, sort_expr) ->
-               (match patternize patt with
-                  | `Variable var, _ -> 
-                      SortBy(desugar expr, (Abstr([var], desugar sort_expr, pos)), pos)
-                  | pattern -> raise (ASTSyntaxError(data_position pos, "orderby clause on non-simple pattern-matching for is not yet implemented.")))
-           | `Iteration (generator, body, None, None) ->
-               let pattern, from = as_list pos' generator
+                                                        pos)*)
+           | `Block (es, exp) ->
+               let es = 
+                 List.map (fst ->- (function (* pattern * untyped_expression * position * recursivep *)
+                             | `Val (p, e, _, _) (* TODO: use datatype, if any *) -> 
+                                 (patternize p, desugar e, pos, false)
+                             | `Fun (n, funlit, _, _) (* TODO: use datatype, if any *) -> 
+                                 ((`Variable n, pos), 
+                                  desugar (`FunLit funlit, pos'),
+                                  pos, 
+                                  true)
+                             | `Exp expr -> 
+                                 (`HasType ((`Variable "__", pos), Types.unit_type), pos), 
+                                 desugar expr,
+                                 pos, false
+                             | `Infix
+                             | `Funs _
+                             | `Type _
+                             | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
+                 polylets es (desugar exp)
+
+           | `Iteration (generator, body, filter, None) ->
+               let body =
+                 match filter with
+                   | None -> body
+                   | Some condition ->
+                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+               and pattern, from = as_list pos' generator
                in
-                 (match patternize pattern with
-                    | `Variable var, _ -> For (desugar body, var, desugar from, pos)
-                    | pattern -> (let var = unique_name () in
-                                    For (polylet pattern pos (Variable (var, pos)) (desugar body),
-                                         var, desugar from, pos)))
-           | `Iteration (generator, body, filter_cond, Some sort_expr) -> 
-               let pattern, from = as_list pos' generator
+                 begin
+                   match patternize pattern with
+                     | `Variable var, _ -> For (desugar body, var, desugar from, pos)
+                     | pattern -> (let var = unique_name () in
+                                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
+                                          var, desugar from, pos))
+                 end
+           | `Iteration (generator, body, filter, Some sort) -> 
+               let body =
+                 match filter with
+                   | None -> body
+                   | Some condition ->
+                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+               and pattern, from = as_list pos' generator
                in
-                 desugar (`Iteration (`List (pattern, (`SortBy_Conc(pattern, from, sort_expr), pos')),
-                                     body, filter_cond, None),
-                          pos')
-           | `Iteration (generator, body, Some exp, sort_expr) ->
-               desugar (`Iteration (generator, 
-                                   (`Conditional (exp,
-                                                 body,
-                                                 (`ListLit [], pos')), pos'), 
-                                   None, sort_expr),
-                        pos')
-           | `Binding _ -> raise (ASTSyntaxError(data_position pos, "Unexpected binding outside a block"))
+                 begin
+                   match patternize pattern with
+                     | `Variable var, _ ->
+                         For (desugar body, var, SortBy(desugar from, (Abstr([var], desugar sort, pos)), pos), pos)
+                     | pattern ->
+                         raise (ASTSyntaxError(data_position pos,
+                                               "orderby clause on non-simple pattern-matching for is not yet implemented."))
+                 end
            | `Switch (exp, patterns) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 
                   (List.map (fun (patt, body) -> ([patternize patt], desugar body)) patterns))
            | `Receive patterns -> 
-               desugar (`Switch ((`FnAppl ((`Var "recv", pos'), ([], pos')), pos'),
+               desugar (`Switch ((`FnAppl ((`Var "recv", pos'), []), pos'),
                                 patterns), pos')
 
            (*  TBD: We should die if the XML text literal has bare ampersands or
@@ -1397,13 +1392,8 @@ module Desugarer =
 
            | `Formlet (formExpr, formHandler) ->
                fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
-           | `Definition _
-           | `TypeDeclaration _
            | `FormBinding _
-           | `HandleWith _
-           | `InfixDecl
-           | `Regex _
-           | `Foreign _ -> assert false
+           | `Regex _ -> assert false
 
      and forest_to_form_expr trees yieldsClause 
          (pos:Syntax.untyped_data) 
@@ -1448,11 +1438,10 @@ module Desugarer =
          (* Note: trees_ppos will become the position for each tuple;
             the position of the tuple is what's reported when duplicate
             bindings are present within one form. *)
-       let handlerFunc =  `FunLit (None,
-                                  map (function
-                                         | [b] -> [b]
-                                         | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
-                                  handlerBody), trees_ppos in
+       let handlerFunc =  `FunLit (map (function
+                                          | [b] -> [b]
+                                          | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
+                                   handlerBody), trees_ppos in
          ctxt (Apply(Variable("pure", pos), [desugar' lookup_pos handlerFunc], pos)), returning_bindings
            
      and desugar_form_expr (formExpr, ppos) : untyped_expression * ppattern list list =
@@ -1486,7 +1475,7 @@ module Desugarer =
        | Regex.Star      -> `ConstructorLit ("Star", None)
        | Regex.Plus      -> `ConstructorLit ("Plus", None)
        | Regex.Question  -> `ConstructorLit ("Question", None)
-     and desugar_regex pos : regex' -> phrasenode = 
+     and desugar_regex pos : regex -> phrasenode = 
        (* Desugar a regex, making sure that only variables are embedded
           within.  Any expressions that are spliced into the regex must be
           let-bound beforehand.  *)
@@ -1497,10 +1486,10 @@ module Desugarer =
              exprs := (v, e) :: !exprs;
              `Var v, pos
            end in
-       let rec aux : regex' -> phrasenode = 
+       let rec aux : regex -> phrasenode = 
          function
-           | `Range (f, t)    -> `ConstructorLit ("Range", Some (`TupleLit [`CharLit f, pos; `CharLit t, pos], pos))
-           | `Simply s        -> `ConstructorLit ("Simply", Some (`StringLit s, pos))
+           | `Range (f, t)    -> `ConstructorLit ("Range", Some (`TupleLit [`Constant (`Char f), pos; `Constant (`Char t), pos], pos))
+           | `Simply s        -> `ConstructorLit ("Simply", Some (`Constant (`String s), pos))
            | `Quote s        -> `ConstructorLit ("Quote", Some (aux s, pos))
            | `Any             -> `ConstructorLit ("Any", None)
            | `StartAnchor   -> `ConstructorLit ("StartAnchor", None)
@@ -1512,28 +1501,20 @@ module Desugarer =
            | `Repeat (rep, r) -> `ConstructorLit ("Repeat", Some (`TupleLit [desugar_repeat pos rep, pos; 
                                                                              aux r, pos], pos))
            | `Splice e        -> `ConstructorLit ("Quote", Some(`ConstructorLit ("Simply", Some (expr e)), pos))
-	   | `Replace (re, (`Literal tmpl)) -> `ConstructorLit("Replace", Some(`TupleLit ([(aux re, pos); (`StringLit tmpl, pos)]), pos))
+	   | `Replace (re, (`Literal tmpl)) -> `ConstructorLit("Replace", Some(`TupleLit ([(aux re, pos); (`Constant (`String tmpl), pos)]), pos))
 	   | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some(`TupleLit ([(aux re, pos); expr e]), pos))
        in fun e ->
          let e = aux e in
-           `Block (List.map (fun (v, e1) -> `Binding ((`Variable v, pos), e1), pos) !exprs,
+           `Block (List.map (fun (v, e1) -> (`Val ((`Variable v, pos), e1, `Unknown, None), pos)) !exprs,
 		   (e, pos))
      and simple_pattern_of_pattern var_env lookup_pos ((pat,pos') : ppattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern var_env lookup_pos
        and pos = `U (lookup_pos pos') in
-       let rec aux = function
+       let rec aux : pattern -> _ = function
          | `Variable _
          | `Nil as p -> p, pos
          | `Any -> `Variable (unique_name ()), pos
-         | `Constant (p,_) ->
-             `Constant (match p with
-                          | `IntLit v    -> Constant(Integer v, pos)
-                          | `FloatLit v  -> Constant(Float v, pos)
-                          | `StringLit v -> Constant(String v, pos)
-                          | `BoolLit v   -> Constant(Boolean v, pos)
-                          | `CharLit v   -> Constant(Char v,  pos)
-                          | _ -> assert false),
-             pos
+         | `Constant p -> `Constant (desugar_constant pos p), pos
          | `Cons (l,r) -> `Cons (desugar l, desugar r), pos
          | `List ps ->
              List.fold_right
@@ -1542,7 +1523,7 @@ module Desugarer =
                ps
                (`Nil, pos)
          | `As (name, p) -> `As (name, desugar p), pos
-         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype var_env datatype), pos
+         | `HasType (p, datatype) -> `HasType (desugar p, desugar_datatype' var_env datatype), pos
          | `Variant (l, Some v) ->
              `Variant (l, desugar v), pos
          | `Variant (l, None) ->
@@ -1619,23 +1600,25 @@ module Desugarer =
        (Debug.if_set show_desugared (fun()-> string_of_expression result);
         result)
 
-   let desugar_expression lookup_pos e = desugar_expression' ((generate_var_mapping -<- get_type_vars) e) lookup_pos e
+   let desugar_expression lookup_pos (_,pos as e) =
+     desugar_expression' ((generate_var_mapping -<- get_type_vars) ((`Exp e), pos)) lookup_pos e
 
-   let desugar_definition lookup_pos ((s, pos') : phrase) : untyped_definition =
-     let _, ((tenv, _) as var_env) = (generate_var_mapping -<- get_type_vars) (s, pos') in
+   let desugar_definition lookup_pos ((s, pos') : binding) : untyped_definition =
+     let _, ((tenv, _) as var_env) = generate_var_mapping (get_type_vars (s, pos')) in
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression lookup_pos in
-     let ds : phrasenode -> _ Syntax.definition' = function
-       | `TypeAnnotation ((`Definition (name, (`FunLit (Some _, patterns, body),_), loc), _), t)  -> 
-           Define (name,
-                   Rec ([name, desugar_expression (`FunLit (None, patterns, body), pos'), Some (desugar_datatype var_env t)],
-                        Variable (name, pos),
-                        pos),
-                   loc,pos)
-       | `TypeAnnotation ((`Definition (name, rhs, loc), _), t)  -> 
-           Define (name, HasType(desugar_expression rhs, desugar_datatype var_env t, pos),loc, pos)
-       | `Definition (name, e, loc) -> Define (name, desugar_expression e, loc, pos)
-       | `TypeDeclaration (name, args, rhs) ->
+     let ds : (ppattern, phrase) binding' -> _ Syntax.definition' = function
+       | `Val ((`Variable name, _), p, location, None) ->
+           Define (name, desugar_expression p, location, pos)
+       | `Val ((`Variable name, _), p, location, Some t) ->
+           Define (name, HasType (desugar_expression p, desugar_datatype' var_env t, pos), location, pos)
+       | `Val _ -> assert false (* TODO: handle other patterns *)
+       | `Fun (name, funlit, location, dtype) ->
+           Define (name,  Rec ([name, desugar_expression (`FunLit funlit, pos'), opt_map (desugar_datatype' var_env) dtype],
+                                Variable (name, pos),
+                               pos),
+                   location, pos)
+       | `Type (name, args, rhs) ->
            let get_var arg =
              match (Unionfind.find (StringMap.find arg tenv)) with
                | `Flexible var | `Rigid var -> var
@@ -1644,7 +1627,7 @@ module Desugarer =
              if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
                Alias (name,
                       List.map get_var args,
-                      desugar_datatype var_env rhs, pos)
+                      desugar_datatype' var_env rhs, pos)
              else
                failwith ("Free variable(s) in alias")
        | `Foreign (language, name, datatype) -> 
@@ -1658,20 +1641,40 @@ module Desugarer =
    let desugar_definitions lookup_pos =
      let rec desugar = function
        | [] -> []
-       | (`InfixDecl, _) :: phrases -> desugar phrases
+       | (`Infix, _) :: phrases -> desugar phrases
        | phrase :: phrases ->
            desugar_definition lookup_pos phrase :: desugar phrases
      in
        desugar
 
-   let desugar_datatype = generalize ->- desugar_assumption
+   let make_write_row (fields, rest : row) (constraints : (string * fieldconstraint list) list) : row  =
+     let rec mr =
+       function
+         | [] -> []
+         | ((name, body) :: fields) ->
+             if List.mem_assoc name constraints
+               && List.exists (function
+                                 | `Readonly -> true) (List.assoc name constraints) then
+                 mr fields
+             else
+               (name, body) :: mr fields
+     in (mr fields, rest)
 
+   let desugar_datatype = generalize ->- desugar_assumption
  end : 
   sig 
     val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
-    val desugar_definitions : (pposition -> Syntax.position) -> phrase list -> Syntax.untyped_definition list
+    val desugar_definitions : (pposition -> Syntax.position) -> binding list -> Syntax.untyped_definition list
     val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val desugar_datatype' : (Types.meta_type_var Utility.StringMap.t *
+                               Types.meta_row_var Utility.StringMap.t) -> Sugartypes.datatype -> Types.datatype
+    val desugar_assumption : Sugartypes.assumption -> Types.assumption 
     val fresh_type_variable : unit -> Sugartypes.datatype
+    val make_write_row : row -> (string * fieldconstraint list) list -> row
+    val generate_var_mapping : Sugartypes.quantifier list -> (Types.quantifier list * 
+                                                                (Types.meta_type_var Utility.StringMap.t *
+                                                                   Types.meta_row_var Utility.StringMap.t))
+    val get_type_vars : Sugartypes.binding -> Sugartypes.quantifier list
   end)
 
 include Desugarer

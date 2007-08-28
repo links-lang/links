@@ -29,9 +29,11 @@ let countNodes e =
       (fun _ -> ()) e; 
     !count;;
 
+module Env = Env.String
+
 (* Inline small, non-recursive functions *)
 let contains_no_extrefs : Syntax.expression -> bool =
-  (=) [] -<- List.filter (not -<- flip List.mem_assoc Library.type_env) -<- StringSet.elements -<- freevars
+  (=) [] -<- List.filter (not -<- Env.has Library.type_env) -<- StringSet.elements -<- freevars
 
 let recursivep : Syntax.expression -> bool = function
   | Rec ([(name, fn, _)], Variable (v, _), _) when v = name 

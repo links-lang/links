@@ -10,10 +10,10 @@ open Pickle
 open Utility
 open Syntax
 
-let optimising = Settings.add_bool("optimise_javascript", true, `User)
-let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, `User)
+let optimising = Basicsettings.Js.optimise
+let elim_dead_defs = Basicsettings.Js.elim_dead_defs
+let js_lib_url = Basicsettings.Js.lib_url
 let js_rename_builtins = Settings.add_bool("js_rename_builtins", false, `User)
-let js_lib_url = Settings.add_string("jsliburl", "lib/", `User)
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (* Intermediate language *)
@@ -450,7 +450,7 @@ let end_thread expr = Call(expr, [idy_js])
     (note anomalous arg order.) *)
 let make_xml_cps attrs_cps attrs_direct children_cps children_direct tag = 
   let innermost_expr = 
-    Call(Var "LINKS.XML",
+    Call(Var "LINKS.XMLk",
          [strlit tag;
           Dict (attrs_direct @ map (fun ((k, _), n) -> (k, Var n)) attrs_cps);
           Lst (children_direct @ map (fun (_, n) -> Var n) children_cps);
@@ -1118,17 +1118,17 @@ let get_alien_names defs =
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
       
-(* Note: the body is not really used here. *)
-let generate_program_defs (Program(defs,body)) root_names =
+let generate_program_defs defs root_names =
   let aliens = get_alien_names defs in
-  let defs = map rename_symbol_operators_def defs in
-  let body = rename_symbol_operators body in
+  let defs = List.map rename_symbol_operators_def defs in
+  (* NOTE: the body is not really used here. *)
+  let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
     if Settings.get_value optimising then
       Optimiser.inline(Optimiser.inline(Optimiser.inline(Program(defs, body))))
     else Program (defs, body)
   in
-  let library_names = aliens @ (List.map fst (fst Library.typing_env)) in
+  let library_names = aliens @ StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let defs =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names
@@ -1139,8 +1139,8 @@ let generate_program_defs (Program(defs,body)) root_names =
 let generate_program ?(onload = "") (Program(defs,expr)) =
   let expr = rename_symbol_operators expr in
   let defs = map rename_symbol_operators_def defs in
-  let js_defs = generate_program_defs (Program(defs,expr)) (Syntax.freevars expr) in
-  let library_names = List.map fst (fst Library.typing_env) in
+  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
+  let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let global_names = Syntax.defined_names defs @ library_names in
   let js_root_expr = 
     (gen
@@ -1163,7 +1163,7 @@ let generate_program ?(onload = "") (Program(defs,expr)) =
 
 let links2js s = 
   let Program (defs, body) =
-    (Parse.parse_string Parse.program
+    (Parse.parse_string Parse.program ->- fst
      ->- Inference.type_program Library.typing_env ->- snd) s in
   let defs = map ((rewrite_def (Optimiser.uniquify_names)) ->- generate_def) defs in
   let body = ((Utility.perhaps_apply Optimiser.uniquify_names) ->- generate) body in
@@ -1218,7 +1218,7 @@ let lstrip s = List.hd (Str.bounded_split (Str.regexp "[ \t\n]+") s 1)
 let rhino_output linkscode =  
   let gen s =
     let Program (defs, body) =
-      (Parse.parse_string Parse.program
+      (Parse.parse_string Parse.program ->- fst
        ->- Inference.type_program Library.typing_env ->- snd) s
     in
       ((Utility.perhaps_apply Optimiser.uniquify_names)

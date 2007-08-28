@@ -40,8 +40,9 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude typenv filename = 
-  let program = lazy(Parse.parse_file Parse.program filename)
+  let program, sugar = lazy(Parse.parse_file Parse.program filename)
     <|measure_as|> "parse" in
+  let () = TypeSugar.Check.file typenv sugar in
   let tenv, program = lazy(Inference.type_program typenv program)
     <|measure_as|> "type" in
   let tenv, program = 
@@ -190,10 +191,12 @@ let perform_request
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
         assert(Syntax.is_closed_wrt expr 
-                 (StringSet.from_list (dom globals @ dom env @ dom (fst Library.typing_env))));
-          Library.print_http_response [("Content-type", "text/html")]
-            (Result.string_of_result 
-               (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
+                 (StringSet.union
+                    (StringSet.from_list (dom globals @ dom env))
+                    (Env.String.domain (fst Library.typing_env))));
+        Library.print_http_response [("Content-type", "text/html")]
+          (Result.string_of_result 
+             (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
     | ClientReturn(cont, value) ->
         Interpreter.has_client_context := true;
         let result_json = (Json.jsonize_result 
@@ -216,7 +219,10 @@ let perform_request
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              catch_notfound_l "generate_program"
-               (lazy(Js.generate_program program))
+               (lazy(if Settings.get_value (Basicsettings.use_monadic_ir) then
+                       Irtojs.generate_program program
+                     else
+                       Js.generate_program program))
            else 
              let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
                Result.string_of_result rslt)

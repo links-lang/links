@@ -10,6 +10,7 @@ type constant =
   | Char of char
   | String of string
   | Float of float
+deriving (Show)
 
 (*
   [TODO]
@@ -74,12 +75,12 @@ type untyped_data = [`U of position]
 type typed_data = [`T of (position * Types.datatype * label option)]
 
 type expression = typed_data expression' deriving (Show)
-type untyped_expression = untyped_data expression'
+type untyped_expression = untyped_data expression' deriving (Show)
 type stripped_expression = unit expression' deriving (Show)
 
 type definition = typed_data definition' deriving (Show)
-type untyped_definition = untyped_data definition'
-type stripped_definition = unit definition'
+type untyped_definition = untyped_data definition' deriving (Show)
+type stripped_definition = unit definition' deriving (Show)
 
 type program = typed_data program' deriving (Show)
 type untyped_program = untyped_data program' deriving (Show)

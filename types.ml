@@ -52,23 +52,22 @@ type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
 type quantifier = type_variable
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
+module Env = Env.String
+
 type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = ((string * assumption) list)
-    deriving (Show, Pickle)
-type alias_environment = assumption stringmap
-    deriving (Show, Pickle)
+type environment = assumption Env.t
+    deriving (Show)
+type alias_environment = assumption Env.t
+    deriving (Show)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show)
 
 (* Functions on environments *)
-let environment_values = fun env -> snd (List.split env)
-let lookup = fun x -> List.assoc x
-
-let concat_environment
+let concat_typing_environment
       ((types1, aliases1) : typing_environment)
       (types2, aliases2) : typing_environment = 
-    (types1 @ types2, StringMap.superimpose aliases1 aliases2)
+    (Env.extend types1 types2, Env.extend aliases1 aliases2)
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -117,7 +116,6 @@ let _ =
                 | `Body row ->
                     is_closed rec_vars row
             end
-        | _ -> assert false
     in
       is_closed TypeVarSet.empty
 
@@ -385,7 +383,9 @@ let unwrap_row : row -> (row * row_var option) =
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
+let bool_type = `Primitive `Bool
 let xml_type = `Application ("Xml", [])
+let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
 
 (*
@@ -444,7 +444,6 @@ and row_skeleton = fun rec_vars row ->
   in
     field_env', row_var'
 
-
 (* check for undefined aliases *)
 exception UndefinedAlias of string
 
@@ -458,7 +457,7 @@ let rec free_alias_check alias_env = fun rec_vars ->
       | `Variant row -> free_alias_check_row alias_env rec_vars row
       | `Table (r, w) -> fac rec_vars r; fac rec_vars w
       | `Application (s, ts) ->
-          if StringMap.mem s alias_env then
+          if Env.has alias_env s then
             List.iter (fac rec_vars) ts
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
@@ -500,15 +499,7 @@ and free_alias_check_row alias_env = fun rec_vars row ->
 let free_alias_check alias_env = free_alias_check alias_env TypeVarSet.empty
 let free_alias_check_row alias_env = free_alias_check_row alias_env TypeVarSet.empty
 
-let is_flexible t =
-  match concrete_type t with
-    | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-            | `Flexible _ -> true
-            | _ -> false
-        end
-    | _ -> false
+
 
 let rec is_mailbox_free alias_env = fun rec_vars t ->
   let imb = is_mailbox_free alias_env rec_vars in
@@ -522,7 +513,7 @@ let rec is_mailbox_free alias_env = fun rec_vars t ->
       | `Table (r, w) -> imb r && imb w
       | `Application ("Mailbox", _) -> false
       | `Application (s, ts) ->
-          if StringMap.mem s alias_env then
+          if Env.has alias_env s then
             List.for_all imb ts
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
@@ -563,6 +554,27 @@ and is_mailbox_free_row alias_env = fun rec_vars row ->
 let is_mailbox_free alias_env = is_mailbox_free alias_env TypeVarSet.empty
 let is_mailbox_free_row alias_env = is_mailbox_free_row alias_env TypeVarSet.empty
 
+(* precondition: the row is unwrapped *)
+let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
+  match Unionfind.find rowvar with
+    | `Closed ->
+        let n = StringMap.size field_env in
+        let b =
+          n = 0
+          ||
+          (List.for_all
+             (fun i ->
+                let name = string_of_int i in
+                  FieldEnv.mem name field_env
+                  && (match FieldEnv.find (string_of_int i) field_env with
+                        | `Present _ -> true
+                        | `Absent -> false))
+             (fromTo 1 n))
+        in
+          (* 0/1-tuples are displayed as records *)
+          b && (allow_onetuples || n <> 1)
+    | _ -> false
+
 
 (* whether to display mailbox annotations on arrow types
    [NOTE]
@@ -594,28 +606,6 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
       end in
 
     let unwrap = fst -<- unwrap_row in
-
-    (* precondition: the row is unwrapped *)
-    let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
-      match Unionfind.find rowvar with
-        | `Closed ->
-            let n = StringMap.size field_env in
-            let b =
-              n = 0
-              ||
-              (List.for_all
-                 (fun i ->
-                    let name = string_of_int i in
-                      FieldEnv.mem name field_env
-                      && (match FieldEnv.find (string_of_int i) field_env with
-                            | `Present _ -> true
-                            | `Absent -> false))
-                 (fromTo 1 n))
-            in
-              (* 0/1-tuples are displayed as records *)
-              b && (allow_onetuples || n <> 1)
-        | _ -> false
-    in
     (* precondition: the row is unwrapped *)
     let string_of_tuple (field_env, row_var) =
       let tuple_env =
@@ -928,6 +918,20 @@ type type_alias_set = Utility.StringSet.t
 let type_aliases = type_aliases TypeVarSet.empty
 let row_type_aliases = row_type_aliases TypeVarSet.empty
 
+(** register an alias in a typing environment *)
+let register_alias  : string * int list * datatype -> alias_environment -> alias_environment =
+  fun (typename, vars, datatype) alias_env ->
+  let _ =
+    if Env.has alias_env typename then
+      failwith ("Duplicate typename: "^typename) in
+  let aliases = type_aliases datatype in
+  let free_aliases =
+    StringSet.filter (fun alias -> not (Env.has alias_env alias)) aliases
+  in
+    if not (StringSet.is_empty free_aliases) then
+      failwith ("Undefined typename(s) in type declaration: "^String.concat "," (StringSet.elements free_aliases))
+    else
+      Env.bind alias_env (typename, ((List.map (fun var -> `TypeVar var) vars), datatype))
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
@@ -954,7 +958,12 @@ let string_of_assumption = function
   | [], datatype -> string_of_datatype datatype
   | assums, datatype -> "forall " ^ (String.concat ", " (List.map string_of_quantifier assums)) ^" . "^ string_of_datatype datatype
 let string_of_environment env =
-  "{ " ^ (String.concat " ; " (List.map (fun (f, s) -> f ^" : " ^ string_of_assumption s) env)) ^" }"
+  let module M = Env.Show_t(Show.ShowDefaults(struct
+                                                type a = assumption
+                                                let format fmt a = 
+                                                  Format.pp_print_string fmt (string_of_assumption a)
+                                              end)) in
+    M.show env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in
@@ -1015,10 +1024,9 @@ exception AliasMismatch of string
 
 let lookup_alias (s, ts) alias_env =
   let vars, alias =
-    if StringMap.mem s alias_env then
-      StringMap.find s alias_env
-    else
-      raise (AliasMismatch ("Unbound typename "^s))
+    match Env.find alias_env s with
+      | Some s -> s
+      | None -> raise (AliasMismatch ("Unbound typename "^s))
   in
     if List.length vars <> List.length ts then
       raise (AliasMismatch
@@ -1042,8 +1050,17 @@ let make_tuple_type (ts : datatype list) : datatype =
           (1, make_empty_closed_row ())
           ts))
 
-let arg_types = function
-  | `Function (`Record ((field_env, _) as row), _, _) ->
-      assert (is_closed_row row);
-      FieldEnv.fold (fun _ t ts -> t :: ts) field_env []
-  | _ -> assert false
+let make_formlet_type t = `Application ("Formlet", [t])
+let make_list_type t = `Application ("List", [t])
+let make_mailbox_type t = `Application ("Mailbox", [t])
+
+let make_row ts =
+  (List.fold_left
+     (fun row (name, t) -> row_with (name, `Present t) row)
+     (make_empty_closed_row ())
+     ts)
+
+let make_record_type ts = `Record (make_row ts)
+let make_variant_type ts = `Variant (make_row ts)
+
+let make_table_type (r, w) =`Table (r, w)

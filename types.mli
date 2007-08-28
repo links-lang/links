@@ -62,16 +62,18 @@ type quantifier = type_variable
 
 type assumption = ((quantifier list) * datatype)
     deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = ((string * assumption) list)
-    deriving (Show, Pickle)
-type alias_environment = assumption stringmap
-    deriving (Show, Pickle)
+type environment = assumption Env.String.t
+    deriving (Show)
+type alias_environment = assumption Env.String.t
+    deriving (Show)
 type typing_environment = environment * alias_environment
-    deriving (Show, Pickle)
+    deriving (Show)
 
 (* useful types *)
 val unit_type : datatype
 val string_type : datatype
+val bool_type : datatype
+val database_type : datatype
 val xml_type : datatype
 val native_string_type : datatype
 
@@ -115,6 +117,8 @@ val make_singleton_open_row : (string * field_spec) -> row
 val is_closed_row : row -> bool
 val is_absent_from_row : string -> row -> bool
 
+val is_tuple : ?allow_onetuples:bool -> row -> bool
+
 (* row_var retrieval *)
 val get_row_var : row -> int option
 
@@ -125,8 +129,18 @@ val row_with : (string * field_spec) -> row -> row
 val empty_field_env : field_spec_map
 val closed_row_var : row_var
 
+val make_formlet_type : datatype -> datatype
+
 val make_tuple_type : datatype list -> datatype
-val make_record_type : (string*datatype) list -> datatype
+val make_list_type : datatype -> datatype
+val make_mailbox_type : datatype -> datatype
+
+val make_row : (string * datatype) list -> row
+
+val make_record_type  : (string * datatype) list -> datatype
+val make_variant_type : (string * datatype) list -> datatype
+
+val make_table_type : datatype * datatype -> datatype
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
@@ -168,10 +182,10 @@ exception UndefinedAlias of string
 
 type type_alias_set = Utility.StringSet.t
 
+val register_alias : string * int list * datatype -> alias_environment -> alias_environment
+
 val free_alias_check : alias_environment -> datatype -> unit
 val free_alias_check_row : alias_environment -> row -> unit
-
-val is_flexible : datatype -> bool
 
 val is_mailbox_free : alias_environment -> datatype -> bool
 val is_mailbox_free_row : alias_environment -> row -> bool
@@ -186,9 +200,7 @@ type inference_type_map =
 (*type context = environment * inference_type_map*)
 
 (* environments *)
-val concat_environment : typing_environment -> typing_environment -> typing_environment
-val environment_values : environment -> assumption list
-val lookup : string -> environment -> assumption
+val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
 
 (* mailboxes *)
 val show_mailbox_annotations : bool Settings.setting

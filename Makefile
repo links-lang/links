@@ -55,6 +55,7 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml
 
 SOURCES = $(OPC)                		\
           utility.ml            		\
+          env.mli env.ml                        \
           settings.mli settings.ml 		\
           basicsettings.ml                      \
           debug.mli debug.ml    		\
@@ -69,9 +70,10 @@ SOURCES = $(OPC)                		\
           regex.ml                              \
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
-          result.mli result.ml         		\
-          errors.mli errors.ml                  \
           parser.mly            		\
+          result.mli result.ml         		\
+          value.mli value.ml                    \
+          errors.mli errors.ml                  \
           $(DB_CODE)            		\
           database.mli database.ml 		\
           lexer.mll             		\
@@ -81,21 +83,29 @@ SOURCES = $(OPC)                		\
           json.ml               		\
           callgraph.ml                          \
           instantiate.mli instantiate.ml        \
+          generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
+          unify.mli unify.ml                    \
           inference.mli inference.ml 		\
+          showsugar.ml                          \
+          typeSugar.mli typeSugar.ml            \
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
+          ir.ml ir.mli                          \
+          compileir.ml                          \
+          irtojs.mli irtojs.ml                  \
           js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
+          evalir.ml                             \
           loader.ml                             \
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
           links.ml              		\
-          ir.mli                                \
-          compileir.ml                          \
           rewriteexamples.ml                    \
+
+
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

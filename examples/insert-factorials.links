@@ -1,4 +1,4 @@
-var db = database (name="factorials" | getDatabaseConfig());
+var db = database "factorials";
 var factorials = table "factorials" with (i : Int, f : Int) from db; #write db;
 
 ### library functions ###
@@ -10,38 +10,12 @@ fun upto(i,j) {
   }
 }
 
-fun map(f, xs) {
-  switch (xs) {
-    case [] -> []
-    case (x::xs) -> f(x) :: (map(f, xs))
-  }
-}
-
-fun foldr(f, xs, y) {
-  switch (xs) {
-    case [] -> y
-    case (x::xs) -> foldr(f, xs, f(x)(y))
-  }
-}
-
-fun filter(xs, p) {
-  foldr(
-    fun(x)(ys) {
-     if(p(x)) {x :: ys}
-     else {ys}
-    }, xs, [])
-}
-
 fun mem(y, xs) {
-  not (filter (xs, fun (x) {x == y}) == [])
+  not (filter (fun (x) {x == y}, xs) == [])
 }
 
-fun diff(xs)(ys) {
-  filter(xs, fun (x) {not(mem(x, ys))})
-}
-
-fun product(xs) {
-  foldr ((*), xs, 1)
+fun diff(xs, ys) {
+  filter(fun (x) {not(mem(x, ys))}, xs)
 }
 ### end of library functions ###
 
@@ -64,5 +38,4 @@ fun insertFactorials(n) {
 }
 
 # `diff` is list difference
-
 insertFactorials(20)

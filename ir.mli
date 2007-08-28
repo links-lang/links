@@ -1,8 +1,11 @@
+(*pp deriving *)
 (** Monadic IR *)
 
+type scope = [ `Local | `Global ]
+  deriving (Show)
 (* term variables *)
 type var = int
-type var_info = Types.datatype * string
+type var_info = Types.datatype * string * scope
 type binder = var * var_info
 
 (* type variables *)
@@ -11,7 +14,10 @@ type tyname = string
 (* type tybinder = tyvar * var_info *)
 
 type name = string
-type 'a name_map = 'a Utility.StringMap.t
+type 'a name_map = 'a Utility.stringmap
+  deriving (Show)
+
+type language = string
 
 (*
 type constant =
@@ -23,48 +29,53 @@ type constant =
 *)
 
 type constant = Syntax.constant
+  deriving (Show)
+
+type location = Syntax.location
 
 type value =
   [ `Constant of constant
   | `Variable of var
-  | `Extend of (value name_map * value option)
-  | `Project of (name * value)
-  | `Inject of (name * value)
+  | `Extend of value name_map * value option
+  | `Project of name * value
+  | `Erase of name * value    (* should be implemented using coerce *) 
+  | `Inject of name * value
 
-  | `Nil
-  | `Cons of (value * value)
-  | `XmlNode of (name * value name_map * value list)
-  | `Coerce of (value * Types.datatype * Types.datatype)
+  | `XmlNode of name * value name_map * value list
+  | `ApplyPrim of value * value list
+  | `Comparison of value * Syntaxutils.comparison * value    (* should really be implemented as constants *)
+
+  | `Coerce of value * Types.datatype
   | `Abs of value
   ]
 and tail_computation =
-  [ `Return of (value)
-  | `Apply of (value * value list)
-
+  [ `Return of value
+  | `Apply of value * value list
   | `Special of special
-
-  | `Case of (value * (binder * computation) name_map * (binder * computation) option)
-  | `If of (value * computation * computation)
+  | `Case of value * (binder * computation) name_map * (binder * computation) option
+  | `If of value * computation * computation
   ]
 and binding =
-  [ `Let of (binder * tail_computation)
-  | `Abs of (binder * binder list * computation)
-  | `Rec of (binder * binder list * computation) list
-  | `For of (binder * value) ]
+  [ `Let of binder * tail_computation
+  | `Fun of binder * binder list * computation * location
+  | `Rec of (binder * binder list * computation * location) list
+  | `Alien of binder * language * Types.assumption
+  | `Alias of tyname * tyvar list * Types.datatype ]
 and special =
   [ `App of value * value
   | `Wrong
-  | `Database of (value)
-  | `TableQuery of (value name_map * SqlQuery.sqlQuery)
-  | `TableHandle of (value * value * (Types.datatype * Types.datatype))
-  | `SortBy of (value * value)
-  | `CallCC of (value) ]
+  | `Database of value
+  | `TableQuery of value name_map * SqlQuery.sqlQuery
+  | `TableHandle of value * value * (Types.datatype * Types.datatype)
+  | `CallCC of value ]
 and computation = binding list * tail_computation
+  deriving (Show)  
 
-type definition =
-  [ `Define of (binder * computation * Syntax.location)
-  | `Alias of (tyname * tyvar list * Types.datatype)
-  | `Alien of (binder * string * Types.assumption)
-  ]
+type program = computation
 
-type program = definition list * computation
+val is_atom : value -> bool
+
+module Inline :
+sig
+  val program : program -> program
+end

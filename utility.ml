@@ -43,6 +43,16 @@ module type Map =
 sig
   include Map.S
   exception Not_disjoint of key * string
+
+  val singleton : key -> 'a -> 'a t 
+  (** create a singleton map *)
+
+  val filter : ('a -> bool) -> 'a t -> 'a t
+  (** filter by value *)
+
+  val filteri : (key -> 'a -> bool) -> 'a t -> 'a t
+  (** filter by key and value *)
+
   val for_all : ('a -> bool) -> 'a t -> bool
   (** return true if p holds for all values in the range of m *)
 
@@ -68,6 +78,9 @@ sig
   val union_disjoint : 'a t -> 'a t -> 'a t
   (** disjoint union *)
 
+  val union_all : ('a t) list -> 'a t
+  (** disjoint union of a list of maps *)
+
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
 
@@ -92,6 +105,20 @@ module Int = struct
   module Show_t = Primitives.Show_int
 end
 
+module Char = 
+struct
+  include Char
+  module Show_t = Primitives.Show_char
+  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
+  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
+  let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
+  let isLower = function 'a'..'z' -> true | _ -> false
+  let isUpper = function 'A'..'Z' -> true | _ -> false
+  let isDigit = function '0'..'9' -> true | _ -> false
+  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
+  let isBlank = function ' '|'\t' -> true | _ -> false
+end
+
 module Map :
 sig
   module type OrderedType = OrderedShow
@@ -103,6 +130,19 @@ struct
   module type S = Map
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
+
+    let singleton i v =
+      add i v empty
+
+    let filter f map =
+      fold (fun name v map ->
+              if f v then add name v map
+              else map) map empty
+
+    let filteri f map =
+      fold (fun name v map ->
+              if f name v then add name v map
+              else map) map empty
 
     let find elem map = 
       try find elem map 
@@ -140,6 +180,8 @@ struct
            if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
            else
              add k v r) b a
+
+    let union_all ms = List.fold_right union_disjoint ms empty
 
     let superimpose a b = fold add b a
 
@@ -194,12 +236,16 @@ struct
 end
 
 module type INTSET = Set with type elt = int
-module IntSet : INTSET = Set.Make(Int)
+module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
+
+module type CHARSET = Set with type elt = char
+module CharSet : CHARSET = Set.Make(Char)
+module CharMap = Map.Make(Char)
 
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
@@ -569,6 +615,8 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_iter f = opt_map f ->- ignore
+
   let fromOption default = function
     | None -> default
     | Some x -> x
@@ -599,19 +647,6 @@ struct
     in aux [] e
 end
 include OptionUtils
-
-module Char = 
-struct
-  include Char
-  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
-  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
-  let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
-  let isLower = function 'a'..'z' -> true | _ -> false
-  let isUpper = function 'A'..'Z' -> true | _ -> false
-  let isDigit = function '0'..'9' -> true | _ -> false
-  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
-  let isBlank = function ' '|'\t' -> true | _ -> false
-end
 
 (** {0 Character Encoding} **)
 

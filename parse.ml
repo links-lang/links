@@ -101,13 +101,14 @@ let read : parse:('intermediate parser_)
         -> infun:(string -> int -> int)
         -> name:string
         -> ?nlhook:(unit -> unit)
-        -> 'result =
+        -> 'result * ('intermediate * (Sugartypes.pposition -> Syntax.position)) =
 fun ~parse ~desugarer ~infun ~name ?nlhook ->
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      desugarer code (parse (Lexer.lexer (fromOption identity nlhook)) lexbuf)
+      let p = parse (Lexer.lexer (fromOption identity nlhook)) lexbuf in
+        (desugarer code p, (p, lookup code))
     with 
       | Parsing.Parse_error -> 
           let line, column = find_line code lexbuf.lex_curr_p in
@@ -175,7 +176,7 @@ let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = {
   }
   
 let program : (Syntax.untyped_program,
-               (Sugartypes.phrase list * Sugartypes.phrase option)) grammar = {
+               (Sugartypes.binding list * Sugartypes.phrase option)) grammar = {
   desugar = (fun code (defs, body) ->
                let pos = lookup code in
                  Syntax.Program

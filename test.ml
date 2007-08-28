@@ -25,7 +25,7 @@ let equals : ('a -> string) -> 'a -> 'a -> (string, 'a) either
 open Utility.EitherMonad
 
 let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
-let parse = attempt (Parse.parse_string Parse.program)
+let parse = attempt (Parse.parse_string Parse.program ->- fst)
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
 let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_value Basicsettings.prelude_file) in
                          let prelude, _ = Interpreter.run_program [] [] prelude in
@@ -36,9 +36,9 @@ let type_matches ~inferred ~expected =
   let nfreevars =  
     Types.TypeVarSet.cardinal -<- Types.free_type_vars 
   and inferred = 
-    Instantiate.instantiate_datatype (Types.make_fresh_envs inferred) inferred
+    Instantiate.datatype (Types.make_fresh_envs inferred) inferred
   and expected = 
-    Instantiate.instantiate_datatype (Types.make_rigid_envs expected) expected
+    Instantiate.datatype (Types.make_rigid_envs expected) expected
   in try
       (* Check for unification without instantiation.  Perhaps we
          could just count freevars on both sides instead of all this
@@ -56,9 +56,9 @@ let type_matches ~inferred ~expected =
   *)
   let check_rhs_unchanged l r =
     let l =  
-      Instantiate.instantiate_datatype (Types.make_wobbly_envs l) l 
+      Instantiate.datatype (Types.make_wobbly_envs l) l 
     and r =  
-     Instantiate.instantiate_datatype (Types.make_rigid_envs r) r 
+     Instantiate.datatype (Types.make_rigid_envs r) r 
     in try
         let c = Types.free_type_vars r in
         Inference.unify Library.alias_env (l, r);
@@ -79,7 +79,7 @@ let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
                  (Types.Show_datatype.show body_type)
 )
 
-let datatype = Parse.parse_string Parse.datatype
+let datatype = Parse.parse_string Parse.datatype ->- fst
 
 let functionp : Result.result -> Result.result m = function
   | `RecFunction _ as f -> Right f
