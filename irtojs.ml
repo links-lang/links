@@ -262,7 +262,6 @@ struct
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [label; record]) -> 
             maybe_parenise record ^^ (brackets (show label))
-              (* (paren record) ^ "[" ^ show label ^ "]" *)
         | Call (Var "hd", [list;kappa]) -> 
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
         | Call (Var "tl", [list;kappa]) -> 
