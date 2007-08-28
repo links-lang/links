@@ -848,7 +848,7 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
     and tc = type_check context
     and tpc = type_pattern `Closed lookup_pos alias_env (context.tvars, context.rvars)
     and pattern_env  (_,(_,(e,_))) = e
-    and (++) env' (env, alias_env) = (Env.extend env' env, alias_env) in
+    and (++) (env, alias_env) env' = (Env.extend env env', alias_env) in
     let typed, env = match def with
         | `Val (pat, body, location, datatype) -> 
             let body = tc body in
@@ -866,7 +866,7 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
                (Env.extend env penv, alias_env))
         | `Fun (name, (pats, body), location, t) ->
             let pats = List.map (List.map tpc) pats in
-            let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
             let body_env, alias_env = List.fold_left fold_in_envs context.tenv pats in
             let mt = Types.fresh_type_variable () in
             let body = type_check {context with tenv = (Env.bind body_env (mailbox, ([], mt)), alias_env)} body in
@@ -906,7 +906,7 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
                         ((name, fb), pats)) defs) in
             let defs =
               let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) env fbs in
-              let fold_in_envs = List.fold_left (fun env pat' -> (pattern_env pat') ++ env) in
+              let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
                 List.rev
                   (List.fold_left2
                      (fun defs (name, (_, body), location, t) pats ->
@@ -982,7 +982,7 @@ let type_bindings lookup_pos typing_env bindings =
        let _, (tvars, rvars) = Sugar.generate_var_mapping (Sugar.get_type_vars bind) in
        let ctxt =  {tenv = tenv; tvars = tvars; rvars = rvars} in
        let bind, tenv' = type_binding lookup_pos ctxt bind in
-         Types.concat_typing_environment tenv' tenv, bind::binds)
+         Types.concat_typing_environment tenv tenv', bind::binds)
     (typing_env, []) (Sugartypes.refine_bindings bindings)
 
 let sentence lookup_pos typing_env : Sugartypes.sentence -> Typed.sentence = 
