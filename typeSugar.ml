@@ -613,7 +613,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ into, `Table (read, write))
-            and _ = unify (write, Types.make_list_type write) in
+            and _ = unify (Types.make_list_type write, typ values) in
               `DBInsert (into, values), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat
@@ -627,7 +627,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
             let set = List.map 
               (fun (name, exp) ->
-                 let exp = tc exp in
+                 let exp = type_check context' exp in
                  let _ = unify (write, `Record (Types.make_singleton_open_row
                                                   (name, `Present (typ exp)))) in
                    (name, exp)) set in
