@@ -14,7 +14,7 @@ open Num
 
 open SqlQuery
 
-let debug = Settings.add_bool("debug_sqlcompile", true, `User)
+let debug = Settings.add_bool("debug_sqlcompile", false, `User)
 
 (* [sqlable_primtype ty] is true if [ty] corresponds to a primitive
    SQL type. *)
