@@ -648,7 +648,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and read =  `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
             let _ = unify (typ from, `Table (read, write))
-            and _ = unify (pattern_typ pat, write) in
+            and _ = unify (pattern_typ pat, read) in
             let context' = {context with tenv = context.tenv ++ pattern_env pat} in
             let where = opt_map (type_check context') where in
             let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
