@@ -157,18 +157,19 @@ let uniquify_names : RewriteSyntax.rewriter =
                                    (name, gensym ~prefix:name ())) vs in
         let rename = List.fold_right (fun (x, r) expr ->
                                         Syntax.rename_fast x r expr) bindings in
-          Some(Rec(List.map (fun (n, v, t) ->
-                               (List.assoc n bindings, rename v, t)) vs,
-                   rename b, data))
+          Some (Rec (List.map (fun (n, v, t) ->
+                                 (List.assoc n bindings, rename v, t)) vs,
+                     rename b, data))
     | Record_selection (lab, lvar, var, value, body, data) ->
         let lvar' = gensym ~prefix:lvar ()
         and var'  = gensym ~prefix:var () in
           Some(Record_selection(lab, lvar', var', value, 
-                                Syntax.rename_fast var var' (Syntax.rename_fast lvar lvar' body),
+                                Syntax.rename_fast var var' 
+                                  (Syntax.rename_fast lvar lvar' body),
                                 data))
     | For (b, v, src, data) -> 
         let name = gensym ~prefix:v () in
-          Some (For(Syntax.rename_fast v name b, name, src, data))
+          Some (For (Syntax.rename_fast v name b, name, src, data))
     | Variant_selection (value, clab, cvar, cbody, var, body, data) ->
         let cvar' = gensym ~prefix:cvar ()
         and var'  = gensym ~prefix:var () in
@@ -178,7 +179,8 @@ let uniquify_names : RewriteSyntax.rewriter =
                                    data))
     | _ -> None
   (* Note that this will only work bottomup, not topdown, since
-     we need to replace bindings from the inside out *)
+     we need to replace bindings from the inside out. (So that subtrees
+     are already uniquified and thus we can use rename_fast.) *)
   in RewriteSyntax.bottomup rewrite_node
 
 (** {0 Renaming} *)
@@ -191,8 +193,8 @@ let uniquify_names : RewriteSyntax.rewriter =
     we would be more complete.
 *)
 let renaming : RewriteSyntax.rewriter = 
+  (* [bound_in x expr == true] iff [x] is bound anywhere inside [expr] *)
   let bound_in var = 
-    (* Is a particular name bound inside an expression? *)
     let binds default = function
       | Let (v, _, _, _)
           when v = var -> true
@@ -380,7 +382,7 @@ let print_definition of_name ?msg:msg def =
 
 let rewriters env = [
   uniquify_names;
-  RewriteSyntax.bottomup no_project_erase;  
+  RewriteSyntax.bottomup no_project_erase;
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   if Settings.get_value reduce_recs then
@@ -391,6 +393,7 @@ let rewriters env = [
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
+  Sqlcompile.sql_compile;
 ]
 
 let run_optimisers
@@ -401,8 +404,7 @@ let optimise' env expr =
   if not (Settings.get_value optimising) then 
     None
   else
-    let expr' = fromOption expr (run_optimisers env expr) in
-    let expr' = Sqlcompile.sql_compile expr' in
+    let expr' = run_optimisers env expr in
     let _ =
         match expr' with
             None -> Debug.if_set_l show_optimisation
