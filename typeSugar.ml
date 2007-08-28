@@ -298,23 +298,24 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | ((`As (_, p) | `HasType (p, _)), _) :: ps -> are_open (p :: ps)
               | ((`Constant _ | `Variant _), _) :: ps -> are_open ps
               | ((`Nil | `Cons _ | `List _ | `Tuple _ | `Record _), _) :: _ -> assert false in
-          let fields, are_open =
+          let fields =
             StringMap.fold
-              (fun name field_spec (env, p) ->
+              (fun name field_spec env ->
                  match field_spec with
                    | `Present t ->
-                       let p = (p || are_open pats) in
                        let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
-                         (StringMap.add name (`Present t)) env, p
+                         (StringMap.add name (`Present t)) env
                    | `Absent ->
-                       assert false) fields (StringMap.empty, false)
+                       assert false) fields StringMap.empty
           in
-            if are_open then
+            if are_open pats then
               begin
                 let row = (fields, row_var) in
-                  assert (not (Types.is_closed_row row));
-                  `Variant row
+                  if Types.is_closed_row row then
+                    failwith ("Open row pattern with closed type: "^Types.string_of_row row)
+                  else
+                    `Variant row
               end
             else
               begin
@@ -488,6 +489,32 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
       let (_,_,e) = lookup_pos pos in e 
     and expr_string_typed (_,(pos,_) : Typed.phrase) : string =
       let (_,_,e) = lookup_pos pos in e in
+
+    let type_cases binders =
+      let pt = Types.fresh_type_variable () in
+      let bt = Types.fresh_type_variable () in
+      let binders, pats = 
+        List.fold_right
+          (fun (pat, body) (binders, pats) ->
+             let pat = tpo pat in
+             let _ = unify (pattern_typ pat, pt) in
+               (pat, body)::binders, pat :: pats)
+          binders ([], []) in
+      let pt = close_pattern_type pats pt in
+
+      (* NOTE: it is important to type the patterns in isolation first in order to
+         allow them to be closed before typing the bodies *)
+
+      let binders = 
+        List.fold_right
+          (fun (pat, body) binders ->
+             let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
+             let _ = unify (typ body, bt) in
+               (pat, body)::binders)
+          binders []
+      in
+        binders, pt, bt in
+
     let e, t =
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
@@ -653,20 +680,9 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type env in
             let _ = unify (boxed_mbtype, `Application ("Mailbox", [mbtype])) in
-            let pt = Types.fresh_type_variable ()
-            and rtype = Types.fresh_type_variable () in
-            let binders, pats = 
-              List.fold_right
-                (fun (pat, body) (binders, pats) ->
-                   let pat = tpo pat in
-                   let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
-                   let _ = unify (pattern_typ pat, pt)
-                   and _ = unify (typ body, rtype) in
-                     (pat, body)::binders, pat :: pats)
-                binders ([], []) in
-            let pt = close_pattern_type pats pt in
-            let _ = unify (pt, mbtype) in
-              `Receive binders, rtype
+            let binders, pattern_type, body_type = type_cases binders in
+            let _ = unify (pattern_type, mbtype) in
+              `Receive binders, body_type
 
         (* applications of various sorts *)
         | `UnaryAppl (op, p) -> 
@@ -825,20 +841,9 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               `TypeAnnotation (e, t), t'
         | `Switch (e, binders) ->
             let e = tc e in
-            let pt = Types.fresh_type_variable () in
-            let bt = Types.fresh_type_variable () in
-            let binders, pats = 
-              List.fold_right
-                (fun (pat, body) (binders, pats) ->
-                   let pat = tpo pat in
-                   let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
-                   let _ = unify (pattern_typ pat, pt) in
-                   let _ = unify (typ body, bt) in
-                     (pat, body)::binders, pat :: pats)
-                binders ([], []) in
-            let pt = close_pattern_type pats pt in
-            let _ = unify (pt, typ e) in
-              `Switch (e, binders), bt
+            let binders, pattern_type, body_type = type_cases binders in
+            let _ = unify (pattern_type, typ e) in
+              `Switch (e, binders), body_type
     in e, (pos, t)
   in type_check
 and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Types.typing_environment =
