@@ -187,12 +187,15 @@ let interact envs =
 
 let run_file prelude envs filename = 
   Settings.set_value interacting false;
-  match Utility.getenv "REQUEST_METHOD" with 
+  begin match Utility.getenv "REQUEST_METHOD" with 
     | Some _ -> 
-        (Settings.set_value web_mode true;
-         Webif.serve_request prelude envs filename)
-    | None ->
-        ignore (evaluate (Parse.parse_file Parse.program) envs filename)
+        Settings.set_value web_mode true
+    | None -> ()
+  end;
+  if Settings.get_value web_mode then 
+    Webif.serve_request prelude envs filename
+  else 
+    ignore (evaluate (Parse.parse_file Parse.program) envs filename)
 
 let evaluate_string_in envs v =
   (Settings.set_value interacting false;
@@ -210,6 +213,7 @@ let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
+    ('w',     "web-mode",            set web_mode true,                None);
     ('O',     "optimize",            set Optimiser.optimising true,    None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
@@ -263,4 +267,3 @@ let main () =
     end
 
 let _ = main ()
-
