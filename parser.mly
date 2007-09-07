@@ -471,11 +471,18 @@ case_expression:
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR LPAREN generator RPAREN
+| FOR LPAREN perhaps_generators RPAREN
       perhaps_where
       perhaps_orderby
       exp                                                      { `Iteration ($3, $7, $5, $6), pos() }
 
+perhaps_generators:
+| /* empty */                                                  { [] }
+| generators                                                   { $1 }
+
+generators:
+| generator                                                    { [$1] }
+| generator COMMA generators                                   { $1 :: $3 }
 
 generator:
 | list_generator                                               { `List $1 }

@@ -940,8 +940,8 @@ module Desugarer =
              | `Spawn e -> phrase e
              | `SpawnWait e -> phrase e
              | `ListLit es -> phrases es
-             | `Iteration (generator, body, filter, sort) ->
-                 flatten [gtv generator; phrase body; opt_phrase filter; opt_phrase sort]
+             | `Iteration (generators, body, filter, sort) ->
+                 flatten [concat_map gtv generators; phrase body; opt_phrase filter; opt_phrase sort]
              | `Escape (_, e) ->  phrase e
              | `Section _ -> empty
              | `Conditional (e1, e2, e3) -> flatten [phrase e1; phrase e2; phrase e3]
@@ -1215,7 +1215,7 @@ module Desugarer =
                let rv = ((`Var r), pos') in
                let generator =
                  `Table ((`As (r, pattern), pos'), tv) in
-               let rows = `Iteration (generator, ((`ListLit [rv]), pos'), condition, None), pos' in
+               let rows = `Iteration ([generator], ((`ListLit [rv]), pos'), condition, None), pos' in
                  desugar (
                    `Block (([`Val ((`Variable t, pos'), table, `Unknown, None), pos']),
                            (`FnAppl ((`Var "deleterows", pos'), [tv; rows ]), pos')), pos')
@@ -1237,7 +1237,7 @@ module Desugarer =
                     [(`TupleLit
                         [rv;
                          (`RecordLit (row, None), pos')]), pos']), pos' in
-               let row_pairs = `Iteration (generator, body, condition, None), pos'
+               let row_pairs = `Iteration ([generator], body, condition, None), pos'
                in      
                  desugar (
                    `Block ([`Val ((`Variable t, pos'), table, `Unknown, None), pos'],
@@ -1310,22 +1310,28 @@ module Desugarer =
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
 
-           | `Iteration (generator, body, filter, None) ->
+           | `Iteration ([], _, _, _) ->  Nil pos
+           | `Iteration (generators, body, filter, None) ->
                let body =
                  match filter with
                    | None -> body
                    | Some condition ->
                        `Conditional (condition, body, (`ListLit [], pos')), pos'
-               and pattern, from = as_list pos' generator
                in
-                 begin
-                   match patternize pattern with
-                     | `Variable var, _ -> For (desugar body, var, desugar from, pos)
-                     | pattern -> (let var = unique_name () in
-                                     For (polylet pattern pos (Variable (var, pos)) (desugar body),
-                                          var, desugar from, pos))
-                 end
-           | `Iteration (generator, body, filter, Some sort) -> 
+                 List.fold_right
+                   (fun generator body ->
+                      let pattern, from = as_list pos' generator in
+                      let var, body =
+                        match patternize pattern with
+                          | `Variable var, _ -> var, body
+                          | pattern ->
+                              let var = unique_name () in
+                                var, polylet pattern pos (Variable (var, pos)) body
+                      in
+                        For (body, var, desugar from, pos))
+                   generators
+                   (desugar body)
+           | `Iteration ([generator], body, filter, Some sort) -> 
                let body =
                  match filter with
                    | None -> body
@@ -1341,6 +1347,10 @@ module Desugarer =
                          raise (ASTSyntaxError(data_position pos,
                                                "orderby clause on non-simple pattern-matching for is not yet implemented."))
                  end
+           | `Iteration (generators, body, filter, Some sort) ->
+               raise (ASTSyntaxError(data_position pos,
+                                     "orderby clause with multiple generators is not yet implemented."))
+               
            | `Switch (exp, patterns) ->
                PatternCompiler.match_cases
                  (pos, desugar exp, 

@@ -143,3 +143,11 @@ stdout : false : Bool
 List comparison (2)
 [1] > []
 stdout : true : Bool
+
+Nullary for comprehensions
+for () []
+stdout : @\[\] : \[[a-z]+\]
+
+For comprehensions with multiple generators
+for (var x <- [1,2], var y <- [true, false], var z <- ["foo", "bar"]) [(x,y,z)]
+stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : [(Int, Bool, String)]

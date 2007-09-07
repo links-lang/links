@@ -123,7 +123,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Spawn of 'phrase
 | `SpawnWait of 'phrase
 | `ListLit of ('phrase list)
-| `Iteration of (('ppattern, 'phrase) iterpatt * 'phrase * (*where:*)'phrase option 
+| `Iteration of ((('ppattern, 'phrase) iterpatt) list * 'phrase * (*where:*)'phrase option 
                  * (*orderby:*)'phrase option)
 | `Escape of (name * 'phrase)
 | `Section of (sec)
@@ -257,14 +257,24 @@ struct
       let binds = formlet_bound xml in
         union (phrase xml) (diff (phrase yields) binds)
     | `FunLit fnlit -> funlit fnlit
-    | `Iteration (`List (pat, source), body, where, orderby)
-
-    | `Iteration (`Table (pat, source), body, where, orderby) -> 
-        let pat_bound = pattern pat in
-          union_all [phrase source;
+    | `Iteration (generators, body, where, orderby) ->
+        let xs = union_map (function
+                              | `List (_, source)
+                              | `Table (_, source) -> phrase source) generators in
+        let pat_bound = union_map (function
+                                     | `List (pat, _)
+                                     | `Table (pat, _) -> pattern pat) generators in
+          union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
-                     diff (option_map phrase orderby) pat_bound]
+                     diff (option_map phrase orderby) pat_bound]                     
+(*     | `Iteration (`List (pat, source), body, where, orderby) *)
+(*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
+(*         let pat_bound = pattern pat in *)
+(*           union_all [phrase source; *)
+(*                      diff (phrase body) pat_bound; *)
+(*                      diff (option_map phrase where) pat_bound; *)
+(*                      diff (option_map phrase orderby) pat_bound] *)
     | `Switch (p, cases) -> union (phrase p) (union_map case cases)
     | `Receive cases -> union_map case cases 
     | `DBDelete (pat, p, where) -> 

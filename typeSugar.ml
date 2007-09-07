@@ -738,31 +738,37 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               `FormBinding (e, pattern), Types.xml_type
 
         (* various expressions *)
-        | `Iteration (binder, body, where, orderby) ->            
-            let binder, context =
+        | `Iteration (generators, body, where, orderby) ->            
+            let generators, context =
               let a = Types.fresh_type_variable () in
               let lt = Types.make_list_type a in
-                match binder with
-                | `List (pattern, e) ->
-                    let pattern = tpc pattern
-                    and e = tc e in             
-                      unify (lt, typ e);
-                      unify (a, pattern_typ pattern);
-                      `List (pattern, e), {context with tenv = context.tenv ++ pattern_env pattern}
-                | `Table (pattern, e) ->
-                    let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
-                    let pattern = tpc pattern
-                    and e = tc e in
-                      unify (tt, typ e);
-                      unify (a, pattern_typ pattern);
-                      `Table (pattern, e), {context with tenv = context.tenv ++ pattern_env pattern} in
+                List.fold_left
+                  (fun (generators, context) ->
+                     function
+                       | `List (pattern, e) ->
+                           let pattern = tpc pattern
+                           and e = tc e in
+                             unify (lt, typ e);
+                             unify (a, pattern_typ pattern);
+                             (`List (pattern, e) :: generators,
+                              {context with tenv = context.tenv ++ pattern_env pattern})
+                       | `Table (pattern, e) ->
+                           let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
+                           let pattern = tpc pattern
+                           and e = tc e in
+                             unify (tt, typ e);
+                             unify (a, pattern_typ pattern);
+                             (`Table (pattern, e) :: generators,
+                              {context with tenv = context.tenv ++ pattern_env pattern}))
+                  ([], context) generators in
+            let generators = List.rev generators in              
             let tc = type_check context in
             let body = tc body in
             let where = opt_map tc where in
             let orderby = opt_map tc orderby in
               unify (Types.make_list_type (Types.fresh_type_variable ()), typ body);
               opt_iter (fun where -> unify (Types.bool_type, typ where)) where;
-              `Iteration (binder, body, where, orderby), (typ body)
+              `Iteration (generators, body, where, orderby), (typ body)
 
         | `Escape (name, e) ->
             (* There's a question here whether to generalise the
