@@ -1310,7 +1310,14 @@ module Desugarer =
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
 
-           | `Iteration ([], _, _, _) ->  Nil pos
+           | `Iteration ([], body, filter, None) ->
+               let body =
+                 match filter with
+                   | None -> body
+                   | Some condition ->
+                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+               in
+                 desugar body
            | `Iteration (generators, body, filter, None) ->
                let body =
                  match filter with

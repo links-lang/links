@@ -145,8 +145,8 @@ List comparison (2)
 stdout : true : Bool
 
 Nullary for comprehensions
-for () []
-stdout : @\[\] : \[[a-z]+\]
+for () [1]
+stdout : [1] : [Int]
 
 For comprehensions with multiple generators
 for (var x <- [1,2], var y <- [true, false], var z <- ["foo", "bar"]) [(x,y,z)]
