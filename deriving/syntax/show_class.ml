@@ -76,7 +76,7 @@ struct
                 $self#nargs ctxt (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ >>$ >>
     
     method field ctxt : Type.field -> Ast.expr = function
-      | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " ="$;
+      | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " = "$;
                                       $mproject (self#expr ctxt t) "format"$ formatter $lid:name$ >>
       | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
 
