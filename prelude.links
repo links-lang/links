@@ -26,15 +26,30 @@ fun any(p, l) {
    }
 }
 
+fun the(l) {
+  var x = hd(l);
+  if (all(fun (y) { x == y }, l))
+    x
+  else
+    error("list argument to 'the' had varying values.")
+}
+
+fun elem(x, l) {
+  not(l==[]) && (x == hd(l) || x `elem` tl(l))
+}
+
 fun odd(i)  { i `mod` 2 == 1 }
 fun even(i) { i `mod` 2 == 0 }
 
 #fun null(l) { l == [] }
 
-# return element i of xs
+# return element at index i of xs
 fun select(xs, i) {
   hd(drop(i, xs))
 }
+
+# infix operator for 'select'
+op xs !! n { nth(n, xs) };
 
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
@@ -556,14 +571,14 @@ fun renderMultipart(frm, nextPage) {
 sig input : Formlet (String)
 var input = 
    nextName >>= fun (name) {
-   (retern ((<input name="{name}"/>,
+   (retern ((<input name="{name}" />,
              fun (env) { assoc(name, env) })))};
 
-# A formlet producing a String whose contents are hidden on entry.
+# A formlet for the user to enter a string, which is not revealed on the page.
 sig inputPassword : Formlet (String)
 var inputPassword = 
    nextName >>= fun (name) {
-   (retern ((<input type="password" name="{name}"/>,
+   (retern ((<input type="password" name="{name}" />,
              fun (env) { assoc(name, env) })))};
 
 sig emptyFormlet : (a) -> Formlet ([b])
@@ -573,8 +588,8 @@ fun emptyFormlet(_) { pure([]) }
 sig inputValue : (String) -> Formlet (String)
 fun inputValue(v) { 
    nextName >>= fun (name) {
-   (retern ((<input name="{name}" value="{v}"/>,
-             fun (env) { assoc(name, env)})))}
+   (retern ((<input name="{name}" value="{v}" />,
+             fun (env) { assoc(name, env) })))}
 }
 
 # A hidden String formlet; shoudln't normally be needed since you can capture 
@@ -583,7 +598,7 @@ sig hidden : (String) -> Formlet (String)
 fun hidden(v) { 
    nextName >>= fun (name) {
    (retern ((<input name="{name}" value="{v}" type="hidden" />,
-            fun (env) { assoc(name, env)})))}
+            fun (env) { assoc(name, env) })))}
 }
 
 # A hidden formlet that produces an Int value.
@@ -741,7 +756,6 @@ fun choices (items) {
      preludeMultiOptions(items) >>= fun ((xml, retrieve)) {
         retern ((<select name="{name}" multiple="multiple">{xml}</select>,
                  fun (env) { concat(map(retrieve, assocAll(name,env))) }))
-
      }
   }
 }
