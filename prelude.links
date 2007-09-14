@@ -49,7 +49,7 @@ fun select(xs, i) {
 }
 
 # infix operator for 'select'
-op xs !! n { select(n, xs) }
+op xs !! n { select(xs, n) }
 
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
