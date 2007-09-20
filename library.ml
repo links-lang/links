@@ -201,8 +201,15 @@ let less_or_equal l r = less l r || equal l r
 
 let add_attribute : result * result -> result -> result = 
   fun (name,value) -> function
-    | `XML (Node (tag, children)) -> 
-        `XML (Node (tag, Attr (unbox_string name, unbox_string value) :: children)) 
+    | `XML (Node (tag, children)) ->
+        let name = unbox_string name
+        and value = unbox_string value in
+        let rec filter = function
+          | [] -> []
+          | (Attr (s, _) as node) :: nodes when s=name -> filter nodes
+          | node :: nodes -> node :: filter nodes
+        in
+          `XML (Node (tag, Attr (name, value) :: filter children)) 
     | r -> failwith ("cannot add attribute to " ^ Result.string_of_result r)
 
 let add_attributes : (result * result) list -> result -> result =

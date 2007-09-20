@@ -1375,6 +1375,18 @@ module Desugarer =
            | `Xml _ as x when LAttrs.has_lattrs x ->
                desugar (LAttrs.replace_lattrs (x, pos'))
            | `Xml (tag, attrs, attrexp, subnodes) -> 
+               let () =
+                 let rec dup_check names =
+                   function
+                     | [] -> ()
+                     | (name, _) :: attrs ->
+                         if StringSet.mem name names then
+                           raise (ASTSyntaxError (Syntax.data_position pos,
+                                                  "XML attribute '"^name^"' is defined more than once"))
+                         else
+                           dup_check (StringSet.add name names) attrs
+                 in
+                   dup_check StringSet.empty attrs in
 
                let rec coalesce : (Sugartypes.phrase list -> Sugartypes.phrase list)
                    = function 
