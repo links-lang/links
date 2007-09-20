@@ -163,7 +163,7 @@ struct
     let from_alist l =
       List.fold_right (uncurry add) l empty 
         
-    let megamap f m = from_alist (List.map f (to_alist m))
+    let megamap f m = fold (fun k v -> uncurry add (f (k, v))) m empty
 
     let pop item map = 
       (find item map, remove item map)
