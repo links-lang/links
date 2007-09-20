@@ -146,7 +146,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `DBDelete of ('ppattern * 'phrase * 'phrase option)
 | `DBInsert of ('phrase * 'phrase)
 | `DBUpdate of ('ppattern * 'phrase * 'phrase option * (name * 'phrase) list)
-| `Xml of (name * (string * ('phrase list)) list * 'phrase list)
+| `Xml of (name * (string * ('phrase list)) list * 'phrase option * 'phrase list)
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
@@ -192,7 +192,7 @@ struct
   open StringSet
 
   let union_map f = union_all -<- List.map f
-  let option_map f = opt_app f empty 
+  let option_map f = opt_app f empty
 
   let rec pattern (p, _ : ppattern) : StringSet.t = match p with
     | `Any
@@ -211,7 +211,7 @@ struct
 
 
   let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
-    | `Xml (_, _, children) -> union_map formlet_bound children
+    | `Xml (_, _, _, children) -> union_map formlet_bound children
     | `FormBinding (_, pat) -> pattern pat
     | _ -> empty 
 
@@ -250,9 +250,11 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, p2)
     | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
-    | `Xml (_, attrs, children) -> 
-        union (union_map (snd ->- union_map phrase) attrs)
-          (union_map phrase children)
+    | `Xml (_, attrs, attrexp, children) -> 
+        union_all
+          [union_map (snd ->- union_map phrase) attrs;
+           option_map phrase attrexp;
+           union_map phrase children]
     | `Formlet (xml, yields) ->
       let binds = formlet_bound xml in
         union (phrase xml) (diff (phrase yields) binds)

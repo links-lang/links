@@ -31,7 +31,7 @@ struct
           "lname_" ^ string_of_int !counter))
 
   let desugar_lhref : phrase -> phrase = function
-    | `Xml (("a"|"A") as a, attrs, children), pos
+    | `Xml (("a"|"A") as a, attrs, attrexp, children), pos
         when mem_assoc "l:href" attrs -> 
         let attrs =
           match partition (fst ->- (=)"l:href") attrs with
@@ -42,11 +42,11 @@ struct
                 :: rest 
             | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
         in 
-          `Xml (a, attrs, children), pos
+          `Xml (a, attrs, attrexp, children), pos
     | e -> e
 
   let desugar_laction : phrase -> phrase = function
-    | `Xml (("form"|"FORM") as form, attrs, children), pos 
+    | `Xml (("form"|"FORM") as form, attrs, attrexp, children), pos 
         when mem_assoc "l:action" attrs ->
         begin match partition (fst ->- (=)"l:action") attrs with
           | [_,[laction]], rest ->
@@ -56,10 +56,11 @@ struct
                        "name",  [`Constant (`String "_k"), pos];
                        "value", [apply pos "pickleCont"
                                    [`FunLit ([[`Variable "_env",pos]], laction), pos]]],
+                      None,
                       []), pos
               and action = ("action", [`Constant (`String "#"), pos]) 
               in 
-                `Xml (form, action::rest, hidden::children), pos
+                `Xml (form, action::rest, attrexp, hidden::children), pos
           | _ -> assert false (* multiple l:actions, or an invalid rhs *)
         end
     | e -> e
@@ -73,14 +74,14 @@ struct
                        `FunLit ([[`Variable "event", pos]], rhs), pos], pos
       | _ -> assert false
     in function
-      | `Xml (tag, attrs, children), pos
+      | `Xml (tag, attrs, attrexp, children), pos
           when exists (fst ->- start_of ~is:"l:on") attrs ->
           let lons, others = partition (fst ->- start_of ~is:"l:on") attrs in
           let idattr =
             ("key", 
              [apply pos "registerEventHandlers" 
                 [`ListLit (List.map (pair pos) lons), pos]]) in
-            `Xml (tag, idattr::others, children), pos
+            `Xml (tag, idattr::others, attrexp, children), pos
       | e -> e
 
   let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t = 
@@ -94,17 +95,17 @@ struct
       | "l:name", _ -> failwith ("Invalid l:name binding")
       | a -> [a] in
     let rec aux (p,pos as node : phrase) = match p with
-      | `Xml (tag, attrs, children) ->
+      | `Xml (tag, attrs, attrexp, children) ->
           let attrs = concat_map attr attrs
           and children = List.map aux children in
-            `Xml (tag, attrs, children), pos
+            `Xml (tag, attrs, attrexp, children), pos
       | _ -> node
     in 
       let p' = aux p in
         p', !lnames
 
   let rec has_lattrs : phrasenode -> bool = function
-    | `Xml (_, attrs, _) -> exists (fst ->- start_of ~is:"l:") attrs
+    | `Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
     | _ -> false
 
   let let_in pos name rhs body : phrase = 
@@ -124,21 +125,21 @@ struct
     | attr -> attr
 
   let desugar_form = function
-    | `Xml (("form"|"FORM") as form, attrs, children), pos ->
+    | `Xml (("form"|"FORM") as form, attrs, attrexp, children), pos ->
         let children, lnames = List.split (List.map desugar_lnames children) in
         let lnames = 
           try List.fold_left StringMap.union_disjoint StringMap.empty lnames 
           with StringMap.Not_disjoint (item, _) ->
             raise (ConcreteSyntaxError ("Duplicate l:name binding: " ^ item, pos)) in
         let attrs = List.map (bind_lname_vars pos lnames) attrs in
-          `Xml (form, attrs, children), pos
+          `Xml (form, attrs, attrexp, children), pos
     | e -> e
 
   let replace_lattrs = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-
     (fun (xml, pos) ->
        if (has_lattrs xml) then
          match xml with
-           | `Xml (tag, attributes, _) ->
+           | `Xml (tag, attributes, _, _) ->
                raise (ConcreteSyntaxError ("Illegal l: attribute in XML node", pos))
            | _ -> assert false
        else
@@ -967,8 +968,8 @@ module Desugarer =
              | `DBDelete (p, e1, e2) -> flatten [ptv p; phrase e1; opt_phrase e2]
              | `DBUpdate (p, e1, e2, fs) -> flatten [ptv p; phrase e1; opt_phrase e2; ftvs fs]
 
-             | `Xml (_, attrs, subnodes) ->
-                 flatten ((List.map (fun (_, es) -> phrases es) attrs) @ [phrases subnodes])
+             | `Xml (_, attrs, attrexp, subnodes) ->
+                 flatten ((List.map (fun (_, es) -> phrases es) attrs) @ [opt_phrase attrexp] @ [phrases subnodes])
              | `TextNode _ -> empty
              | `Formlet (e1, e2) -> flatten [phrase e1; phrase e2]
              | `FormBinding (e, p) -> flatten [phrase e; ptv p]
@@ -1373,7 +1374,7 @@ module Desugarer =
            | `TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
            | `Xml _ as x when LAttrs.has_lattrs x ->
                desugar (LAttrs.replace_lattrs (x, pos'))
-           | `Xml (tag, attrs, subnodes) -> 
+           | `Xml (tag, attrs, attrexp, subnodes) -> 
 
                let rec coalesce : (Sugartypes.phrase list -> Sugartypes.phrase list)
                    = function 
@@ -1390,10 +1391,11 @@ module Desugarer =
                let desugar_attr = function
                  | [] -> Constant(String "", pos)
                  | [x] -> desugar x
-                 | xs  -> (fold_right concat xs (Nil (pos))) in
+                 | xs  -> (fold_right concat xs (Nil (pos)))
+               in
                  if (tag = "#") then
                    begin
-                     if List.length attrs != 0 then
+                     if List.length attrs != 0 || attrexp <> None then
                        raise (ASTSyntaxError (Syntax.data_position pos, "XML forest literals cannot have attributes"))
                      else
                        HasType (
@@ -1404,8 +1406,18 @@ module Desugarer =
                          pos)
                    end
                  else
-                   Xml_node (tag, alistmap desugar_attr attrs,
-                             map desugar (coalesce subnodes), pos)
+                   begin
+                     match attrexp with
+                       | None ->
+                           Xml_node (tag, alistmap desugar_attr attrs,
+                                     map desugar (coalesce subnodes), pos)
+                       | Some attrexp ->
+                           Apply(Variable ("addAttributes", pos),
+                                 [Xml_node (tag, alistmap desugar_attr attrs,
+                                            map desugar (coalesce subnodes), pos);
+                                  desugar attrexp],
+                                 pos)
+                   end
 
            | `Formlet (formExpr, formHandler) ->
                fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
@@ -1470,10 +1482,10 @@ module Desugarer =
        else
          match formExpr with
            | `FormBinding (phrase, ppattern) -> desugar phrase, [[ppattern]]
-           | `Xml ("#", [], contents) -> forest_to_form_expr contents None pos ppos
-           | `Xml ("#", _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
+           | `Xml ("#", [], attrexp, contents) -> forest_to_form_expr contents None pos ppos
+           | `Xml ("#", _, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
                                                       "XML forest literals cannot have attributes"))
-           | `Xml(tag, attrs, contents) ->
+           | `Xml(tag, attrs, attrexp, contents) ->
                let form, bindings = forest_to_form_expr contents None pos ppos in
                let attrs' = alistmap (map desugar ->- make_links_list pos) attrs in
                  (appPrim "plug" [make_xml_context tag attrs' pos; form],
@@ -1484,7 +1496,7 @@ module Desugarer =
            | _ -> assert false
 
      and has_form_binding = function
-       | `Xml (_, _, subnodes),_ -> exists has_form_binding subnodes
+       | `Xml (_, _, _, subnodes),_ -> exists has_form_binding subnodes
        | `FormBinding _,_      -> true
        |  _                    -> false
 

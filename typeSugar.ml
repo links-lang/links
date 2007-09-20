@@ -72,8 +72,9 @@ struct
         is_generalisable p1 
      && is_generalisable p2
      && is_generalisable p3 
-    | `Xml (_, attrs, children) -> 
+    | `Xml (_, attrs, attrexp, children) -> 
         List.for_all (snd ->- List.for_all is_generalisable) attrs
+     && opt_generalisable attrexp
      && List.for_all (is_generalisable) children
     | `Formlet (p1, p2) ->
         is_generalisable p1 && is_generalisable p2
@@ -467,7 +468,7 @@ let rec extract_formlet_bindings (expr, pos) =
   let pattern_env  (_,(_,(e,_))) = e in
     match expr with
       | `FormBinding (f, pattern) -> pattern_env pattern
-      | `Xml (_, _, children) ->
+      | `Xml (_, _, _, children) ->
           List.fold_right
             (fun child env ->
                Env.extend env (extract_formlet_bindings child))
@@ -714,13 +715,14 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
                a bit this will be performed in an earlier phase *)
             let phrase, (_, t) = tc (Sugar.LAttrs.replace_lattrs (expr, pos)) in
               phrase, t
-        | `Xml (tag, attrs, children) ->
-
+        | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
+            and attrexp = opt_map tc attrexp
             and children = List.map (tc) children in
             let _ = List.iter (snd ->- List.iter (fun attr -> unify (Types.string_type, typ attr))) attrs
+            and _ = opt_iter (fun e -> unify (typ e, Types.make_list_type (Types.make_tuple_type [Types.string_type; Types.string_type]))) attrexp
             and _ = List.iter (fun child -> unify (Types.xml_type, typ child)) children in
-              `Xml (tag, attrs, children), Types.xml_type
+              `Xml (tag, attrs, attrexp, children), Types.xml_type
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = tc body in

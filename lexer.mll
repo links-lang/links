@@ -288,6 +288,8 @@ and starttag optable lexers nl = parse
                                           Stack.pop lexers;  Stack.push (xmllex optable lexers nl) lexers; RXML }
   | '"'                                 { (* Come back here after scanning the attr value *)
                                           Stack.push (attrlex optable lexers nl) lexers; LQUOTE }
+  | '{'                                 { (* Come back here after scanning the attribute block *)
+                                          Stack.push (lex optable lexers nl) lexers; LBRACE }
   | "/>"                                { Stack.pop lexers (* fall back *); SLASHRXML }
   | '\n'                                { nl () ; bump_lines lexbuf 1; starttag optable lexers nl lexbuf }
   | def_blank                           { starttag optable lexers nl lexbuf }

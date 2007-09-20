@@ -415,9 +415,15 @@ xml:
 xmlid: 
 | VARIABLE                                                     { $1 }
 
+attrs:
+| block                                                        { [], Some (`Block $1, pos ()) }
+| attr_list                                                    { $1, None }
+| attr_list block                                              { $1, Some (`Block $2, pos ()) }
+
 attr_list:
 | attr                                                         { [$1] }
 | attr_list attr                                               { $2 :: $1 }
+
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
 | xmlid EQ LQUOTE RQUOTE                                       { ($1, [(`Constant (`String ""), pos() : Sugartypes.phrase)]) }
@@ -429,12 +435,12 @@ attr_val:
 | STRING attr_val                                              { (`Constant (`String $1), pos()) :: $2}
 
 xml_tree:
-| LXML SLASHRXML                                               { `Xml ($1, [], []), pos() } 
-| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], []), pos()) } 
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], $3), pos()) } 
-| LXML attr_list RXML ENDTAG                                   { ensure_match (pos()) $1 $4 (`Xml ($1, $2, []), pos()) } 
-| LXML attr_list SLASHRXML                                     { `Xml ($1, $2, []), pos() } 
-| LXML attr_list RXML xml_contents_list ENDTAG                 { ensure_match (pos()) $1 $5 (`Xml ($1, $2, $4), pos()) } 
+| LXML SLASHRXML                                               { `Xml ($1, [], None, []), pos() } 
+| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], None, []), pos()) } 
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], None, $3), pos()) } 
+| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (`Xml ($1, fst $2, snd $2, []), pos()) } 
+| LXML attrs SLASHRXML                                         { `Xml ($1, fst $2, snd $2, []), pos() } 
+| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (`Xml ($1, fst $2, snd $2, $4), pos()) } 
 
 xml_contents_list:
 | xml_contents                                                 { [$1] }
