@@ -16,8 +16,12 @@ let rigid_type_variables = Settings.add_bool("rigid_type_variables", true, `User
  *)
 let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
 
-exception Unify_failure of string
+type error = [
+  `Msg of string
+| `PresentAbsentClash of string * Types.row * Types.row
+]
 
+exception Failure of error
 
 let occurs_check alias_env var t =
   match Settings.get_value infer_recursive_types with
@@ -144,17 +148,17 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
     if occurs_check alias_env var t then
       Unionfind.change point (`Recursive (var, t))
     else
-      raise (Unify_failure ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
+      raise (Failure (`Msg ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
                             " because "^
                             match Settings.get_value infer_recursive_types with
                               | "guarded" -> "the type variable occurs unguarded inside the datatype"
                               | "positive" -> "the type variable occurs in a negative position inside the datatype"
-                              | _ -> assert false)) in
+                              | _ -> assert false))) in
     
   let lookup_alias (s, ts) alias_env =
     try lookup_alias (s, ts) alias_env
     with
-        AliasMismatch msg -> raise (Unify_failure msg) in
+        AliasMismatch msg -> raise (Failure (`Msg msg)) in
 
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -168,7 +172,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 	        (match (Unionfind.find lpoint, Unionfind.find rpoint) with
 	           | `Rigid l, `Rigid r ->
                        if l <> r then 
-                         raise (Unify_failure ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match"))
+                         raise (Failure (`Msg ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match")))
                        else 
 		         Unionfind.union lpoint rpoint
 	           | `Flexible _, `Flexible _ ->
@@ -188,11 +192,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		          ());
 		       Unionfind.union rpoint lpoint
                    | `Rigid l, _ ->
-                       raise (Unify_failure ("Couldn't unify the rigid type variable "^
-                                               string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint)))
+                       raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
+                                               string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
                    | _, `Rigid r ->
-                       raise (Unify_failure ("Couldn't unify the rigid type variable "^
-                                               string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint)))
+                       raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
+                                               string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
 	           | `Recursive (lvar, t), `Recursive (rvar, t') ->
 		       assert(lvar <> rvar);
 		       Debug.if_set (show_recursion)
@@ -201,14 +205,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                          if is_unguarded_recursive (`MetaTypeVar lpoint) then
                            begin
                              if not (is_unguarded_recursive (`MetaTypeVar rpoint)) then
-                               raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                               raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                        string_of_datatype (`MetaTypeVar lpoint) ^
-                                                       " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar rpoint)))
+                                                       " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar rpoint))))
                            end
                          else if is_unguarded_recursive (`MetaTypeVar lpoint) then
-                           raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                           raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                    string_of_datatype (`MetaTypeVar rpoint) ^
-                                                   " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar lpoint)))
+                                                   " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
                          else
 		           unify_rec2 ((lvar, t), (rvar, t'))
                        end;
@@ -217,9 +221,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		       Debug.if_set (show_recursion) (fun () -> "rec left (" ^ (string_of_int var) ^ ")");
                        begin
                          if is_unguarded_recursive (`MetaTypeVar lpoint) then
-                           raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                           raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                    string_of_datatype (`MetaTypeVar lpoint) ^
-                                                   " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint)))
+                                                   " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint))))
                          else                   
 		           unify_rec ((var, t'), t)
                        end;
@@ -228,9 +232,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
 		       Debug.if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
                        begin
                          if is_unguarded_recursive (`MetaTypeVar rpoint) then
-                           raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                           raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                    string_of_datatype (`MetaTypeVar rpoint) ^
-                                                   " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint)))
+                                                   " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
                          else                   
 		           unify_rec ((var, t'), t)
                        end;
@@ -239,7 +243,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
           | `MetaTypeVar point, t | t, `MetaTypeVar point ->
               (match (Unionfind.find point) with
                  | `Rigid l -> 
-                     raise (Unify_failure ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t))
+                     raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^" with the type "^ string_of_datatype t)))
 	         | `Flexible var ->
 		     if var_is_free_in_type var t then
                        begin
@@ -257,9 +261,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
    		     Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
                      begin
                        if is_unguarded_recursive (`MetaTypeVar point) then
-                         raise (Unify_failure ("Couldn't unify the unguarded recursive type "^
+                         raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                  string_of_datatype (`MetaTypeVar point) ^
-                                                 " with the non-recursive type "^ string_of_datatype t))
+                                                 " with the non-recursive type "^ string_of_datatype t)))
                        else                   
 		         unify_rec ((var, t'), t)
                      end
@@ -285,9 +289,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                 begin
                   match lalias, ralias with
                     | `Primitive `Abstract, `Primitive `Abstract ->
-                        raise (Unify_failure
-                                 ("Cannot unify abstract type '"^string_of_datatype t1^
-                                    "' with abstract type '"^string_of_datatype t2^"'"))
+                        raise (Failure
+                                 (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
+                                          "' with abstract type '"^string_of_datatype t2^"'")))
                     | `Primitive `Abstract, _ ->
                         unify' rec_env (t1, Instantiate.alias (rvars, ralias) rts)
                     | _, `Primitive `Abstract ->
@@ -301,14 +305,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                 begin
                   match alias with
                     | `Primitive `Abstract ->
-                        raise (Unify_failure
-                                 ("Cannot unify abstract type '"^
-                                    string_of_datatype (`Application (s, ts)) ^"' with type '"^string_of_datatype t^"'"))
+                        raise (Failure
+                                 (`Msg ("Cannot unify abstract type '"^
+                                          string_of_datatype (`Application (s, ts)) ^"' with type '"^string_of_datatype t^"'")))
                     | _ ->
                         unify' rec_env (Instantiate.alias (vars, alias) ts, t)
                 end
           | _, _ ->
-              raise (Unify_failure ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)));
+              raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2))));
        Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
       )
 
@@ -373,10 +377,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		    extension
 		| `Present _, `Absent
 		| `Absent, `Present _ ->
-		    raise (Unify_failure ("Rows\n "^ string_of_row lrow
-					  ^"\nand\n "^ string_of_row rrow
-					  ^"\n could not be unified because they have conflicting fields"))
-	     )
+                    raise (Failure (`PresentAbsentClash (label, lrow, rrow))))
 	   else
 	     StringMap.add label field_spec extension
 	) traversal_env (StringMap.empty) in
@@ -392,12 +393,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       if occurs_check_row alias_env var row then
 	Unionfind.change point (`Recursive (var, row))
       else
-        raise (Unify_failure ("Cannot unify row variable "^string_of_int var^" with row "^string_of_row row^
+        raise (Failure (`Msg ("Cannot unify row variable "^string_of_int var^" with row "^string_of_row row^
                                 " because "^
                                 match Settings.get_value infer_recursive_types with
                                   | "guarded" -> "the row variable occurs unguarded inside the row"
                                   | "positive" -> "the row variable occurs in a negative position inside the row"
-                                  | _ -> assert false)) in
+                                  | _ -> assert false))) in
 
     (*
       unify_row_var_with_row rec_env (row_var, row)
@@ -415,19 +416,19 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | `Flexible _ ->
                 Unionfind.change point `Closed
             | `Rigid _ ->
-                raise (Unify_failure ("Closed row var cannot be unified with rigid row var\n"))
+                raise (Failure (`Msg ("Closed row var cannot be unified with rigid row var\n")))
             | _ -> assert false in
 
         (* unify row_var with `RigidRowVar var *)
         let rigidify_empty_row_var var : row_var -> unit = fun point ->
           match Unionfind.find point with
             | `Closed ->
-	        raise (Unify_failure ("Rigid row var cannot be unified with empty closed row\n"))
+	        raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
             | `Flexible _ ->
                 Unionfind.change point (`Rigid var)
             | `Rigid var' when var=var' -> ()
             | `Rigid var' ->
-                raise (Unify_failure ("Incompatible rigid row variables cannot be unified\n"))
+                raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
             | _ -> assert false in
 
 	let rec extend = function
@@ -439,14 +440,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                       if is_empty_row extension_row then
                         close_empty_row_var extension_row_var
                       else
-			raise (Unify_failure ("Closed row cannot be extended with non-empty row\n"
-					      ^string_of_row extension_row))
+			raise (Failure (`Msg ("Closed row cannot be extended with non-empty row\n"
+					      ^string_of_row extension_row)))
 		  | `Rigid var ->
                       if is_empty_row extension_row then
                         rigidify_empty_row_var var extension_row_var
                       else
-			raise (Unify_failure ("Rigid row variable cannot be unified with non-empty row\n"
-					      ^string_of_row extension_row))
+			raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
+					      ^string_of_row extension_row)))
 		  | `Flexible var ->
 		      if TypeVarSet.mem var (free_row_type_vars extension_row) then
 			rec_row_intro point (var, extension_row)
@@ -553,9 +554,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         *)
         match Unionfind.find lrow_var', Unionfind.find rrow_var' with
           | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
-              raise (Unify_failure ("Rigid rows\n "^ string_of_row lrow
+              raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
 				    ^"\nand\n "^ string_of_row lrow
-				    ^"\n could not be unified because they have distinct rigid row variables"))
+				    ^"\n could not be unified because they have distinct rigid row variables")))
           | _, _ ->
 	      if fields_are_compatible (lrow', rrow') then
 	        let rec_env' =
@@ -569,9 +570,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		    | Some rec_env ->
 		        unify_compatible_field_environments rec_env (lfield_env', rfield_env')
 	      else
-	        raise (Unify_failure ("Rigid rows\n "^ string_of_row lrow
+	        raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
 				      ^"\nand\n "^ string_of_row rrow
-				      ^"\n could not be unified because they have different fields")) in
+				      ^"\n could not be unified because they have different fields"))) in
 
     let unify_both_rigid = unify_both_rigid_with_rec_env rec_env in
 
@@ -586,11 +587,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 	     else
 	       match field_spec with
 		 | `Present _ ->
-		     raise (Unify_failure
-			      ("Rows\n "^ string_of_row rigid_row
+		     raise (Failure
+			      (`Msg 
+                               ("Rows\n "^ string_of_row rigid_row
 			       ^"\nand\n "^ string_of_row open_row
 			       ^"\n could not be unified because the former is rigid"
-			       ^" and the latter contains fields not present in the former"))
+			       ^" and the latter contains fields not present in the former")))
 		 | `Absent -> ()
 	  ) open_field_env';
         
@@ -647,13 +649,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let check_unguarded_recursion lrow rrow =      
       if is_unguarded_recursive lrow then
         if not (is_unguarded_recursive rrow) then
-	  raise (Unify_failure
-		   ("Could not unify unguarded recursive row"^ string_of_row lrow
-		    ^"\nwith row "^ string_of_row rrow))
+	  raise (Failure
+		   (`Msg ("Could not unify unguarded recursive row"^ string_of_row lrow
+		    ^"\nwith row "^ string_of_row rrow)))
         else if is_unguarded_recursive rrow then
-	  raise (Unify_failure
-		   ("Could not unify unguarded recursive row"^ string_of_row rrow
-		    ^"\nwith row "^ string_of_row lrow)) in
+	  raise (Failure
+		   (`Msg ("Could not unify unguarded recursive row"^ string_of_row rrow
+		    ^"\nwith row "^ string_of_row lrow))) in
       
     let _ =
       check_unguarded_recursion lrow rrow;
@@ -680,4 +682,4 @@ and unify_rows alias_env (row1, row2) =
 (* external interface *)
 let datatypes = unify
 let rows = unify_rows
-exception Failure = Unify_failure
+

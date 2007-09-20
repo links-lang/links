@@ -67,7 +67,7 @@ type 'a program' = Program of ('a definition' list * 'a expression')
 val program_body :'a program' -> 'a expression'
 val program_defs :'a program' -> 'a definition' list
 
-type position = Lexing.position * string * string
+type position = Lexing.position * string (* line *) * string (* expression *)
 
 val show_pos : position -> string
 

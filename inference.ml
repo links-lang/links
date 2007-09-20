@@ -352,20 +352,29 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         free_alias_check alias_env inference_datatype;
         begin
           try unify(expr_type, inference_datatype);
-          with Unify.Failure msg -> 
-            let _,_,src = position expr in
-            type_mismatch
-              ~expected:inference_datatype
-              ~inferred:expr_type
-              ~src:src
-              ~pos:pos msg
+          with Unify.Failure error -> 
+            match error with
+              | `Msg msg -> 
+                  let _,_,src = position expr in
+                    type_mismatch
+                      ~expected:inference_datatype
+                      ~inferred:expr_type
+                      ~src:src
+                      ~pos:pos msg
+              | `PresentAbsentClash _ ->
+                  assert false
         end;
 	HasType(expr, datatype, `T (pos, inference_datatype, None))
  with 
-     Unify.Failure msg
    | UndefinedVariable msg
-   | UndefinedAlias msg ->
+   | UndefinedAlias msg
+   | Unify.Failure (`Msg msg) ->
        raise (Type_error(position expression, msg))
+   | Unify.Failure (`PresentAbsentClash (label, lrow, rrow)) ->
+       raise (Type_error(position expression, 
+                         ("Rows\n "^ string_of_row lrow
+	                  ^"\nand\n "^ string_of_row rrow
+	                  ^"\n could not be unified because they have conflicting fields")))
          (* end "type_check" *)
 
 (** type_check_mutually
