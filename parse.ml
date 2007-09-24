@@ -147,13 +147,15 @@ fun ~parse ~desugarer ~infun ~name ?nlhook ->
 (* Given an input channel, return a function suitable for input to
    Lexing.from_function that reads characters from the channel.
 *)
-let reader_of_channel channel =
-  fun buffer nchars -> input channel buffer 0 nchars
-
+let reader_of_channel channel buffer = input channel buffer 0
+  
 (* Given a string, return a function suitable for input to
    Lexing.from_function that reads characters from the string.
 *)
-let reader_of_string string = 
+let reader_of_string ?pp string = 
+  let string = match pp with
+    | None -> string
+    | Some command -> Utility.filter_through ~command string in
   let current_pos = ref 0 in
     fun buffer nchars ->
       let nchars = min nchars (String.length string - !current_pos) in
@@ -190,6 +192,11 @@ let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
     parse = Parser.just_datatype
   }
 
+let normalize_pp = function
+  | None
+  | Some "" -> None
+  | pp -> pp
+
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs. 
 
@@ -198,11 +205,21 @@ let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
     intercept and retain the code that has been read (in order to give
     better error messages).
 **)
-let parse_string grammar string =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>" ?nlhook:None
+let parse_string ?pp grammar string =
+  let pp = normalize_pp pp in
+    read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string ?pp string) ~name:"<string>" ?nlhook:None
 
 let parse_channel ?interactive grammar (channel, name) =
   read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name ?nlhook:interactive
 
-let parse_file grammar filename =
-  parse_channel grammar (open_in filename, filename)
+let parse_file ?pp grammar filename =
+  match normalize_pp pp with
+    | None -> parse_channel grammar (open_in filename, filename)
+    | Some pp ->
+        Utility.call_with_open_infile filename
+          (fun channel ->
+             read ~parse:grammar.parse
+                  ~desugarer:grammar.desugar
+                  ~infun:(reader_of_string ~pp (String.concat "\n" (Utility.lines channel)))
+                  ~name:filename 
+                  ?nlhook:None)

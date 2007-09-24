@@ -7,6 +7,9 @@ open Basicsettings
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 
+(* Installed preprocessor *)
+let pp = Settings.add_string("preprocessor", "", `System)
+
 (* Types of built-in primitives.  TODO: purge. *)
 let stdenvs = ref([], Library.typing_env)
 
@@ -76,7 +79,7 @@ let rec directives
               let library_types, libraries =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
-              let program, sugar = Parse.parse_file Parse.program filename in
+              let program, sugar = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
               let () = TypeSugar.Check.file library_types sugar in
               let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
@@ -89,7 +92,7 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let (_,t), _ = Parse.parse_string Parse.datatype (String.concat " " args) in
+          | _ -> let (_,t), _ = Parse.parse_string ~pp:(Settings.get_value pp) Parse.datatype (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then
@@ -195,11 +198,11 @@ let run_file prelude envs filename =
   if Settings.get_value web_mode then 
     Webif.serve_request prelude envs filename
   else 
-    ignore (evaluate (Parse.parse_file Parse.program) envs filename)
+    ignore (evaluate (Parse.parse_file ~pp:(Settings.get_value pp) Parse.program) envs filename)
 
 let evaluate_string_in envs v =
   (Settings.set_value interacting false;
-   ignore(evaluate (Parse.parse_string Parse.program) envs v))
+   ignore(evaluate (Parse.parse_string ~pp:(Settings.get_value pp) Parse.program) envs v))
 
 let cmd_line_actions = ref []
 
@@ -220,9 +223,10 @@ let options : opt list =
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
-    (noshort, "working-tests",               Some (run_tests Tests.working_tests),                   None);
-    (noshort, "broken-tests",                Some (run_tests Tests.broken_tests),                   None);
-    (noshort, "failing-tests",               Some (run_tests Tests.known_failures),                   None);
+    (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
+    (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
+    (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None);
+    (noshort, "pp",                  None,                             Some (Settings.set_value pp));
     ]
 
 let main () =

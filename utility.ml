@@ -544,7 +544,26 @@ let call_with_open_infile,
       (fun x ?(binary=false) -> call (if binary then open_out_bin else open_out) close_out x))
 
 let process_output : string -> string
-  = String.concat "\n" -<- lines -<- Unix.open_process_in
+  = fun proc ->
+    let fd = Unix.open_process_in proc in
+      try 
+        let lines = lines fd in
+        let rv = String.concat "\n" lines in
+          close_in_noerr fd;
+          rv
+      with e ->
+        close_in_noerr fd;
+        raise e
+
+let filter_through : command:string -> string -> string =
+  fun ~command string ->
+    let filename, fd = Filename.open_temp_file "pp" ".links" in
+    let () = output_string fd string in
+    let () = close_out fd in
+    let sh = Printf.sprintf "%s < %s" command filename in 
+    let filtered = process_output sh in
+      Sys.remove filename;
+      filtered
 
 (** [lookup_in alist] is a function that looks up its argument in [alist] *)
 let lookup_in alist x = List.assoc x alist
