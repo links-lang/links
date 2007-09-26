@@ -149,6 +149,8 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Xml of (name * (string * ('phrase list)) list * 'phrase option * 'phrase list)
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
+| `Page of 'phrase
+| `FormletPlacement of ('phrase * 'phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
     deriving (Show)
 
@@ -227,6 +229,7 @@ struct
     | `SpawnWait p
     | `FormBinding (p, _)
     | `Projection (p, _)
+    | `Page p
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit ps
@@ -235,6 +238,7 @@ struct
     | `Escape (v, p) -> diff (phrase p) (singleton v)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | `Block b -> block b
+    | `FormletPlacement (p1, p2)
     | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
     | `Regex r -> regex r
     | `UnaryAppl (_, p) -> phrase p

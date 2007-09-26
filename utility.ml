@@ -279,6 +279,14 @@ struct
     in if t < f then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
 
+  let mapIndex (f : 'a -> int -> 'b) (l : 'a list)  : 'b list = 
+    fst 
+      (List.fold_right 
+         (fun x (out, i) ->
+            (f x i :: out, i+1))
+         l
+         ([], 0))
+
   (** [all_equiv rel list]: given an equiv. rel'n [rel], determine
       whether all elements of [list] are equivalent. *)
   let all_equiv (cmp : 'a -> 'a -> bool) : 'a list -> bool = function

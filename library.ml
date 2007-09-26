@@ -118,6 +118,13 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_pri
      (([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.assumption)),
    pure)
 
+let xml_to_page : result -> result = function
+  | `List items -> 
+      let result_to_item : result -> xmlitem = 
+        function `XML xml -> xml | _ -> assert false in
+        `Page (map result_to_item items)
+  | _ -> assert false
+
 let string_to_xml : result -> result = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
@@ -239,6 +246,11 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   ((p1 string_to_xml),
    datatype "(String) -> Xml",
   PURE);
+
+  "xmlToPage",
+  ((p1 xml_to_page),
+   datatype "(Xml) -> Page",
+   PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-

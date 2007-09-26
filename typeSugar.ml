@@ -78,6 +78,8 @@ struct
         is_generalisable p1 && is_generalisable p2
     | `Regex r -> is_generalisable_regex r
     | `Iteration _ (* could do a little better in some of these cases *)
+    | `Page _
+    | `FormletPlacement _
     | `UnaryAppl _
     | `FormBinding _
     | `InfixAppl _
@@ -830,6 +832,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             let yields = type_check context' yields in
               unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
+        | `Page _ -> assert false
+        | `FormletPlacement _ -> assert false
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in

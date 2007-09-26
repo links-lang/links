@@ -601,13 +601,6 @@ fun globals locals expr cont ->
   | Syntax.HasType(expr, _, _) ->
       eval expr cont
 
-and interpret_safe globals locals expr cont =
-  try 
-    interpret globals locals expr cont
-  with
-    | TopLevel s -> snd s
-    | Not_found -> failwith "Internal error: Not_found while interpreting."
-
 let run_program (globals : environment) locals (Program (defs, body)) : (environment * result)= 
   try (
     (match defs with

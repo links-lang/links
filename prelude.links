@@ -48,9 +48,6 @@ fun select(xs, i) {
   hd(drop(i, xs))
 }
 
-# infix operator for 'select'
-op xs !! n { select(xs, n) }
-
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
  for (var x <- xs) {
@@ -424,8 +421,8 @@ typename Env = [(String,String)];
 typename Names = Int;
 typename State (d,a) = [|State:(d) ->(a,d)|];
 typename Collector (a) = (Env) -> a;
-typename Formlet (a) = State (Names, (Xml,Collector(a)));
-typename Combiner (a,b,c) = (Collector (a)) -> (Collector (b)) -> Collector (c);
+typename Formlet (a) = State (Names, (Xml,Collector((Xml, Maybe(a)))));
+#typename Combiner (a,b,c) = (Collector (a)) -> (Collector (b)) -> Collector (c);
 
 infixr 0 $;
 sig $ : ((a) -> b, a) -> b
@@ -473,7 +470,18 @@ fun lift2(f)(x,y) {
 
 sig pure : (a) -> Formlet(a)
 fun pure(v) {
-  retern(([], fun (_) { v }))
+  retern(([], fun (_) { ([], Just (v)) }))
+}
+
+sig pureE : (a) -> Maybe (a)
+fun pureE (x) { Just (x) }
+
+sig applyE : (Maybe (((a) -> b)), Maybe (a)) -> Maybe (b)
+fun applyE (f, x) {
+  switch ((f, x)) {
+    case (Just (f), Just (x)) -> Just (f(x))
+    case (_       , _       ) -> Nothing    
+  }
 }
 
 infixr 1 @@@;
@@ -481,7 +489,12 @@ sig @@@ : (Formlet (a), Formlet (((a)-> b))) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
-  retern((x++y, fun(e){ f(e)(c(e)) }))}}
+  retern((x++y, 
+          fun(e){ 
+                  var (fx, f) = f(e);
+                  var (cx, c) = c(e);
+                  (cx++fx,  f `applyE` c) 
+         }))}}
 }
 
 # x @@=> f
@@ -489,25 +502,27 @@ op m @@@ k {
 #   output through f. (This definition is significantly more efficient
 #   than the simpler one below.)  (This is fmap for the Formlet functor.)
 sig @@=> : (Formlet(a), (a) -> b) -> Formlet(b)
-op m @@=> f {
-  m >>= fun((x,c)) {
-  retern((x, fun (e) { f(c(e)) } )) }
-}
-
-# Definition of @@=> in terms of @@@ and pure.
 #op m @@=> f {
-#  m @@@ pure(f)
+#  m >>= fun((x,c)) {
+#  retern((x, fun (e) { f(c(e)) } )) }
 #}
 
+# Definition of @@=> in terms of @@@ and pure.
+op m @@=> f {
+  m @@@ pure(f)
+}
+
 sig xml : (Xml) -> Formlet (())
-fun xml(x) { retern ( (x, fun (e) { () })) }
+fun xml(x) { retern ( (x, fun (e) { (x, pureE(())) })) }
 
 sig text : (String) -> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
 sig plug : ((Xml) -> Xml, Formlet (a)) -> Formlet (a)
 op f `plug` m {
-  m >>= fun((x,v)){ retern((f(x),v)) }
+  m >>= fun((x,collector)){ retern((f(x),
+    fun (env) { var (xml,c) = collector (env); 
+                (f(xml), c) }))}
 }
 
 sig makeName : (Int) -> String
@@ -523,7 +538,7 @@ var nextName = State(fun (i) { (makeName(i), i+1) });
 #    put (i+1) >>
 #    retern (name)};
 
-#sig formlets : ([Formlet (a)]) -> Formlet ([a])
+sig formlets : ([Formlet (a)]) -> Formlet ([a])
 fun formlets(fs) { 
   switch (fs) {
     case [] -> pure ([])
@@ -537,22 +552,54 @@ fun formlets(fs) {
 sig render : (Formlet (a), (a) -> Xml) -> Xml
 fun render(frm, nextPage) {
    var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="application/x-www-form-urlencoded"
-         l:action="{nextPage(extractor(environment()))}" method="POST">
-     {xml}
-   </form>
+   fun continuation(cc, env) {
+     var (xml, val) = extractor(env);
+     switch (val) {
+       case (Just (v)) -> nextPage(v)
+       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
+     }
+   }
+   fun mkForm(cont, contents) {
+     <form enctype="application/x-www-form-urlencoded"
+           l:action="{cont(environment())}" method="POST">
+       {contents}
+     </form>
+   }
+
+   escape cc in mkForm(fun (env) { continuation(cc, env) }, xml)
+}
+
+sig renderToo : (Formlet (a), (a) -> Xml, (Xml) -> Xml) -> Xml
+fun renderToo (form, nextPage, pageContext) {
+   var ((xml, extractor),_) = runState(form)(0);
+   fun continuation(cc, env) {
+     var (xml, val) = extractor(env);
+     switch (val) {
+       case (Just (v)) -> nextPage(v)
+       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
+     }
+   }
+   fun mkForm(cont, contents) {
+     <form enctype="application/x-www-form-urlencoded"
+           l:action="{cont(environment())}" method="POST">
+       {contents}
+     </form>
+   }
+
+   fun cc(form) { exit(pageContext(form)) }
+   mkForm(fun (env) { continuation(cc, env) }, xml)
 }
 
 # Render formlet to a multipart form, which allows file-upload inputs
 # (using [inputFile])
-sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
-fun renderMultipart(frm, nextPage) {
-   var ((xml, extractor),_) = runState(frm)(0);
-   <form enctype="multipart/form-data"
-         l:action="{nextPage(extractor(environment()))}" method="POST">
-     {xml}
-   </form>
-}
+# sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
+# fun renderMultipart(frm, nextPage) {
+#    var ((xml, extractor),_) = runState(frm)(0);
+#    <form enctype="multipart/form-data"
+#          l:action="{nextPage(extractor(environment()))}" method="POST">
+#      {xml}
+#    </form>
+# }
 
 # Types of input we need to handle:
 #   text (done)
@@ -568,69 +615,59 @@ fun renderMultipart(frm, nextPage) {
 
 # A one element String-type formlet can be constructed using the [input]
 # function.
+
+fun mkInput(mkXml,mkFilledXml) {
+  nextName >>= fun (name) {
+    (retern ((mkXml(name),
+              fun (env) { var v = assoc (name, env);
+                          (mkFilledXml(name,v), pureE (v)) })))}
+}
+
+
 sig input : Formlet (String)
-var input = 
-   nextName >>= fun (name) {
-   (retern ((<input name="{name}" />,
-             fun (env) { assoc(name, env) })))};
+var input = mkInput(fun(name) { <input name="{name}"/> },
+                    fun(name,v) { <input name="{name}" value="{v}"/> });
 
-# A formlet for the user to enter a string, which is not revealed on the page.
+# A formlet producing a String whose contents are hidden on entry.
 sig inputPassword : Formlet (String)
-var inputPassword = 
-   nextName >>= fun (name) {
-   (retern ((<input type="password" name="{name}" />,
-             fun (env) { assoc(name, env) })))};
-
-sig emptyFormlet : (a) -> Formlet ([b])
-fun emptyFormlet(_) { pure([]) }
+var inputPassword = mkInput(fun (name) { <input type="password" name="{name}"/> },
+                            fun (name, v) { <input type="password" name="{name}" value="{v}"/> });
 
 # A one-element formlet populated with an initial value
 sig inputValue : (String) -> Formlet (String)
-fun inputValue(v) { 
-   nextName >>= fun (name) {
-   (retern ((<input name="{name}" value="{v}" />,
-             fun (env) { assoc(name, env) })))}
+fun inputValue(v) {
+  mkInput(fun (name) { <input name="{name}" value="{v}"/> },
+          fun (name,v) { <input name="{name}" value="{v}"/> })
 }
 
 # A hidden String formlet; shoudln't normally be needed since you can capture 
 # free variables in a [yields] expression
 sig hidden : (String) -> Formlet (String)
 fun hidden(v) { 
-   nextName >>= fun (name) {
-   (retern ((<input name="{name}" value="{v}" type="hidden" />,
-            fun (env) { assoc(name, env) })))}
+   mkInput(fun (name)   { <input name="{name}" value="{v}" type="hidden" /> },
+           fun (name,_) { <input name="{name}" value="{v}" type="hidden" /> })
 }
-
-# A hidden formlet that produces an Int value.
-fun hiddenInt(val) {
-  formlet <#>{ hidden(intToString(val)) -> rslt }</#>
-  yields { stringToInt(rslt) }
-}
-
 
 # A "file" type input.
 sig inputFile : Formlet (String)
-var inputFile = 
-   nextName >>= fun (name) {
-   (retern ((<input name="{name}" type="file" />,
-             fun (env) { assoc(name, env)})))};
+var inputFile = mkInput(fun (name) { <input name="{name}" type="file" /> },
+                        fun (name,_) { <input name="{name}" type="file" /> });
 
 sig inputInt : Formlet(Int)
 var inputInt = input @@=> stringToInt;
 
 sig inputIntValue : (Int) -> Formlet(Int)
-var inputIntValue = fun (value) { 
+fun inputIntValue(value) {
   inputValue(intToString(value)) @@=> stringToInt
-};
+}
 
 sig inputFloat : Formlet(Float)
 var inputFloat = input @@=> stringToFloat;
 
 sig textarea : (String) -> Formlet (String)
 fun textarea(value) {
-  nextName >>= fun (name) {
-    retern ((<textarea name="{name}">{stringToXml(value)}</textarea>,
-            fun (env) { assoc(name, env) }))}
+  mkInput(fun (name) { <textarea name="{name}">{stringToXml(value)}</textarea> },
+          fun (name,value) { <textarea name="{name}">{stringToXml(value)}</textarea> })
 }
 
 sig button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
@@ -641,8 +678,9 @@ fun button(text, behaviour, v) {
       case Reset -> "reset"
       case Button -> "button"
     };
-    retern ((<button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>,
-             fun (env) { if (memassoc(name, env))  Just(v) else Nothing }))
+    var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
+    retern ((xml,
+             fun (env) { (xml, pureE (if (memassoc(name, env))  Just(v) else Nothing)) }))
   }
 }
 
@@ -664,8 +702,9 @@ fun pushButton(text, v) {
 sig checkbox : Formlet (Bool)
 var checkbox =
   nextName >>= fun (name) {
-  retern ((<input type="checkbox" name="{name}" value="yes" />,
-           fun (env) { (memassoc(name, env)) }))};
+  var xml = <input type="checkbox" name="{name}" value="yes" />;
+  retern ((xml,
+           fun (env) { (xml, pureE (memassoc(name, env))) }))};
 
 
 # before ++ [selected] ++ after is a list of (value, data) pairs
@@ -689,8 +728,8 @@ fun inputRadiogroup(before, selected, after, layout) {
     var selected = [(<input type="radio" checked="on" name="{name}" value="{selected.1}" />, selected.2)];
     var after = for (var (value, data) <- after)
                   [(<input type="radio" name="{name}" value="{value}" />, data)];
-    
-    retern ((layout(before ++ selected ++ after), fun (env) { (assoc(name, env))}))
+    var xml = layout(before ++ selected ++ after);
+    retern ((xml, fun (env) { (xml, pureE(assoc(name, env)))}))
   }
 }
 
@@ -736,16 +775,18 @@ fun choice (items) {
   var (default, _) = hd(items);
   nextName >>= fun (name) {
   preludeOptions(items, default) >>= fun ((xml, retrieve)) {
-  retern ((<select name="{name}">{xml}</select>,
-           fun (env) { hd(retrieve(assoc(name, env))) }))}}
+  var xml = <select name="{name}">{xml}</select>;
+  retern ((xml,
+           fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))}}
 }
 
 sig choiceDefault : ([(a,String)], a) -> Formlet (a)
 fun choiceDefault (items, default) {
   nextName >>= fun (name) {
      preludeOptions(items, default) >>= fun ((xml, retrieve)) {
-        retern ((<select name="{name}">{xml}</select>,
-                 fun (env) { hd(retrieve(assoc(name, env))) }))
+        var xml = <select name="{name}">{xml}</select>;
+        retern ((xml,
+                 fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))
      }
   }
 }
@@ -754,8 +795,10 @@ sig choices : ([(a,String, Bool)]) -> Formlet ([a])
 fun choices (items) {
   nextName >>= fun (name) {
      preludeMultiOptions(items) >>= fun ((xml, retrieve)) {
-        retern ((<select name="{name}" multiple="multiple">{xml}</select>,
-                 fun (env) { concat(map(retrieve, assocAll(name,env))) }))
+        var xml = <select name="{name}" multiple="multiple">{xml}</select>;
+        retern ((xml,
+                 fun (env) { (xml, pureE(concatMap(retrieve, assocAll(name,env)))) }))
+
      }
   }
 }
@@ -764,3 +807,31 @@ sig choicesNone : ([(a, String)]) -> Formlet ([a])
 fun choicesNone (items) {
   choices (map (fun ((v, name)) {(v, name, false)}, items))
 }
+
+typename Either (a,b) = [|Left:a | Right : b|];
+
+# given a formlet and a "predicate", return a new formlet that uses
+# the predicate for validation.
+sig satisfies : (Formlet (a), (a,Xml) -> Either(Xml,Xml)) -> Formlet(a)
+fun satisfies(f, validate) {
+   f >>= fun((xml,collector)) {
+   retern((xml, fun (env) { 
+       var (cxml, val) = collector(env);
+       switch (val) {
+         case Nothing  -> (cxml, Nothing)
+         case Just (v) -> 
+            switch (validate(v, cxml)) {
+               case Right (xml) -> (xml, Nothing)
+               case Left (xml)  -> (xml, Just (v)) }}}))}
+}
+
+
+sig errorMsg : ((a) -> Bool, (a) -> String) -> (a,Xml) -> Either (Xml,Xml)
+fun errorMsg (f, msg) (x,xml) {
+  if (f(x)) Left (xml)
+  else Right (<span class="errorinput">{xml} </span>
+          ++ <span class="error"> {stringToXml(msg(x))}</span>)
+}
+
+infixr 9 `errorMsg`;
+
