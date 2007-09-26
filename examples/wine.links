@@ -377,9 +377,9 @@ fun begin_checkout(cust_id, order_id) {
       <form method="POST" l:action="{checkout(cust_id, order_id, card_no, expiry, instr)}">
       <table class="data-entry">
         <tr><td class="label mandatory">
-          <label for="card_no"> SurchargeCard: 	</label>
+          <label for="card_no"> SurchargeCard: </label>
         </td><td>
-          <input id="card_no" type="text" l:name="card_no" value="" />
+          <input type="text" l:name="card_no" value="" />
         </td></tr>
         <tr><td class="label mandatory">
           Expiry Date (mm/yy): 	
@@ -499,7 +499,7 @@ fun cart_itemlist(cust_id, order_id) {
                  }
     );
     debug("constructed cart form");
-    var page = cart_form ++
+    var pageText = cart_form ++
     (if (cust_id <> -1)
       <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
         <input type="submit" value="Check out" />
@@ -510,7 +510,7 @@ fun cart_itemlist(cust_id, order_id) {
            </div>}
     );
     debug("done composing cart page");
-    page
+    pageText
   }
 }
 
@@ -695,7 +695,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
                          search_region_id,
                          search_wine_type,
                          1),
-          fun (page) { page } ) }
+          fun (p) { p } ) }
     </div>
     <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
