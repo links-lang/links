@@ -512,10 +512,10 @@ fun create_cart(cust_id) {
   (order_id, cust_id)
 }
 
-fun wine_listing(cust_id, order_id, region_id, wine_type, page) {
+fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
   var negone = -1;
   var result = 
-    take(page_size, drop(page * page_size,
+    take(page_size, drop(pageNum * page_size,
     for (var wine <-- wineTable )
     where (wine_type == 1 || wine.wine_type == wine_type)
     {
@@ -581,17 +581,17 @@ fun cartSummary(cust_id, order_id) {
 
 sig search_results : (Int, Int, Int, Int, Int) -> Xml
 
-fun search_results(cust_id, order_id, region_id, wine_type, page) {
+fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
-  var winesOnThisPage = minimum(page_size, [numWines - (page) * page_size]);
+  var winesOnThisPage = minimum(page_size, [numWines - (pageNum) * page_size]);
   <html>
     {header(cust_id, order_id)}
     {cartSummary(cust_id, order_id)}
     <form method="POST" l:action="{search_results(cust_id, order_id,
                                                   stringToInt(search_region_id),
                                                   stringToInt(search_wine_type),
-                                                  page)}">
+                                                  pageNum)}">
       <h2>Filter wines by </h2>
       <table>
         <tr><td>Region:</td>
@@ -625,21 +625,21 @@ fun search_results(cust_id, order_id, region_id, wine_type, page) {
     </form>
     <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
-    Page {intToXml(page+1)} of {intToXml(numPages)}
+    Page {intToXml(pageNum+1)} of {intToXml(numPages)}
     <ul>
-      {wine_listing(cust_id, order_id, region_id, wine_type, page)}
+      {wine_listing(cust_id, order_id, region_id, wine_type, pageNum)}
     </ul>
-    Showing wines {intToXml(page_size*page+1)} thru {intToXml(page_size*page+winesOnThisPage)}.<br />
-    {if (page <> 0)
-      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, page-1)}">Previous</a> else []}
+    Showing wines {intToXml(page_size*pageNum+1)} thru {intToXml(page_size*pageNum+winesOnThisPage)}.<br />
+    {if (pageNum <> 0)
+      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum-1)}">Previous</a> else []}
     {for (var i <- range(numPages-1)) {
-       (if (i == page) {intToXml(i+1)}
+       (if (i == pageNum) {intToXml(i+1)}
        else 
          <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
        ++ <span> </span> 
     }}
-    {if (page <> numPages)
-      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, page+1)}">Next</a> else []
+    {if (pageNum <> numPages)
+      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum+1)}">Next</a> else []
     }
     {footer(cust_id)}
   </html>
