@@ -52,7 +52,7 @@ fun checkBookingInfo((person= _, age= _, arrival=arrival, departure=departure)) 
 }
 
 sig checkedForm : Formlet(BookingInfo)
-var checkedForm = travelForm `satisfies` checkBookingInfo `errorMsg` fun (_) { "You can't depart before you arrive" };
+var checkedForm = travelForm `satisfies` (checkBookingInfo `errorMsg` fun (_) { "You can't depart before you arrive" });
 
 fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    <html>
@@ -69,5 +69,4 @@ page
  <html>
     <h1>Date:</h1>
     { checkedForm => showBookingInformation }
-
  </html>

@@ -1436,61 +1436,104 @@ module Desugarer =
            | `Formlet (formExpr, formHandler) ->
                fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
            | `Page e -> 
+            (*
+                  [[ page X[{f1 => h1}, ..., {fj => hj}] ]]
+                ==
+                  var (x1, c1, _) = f1(0);
+                   ...
+                  var (xj, cj, _) = fj(0);
+            
+                  # sig zi : mu a.([a]) -> Xml
+            
+                  fun z1(zs) {
+                    mkForm({validate(c1, h1, X, zs, 0)}, x1)
+                  }
+                   ...
+                  fun zj(zs) {
+                    mkForm({validate(cj, hj, X, zs, j-1)}, xj)
+                  }
+            
+                  var zs = [z1, ..., zj];
+            
+                  xmlToPage(renderPage(X[ ]*, zs)) 
+            *)
+               let var v = `Var v, pos' in
+               let int n = `Constant (`Int (Num.num_of_int n)), pos' in
                let xml_context, formlets = extract_placements e in
-               let named_formlets = pair_fresh_names ~prefix:"_formlet" formlets in
-               let render_exprs : (string * phrasenode) list = ListLabels.map named_formlets
-                               ~f:(fun ((ei,hi), (cxtname : string)) -> 
-                                     cxtname, 
-                                     (`FnAppl (((`Var "renderToo", pos') : phrase),
-                                               [(ei : phrase); hi; (`Var cxtname, pos')]) : phrasenode)) in
-               let hole_var = gensym () in
-               let page_contexts = 
-                   mapIndex (fun (name,_) i ->
-                               (name,
-                                ([[`Variable hole_var, pos']],
-                                 (xml_context
-                                    (mapIndex
-                                       (fun (_,e') j -> if i = j then `Var hole_var else e')
-                                       render_exprs))),
-                                `Unknown,
-                                None))
-                     render_exprs
-               in let let_rec_defs : binding list = List.map (fun c -> `Fun c, pos') page_contexts in
-               let xml = 
-                 match render_exprs with
-                   | [] -> xml_context []
-                   | (name,exp)::_ ->
-                       `Block (let_rec_defs, 
-                               (`FnAppl ((`Var name, pos'), [exp, pos']), pos')), pos'
-               in 
-                 appPrim "xmlToPage" [desugar xml]
-  
-           | `FormletPlacement _ -> assert false
+               let bindings : ((string * string) * binding) list = 
+                 mapIndex
+                   (fun (f, _) i ->
+                      let xi = gensym ~prefix:(Printf.sprintf "x%d" i) ()
+                      and ci = gensym ~prefix:(Printf.sprintf "c%d" i) () in
+                        (xi, ci), (`Val ((`Tuple [(`Tuple [`Variable xi, pos';
+                                                           `Variable ci, pos'], pos');
+                                                  `Any, pos'], pos'),
+                                         (`FnAppl (var "runState", [f;int 0]), pos'),
+                                         `Unknown,
+                                         None), pos'))
+                   formlets in
+               let ctxt_var = gensym ~prefix:"xml_context" () in
+               let context : binding =
+                 `Val ((`Variable ctxt_var, pos), xml_context, `Unknown, None), pos' in
+               let z_funs : (string * binding) list = 
+                 mapIndex
+                   (fun ((xi, ci), _) i ->
+                      let z = gensym ~prefix:(Printf.sprintf "z%d" i) ()
+                      and zs = gensym ~prefix:"zs" () in
+                      let body = 
+                        `FnAppl (var "mkForm",
+                                 [`FnAppl (var "validate",
+                                           [var ci; snd (List.nth formlets i);  
+                                            var ctxt_var; var zs; int i]), pos';
+                                  var xi]), pos' in
+                        z, (`Fun (z, ([[`Variable zs, pos']], body), `Unknown, None), pos'))
+                   bindings in
+               let zs : string * binding = 
+                 let zs = gensym ~prefix:"zs" () in
+                   zs, (`Val ((`Variable zs, pos'),
+                              (`ListLit (rev (map (fst ->- var) z_funs)), pos),
+                              `Unknown, None), 
+                        pos')
+               in
+               let r = 
+                 desugar (`Block
+                            (context :: map snd bindings @ map snd z_funs @ [snd zs],
+                             (`FnAppl (var "xmlToPage", 
+                                       [`FnAppl (var "renderPage",
+                                                 [var ctxt_var;
+                                                  var (fst zs)]), pos']), pos')), pos') in
+                 prerr_endline (Syntax.string_of_expression r);
+                 r
+           | `FormletPlacement _
            | `FormBinding _
            | `Regex _ -> assert false
-
-     and extract_placements : phrase -> (phrasenode list -> phrase) * (phrase * phrase) list =
-       fun (phrase, pos) -> 
-         let rec extract n = function
+     and extract_placements : phrase -> phrase * (phrase * phrase) list =
+       fun (phrase, pos) ->
+         let arg = gensym ~prefix:"xml" () in
+         let rec extract n : phrasenode -> int * (phrase * (phrase * phrase) list) = function
            | `Xml (name, attrs, dynattrs, children) ->
                let n, childfns, child_placements = 
                  fold_right
-                   (fun (child,_) (n, fns, placements) ->
-                      let n, (fn, placement) = extract n child in
-                        (n, (fun p -> fn p :: fns p), placements @ placement))
+                   (fun (child,_) (n, templates, placements) ->
+                      let n, (template, placement) = extract n child in
+                        (n, (template :: templates), placement @ placements))
                    children
-                   (n, const [], []) in
+                   (n, [], []) in
                  (n,
-                  ((fun phrases -> `Xml (name, attrs, dynattrs, childfns phrases), pos),
+                  ((`Xml (name, attrs, dynattrs, childfns), pos),
                    child_placements))
            | `FormletPlacement (formlet, continuation) ->
                n+1,
-               ((fun phrasenodes -> nth phrasenodes n, pos), [formlet, continuation])
-           | `TextNode _ as t -> 
-               n, (const (t,pos), [])
+               ((`FnAppl ((`Var "select", pos),
+                          [(`Var arg, pos);
+                           (`Constant (`Int (Num.num_of_int n)), pos)]), pos),
+                [formlet, continuation])
+           | `TextNode _ as t -> n, ((t, pos), [])
            | e -> 
                raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal"))
-         in snd (extract 0 phrase)
+         in let _, (body, placements) = extract 0 phrase in
+           (`FunLit (([[`Variable arg, pos]]), body), pos), rev placements
+
      and forest_to_form_expr trees yieldsClause 
          (pos:Syntax.untyped_data) 
          (trees_ppos:Sugartypes.pposition)

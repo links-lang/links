@@ -429,13 +429,13 @@ sig $ : ((a) -> b, a) -> b
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a)) -> (d) -> (a,d)
-fun runState(State (s)) { s }
+sig runState : (State (d,a), d) -> (a,d)
+fun runState(State (s),i) { s(i) }
 
 infixl 1 >>=;
 sig >>= : (State (d,a), (a) -> State(d,b)) -> State (d,b)
 op State (x) >>= f {
-   State (fun (s1) { var (v,s2) = x (s1); runState (f (v)) (s2) })
+   State (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
 
 infixl 1 >>;
@@ -551,7 +551,7 @@ fun formlets(fs) {
 # render function
 sig render : (Formlet (a), (a) -> Xml) -> Xml
 fun render(frm, nextPage) {
-   var ((xml, extractor),_) = runState(frm)(0);
+   var ((xml, extractor),_) = runState(frm,0);
    fun continuation(cc, env) {
      var (xml, val) = extractor(env);
      switch (val) {
@@ -571,7 +571,7 @@ fun render(frm, nextPage) {
 
 sig renderToo : (Formlet (a), (a) -> Xml, (Xml) -> Xml) -> Xml
 fun renderToo (form, nextPage, pageContext) {
-   var ((xml, extractor),_) = runState(form)(0);
+   var ((xml, extractor),_) = runState(form,0);
    fun continuation(cc, env) {
      var (xml, val) = extractor(env);
      switch (val) {
@@ -590,11 +590,53 @@ fun renderToo (form, nextPage, pageContext) {
    mkForm(fun (env) { continuation(cc, env) }, xml)
 }
 
+
+sig renderPage : (([Xml]) -> Xml, [mu a.(([a]) -> Xml)]) -> Xml
+fun renderPage(k, zs) {
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+
+   sig substAt : ([a], Int, a) -> [a]
+   fun substAt(xs, i, y) {
+     switch (xs) {
+       case [] -> []
+       case x::xs -> if (i <= 0) {y :: xs}
+                     else {x :: substAt(xs, i-1, y)}
+     }
+   } 
+   
+   sig mkForm : ((Env) -> Xml, Xml) -> Xml
+   fun mkForm(cont, contents) {
+     <form enctype="application/x-www-form-urlencoded"
+            l:action="{cont(environment())}" method="POST">
+       {contents}
+     </form>
+   }
+   
+   
+   sig validate :
+     (Collector ((Xml, Maybe(a))), (a) -> Xml, ([Xml]) -> Xml, [mu a.(([a]) -> Xml)], Int) -> (Env) -> Xml
+   fun validate(c, h, k, zs, i) (env) {
+     var (xml, v) = c(env);
+     switch (v) {
+       case (Just(v)) -> h(v)
+       case (Nothing)  -> {
+         fun z(zs) {
+           mkForm(validate(c, h, k, zs, i), xml)
+         }
+         var zs = substAt(zs, i, z);
+         exit(renderPage(k, zs))
+       }
+     }
+   }
+
+
 # Render formlet to a multipart form, which allows file-upload inputs
 # (using [inputFile])
 # sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
 # fun renderMultipart(frm, nextPage) {
-#    var ((xml, extractor),_) = runState(frm)(0);
+#    var ((xml, extractor),_) = runState(frm,0);
 #    <form enctype="multipart/form-data"
 #          l:action="{nextPage(extractor(environment()))}" method="POST">
 #      {xml}
@@ -736,14 +778,14 @@ fun inputRadiogroup(before, selected, after, layout) {
 sig preludeOption : ((a,String), Bool) -> State(Names,(Xml, (((String) -> [a]) -> (String) -> [a])))
 fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
-	if(selected) {
-	   retern ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
+        if(selected) {
+           retern ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
-	}
-	else {
-	   retern ((<option value="{name}">{stringToXml(b)}</option>,
+        }
+        else {
+           retern ((<option value="{name}">{stringToXml(b)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
-	}
+        }
 }}
 
 
