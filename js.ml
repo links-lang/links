@@ -1066,6 +1066,18 @@ let symbolp name =
     (if Settings.get_value js_rename_builtins then true (* FIXME: this is a horrible hack. *)
      else (not (Library.is_primitive name)))
 
+let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+                   "catch";"for";"switch";"while";"continue";"function";"this";
+                   "with";"default";"if";"throw";"delete";"in";"try";"do";
+                   "instanceof";"typeof";
+                   (* "future keywords" *)
+                   "abstract";"enum";"int";"short";"boolean";"export";
+                   "interface";"static";"byte";"extends";"long";"super";"char";
+                   "final";"native";"synchronized";"class";"float";"package";
+                   "throws";"const";"goto";"private";"transient";"debugger";
+                   "implements";"protected";"volatile";
+                 ]
+
 let wordify name = 
   if symbolp name then 
     try
@@ -1081,6 +1093,8 @@ let wordify name =
          then we would not split apart words in partly-symbolic idents. *)
     with
         Not_found -> failwith("Internal error: unknown symbol character")
+  else if mem name js_keywords then
+    "_" ^ name (* FIXME: this could conflict with Links names. *)
   else name
 
 let wordify_rewrite : RewriteSyntax.rewriter = function

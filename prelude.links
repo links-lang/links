@@ -444,8 +444,8 @@ op m >> k {
    m >>= fun (_) { k }
 }
 
-sig retern : (a) -> State (b,a)
-fun retern(a) {
+sig return : (a) -> State (b,a)
+fun return(a) {
   State (fun (s) { (a,s)  })
 }
 
@@ -460,17 +460,17 @@ fun put(s) {
 
 sig fmap : ((a) -> b) -> (State (c,a)) -> State (c,b)
 fun fmap(f)(x) {
-  x >>= (fun (x) { retern (f(x)) })
+  x >>= (fun (x) { return (f(x)) })
 } 
 
 sig lift2 : ((a,b) -> c) -> (State (d,a), State (d,b)) -> State(d,c)
 fun lift2(f)(x,y) {
-  x >>= (fun (x) { y >>= fun (y) { retern(f(x,y)) } })
+  x >>= (fun (x) { y >>= fun (y) { return(f(x,y)) } })
 }
 
 sig pure : (a) -> Formlet(a)
 fun pure(v) {
-  retern(([], fun (_) { ([], Just (v)) }))
+  return(([], fun (_) { ([], Just (v)) }))
 }
 
 sig pureE : (a) -> Maybe (a)
@@ -489,7 +489,7 @@ sig @@@ : (Formlet (a), Formlet (((a)-> b))) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
-  retern((x++y, 
+  return((x++y, 
           fun(e){ 
                   var (fx, f) = f(e);
                   var (cx, c) = c(e);
@@ -504,7 +504,7 @@ op m @@@ k {
 sig @@=> : (Formlet(a), (a) -> b) -> Formlet(b)
 #op m @@=> f {
 #  m >>= fun((x,c)) {
-#  retern((x, fun (e) { f(c(e)) } )) }
+#  return((x, fun (e) { f(c(e)) } )) }
 #}
 
 # Definition of @@=> in terms of @@@ and pure.
@@ -513,14 +513,14 @@ op m @@=> f {
 }
 
 sig xml : (Xml) -> Formlet (())
-fun xml(x) { retern ( (x, fun (e) { (x, pureE(())) })) }
+fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 
 sig text : (String) -> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
 sig plug : ((Xml) -> Xml, Formlet (a)) -> Formlet (a)
 op f `plug` m {
-  m >>= fun((x,collector)){ retern((f(x),
+  m >>= fun((x,collector)){ return((f(x),
     fun (env) { var (xml,c) = collector (env); 
                 (f(xml), c) }))}
 }
@@ -536,7 +536,7 @@ var nextName = State(fun (i) { (makeName(i), i+1) });
 #    get >>= fun (i) {
 #    var name = makeName(i);
 #    put (i+1) >>
-#    retern (name)};
+#    return (name)};
 
 sig formlets : ([Formlet (a)]) -> Formlet ([a])
 fun formlets(fs) { 
@@ -660,7 +660,7 @@ fun renderPage(k, zs) {
 
 fun mkInput(mkXml,mkFilledXml) {
   nextName >>= fun (name) {
-    (retern ((mkXml(name),
+    (return ((mkXml(name),
               fun (env) { var v = assoc (name, env);
                           (mkFilledXml(name,v), pureE (v)) })))}
 }
@@ -721,7 +721,7 @@ fun button(text, behaviour, v) {
       case Button -> "button"
     };
     var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
-    retern ((xml,
+    return ((xml,
              fun (env) { (xml, pureE (if (memassoc(name, env))  Just(v) else Nothing)) }))
   }
 }
@@ -745,7 +745,7 @@ sig checkbox : Formlet (Bool)
 var checkbox =
   nextName >>= fun (name) {
   var xml = <input type="checkbox" name="{name}" value="yes" />;
-  retern ((xml,
+  return ((xml,
            fun (env) { (xml, pureE (memassoc(name, env))) }))};
 
 
@@ -771,7 +771,7 @@ fun inputRadiogroup(before, selected, after, layout) {
     var after = for (var (value, data) <- after)
                   [(<input type="radio" name="{name}" value="{value}" />, data)];
     var xml = layout(before ++ selected ++ after);
-    retern ((xml, fun (env) { (xml, pureE(assoc(name, env)))}))
+    return ((xml, fun (env) { (xml, pureE(assoc(name, env)))}))
   }
 }
 
@@ -779,11 +779,11 @@ sig preludeOption : ((a,String), Bool) -> State(Names,(Xml, (((String) -> [a]) -
 fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
         if(selected) {
-           retern ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
+           return ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
         }
         else {
-           retern ((<option value="{name}">{stringToXml(b)}</option>,
+           return ((<option value="{name}">{stringToXml(b)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
         }
 }}
@@ -792,11 +792,11 @@ fun preludeOption ((a,b), selected) {
 sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
   switch (items) {
-     case [] -> retern ((<#/>, fun (_) { [] }))
+     case [] -> return ((<#/>, fun (_) { [] }))
      case item::items -> 
        preludeOption(item, (first(item) == default))
                      >>= fun ((xml, r1)) { preludeOptions(items, default)
-                     >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
+                     >>= fun ((morexml, r2)) { return ((xml ++ morexml, r1(r2))) } }
   }
 }
 
@@ -804,11 +804,11 @@ sig preludeMultiOptions
      : ([(a,String,Bool)]) -> State(Names,(Xml, (String) -> [a]))
 fun preludeMultiOptions(items) {
   switch (items) {
-     case [] -> retern ((<#/>, fun (_) { [] }))
+     case [] -> return ((<#/>, fun (_) { [] }))
      case item::items ->
        preludeOption((first(item),second(item)), third(item))
                      >>= fun ((xml, r1)) { preludeMultiOptions(items)
-                     >>= fun ((morexml, r2)) { retern ((xml ++ morexml, r1(r2))) } }
+                     >>= fun ((morexml, r2)) { return ((xml ++ morexml, r1(r2))) } }
   }
 }
 
@@ -818,7 +818,7 @@ fun choice (items) {
   nextName >>= fun (name) {
   preludeOptions(items, default) >>= fun ((xml, retrieve)) {
   var xml = <select name="{name}">{xml}</select>;
-  retern ((xml,
+  return ((xml,
            fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))}}
 }
 
@@ -827,7 +827,7 @@ fun choiceDefault (items, default) {
   nextName >>= fun (name) {
      preludeOptions(items, default) >>= fun ((xml, retrieve)) {
         var xml = <select name="{name}">{xml}</select>;
-        retern ((xml,
+        return ((xml,
                  fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))
      }
   }
@@ -838,7 +838,7 @@ fun choices (items) {
   nextName >>= fun (name) {
      preludeMultiOptions(items) >>= fun ((xml, retrieve)) {
         var xml = <select name="{name}" multiple="multiple">{xml}</select>;
-        retern ((xml,
+        return ((xml,
                  fun (env) { (xml, pureE(concatMap(retrieve, assocAll(name,env)))) }))
 
      }
@@ -857,7 +857,7 @@ typename Either (a,b) = [|Left:a | Right : b|];
 sig satisfies : (Formlet (a), (a,Xml) -> Either(Xml,Xml)) -> Formlet(a)
 fun satisfies(f, validate) {
    f >>= fun((xml,collector)) {
-   retern((xml, fun (env) { 
+   return((xml, fun (env) { 
        var (cxml, val) = collector(env);
        switch (val) {
          case Nothing  -> (cxml, Nothing)
