@@ -1474,7 +1474,7 @@ module Desugarer =
                    formlets in
                let ctxt_var = gensym ~prefix:"xml_context" () in
                let context : binding =
-                 `Val ((`Variable ctxt_var, pos), xml_context, `Unknown, None), pos' in
+                 `Val ((`Variable ctxt_var, pos'), xml_context, `Unknown, None), pos' in
                let z_funs : (string * binding) list = 
                  mapIndex
                    (fun ((xi, ci), _) i ->
@@ -1491,7 +1491,7 @@ module Desugarer =
                let zs : string * binding = 
                  let zs = gensym ~prefix:"zs" () in
                    zs, (`Val ((`Variable zs, pos'),
-                              (`ListLit (rev (map (fst ->- var) z_funs)), pos),
+                              (`ListLit (rev (map (fst ->- var) z_funs)), pos'),
                               `Unknown, None), 
                         pos')
                in
