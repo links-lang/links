@@ -552,11 +552,11 @@ fun formlets(fs) {
 sig render : (Formlet (a), (a) -> Xml) -> Xml
 fun render(frm, nextPage) {
    var ((xml, extractor),_) = runState(frm,0);
-   fun continuation(cc, env) {
+   fun continuation(env) {
      var (xml, val) = extractor(env);
      switch (val) {
        case (Just (v)) -> nextPage(v)
-       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
+       case (Nothing)  -> error("Validation used in formlet with no 'page' context")
      }
    }
    fun mkForm(cont, contents) {
@@ -566,7 +566,7 @@ fun render(frm, nextPage) {
      </form>
    }
 
-   escape cc in mkForm(fun (env) { continuation(cc, env) }, xml)
+   mkForm(continuation, xml)
 }
 
 sig renderToo : (Formlet (a), (a) -> Xml, (Xml) -> Xml) -> Xml
