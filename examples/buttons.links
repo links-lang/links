@@ -1,5 +1,7 @@
-fun firstButton(buttons) {
-   fromJust(find(isJust, buttons))
+fun firstButton(plus,times) {
+   if(plus) {(+)}
+   else if(times) {(*)}
+   else {error("unknown button")}
 }
 
 var f = 
@@ -8,10 +10,10 @@ var f =
      {inputInt -> l}
      {inputInt -> r}
      <br/>
-     {submitButton("+",(+)) -> plus}
-     {submitButton("*",(*)) -> times}
+     {submitButton("+") -> plus}
+     {submitButton("*") -> times}
    </#>
-  yields (action=firstButton([plus,times]), l=l,r=r);
+  yields (action=firstButton(plus,times), l=l,r=r);
 
 fun run ((action=action, l=l, r=r)) {
    <html>

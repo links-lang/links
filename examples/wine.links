@@ -400,11 +400,11 @@ fun begin_checkout(cust_id, order_id) {
   </html>
 }
 
-fun withButton(label, val, frm) {
+fun withButton(label, frm) {
   debug("withButton");
   formlet <#>
     {frm -> result}
-    {submitButton(label, val) -> btn}
+    {submit(label)}
   </#>
   yields
     result
@@ -456,7 +456,7 @@ fun cart_itemlist(cust_id, order_id) {
     var total_items = intToString(length(cart_items));
     debug("got total items");
     var cart_form = render(
-      withButton("Update Cart", 1, 
+      withButton("Update Cart",
         formlet
           <table width="100%">
             <tr>
@@ -470,7 +470,6 @@ fun cart_itemlist(cust_id, order_id) {
                   [formlet
                    <tr>
                        <td>{inputIntValue(cartItem.qty) -> qty}
-                           {hiddenInt(cartItem.id) -> itemId}
                        </td>
                        <td>{stringToXml(cartItem.name)}
                        </td>
@@ -479,7 +478,7 @@ fun cart_itemlist(cust_id, order_id) {
                        <td></td>
                      </tr>
                    yields
-                     (itemId, qty)
+                     (cartItem.id, qty)
                   ]})
                -> item_qtys
             }
@@ -685,7 +684,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
                 <tr>
                   <td></td>
                   <td>
-                  { submitButton("Show wines", ()) -> _ }
+                  { submit("Show wines") }
                   </td>
                 </tr>
              </table>

@@ -634,14 +634,25 @@ fun renderPage(k, zs) {
 
 # Render formlet to a multipart form, which allows file-upload inputs
 # (using [inputFile])
-# sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
-# fun renderMultipart(frm, nextPage) {
-#    var ((xml, extractor),_) = runState(frm,0);
-#    <form enctype="multipart/form-data"
-#          l:action="{nextPage(extractor(environment()))}" method="POST">
-#      {xml}
-#    </form>
-# }
+sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
+fun renderMultipart(frm, nextPage) {
+   var ((xml, extractor),_) = runState(frm,0);
+   fun continuation(cc, env) {
+     var (xml, val) = extractor(env);
+     switch (val) {
+       case (Just (v)) -> nextPage(v)
+       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
+     }
+   }
+   fun mkForm(cont, contents) {
+     <form enctype="multipart/form-data"
+           l:action="{cont(environment())}" method="POST">
+       {contents}
+     </form>
+   }
+
+   escape cc in mkForm(fun (env) { continuation(cc, env) }, xml)
+}
 
 # Types of input we need to handle:
 #   text (done)
@@ -682,7 +693,7 @@ fun inputValue(v) {
           fun (name,v) { <input name="{name}" value="{v}"/> })
 }
 
-# A hidden String formlet; shoudln't normally be needed since you can capture 
+# A hidden String formlet; shouldn't normally be needed since you can capture 
 # free variables in a [yields] expression
 sig hidden : (String) -> Formlet (String)
 fun hidden(v) { 
@@ -712,8 +723,15 @@ fun textarea(value) {
           fun (name,value) { <textarea name="{name}">{stringToXml(value)}</textarea> })
 }
 
-sig button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
-fun button(text, behaviour, v) {
+# raw submit button
+sig submit : (String) -> Xml
+fun submit(text) {
+  <button type="submit">{stringToXml(text)}</button>
+}
+
+# button that returns true iff it is pressed
+sig button : (String,[|Submit|Reset|Button|]) -> Formlet (Bool)
+fun button(text, behaviour) {
   nextName >>= fun (name) {
     var behaviour = switch (behaviour) {
       case Submit -> "submit"
@@ -722,23 +740,23 @@ fun button(text, behaviour, v) {
     };
     var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
     return ((xml,
-             fun (env) { (xml, pureE (if (memassoc(name, env))  Just(v) else Nothing)) }))
+             fun (env) { (xml, pureE (memassoc(name, env))) }))
   }
 }
 
-sig submitButton : (String,a) -> Formlet (Maybe(a))
-fun submitButton(text, v) {
-  button(text, Submit, v)
+sig submitButton : (String) -> Formlet (Bool)
+fun submitButton(text) {
+  button(text, Submit)
 }
 
-sig resetButton : (String,a) -> Formlet (Maybe(a))
-fun resetButton(text, v) {
-  button(text, Reset, v)
+sig resetButton : (String) -> Formlet (Bool)
+fun resetButton(text) {
+  button(text, Reset)
 }
 
-sig pushButton : (String,a) -> Formlet (Maybe(a))
-fun pushButton(text, v) {
-  button(text, Button, v)
+sig pushButton : (String) -> Formlet (Bool)
+fun pushButton(text) {
+  button(text, Button)
 }
 
 sig checkbox : Formlet (Bool)

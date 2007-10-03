@@ -36,14 +36,14 @@ var theFormlet =
      <div>
        Upload a file: { inputFile -> file }
      </div>
-       { submitButton("Check Out", "checkout") -> checkout }  
-       { submitButton("Cancel", "cancel") -> cancel }
+       { submitButton("Check Out") -> checkout }  
+       { submitButton("Cancel") -> cancel }
    </#>
  yields
     (bikeStyle=bikeStyle,
      comments=comments,
      over65=over65,
-     cmd=if (isJust (checkout)) Checkout else if (isJust (cancel)) Cancel else NoButton,
+     cmd=if (checkout) Checkout else if (cancel) Cancel else NoButton,
      addons=addons,
      colour=colour,
      file=file);
