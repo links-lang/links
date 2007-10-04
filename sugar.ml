@@ -1491,7 +1491,7 @@ module Desugarer =
                let zs : string * binding = 
                  let zs = gensym ~prefix:"zs" () in
                    zs, (`Val ((`Variable zs, pos'),
-                              (`ListLit (rev (map (fst ->- var) z_funs)), pos'),
+                              (`ListLit (map (fst ->- var) z_funs), pos'),
                               `Unknown, None), 
                         pos')
                in
@@ -1514,9 +1514,9 @@ module Desugarer =
            | `Xml (name, attrs, dynattrs, children) ->
                let n, childfns, child_placements = 
                  fold_right
-                   (fun (child,_) (n, templates, placements) ->
-                      let n, (template, placement) = extract n child in
-                        (n, (template :: templates), placement @ placements))
+                   (fun (child,_) (n, templates, placements') ->
+                      let n, (template, placements) = extract n child in
+                        (n, (template :: templates), placements @ placements'))
                    children
                    (n, [], []) in
                  (n,
