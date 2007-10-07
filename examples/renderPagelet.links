@@ -1,0 +1,31 @@
+fun isInt (x) { x ~ /[0-9]+/ }
+
+var checker = isInt `errorMsg` fun (x) { x ++ " is not a natural number!"};
+
+var checkedInt = 
+   formlet <#>{input `satisfies` checker -> n}</#> yields stringToInt(n);
+
+fun intForm(label) {
+  (f=formlet
+       <#><b>{stringToXml(label)}</b>: {checkedInt -> i}{submit("submit integer")}</#>
+     yields
+       i,
+   h=fun (i) {
+       <html>
+        <head><title>Pagelet test</title></head>
+        <body>
+         For '{stringToXml(label)}' you entered the integer '{intToXml(i)}'.
+        </body>
+       </html>
+   }
+  )
+}
+
+var x = intForm("x");
+var xr = renderPagelet(pagelet <#>{x.f => x.h}</#>);
+
+<html>
+ <body>
+  {xr} {xr}
+ </body>
+</html>
