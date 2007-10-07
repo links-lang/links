@@ -973,7 +973,9 @@ module Desugarer =
              | `TextNode _ -> empty
              | `FormletPlacement (e1, e2)
              | `Formlet (e1, e2) -> flatten [phrase e1; phrase e2]
+             | `PageletPlacement e -> phrase e
              | `Page e -> phrase e
+             | `Pagelet e -> phrase e
              | `FormBinding (e, p) -> flatten [phrase e; ptv p]
          in binding s
      and get_pattern_type_vars (p, _ : ppattern) = (* fold *)
@@ -1504,7 +1506,39 @@ module Desugarer =
                                                   var (fst zs)]), pos']), pos')), pos') in
                  prerr_endline (Syntax.string_of_expression r);
                  r
+           | `Pagelet e ->
+               let rec desugar_pagelet : phrase -> phrase =
+                 fun (phrase, pos) ->
+                   let desugar_pagelets : phrase list -> phrase = fun children ->
+                     (`FnAppl ((`Var "joinManyP", pos), [`ListLit (map desugar_pagelet children), pos]), pos) in
+                   let dp : phrasenode -> phrase = function
+                     | `TextNode s ->
+                         (`FnAppl ((`Var "bodyP", pos),
+                                   [`FnAppl ((`Var "stringToXml", pos),
+                                             [`Constant (`String s), pos]), pos]), pos)
+                     | `Block _ as b ->
+                         (`FnAppl ((`Var "bodyP", pos), [b, pos]), pos)
+                     | `FormletPlacement (formlet, handler) ->
+                         (`FnAppl ((`Var "formP", pos), [formlet; handler]), pos)
+                     | `PageletPlacement (pagelet) ->
+                         pagelet
+                     | `Xml ("#", [], _, children) ->
+                         desugar_pagelets children
+                     | `Xml (name, attrs, dynattrs, children) ->
+                         let x = gensym ~prefix:"xml" () in
+                           (`FnAppl ((`Var "plugP", pos),
+                                     [(`FunLit([[`Variable x, pos]],
+                                               (`Xml (name, attrs, dynattrs, [`Block ([], (`Var x, pos)), pos]), pos)), pos);
+                                      desugar_pagelets children
+                                     ]), pos)
+                     | _ ->
+                         raise (ASTSyntaxError (lookup_pos pos, "Invalid element in pagelet literal"))
+                   in
+                     dp phrase
+               in
+                 desugar (desugar_pagelet e)
            | `FormletPlacement _
+           | `PageletPlacement _
            | `FormBinding _
            | `Regex _ -> assert false
      and extract_placements : phrase -> phrase * (phrase * phrase) list =

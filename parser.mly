@@ -44,9 +44,9 @@ let parseRegexFlags f =
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
 %token LPAREN RPAREN
-%token LBRACE RBRACE ELBRACE LQUOTE RQUOTE
+%token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW WHERE FORMLET PAGE
+%token FOR LARROW LLARROW WHERE FORMLET PAGE PAGELET
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
@@ -448,16 +448,20 @@ xml_contents_list:
 
 xml_contents:
 | block                                                        { `Block $1, pos () }
-| form_binding                                                 { $1 }
+| formlet_binding                                              { $1 }
 | formlet_placement                                            { $1 }
+| pagelet_placement                                            { $1 }
 | xml_tree                                                     { $1 }
 | CDATA                                                        { `TextNode (Utility.xml_unescape $1), pos() }
 
-form_binding:
+formlet_binding:
 | LBRACE logical_expression RARROW pattern RBRACE              { `FormBinding($2, $4), pos()}
 
 formlet_placement:
 | LBRACE logical_expression FATRARROW logical_expression RBRACE { `FormletPlacement ($2, $4), pos () }
+
+pagelet_placement:
+| LBRACEBAR exp BARRBRACE                                      { `PageletPlacement $2, pos() }
 
 conditional_expression:
 | db_expression                                                { $1 }
@@ -519,6 +523,7 @@ escape_expression:
 formlet_expression:
 | escape_expression                                            { $1 }
 | FORMLET xml YIELDS exp                                       { `Formlet ($2, $4), pos() }
+| PAGELET xml                                                  { `Pagelet ($2), pos() }
 | PAGE xml                                                     { `Page ($2), pos() }
 
 table_expression:

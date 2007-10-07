@@ -155,6 +155,25 @@ fun map(f, l) {
   }
 }
 
+fun mapi(f, xs) {
+  fun mi(i, xs) {
+    switch (xs) {
+      case []    -> []
+      case x::xs -> f(x, i) :: mi(i+1, xs)
+    }
+  }
+  mi(0, xs)
+}
+
+sig substAt : ([a], Int, a) -> [a]
+fun substAt(xs, i, y) {
+  switch (xs) {
+    case [] -> []
+    case x::xs -> if (i <= 0) {y :: xs}
+                  else {x :: substAt(xs, i-1, y)}
+  }
+} 
+
 fun reverse(l) {
   fun aux(l,o) {
     switch (l) {
@@ -418,11 +437,12 @@ fun sendSuspend(xmlf) {
 ####   TBD: move to a namespaced module
 
 typename Env = [(String,String)];
-typename Names = Int;
+typename Gen = Int;
 typename State (d,a) = [|State:(d) ->(a,d)|];
+typename Handler (a) = (a) -> Xml;
 typename Collector (a) = (Env) -> a;
-typename Formlet (a) = State (Names, (Xml,Collector((Xml, Maybe(a)))));
-#typename Combiner (a,b,c) = (Collector (a)) -> (Collector (b)) -> Collector (c);
+typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
+typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
 
 infixr 0 $;
 sig $ : ((a) -> b, a) -> b
@@ -590,33 +610,45 @@ fun renderToo (form, nextPage, pageContext) {
    mkForm(fun (env) { continuation(cc, env) }, xml)
 }
 
+# Pagelet stuff
+
+typename XmlContext = (Xml) -> Xml;
+
+typename RecForms = [mu a.(([a]) -> Xml)];
+typename MultiXmlContext = ([Xml]) -> Xml;
+
+typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -> Xml;
+typename Pagelet = (Int, MultiXmlContext, (Gen) -> ([CheckedFormBuilder], Gen));
+
+sig renderPagelet : (Pagelet) -> Xml
+fun renderPagelet((n, k, fs)) {
+  var (ms, _) = fs(0);
+  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a)) -> (MultiXmlContext, RecForms, Int) -> Xml
+fun mkCheckedFormBuilder(x, c, h)(k, zs, i) {
+  mkForm(validate(c, h, k, zs, i), x)   
+}
+
 
 sig renderPage : (([Xml]) -> Xml, [mu a.(([a]) -> Xml)]) -> Xml
 fun renderPage(k, zs) {
   k(map (fun (z) {z(zs)}, zs))
 }
 
-
-   sig substAt : ([a], Int, a) -> [a]
-   fun substAt(xs, i, y) {
-     switch (xs) {
-       case [] -> []
-       case x::xs -> if (i <= 0) {y :: xs}
-                     else {x :: substAt(xs, i-1, y)}
-     }
-   } 
-   
+  
    sig mkForm : ((Env) -> Xml, Xml) -> Xml
    fun mkForm(cont, contents) {
      <form enctype="application/x-www-form-urlencoded"
-            l:action="{cont(environment())}" method="POST">
+           l:action="{cont(environment())}" method="POST">
        {contents}
      </form>
    }
    
-   
    sig validate :
-     (Collector ((Xml, Maybe(a))), (a) -> Xml, ([Xml]) -> Xml, [mu a.(([a]) -> Xml)], Int) -> (Env) -> Xml
+     (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int) -> (Env) -> Xml
    fun validate(c, h, k, zs, i) (env) {
      var (xml, v) = c(env);
      switch (v) {
@@ -626,11 +658,57 @@ fun renderPage(k, zs) {
            mkForm(validate(c, h, k, zs, i), xml)
          }
          var zs = substAt(zs, i, z);
-         exit(renderPage(k, zs))
+         exit(k(map (fun (z) {z(zs)}, zs)))
        }
      }
    }
 
+
+sig unitP : Pagelet
+var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
+
+sig joinP : (Pagelet, Pagelet) -> Pagelet
+fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
+  (i1+i2,
+   fun (xs) {
+     <#>{k1(take(i1, xs))}{k2(drop(i1, xs))}</#>
+   },
+   fun (gen) {
+     var (ms1, gen) = fs1(gen);
+     var (ms2, gen) = fs2(gen);
+     (ms1 ++ ms2, gen)
+   })
+}
+
+sig joinManyP : ([Pagelet]) -> Pagelet
+fun joinManyP(gs) {
+  fold_left(joinP, unitP, gs)
+}
+
+
+
+sig bodyP : (Xml) -> Pagelet
+fun bodyP(xml) {
+  (0, fun ([]) {xml}, fun (gen) {([], gen)})
+}
+
+sig plugP : (XmlContext, Pagelet) -> Pagelet
+fun plugP(context, (i, k, fs)) {
+  (i, fun (xs) {context(k(xs))}, fs)
+}
+
+sig formP : (Formlet(a), Handler(a)) -> Pagelet
+fun formP(f, h) {
+  (1,
+   fun ([x]) {x},
+   fun (gen) {
+     var ((x, c), gen) = runState(f, gen);
+     ([mkCheckedFormBuilder(x, c, h)], gen)
+   })
+}
+
+
+# end of pagelet stuff
 
 # Render formlet to a multipart form, which allows file-upload inputs
 # (using [inputFile])
@@ -793,7 +871,7 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-sig preludeOption : ((a,String), Bool) -> State(Names,(Xml, (((String) -> [a]) -> (String) -> [a])))
+sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, (((String) -> [a]) -> (String) -> [a])))
 fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
         if(selected) {
@@ -807,7 +885,7 @@ fun preludeOption ((a,b), selected) {
 }}
 
 
-sig preludeOptions : ([(a,String)], a) -> State(Names,(Xml, (String) -> [a]))
+sig preludeOptions : ([(a,String)], a) -> State(Gen,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
   switch (items) {
      case [] -> return ((<#/>, fun (_) { [] }))
@@ -819,7 +897,7 @@ fun preludeOptions(items, default) {
 }
 
 sig preludeMultiOptions
-     : ([(a,String,Bool)]) -> State(Names,(Xml, (String) -> [a]))
+     : ([(a,String,Bool)]) -> State(Gen,(Xml, (String) -> [a]))
 fun preludeMultiOptions(items) {
   switch (items) {
      case [] -> return ((<#/>, fun (_) { [] }))

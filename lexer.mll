@@ -176,6 +176,7 @@ let keywords = [
  "orderby"  , ORDERBY;
  "op"       , OP; 
  "page"     , PAGE;
+ "pagelet"  , PAGELET;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "server"   , SERVER; 
@@ -240,7 +241,9 @@ rule lex optable lexers nl = parse
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
+  | "{|"                                { Stack.push (lex optable lexers nl) lexers; LBRACEBAR }
   | '{'                                 { Stack.push (lex optable lexers nl) lexers; LBRACE }
+  | "|}"                                { Stack.pop lexers (* fall back *); BARRBRACE }
   | '}'                                 { Stack.pop lexers (* fall back *); RBRACE }
   | "<-"                                { LARROW }
   | "<--"                               { LLARROW }
@@ -305,6 +308,8 @@ and xmllex optable lexers nl = parse
   | "&amp;"                             { CDATA "&" } 
   | "&lt;"                              { CDATA "<" } 
   | "&gt;"                              { CDATA ">" } 
+  | "{|"                                { (* scan the expression, then back here *)
+                                          Stack.push (lex optable lexers nl) lexers; LBRACEBAR }
   | '{'                                 { (* scan the expression, then back here *)
                                           Stack.push (lex optable lexers nl) lexers; LBRACE }
   | "</" (def_qname as var) '>'         { (* fall back *)
