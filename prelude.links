@@ -567,6 +567,28 @@ fun formlets(fs) {
   }
 }
 
+sig mkForm : ((Env) -> Xml, Xml) -> Xml
+fun mkForm(cont, contents) {
+  <form enctype="application/x-www-form-urlencoded"
+        action="#" method="POST">
+    <input type="hidden"
+           name="_k"
+           value="{pickleCont(fun (_) {cont(environment())})}" />
+    {contents}
+  </form>
+}
+
+sig mkFormMultipart : ((Env) -> Xml, Xml) -> Xml
+fun mkFormMultipart(cont, contents) {
+  <form enctype="multipart/form-data"
+        action="#" method="POST">
+    <input type="hidden"
+           name="_k"
+           value="{pickleCont(fun (_) {cont(environment())})}" />
+    {contents}
+  </form>
+}
+
 # A formlet is rendered to become a form, and a handler applied, using the 
 # render function
 sig render : (Formlet (a), (a) -> Xml) -> Xml
@@ -579,13 +601,6 @@ fun render(frm, nextPage) {
        case (Nothing)  -> error("Validation used in formlet with no 'page' context")
      }
    }
-   fun mkForm(cont, contents) {
-     <form enctype="application/x-www-form-urlencoded"
-           l:action="{cont(environment())}" method="POST">
-       {contents}
-     </form>
-   }
-
    mkForm(continuation, xml)
 }
 
@@ -598,12 +613,6 @@ fun renderToo (form, nextPage, pageContext) {
        case (Just (v)) -> nextPage(v)
        case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
      }
-   }
-   fun mkForm(cont, contents) {
-     <form enctype="application/x-www-form-urlencoded"
-           l:action="{cont(environment())}" method="POST">
-       {contents}
-     </form>
    }
 
    fun cc(form) { exit(pageContext(form)) }
@@ -624,7 +633,7 @@ sig renderPagelet : (Pagelet) -> Xml
 fun renderPagelet((n, k, fs)) {
   var (ms, _) = fs(0);
   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-  k(map (fun (z) {z(zs)}, zs))
+  exit(k(map (fun (z) {z(zs)}, zs)))
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a)) -> (MultiXmlContext, RecForms, Int) -> Xml
@@ -637,23 +646,14 @@ sig renderPage : (([Xml]) -> Xml, [mu a.(([a]) -> Xml)]) -> Xml
 fun renderPage(k, zs) {
   k(map (fun (z) {z(zs)}, zs))
 }
-
-  
-   sig mkForm : ((Env) -> Xml, Xml) -> Xml
-   fun mkForm(cont, contents) {
-     <form enctype="application/x-www-form-urlencoded"
-           l:action="{cont(environment())}" method="POST">
-       {contents}
-     </form>
-   }
-   
+ 
    sig validate :
      (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int) -> (Env) -> Xml
    fun validate(c, h, k, zs, i) (env) {
      var (xml, v) = c(env);
      switch (v) {
-       case (Just(v)) -> h(v)
-       case (Nothing)  -> {
+       case Just(v) -> h(v)
+       case Nothing -> {
          fun z(zs) {
            mkForm(validate(c, h, k, zs, i), xml)
          }
@@ -722,14 +722,8 @@ fun renderMultipart(frm, nextPage) {
        case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
      }
    }
-   fun mkForm(cont, contents) {
-     <form enctype="multipart/form-data"
-           l:action="{cont(environment())}" method="POST">
-       {contents}
-     </form>
-   }
 
-   escape cc in mkForm(fun (env) { continuation(cc, env) }, xml)
+   escape cc in mkFormMultipart(fun (env) { continuation(cc, env) }, xml)
 }
 
 # Types of input we need to handle:

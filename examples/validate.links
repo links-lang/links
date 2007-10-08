@@ -1,7 +1,7 @@
 typename Date = [|Date:(Int,Int)|];
 typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 
-fun isInt (x) { x ~ /[0-9]+/ }
+fun isInt (x) { x ~ /-?[0-9]+$/ }
 
 var checker = isInt `errorMsg` fun (x) { x ++ " is not a natural number!"};
 
