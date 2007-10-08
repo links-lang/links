@@ -676,9 +676,9 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (`Client, datatype "(Event) -> Int",
   PURE);
 
-  (* getCharCode : (Event) -> Char *)
+  (* getCharCode : (Event) -> Int *)
   "getCharCode",
-  (`Client, datatype "(Event) -> Char",
+  (`Client, datatype "(Event) -> Int",
   PURE);
 
   "getInputValue",
