@@ -443,6 +443,7 @@ typename Handler (a) = (a) -> Xml;
 typename Collector (a) = (Env) -> a;
 typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
+typename XmlContext = (Xml) -> Xml;
 
 infixr 0 $;
 sig $ : ((a) -> b, a) -> b
@@ -458,35 +459,11 @@ op State (x) >>= f {
    State (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
 
-infixl 1 >>;
-sig >> : (State(a,b), State (a,c)) -> State (a,c)
-op m >> k {
-   m >>= fun (_) { k }
-}
-
 sig return : (a) -> State (b,a)
-fun return(a) {
-  State (fun (s) { (a,s)  })
-}
+fun return(a) { State (fun (s) { (a,s) }) }
 
-sig get : State (d,d)
-var get = State (fun (s) { (s,s) });
-
-sig put :  (a) -> State(a,())
-fun put(s) {
-  State (fun (_) { ((), s) })
-}
-
-
-sig fmap : ((a) -> b) -> (State (c,a)) -> State (c,b)
-fun fmap(f)(x) {
-  x >>= (fun (x) { return (f(x)) })
-} 
-
-sig lift2 : ((a,b) -> c) -> (State (d,a), State (d,b)) -> State(d,c)
-fun lift2(f)(x,y) {
-  x >>= (fun (x) { y >>= fun (y) { return(f(x,y)) } })
-}
+sig fmap : ((a) -> b, State (c,a)) -> State (c,b)
+fun fmap(f, x) { x >>= return `compose` f } 
 
 sig pure : (a) -> Formlet(a)
 fun pure(v) {
@@ -519,15 +496,9 @@ op m @@@ k {
 
 # x @@=> f
 #   Returns a formlet that post-processes the formlet x by running its
-#   output through f. (This definition is significantly more efficient
-#   than the simpler one below.)  (This is fmap for the Formlet functor.)
+#   output through f.   (This is fmap for the Formlet functor.)
+#   (This could be written more efficiently.)
 sig @@=> : (Formlet(a), (a) -> b) -> Formlet(b)
-#op m @@=> f {
-#  m >>= fun((x,c)) {
-#  return((x, fun (e) { f(c(e)) } )) }
-#}
-
-# Definition of @@=> in terms of @@@ and pure.
 op m @@=> f {
   m @@@ pure(f)
 }
@@ -538,7 +509,7 @@ fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 sig text : (String) -> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : ((Xml) -> Xml, Formlet (a)) -> Formlet (a)
+sig plug : (XmlContext, Formlet (a)) -> Formlet (a)
 op f `plug` m {
   m >>= fun((x,collector)){ return((f(x),
     fun (env) { var (xml,c) = collector (env); 
@@ -551,19 +522,12 @@ fun makeName(i) { "input_" ++ intToString(i) }
 sig nextName : State (Int,String)
 var nextName = State(fun (i) { (makeName(i), i+1) });
 
-## Alt. def. of nextName
-# var nextName = 
-#    get >>= fun (i) {
-#    var name = makeName(i);
-#    put (i+1) >>
-#    return (name)};
-
 sig formlets : ([Formlet (a)]) -> Formlet ([a])
 fun formlets(fs) { 
   switch (fs) {
-    case [] -> pure ([])
-    case [x] -> x @@=> fun (x) { [x] }
-    case (x::xs) -> x @@@ (formlets(xs) @@=> fun(ls)(l) { l::ls } )
+    case []    -> formlet <#/> yields []
+    case [x]   -> formlet <#>{x -> f}</#> yields [f]
+    case x::xs -> formlet <#>{x -> f}{formlets(xs) -> fs}</#> yields f::fs
   }
 }
 
@@ -604,7 +568,7 @@ fun render(frm, nextPage) {
    mkForm(continuation, xml)
 }
 
-sig renderToo : (Formlet (a), (a) -> Xml, (Xml) -> Xml) -> Xml
+sig renderToo : (Formlet (a), (a) -> Xml, XmlContext) -> Xml
 fun renderToo (form, nextPage, pageContext) {
    var ((xml, extractor),_) = runState(form,0);
    fun continuation(cc, env) {
@@ -620,8 +584,6 @@ fun renderToo (form, nextPage, pageContext) {
 }
 
 # Pagelet stuff
-
-typename XmlContext = (Xml) -> Xml;
 
 typename RecForms = [mu a.(([a]) -> Xml)];
 typename MultiXmlContext = ([Xml]) -> Xml;
@@ -646,23 +608,22 @@ sig renderPage : (([Xml]) -> Xml, [mu a.(([a]) -> Xml)]) -> Xml
 fun renderPage(k, zs) {
   k(map (fun (z) {z(zs)}, zs))
 }
- 
-   sig validate :
-     (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int) -> (Env) -> Xml
-   fun validate(c, h, k, zs, i) (env) {
-     var (xml, v) = c(env);
-     switch (v) {
-       case Just(v) -> h(v)
-       case Nothing -> {
-         fun z(zs) {
-           mkForm(validate(c, h, k, zs, i), xml)
-         }
-         var zs = substAt(zs, i, z);
-         exit(k(map (fun (z) {z(zs)}, zs)))
-       }
-     }
-   }
 
+sig validate :
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int) -> (Env) -> Xml
+fun validate(c, h, k, zs, i) (env) {
+  var (xml, v) = c(env);
+  switch (v) {
+    case Just(v) -> h(v)
+    case Nothing  -> {
+      fun z(zs) {
+        mkForm(validate(c, h, k, zs, i), xml)
+      }
+      var zs = substAt(zs, i, z);
+      exit(k(map (fun (z) {z(zs)}, zs)))
+    }
+  }
+}
 
 sig unitP : Pagelet
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
@@ -684,8 +645,6 @@ sig joinManyP : ([Pagelet]) -> Pagelet
 fun joinManyP(gs) {
   fold_left(joinP, unitP, gs)
 }
-
-
 
 sig bodyP : (Xml) -> Pagelet
 fun bodyP(xml) {
@@ -722,7 +681,6 @@ fun renderMultipart(frm, nextPage) {
        case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
      }
    }
-
    escape cc in mkFormMultipart(fun (env) { continuation(cc, env) }, xml)
 }
 
@@ -747,7 +705,6 @@ fun mkInput(mkXml,mkFilledXml) {
               fun (env) { var v = assoc (name, env);
                           (mkFilledXml(name,v), pureE (v)) })))}
 }
-
 
 sig input : Formlet (String)
 var input = mkInput(fun(name) { <input name="{name}"/> },
@@ -779,15 +736,16 @@ var inputFile = mkInput(fun (name) { <input name="{name}" type="file" /> },
                         fun (name,_) { <input name="{name}" type="file" /> });
 
 sig inputInt : Formlet(Int)
-var inputInt = input @@=> stringToInt;
+var inputInt = formlet <#>{input -> x}</#> yields stringToInt(x);
 
 sig inputIntValue : (Int) -> Formlet(Int)
-fun inputIntValue(value) {
-  inputValue(intToString(value)) @@=> stringToInt
+fun inputIntValue(v) {
+  formlet <#>{inputValue(intToString(v)) -> x}</#> 
+  yields stringToInt(x)
 }
 
 sig inputFloat : Formlet(Float)
-var inputFloat = input @@=> stringToFloat;
+var inputFloat = formlet <#>{input -> x}</#> yields stringToFloat(x);
 
 sig textarea : (String) -> Formlet (String)
 fun textarea(value) {
@@ -846,7 +804,7 @@ var checkbox =
 #   A default selection is compulsory as recommended by the HTML spec.
 #   We should probably do the same for 'choice' (drop-down menus) as well.
 #
-# It is the users responsibility to ensure that layout produces Xml that
+# It is the user's responsibility to ensure that layout produces Xml that
 # uses each radio button exactly once and does not introduce any other input
 # elements.
 #
