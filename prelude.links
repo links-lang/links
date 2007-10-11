@@ -473,7 +473,7 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe (((a) -> b)), Maybe (a)) -> Maybe (b)
+sig applyE : (Maybe ((a) -> b), Maybe (a)) -> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -482,7 +482,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet (((a)-> b))) -> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a)-> b)) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
@@ -823,7 +823,7 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, (((String) -> [a]) -> (String) -> [a])))
+sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, ((String) -> [a]) -> (String) -> [a]))
 fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
         if(selected) {

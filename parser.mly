@@ -636,11 +636,11 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 
-| CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN datatype_list RPAREN                      { TypeApplication ($1, $3) }
 
-primary_datatype_list:
-| primary_datatype                                             { [$1] }
-| primary_datatype COMMA primary_datatype_list                 { $1 :: $3 }
+datatype_list:
+| datatype                                                     { [$1] }
+| datatype COMMA datatype_list                                 { $1 :: $3 }
 
 vrow:
 | vfields                                                      { $1 }
