@@ -621,6 +621,10 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (`Client, datatype "(DomNode, String, String) -> String",
   IMPURE);
 
+  "domSetWinDocAttribute",
+  (`Client, datatype "(String, String) -> String",
+  IMPURE);
+
   (* Section:  Navigation for DomNodes *)
   "parentNode",
   (`Client, datatype "(DomNode) -> DomNode",
@@ -693,6 +697,27 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (* # stopEvent : ??? *)
   (* # stopPropagation : ??? *)
   (* # preventDefault : ??? *)
+  (* Extended functionality *)
+  "getModifiers",
+  (`Client, datatype "(Event) -> [Char]",
+  PURE);
+
+  "getElementsByTagName",
+  (`Client, datatype "(String) -> [DomNode]",
+  PURE);
+
+  "getContentDocument",
+  (`Client, datatype "(DomNode) -> (DomNode)",
+  PURE);
+
+  "execBold",
+  (`Client, datatype "(DomNode) -> ()",
+   IMPURE);
+
+  "execInsertImage",
+  (`Client, datatype "(DomNode, String) -> ()",
+   IMPURE);
+
 
   (* Cookies *)
   "setCookie",
@@ -1005,6 +1030,25 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    (`Server (p1 (fun v -> broken_unmarshal_value (unbox_string v))),
     datatype "(String) -> a",
   IMPURE));
+
+  (* Tom's fns *)
+ 
+  (* md5 hashing *)
+  "md5",
+  (p1 (fun input ->
+        let input = charlist_as_string input in
+        (box_string (Digest.to_hex(Digest.string(input))))),
+  datatype "(String) -> String",
+  PURE);
+
+  (* Get pseudo-random number seeded by current time (not portable..) *)
+  "getRandom",
+  (p1 (fun _ ->
+        let void = Random.init(int_of_float(Unix.time())) in
+        (box_float(Random.float(1.0)))),
+  datatype "() -> Float",
+  PURE);
+
 ]
 
 let impl : located_primitive -> primitive option = function
