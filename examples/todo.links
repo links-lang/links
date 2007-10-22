@@ -27,5 +27,5 @@ fun todo(items) client {
    </html>
 }
 
-pagelet
+page
  <#>{todo(["add items to todo list"])}</#>

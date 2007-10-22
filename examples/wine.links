@@ -724,5 +724,5 @@ fun main() {
   search_results(-1, -1, 1, 1, 0)
 }
 
-pagelet
+page
   <#>{main()}</#>

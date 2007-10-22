@@ -1,6 +1,6 @@
 fun f(n) client {
   var n = n + 1 - 1;
-  pagelet
+  page
    <body>
      on client   
      <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
@@ -9,7 +9,7 @@ fun f(n) client {
 }
 
 fun g(n) server {
-  pagelet
+  page
    <body>
      on server
      <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />

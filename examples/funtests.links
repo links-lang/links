@@ -36,7 +36,7 @@ fun go(c::rest) client {
 ;
 }
 
-pagelet
+page
  <html>
    <form l:onsubmit="{go(value)}">  <input l:name="value" value=""/>
    <input type="submit"/>

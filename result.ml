@@ -192,7 +192,6 @@ type primitive_value = [
 | `Float of float
 | `Int of num
 | `XML of xmlitem
-| `Page of xmlitem list
 | `NativeString of string
 ]  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
@@ -202,7 +201,6 @@ let type_of_primitive : primitive_value -> datatype = function
   | `Float _ -> `Primitive `Float
   | `Char _ -> `Primitive `Char
   | `XML _ -> `Primitive `XmlItem
-  | `Page _ -> `Primitive `Abstract
   | `Database _ -> `Primitive `DB
   | `Table _ -> `Primitive `Abstract
   | `NativeString _ ->`Primitive `NativeString
@@ -376,7 +374,6 @@ and string_of_primitive : primitive_value -> string = function
   | `Float value -> string_of_float value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
-  | `Page xmlitems -> mapstrcat "" string_of_item xmlitems
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
   | `NativeString s -> "\"" ^ s ^ "\""

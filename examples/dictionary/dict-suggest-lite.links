@@ -43,7 +43,7 @@ var handler = spawn {
  receiver()
 };
 
-pagelet
+page
  <html>
   <head>
    <title>Dictionary suggest</title>

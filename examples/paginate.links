@@ -34,7 +34,7 @@ fun showPage(n, c) {
  </html>
 }
 
-pagelet
+page
  <html>
   <head><title>Dictionary browser</title></head>
   <body>

@@ -79,7 +79,7 @@ fun main() client {
     listen()
   };
 
-  pagelet
+  page
    <html>
    <head>
     <style>

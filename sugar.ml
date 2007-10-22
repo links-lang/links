@@ -973,9 +973,8 @@ module Desugarer =
              | `TextNode _ -> empty
              | `FormletPlacement (e1, e2)
              | `Formlet (e1, e2) -> flatten [phrase e1; phrase e2]
-             | `PageletPlacement e -> phrase e
+             | `PagePlacement e -> phrase e
              | `Page e -> phrase e
-             | `Pagelet e -> phrase e
              | `FormBinding (e, p) -> flatten [phrase e; ptv p]
          in binding s
      and get_pattern_type_vars (p, _ : ppattern) = (* fold *)
@@ -1437,117 +1436,48 @@ module Desugarer =
 
            | `Formlet (formExpr, formHandler) ->
                fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
-           | `Page e -> 
-            (*
-                  [[ page X[{f1 => h1}, ..., {fj => hj}] ]]
-                ==
-                  var (x1, c1, _) = f1(0);
-                   ...
-                  var (xj, cj, _) = fj(0);
-            
-                  # sig zi : mu a.([a]) -> Xml
-            
-                  fun z1(zs) {
-                    mkForm({validate(c1, h1, X, zs, 0)}, x1)
-                  }
-                   ...
-                  fun zj(zs) {
-                    mkForm({validate(cj, hj, X, zs, j-1)}, xj)
-                  }
-            
-                  var zs = [z1, ..., zj];
-            
-                  xmlToPage(renderPage(X[ ]*, zs)) 
-            *)
-               let var v = `Var v, pos' in
-               let int n = `Constant (`Int (Num.num_of_int n)), pos' in
-               let xml_context, formlets = extract_placements e in
-               let bindings : ((string * string) * binding) list = 
-                 mapIndex
-                   (fun (f, _) i ->
-                      let xi = gensym ~prefix:(Printf.sprintf "x%d" i) ()
-                      and ci = gensym ~prefix:(Printf.sprintf "c%d" i) () in
-                        (xi, ci), (`Val ((`Tuple [(`Tuple [`Variable xi, pos';
-                                                           `Variable ci, pos'], pos');
-                                                  `Any, pos'], pos'),
-                                         (`FnAppl (var "runState", [f;int 0]), pos'),
-                                         `Unknown,
-                                         None), pos'))
-                   formlets in
-               let ctxt_var = gensym ~prefix:"xml_context" () in
-               let context : binding =
-                 `Val ((`Variable ctxt_var, pos'), xml_context, `Unknown, None), pos' in
-               let z_funs : (string * binding) list = 
-                 mapIndex
-                   (fun ((xi, ci), _) i ->
-                      let z = gensym ~prefix:(Printf.sprintf "z%d" i) ()
-                      and zs = gensym ~prefix:"zs" () in
-                      let body = 
-                        `FnAppl (var "mkForm",
-                                 [`FnAppl (var "validate",
-                                           [var ci; snd (List.nth formlets i);  
-                                            var ctxt_var; var zs; int i]), pos';
-                                  var xi]), pos' in
-                        z, (`Fun (z, ([[`Variable zs, pos']], body), `Unknown, None), pos'))
-                   bindings in
-               let zs : string * binding = 
-                 let zs = gensym ~prefix:"zs" () in
-                   zs, (`Val ((`Variable zs, pos'),
-                              (`ListLit (map (fst ->- var) z_funs), pos'),
-                              `Unknown, None), 
-                        pos')
-               in
-               let r = 
-                 desugar (`Block
-                            (context :: map snd bindings @ map snd z_funs @ [snd zs],
-                             (`FnAppl (var "xmlToPage", 
-                                       [`FnAppl (var "renderPage",
-                                                 [var ctxt_var;
-                                                  var (fst zs)]), pos']), pos')), pos') in
-                 prerr_endline (Syntax.string_of_expression r);
-                 r
-           | `Pagelet e ->               
-               let rec desugar_pagelet : phrase -> phrase =
+           | `Page e ->               
+               let rec desugar_page : phrase -> phrase =
                  fun (phrase, pos) ->
                    let rec is_raw (phrase, pos) =
                      match phrase with
                        | `TextNode _
                        | `Block _ -> true
                        | `FormletPlacement _
-                       | `PageletPlacement _ -> false
+                       | `PagePlacement _ -> false
                        | `Xml (_, _, _, children) ->
                            List.for_all is_raw children
                        | _ ->
-                           raise (ASTSyntaxError (lookup_pos pos, "Invalid element in pagelet literal")) in
+                           raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal")) in
 
-                   let desugar_pagelets : phrase list -> phrase = fun children ->
-                     (`FnAppl ((`Var "joinManyP", pos), [`ListLit (map desugar_pagelet children), pos]), pos) in
+                   let desugar_pages : phrase list -> phrase = fun children ->
+                     (`FnAppl ((`Var "joinManyP", pos), [`ListLit (map desugar_page children), pos]), pos) in
                    let dp : phrasenode -> phrase = function
                      | e when is_raw (e, pos) ->
                          (`FnAppl ((`Var "bodyP", pos), [e, pos]), pos)
                      | `FormletPlacement (formlet, handler) ->
                          (`FnAppl ((`Var "formP", pos), [formlet; handler]), pos)
-                     | `PageletPlacement (pagelet) ->
-                         pagelet
+                     | `PagePlacement (page) ->
+                         page
                      | `Xml _ as x when LAttrs.has_lattrs x ->
-                         desugar_pagelet (LAttrs.replace_lattrs (x, pos))
+                         desugar_page (LAttrs.replace_lattrs (x, pos))
                      | `Xml ("#", [], _, children) ->
-                         desugar_pagelets children
+                         desugar_pages children
                      | `Xml (name, attrs, dynattrs, children) ->
                          let x = gensym ~prefix:"xml" () in
                            (`FnAppl ((`Var "plugP", pos),
                                      [(`FunLit([[`Variable x, pos]],
                                                (`Xml (name, attrs, dynattrs, [`Block ([], (`Var x, pos)), pos]), pos)), pos);
-                                      desugar_pagelets children
+                                      desugar_pages children
                                      ]), pos)
                      | _ ->
-                         raise (ASTSyntaxError (lookup_pos pos, "Invalid element in pagelet literal"))
+                         raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal"))
                    in
                      dp phrase
                in
-                 desugar (desugar_pagelet e)
+                 desugar (desugar_page e)
            | `FormletPlacement _
-           | `PageletPlacement _
+           | `PagePlacement _
            | `FormBinding _
            | `Regex _ -> assert false
      and extract_placements : phrase -> phrase * (phrase * phrase) list =

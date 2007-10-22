@@ -23,7 +23,7 @@ fun run ((action=action, l=l, r=r)) {
    </html>
 }
 
-pagelet
+page
   <html>
     <body>
       {f => run}

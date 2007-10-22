@@ -83,7 +83,7 @@ fun iterate(colour) client {
 
 var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
-pagelet
+page
  <html>
   <body>
    <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"

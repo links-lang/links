@@ -268,7 +268,7 @@ fun distinct(xs) {
     receiver("", "", None)
   };
 
-pagelet
+page
   <html>
    {header("Citations")}
    <body>

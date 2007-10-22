@@ -74,7 +74,6 @@ type primitive_value =
     | `Float of float
     | `Int of Num.num
     | `XML of xmlitem 
-    | `Page of xmlitem list
     | `NativeString of string
     ]
 type result = [ primitive_value

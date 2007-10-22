@@ -22,7 +22,7 @@ fun showAnswer(answer) client {
 	)
 }
 
-pagelet
+page
  <html>
   <body>
    <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">

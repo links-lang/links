@@ -150,9 +150,8 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
 | `Page of 'phrase
-| `Pagelet of 'phrase
 | `FormletPlacement of ('phrase * 'phrase)
-| `PageletPlacement of ('phrase)
+| `PagePlacement of ('phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
     deriving (Show)
 
@@ -232,8 +231,7 @@ struct
     | `FormBinding (p, _)
     | `Projection (p, _)
     | `Page p
-    | `Pagelet p
-    | `PageletPlacement p
+    | `PagePlacement p
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit ps

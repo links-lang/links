@@ -44,5 +44,5 @@ fun lookupFactorials(n) server {
   [(row.i, row.f)]
 }
 
-pagelet
+page
   <#>{request("")}</#>

@@ -43,7 +43,7 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-pagelet
+page
  <html>
     <h1>Date:</h1>
     {render(travelForm, showBookingInformation)}

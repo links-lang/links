@@ -38,7 +38,7 @@ fun completions(prefixx) server {
 }
 
 fun main() {
- pagelet
+ page
   <html>
    <head>
     <title>Dictionary suggest</title>

@@ -79,9 +79,8 @@ struct
     | `Regex r -> is_generalisable_regex r
     | `Iteration _ (* could do a little better in some of these cases *)
     | `Page _
-    | `Pagelet _
     | `FormletPlacement _
-    | `PageletPlacement _
+    | `PagePlacement _
     | `UnaryAppl _
     | `FormBinding _
     | `InfixAppl _
@@ -835,9 +834,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
         | `Page _ -> assert false
-        | `Pagelet _ -> assert false
         | `FormletPlacement _ -> assert false
-        | `PageletPlacement _ -> assert false
+        | `PagePlacement _ -> assert false
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in

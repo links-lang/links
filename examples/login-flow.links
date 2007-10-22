@@ -2,7 +2,7 @@
 var noMsg = "";
 
 fun login_widget(msg, return) {
-   pagelet
+   page
     <html>
       <body>
       <div class="error">{stringToXml(msg)}</div>
@@ -56,7 +56,7 @@ fun logoutLink(target) {
 fun main() {
  var user = get_user(noMsg);
 
- pagelet
+ page
   <html>
     <body>
       <div>Thanks for logging in, {stringToXml(user)}.</div>

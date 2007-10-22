@@ -46,7 +46,7 @@ fun draggableList(id, items)
 
 }
 
-pagelet
+page
  <html>
  <body>
  <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>

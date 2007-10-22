@@ -8,7 +8,7 @@ fun change() client {
   )
 }
 
-pagelet
+page
  <html>
  <body>
  <a l:onclick="{change()}">change</a>

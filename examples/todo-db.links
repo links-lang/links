@@ -31,5 +31,5 @@ fun remove(name) server {
  showList()
 }
 
-pagelet
+page
  <#>{showList()}</#>

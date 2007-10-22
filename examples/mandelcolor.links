@@ -166,7 +166,7 @@ fun main() client {
   goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512);
 
   # insane hack
-  pagelet <#/>
+  page <#/>
 }
 
 main()

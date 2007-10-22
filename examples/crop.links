@@ -119,7 +119,7 @@ fun makeCroppingFrame(left, top, width, height) client{
   </div>
 }
 
-pagelet
+page
  <body>
 
    <h1> Home of Robert Louis Stevenson </h1>
