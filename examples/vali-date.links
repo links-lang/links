@@ -142,6 +142,7 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep) as trav
 
 sig showForm : (TravelRecord) -> Xml
 fun showForm(travelRecord) {
+ pagelet
   <html>
     <h1>Dates with defaults and validation</h1>
     {render(travelForm(travelRecord), showBookingInformation)}

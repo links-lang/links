@@ -38,24 +38,25 @@ fun completions(prefixx) server {
 }
 
 fun main() {
- <html>
-  <head>
-   <title>Dictionary suggest</title>
-   <style>
-     input {{ width:500px }}
-     #suggestions {{ text-align:left; width:500px;
-                     background-color:#ccccff }}
-   </style>
-  </head>
- <body>
-  <h1>Dictionary suggest</h1>
-  <form l:onkeyup="{suggest(prefixx)}">
-   <input type="text" l:name="prefixx"
-          class="input" autocomplete="off"/>
-  </form>
-  <div id="suggestions" class="suggestions"/>
-  </body>
- </html>
+ pagelet
+  <html>
+   <head>
+    <title>Dictionary suggest</title>
+    <style>
+      input {{ width:500px }}
+      #suggestions {{ text-align:left; width:500px;
+                      background-color:#ccccff }}
+    </style>
+   </head>
+  <body>
+   <h1>Dictionary suggest</h1>
+   <form l:onkeyup="{suggest(prefixx)}">
+    <input type="text" l:name="prefixx"
+           class="input" autocomplete="off"/>
+   </form>
+   <div id="suggestions" class="suggestions"/>
+   </body>
+  </html>
 }
 
 main()

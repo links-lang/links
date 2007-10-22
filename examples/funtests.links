@@ -36,9 +36,10 @@ fun go(c::rest) client {
 ;
 }
 
-<html>
-  <form l:onsubmit="{go(value)}">  <input l:name="value" value=""/>
-  <input type="submit"/>
-  </form>
-  <div id="stuff"/>
-</html>
+pagelet
+ <html>
+   <form l:onsubmit="{go(value)}">  <input l:name="value" value=""/>
+   <input type="submit"/>
+   </form>
+   <div id="stuff"/>
+ </html>

@@ -43,17 +43,18 @@ var handler = spawn {
  receiver()
 };
 
-<html>
- <head>
-  <title>Dictionary suggest</title>
- </head>
- <body>
-  <h1>Dictionary suggest</h1>
-  <form l:onkeyup="{handler!Suggest(pre)}">
-   <input type="text" l:name="pre"
-          autocomplete="off"/>
-  </form>
-  <div id="suggestions"/>
- </body>
-</html>
+pagelet
+ <html>
+  <head>
+   <title>Dictionary suggest</title>
+  </head>
+  <body>
+   <h1>Dictionary suggest</h1>
+   <form l:onkeyup="{handler!Suggest(pre)}">
+    <input type="text" l:name="pre"
+           autocomplete="off"/>
+   </form>
+   <div id="suggestions"/>
+  </body>
+ </html>
 

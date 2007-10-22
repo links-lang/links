@@ -43,7 +43,8 @@ fun scribble() {
   ()
 }
 
-<html><body>
-  <div id="body"/>
-  <a l:onclick="{scribble()}">draw</a>
-</body></html>
+pagelet
+ <html><body>
+   <div id="body"/>
+   <a l:onclick="{scribble()}">draw</a>
+ </body></html>

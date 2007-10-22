@@ -1506,22 +1506,31 @@ module Desugarer =
                                                   var (fst zs)]), pos']), pos')), pos') in
                  prerr_endline (Syntax.string_of_expression r);
                  r
-           | `Pagelet e ->
+           | `Pagelet e ->               
                let rec desugar_pagelet : phrase -> phrase =
                  fun (phrase, pos) ->
+                   let rec is_raw (phrase, pos) =
+                     match phrase with
+                       | `TextNode _
+                       | `Block _ -> true
+                       | `FormletPlacement _
+                       | `PageletPlacement _ -> false
+                       | `Xml (_, _, _, children) ->
+                           List.for_all is_raw children
+                       | _ ->
+                           raise (ASTSyntaxError (lookup_pos pos, "Invalid element in pagelet literal")) in
+
                    let desugar_pagelets : phrase list -> phrase = fun children ->
                      (`FnAppl ((`Var "joinManyP", pos), [`ListLit (map desugar_pagelet children), pos]), pos) in
                    let dp : phrasenode -> phrase = function
-                     | `TextNode s ->
-                         (`FnAppl ((`Var "bodyP", pos),
-                                   [`FnAppl ((`Var "stringToXml", pos),
-                                             [`Constant (`String s), pos]), pos]), pos)
-                     | `Block _ as b ->
-                         (`FnAppl ((`Var "bodyP", pos), [b, pos]), pos)
+                     | e when is_raw (e, pos) ->
+                         (`FnAppl ((`Var "bodyP", pos), [e, pos]), pos)
                      | `FormletPlacement (formlet, handler) ->
                          (`FnAppl ((`Var "formP", pos), [formlet; handler]), pos)
                      | `PageletPlacement (pagelet) ->
                          pagelet
+                     | `Xml _ as x when LAttrs.has_lattrs x ->
+                         desugar_pagelet (LAttrs.replace_lattrs (x, pos))
                      | `Xml ("#", [], _, children) ->
                          desugar_pagelets children
                      | `Xml (name, attrs, dynattrs, children) ->

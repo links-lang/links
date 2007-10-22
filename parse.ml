@@ -180,6 +180,13 @@ let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = {
 let program : (Syntax.untyped_program,
                (Sugartypes.binding list * Sugartypes.phrase option)) grammar = {
   desugar = (fun code (defs, body) ->
+               let body =
+                 if Settings.get_value Basicsettings.web_mode then
+                   opt_map (fun body ->
+                              let _, pos = body in
+                                `FnAppl ((`Var "renderPagelet", pos), [body]), pos) body
+                 else
+                   body in
                let pos = lookup code in
                  Syntax.Program
                    (Sugar.desugar_definitions pos defs,

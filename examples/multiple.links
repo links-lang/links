@@ -12,7 +12,8 @@ fun withSubmitButton(f) {
     v
 }
 
-<html>
-   <h1>Multiple</h1>
-   Enter numbers: {render(inputInt, enterNumbers)}
-</html>
+pagelet
+ <html>
+    <h1>Multiple</h1>
+    Enter numbers: {render(inputInt, enterNumbers)}
+ </html>

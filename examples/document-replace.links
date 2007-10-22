@@ -8,8 +8,9 @@ fun change() client {
   )
 }
 
-<html>
-<body>
-<a l:onclick="{change()}">change</a>
-</body>
-</html>
+pagelet
+ <html>
+ <body>
+ <a l:onclick="{change()}">change</a>
+ </body>
+ </html>

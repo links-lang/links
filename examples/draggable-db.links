@@ -79,18 +79,19 @@ fun main() client {
     listen()
   };
 
-  <html>
-  <head>
-   <style>
-     .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
-     .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
-   </style>
-  </head>
-  <body>
-    <h2>Great Bears</h2>{bears}
-    <input type="button" value="load" l:onclick="{marshaller!Load}"/>
-    <input type="button" value="save" l:onclick="{marshaller!Save}"/>
-  </body></html>
+  pagelet
+   <html>
+   <head>
+    <style>
+      .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
+      .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
+    </style>
+   </head>
+   <body>
+     <h2>Great Bears</h2>{bears}
+     <input type="button" value="load" l:onclick="{marshaller!Load}"/>
+     <input type="button" value="save" l:onclick="{marshaller!Save}"/>
+   </body></html>
 }
 
 main()

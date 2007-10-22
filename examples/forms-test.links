@@ -62,4 +62,5 @@ fun renderer (formData) {
    <#> Order Cancelled. Thanks for visiting! </#>
 }
 
-renderMultipart(theFormlet, renderer)
+pagelet
+ <#>{renderMultipart(theFormlet, renderer)}</#>

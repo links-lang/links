@@ -595,7 +595,7 @@ sig renderPagelet : (Pagelet) -> Xml
 fun renderPagelet((n, k, fs)) {
   var (ms, _) = fs(0);
   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-  exit(k(map (fun (z) {z(zs)}, zs)))
+  k(map (fun (z) {z(zs)}, zs))
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a)) -> (MultiXmlContext, RecForms, Int) -> Xml

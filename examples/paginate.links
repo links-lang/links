@@ -17,8 +17,9 @@ fun query(n,c) {
  )
 }
 
-fun page(n, c) {
+fun showPage(n, c) {
  var title = stringToXml("Results: page "++ intToString(n));
+
  <html>
   <head><title>{title}</title></head>
   <body>
@@ -27,19 +28,20 @@ fun page(n, c) {
     {for (var result <- query(n, c))
     <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
    </dl>
-   {if (n <> 1) <a l:href="{page(n-1,c)}">previous</a> else <span/>}
-   <a l:href="{page(n+1,c)}">next</a>
+   {if (n <> 1) <a l:href="{showPage(n-1,c)}">previous</a> else <span/>}
+   <a l:href="{showPage(n+1,c)}">next</a>
   </body>
  </html>
 }
 
-<html>
- <head><title>Dictionary browser</title></head>
- <body>
-  <h1>Dictionary browser</h1>
-   <ul>
-    {for (var c <- "abcdefghijklmnopqrstuvwxyz")
-    <li><a l:href="{page(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
-   </ul>
- </body>
-</html>
+pagelet
+ <html>
+  <head><title>Dictionary browser</title></head>
+  <body>
+   <h1>Dictionary browser</h1>
+    <ul>
+     {for (var c <- "abcdefghijklmnopqrstuvwxyz")
+     <li><a l:href="{showPage(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
+    </ul>
+  </body>
+ </html>

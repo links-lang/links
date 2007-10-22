@@ -119,27 +119,27 @@ fun makeCroppingFrame(left, top, width, height) client{
   </div>
 }
 
+pagelet
+ <body>
 
-<body>
+   <h1> Home of Robert Louis Stevenson </h1>
 
-  <h1> Home of Robert Louis Stevenson </h1>
+   <div>
+     <div id="picture-frame">
 
-  <div>
-    <div id="picture-frame">
+       <img src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
+       { makeCroppingFrame(16, 112, 32, 32) }
+     </div>
+   </div>
 
-      <img src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
-      { makeCroppingFrame(16, 112, 32, 32) }
-    </div>
-  </div>
+   Drag the cropping frame around the image; drag the wee handles in
+   the corners to resize it.
 
-  Drag the cropping frame around the image; drag the wee handles in
-  the corners to resize it.
+   <div id="crop-preview-frame" 
+        style="border: 1px solid black; overflow: hidden; 
+               width: 32; height: 32">
+     <img id="crop-preview" style="display: block;"
+          src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
+   </div>
 
-  <div id="crop-preview-frame" 
-       style="border: 1px solid black; overflow: hidden; 
-              width: 32; height: 32">
-    <img id="crop-preview" style="display: block;"
-         src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
-  </div>
-
-</body>
+ </body>

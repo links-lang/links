@@ -733,7 +733,7 @@ struct
                             location,
                             fun v -> eval_defs (Env.extend env [f] [v]) defss rest)
             | Define (x, e, _, _) ->
-                Debug.print("compiling def: " ^ x);
+(*                 Debug.print("compiling def: " ^ x); *)
                 I.comp (make_global_info (node_datatype e, x),
                         eval env e,
                         fun v -> eval_defs (Env.extend env [x] [v]) defss rest)

@@ -83,15 +83,16 @@ fun iterate(colour) client {
 
 var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
-<html>
- <body>
-  <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"
-	style="display: block">
-    {for (var colour <- colours)
-       <option>{stringToXml(colour)}</option>}
-  </select>
-  <div id="body"/>
- </body>
-</html>
+pagelet
+ <html>
+  <body>
+   <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"
+ 	style="display: block">
+     {for (var colour <- colours)
+        <option>{stringToXml(colour)}</option>}
+   </select>
+   <div id="body"/>
+  </body>
+ </html>
 
 

@@ -163,7 +163,10 @@ fun main() client {
   <html><body>
     <div id="p0x0" />
   </body></html>);
-  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512)
+  goMandelMadness(-1 * realUnit, -1 * realUnit, realUnit, realUnit, 512);
+
+  # insane hack
+  pagelet <#/>
 }
 
 main()

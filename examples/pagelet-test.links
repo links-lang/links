@@ -1,6 +1,6 @@
 fun isInt (x) { x ~ /-?[0-9]+$/ }
 
-var checker = isInt `errorMsg` fun (x) { x ++ " is not a natural number!"};
+var checker = isInt `errorMsg` fun (x) { x ++ " is not an integer!"};
 
 var checkedInt = 
    formlet <#>{input `satisfies` checker -> n}</#> yields stringToInt(n);
@@ -24,7 +24,6 @@ fun intForm(label) {
 var x = intForm("x");
 var y = intForm("y");
 
-renderPagelet(
 pagelet
  <html>
   <head><title>Pagelet test</title></head>
@@ -33,5 +32,4 @@ pagelet
    {y.f => y.h}
   </body>
  </html>
-)
 

@@ -1,9 +1,8 @@
 fun request(s) client {
- replaceDocument(
   <html>
    <body>
     <h1>Please type a number</h1>
-     <form l:onsubmit="{response(t)}" l:onkeyup="{request(t)}">
+     <form l:onsubmit="{response(t)}" l:onkeyup="{replaceDocument(request(t))}">
       <input type="text" value="{s}" l:name="t"/>
       {
       if (s ~ /^[0-9]+/)
@@ -14,7 +13,6 @@ fun request(s) client {
      </form>
     </body>
   </html>
- )
 }
 
 fun response(s) client {
@@ -46,4 +44,5 @@ fun lookupFactorials(n) server {
   [(row.i, row.f)]
 }
 
-request("")
+pagelet
+  <#>{request("")}</#>

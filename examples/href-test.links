@@ -1,18 +1,20 @@
 fun f(n) client {
   var n = n + 1 - 1;
-  <body>
-    on client   
-    <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
-    <a l:href="{g(n+1)}">inc server {intToXml(n)}</a>
-  </body>
+  pagelet
+   <body>
+     on client   
+     <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
+     <a l:href="{g(n+1)}">inc server {intToXml(n)}</a>
+   </body>
 }
 
 fun g(n) server {
-  <body>
-    on server
-    <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
-    <a l:href="{g(n+1)}">inc server {intToXml(n)}</a>
-  </body>
+  pagelet
+   <body>
+     on server
+     <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
+     <a l:href="{g(n+1)}">inc server {intToXml(n)}</a>
+   </body>
 }
 
 f(0)

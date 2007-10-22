@@ -22,13 +22,14 @@ fun showAnswer(answer) client {
 	)
 }
 
-<html>
- <body>
-  <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">
-   <input type="text" l:name="n"/>
-   <input type="submit"/>
-  </form>
-  <div id="bar"/>
- </body>
-</html>
+pagelet
+ <html>
+  <body>
+   <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">
+    <input type="text" l:name="n"/>
+    <input type="submit"/>
+   </form>
+   <div id="bar"/>
+  </body>
+ </html>
 

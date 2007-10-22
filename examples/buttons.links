@@ -23,5 +23,10 @@ fun run ((action=action, l=l, r=r)) {
    </html>
 }
 
-render(f, run)
+pagelet
+  <html>
+    <body>
+      {f => run}
+    </body>
+  </html>
 
