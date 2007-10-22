@@ -28,18 +28,18 @@ type baseexpr = [
 type valueexpr = [
 |`Var of name
 | literal] deriving (Show)
+type sorting = [`Asc of (string * string) | `Desc of (string * string)]
+    deriving (Show, Pickle)
 type simpleExpr = [
 |`For    of pat * simpleExpr * simpleExpr
 |`Where  of baseexpr * simpleExpr
 |`Let    of name * baseexpr * simpleExpr
-|`Table  of (name * Types.datatype) list * string * string
+|`Table  of (name * Types.datatype) list * string * string * sorting list
 |`Return of baseexpr]
 type expr = [
 |`Take of num * expr
 |`Drop of num * expr
 | simpleExpr]
-type sorting = [`Asc of (string * string) | `Desc of (string * string)]
-    deriving (Show, Pickle)
 
 type field = {table:name; column:name; ty:Types.datatype} deriving (Show, Pickle)
 type sqlexpr = [

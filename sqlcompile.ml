@@ -394,13 +394,13 @@ struct
 	     cond = [`True];
 	     most = Inf;
 	     from = Int 0;
-             sort = _},
+             sort = sort},
             ty ->
               let fields = (match ty with
                               | `Application ("List", [`Record (fields,_)]) -> fields
                               | s -> failwith ("Unexpected table type in:" ^
                                                Types.Show_datatype.show s)) in
-                `Table(present_fields fields, th_var, table_alias)
+                `Table(present_fields fields, th_var, table_alias, sort)
           | _ -> 
               Debug.if_set_l debug(lazy "could not compile table query");
               uncompilable e
@@ -485,6 +485,14 @@ struct
          `F {f with table=assoc t substs}
       |`F _ as f -> f
 
+  let rec subst_tabsort substs : sorting -> sorting =
+    function
+      | `Asc (t, f) when mem_assoc t substs ->
+          `Asc (assoc t substs, f)
+      | `Desc (t, f) when mem_assoc t substs ->
+          `Desc (assoc t substs, f)
+      | s -> s          
+
   let rec evalb env : baseexpr -> sqlexpr = function
     | `Op (op, l, r) -> `Op (op, evalb env l, evalb env r)
     | `Not b -> `Not (evalb env b)
@@ -505,7 +513,8 @@ struct
         let tab_alias_map = map (fun (_,oldas,newas) -> (oldas,newas)) tab_map in
         let q1 = {q1 with cols = map (fun (expr, alias) -> (subst_tabnames tab_alias_map expr, alias)) q1.cols
                         ; tabs = map (fun (t,_,newas) -> `TableVar(t, newas)) tab_map
-                        ; cond = map (subst_tabnames tab_alias_map) q1.cond} in
+                        ; cond = map (subst_tabnames tab_alias_map) q1.cond
+                        ; sort = map (subst_tabsort tab_alias_map) q1.sort} in
         (* (substitute expressions: see JOIN rule) *)
         let env' = (fold_right
                       (fun (l,v) -> Env.binde v (Auxiliary.find_output_column q1 l))
@@ -517,20 +526,20 @@ struct
             cond = q1.cond @ q2.cond;
             most = (match q1.most, q2.most with Inf, Inf -> Inf | _ -> assert false);
             from = (match q1.from, q2.from with Int 0, Int 0 -> Int 0 | _ -> assert false);
-            sort = []}
+            sort = q1.sort @ q2.sort }
     | `Let (v, b, e) -> evalS (Env.binde v (evalb env b) env) e
     | `Where (b, s) -> 
         let cond = evalb env b
         and q = evalS env s in
           {q with cond = cond :: q.cond}
-    | `Table (cols, table_var, table_alias) ->
+    | `Table (cols, table_var, table_alias, sort) ->
         { cols = map (fun (col,ty) ->
                         (`F {table=table_alias; column=col; ty=ty}, col)) cols;
           tabs = [`TableVar(table_var, table_alias)];
           cond = [];
           most = Inf;
           from = num_of_int 0;
-          sort = []}
+          sort = sort}
     | `Return b ->
         begin match evalb env b with
           | `Rec fields -> 
