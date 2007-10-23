@@ -958,6 +958,7 @@ module Desugarer =
                  flatten ((List.map (fun (_, field) -> phrase field) fields) @ [phrase e])
              | `Projection (e, _) -> phrase e
              | `TypeAnnotation(e, k) -> flatten [phrase e; tv k]
+             | `Upcast(e, t1, t2) -> flatten [phrase e; tv t1; tv t2]
              | `ConstructorLit (_, e) -> opt_phrase e
              | `Switch (exp, binders) -> flatten [phrase exp; btvs binders]
              | `Receive (binders) -> btvs binders
@@ -1112,6 +1113,12 @@ module Desugarer =
        let desugar = desugar' lookup_pos in
          match (s : phrasenode) with
            | `TypeAnnotation(e, k) -> HasType(desugar e, desugar_datatype' var_env k, pos)
+           | `Upcast(e, t1, t2) ->
+               (* HACK:
+
+                  use unsafe_cast here to avoid having to add extra syntax to the old IR
+               *)
+               desugar (`TypeAnnotation ((`FnAppl ((`Var "unsafe_cast", pos'), [`TypeAnnotation(e, t2), pos']), pos'), t1), pos')
            | `Constant p -> desugar_constant pos p
            | `Var v       -> Variable (v, pos)
            | `InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)

@@ -177,6 +177,10 @@ or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
 
+(* subtyping *)
+val is_sub_type : datatype * datatype -> bool
+val is_sub_row : row * row -> bool
+
 (* check for free aliases *)
 exception UndefinedAlias of string
 

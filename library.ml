@@ -993,6 +993,12 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    (`Server (p1 (fun v -> broken_unmarshal_value (unbox_string v))),
     datatype "(String) -> a",
   IMPURE));
+
+  (* HACK *)
+  ("unsafe_cast",
+   (`Server (p1 (fun v -> v)),
+    datatype "(a) -> b",
+    PURE));
 ]
 
 let impl : located_primitive -> primitive option = function

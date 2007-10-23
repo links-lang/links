@@ -66,7 +66,7 @@ and eq_field_envs (lfield_env, rfield_env) =
   in
     StringMap.equal compare_specs lfield_env rfield_env
 and eq_row_vars (lpoint, rpoint) =
-  (* [QUESTION]
+  (* QUESTION:
      Do we need to deal with closed rows specially?
   *)
   match Unionfind.find lpoint, Unionfind.find rpoint with
@@ -321,7 +321,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
     (* 
-       [NOTE]
+       NOTE:
 
        - All calls to fail_on_absent_fields are currently disabled,
        as under the current model absent fields have
@@ -633,7 +633,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 		       thus we call extend_field_env once in each direction *)
 		  let rextension =
 		    extend_field_env rec_env lfield_env' rfield_env' in
-		    (* [NOTE]
+		    (* NOTE:
 		       extend_field_env may change rrow_var' or lrow_var', as either
 		       could occur inside the body of lfield_env' or rfield_env'
 		    *)

@@ -138,6 +138,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Projection of ('phrase * name)
 | `With of ('phrase * (name * 'phrase) list)
 | `TypeAnnotation of ('phrase * datatype)
+| `Upcast of ('phrase * datatype * datatype)
 | `ConstructorLit of (name * 'phrase option)
 | `Switch of ('phrase * ('ppattern * 'phrase) list)
 | `Receive of ('ppattern * 'phrase) list
@@ -232,6 +233,7 @@ struct
     | `Projection (p, _)
     | `Page p
     | `PagePlacement p
+    | `Upcast (p, _, _)
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit ps

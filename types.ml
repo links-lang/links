@@ -83,7 +83,7 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
 let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
 *)
 (*
-  [NOTE]
+  NOTE:
   
   We use Map.fold and Set.fold too often to support OCaml versions prior to 3.08.4
 *)
@@ -1018,6 +1018,55 @@ let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
   let tenv, renv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_type_variable ()) tenv,
      IntMap.map (fun _ -> fresh_row_variable ()) renv)
+
+
+(* subtyping *)
+let is_sub_type, is_sub_row =
+  let module S = TypeVarSet in
+  let rec is_sub_type = fun rec_vars ->
+    function
+      | `Not_typed, `Not_typed -> true
+      | `Primitive p, `Primitive q -> p=q
+      | `Function _, `Function _ -> failwith "not implemented subtyping on functions yet"
+      | `Record row', `Record row
+      | `Variant row, `Variant row' ->
+          let lrow, _ = unwrap_row row
+          and rrow, _ = unwrap_row row' in
+            is_sub_row rec_vars (lrow, rrow)
+      | `Table _, `Table _ -> failwith "not implemented subtyping on tables yet"
+      | `Application _, _ -> failwith "not implemented subtyping on applications yet"
+      | _, `Application _ -> failwith "not implemented subtyping on applications yet"
+      | `MetaTypeVar _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | `MetaTypeVar _, _ -> failwith "not implemented subtyping on metatypevars yet"
+      | _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | _, _ -> false
+  and is_sub_row =
+    fun rec_vars ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
+      let sub_fields =
+        FieldEnv.fold (fun name t b ->
+                         match t with
+                           | `Present t ->
+                               if FieldEnv.mem name rfield_env then
+                                 match FieldEnv.find name rfield_env with
+                                   | `Present t' ->
+                                       is_sub_type rec_vars (t, t')
+                                   | `Absent -> false
+                               else
+                                 false
+                           | `Absent ->
+                               true) lfield_env true in
+      let sub_row_vars =
+        match Unionfind.find lrow_var, Unionfind.find rrow_var with
+          | `Flexible var, `Flexible var'
+          | `Rigid var, `Rigid var' -> var=var'
+          | `Closed, _ -> true
+          | _, _ -> false
+      in
+        sub_fields && sub_row_vars
+  in
+    ((fun t -> is_sub_type S.empty t),
+     (fun row -> is_sub_row S.empty row))
+
 
 (* alias lookup *)
 exception AliasMismatch of string

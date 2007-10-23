@@ -58,6 +58,7 @@ struct
     | `TupleLit ps -> List.for_all is_generalisable ps
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
+    | `Upcast (p, _, _)
     | `Escape (_, p) -> is_generalisable p
     | `ConstructorLit (_, p) -> opt_generalisable p
     | `RecordLit (fields, p) ->
@@ -953,6 +954,17 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and t' = Sugar.desugar_datatype' (context.tvars, context.rvars) t in
               unify (typ e, t');
               `TypeAnnotation (e, t), t'
+        | `Upcast (e, t1, t2) ->
+            let e = tc e
+            and t1' = Sugar.desugar_datatype' (context.tvars, context.rvars) t1
+            and t2' = Sugar.desugar_datatype' (context.tvars, context.rvars) t2 in
+              if Types.is_sub_type (t2', t1') then
+                begin
+                  unify (typ e, t2');
+                  `Upcast (e, t1, t2), t1'
+                end
+              else
+                failwith "upcast failure (TODO: implement this error message!)"
         | `Switch (e, binders) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
