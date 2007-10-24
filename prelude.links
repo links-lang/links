@@ -48,6 +48,9 @@ fun select(xs, i) {
   hd(drop(i, xs))
 }
 
+# infix operator for 'select'
+op xs !! n { select(xs, n) }
+
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
  for (var x <- xs) {
@@ -379,6 +382,15 @@ fun assoc(x,l) {
   }
 }
 
+sig removeAssoc : (a,[(a,b)]) -> [(a,b)]
+fun removeAssoc(x,l) {
+  switch (l) {
+    case [] -> []
+    case (k,v)::xs -> if(k == x) xs
+                      else (k,v)::removeAssoc(x, xs) 
+  }
+}
+
 sig assocAll : (String,[(String,b)]) -> [b]
 fun assocAll(x,l) {
   switch (l) {
@@ -402,6 +414,12 @@ fun sortBy (f, l) {
     }
   }
 }
+
+sig isInt : (String) -> Bool
+fun isInt (x) { x ~ /-?[0-9]+$/ }
+
+sig isFloat : (String) -> Bool
+fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 #### WEB-RELATED ####
 
@@ -710,42 +728,54 @@ sig input : Formlet (String)
 var input = mkInput(fun(name) { <input name="{name}"/> },
                     fun(name,v) { <input name="{name}" value="{v}"/> });
 
+typename Attributes = [(String, String)];
+
+# QUESTION:
+#   Should we change the semantics of attribute expressions such that
+#   the *do not* override literal attributes?
+#
+#   An advantage of doing this would be that we wouldn't have to use
+#   removeAssoc in formlet library functions. A disadvantage is that
+#   this wouldn't correspond with the usual update semantics.
+
+# input with attributes
+sig inputA : (Attributes) -> Formlet (String)
+fun inputA(attributes) {
+  mkInput(fun(name) { <input name="{name}" {removeAssoc("name", attributes)}/> },
+          fun(name,v) { <input name="{name}" value="{v}" {removeAssoc("name", removeAssoc("value", attributes))}/> })
+}
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPasswordA : (Attributes) -> Formlet (String)
+fun inputPasswordA(attributes) {
+  inputA(("type", "password")::removeAssoc("type", attributes))
+}
+
+# A one-element formlet populated with an initial value
+sig inputValueA : (String, Attributes) -> Formlet (String)
+fun inputValueA(v, attributes) {
+  inputA(("value", v)::removeAssoc("value", attributes))
+}
+
+# A "file" type input.
+sig inputFileA : (Attributes) -> Formlet (String)
+fun inputFileA(attributes) {
+  inputA(("type", "file")::removeAssoc("type", attributes))
+}
+
 # A formlet producing a String whose contents are hidden on entry.
 sig inputPassword : Formlet (String)
-var inputPassword = mkInput(fun (name) { <input type="password" name="{name}"/> },
-                            fun (name, v) { <input type="password" name="{name}" value="{v}"/> });
+var inputPassword = inputPasswordA([]);
 
 # A one-element formlet populated with an initial value
 sig inputValue : (String) -> Formlet (String)
 fun inputValue(v) {
-  mkInput(fun (name) { <input name="{name}" value="{v}"/> },
-          fun (name,v) { <input name="{name}" value="{v}"/> })
-}
-
-# A hidden String formlet; shouldn't normally be needed since you can capture 
-# free variables in a [yields] expression
-sig hidden : (String) -> Formlet (String)
-fun hidden(v) { 
-   mkInput(fun (name)   { <input name="{name}" value="{v}" type="hidden" /> },
-           fun (name,_) { <input name="{name}" value="{v}" type="hidden" /> })
+  inputValueA(v, [])
 }
 
 # A "file" type input.
 sig inputFile : Formlet (String)
-var inputFile = mkInput(fun (name) { <input name="{name}" type="file" /> },
-                        fun (name,_) { <input name="{name}" type="file" /> });
-
-sig inputInt : Formlet(Int)
-var inputInt = formlet <#>{input -> x}</#> yields stringToInt(x);
-
-sig inputIntValue : (Int) -> Formlet(Int)
-fun inputIntValue(v) {
-  formlet <#>{inputValue(intToString(v)) -> x}</#> 
-  yields stringToInt(x)
-}
-
-sig inputFloat : Formlet(Float)
-var inputFloat = formlet <#>{input -> x}</#> yields stringToFloat(x);
+var inputFile = inputFileA([]);
 
 sig textarea : (String) -> Formlet (String)
 fun textarea(value) {
@@ -925,3 +955,28 @@ fun errorMsg (f, msg) (x,xml) {
 
 infixr 9 `errorMsg`;
 
+sig transform : (Formlet(a), (a) -> Bool, (a) -> String, (a) -> b) -> Formlet(b)
+fun transform(f, predicate, error, g) {
+  formlet
+    <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
+  yields
+    g(v)
+}
+
+### checked input components
+
+sig inputInt : Formlet(Int)
+var inputInt = transform(input, isInt, fun (s) {s ++ "is not an integer"}, stringToInt);
+
+sig inputIntA : (Attributes) -> Formlet(Int)
+fun inputIntA(attributes) {
+  transform(inputA(attributes), isInt, fun (s) {s ++ "is not an integer"}, stringToInt)
+}
+
+sig inputIntValue : (Int) -> Formlet(Int)
+fun inputIntValue(v) {
+  transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ++ "is not an integer"}, stringToInt)
+}
+
+sig inputFloat : Formlet(Float)
+var inputFloat = transform(input, isFloat, fun (s) {s ++ "is not an integer"}, stringToFloat);

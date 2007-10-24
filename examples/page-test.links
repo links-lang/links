@@ -1,13 +1,6 @@
-fun isInt (x) { x ~ /-?[0-9]+$/ }
-
-var checker = isInt `errorMsg` fun (x) { x ++ " is not a natural number!"};
-
-var checkedInt = 
-   formlet <#>{input `satisfies` checker -> n}</#> yields stringToInt(n);
-
 fun intForm(label) {
   (f=formlet
-       <#><b>{stringToXml(label)}</b>: {checkedInt -> i}{submit("submit integer")}</#>
+       <#><b>{stringToXml(label)}</b>: {inputInt -> i}{submit("submit integer")}</#>
      yields
        i,
    h=fun (i) {
