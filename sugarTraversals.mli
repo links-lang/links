@@ -70,3 +70,67 @@ class map :
     method sentence'' : ('a -> 'c) -> ('b -> 'd) -> ('a, 'b) sentence'' -> ('c, 'd) sentence''
     method unary_op : unary_op -> unary_op
   end
+
+(* Reduce a value.  See 
+
+   http://brion.inria.fr/gallium/index.php/Camlp4FoldGenerator
+
+   for the details.
+*)
+class fold :
+  object ('SELF)
+    method float : float -> 'SELF
+    method int : int -> 'SELF
+    method num : num -> 'SELF
+    method bool : bool -> 'SELF
+    method char : char -> 'SELF
+    method ref : ('SELF -> 'o -> 'SELF) -> 'o ref -> 'SELF
+    method array : ('SELF -> 'b -> 'SELF) -> 'b array -> 'SELF
+    method list : ('SELF -> 'i -> 'SELF) -> 'i list -> 'SELF
+    method option : ('SELF -> 'j -> 'SELF) -> 'j option -> 'SELF
+    method string : name -> 'SELF
+
+    method _Lexing_position : Lexing.position -> 'SELF
+    method _Num_num : num -> 'SELF
+    method _Regex_repeat : Regex.repeat -> 'SELF
+    method _Syntax_location : location -> 'SELF
+    method _Syntax_untyped_definition : Syntax.untyped_definition -> 'SELF
+    method _Syntax_untyped_expression : Syntax.untyped_expression -> 'SELF
+    method _Types_primitive : Types.primitive -> 'SELF
+
+    method assumption : assumption -> 'SELF
+    method binding : binding -> 'SELF
+    method binding' : ('SELF -> 'c -> 'SELF) -> ('SELF -> 'd -> 'SELF) -> ('c, 'd) binding' -> 'SELF
+    method binop : binop -> 'SELF
+    method constant : constant -> 'SELF
+    method datatype : datatype -> 'SELF
+    method directive : directive -> 'SELF
+    method fieldconstraint : fieldconstraint -> 'SELF
+    method fieldspec : fieldspec -> 'SELF
+    method funlit : funlit -> 'SELF
+    method funlit' : ('SELF -> 'e -> 'SELF) -> ('SELF -> 'f -> 'SELF) -> ('e, 'f) funlit' -> 'SELF
+    method iterpatt : ('SELF -> 'g -> 'SELF) -> ('SELF -> 'h -> 'SELF) -> ('g, 'h) iterpatt -> 'SELF
+    method location : location -> 'SELF
+    method logical_binop : logical_binop -> 'SELF
+    method name : name -> 'SELF
+    method operator : operator -> 'SELF
+    method pattern : pattern -> 'SELF
+    method pattern' : ('SELF -> 'k -> 'SELF) -> 'k pattern' -> 'SELF
+    method phrase : phrase -> 'SELF
+    method phrasenode : phrasenode -> 'SELF
+    method phrasenode' : ('SELF -> 'l -> 'SELF) -> ('SELF -> 'm -> 'SELF) -> ('SELF -> 'n -> 'SELF) -> ('l, 'm, 'n) phrasenode' -> 'SELF
+    method ppattern : ppattern -> 'SELF
+    method pposition : pposition -> 'SELF
+    method quantifier : quantifier -> 'SELF
+    method regex : regex -> 'SELF
+    method regex' : ('SELF -> 'p -> 'SELF) -> 'p regex' -> 'SELF
+    method regexflag : regexflag -> 'SELF
+    method replace_rhs : ('SELF -> 'q -> 'SELF) -> 'q replace_rhs -> 'SELF
+    method row : row -> 'SELF
+    method row_var : row_var -> 'SELF
+    method sec : sec -> 'SELF
+    method sentence : sentence -> 'SELF
+    method sentence' : sentence' -> 'SELF
+    method sentence'' : ('SELF -> 'r -> 'SELF) -> ('SELF -> 's -> 'SELF) -> ('r, 's) sentence'' -> 'SELF
+    method unary_op : unary_op -> 'SELF
+  end
