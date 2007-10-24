@@ -84,10 +84,10 @@ class fold :
     method num : num -> 'SELF
     method bool : bool -> 'SELF
     method char : char -> 'SELF
-    method ref : ('SELF -> 'o -> 'SELF) -> 'o ref -> 'SELF
-    method array : ('SELF -> 'b -> 'SELF) -> 'b array -> 'SELF
-    method list : ('SELF -> 'i -> 'SELF) -> 'i list -> 'SELF
-    method option : ('SELF -> 'j -> 'SELF) -> 'j option -> 'SELF
+    method ref : ('SELF -> 'a -> 'SELF) -> 'a ref -> 'SELF
+    method array : ('SELF -> 'a -> 'SELF) -> 'a array -> 'SELF
+    method list : ('SELF -> 'a -> 'SELF) -> 'a list -> 'SELF
+    method option : ('SELF -> 'a -> 'SELF) -> 'a option -> 'SELF
     method string : name -> 'SELF
 
     method _Lexing_position : Lexing.position -> 'SELF
@@ -100,7 +100,7 @@ class fold :
 
     method assumption : assumption -> 'SELF
     method binding : binding -> 'SELF
-    method binding' : ('SELF -> 'c -> 'SELF) -> ('SELF -> 'd -> 'SELF) -> ('c, 'd) binding' -> 'SELF
+    method binding' : ('SELF -> 'a -> 'SELF) -> ('SELF -> 'b -> 'SELF) -> ('a, 'b) binding' -> 'SELF
     method binop : binop -> 'SELF
     method constant : constant -> 'SELF
     method datatype : datatype -> 'SELF
@@ -108,29 +108,29 @@ class fold :
     method fieldconstraint : fieldconstraint -> 'SELF
     method fieldspec : fieldspec -> 'SELF
     method funlit : funlit -> 'SELF
-    method funlit' : ('SELF -> 'e -> 'SELF) -> ('SELF -> 'f -> 'SELF) -> ('e, 'f) funlit' -> 'SELF
-    method iterpatt : ('SELF -> 'g -> 'SELF) -> ('SELF -> 'h -> 'SELF) -> ('g, 'h) iterpatt -> 'SELF
+    method funlit' : ('SELF -> 'a -> 'SELF) -> ('SELF -> 'b -> 'SELF) -> ('a, 'b) funlit' -> 'SELF
+    method iterpatt : ('SELF -> 'a -> 'SELF) -> ('SELF -> 'b -> 'SELF) -> ('a, 'b) iterpatt -> 'SELF
     method location : location -> 'SELF
     method logical_binop : logical_binop -> 'SELF
     method name : name -> 'SELF
     method operator : operator -> 'SELF
     method pattern : pattern -> 'SELF
-    method pattern' : ('SELF -> 'k -> 'SELF) -> 'k pattern' -> 'SELF
+    method pattern' : ('SELF -> 'a -> 'SELF) -> 'a pattern' -> 'SELF
     method phrase : phrase -> 'SELF
     method phrasenode : phrasenode -> 'SELF
-    method phrasenode' : ('SELF -> 'l -> 'SELF) -> ('SELF -> 'm -> 'SELF) -> ('SELF -> 'n -> 'SELF) -> ('l, 'm, 'n) phrasenode' -> 'SELF
+    method phrasenode' : ('SELF -> 'a -> 'SELF) -> ('SELF -> 'b -> 'SELF) -> ('SELF -> 'c -> 'SELF) -> ('a, 'b, 'c) phrasenode' -> 'SELF
     method ppattern : ppattern -> 'SELF
     method pposition : pposition -> 'SELF
     method quantifier : quantifier -> 'SELF
     method regex : regex -> 'SELF
-    method regex' : ('SELF -> 'p -> 'SELF) -> 'p regex' -> 'SELF
+    method regex' : ('SELF -> 'a -> 'SELF) -> 'a regex' -> 'SELF
     method regexflag : regexflag -> 'SELF
-    method replace_rhs : ('SELF -> 'q -> 'SELF) -> 'q replace_rhs -> 'SELF
+    method replace_rhs : ('SELF -> 'a -> 'SELF) -> 'a replace_rhs -> 'SELF
     method row : row -> 'SELF
     method row_var : row_var -> 'SELF
     method sec : sec -> 'SELF
     method sentence : sentence -> 'SELF
     method sentence' : sentence' -> 'SELF
-    method sentence'' : ('SELF -> 'r -> 'SELF) -> ('SELF -> 's -> 'SELF) -> ('r, 's) sentence'' -> 'SELF
+    method sentence'' : ('SELF -> 'a -> 'SELF) -> ('SELF -> 'b -> 'SELF) -> ('a, 'b) sentence'' -> 'SELF
     method unary_op : unary_op -> 'SELF
   end
