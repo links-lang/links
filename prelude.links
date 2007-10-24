@@ -953,7 +953,7 @@ fun errorMsg (f, msg) (x,xml) {
           ++ <span class="error"> {stringToXml(msg(x))}</span>)
 }
 
-infixr 9 `errorMsg`;
+infixr 5 `errorMsg`;
 
 sig transform : (Formlet(a), (a) -> Bool, (a) -> String, (a) -> b) -> Formlet(b)
 fun transform(f, predicate, error, g) {
