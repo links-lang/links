@@ -64,7 +64,11 @@ struct
         -> Some body
     | _ -> None
 
-    (* This module will go away once we stop using Record_selection *)
+    (* This module will go away once we stop using Record_selection
+       (in theory).
+
+       In practice we still need it for the time being.
+    *)
   module NormalizeProjections : 
   sig
     val normalize_projections : RewriteSyntax.rewriter
@@ -79,16 +83,11 @@ struct
     (** eliminate all occurrences of Record_selection in favour of
         Project and Erase *)
     let convert_projections : rewriter = function
-      | Record_selection (label, labelvar, etcvar, (Variable _ as v), body, data) ->
-          Some (Let (labelvar, Project (v, label, data),
-                     Let (etcvar, Erase (v, label, data),
-                          body, data), data))
-      | Record_selection (label, labelvar, etcvar, value, body, data) ->
-          let name = gensym ~prefix:"recordvar" () in
-            Some(Let(name, value, 
-                     Let(labelvar, Project (Variable (name, data), label, data),
-                         Let(etcvar, Erase (Variable (name, data), label, data),
-                             body, data), data), data))
+      | Project (Variable _, _, _) -> None
+      | Project (e, label, data) ->
+          let e_data = expression_data e in
+          let var = gensym ~prefix:"recordvar" () in
+            Some(Let(var, e, Project(Variable (var, e_data), label, data), data))
       | _ -> None
           
     (** Replace projection from an etc. var with projection from the
@@ -116,19 +115,11 @@ struct
           Some (subst_fast var p body)
       | _ -> None
           
-    (** Check post conditions hold (not really a rewriter) *)
-    let check_projections : rewriter = function
-      | Project (Variable _, _, _) -> None
-      | Project  _
-      | Record_selection _         -> assert false
-      | _                          -> None
-
     let normalize_projections = bottomup (all [
                                             convert_projections;
                                             replace_erase;
                                             remove_unused_variables;
                                             inline_projections;
-                                            check_projections
                                           ])
   end
 

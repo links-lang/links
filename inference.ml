@@ -200,18 +200,6 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                                               StringMap.add label t field_env') rfield_env field_env in
                     Record_intro (bs, Some r, `T (pos, `Record (field_env', rrow_var), None))                  
         end           
-  | Record_selection (label, label_variable, variable, value, body, `U pos) ->
-      let value = type_check typing_env value in
-      let label_variable_type = fresh_type_variable () in
-	unify (type_of_expression value, `Record (make_singleton_open_row (label, `Present (label_variable_type))));
-
-	let value_row = extract_row typing_env (type_of_expression value) in
-	let body_env = (Env.bind
-                          (Env.bind env (variable, ([], `Record (row_with (label, `Absent) value_row))))
-                          (label_variable, ([], label_variable_type))) in
-	let body = type_check (body_env, alias_env) body in
-	let body_type = type_of_expression body in
-	  Record_selection (label, label_variable, variable, value, body, `T (pos, body_type, None))
   | Project (expr, label, `U pos) ->
       let expr = type_check typing_env expr in
       let label_variable_type = fresh_type_variable () in

@@ -666,8 +666,8 @@ module PatternCompiler =
                                   Some (Variable (extension_variable, pos)),
                                   pos))
                       env)
-               in                        
-                 Record_selection
+               in
+                 record_selection
                    (name,
                     label_variable,
                     extension_variable,
@@ -1034,7 +1034,7 @@ module Desugarer =
            | `Record (label, patt, rem_patt) ->
                let temp_var_field = unique_name () in
                let temp_var_ext = unique_name () in
-                 Record_selection (label,
+                 record_selection (label,
                                    temp_var_field,
                                    temp_var_ext,
                                    value,
@@ -1168,18 +1168,20 @@ module Desugarer =
                                                               (`Projection ((`Var var, pos'), name), pos')), pos'))
            | `Section (`Name name) -> Variable (name, pos)
            | `Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
-           | `Projection (e, name) -> (let s = unique_name ()
-                                      in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos))
+           | `Projection (e, name) ->
+               Project (desugar e, name, pos)
+(*                (let s = unique_name () *)
+(*                 in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos)) *)
            | `With (e, fields) -> 
                ListLabels.fold_right ~init:(desugar e) fields 
                  ~f:(fun (label, value) record ->
                        let rvar = gensym () in
                          Record_intro (StringMap.add label (desugar value) StringMap.empty,
-                                       Some (Record_selection (label, gensym(), rvar, record,
+                                       Some (record_selection (label, gensym(), rvar, record,
                                                                Variable (rvar,pos), pos)),
                                        pos))
            | `TableLit (name, datatype, constraints, db) -> 
-               (* [HACK]
+               (* HACK:
 
                   This isn't as flexible as it should be - it's just a
                   quick hack to get things going. We should probably

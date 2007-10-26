@@ -162,13 +162,6 @@ let uniquify_names : RewriteSyntax.rewriter =
           Some (Rec (List.map (fun (n, v, t) ->
                                  (List.assoc n bindings, rename v, t)) vs,
                      rename b, data))
-    | Record_selection (lab, lvar, var, value, body, data) ->
-        let lvar' = gensym ~prefix:lvar ()
-        and var'  = gensym ~prefix:var () in
-          Some(Record_selection(lab, lvar', var', value, 
-                                Syntax.rename_fast var var' 
-                                  (Syntax.rename_fast lvar lvar' body),
-                                data))
     | For (b, v, src, data) -> 
         let name = gensym ~prefix:v () in
           Some (For (Syntax.rename_fast v name b, name, src, data))
@@ -201,7 +194,6 @@ let renaming : RewriteSyntax.rewriter =
       | Let (v, _, _, _)
           when v = var -> true
       | Abstr (vs, _, _) when mem var vs -> true
-      | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
       | Rec (bindings, _, _) when List.exists (fun (v,_,_) -> v = var) bindings -> true
       | other -> default other
@@ -384,7 +376,7 @@ let print_definition of_name ?msg:msg def =
 
 let rewriters env = [
   uniquify_names;
-  RewriteSyntax.bottomup no_project_erase;
+(*  RewriteSyntax.bottomup no_project_erase; *)
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   if Settings.get_value reduce_recs then

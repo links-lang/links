@@ -68,8 +68,6 @@ type 'data expression' =
                    ('data expression' list) * 'data)
   | Record_intro of (('data expression') stringmap * ('data expression') option 
                      * 'data)
-  | Record_selection of (string * string * string * 'data expression' * 
-                           'data expression' * 'data)
   | Project of ('data expression' * string * 'data)
   | Erase of ('data expression' * string * 'data)
   | Variant_injection of (string * 'data expression' * 'data)
@@ -160,7 +158,6 @@ let rec is_value : 'a expression' -> bool = function
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
   | For (a, _, b, _)
-  | Record_selection (_, _, _, a, b, _)
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
@@ -225,9 +222,6 @@ let rec show t : 'a expression' -> string = function
         (StringMap.to_list (fun label e -> label ^ "=" ^ (show t e)) bs) ^
         (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
-  | Record_selection (label, label_variable, variable, value, body, data) ->
-      "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
-      ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Project (e, l, data) -> show t e ^ "." ^ l ^ t data
   | Erase (e, l, data) -> show t e ^ "\\" ^ l ^ t data
   | Variant_injection (label, value, data) ->
@@ -329,7 +323,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
                | Concat (e1, e2, _)
-               | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _)
                | App (e1, e2, _)
                | SortBy (e1, e2, _) ->
@@ -384,7 +377,6 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     (* 2 subnodes *)
     | Comparison (_, c, _, d)                , [e1;e2] -> Comparison (e1, c, e2, d)
     | Let (s, _, _, d)                       , [e1;e2] -> Let (s, e1, e2, d)
-    | Record_selection (s1, s2, s3, _, _, d) , [e1;e2] -> Record_selection (s1, s2, s3, e1, e2, d)
     | Concat (_, _, d)                       , [e1;e2] -> Concat (e1, e2, d)
     | For (_, s, _, d)                       , [e1;e2] -> For (e1, s, e2, d)
     | TableHandle (_, _, t, d)               , [e1;e2] -> TableHandle (e1, e2, t, d)
@@ -431,8 +423,6 @@ let freevars (expression : 'a expression') : StringSet.t =
       | For (body, var, generator, _) -> S.union (aux generator) (S.remove var (aux body))
       | Let (var, value, body, _) -> S.union (aux value) (S.remove var (aux body))
       | Abstr (vars, body, _) -> S.diff (aux body) (S.from_list vars)
-      | Record_selection (_, labvar, var, value, body, _) ->
-          S.union (aux value) (S.diff (aux body) (S.from_list [var;labvar]))
       | Variant_selection (value, _, cvar, cbody, var, body, _) ->
           S.union (aux value)
             (S.union (S.remove cvar (aux cbody))
@@ -509,7 +499,6 @@ let expression_data : ('a expression' -> 'a) = function
   | Rec (_, _, data) -> data
   | Xml_node (_, _, _, data) -> data
   | Record_intro (_, _, data) -> data
-  | Record_selection (_, _, _, _, _, data) -> data
   | Project (_,_,data) -> data
   | Erase (_,_,data) -> data
   | Variant_injection (_, _, data) -> data
@@ -549,8 +538,6 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | Rec (a, b,_) -> Rec (a, b,data)
     | Xml_node (a, b, c, data) ->  Xml_node (a, b, c, data)
     | Record_intro (a, b,_) -> Record_intro (a, b,data)
-    | Record_selection (a, b, c, d, e, _) -> 
-        Record_selection (a, b, c, d, e,data)
     | Project (a,b,_) -> Project(a,b,data)
     | Erase (a,b,_) -> Erase(a,b,data)
     | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
@@ -656,10 +643,6 @@ let rec map_free_occ u f expr =
     | Rec(defs, body, d) when (not (mem_assoc3 u defs)) ->
         Some(Rec(map (fun (n, defn, t) -> (n, recurse defn, t)) defs, 
                  recurse body, d))
-    | Record_selection(label, label_var, etc_var, src, body, d) ->
-        Some(Record_selection(label, label_var, etc_var, recurse src, 
-                              (if (u <> label_var && u <> etc_var) then
-                                 recurse body else body), d))
     | Variant_selection(value, case_label, case_variable, case_body, 
                         etc_var, etc_body, d) ->
         Some(Variant_selection(recurse value, case_label, case_variable, 
@@ -775,8 +758,6 @@ let skeleton = function
   (* Two sub-expressions *)
   | Comparison(lhs, op, rhs, d) -> Comparison(lhs, op, rhs, d)
   | Let(letvar, letsrc, letbody, d) -> Let(letvar, letsrc, letbody, d)
-  | Record_selection(label, labelvar, etcvar, src, body, d) ->
-      Record_selection(label, labelvar, etcvar, src, body, d)
   | Project (expr, label, d) -> Project (expr, label, d)
   | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
   | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
@@ -811,3 +792,15 @@ let definition_skeleton = function
 let program_skeleton =
   fun (ds, body) ->
     (List.map definition_skeleton ds, skeleton body)
+
+
+let record_selection (name, label_variable, extension_variable, var_exp, body, data) =
+  let v = gensym () in
+    Let(v,
+        var_exp,
+        Let(label_variable,
+            Project(Variable (v, data), name, data),
+            Let (extension_variable, Erase(Variable (v, data), name, data), body, data),
+            data),
+        data)
+    

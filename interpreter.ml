@@ -544,9 +544,6 @@ fun globals locals expr cont ->
       let fvs = StringSet.union_all fvss in
       eval record (StringMap.fold (fun label value cont ->
                                      BinopRight(locals, `RecExt label, value) :: cont) fields cont)
-  | Syntax.Record_selection (label, label_variable, variable, value, body, _) ->
-      let locals = retain (freevars body) locals in
-        eval value (RecSelect(locals, label, label_variable, variable, body) :: cont)
   | Syntax.Project (expr, label, _) ->
       eval expr (UnopApply (locals, Result.Project label) :: cont)
   | Syntax.Erase (expr, label, _) ->

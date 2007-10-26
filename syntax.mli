@@ -16,7 +16,6 @@ deriving (Show)
   [TODO]
 
     - get rid of Comparison (move to library.ml?)
-    - get rid of Record_selection
     - change variant_selection to be n-ary
     - get rid of variant_selection_empty
     - replace List_of and Concat with Cons
@@ -37,7 +36,6 @@ type 'a expression' =
   | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
   | Record_intro of (('a expression') Utility.stringmap * ('a expression') option * 'a)
-  | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
   | Project of ('a expression' * string * 'a)
   | Erase of ('a expression' * string * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
@@ -181,3 +179,4 @@ val rewrite_program :
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
 
+val record_selection : (string * string * string * 'a expression' * 'a expression' * 'a) -> 'a expression'

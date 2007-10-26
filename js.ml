@@ -327,7 +327,7 @@ let boiler_1 () = "<html>
   <head>
   "^script_tag "json.js"^"
   "^script_tag "regex.js"^"
-  "^script_tag "yahoo/YAHOO.js"^"
+  "^script_tag "yahoo/yahoo.js"^"
   "^script_tag "yahoo/event.js"^"
     <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>
@@ -651,36 +651,6 @@ let rec generate : 'a expression' -> code =
                                 callk_yielding (
                                   Call (Var "LINKS.union", [Var name; Dict dict])))])))
         end
-  | Record_selection (l, lv, etcv, r, b, _) when StringSet.mem etcv (Syntax.freevars b) ->
-      let r_cps = generate' r in
-      let b_cps = generate' b in
-      let name = gensym ~prefix:"__r" () in
-        Fn(["__kappa"],
-           Call(r_cps, [Fn (["__r"], 
-                (Bind (name, Var "__r", 
-                       Bind (lv, 
-                             Call (Var "LINKS.project",
-                                   [strlit l; Var name]),
-                             Bind (etcv, 
-                                   Call(Var "LINKS.remove", [Var name; strlit l]),
-                                   Call(b_cps, [Var "__kappa"]))))))]))
-
-  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
-      (* Could use dot-notation instead of [project] call *)
-      let v_cps = generate' v in
-        Fn(["__kappa"],
-           Call(v_cps, [Fn(["__v"],
-                callk_yielding
-                     (Call (Var "LINKS.project", [strlit l; Var "__v"])))]))
-  | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      let v_cps = generate' v in
-      let b_cps = generate' b in
-        Fn(["__kappa"],
-           Call(v_cps, [Fn(["__v"], 
-                Bind (lv,
-	              Call (Var "LINKS.project", [strlit l; Var "__v"]),
-                      Call(b_cps, [Var "__kappa"])))]))
-
   | Project (expr, label, _) -> 
       let expr_cps = generate' expr in
          Fn(["__kappa"],
@@ -863,16 +833,6 @@ and generate_direct_style : 'a expression' -> code =
             | Some r ->
                 Call (Var "LINKS.union", [dict; generate r])
         end
-  | Record_selection (l, lv, etcv, r, b, _) when StringSet.mem etcv (Syntax.freevars b) ->
-      let name = gensym ~prefix:"_r" () in
-	Bind(name, gd r,
-	     Bind(lv, Call(Var "LINKS.project", [strlit l; Var name]),
-		  Bind(etcv, Var name, gd b)))
-  | Record_selection (l, lv, _, v, Variable (lv', _), _) when lv = lv' ->
-      (* Could use dot-notation instead of project call *)
-      Call(Var "LINKS.project", [strlit l; gd v])
-  | Record_selection (l, lv, _, v, b, _) -> (* var unused: a simple projection *)
-      Bind(lv, Call(Var "LINKS.project", [strlit l; gd v]), gd b)
   | Project (expr, label, _) ->
       Call (Var "LINKS.project", [strlit label; gd expr])
   | Erase (expr, label, _) -> 

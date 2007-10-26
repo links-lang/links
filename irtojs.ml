@@ -337,7 +337,7 @@ let boiler_1 () = "<html>
   <head>
   "^script_tag "json.js"^"
   "^script_tag "regex.js"^"
-  "^script_tag "yahoo/YAHOO.js"^"
+  "^script_tag "yahoo/yahoo.js"^"
   "^script_tag "yahoo/event.js"^"
     <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>

@@ -146,7 +146,7 @@ sig
 
   val xmlnode : string * (value sem) StringMap.t * (value sem) list -> value sem
   val record : (value sem) StringMap.t * (value sem) option * datatype -> value sem
-(* record_selection? *)
+
   val project : name * value sem * datatype -> value sem
 (* erase? *)
   val erase :  name * value sem * datatype -> value sem
@@ -600,17 +600,6 @@ struct
                            field_map StringMap.empty,
                          opt_map ev r,
                          node_datatype e))
-        | Record_selection (label, x, y, e, body, _) ->
-(*
-            let t, r = split_record_type label (node_datatype e) in
-            cofv
-              (I.recordselection (
-                 make_local_info (t, x),
-                 make_local_info (r, y),
-                 ec e,
-                 fun (v, p) -> eval (Env.extend env [x; y] [v; p]) body))
-*)
-            failwith "eval (Record_selection _) not implemented yet"
         | Project (e, name, _) ->
             cofv (I.project (name, ev e, t))
         | Erase (e, name, _) ->
