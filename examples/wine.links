@@ -694,12 +694,12 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
                          search_region_id,
                          search_wine_type,
                          1),
-          fun (p) { p } ) }
+        fun (p) { p } ) }
     </div>
     <h1>Wines for region {stringToXml(get_region_name(region_id))},
         {wineTypeName(wine_type)}</h1>
     Page {intToXml(pageNum+1)} of {intToXml(numPages)}
-    <ul>
+    <ul class="wine-listing">
       {wine_listing(cust_id, order_id, region_id, wine_type, pageNum)}
     </ul>
     Showing wines {intToXml(page_size*pageNum+1)} thru
