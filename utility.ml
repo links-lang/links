@@ -351,11 +351,11 @@ struct
       snd (unsnoc l)
     with Invalid_argument _ -> invalid_arg "last"
     
-  (** [butlast list]: Return a copy of the list with the last element removed. *)
-  let butlast l = 
+  (** [curtail list]: Return a copy of the list with the last element removed. *)
+  let curtail l = 
     try
       fst (unsnoc l)
-    with Invalid_argument _ -> invalid_arg "butlast"
+    with Invalid_argument _ -> invalid_arg "curtail"
 
   let difference list1 list2 = 
     List.filter (fun x -> not (List.mem x list2)) list1

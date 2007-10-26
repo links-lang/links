@@ -268,7 +268,7 @@ fun init(list) {
   }
 }
 
-fun butlast(list) { init(list) }
+fun curtail(list) { init(list) }
 
 sig last : ([a]) -> a
 fun last(list) {
