@@ -128,7 +128,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    ) (IntMap.empty, IntMap.empty) quantifiers
 	  in
 	    instantiate_datatype (tenv, renv) t)
-  with Not_found ->
+  with NotFound _ ->
     raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
 let var = instantiate
