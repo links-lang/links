@@ -54,8 +54,8 @@ type sqlexpr = [
 type ninf = I of num | Inf
     deriving (Show, Pickle)
 type tabSpec = [
-  `TableVar of (string (*real name*) * string (* alias*) )
-| `TableName of (string (*variable*) * string (* alias*) ) ] 
+| `TableVar of (string (*variable*) * string (* alias*) )
+| `TableName of (string (*real name*) * string (* alias*) ) ] 
     deriving (Show, Pickle)
 type sqlQuery = {
   cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
