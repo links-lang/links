@@ -1000,6 +1000,11 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    (`Server (p1 (fun v -> v)),
     datatype "(a) -> b",
     PURE));
+
+  "random",
+  (`PFun (fun _ -> (box_float (Random.float 1.0))),
+   datatype "() -> Float",
+   IMPURE)    
 ]
 
 let impl : located_primitive -> primitive option = function

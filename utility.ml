@@ -811,3 +811,5 @@ let catch_notfound_l msg e =
     Lazy.force e
   with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
 
+(** Initialise the random number generator *)
+let _ = Random.self_init()
