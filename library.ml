@@ -1014,10 +1014,7 @@ let impl : located_primitive -> primitive option = function
 
 let value_env = 
   ref (List.fold_right
-    (fun (name, (p,_,_)) env -> 
-       match impl p with
-         | None -> env
-         | Some p -> StringMap.add name p env)
+    (fun (name, (p,_,_)) env -> StringMap.add name (impl p) env)
     env
     StringMap.empty)
 
@@ -1028,13 +1025,16 @@ let primitive_location (name:string) = match fst3 (assoc name env) with
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
-    | #result as r -> r
-    | _ -> `PrimitiveFunction name
+    | Some (#result as r) -> r
+    | Some _ -> `PrimitiveFunction name
+    | None  -> `ClientFunction name
+
 
 let apply_pfun name args = 
   match StringMap.find name (!value_env) with
-    | #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
-    | `PFun p -> p args
+    | Some #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
+    | Some (`PFun p) -> p args
+    | None -> assert false
 
 module Env = Env.String
         

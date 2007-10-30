@@ -279,6 +279,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 
                   | `ClientFunction name ->
                       client_call_impl name cont args
+
 	          | `Continuation cont ->
                       assert (length args == 1);
                       apply_cont globals cont (List.hd(args))

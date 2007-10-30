@@ -33,7 +33,7 @@ type primitive = [
 ]
 val is_primitive : string -> bool
 val is_pure_primitive : string -> bool
-val value_env : primitive Utility.StringMap.t ref
+val value_env : primitive option Utility.StringMap.t ref
 val type_env : Types.environment
 val alias_env : Types.alias_environment
 val typing_env : Types.typing_environment
