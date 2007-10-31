@@ -84,6 +84,9 @@ sig
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
 
+  val split : ('a * 'b) t -> ('a t * 'b t)
+  (** split a pair map into a pair of maps *)
+
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
@@ -184,6 +187,11 @@ struct
     let union_all ms = List.fold_right union_disjoint ms empty
 
     let superimpose a b = fold add b a
+
+    let split m =
+      fold
+        (fun i (v1, v2) (m1, m2) -> (add i v1 m1, add i v2 m2))
+        m (empty, empty)
 
     let partition f m =
       fold
@@ -643,6 +651,10 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_split = function
+    | None -> None, None
+    | Some (x, y) -> Some x, Some y
+
   let opt_iter f = opt_map f ->- ignore
 
   let fromOption default = function
@@ -654,7 +666,7 @@ struct
       | None -> p
       | Some x -> x  
 (*
-  [NOTE][SL]
+  NOTE:
   
   The following equations hold
 

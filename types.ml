@@ -384,6 +384,8 @@ let unwrap_row : row -> (row * row_var option) =
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
 let bool_type = `Primitive `Bool
+let int_type = `Primitive `Int
+let float_type = `Primitive `Float
 let xml_type = `Application ("Xml", [])
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
@@ -1082,13 +1084,6 @@ let lookup_alias (s, ts) alias_env =
     else
       vars, alias
 
-let make_record_type (ts : (string*datatype) list) : datatype =
-  `Record 
-    (List.fold_left
-       (fun row (name, t) -> row_with (name, `Present t) row)
-       (make_empty_closed_row ())
-       ts)
-
 let make_tuple_type (ts : datatype list) : datatype =
   `Record 
     (snd 
@@ -1110,4 +1105,4 @@ let make_row ts =
 let make_record_type ts = `Record (make_row ts)
 let make_variant_type ts = `Variant (make_row ts)
 
-let make_table_type (r, w) =`Table (r, w)
+let make_table_type (r, w) = `Table (r, w)

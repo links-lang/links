@@ -73,6 +73,8 @@ type typing_environment = environment * alias_environment
 val unit_type : datatype
 val string_type : datatype
 val bool_type : datatype
+val int_type : datatype
+val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val native_string_type : datatype
