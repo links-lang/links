@@ -283,10 +283,7 @@ let sql_aslist : RewriteSyntax.rewriter =
         let th_list_type = `Application ("List", [`Record(th_row)]) in
           (* With the new SQL compiler, this TableQuery is needed only
              to hold the variable and the generated alias. *)
-        let table_query = TableQuery([table_alias, 
-                                      Variable(th_var, `T(pos, th_type, None))],
-                                     select_all,
-                                     `T (pos, th_list_type, None))
+        let table_query = TableQuery(select_all, `T (pos, th_list_type, None))
         in
           (match th with
              | Variable _ -> Some table_query

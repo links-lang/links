@@ -599,9 +599,9 @@ and generate_special env : special -> code -> code = fun sp kappa ->
       | `Wrong -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `TableQuery _ ->
-          failwith ("Cannot (yet?) generate JavaScript code for `TableQuery")
-      | `TableHandle (db, table_name, (readtype, writetype)) ->
+      | `Query _ ->
+          failwith ("Cannot (yet?) generate JavaScript code for `Query")
+      | `Table (db, table_name, (readtype, writetype)) ->
           callk_yielding kappa
             (Dict [("_table",
                     Dict [("db", gv db);

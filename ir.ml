@@ -78,9 +78,9 @@ and binding =
 and special =
   [ `App of value * value
   | `Wrong
-  | `Database of (value)
-  | `TableQuery of (value name_map * SqlQuery.sqlQuery)
-  | `TableHandle of (value * value * (Types.datatype * Types.datatype))
+  | `Database of value
+  | `Query of SqlQuery.sqlQuery
+  | `Table of (value * value * (Types.datatype * Types.datatype))
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show)  
@@ -116,7 +116,7 @@ struct
       | _ -> false
 
   (* 
-    [NOTE]
+     NOTE:
      
      Most of this is just boilerplate. It would be nice if we could
      generate it automatically somehow...
@@ -155,9 +155,9 @@ struct
         | `App (v, w) -> `App (iv v, iv w)
         | `Wrong -> `Wrong
         | `Database v -> `Database (iv v)
-        | `TableQuery (vmap, q) -> `TableQuery (StringMap.map iv vmap, q)
+        | `Query q -> `Query q
             (* [WARNING] perhaps we need to look inside the query *)
-        | `TableHandle (v, w, t) -> `TableHandle (iv v, iv w, t)
+        | `Table (v, w, t) -> `Table (iv v, iv w, t)
         | `CallCC v -> `CallCC (iv v)
     
   and binding env =
@@ -280,13 +280,13 @@ class map =
       | `App x -> `App ((fun (_x0, _x1) -> ((o#value _x0), (o#value _x1))) x)
       | `Wrong -> `Wrong
       | `Database x -> `Database (o#value x)
-      | `TableQuery x ->
-          `TableQuery
-            ((fun (_x0, _x1) ->
-                ((o#name_map o#value _x0), (o#_SqlQuery_sqlQuery _x1)))
+      | `Query x ->
+          `Query
+            ((fun _x0 ->
+                (o#_SqlQuery_sqlQuery _x0))
                x)
-      | `TableHandle x ->
-          `TableHandle
+      | `Table x ->
+          `Table
             ((fun (_x0, _x1, _x2) ->
                 ((o#value _x0), (o#value _x1),
                  ((fun (_x0, _x1) ->
@@ -415,8 +415,8 @@ class fold =
       | `App x -> (fun (_x0, _x1) -> (o#value _x0)#value _x1) x
       | `Wrong -> o
       | `Database x -> o#value x
-      | `TableQuery x -> (fun (_x0, _x1) -> o#_SqlQuery_sqlQuery _x1) x
-      | `TableHandle x ->
+      | `Query x -> (fun _x0 -> o#_SqlQuery_sqlQuery _x0) x
+      | `Table x ->
           (fun (_x0, _x1, _x2) ->
              (fun (_x0, _x1) -> o#_Types_datatype _x1) _x2)
             x

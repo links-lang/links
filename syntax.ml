@@ -81,13 +81,7 @@ type 'data expression' =
   | For of ('data expression' * string * 'data expression' * 'data)
       (* For(body, var, src, _data) *)
   | Database of ('data expression' * 'data)
-  | TableQuery of
-      ((* the tables: *)
-        (string * (* alias *) 
-         'data expression' (* variable whose value is the corresponding table *)) list *
-          (* the query: *) 
-          SqlQuery.sqlQuery *
-          'data)
+  | TableQuery of (SqlQuery.sqlQuery * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table: *) 'data expression'
       * (* the read / write (record) types of a table row: *) 
@@ -242,9 +236,8 @@ let rec show t : 'a expression' -> string = function
   | TableHandle (db, name, (readtype, writetype), data) ->
       "("^ show t name ^" from "^ show t db ^
       "["^Types.string_of_datatype readtype^";"^Types.string_of_datatype writetype^"])" ^ t data
-  | TableQuery (ths, query, data) ->
-      "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
-        "["^SqlQuery.Show_sqlQuery.show query^"])" ^ t data
+  | TableQuery (query, data) ->
+      "(["^SqlQuery.Show_sqlQuery.show query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
@@ -304,6 +297,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Constant _
                | Nil _
                | Wrong _
+               | TableQuery _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
@@ -316,8 +310,6 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Call_cc(e, _)
                | Abs (e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
-
-               | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
 
                | TableHandle (e1, e2, _, _)
                | Comparison (e1, _, e2, _)
@@ -406,8 +398,8 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
                     List.map2 (fun (k,_) v -> (k,v)) attrs attrnodes,
                     childnodes,
                     d)
-    | TableQuery (es, q, d), nodes ->
-        TableQuery (List.map2 (fun (k,_) v -> (k,v)) es nodes, q, d)
+    | TableQuery (q, d), nodes ->
+        TableQuery (q, d)
     | e -> raise (Invalid_argument "set_subnodes")
         
 let rec stringlit_value = function
@@ -432,10 +424,8 @@ let freevars (expression : 'a expression') : StringSet.t =
             S.diff
               (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
               (S.from_list vars)
-      | TableQuery (ts, query, _) ->
-          S.union
-            (S.union_all (List.map (fun (_, e) -> aux e) ts))
-            (SqlQuery.freevars_sqlQuery query)
+      | TableQuery (query, _) ->
+          SqlQuery.freevars_sqlQuery query
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
@@ -509,7 +499,7 @@ let expression_data : ('a expression' -> 'a) = function
   | Concat (_, _, data) -> data
   | For (_, _, _, data) -> data
   | Database (_, data) -> data
-  | TableQuery (_, _, data) -> data
+  | TableQuery (_, data) -> data
   | TableHandle (_, _, _, data) -> data
   | SortBy (_, _, data) -> data
   | Call_cc (_, data) -> data
@@ -549,7 +539,7 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | Concat (a, b,_) -> Concat (a, b,data)
     | For (a, b, c, _) -> For (a, b, c, data)
     | Database (a, _) ->  Database (a, data)
-    | TableQuery (a, b,_) ->  TableQuery (a, b,data)
+    | TableQuery (a, _) ->  TableQuery (a, data)
     | TableHandle (a, b, c, _) -> TableHandle (a, b, c, data)
     | SortBy (a, b,_) -> SortBy (a, b,data)
     | Call_cc (a, _) -> Call_cc (a, data)
@@ -686,9 +676,9 @@ let subst_fast_def name replacement =
 let rename_fast name replacement expr = 
   let replacer name replacement : RewriteSyntax.rewriter = function
     | Variable (n, d) when n = name -> Some (Variable(replacement, d))
-    | TableQuery(th, q, data) -> 
+    | TableQuery(q, data) -> 
         let q = SqlQuery.subst_sqlQuery name (`V replacement) q in
-          Some(TableQuery(th, q, data)) 
+          Some(TableQuery(q, data)) 
     | _ -> None
   in
     fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
@@ -779,8 +769,8 @@ let skeleton = function
   | Rec(defs, body, d) -> Rec(defs, body, d)
   | Xml_node(tagname, attrs, contents, d) -> 
       Xml_node(tagname, attrs, contents, d)
-  | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
-      (* note: besides the alist, [query] can also contain
+  | TableQuery(query, d) -> TableQuery(query, d)
+      (* note: [query] can also contain
          expressions, in the [query.ml] sublanguage *)
 
 let definition_skeleton = function
@@ -794,13 +784,13 @@ let program_skeleton =
     (List.map definition_skeleton ds, skeleton body)
 
 
-let record_selection (name, label_variable, extension_variable, var_exp, body, data) =
+let record_selection (name, label_variable, extension_variable, scrutinee, body, data) =
   let v = gensym () in
     Let(v,
-        var_exp,
+        scrutinee,
         Let(label_variable,
             Project(Variable (v, data), name, data),
             Let (extension_variable, Erase(Variable (v, data), name, data), body, data),
             data),
         data)
-    
+ 

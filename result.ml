@@ -141,7 +141,6 @@ type unop = MkColl
                                rexpr option)
             | Erase of string
             | Project of string
-            | QueryOp of (SqlQuery.sqlQuery * (* table aliases: *) string list)
                 deriving (Show, Pickle)
 		
 let string_of_unop = Show_unop.show

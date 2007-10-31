@@ -65,8 +65,8 @@ and special =
   [ `App of value * value
   | `Wrong
   | `Database of value
-  | `TableQuery of value name_map * SqlQuery.sqlQuery
-  | `TableHandle of value * value * (Types.datatype * Types.datatype)
+  | `Query of SqlQuery.sqlQuery
+  | `Table of value * value * (Types.datatype * Types.datatype)
   | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show)  

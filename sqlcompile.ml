@@ -358,7 +358,7 @@ struct
               uncompilable e
         end
 
-    | SortBy(TableQuery(th, query, data1),
+    | SortBy(TableQuery(query, data1),
              Abstr([loopVar], sortByExpr, _), _) as e ->
         let read_proj = function
           | Project (record, name, _) -> Some (record, name)
@@ -371,17 +371,17 @@ struct
               | Some (Variable(sortByRecVar, _), sortByFld)
                   when sortByRecVar = loopVar ->
                   (trycompile "S" compileS) env
-                    (TableQuery(th, add_sorting query
+                    (TableQuery(add_sorting query
                                   (`Asc(SqlQuery.owning_table sortByFld query,
 				        sortByFld)), data1))
               | _ -> uncompilable e
           end
 
-    | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
+    | TableQuery (q, `T (_,ty,_)) as e ->
         Debug.if_set_l debug(lazy("attempting to compile table query"));
         begin match q, Types.concrete_type ty with 
           | {cols = _;
-	     tabs = [_]; (* single table *)
+	     tabs = [`TableVar (th_var, table_alias)]; (* single table *)
 	     cond = [`True];
 	     most = Inf;
 	     from = Int 0;
@@ -557,15 +557,6 @@ struct
   let eval = evalE
 end
 
-(* For now, we have to reconstruct the pairings of the 
-   aliases with the variables that hold the actual table 
-   value *)
-let table_names q =
-  map (function
-           (`TableVar(x, alias)) -> 
-             alias, (Syntax.Variable(x, (Syntax.no_expr_data)))
-         | `TableName _ -> assert false) q.tabs
-
 let underscore_numeric_names cols =
   map (fun (expr, col) ->
          if is_numeric col then
@@ -585,7 +576,6 @@ let rename_cols renamings q =
     here because it involves both an operation on the query and also a
     wrapping expression that projects out the needed data at the end. *)
 let injectQuery q data =
-  let names = table_names q in
   let needs_renaming = exists (snd ->- is_numeric) q.cols in
   let renamings = underscore_numeric_names q.cols in
   let renamer =
@@ -606,10 +596,10 @@ let injectQuery q data =
     if needs_renaming then
       Syntax.Apply(Syntax.Variable("map", Syntax.no_expr_data),
                    [renamer;
-                    Syntax.TableQuery(names, q, data)],
+                    Syntax.TableQuery(q, data)],
                    Syntax.no_expr_data)
     else
-      Syntax.TableQuery(names, q, data)
+      Syntax.TableQuery(q, data)
       
 let sql_compile_prepared (expr : Syntax.expression) : Syntax.expression option =
   let expr_data = Syntax.expression_data expr in

@@ -1000,7 +1000,8 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
    (`Server (p1 (fun v -> v)),
     datatype "(a) -> b",
     PURE));
-
+  
+  (** non-deterministic random number generator *)
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",

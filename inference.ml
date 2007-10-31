@@ -298,25 +298,19 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let params = type_check typing_env params in
         unify (type_of_expression params, db_descriptor_type);
         Database (params, `T (pos, `Primitive `DB, None))
-  | TableQuery (ths, query, `U pos) ->
+  | TableQuery (query, `U pos) ->
       let row =
 	(List.fold_right
-	   (fun (expr, alias) env -> 
+	   (fun (expr, alias) env ->
               match expr with 
                 | `F field -> 
                     StringMap.add alias (`Present field.SqlQuery.ty) env
                 | _ -> assert(false) (* can't handle other kinds of expressions *))
 	   query.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
       let datatype =  `Application ("List", [`Record row]) in
-      let rrow = make_empty_open_row () in
-      let wrow = make_empty_open_row () in
-      let ths = alistmap (type_check typing_env) ths
-      in
-        Utility.for_each ths 
-          (fun _, th -> 
-             unify (type_of_expression th, `Table (`Record rrow, `Record wrow)));
-	unify_rows (row, rrow);
-        TableQuery (ths, query, `T (pos, datatype, None))
+        (* BUG: should really check table types here. This isn't a
+           priority though, as this module is going to die soon. *)
+        TableQuery (query, `T (pos, datatype, None))
   | TableHandle (db, tableName, (readtype, writetype), `U pos) ->
       let datatype =  `Table (readtype, writetype) in
       let db = type_check typing_env db in

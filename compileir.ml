@@ -164,7 +164,7 @@ sig
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
 *)
   val database : value sem -> tail_computation sem
-  val table_query : (value sem) StringMap.t * SqlQuery.sqlQuery * datatype -> tail_computation sem
+  val table_query : SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem
@@ -459,16 +459,13 @@ struct
 
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
-  let table_query (tables, query, t) =
-    let tables = lift_stringmap tables
-    in
-      M.bind tables
-        (fun tables -> lift (`Special (`TableQuery (tables, query)), t))
+  let table_query (query, t) =
+    lift (`Special (`Query query), t)
   let table_handle (database, table, ts, t) =
     bind database
       (fun database ->
          bind table
-           (fun table -> lift (`Special (`TableHandle (database, table, ts)), t)))
+           (fun table -> lift (`Special (`Table (database, table, ts)), t)))
 
   let callcc (s, t) = bind s (fun v -> lift (`Special (`CallCC v), t))
   let wrong t = lift (`Special `Wrong, t)
@@ -665,14 +662,8 @@ struct
             I.database (ev e)
         | TableHandle (database, table, ts, _) ->
             I.table_handle (ev database, ev table, ts, node_datatype e)
-        | TableQuery (tables, query, _) ->
-            I.table_query
-              (List.fold_right
-                 (fun (name, e) tables ->
-                    StringMap.add name (ev e) tables)
-                 tables StringMap.empty,
-               query,
-               node_datatype e)
+        | TableQuery (query, _) ->
+            I.table_query (query, node_datatype e)
         | SortBy (expr, byExpr, _) ->
             failwith "eval (SortyBy _) not implemented yet"
         | Call_cc (e, _) ->

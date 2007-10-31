@@ -47,7 +47,7 @@ type 'a expression' =
   | Concat of ('a expression' * 'a expression' * 'a)
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
-  | TableQuery of ((string * 'a expression') list * SqlQuery.sqlQuery * 'a)
+  | TableQuery of (SqlQuery.sqlQuery * 'a)
   | TableHandle of ('a expression' * 'a expression' * 
                       (Types.datatype * Types.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)

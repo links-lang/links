@@ -105,6 +105,8 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
                     `Table(_, tableName, _) -> `TableName(tableName, alias)
                   | _ -> failwith "Internal Error: table source was not a table!")
            | `TableName(name, alias) -> `TableName(name, alias)
+           | `SubQuery(query, alias) ->
+               failwith "Not implemented subqueries yet"
         ) 
   in {qry with
         SqlQuery.tabs = normalise_tables qry.SqlQuery.tabs;
@@ -125,47 +127,50 @@ let row_field_type field : Types.row -> Types.datatype =
       | `Present t -> t
       | `Absent -> raise (NoSuchField field)
 
-let query_result_types (query : SqlQuery.sqlQuery) (table_defs : (string * Types.row) list)
+let query_result_types (query : SqlQuery.sqlQuery)
     : (string * Types.datatype) list =
   try 
-    let col_type table_alias col_name =
-      row_field_type col_name (assoc table_alias table_defs) 
-    in
-      concat_map (function
-                      (`F field, alias) -> 
-                        [alias, field.SqlQuery.ty (*col_type field.SqlQuery.table field.SqlQuery.column*)]
-                    | (expr, _alias) -> failwith("Internal error: no type info for sql expression " 
-                                                 ^ SqlQuery.string_of_expression expr)) query.SqlQuery.cols
+    concat_map
+      (function
+           (`F field, alias) -> 
+             [alias, field.SqlQuery.ty]
+         | (expr, _alias) -> failwith("Internal error: no type info for sql expression " 
+                                      ^ SqlQuery.string_of_expression expr))
+      query.SqlQuery.cols
   with NoSuchField field ->
     failwith ("Field " ^ field ^ " from " ^ 
-                SqlQuery.string_of_query query ^
-                " was not found in tables " ^ 
-                mapstrcat "," fst table_defs ^ ".")
+                SqlQuery.string_of_query query)
 
-let do_query globals locals (query : SqlQuery.sqlQuery) table_aliases tables = 
-  let (dbs, table_defs) = 
-    split(map(function `Table((db, params), _table_name, row) -> (db, row)
-                | _ -> assert false) 
-            tables) in
-    
-    assert (dbs <> []);
+let do_query globals locals (query : SqlQuery.sqlQuery) = 
+  let get_database : SqlQuery.sqlQuery -> database = fun query ->
+    let vars = concat_map (function
+                            | `TableVar (var, _) -> [var]
+                            | _ -> []) query.SqlQuery.tabs in
+    let dbs = 
+      map (fun var -> 
+             match lookup globals locals var with
+               | `Table((db, params), _table_name, _row) -> db
+               | _ -> assert false) vars in
 
-    if(not (all_equiv (=) dbs)) then
-      failwith ("Cannot join across different databases");
-    
-    let table_defs = combine table_aliases table_defs in
-    let db = hd(dbs) in
+      assert (dbs <> []);
+
+      if(not (all_equiv (=) dbs)) then
+        failwith ("Cannot join across different databases");
+      
+      hd(dbs) in
+
+  let db = get_database query in
       (* TBD: factor this stuff out into a module that processes
          queries *)
-    let result_types = query_result_types query table_defs in
-    let query_string = SqlQuery.string_of_query (normalise_query globals locals db query) in
-
-      prerr_endline("RUNNING QUERY:\n" ^ query_string);
-      let t = Unix.gettimeofday() in
-      let result = Database.execute_select result_types query_string db in
+  let result_types = query_result_types query in
+  let query_string = SqlQuery.string_of_query (normalise_query globals locals db query) in
+    
+    prerr_endline("RUNNING QUERY:\n" ^ query_string);
+    let t = Unix.gettimeofday() in
+    let result = Database.execute_select result_types query_string db in
       Debug.print("Query took : " ^ 
                     string_of_float((Unix.gettimeofday() -. t)) ^ "s");
-        result
+      result
 
 (** 0 Web-related stuff *)
 let has_client_context = ref false
@@ -389,14 +394,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                        apply_cont globals cont (`Record (snd (crack_row label (recfields value))))
                    | Result.Project label ->
                        apply_cont globals cont (fst (crack_row label (recfields value)))
-                   | QueryOp(query, table_aliases) ->
-                       let result = 
-                         match value with
-                           | `List(tbls) ->
-                               do_query globals locals query table_aliases tbls
-                           | _ -> assert false
-                       in
-                         apply_cont globals cont result
 	        end
             | RecSelect (locals, label, label_var, variable, body) ->
 	        let field, remaining = crack_row label (recfields value) in
@@ -579,15 +576,17 @@ fun globals locals expr cont ->
               failwith ("table rows must have record type")
       end
 
-  | Syntax.TableQuery (ths, query, d) ->
+  | Syntax.TableQuery (query, d) ->
+      apply_cont globals cont (do_query globals locals query)
+
       (* [ths] is an alist mapping table aliases to expressions that
          provide the corresponding TableHandles. We evaluate those
          expressions and rely on them coming through to the continuation
          in the same order. That way we can stash the aliases in the
          continuation frame & match them up later. *)
-      let aliases, th_exprs = split ths in
-        eval (Syntax.list_expr d th_exprs)
-          (UnopApply(locals, QueryOp(query, aliases)) :: cont)
+(*       let _, th_exprs = split ths in *)
+(*         eval (Syntax.list_expr d th_exprs) *)
+(*           (UnopApply(locals, QueryOp(query)) :: cont) *)
   | Syntax.Call_cc(arg, _) ->
       let locals = [] in
       let cc = `Continuation cont in

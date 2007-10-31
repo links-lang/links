@@ -76,6 +76,15 @@ class map :
    http://brion.inria.fr/gallium/index.php/Camlp4FoldGenerator
 
    for the details.
+
+   This example counts all the names in a datatype.
+
+   object 
+     inherit fold
+     val count = 0
+     method count = count
+     method name = {< count = self#count + 1 >}
+   end
 *)
 class fold :
   object ('SELF)

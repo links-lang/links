@@ -1170,8 +1170,6 @@ module Desugarer =
            | `Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | `Projection (e, name) ->
                Project (desugar e, name, pos)
-(*                (let s = unique_name () *)
-(*                 in Record_selection (name, s, unique_name (), desugar e, Variable (s, pos), pos)) *)
            | `With (e, fields) -> 
                ListLabels.fold_right ~init:(desugar e) fields 
                  ~f:(fun (label, value) record ->

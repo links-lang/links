@@ -55,9 +55,9 @@ type ninf = I of num | Inf
     deriving (Show, Pickle)
 type tabSpec = [
 | `TableVar of (string (*variable*) * string (* alias*) )
-| `TableName of (string (*real name*) * string (* alias*) ) ] 
-    deriving (Show, Pickle)
-type sqlQuery = {
+| `TableName of (string (*real name*) * string (* alias*) )
+| `SubQuery of sqlQuery * string (* alias *) ]
+and sqlQuery = {
   cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
   tabs : tabSpec list;
   (* (x, a) means "from x as a", and x is a free variable representing a table.*)
@@ -82,9 +82,16 @@ let rec freevars_sqlexpr : sqlexpr -> StringSet.t = function
 | `V x -> StringSet.singleton x
 | _ -> StringSet.empty
 
-let freevars_sqlQuery q = 
-  StringSet.union (StringSet.union_all (map freevars_sqlexpr q.cond))
-    (StringSet.union_all (map freevars_sqlexpr (map fst q.cols)))
+let rec freevars_tabSpec =
+  function
+    | `TableName _ -> StringSet.empty
+    | `TableVar (x, _) -> StringSet.singleton x
+    | `SubQuery (q, _) -> freevars_sqlQuery q 
+
+and freevars_sqlQuery q =
+  StringSet.union_all (map freevars_tabSpec q.tabs @
+                       map freevars_sqlexpr q.cond @
+                       map freevars_sqlexpr (map fst q.cols))
 
 let rec subst_likeExpr e = assert false
 
@@ -152,6 +159,8 @@ and string_of_query (qry:sqlQuery) : string =
                             table ^ " AS " ^ alias
                         | `TableVar(var, alias) -> 
                             "VARIABLE:" ^ var ^ " AS " ^ alias
+                        | `SubQuery(q, alias) ->
+                            "(" ^ string_of_query(q) ^ ") AS " ^ alias
                      ) qry.tabs) ^
        string_of_condition qry.cond
      ^ (match qry.sort with
