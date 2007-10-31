@@ -453,3 +453,194 @@ class fold =
     method binder : binder -> 'self_type =
       fun (_x0, _x1) -> (o#var _x0)#var_info _x1
   end
+
+
+
+class foldmap =
+  object ((o : 'self_type))
+    method string : string -> ('self_type * string) = o#unknown
+      
+    method option :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+          'a option -> ('self_type * ('a option)) =
+      fun _f_a ->
+        function
+        | None -> (o, None)
+        | Some _x -> let (o, _x) = _f_a o _x in (o, (Some _x))
+      
+    method list :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+          'a list -> ('self_type * ('a list)) =
+      fun _f_a ->
+        function
+        | [] -> (o, [])
+        | _x :: _x_i1 ->
+            let (o, _x) = _f_a o _x in
+            let (o, _x_i1) = o#list _f_a _x_i1 in (o, (_x :: _x_i1))
+      
+    method int : int -> ('self_type * int) = o#unknown
+      
+    method var_info : var_info -> ('self_type * var_info) =
+      fun (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#unknown _x in
+        let (o, _x_i1) = o#string _x_i1 in
+        let (o, _x_i2) = o#scope _x_i2 in (o, (_x, _x_i1, _x_i2))
+      
+    method var : var -> ('self_type * var) = o#int
+      
+    method value : value -> ('self_type * value) =
+      function
+      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
+      | `Variable _x -> let (o, _x) = o#var _x in (o, (`Variable _x))
+      | `Extend ((_x, _x_i1)) ->
+          let (o, _x) = o#name_map (fun o -> o#value) _x in
+          let (o, _x_i1) = o#option (fun o -> o#value) _x_i1
+          in (o, (`Extend ((_x, _x_i1))))
+      | `Project ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#value _x_i1 in (o, (`Project ((_x, _x_i1))))
+      | `Erase ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#value _x_i1 in (o, (`Erase ((_x, _x_i1))))
+      | `Inject ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#value _x_i1 in (o, (`Inject ((_x, _x_i1))))
+      | `XmlNode ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#name_map (fun o -> o#value) _x_i1 in
+          let (o, _x_i2) = o#list (fun o -> o#value) _x_i2
+          in (o, (`XmlNode ((_x, _x_i1, _x_i2))))
+      | `ApplyPrim ((_x, _x_i1)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#list (fun o -> o#value) _x_i1
+          in (o, (`ApplyPrim ((_x, _x_i1))))
+      | `Comparison ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#unknown _x_i1 in
+          let (o, _x_i2) = o#value _x_i2
+          in (o, (`Comparison ((_x, _x_i1, _x_i2))))
+      | `Coerce ((_x, _x_i1)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#unknown _x_i1 in (o, (`Coerce ((_x, _x_i1))))
+      | `Abs _x -> let (o, _x) = o#value _x in (o, (`Abs _x))
+      
+    method tyvar : tyvar -> ('self_type * tyvar) = o#int
+      
+    method tyname : tyname -> ('self_type * tyname) = o#string
+      
+    method tail_computation :
+      tail_computation -> ('self_type * tail_computation) =
+      function
+      | `Return _x -> let (o, _x) = o#value _x in (o, (`Return _x))
+      | `Apply ((_x, _x_i1)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#list (fun o -> o#value) _x_i1
+          in (o, (`Apply ((_x, _x_i1))))
+      | `Special _x -> let (o, _x) = o#special _x in (o, (`Special _x))
+      | `Case ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) =
+            o#name_map
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#binder _x in
+                 let (o, _x_i1) = o#computation _x_i1 in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) =
+            o#option
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#binder _x in
+                 let (o, _x_i1) = o#computation _x_i1 in (o, (_x, _x_i1)))
+              _x_i2
+          in (o, (`Case ((_x, _x_i1, _x_i2))))
+      | `If ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#computation _x_i1 in
+          let (o, _x_i2) = o#computation _x_i2
+          in (o, (`If ((_x, _x_i1, _x_i2))))
+      
+    method special : special -> ('self_type * special) =
+      function
+      | `App ((_x, _x_i1)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#value _x_i1 in (o, (`App ((_x, _x_i1))))
+      | `Wrong -> (o, `Wrong)
+      | `Database _x -> let (o, _x) = o#value _x in (o, (`Database _x))
+      | `Query _x -> let (o, _x) = o#unknown _x in (o, (`Query _x))
+      | `Table ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#value _x in
+          let (o, _x_i1) = o#value _x_i1 in
+          let (o, _x_i2) =
+            (fun (_x, _x_i1) ->
+               let (o, _x) = o#unknown _x in
+               let (o, _x_i1) = o#unknown _x_i1 in (o, (_x, _x_i1)))
+              _x_i2
+          in (o, (`Table ((_x, _x_i1, _x_i2))))
+      | `CallCC _x -> let (o, _x) = o#value _x in (o, (`CallCC _x))
+      
+    method scope : scope -> ('self_type * scope) =
+      function | `Local -> (o, `Local) | `Global -> (o, `Global)
+      
+    method name_map :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+          'a name_map -> ('self_type * ('a name_map)) =
+      fun _f_a -> o#unknown
+      
+    method name : name -> ('self_type * name) = o#string
+      
+    method location : location -> ('self_type * location) = o#unknown
+      
+    method language : language -> ('self_type * language) = o#string
+      
+    method constant : constant -> ('self_type * constant) = o#unknown
+      
+    method computation : computation -> ('self_type * computation) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#binding) _x in
+        let (o, _x_i1) = o#tail_computation _x_i1 in (o, (_x, _x_i1))
+      
+    method binding : binding -> ('self_type * binding) =
+      function
+      | `Let ((_x, _x_i1)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#tail_computation _x_i1
+          in (o, (`Let ((_x, _x_i1))))
+      | `Fun ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#list (fun o -> o#binder) _x_i1 in
+          let (o, _x_i2) = o#computation _x_i2 in
+          let (o, _x_i3) = o#location _x_i3
+          in (o, (`Fun ((_x, _x_i1, _x_i2, _x_i3))))
+      | `Rec _x ->
+          let (o, _x) =
+            o#list
+              (fun o (_x, _x_i1, _x_i2, _x_i3) ->
+                 let (o, _x) = o#binder _x in
+                 let (o, _x_i1) = o#list (fun o -> o#binder) _x_i1 in
+                 let (o, _x_i2) = o#computation _x_i2 in
+                 let (o, _x_i3) = o#location _x_i3
+                 in (o, (_x, _x_i1, _x_i2, _x_i3)))
+              _x
+          in (o, (`Rec _x))
+      | `Alien ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#language _x_i1 in
+          let (o, _x_i2) = o#unknown _x_i2
+          in (o, (`Alien ((_x, _x_i1, _x_i2))))
+      | `Alias ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#tyname _x in
+          let (o, _x_i1) = o#list (fun o -> o#tyvar) _x_i1 in
+          let (o, _x_i2) = o#unknown _x_i2
+          in (o, (`Alias ((_x, _x_i1, _x_i2))))
+      
+    method binder : binder -> ('self_type * binder) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#var _x in
+        let (o, _x_i1) = o#var_info _x_i1 in (o, (_x, _x_i1))
+      
+    method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
+      
+  end
+  

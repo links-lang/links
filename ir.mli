@@ -157,3 +157,31 @@ class fold :
     method var : tyvar -> 'a
     method var_info : var_info -> 'a
   end
+
+
+
+class foldmap :
+  object ('self_type)
+    method string : string -> ('self_type * string)
+    method option : 'a. ('self_type -> 'a -> ('self_type * 'a)) -> 'a option -> ('self_type * ('a option))
+    method list : 'a. ('self_type -> 'a -> ('self_type * 'a)) -> 'a list -> ('self_type * ('a list))
+    method int : int -> ('self_type * int)
+    method var_info : var_info -> ('self_type * var_info)
+    method var : var -> ('self_type * var)
+    method value : value -> ('self_type * value)
+    method tyvar : tyvar -> ('self_type * tyvar)
+    method tyname : tyname -> ('self_type * tyname)
+    method tail_computation : tail_computation -> ('self_type * tail_computation)
+    method special : special -> ('self_type * special)
+    method scope : scope -> ('self_type * scope)
+    method name_map : 'a. ('self_type -> 'a -> ('self_type * 'a)) -> 'a name_map -> ('self_type * ('a name_map))
+    method name : name -> ('self_type * name)
+    method location : location -> ('self_type * location)
+    method language : language -> ('self_type * language)
+    method constant : constant -> ('self_type * constant)
+    method computation : computation -> ('self_type * computation)
+    method binding : binding -> ('self_type * binding)
+    method binder : binder -> ('self_type * binder)
+    method unknown : 'a. 'a -> ('self_type * 'a)
+  end
+  
