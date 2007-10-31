@@ -75,7 +75,7 @@ let rec freevars_like_expr = function
 
 let rec freevars_sqlexpr : sqlexpr -> StringSet.t = function
 | `Rec fields -> StringSet.union_all(map (freevars_sqlexpr -<- snd) fields)
-| `Op(op, lhs, rhs) -> StringSet.union (freevars_sqlexpr lhs) 
+| `Op(_op, lhs, rhs) -> StringSet.union (freevars_sqlexpr lhs) 
                                        (freevars_sqlexpr rhs)
 | `Not e -> freevars_sqlexpr e
 | `Like(e, l) -> StringSet.union (freevars_like_expr l) (freevars_sqlexpr e)
@@ -109,7 +109,7 @@ and subst_sqlQuery var expr query =
 
 let owning_table of_col qry =
   match List.find (fun (_expr, name) -> name = of_col) qry.cols with
-    | (`F field, name) -> field.table
+    | (`F field, _name) -> field.table
     | _ -> assert false
 
 let sorting_to_sql = function

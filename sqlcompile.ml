@@ -20,11 +20,12 @@ let debug = Settings.add_bool("debug_sqlcompile", false, `User)
    SQL type. *)
 let sqlable_primtype ty = 
   match Types.concrete_type ty with
-      `Primitive ty' -> (match ty' with 
-                            `Bool | `Int | `Char | `Float -> true
-                          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
-                                              Types.string_of_datatype ty));
-                              false)
+      `Primitive ty' -> (
+        match ty' with 
+            `Bool | `Int | `Char | `Float -> true
+          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
+                                             Types.string_of_datatype ty));
+              false)
     | `Application ("String", []) -> true
     | `Application ("List", [`Primitive `Char]) -> true
     | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
@@ -179,15 +180,51 @@ struct
               Some result
     | _ -> None
 
+  let asList_to_TableQuery : RewriteSyntax.rewriter =
+    function 
+      | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
+          let th_type = Types.concrete_type (node_datatype th) in
+          let th_row = match th_type with
+            | `Table (`Record th_row, _) -> th_row
+            | _ -> failwith "Internal Error: tables must have concrete table type"
+          in
+          let table_alias = gensym ~prefix:"Table_" () in
+          let rowFieldToTableCol colName = function
+            | `Present fieldType -> (`F{SqlQuery.table = table_alias;
+                                        SqlQuery.column = colName;
+                                        SqlQuery.ty = fieldType}, colName)
+            | _ -> failwith "Internal Error: missing field in row"
+          in
+          let fields, _ = th_row in
+          let columns = StringMap.to_list rowFieldToTableCol fields in
+          let th_var = match th with
+            | Variable(var, _) -> var
+            | _ -> gensym ~prefix:"_t" () in
+          let select_all = {SqlQuery.cols = columns;
+                            SqlQuery.tabs = [`TableVar(th_var, table_alias)];
+                            SqlQuery.cond = [`True];
+                            SqlQuery.most = SqlQuery.Inf;
+                            SqlQuery.from = Num.Int 0;
+                            SqlQuery.sort = []} in
+          let th_list_type = `Application ("List", [`Record(th_row)]) in
+          let table_query = TableQuery(select_all, `T (pos, th_list_type, None))
+          in
+            (match th with
+               | Variable _ -> Some table_query
+               | _ -> Some (Let (th_var, th, table_query, data)))
+      | _ -> None
+
   let normalize : Syntax.expression -> Syntax.expression =
     let rules = [
+      Syntax.RewriteSyntax.bottomup asList_to_TableQuery;
       NormalizeProjections.normalize_projections;
       Syntax.RewriteSyntax.bottomup lift_nonrecord_compn;
       Simplify.simplify;
       Syntax.RewriteSyntax.topdown simplify_table_query;
       Syntax.RewriteSyntax.topdown remove_unused_variables;
     ] in
-      fun e -> fromOption (Variable("FUD", Syntax.no_expr_data)) (Syntax.RewriteSyntax.all rules e)
+      fun e -> fromOption (Variable("FUD", Syntax.no_expr_data))
+                          (Syntax.RewriteSyntax.all rules e)
         
   let normalize e = 
     let r = normalize e in
@@ -291,7 +328,6 @@ struct
       | e -> uncompilable e
     in compile e
 
-
   let rec compileB (env : Env.t) : expression -> baseexpr = function
     | Apply (Variable ("not", _), [b], _)  -> 
         `Not ((trycompile "B" compileB) env b)
@@ -353,8 +389,8 @@ struct
                 | _ -> uncompilable e
               end
           | t -> 
-              Debug.if_set_l debug(lazy ("comprehension source: wrong type : " ^
-                            Types.Show_datatype.show t));
+              Debug.if_set_l debug(lazy("comprehension source: wrong type : " ^
+                                          Types.Show_datatype.show t));
               uncompilable e
         end
 
@@ -396,7 +432,6 @@ struct
               Debug.if_set_l debug(lazy "could not compile table query");
               uncompilable e
         end
-    | TableQuery _ -> failwith "Unexpected form of TableQuery"
     | Condition (c, t, Nil _, _) ->
         `Where ((trycompile "B" compileB) env c, (trycompile "S" compileS) env t)
     | Condition (c, Nil _, t, _) ->
@@ -558,7 +593,7 @@ struct
 end
 
 let underscore_numeric_names cols =
-  map (fun (expr, col) ->
+  map (fun (_expr, col) ->
          if is_numeric col then
            (col, "_" ^ col) 
          else
@@ -580,7 +615,7 @@ let injectQuery q data =
   let renamings = underscore_numeric_names q.cols in
   let renamer =
     let fields = map
-      (fun (expr, name) ->
+      (fun (_expr, name) ->
          (name,
           (Syntax.Project(Syntax.Variable("row", Syntax.no_expr_data),
                           (try List.assoc name renamings
@@ -616,4 +651,3 @@ let sql_compile_prepared (expr : Syntax.expression) : Syntax.expression option =
 let sql_compile (expr : Syntax.expression) : Syntax.expression option =
   let expr = Prepare.normalize expr in
     Syntax.RewriteSyntax.maxonce_td sql_compile_prepared expr
-

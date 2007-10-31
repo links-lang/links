@@ -140,7 +140,7 @@ let expr_eval_req valenv program params =
           let env = List.filter (not -<- is_special_param) params in
           let env = (List.fold_right
                        (fun pair env -> 
-                          Syntax.Concat (Syntax.List_of (mkStringPair pair, data),
+                          Syntax.Concat (Syntax.List_of(mkStringPair pair, data),
                                          env, data))
                        env (Syntax.Nil data))
           in ExprEval (Syntax.Apply (f, [env], data), locals @ json_args)

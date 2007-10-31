@@ -107,7 +107,6 @@ SOURCES = $(OPC)                		\
           rewriteexamples.ml                    \
 
 
-
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)

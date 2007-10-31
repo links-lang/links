@@ -253,43 +253,6 @@ let simplify_regex : RewriteSyntax.rewriter = function
     as much calculation to the DBMS as possible. {e Beware:} some
     optimisers have dependencies with other optimisers. *)
 
-let sql_aslist : RewriteSyntax.rewriter =
-  function 
-    | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
-        let th_type = Types.concrete_type (node_datatype th) in
-        let th_row = match th_type with
-          |  `Table (`Record th_row, _) -> th_row
-          | _ -> failwith "Internal Error: tables must have concrete table type"
-        in
-        let table_alias = gensym ~prefix:"Table_" () in
-	let rowFieldToTableCol colName = function
-	  | `Present fieldType -> (`F{SqlQuery.table = table_alias;
-                                      SqlQuery.column = colName;
-                                      SqlQuery.ty = fieldType}, colName)
-	  | _ -> failwith "Internal Error: missing field in row"
-	in
-	let fields, _ = th_row in
-	let columns = StringMap.to_list rowFieldToTableCol fields in
-        let th_var = match th with
-          | Variable(var, _) -> var
-          | _ -> gensym ~prefix:"_t" () in
-          (* With the new SQL compiler, this no longer serves a purpose. *)
-	let select_all = {SqlQuery.cols = columns;
-			  SqlQuery.tabs = [`TableVar(th_var, table_alias)];
-			  SqlQuery.cond = [`True];
-			  SqlQuery.most = SqlQuery.Inf;
-			  SqlQuery.from = Num.Int 0;
-                          SqlQuery.sort = []} in
-        let th_list_type = `Application ("List", [`Record(th_row)]) in
-          (* With the new SQL compiler, this TableQuery is needed only
-             to hold the variable and the generated alias. *)
-        let table_query = TableQuery(select_all, `T (pos, th_list_type, None))
-        in
-          (match th with
-             | Variable _ -> Some table_query
-             | _ -> Some (Let (th_var, th, table_query, data)))
-    | _ -> None
-
 let lift_lets : RewriteSyntax.rewriter = function
   | For(loopbody, loopvar, Let(letvar, letval, letbody, letdata), data) 
     -> Some(Let(letvar, letval,
@@ -380,7 +343,6 @@ let rewriters env = [
     RewriteSyntax.topdown reduce_recursion
   else RewriteSyntax.never;
   RewriteSyntax.topdown simplify_regex;
-  RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;

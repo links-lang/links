@@ -59,7 +59,8 @@ type 'data expression' =
   | Apply of ('data expression' * 'data expression' list * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
-  | Comparison of ('data expression' * Syntaxutils.comparison * 'data expression' * 'data)
+  | Comparison of ('data expression' * Syntaxutils.comparison * 
+                     'data expression' * 'data)
   | Abstr of (string list * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * 'data expression' * Types.datatype option) list 

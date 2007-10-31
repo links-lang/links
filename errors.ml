@@ -91,7 +91,7 @@ let get_mailbox_msg add_code_tags =
       | None -> ""
       | Some mbtype ->
 	  " (mailbox type "^ string_of_datatype mbtype ^ ") "
-  
+
 let rec format_exception = function
   | RichSyntaxError s ->
       ("*** Parse error: " ^ s.filename ^ ":"
@@ -104,11 +104,11 @@ let rec format_exception = function
         pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expressions `" ^ 
-        String.concat ", " pexpr ^ "' have types\n    " ^ 
+        String.concat "', `" pexpr ^ "' have types\n    " ^ 
         mapstrcat "\n" (indent 2 -<- string_of_datatype) paramtype ^ 
         (get_mailbox_msg false mb)^
         "\nand cannot be passed to function `"^ fexpr ^
-        "', which expects arguments of type\n    "^ string_of_datatype fntype
+        "', which has type\n    "^ string_of_datatype fntype
       in format_exception(Type_error(pos, msg))
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression `"^ fexpr ^"', which has type\n    "^ 

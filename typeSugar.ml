@@ -580,7 +580,8 @@ let rec extract_formlet_bindings (expr, pos) =
             children Env.empty
       | _ -> Env.empty
           
-let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : context -> Untyped.phrase -> Typed.phrase = 
+let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) 
+    : context -> Untyped.phrase -> Typed.phrase = 
   let rec type_check ({tenv = (env, alias_env)} as context) (expr, pos) =
     let unify = Utils.unify alias_env
     and (++) (env, alias_env) env' = (Env.extend env env', alias_env)
@@ -607,8 +608,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
           binders ([], []) in
       let pt = close_pattern_type pats pt in
 
-      (* NOTE: it is important to type the patterns in isolation first in order to
-         allow them to be closed before typing the bodies *)
+      (* NOTE: it is important to type the patterns in isolation first in order
+         to allow them to be closed before typing the bodies *)
 
       let binders = 
         List.fold_right
@@ -624,7 +625,6 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
         | `Section _ as s   -> type_section env s
-
 
         (* literals *)
         | `Constant c as c' -> c', constant_type c

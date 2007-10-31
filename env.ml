@@ -9,7 +9,7 @@ sig
   val lookup : 'a t -> name -> 'a
   val find : 'a t -> name -> 'a option
   module Dom : Utility.Set.S
- val domain : 'a t -> Dom.t
+  val domain : 'a t -> Dom.t
   val range : 'a t -> 'a list
 
   val map : ('a -> 'b) -> 'a t -> 'b t
