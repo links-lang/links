@@ -116,6 +116,8 @@ let sorting_to_sql = function
   | `Asc (table, col)  -> table ^ "." ^ col ^ " ASC" 
   | `Desc (table, col) -> table ^ "." ^ col ^ " DESC"
 
+let add_sorting query col = {query with sort = col :: query.sort}
+
 let rec like_as_string = function 
   | `Percent -> "%"
   | `Seq exprs -> mapstrcat "" like_as_string exprs

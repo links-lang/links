@@ -161,6 +161,9 @@ val labelize : program -> program
 val dummy_position : position
 val no_expr_data : typed_data
 
+(** extract the target and field name from an expression if it's a projection. *)
+val read_proj : 'a expression' -> ('a expression' * string) option
+
 val is_closed : expression -> bool
 val is_closed_wrt : expression -> Utility.StringSet.t -> bool
 

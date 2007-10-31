@@ -784,6 +784,9 @@ let program_skeleton =
   fun (ds, body) ->
     (List.map definition_skeleton ds, skeleton body)
 
+let read_proj = function
+  | Project (record, name, _) -> Some (record, name)
+  | _ -> None 
 
 let record_selection (name, label_variable, extension_variable, scrutinee, body, data) =
   let v = gensym () in

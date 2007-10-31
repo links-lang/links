@@ -23,12 +23,12 @@ let sqlable_primtype ty =
       `Primitive ty' -> (
         match ty' with 
             `Bool | `Int | `Char | `Float -> true
-          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
+          | _ -> Debug.print_l(lazy("non-sqlable primitive: " ^ 
                                              Types.string_of_datatype ty));
               false)
     | `Application ("String", []) -> true
     | `Application ("List", [`Primitive `Char]) -> true
-    | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
+    | _ -> Debug.print_l(lazy("non-primitive in record was " ^ 
                         Types.string_of_datatype ty));
         false
 
@@ -158,7 +158,7 @@ struct
       For(List_of(elem, data_body), var, src, data_for) 
         when sqlable_primtype(node_datatype elem)
           -> 
-            Debug.if_set_l debug(lazy("Lifting non-record in comp'n body"));
+            Debug.print_l(lazy("Lifting non-record in comp'n body"));
 
             let ty = Types.concrete_type(node_datatype elem) in
             let recd_ty = Types.make_record_type[("a", ty)] in
@@ -175,62 +175,53 @@ struct
                                 For(List_of(elem_record, 
                                             data_body),
                                     var, src, data_for)], data_for) in
-              Debug.if_set_l debug(lazy(" to: " ^
+              Debug.print_l(lazy(" to: " ^
                            string_of_expression(result)));
               Some result
     | _ -> None
 
-  let asList_to_TableQuery : RewriteSyntax.rewriter =
-    function 
-      | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
-          let th_type = Types.concrete_type (node_datatype th) in
-          let th_row = match th_type with
-            | `Table (`Record th_row, _) -> th_row
-            | _ -> failwith "Internal Error: tables must have concrete table type"
-          in
-          let table_alias = gensym ~prefix:"Table_" () in
-          let rowFieldToTableCol colName = function
-            | `Present fieldType -> (`F{SqlQuery.table = table_alias;
-                                        SqlQuery.column = colName;
-                                        SqlQuery.ty = fieldType}, colName)
-            | _ -> failwith "Internal Error: missing field in row"
-          in
-          let fields, _ = th_row in
-          let columns = StringMap.to_list rowFieldToTableCol fields in
-          let th_var = match th with
-            | Variable(var, _) -> var
-            | _ -> gensym ~prefix:"_t" () in
-          let select_all = {SqlQuery.cols = columns;
-                            SqlQuery.tabs = [`TableVar(th_var, table_alias)];
-                            SqlQuery.cond = [`True];
-                            SqlQuery.most = SqlQuery.Inf;
-                            SqlQuery.from = Num.Int 0;
-                            SqlQuery.sort = []} in
-          let th_list_type = `Application ("List", [`Record(th_row)]) in
-          let table_query = TableQuery(select_all, `T (pos, th_list_type, None))
-          in
-            (match th with
-               | Variable _ -> Some table_query
-               | _ -> Some (Let (th_var, th, table_query, data)))
+  (** [asList_anf] puts applications of asList in ANF, so that the
+      argument can only be a variable; this would go away if we had
+      ANF in the IR *)
+  let asList_anf : RewriteSyntax.rewriter = function 
+    | (Apply(Variable("asList", d1), [Variable _], d2) as expr) -> None
+    | (Apply(Variable("asList", d1), [th], d2) as expr) -> 
+        let th_data = expression_data th in
+        let th_var = gensym ~prefix:"_t" () in
+          Some (Let (th_var, th,
+                     Apply(Variable("asList", d1),
+                           [Variable(th_var, th_data)], d2), d2))
+    | _ -> None
+
+  (** [lift_let_past_sortby] does some limited re-normalization (or
+      let-flattening). This is presently just used to get SortBy
+      applications in the right form for query compilation. This, too,
+      would go away if the source was a flattened ANF representation.
+      (Note: presumes that all binders are unique *)
+  let lift_let_past_sortby =
+    function
+      | SortBy(Let(x, e1, e2, d1), e3, d2) ->
+          Some (Let(x, e1, SortBy(e2, e3, d2), d1))
       | _ -> None
 
   let normalize : Syntax.expression -> Syntax.expression =
     let rules = [
-      Syntax.RewriteSyntax.bottomup asList_to_TableQuery;
+      Syntax.RewriteSyntax.bottomup asList_anf;
       NormalizeProjections.normalize_projections;
       Syntax.RewriteSyntax.bottomup lift_nonrecord_compn;
       Simplify.simplify;
       Syntax.RewriteSyntax.topdown simplify_table_query;
       Syntax.RewriteSyntax.topdown remove_unused_variables;
+      Syntax.RewriteSyntax.topdown lift_let_past_sortby;
     ] in
       fun e -> fromOption (Variable("FUD", Syntax.no_expr_data))
-                          (Syntax.RewriteSyntax.all rules e)
+        (Syntax.RewriteSyntax.all rules e)
         
   let normalize e = 
     let r = normalize e in
       (if !trace_normalize then
          prerr_endline ("normalize output : " ^ 
-(*          Syntax.Show_expression.show r)); *)
+                          (*          Syntax.Show_expression.show r)); *)
          Syntax.Show_stripped_expression.show (Syntax.strip_data r)));
       r
 end
@@ -292,15 +283,15 @@ struct
         let i = !counter in
           incr counter;
           try 
-            Debug.if_set_l debug(lazy(string_of_int i ^ " " ^ msg ^ 
+            Debug.print_l(lazy(string_of_int i ^ " " ^ msg ^ 
                          " attempting to compile : " ^ 
                          Syntax.Show_stripped_expression.show 
                          (Syntax.strip_data e)));
             let r = f env e in
-              Debug.if_set_l debug(lazy(string_of_int i ^ " success!"));
+              Debug.print_l(lazy(string_of_int i ^ " success!"));
               r
           with (Uncompilable _) as ex -> 
-            Debug.if_set_l debug(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
+            Debug.print_l(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
             raise ex
 
   let compileRegex (e : 'a Syntax.expression') : like_expr = 
@@ -343,7 +334,7 @@ struct
         begin match Env.lookupf {Env.var=v;Env.label=label} env with
           | Some v -> `Var v
           | None   -> 
-              Debug.if_set_l debug(lazy("env : " ^ Env.Show_t.show env));
+              Debug.print_l(lazy("env : " ^ Env.Show_t.show env));
               uncompilable e
         end
     | Record_intro (fields, None, _) ->
@@ -364,7 +355,7 @@ struct
 
   let rec compileS env : expression -> simpleExpr = function
     | For (body, var, src, _) as e -> 
-        Debug.if_set_l debug(lazy("attempting to compile comprehension!"));
+        Debug.print_l(lazy("attempting to compile comprehension!"));
         begin match Types.concrete_type (node_datatype src) with
           | `Application ("List",[r]) ->
               begin match Types.concrete_type r with 
@@ -374,14 +365,14 @@ struct
                       List.map (fun (label, _) -> 
                                   (
                                     (let l = {Env.var = var; Env.label = label} in
-                                       Debug.if_set_l debug(lazy("binding : " ^ Env.Show_field.show l));
+                                       Debug.print_l(lazy("binding : " ^ Env.Show_field.show l));
                                        l), gensym())) fields in
                     let env' = fold_right (uncurry Env.bindf) fieldinfo env in
                     let env' = Env.bindv var (`Rec (List.map (fun (f,v) -> f.Env.label, `Var v) fieldinfo)) env' in
                       begin
                         let s = (trycompile "S" compileS) env src
                         and t = (trycompile "S" compileS) env' body in
-                          Debug.if_set_l debug(lazy "SUCCESSFULLY compiled comprehension");
+                          Debug.print_l(lazy "SUCCESSFULLY compiled comprehension");
                           `For((List.map (fun (field, fname) -> 
                                             (field.Env.label, fname))
                                   fieldinfo), s, t)
@@ -389,49 +380,40 @@ struct
                 | _ -> uncompilable e
               end
           | t -> 
-              Debug.if_set_l debug(lazy("comprehension source: wrong type : " ^
-                                          Types.Show_datatype.show t));
+              Debug.print_l(lazy("comprehension source: wrong type : " ^
+                                   Types.Show_datatype.show t));
               uncompilable e
         end
+          
+    | SortBy(listExpr, Abstr([loopVar], sortByExpr, _), _) as e ->
+        begin
+          match (trycompile "S" compileS) env listExpr with
+              `Table(fields, th_var, table_alias, sort) ->
+                begin
+                  match read_proj sortByExpr with
+                    | Some(Variable(sortByRecVar, _), sortByFld)
+                        when sortByRecVar = loopVar ->
+                          `Table(fields, th_var, table_alias, sort @ [`Asc(table_alias, sortByFld)])
+                    | _ -> uncompilable e
+                end
+            | _ -> uncompilable e
+        end
 
-    | SortBy(TableQuery(query, data1),
-             Abstr([loopVar], sortByExpr, _), _) as e ->
-        let read_proj = function
-          | Project (record, name, _) -> Some (record, name)
-          | _ -> None in
-        let add_sorting query col = 
-          {query with SqlQuery.sort = col :: query.SqlQuery.sort}
+    | (Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) as expr)
+      ->
+        Debug.print_l(lazy("attempting to compile asList application"));
+        let fields = match Types.concrete_type (node_datatype th) with
+          | `Table (`Record (fields, _), _) -> fields
+          | _ -> failwith "Internal Error: tables must have concrete table type"
         in
-          begin
-            match read_proj sortByExpr with
-              | Some (Variable(sortByRecVar, _), sortByFld)
-                  when sortByRecVar = loopVar ->
-                  (trycompile "S" compileS) env
-                    (TableQuery(add_sorting query
-                                  (`Asc(SqlQuery.owning_table sortByFld query,
-				        sortByFld)), data1))
-              | _ -> uncompilable e
-          end
+        let th_var = match th with
+          | Variable(var, _) -> var
+          | _ -> Debug.print("Internal error: asList arg was not var"); 
+              uncompilable expr
+        in
+        let table_alias = gensym ~prefix:"Table_" () in
+          `Table(present_fields fields, th_var, table_alias, [])
 
-    | TableQuery (q, `T (_,ty,_)) as e ->
-        Debug.if_set_l debug(lazy("attempting to compile table query"));
-        begin match q, Types.concrete_type ty with 
-          | {cols = _;
-	     tabs = [`TableVar (th_var, table_alias)]; (* single table *)
-	     cond = [`True];
-	     most = Inf;
-	     from = Int 0;
-             sort = sort},
-            ty ->
-              let fields = (match ty with
-                              | `Application ("List", [`Record (fields,_)]) -> fields
-                              | s -> failwith ("Unexpected table type in:" ^
-                                               Types.Show_datatype.show s)) in
-                `Table(present_fields fields, th_var, table_alias, sort)
-          | _ -> 
-              Debug.if_set_l debug(lazy "could not compile table query");
-              uncompilable e
-        end
     | Condition (c, t, Nil _, _) ->
         `Where ((trycompile "B" compileB) env c, (trycompile "S" compileS) env t)
     | Condition (c, Nil _, t, _) ->
@@ -442,8 +424,8 @@ struct
           match (trycompile "B" compileB) env b with
             | `Rec _ as b -> `Return b
             | _ -> uncompilable e
-        else (Debug.if_set_l debug(lazy("List_of body was not a tuple, it was: " ^ 
-                           Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
+        else (Debug.print_l(lazy("List_of body was not a tuple, it was: " ^ 
+                                   Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
               uncompilable e)
     | e -> uncompilable e
 
@@ -553,6 +535,7 @@ struct
             most = (match q1.most, q2.most with Inf, Inf -> Inf | _ -> assert false);
             from = (match q1.from, q2.from with Int 0, Int 0 -> Int 0 | _ -> assert false);
             sort = q1.sort @ q2.sort }
+
     | `Let (v, b, e) -> evalS (Env.binde v (evalb env b) env) e
     | `Where (b, s) -> 
         let cond = evalb env b
