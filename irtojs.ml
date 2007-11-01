@@ -474,7 +474,7 @@ let rec generate_value env : value -> code =
               | String v   -> chrlistlit v
           end
       | `Variable var ->
-          (* [HACK] *)
+          (* HACK *)
           begin
             match (Env'.lookup env var) with
               | "map" -> Var ("LINKS.accum")
@@ -737,6 +737,18 @@ struct
         '|', "pipe";
         '_', "underscore"]
 
+  let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+                     "catch";"for";"switch";"while";"continue";"function";"this";
+                     "with";"default";"if";"throw";"delete";"in";"try";"do";
+                     "instanceof";"typeof";
+                     (* "future keywords" *)
+                     "abstract";"enum";"int";"short";"boolean";"export";
+                     "interface";"static";"byte";"extends";"long";"super";"char";
+                     "final";"native";"synchronized";"class";"float";"package";
+                     "throws";"const";"goto";"private";"transient";"debugger";
+                     "implements";"protected";"volatile";
+                    ]
+
   let has_symbols name =
     not (Library.is_primitive name) &&
       List.exists (not -<- Utility.Char.isWord) (explode name)
@@ -756,6 +768,8 @@ struct
         (* TBD: it would be better if this split to chunks maximally matching
            (\w+)|(\W)
            then we would not split apart words in partly-symbolic idents. *)
+    else if mem name js_keywords then
+      "_" ^ name (* FIXME: this could conflict with Links names. *)
     else name
       
   let rename exp = 

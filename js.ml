@@ -13,7 +13,6 @@ open Syntax
 let optimising = Basicsettings.Js.optimise
 let elim_dead_defs = Basicsettings.Js.elim_dead_defs
 let js_lib_url = Basicsettings.Js.lib_url
-let js_rename_builtins = Settings.add_bool("js_rename_builtins", false, `User)
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (* Intermediate language *)
@@ -184,6 +183,7 @@ let rec local_names : code -> string list = function
   | Seq (l, r) -> local_names l @ local_names r
   | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
   | Defs (bs) -> map fst bs
+  | Ret a -> local_names a
 
 (* Generate code from intermediate language *) 
 let rec show : code -> string = 
@@ -229,6 +229,7 @@ let rec show : code -> string =
       | Seq (l, r) -> "(" ^ show l ^", "^ show r ^ ")"
       | Nothing -> ""
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
+      | Ret a -> "return "^show a
 
 open PP
 
@@ -349,29 +350,27 @@ and  boiler_4 () = ";
   </body>
 </html>"
 
-(* Operators are represented as functions in the interpreter, but
-   operator names aren't valid JS function names.*)
-let builtins = ["+", "_plus";
-                "+.", "_plus";
-                "-", "_minus";
-                "-.", "_minus";
-                "*", "_times";
-                "*.", "_times";
-                "/", "_divide";
-                "/.", "_divide"]
+module Binop :
+sig
+  val is : string -> bool
+  val js_name : string -> string
+end =
+struct
+  let builtin_ops =
+    StringMap.from_alist
+      [ "+",  "+" ;
+        "+.", "+" ;
+        "-",  "-" ;
+        "-.", "-" ;
+        "*",  "*" ;
+        "*.", "*" ;
+        "/",  "/" ;
+        "/.", "/" ]
 
-let binop_name op = 
-  try
-    assoc op ["+",  "+";
-              "+.", "+";
-              "-",  "-";
-              "-.", "-";
-              "*",  "*";
-              "*.", "*";
-              "/",  "/";
-              "/.", "/";
-	     ]
-   with Not_found ->  failwith ("Not found : " ^ op)
+  let is x = StringMap.mem x builtin_ops
+  let js_name op = StringMap.find op builtin_ops
+end
+
 
 let comparison_name = function
   |`Less   -> "<"
@@ -379,9 +378,6 @@ let comparison_name = function
   |`Equal  -> "=="
   |`NotEq  -> "!="
   
-let rename_builtins name =
-  try assoc name builtins
-  with Not_found -> name
 
 let href_rewrite globals : RewriteSyntax.rewriter = function
   | Apply (Variable ("pickleCont",_), 
@@ -516,7 +512,11 @@ let rec generate : 'a expression' -> code =
                         Bind(v, Var x,
                              Call(b', [Var "__kappa"])))]))
   | Variable ("~", _)                  -> trivial_cps (Var "tilde")
-  | Variable (v, _)                    -> trivial_cps (Var v)
+  | Variable (name, _) ->
+      if Binop.is name then
+        trivial_cps (Fn (["x"; "y"], Ret(Binop(Var "x", Binop.js_name name, Var "y"))))
+      else
+        trivial_cps (Var name)
   | Comparison (l, `Equal, r, _)         -> 
       let l_cps = generate' l in
       let r_cps = generate' r in
@@ -579,14 +579,13 @@ let rec generate : 'a expression' -> code =
                                               [Var f_name])
                                         :: [Lst ([Var arg_name]); 
                                             Var ("__kappa")])))])))]))
-
-  | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
+  | Apply (Variable (op, _), [l; r], _) when Binop.is op ->
       let l_cps = generate' l in
       let r_cps = generate' r in
         Fn(["__kappa"], 
            Call(l_cps, [Fn(["__l"],
                 Call(r_cps, [Fn(["__r"],
-                     callk_yielding (Binop (Var "__l", binop_name op, Var "__r")))]))]))
+                     callk_yielding (Binop (Var "__l", Binop.js_name op, Var "__r")))]))]))
    | Apply (f, p, _  ) -> 
       let kappa = Var("__kappa") in
       let f_cps = generate' f in
@@ -807,9 +806,8 @@ and generate_direct_style : 'a expression' -> code =
   | App _ -> 
       failwith "nyi js gen direct_style app"
 
-  | Apply (Variable (op, _), [l; r], _) when mem_assoc op builtins -> 
-      Binop(gd l, binop_name op, gd r)
-
+  | Apply (Variable (op, _), [l; r], _) when Binop.is op -> 
+      Binop(gd l, Binop.js_name op, gd r)
   | Apply (f, ps, _  ) ->
       Call(gd f, map gd ps)
 
@@ -894,6 +892,7 @@ let rec freevars =
   | Lst terms           -> S.union_all (map fv terms)
   | Bind (var, e, body) -> S.union (fv e) (S.remove var (fv body))
   | Seq (l, r)          -> S.union (fv l) (fv r)
+  | Ret a               -> fv a
   | Lit _ 
   | Die _ 
   | Nothing             -> S.empty
@@ -999,85 +998,95 @@ let gen ?(pre_opt=identity) =
   ->- pre_opt
   ->- optimise
 
-let words = 
-  [ '!', "bang";
-    '$', "dollar";
-    '%', "percent";
-    '&', "and";
-    '*', "star";
-    '+', "plus";
-    '/', "slash";
-    '<', "lessthan";
-    '=', "equals";
-    '>', "greaterthan";
-    '?', "huh";
-    '@', "monkey";
-    '\\', "backslash";
-    '^', "caret";
-    '-', "hyphen";
-    '.', "fullstop";
-    '|', "pipe";
-    '_', "underscore"]
+module Symbols :
+sig
+  val rename : Syntax.expression -> Syntax.expression
+  val rename_def : Syntax.definition -> Syntax.definition
+end =
+struct
+  let words =
+    CharMap.from_alist
+      [ '!', "bang";
+        '$', "dollar";
+        '%', "percent";
+        '&', "and";
+        '*', "star";
+        '+', "plus";
+        '/', "slash";
+        '<', "lessthan";
+        '=', "equals";
+        '>', "greaterthan";
+        '?', "huh";
+        '@', "monkey";
+        '\\', "backslash";
+        '^', "caret";
+        '-', "hyphen";
+        '.', "fullstop";
+        '|', "pipe";
+        '_', "underscore"]
 
-let symbols = List.map fst words
+  let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+                     "catch";"for";"switch";"while";"continue";"function";"this";
+                     "with";"default";"if";"throw";"delete";"in";"try";"do";
+                     "instanceof";"typeof";
+                     (* "future keywords" *)
+                     "abstract";"enum";"int";"short";"boolean";"export";
+                     "interface";"static";"byte";"extends";"long";"super";"char";
+                     "final";"native";"synchronized";"class";"float";"package";
+                     "throws";"const";"goto";"private";"transient";"debugger";
+                     "implements";"protected";"volatile";
+                    ]
 
-let symbolp name =
-  List.exists (not -<- Utility.Char.isWord) (explode name) &&
-    (if Settings.get_value js_rename_builtins then true (* FIXME: this is a horrible hack. *)
-     else (not (Library.is_primitive name)))
+  let has_symbols name =
+    not (Library.is_primitive name) &&
+      List.exists (not -<- Utility.Char.isWord) (explode name)
 
-let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
-                   "catch";"for";"switch";"while";"continue";"function";"this";
-                   "with";"default";"if";"throw";"delete";"in";"try";"do";
-                   "instanceof";"typeof";
-                   (* "future keywords" *)
-                   "abstract";"enum";"int";"short";"boolean";"export";
-                   "interface";"static";"byte";"extends";"long";"super";"char";
-                   "final";"native";"synchronized";"class";"float";"package";
-                   "throws";"const";"goto";"private";"transient";"debugger";
-                   "implements";"protected";"volatile";
-                 ]
+  let wordify name = 
+    if has_symbols name then 
+      ("_" ^ 
+         mapstrcat "_" 
+         (fun ch ->
+            if (Utility.Char.isWord ch) then
+              String.make 1 ch
+            else if CharMap.mem ch words then
+              CharMap.find ch words
+            else
+              failwith("Internal error: unknown symbol character: "^String.make 1 ch))
+         (Utility.explode name))
+        (* TBD: it would be better if this split to chunks maximally matching
+           (\w+)|(\W)
+           then we would not split apart words in partly-symbolic idents. *)
+    else if mem name js_keywords then
+      "_" ^ name (* FIXME: this could conflict with Links names. *)
+    else name
+      
+  let rename exp = 
+    fromOption exp
+      (RewriteSyntax.bottomup
+         (function
+            | Variable (name, d) -> Some (Variable (wordify name, d))
+            | Let (name, rhs, body, d) -> 
+                Some (Let (wordify name, rhs, body, d))
+            | Rec (bindings, body, d) -> 
+                let rename (nm, body, t) = (wordify nm, body, t) in
+                  Some (Rec (List.map rename bindings, body, d))
+            | _ -> None)
+         exp)
 
-let wordify name = 
-  if symbolp name then 
-    try
-    ("_" ^ 
-       mapstrcat "_" 
-       (fun ch ->
-          if (Utility.Char.isWord ch) then String.make 1 ch else
-            List.assoc ch words
-       )
-       (Utility.explode name))
-      (* TBD: it would be better if this split to chunks maximally matching
-         (\w+)|(\W)
-         then we would not split apart words in partly-symbolic idents. *)
-    with
-        Not_found -> failwith("Internal error: unknown symbol character")
-  else if mem name js_keywords then
-    "_" ^ name (* FIXME: this could conflict with Links names. *)
-  else name
+  let rename_def def =
+    match def with
+      | Define (name, b, l, t) -> 
+          Define (wordify name, rename b, l, t)
+      | Alias (name, _, _, _)
+      | Alien (name, _, _, _) when has_symbols name ->
+          assert false (* symbols shouldn't appear in types or foreign functions *)
+      | _ -> def
+end
 
-let wordify_rewrite : RewriteSyntax.rewriter = function
-  | Variable (name, d) -> Some (Variable (wordify name, d))
-  | Let (name, rhs, body, d) -> 
-      Some (Let (wordify name, rhs, body, d))
-  | Rec (bindings, body, d) -> 
-      let rename (nm, body, t) = (wordify nm, body, t) in
-        Some (Rec (List.map rename bindings, body, d))
-  | _ -> None
 
-let rename_symbol_operators exp = 
-  fromOption exp (RewriteSyntax.bottomup wordify_rewrite exp)
 
-let rename_symbol_operators_def def =
-  match def with
-    | Define (name, b, l, t) -> 
-        Define (wordify name, rename_symbol_operators b, l, t)
-    | Alias (name, args, t, data) ->
-        Alias (wordify name, args, t, data)
-    | Alien (name, b, l, t) when symbolp name ->
-        assert false (* I don't know what's supposed to happen here. *)
-    | _ -> def
+
+
 
 let make_boiler_page ?(onload="") ?(body="") defs =
   boiler_1 ()
@@ -1094,7 +1103,7 @@ let get_alien_names defs =
       
 let generate_program_defs defs root_names =
   let aliens = get_alien_names defs in
-  let defs = List.map rename_symbol_operators_def defs in
+  let defs = List.map Symbols.rename_def defs in
   (* NOTE: the body is not really used here. *)
   let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
@@ -1111,8 +1120,8 @@ let generate_program_defs defs root_names =
     map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
-  let expr = rename_symbol_operators expr in
-  let defs = map rename_symbol_operators_def defs in
+  let expr = Symbols.rename expr in
+  let defs = map Symbols.rename_def defs in
   let js_defs = generate_program_defs defs (Syntax.freevars expr) in
   let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
   let global_names = Syntax.defined_names defs @ library_names in
