@@ -512,10 +512,11 @@ let rec generate : 'a expression' -> code =
                         Bind(v, Var x,
                              Call(b', [Var "__kappa"])))]))
   | Variable ("~", _)                  -> trivial_cps (Var "tilde")
-  | Variable (name, _) ->
-      if Binop.is name then
-        trivial_cps (Fn (["x"; "y"], Ret(Binop(Var "x", Binop.js_name name, Var "y"))))
-      else
+  | Variable (name, _) when Binop.is name ->
+      trivial_cps
+        (Fn (["x"; "y"; "__kappa"],
+             callk_yielding (Binop(Var "x", Binop.js_name name, Var "y"))))
+  | Variable (name, _)                 ->
         trivial_cps (Var name)
   | Comparison (l, `Equal, r, _)         -> 
       let l_cps = generate' l in
@@ -785,7 +786,9 @@ and generate_direct_style : 'a expression' -> code =
   | Let (v, e, b, _)                   ->
       Bind(v, gd e, gd b)
   | Variable ("~", _)                  -> Var "tilde"
-  | Variable (v, _)                    -> Var v
+  | Variable (name, _) when Binop.is name ->
+      Fn (["x"; "y"], Ret(Binop(Var "x", Binop.js_name name, Var "y")))
+  | Variable (name, _)                   -> Var name
   | Comparison (l, `Equal, r, _)         -> 
       Call(Var "LINKS.eq", [gd l; gd r])
   | Comparison (l, op, r, _)           -> 
