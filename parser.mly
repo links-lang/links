@@ -146,7 +146,7 @@ declaration:
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
+                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) $3; 
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable d, pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
