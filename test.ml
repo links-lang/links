@@ -68,7 +68,7 @@ let type_matches ~inferred ~expected =
   && check_rhs_unchanged expected inferred 
 
 (* Check that the body of the program has a type equivalent to `t' *)
-let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
+let has_type (t : Types.datatype) (Syntax.Program (_, body) as program) =
   let body_type = Syntax.node_datatype body in
     if type_matches ~expected:t ~inferred:body_type then Right program
     else Left (Printf.sprintf

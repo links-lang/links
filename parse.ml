@@ -194,7 +194,7 @@ let program : (Syntax.untyped_program,
   parse = Parser.file
 }
 
-let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
+let datatype : (Types.datatype, Sugartypes.datatype) grammar = {
     desugar =  (fun _ -> Sugar.desugar_datatype);
     parse = Parser.just_datatype
   }

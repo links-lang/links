@@ -11,8 +11,8 @@ let show_typechecking = Settings.add_bool("show_typechecking", false, `User)
 
 let show_recursion = Instantiate.show_recursion
 
-let db_descriptor_type =
-  snd (fst (Parse.parse_string Parse.datatype "(driver:String, name:String, args:String)"))
+let db_descriptor_type : Types.datatype =
+  fst (Parse.parse_string Parse.datatype "(driver:String, name:String, args:String)")
 
 (* extract data from inference_expressions *)
 let type_of_expression : expression -> datatype =
@@ -34,8 +34,7 @@ let rec extract_row : typing_environment -> datatype -> row = fun ((env, alias_e
                 ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
         end
     | `Application (s, ts) ->
-        let vars, alias = lookup_alias (s, ts) alias_env in
-          extract_row typing_env (Instantiate.alias (vars, alias) ts)
+        extract_row typing_env (Instantiate.alias (lookup_alias (s, ts) alias_env) ts)
     | _ -> failwith
         ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " ^ (string_of_datatype t))
 
@@ -131,17 +130,17 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let mapping = map2 (fun n v -> (string_of_int n, v, fresh_type_variable ())) (fromTo 1 (1 + List.length variables)) variables in
       let body_env = 
         fold_right
-          (fun (_,v, vtype) env -> Env.bind env (v, ([], vtype)))
+          (fun (_,v, vtype) env -> Env.bind env (v, vtype))
           mapping
-          (Env.bind env ("_MAILBOX_", ([], mb_type))) in          
+          (Env.bind env ("_MAILBOX_", mb_type)) in          
       let body = type_check (body_env, alias_env) body in
       let tuple = make_tuple_type (List.map thd3 mapping) in
       let type' = `Function (tuple, mb_type, type_of_expression body) in
 	Abstr (variables, body, `T (pos, type', None))
   | Let (variable, value, body, `U pos) ->
       let value = type_check typing_env value in
-      let vtype = (if is_value value then (generalise env (type_of_expression value))
-                   else ([], type_of_expression value)) in
+      let vtype = if is_value value then generalise env (type_of_expression value)
+                  else type_of_expression value in
       let body = type_check (Env.bind env (variable, vtype), alias_env) body in        
 	Let (variable, value, body, `T (pos, type_of_expression body, None))
   | Rec (variables, body, `U pos) ->
@@ -222,7 +221,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let variant_type = `Variant (row_with (case_label, `Present case_var_type) body_row) in
 	unify (variant_type, value_type);
 
-	let case_body = type_check ((Env.bind env (case_variable, ([], case_var_type))), alias_env) case_body in
+	let case_body = type_check ((Env.bind env (case_variable, case_var_type)), alias_env) case_body in
 
 	(*
            We take advantage of absence information to give a more refined type when
@@ -247,7 +246,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
            which clearly doesn't!
         *)
 	let body_var_type = `Variant (row_with (case_label, `Absent) body_row) in
-	let body = type_check ((Env.bind env (variable, ([], body_var_type))), alias_env) body in
+	let body = type_check ((Env.bind env (variable, body_var_type)), alias_env) body in
 
 	let case_type = type_of_expression case_body in
 	let body_type = type_of_expression body in
@@ -277,7 +276,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let expr_tvar = fresh_type_variable () in
       let value = type_check typing_env value in
 	unify (type_of_expression value, `Application ("List", [value_tvar]));
-	let expr_env = Env.bind env (var, ([], value_tvar)) in
+	let expr_env = Env.bind env (var, value_tvar) in
 	let expr = type_check (expr_env, alias_env) expr in
 	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
@@ -372,7 +371,7 @@ and
                                    Env.bind env' (name,
                                      (match t with
                                         | Some t -> (generalise env t)
-                                        | None -> ([], fresh_type_variable ()))))
+                                        | None -> fresh_type_variable ())))
 		       defns Env.empty) in
       let inner_env = Env.extend env var_env in
       let type_check result (name, expr, t) =
@@ -380,7 +379,7 @@ and
         let t' = type_of_expression expr in
           match t' with
             | `Function _ as f  ->
-                let t'' = snd (Env.lookup var_env name) in
+                let t'' = Env.lookup var_env name in
 		  unify alias_env (f, t'');
                   (* [HACK]
 
@@ -425,18 +424,16 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
 	| Define (variable, value, loc, `U pos) ->
 	    let value = type_check (env, alias_env) value in
 	    let value_type = if is_value value then 
-              (generalise env (type_of_expression value))
-            else [], type_of_expression value in
+              generalise env (type_of_expression value)
+            else type_of_expression value in
               ((Env.bind env (variable, value_type)), alias_env),
     	    Define (variable, value, loc, `T (pos, type_of_expression value, None))
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype) alias_env),
             Alias (typename, vars, datatype, `T (pos, `Record (make_empty_closed_row ()), None))
-        | Alien (language, name, assumption, `U pos)  ->
-            let (qs, k) = assumption
-            in
-              ((Env.bind env (name, (qs, k))), alias_env), Alien (language, name, assumption, `T (pos, k, None))
+        | Alien (language, name, t, `U pos)  ->
+            ((Env.bind env (name, t)), alias_env), Alien (language, name, t, `T (pos, t, None))
     in
       (env', alias_env'), def'
 

@@ -305,7 +305,7 @@ let is_char = function
   | `Char _ -> true | _ -> false
 
 let is_string = function
-  | `List elems -> for_all is_char elems
+  | `List elems -> List.for_all is_char elems
   | _ -> false
 
 let make_tuple fields = 

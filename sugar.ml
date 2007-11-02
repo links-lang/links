@@ -895,9 +895,9 @@ module Desugarer =
        in fold_right Types.row_with fields seed
      in desugar, desugar_row
 
-   let desugar_assumption ((vars, k)  : assumption) : Types.assumption = 
+   let desugar_assumption ((vars, k)  : assumption) : Types.datatype = 
      let vars, var_env = generate_var_mapping vars in
-       vars, desugar_datatype' var_env k
+       Types.for_all (vars, desugar_datatype' var_env k)
 
    let rec get_type_vars : binding -> quantifier list =
      let empty = [] in
@@ -1784,10 +1784,9 @@ module Desugarer =
   sig 
     val desugar_expression : (pposition -> Syntax.position) -> phrase -> Syntax.untyped_expression
     val desugar_definitions : (pposition -> Syntax.position) -> binding list -> Syntax.untyped_definition list
-    val desugar_datatype : Sugartypes.datatype -> Types.assumption
+    val desugar_datatype : Sugartypes.datatype -> Types.datatype
     val desugar_datatype' : (Types.meta_type_var Utility.StringMap.t *
                                Types.meta_row_var Utility.StringMap.t) -> Sugartypes.datatype -> Types.datatype
-    val desugar_assumption : Sugartypes.assumption -> Types.assumption 
     val fresh_type_variable : unit -> Sugartypes.datatype
     val make_write_row : row -> (string * fieldconstraint list) list -> row
     val generate_var_mapping : Sugartypes.quantifier list -> (Types.quantifier list * 

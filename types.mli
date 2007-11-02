@@ -36,6 +36,13 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
+    deriving (Typeable, Show, Pickle)
+type quantifier = type_variable
+    deriving (Typeable, Show, Pickle)
+
+val type_var_number : type_variable -> int
+
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
@@ -44,7 +51,8 @@ type datatype =
     | `Variant of row
     | `Table of datatype * datatype
     | `Application of (string * (datatype) list)
-    | `MetaTypeVar of meta_type_var ]
+    | `MetaTypeVar of meta_type_var 
+    | `ForAll of (quantifier list * datatype)]
 and field_spec = [ `Present of datatype | `Absent ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
@@ -54,29 +62,22 @@ and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 val concrete_type : datatype -> datatype
+val for_all : quantifier list * datatype -> datatype
 
-type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Typeable, Show, Pickle)
-type quantifier = type_variable
-    deriving (Typeable, Show, Pickle)
 
-type assumption = ((quantifier list) * datatype)
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = assumption Env.String.t
-    deriving (Show)
-type alias_environment = assumption Env.String.t
-    deriving (Show)
-type typing_environment = environment * alias_environment
+type environment        = datatype Env.String.t
+ and alias_environment  = datatype Env.String.t
+ and typing_environment = environment * alias_environment
     deriving (Show)
 
 (* useful types *)
-val unit_type : datatype
-val string_type : datatype
-val bool_type : datatype
-val int_type : datatype
-val float_type : datatype
-val database_type : datatype
-val xml_type : datatype
+val unit_type          : datatype
+val string_type        : datatype
+val bool_type          : datatype
+val int_type           : datatype
+val float_type         : datatype
+val database_type      : datatype
+val xml_type           : datatype
 val native_string_type : datatype
 
 (* get type variables *)
@@ -216,9 +217,6 @@ val string_of_datatype : datatype -> string
 val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
-
-(* val string_of_quantifier : quantifier -> string *)
-val string_of_assumption : assumption -> string
 val string_of_environment : environment -> string
 
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
@@ -227,4 +225,4 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.I
 
 (* alias lookup *)
 exception AliasMismatch of string
-val lookup_alias : string * datatype list -> alias_environment -> assumption
+val lookup_alias : string * datatype list -> alias_environment -> datatype

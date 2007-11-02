@@ -5,6 +5,8 @@ fun all(p, l) {
    }
 }
 
+fun rubbish(x : int) { x : float }
+
 fun and(l) { 
    switch (l) {
      case [] -> true
