@@ -82,7 +82,7 @@ let perform_function_inlining location name var rhs (Program (defs, body)) =
              Syntax.rewrite_def (RewriteSyntax.bottomup replace_application) def
            else
              def) defs,
-      fromOption body (RewriteSyntax.bottomup replace_application body))
+      from_option body (RewriteSyntax.bottomup replace_application body))
 
 let inline (Program (defs, body) as program) = 
   let valuedefp = function
@@ -329,7 +329,7 @@ let print_definition of_name ?msg:msg def =
  (match def with
     | Define (name, value, locn, _) when name = of_name 
         -> Debug.if_set show_optimisation
-        (fun () -> fromOption "" msg ^ string_of_definition def)
+        (fun () -> from_option "" msg ^ string_of_definition def)
     | _ -> ());
   None
 
@@ -374,7 +374,7 @@ let optimise' env expr =
     in
       expr'
     
-let optimise env expr = fromOption expr (optimise' env expr)
+let optimise env expr = from_option expr (optimise' env expr)
 
 let optimise_program (env, (Program (defs, body))) =
   Program (

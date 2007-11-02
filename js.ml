@@ -99,7 +99,7 @@ let remove_renaming : RewriteCode.rewriter =
                                                                    else name) body)
         (* not really a renaming, but it goes here well enough.  In general this is a pessimisation, though *)
 (*    | Bind (x, (Call (Var "LINKS.project", ([Lit _; Var _])) as l), body)*)
-    | Bind (x, (Lit _ as l), body) -> Some (fromOption body (replace x l body) )
+    | Bind (x, (Lit _ as l), body) -> Some (from_option body (replace x l body) )
 
     | _ -> None
 
@@ -127,7 +127,7 @@ let concat_lits = RewriteCode.bottomup concat_lits
 
 let optimise e = 
   if Settings.get_value optimising then
-    fromOption e 
+    from_option e 
       (RewriteCode.all [remove_renamings; concat_lits] e)
   else e
 
@@ -394,7 +394,7 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
                       json_args, data))
   | _ -> None
 
-let fixup_hrefs globals e = fromOption e (RewriteSyntax.bottomup (href_rewrite globals) e)
+let fixup_hrefs globals e = from_option e (RewriteSyntax.bottomup (href_rewrite globals) e)
 
 let fixup_hrefs_def globals = function
   | Define (name, b,l,t) -> Define (name, fixup_hrefs globals b, l, t)
@@ -976,7 +976,7 @@ let rec simplify : Rewrite_code.rewriter = function
   | _ -> None
 
 let simplify_throughout code =
-  fromOption code (Rewrite_code.bottomup simplify code)
+  from_option code (Rewrite_code.bottomup simplify code)
 
 let rec iterate_to_fixedpoint f x =
   let x' = f x in
@@ -1064,7 +1064,7 @@ struct
     else name
       
   let rename exp = 
-    fromOption exp
+    from_option exp
       (RewriteSyntax.bottomup
          (function
             | Variable (name, d) -> Some (Variable (wordify name, d))

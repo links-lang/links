@@ -1701,7 +1701,7 @@ module Desugarer =
                (fun (label, patt) base ->
                   `Record (label, desugar patt, base), pos)
                labs
-               ((fromOption (`Constant (unit_expression pos), pos) (Utility.opt_map desugar base)))
+               ((from_option (`Constant (unit_expression pos), pos) (Utility.opt_map desugar base)))
          | `Tuple ps ->
              List.fold_right2
                (fun patt n base ->

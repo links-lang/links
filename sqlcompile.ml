@@ -214,7 +214,7 @@ struct
       Syntax.RewriteSyntax.topdown remove_unused_variables;
       Syntax.RewriteSyntax.topdown lift_let_past_sortby;
     ] in
-      fun e -> fromOption (Variable("FUD", Syntax.no_expr_data))
+      fun e -> from_option (Variable("FUD", Syntax.no_expr_data))
         (Syntax.RewriteSyntax.all rules e)
         
   let normalize e = 

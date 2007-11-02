@@ -107,7 +107,7 @@ fun ~parse ~desugarer ~infun ~name ?nlhook ->
   let lexbuf = {(from_function (parse_into code infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      let p = parse (Lexer.lexer (fromOption identity nlhook)) lexbuf in
+      let p = parse (Lexer.lexer (from_option identity nlhook)) lexbuf in
         (desugarer code p, (p, lookup code))
     with 
       | Parsing.Parse_error -> 

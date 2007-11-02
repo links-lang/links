@@ -110,7 +110,7 @@ let concat_lits = RewriteCode.bottomup concat_lits
 
 let optimise e = 
   if Settings.get_value optimising then
-    fromOption e 
+    from_option e 
       (RewriteCode.all [concat_lits] e)
   else e
 
@@ -402,7 +402,7 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
                       json_args, data))
   | _ -> None
 
-let fixup_hrefs globals e = fromOption e (RewriteSyntax.bottomup (href_rewrite globals) e)
+let fixup_hrefs globals e = from_option e (RewriteSyntax.bottomup (href_rewrite globals) e)
 
 let fixup_hrefs_def globals = function
   | Define (name, b,l,t) -> Define (name, fixup_hrefs globals b, l, t)
@@ -773,7 +773,7 @@ struct
     else name
       
   let rename exp = 
-    fromOption exp
+    from_option exp
       (RewriteSyntax.bottomup
          (function
             | Variable (name, d) -> Some (Variable (wordify name, d))

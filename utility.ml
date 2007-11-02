@@ -635,11 +635,11 @@ module EitherMonad = Monad.MonadPlusUtils(
 module OptionUtils = 
 struct
   exception EmptyOption
-  let valOf = function
+  let val_of = function
     | Some x -> x
     | None -> raise EmptyOption
         
-  let isSome = function
+  let is_some = function
     | None -> false
     | Some _ -> true
         
@@ -657,7 +657,7 @@ struct
 
   let opt_iter f = opt_map f ->- ignore
 
-  let fromOption default = function
+  let from_option default = function
     | None -> default
     | Some x -> x
 
@@ -671,8 +671,8 @@ struct
   The following equations hold
 
             opt_map f = opt_app (fun x -> Some (f x)) None
-           fromOption = opt_app (fun x -> x)
-    perhaps_apply f p = fromOption p (f p)
+           from_option = opt_app (fun x -> x)
+    perhaps_apply f p = from_option p (f p)
                       = opt_app (fun x -> x) p (f p)
 
   I've left the explicit definitions because they are more perspicuous

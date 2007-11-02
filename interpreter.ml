@@ -377,8 +377,8 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                           | `Variant (label, value) when label = case_label ->
                               (interpret globals (Result.bind locals case_variable value) case_body cont)
                           | `Variant (_) as value ->
-		              (interpret globals (Result.bind locals (valOf variable) value)
-		                 (valOf body) cont)
+		              (interpret globals (Result.bind locals (val_of variable) value)
+		                 (val_of body) cont)
                           | _ -> raise (Runtime_error "TF181"))
 	           | MkDatabase ->
                        let result = (let driver = charlist_as_string (links_project "driver" value)

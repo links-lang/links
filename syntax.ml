@@ -617,10 +617,10 @@ let transform_program transformer (Program (defs, body)) =
 
 (* apply a rewriter on expressions to a definition *)
 let rewrite_def rewriter =
-  transform_def (fun expr -> fromOption expr (rewriter expr))
+  transform_def (fun expr -> from_option expr (rewriter expr))
 
 let rewrite_program rewriter =
-  transform_program (fun expr -> fromOption expr (rewriter expr))
+  transform_program (fun expr -> from_option expr (rewriter expr))
 
 let rec map_free_occ u f expr =
   let recurse = map_free_occ u f in
@@ -649,7 +649,7 @@ let rec map_free_occ u f expr =
         Some(For((if (u <> loop_var) then recurse body else body),
                  loop_var, recurse src, d))
     | expr -> RewriteUntypedExpression.process_children rewrite expr
-  in fromOption expr (rewrite expr)
+  in from_option expr (rewrite expr)
 
 let subst_free u r expr =
   map_free_occ u (fun _ -> r) expr
@@ -669,7 +669,7 @@ let subst_fast_replacer name replacement : RewriteSyntax.rewriter =
     | _ -> None
 
 let subst_fast name replacement expr =
-  fromOption expr (RewriteSyntax.bottomup (subst_fast_replacer name replacement) expr)
+  from_option expr (RewriteSyntax.bottomup (subst_fast_replacer name replacement) expr)
 
 let subst_fast_def name replacement =
   rewrite_def (RewriteSyntax.bottomup (subst_fast_replacer name replacement))
@@ -682,7 +682,7 @@ let rename_fast name replacement expr =
           Some(TableQuery(q, data)) 
     | _ -> None
   in
-    fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
+    from_option expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
 (** {0 Sanity Checks} *)
 

@@ -588,7 +588,7 @@ let resolve_placeholders_expr table expr =
 
 
 let label_of_expression expr =
-  let (_, _, label) = expression_data expr in fromOption "TUNLABELED" label
+  let (_, _, label) = expression_data expr in from_option "TUNLABELED" label
 
 (* boxing and unboxing of primitive types *)
 let box_bool b = `Bool b
