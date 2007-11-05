@@ -16,7 +16,6 @@ deriving (Show)
   [TODO]
 
     - get rid of Comparison (move to library.ml?)
-    - get rid of Record_selection
     - change variant_selection to be n-ary
     - get rid of variant_selection_empty
     - replace List_of and Concat with Cons
@@ -37,7 +36,6 @@ type 'a expression' =
   | Rec of ((string * 'a expression' * Types.datatype option) list * 'a expression' * 'a)
   | Xml_node of (string * (string * 'a expression') list * 'a expression' list * 'a)
   | Record_intro of (('a expression') Utility.stringmap * ('a expression') option * 'a)
-  | Record_selection of (string * string * string * 'a expression' * 'a expression' * 'a)
   | Project of ('a expression' * string * 'a)
   | Erase of ('a expression' * string * 'a)
   | Variant_injection of (string * 'a expression' * 'a)
@@ -49,7 +47,7 @@ type 'a expression' =
   | Concat of ('a expression' * 'a expression' * 'a)
   | For of ('a expression' * string * 'a expression' * 'a)
   | Database of ('a expression' * 'a)
-  | TableQuery of ((string * 'a expression') list * SqlQuery.sqlQuery * 'a)
+  | TableQuery of (SqlQuery.sqlQuery * 'a)
   | TableHandle of ('a expression' * 'a expression' * 
                       (Types.datatype * Types.datatype) * 'a)
   | SortBy of ('a expression' * 'a expression' * 'a)
@@ -163,6 +161,9 @@ val labelize : program -> program
 val dummy_position : position
 val no_expr_data : typed_data
 
+(** extract the target and field name from an expression if it's a projection. *)
+val read_proj : 'a expression' -> ('a expression' * string) option
+
 val is_closed : expression -> bool
 val is_closed_wrt : expression -> Utility.StringSet.t -> bool
 
@@ -181,3 +182,4 @@ val rewrite_program :
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
 
+val record_selection : (string * string * string * 'a expression' * 'a expression' * 'a) -> 'a expression'

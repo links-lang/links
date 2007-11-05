@@ -84,6 +84,9 @@ sig
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
 
+  val split : ('a * 'b) t -> ('a t * 'b t)
+  (** split a pair map into a pair of maps *)
+
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
@@ -184,6 +187,11 @@ struct
     let union_all ms = List.fold_right union_disjoint ms empty
 
     let superimpose a b = fold add b a
+
+    let split m =
+      fold
+        (fun i (v1, v2) (m1, m2) -> (add i v1 m1, add i v2 m2))
+        m (empty, empty)
 
     let partition f m =
       fold
@@ -351,11 +359,11 @@ struct
       snd (unsnoc l)
     with Invalid_argument _ -> invalid_arg "last"
     
-  (** [butlast list]: Return a copy of the list with the last element removed. *)
-  let butlast l = 
+  (** [curtail list]: Return a copy of the list with the last element removed. *)
+  let curtail l = 
     try
       fst (unsnoc l)
-    with Invalid_argument _ -> invalid_arg "butlast"
+    with Invalid_argument _ -> invalid_arg "curtail"
 
   let difference list1 list2 = 
     List.filter (fun x -> not (List.mem x list2)) list1
@@ -627,11 +635,11 @@ module EitherMonad = Monad.MonadPlusUtils(
 module OptionUtils = 
 struct
   exception EmptyOption
-  let valOf = function
+  let val_of = function
     | Some x -> x
     | None -> raise EmptyOption
         
-  let isSome = function
+  let is_some = function
     | None -> false
     | Some _ -> true
         
@@ -643,9 +651,13 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_split = function
+    | None -> None, None
+    | Some (x, y) -> Some x, Some y
+
   let opt_iter f = opt_map f ->- ignore
 
-  let fromOption default = function
+  let from_option default = function
     | None -> default
     | Some x -> x
 
@@ -654,13 +666,13 @@ struct
       | None -> p
       | Some x -> x  
 (*
-  [NOTE][SL]
+  NOTE:
   
   The following equations hold
 
             opt_map f = opt_app (fun x -> Some (f x)) None
-           fromOption = opt_app (fun x -> x)
-    perhaps_apply f p = fromOption p (f p)
+           from_option = opt_app (fun x -> x)
+    perhaps_apply f p = from_option p (f p)
                       = opt_app (fun x -> x) p (f p)
 
   I've left the explicit definitions because they are more perspicuous
@@ -811,3 +823,5 @@ let catch_notfound_l msg e =
     Lazy.force e
   with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
 
+(** Initialise the random number generator *)
+let _ = Random.self_init()

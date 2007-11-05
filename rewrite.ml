@@ -96,11 +96,11 @@ module SimpleRewrite
   and type rewriter = T.t -> T.t option =
 struct 
   include T
-    (* equivalent to let e' = (fromOption e (a e)) in fromOption e' (b e') *)
+    (* equivalent to let e' = (from_option e (a e)) in from_option e' (b e') *)
   let both a b e = 
     match a e with 
       | None   -> b e
-      | Some e -> Some (Utility.fromOption e (b e))
+      | Some e -> Some (Utility.from_option e (b e))
   and either a b e = 
     match a e with
       | None -> b e

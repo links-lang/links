@@ -53,7 +53,6 @@ type unop = | MkColl
                    Syntax.expression option)
             | Erase of string
             | Project of string
-            | QueryOp of (SqlQuery.sqlQuery * (* the table aliases: *) string list)
 type binop = 
     [ Syntaxutils.comparison
     | `Union
@@ -74,7 +73,6 @@ type primitive_value =
     | `Float of float
     | `Int of Num.num
     | `XML of xmlitem 
-    | `Page of xmlitem list
     | `NativeString of string
     ]
 type result = [ primitive_value

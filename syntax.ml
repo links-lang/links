@@ -59,7 +59,8 @@ type 'data expression' =
   | Apply of ('data expression' * 'data expression' list * 'data)
   | Condition of ('data expression' * 'data expression' * 'data expression' * 
                     'data)
-  | Comparison of ('data expression' * Syntaxutils.comparison * 'data expression' * 'data)
+  | Comparison of ('data expression' * Syntaxutils.comparison * 
+                     'data expression' * 'data)
   | Abstr of (string list * 'data expression' * 'data)
   | Let of (string * 'data expression' * 'data expression' * 'data)
   | Rec of ((string * 'data expression' * Types.datatype option) list 
@@ -68,8 +69,6 @@ type 'data expression' =
                    ('data expression' list) * 'data)
   | Record_intro of (('data expression') stringmap * ('data expression') option 
                      * 'data)
-  | Record_selection of (string * string * string * 'data expression' * 
-                           'data expression' * 'data)
   | Project of ('data expression' * string * 'data)
   | Erase of ('data expression' * string * 'data)
   | Variant_injection of (string * 'data expression' * 'data)
@@ -83,13 +82,7 @@ type 'data expression' =
   | For of ('data expression' * string * 'data expression' * 'data)
       (* For(body, var, src, _data) *)
   | Database of ('data expression' * 'data)
-  | TableQuery of
-      ((* the tables: *)
-        (string * (* alias *) 
-         'data expression' (* variable whose value is the corresponding table *)) list *
-          (* the query: *) 
-          SqlQuery.sqlQuery *
-          'data)
+  | TableQuery of (SqlQuery.sqlQuery * 'data)
   | TableHandle of ((* the database: *) 'data expression' 
       * (* the table: *) 'data expression'
       * (* the read / write (record) types of a table row: *) 
@@ -160,7 +153,6 @@ let rec is_value : 'a expression' -> bool = function
   | Comparison (a,_,b,_)
   | Concat (a, b, _)
   | For (a, _, b, _)
-  | Record_selection (_, _, _, a, b, _)
   | Let (_, a, b,_)  -> is_value a && is_value b
   | Variant_selection (a, _, _, b, _, c, _)
   | Condition (a,b,c,_) -> is_value a && is_value b && is_value c
@@ -225,9 +217,6 @@ let rec show t : 'a expression' -> string = function
         (StringMap.to_list (fun label e -> label ^ "=" ^ (show t e)) bs) ^
         (opt_app (fun e -> " | " ^ show t e) "" r) ^
         ")" ^ t data
-  | Record_selection (label, label_variable, variable, value, body, data) ->
-      "{(" ^ label ^ "=" ^ label_variable ^ "|" ^ variable ^ ") = " 
-      ^ show t value ^ "; " ^ show t body ^ "}" ^ t data
   | Project (e, l, data) -> show t e ^ "." ^ l ^ t data
   | Erase (e, l, data) -> show t e ^ "\\" ^ l ^ t data
   | Variant_injection (label, value, data) ->
@@ -248,9 +237,8 @@ let rec show t : 'a expression' -> string = function
   | TableHandle (db, name, (readtype, writetype), data) ->
       "("^ show t name ^" from "^ show t db ^
       "["^Types.string_of_datatype readtype^";"^Types.string_of_datatype writetype^"])" ^ t data
-  | TableQuery (ths, query, data) ->
-      "("^ mapstrcat "," (fun (alias, th) -> show t th ^ "("^alias^")") ths ^
-        "["^SqlQuery.Show_sqlQuery.show query^"])" ^ t data
+  | TableQuery (query, data) ->
+      "(["^SqlQuery.Show_sqlQuery.show query^"])" ^ t data
   | SortBy (expr, byExpr, data) ->
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
@@ -310,6 +298,7 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Constant _
                | Nil _
                | Wrong _
+               | TableQuery _
                | Variable _ -> []
 
                | Variant_selection_empty (e, _)
@@ -323,13 +312,10 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
                | Abs (e, _)
                | HasType (e, _, _) -> [visitor visit_children e]
 
-               | TableQuery (es, _, _) -> (map (fun (_,e) -> visitor visit_children e) es)
-
                | TableHandle (e1, e2, _, _)
                | Comparison (e1, _, e2, _)
                | Let (_, e1, e2, _)
                | Concat (e1, e2, _)
-               | Record_selection (_, _, _, e1, e2, _)
                | For (e1, _, e2, _)
                | App (e1, e2, _)
                | SortBy (e1, e2, _) ->
@@ -384,7 +370,6 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
     (* 2 subnodes *)
     | Comparison (_, c, _, d)                , [e1;e2] -> Comparison (e1, c, e2, d)
     | Let (s, _, _, d)                       , [e1;e2] -> Let (s, e1, e2, d)
-    | Record_selection (s1, s2, s3, _, _, d) , [e1;e2] -> Record_selection (s1, s2, s3, e1, e2, d)
     | Concat (_, _, d)                       , [e1;e2] -> Concat (e1, e2, d)
     | For (_, s, _, d)                       , [e1;e2] -> For (e1, s, e2, d)
     | TableHandle (_, _, t, d)               , [e1;e2] -> TableHandle (e1, e2, t, d)
@@ -414,8 +399,8 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
                     List.map2 (fun (k,_) v -> (k,v)) attrs attrnodes,
                     childnodes,
                     d)
-    | TableQuery (es, q, d), nodes ->
-        TableQuery (List.map2 (fun (k,_) v -> (k,v)) es nodes, q, d)
+    | TableQuery (q, d), nodes ->
+        TableQuery (q, d)
     | e -> raise (Invalid_argument "set_subnodes")
         
 let rec stringlit_value = function
@@ -431,8 +416,6 @@ let freevars (expression : 'a expression') : StringSet.t =
       | For (body, var, generator, _) -> S.union (aux generator) (S.remove var (aux body))
       | Let (var, value, body, _) -> S.union (aux value) (S.remove var (aux body))
       | Abstr (vars, body, _) -> S.diff (aux body) (S.from_list vars)
-      | Record_selection (_, labvar, var, value, body, _) ->
-          S.union (aux value) (S.diff (aux body) (S.from_list [var;labvar]))
       | Variant_selection (value, _, cvar, cbody, var, body, _) ->
           S.union (aux value)
             (S.union (S.remove cvar (aux cbody))
@@ -442,10 +425,8 @@ let freevars (expression : 'a expression') : StringSet.t =
             S.diff
               (List.fold_right (fun v set -> S.union (aux v) set) (body::vals) S.empty)
               (S.from_list vars)
-      | TableQuery (ts, query, _) ->
-          S.union
-            (S.union_all (List.map (fun (_, e) -> aux e) ts))
-            (SqlQuery.freevars_sqlQuery query)
+      | TableQuery (query, _) ->
+          SqlQuery.freevars_sqlQuery query
       | other -> default other
   in 
     reduce_expression aux' (S.union_all -<- snd) expression
@@ -509,7 +490,6 @@ let expression_data : ('a expression' -> 'a) = function
   | Rec (_, _, data) -> data
   | Xml_node (_, _, _, data) -> data
   | Record_intro (_, _, data) -> data
-  | Record_selection (_, _, _, _, _, data) -> data
   | Project (_,_,data) -> data
   | Erase (_,_,data) -> data
   | Variant_injection (_, _, data) -> data
@@ -520,7 +500,7 @@ let expression_data : ('a expression' -> 'a) = function
   | Concat (_, _, data) -> data
   | For (_, _, _, data) -> data
   | Database (_, data) -> data
-  | TableQuery (_, _, data) -> data
+  | TableQuery (_, data) -> data
   | TableHandle (_, _, _, data) -> data
   | SortBy (_, _, data) -> data
   | Call_cc (_, data) -> data
@@ -549,8 +529,6 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | Rec (a, b,_) -> Rec (a, b,data)
     | Xml_node (a, b, c, data) ->  Xml_node (a, b, c, data)
     | Record_intro (a, b,_) -> Record_intro (a, b,data)
-    | Record_selection (a, b, c, d, e, _) -> 
-        Record_selection (a, b, c, d, e,data)
     | Project (a,b,_) -> Project(a,b,data)
     | Erase (a,b,_) -> Erase(a,b,data)
     | Variant_injection (a, b,_) ->  Variant_injection (a, b,data)
@@ -562,7 +540,7 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
     | Concat (a, b,_) -> Concat (a, b,data)
     | For (a, b, c, _) -> For (a, b, c, data)
     | Database (a, _) ->  Database (a, data)
-    | TableQuery (a, b,_) ->  TableQuery (a, b,data)
+    | TableQuery (a, _) ->  TableQuery (a, data)
     | TableHandle (a, b, c, _) -> TableHandle (a, b, c, data)
     | SortBy (a, b,_) -> SortBy (a, b,data)
     | Call_cc (a, _) -> Call_cc (a, data)
@@ -639,10 +617,10 @@ let transform_program transformer (Program (defs, body)) =
 
 (* apply a rewriter on expressions to a definition *)
 let rewrite_def rewriter =
-  transform_def (fun expr -> fromOption expr (rewriter expr))
+  transform_def (fun expr -> from_option expr (rewriter expr))
 
 let rewrite_program rewriter =
-  transform_program (fun expr -> fromOption expr (rewriter expr))
+  transform_program (fun expr -> from_option expr (rewriter expr))
 
 let rec map_free_occ u f expr =
   let recurse = map_free_occ u f in
@@ -656,10 +634,6 @@ let rec map_free_occ u f expr =
     | Rec(defs, body, d) when (not (mem_assoc3 u defs)) ->
         Some(Rec(map (fun (n, defn, t) -> (n, recurse defn, t)) defs, 
                  recurse body, d))
-    | Record_selection(label, label_var, etc_var, src, body, d) ->
-        Some(Record_selection(label, label_var, etc_var, recurse src, 
-                              (if (u <> label_var && u <> etc_var) then
-                                 recurse body else body), d))
     | Variant_selection(value, case_label, case_variable, case_body, 
                         etc_var, etc_body, d) ->
         Some(Variant_selection(recurse value, case_label, case_variable, 
@@ -675,7 +649,7 @@ let rec map_free_occ u f expr =
         Some(For((if (u <> loop_var) then recurse body else body),
                  loop_var, recurse src, d))
     | expr -> RewriteUntypedExpression.process_children rewrite expr
-  in fromOption expr (rewrite expr)
+  in from_option expr (rewrite expr)
 
 let subst_free u r expr =
   map_free_occ u (fun _ -> r) expr
@@ -695,7 +669,7 @@ let subst_fast_replacer name replacement : RewriteSyntax.rewriter =
     | _ -> None
 
 let subst_fast name replacement expr =
-  fromOption expr (RewriteSyntax.bottomup (subst_fast_replacer name replacement) expr)
+  from_option expr (RewriteSyntax.bottomup (subst_fast_replacer name replacement) expr)
 
 let subst_fast_def name replacement =
   rewrite_def (RewriteSyntax.bottomup (subst_fast_replacer name replacement))
@@ -703,12 +677,12 @@ let subst_fast_def name replacement =
 let rename_fast name replacement expr = 
   let replacer name replacement : RewriteSyntax.rewriter = function
     | Variable (n, d) when n = name -> Some (Variable(replacement, d))
-    | TableQuery(th, q, data) -> 
+    | TableQuery(q, data) -> 
         let q = SqlQuery.subst_sqlQuery name (`V replacement) q in
-          Some(TableQuery(th, q, data)) 
+          Some(TableQuery(q, data)) 
     | _ -> None
   in
-    fromOption expr (RewriteSyntax.bottomup (replacer name replacement) expr)
+    from_option expr (RewriteSyntax.bottomup (replacer name replacement) expr)
 
 (** {0 Sanity Checks} *)
 
@@ -775,8 +749,6 @@ let skeleton = function
   (* Two sub-expressions *)
   | Comparison(lhs, op, rhs, d) -> Comparison(lhs, op, rhs, d)
   | Let(letvar, letsrc, letbody, d) -> Let(letvar, letsrc, letbody, d)
-  | Record_selection(label, labelvar, etcvar, src, body, d) ->
-      Record_selection(label, labelvar, etcvar, src, body, d)
   | Project (expr, label, d) -> Project (expr, label, d)
   | Concat(lhs, rhs, d) -> Concat(lhs, rhs, d)
   | For(body, loop_var, src, d) -> For(body, loop_var, src, d)
@@ -798,8 +770,8 @@ let skeleton = function
   | Rec(defs, body, d) -> Rec(defs, body, d)
   | Xml_node(tagname, attrs, contents, d) -> 
       Xml_node(tagname, attrs, contents, d)
-  | TableQuery(thandle_alist, query, d) -> TableQuery(thandle_alist, query, d)
-      (* note: besides the alist, [query] can also contain
+  | TableQuery(query, d) -> TableQuery(query, d)
+      (* note: [query] can also contain
          expressions, in the [query.ml] sublanguage *)
 
 let definition_skeleton = function
@@ -811,3 +783,18 @@ let definition_skeleton = function
 let program_skeleton =
   fun (ds, body) ->
     (List.map definition_skeleton ds, skeleton body)
+
+let read_proj = function
+  | Project (record, name, _) -> Some (record, name)
+  | _ -> None 
+
+let record_selection (name, label_variable, extension_variable, scrutinee, body, data) =
+  let v = gensym () in
+    Let(v,
+        scrutinee,
+        Let(label_variable,
+            Project(Variable (v, data), name, data),
+            Let (extension_variable, Erase(Variable (v, data), name, data), body, data),
+            data),
+        data)
+ 

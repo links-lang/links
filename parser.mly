@@ -46,7 +46,7 @@ let parseRegexFlags f =
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW WHERE FORMLET PAGE PAGELET
+%token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET
@@ -146,7 +146,7 @@ declaration:
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
+                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) $3; 
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable d, pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
@@ -399,6 +399,7 @@ logical_expression:
 typed_expression:
 | logical_expression                                           { $1 }
 | logical_expression COLON datatype                            { `TypeAnnotation ($1, $3), pos() }
+| logical_expression COLON datatype LARROW datatype            { `Upcast ($1, $3, $5), pos() }
 
 db_expression:
 | typed_expression                                             { $1 }
@@ -450,7 +451,7 @@ xml_contents:
 | block                                                        { `Block $1, pos () }
 | formlet_binding                                              { $1 }
 | formlet_placement                                            { $1 }
-| pagelet_placement                                            { $1 }
+| page_placement                                               { $1 }
 | xml_tree                                                     { $1 }
 | CDATA                                                        { `TextNode (Utility.xml_unescape $1), pos() }
 
@@ -460,8 +461,8 @@ formlet_binding:
 formlet_placement:
 | LBRACE logical_expression FATRARROW logical_expression RBRACE { `FormletPlacement ($2, $4), pos () }
 
-pagelet_placement:
-| LBRACEBAR exp BARRBRACE                                      { `PageletPlacement $2, pos() }
+page_placement:
+| LBRACEBAR exp BARRBRACE                                      { `PagePlacement $2, pos() }
 
 conditional_expression:
 | db_expression                                                { $1 }
@@ -523,7 +524,6 @@ escape_expression:
 formlet_expression:
 | escape_expression                                            { $1 }
 | FORMLET xml YIELDS exp                                       { `Formlet ($2, $4), pos() }
-| PAGELET xml                                                  { `Pagelet ($2), pos() }
 | PAGE xml                                                     { `Page ($2), pos() }
 
 table_expression:

@@ -138,6 +138,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `Projection of ('phrase * name)
 | `With of ('phrase * (name * 'phrase) list)
 | `TypeAnnotation of ('phrase * datatype)
+| `Upcast of ('phrase * datatype * datatype)
 | `ConstructorLit of (name * 'phrase option)
 | `Switch of ('phrase * ('ppattern * 'phrase) list)
 | `Receive of ('ppattern * 'phrase) list
@@ -150,9 +151,8 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
 | `Page of 'phrase
-| `Pagelet of 'phrase
 | `FormletPlacement of ('phrase * 'phrase)
-| `PageletPlacement of ('phrase)
+| `PagePlacement of ('phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
     deriving (Show)
 
@@ -232,8 +232,8 @@ struct
     | `FormBinding (p, _)
     | `Projection (p, _)
     | `Page p
-    | `Pagelet p
-    | `PageletPlacement p
+    | `PagePlacement p
+    | `Upcast (p, _, _)
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit ps

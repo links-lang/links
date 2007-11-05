@@ -29,8 +29,8 @@ module Eval = struct
   let untuple : Value.t -> Value.t list =
     fun _ -> assert false
 
-  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t StringMap.t -> Value.t 
-    = fun _ _ _ -> assert false
+  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t 
+    = fun _ _ -> assert false
 
   let switch_context _ = 
     assert false
@@ -169,11 +169,10 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong                      -> raise Wrong
     | `Database v                 -> `Database (db_connect (value env v))
-    | `TableQuery (map, q)        -> 
-          do_query env q (StringMap.map (value env) map)
+    | `Query q                    -> do_query env q
     | `App (f, p)                 -> apply cont env (value env f,
                                                      untuple (value env p))
-    | `TableHandle (db, name, (readtype, _)) -> 
+    | `Table (db, name, (readtype, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->
                `Table ((db, params), unbox_string name, row)

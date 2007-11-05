@@ -110,7 +110,7 @@ let concat_lits = RewriteCode.bottomup concat_lits
 
 let optimise e = 
   if Settings.get_value optimising then
-    fromOption e 
+    from_option e 
       (RewriteCode.all [concat_lits] e)
   else e
 
@@ -337,7 +337,7 @@ let boiler_1 () = "<html>
   <head>
   "^script_tag "json.js"^"
   "^script_tag "regex.js"^"
-  "^script_tag "yahoo/YAHOO.js"^"
+  "^script_tag "yahoo/yahoo.js"^"
   "^script_tag "yahoo/event.js"^"
     <script type='text/javascript'>var DEBUGGING="
 and boiler_2 () = ";</script>
@@ -402,7 +402,7 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
                       json_args, data))
   | _ -> None
 
-let fixup_hrefs globals e = fromOption e (RewriteSyntax.bottomup (href_rewrite globals) e)
+let fixup_hrefs globals e = from_option e (RewriteSyntax.bottomup (href_rewrite globals) e)
 
 let fixup_hrefs_def globals = function
   | Define (name, b,l,t) -> Define (name, fixup_hrefs globals b, l, t)
@@ -474,7 +474,7 @@ let rec generate_value env : value -> code =
               | String v   -> chrlistlit v
           end
       | `Variable var ->
-          (* [HACK] *)
+          (* HACK *)
           begin
             match (Env'.lookup env var) with
               | "map" -> Var ("LINKS.accum")
@@ -599,9 +599,9 @@ and generate_special env : special -> code -> code = fun sp kappa ->
       | `Wrong -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `TableQuery _ ->
-          failwith ("Cannot (yet?) generate JavaScript code for `TableQuery")
-      | `TableHandle (db, table_name, (readtype, writetype)) ->
+      | `Query _ ->
+          failwith ("Cannot (yet?) generate JavaScript code for `Query")
+      | `Table (db, table_name, (readtype, writetype)) ->
           callk_yielding kappa
             (Dict [("_table",
                     Dict [("db", gv db);
@@ -737,6 +737,18 @@ struct
         '|', "pipe";
         '_', "underscore"]
 
+  let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+                     "catch";"for";"switch";"while";"continue";"function";"this";
+                     "with";"default";"if";"throw";"delete";"in";"try";"do";
+                     "instanceof";"typeof";
+                     (* "future keywords" *)
+                     "abstract";"enum";"int";"short";"boolean";"export";
+                     "interface";"static";"byte";"extends";"long";"super";"char";
+                     "final";"native";"synchronized";"class";"float";"package";
+                     "throws";"const";"goto";"private";"transient";"debugger";
+                     "implements";"protected";"volatile";
+                    ]
+
   let has_symbols name =
     not (Library.is_primitive name) &&
       List.exists (not -<- Utility.Char.isWord) (explode name)
@@ -756,10 +768,12 @@ struct
         (* TBD: it would be better if this split to chunks maximally matching
            (\w+)|(\W)
            then we would not split apart words in partly-symbolic idents. *)
+    else if mem name js_keywords then
+      "_" ^ name (* FIXME: this could conflict with Links names. *)
     else name
       
   let rename exp = 
-    fromOption exp
+    from_option exp
       (RewriteSyntax.bottomup
          (function
             | Variable (name, d) -> Some (Variable (wordify name, d))

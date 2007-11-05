@@ -268,6 +268,7 @@ fun distinct(xs) {
     receiver("", "", None)
   };
 
+page
   <html>
    {header("Citations")}
    <body>

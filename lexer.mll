@@ -176,7 +176,6 @@ let keywords = [
  "orderby"  , ORDERBY;
  "op"       , OP; 
  "page"     , PAGE;
- "pagelet"  , PAGELET;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "server"   , SERVER; 

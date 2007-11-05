@@ -118,13 +118,6 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_pri
      (([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.assumption)),
    pure)
 
-let xml_to_page : result -> result = function
-  | `List items -> 
-      let result_to_item : result -> xmlitem = 
-        function `XML xml -> xml | _ -> assert false in
-        `Page (map result_to_item items)
-  | _ -> assert false
-
 let string_to_xml : result -> result = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
@@ -236,21 +229,17 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   "^.", float_op ( ** ) PURE;
 
   (** Conversions (any missing?) **)
+  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type PURE;
   "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
   "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float) PURE;
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type PURE;
+  "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:(num_of_int -<- int_of_float) ~box:box_int ~into:(`Primitive `Int) PURE;
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type PURE;
-  "stringToFloat",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
+  "stringToFloat", conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
   "stringToXml",
   ((p1 string_to_xml),
    datatype "(String) -> Xml",
   PURE);
-
-  "xmlToPage",
-  ((p1 xml_to_page),
-   datatype "(Xml) -> Page",
-   PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-
@@ -1041,16 +1030,20 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   datatype "(String) -> String",
   PURE);
 
-  (* Get pseudo-random number seeded by current time (not portable..) *)
-  "getRandom",
-  (p1 (fun _ ->
-        let void = Random.init(int_of_float(Unix.time())) in
-        (box_float(Random.float(1.0)))),
-  datatype "() -> Float",
-  PURE);
+  (* end of Tom's fns *)
 
+  (* HACK *)
+  ("unsafe_cast",
+   (`Server (p1 (fun v -> v)),
+    datatype "(a) -> b",
+    PURE));
+  
+  (** non-deterministic random number generator *)
+  "random",
+  (`PFun (fun _ -> (box_float (Random.float 1.0))),
+   datatype "() -> Float",
+   IMPURE)    
 ]
-
 let impl : located_primitive -> primitive option = function
   | `Client -> None
   | `Server p
@@ -1058,10 +1051,7 @@ let impl : located_primitive -> primitive option = function
 
 let value_env = 
   ref (List.fold_right
-    (fun (name, (p,_,_)) env -> 
-       match impl p with
-         | None -> env
-         | Some p -> StringMap.add name p env)
+    (fun (name, (p,_,_)) env -> StringMap.add name (impl p) env)
     env
     StringMap.empty)
 
@@ -1072,13 +1062,16 @@ let primitive_location (name:string) = match fst3 (assoc name env) with
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
-    | #result as r -> r
-    | _ -> `PrimitiveFunction name
+    | Some (#result as r) -> r
+    | Some _ -> `PrimitiveFunction name
+    | None  -> `ClientFunction name
+
 
 let apply_pfun name args = 
   match StringMap.find name (!value_env) with
-    | #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
-    | `PFun p -> p args
+    | Some #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
+    | Some (`PFun p) -> p args
+    | None -> assert false
 
 module Env = Env.String
         

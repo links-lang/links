@@ -28,18 +28,18 @@ type baseexpr = [
 type valueexpr = [
 |`Var of name
 | literal] deriving (Show)
+type sorting = [`Asc of (string * string) | `Desc of (string * string)]
+    deriving (Show, Pickle)
 type simpleExpr = [
 |`For    of pat * simpleExpr * simpleExpr
 |`Where  of baseexpr * simpleExpr
 |`Let    of name * baseexpr * simpleExpr
-|`Table  of (name * Types.datatype) list * string * string
+|`Table  of (name * Types.datatype) list * string * string * sorting list
 |`Return of baseexpr]
 type expr = [
 |`Take of num * expr
 |`Drop of num * expr
 | simpleExpr]
-type sorting = [`Asc of (string * string) | `Desc of (string * string)]
-    deriving (Show, Pickle)
 
 type field = {table:name; column:name; ty:Types.datatype} deriving (Show, Pickle)
 type sqlexpr = [
@@ -54,10 +54,10 @@ type sqlexpr = [
 type ninf = I of num | Inf
     deriving (Show, Pickle)
 type tabSpec = [
-  `TableVar of (string (*real name*) * string (* alias*) )
-| `TableName of (string (*variable*) * string (* alias*) ) ] 
-    deriving (Show, Pickle)
-type sqlQuery = {
+| `TableVar of (string (*variable*) * string (* alias*) )
+| `TableName of (string (*real name*) * string (* alias*) )
+| `SubQuery of sqlQuery * string (* alias *) ]
+and sqlQuery = {
   cols : (sqlexpr * name) list; (* (e, n) means "select e as n"*)
   tabs : tabSpec list;
   (* (x, a) means "from x as a", and x is a free variable representing a table.*)
@@ -75,16 +75,23 @@ let rec freevars_like_expr = function
 
 let rec freevars_sqlexpr : sqlexpr -> StringSet.t = function
 | `Rec fields -> StringSet.union_all(map (freevars_sqlexpr -<- snd) fields)
-| `Op(op, lhs, rhs) -> StringSet.union (freevars_sqlexpr lhs) 
+| `Op(_op, lhs, rhs) -> StringSet.union (freevars_sqlexpr lhs) 
                                        (freevars_sqlexpr rhs)
 | `Not e -> freevars_sqlexpr e
 | `Like(e, l) -> StringSet.union (freevars_like_expr l) (freevars_sqlexpr e)
 | `V x -> StringSet.singleton x
 | _ -> StringSet.empty
 
-let freevars_sqlQuery q = 
-  StringSet.union (StringSet.union_all (map freevars_sqlexpr q.cond))
-    (StringSet.union_all (map freevars_sqlexpr (map fst q.cols)))
+let rec freevars_tabSpec =
+  function
+    | `TableName _ -> StringSet.empty
+    | `TableVar (x, _) -> StringSet.singleton x
+    | `SubQuery (q, _) -> freevars_sqlQuery q 
+
+and freevars_sqlQuery q =
+  StringSet.union_all (map freevars_tabSpec q.tabs @
+                       map freevars_sqlexpr q.cond @
+                       map freevars_sqlexpr (map fst q.cols))
 
 let rec subst_likeExpr e = assert false
 
@@ -102,12 +109,14 @@ and subst_sqlQuery var expr query =
 
 let owning_table of_col qry =
   match List.find (fun (_expr, name) -> name = of_col) qry.cols with
-    | (`F field, name) -> field.table
+    | (`F field, _name) -> field.table
     | _ -> assert false
 
 let sorting_to_sql = function
   | `Asc (table, col)  -> table ^ "." ^ col ^ " ASC" 
   | `Desc (table, col) -> table ^ "." ^ col ^ " DESC"
+
+let add_sorting query col = {query with sort = col :: query.sort}
 
 let rec like_as_string = function 
   | `Percent -> "%"
@@ -152,6 +161,8 @@ and string_of_query (qry:sqlQuery) : string =
                             table ^ " AS " ^ alias
                         | `TableVar(var, alias) -> 
                             "VARIABLE:" ^ var ^ " AS " ^ alias
+                        | `SubQuery(q, alias) ->
+                            "(" ^ string_of_query(q) ^ ") AS " ^ alias
                      ) qry.tabs) ^
        string_of_condition qry.cond
      ^ (match qry.sort with

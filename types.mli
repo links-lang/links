@@ -73,6 +73,8 @@ type typing_environment = environment * alias_environment
 val unit_type : datatype
 val string_type : datatype
 val bool_type : datatype
+val int_type : datatype
+val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val native_string_type : datatype
@@ -176,6 +178,10 @@ Also returns the outermost `Recursive that was unwrapped if it exists,
 or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
+
+(* subtyping *)
+val is_sub_type : datatype * datatype -> bool
+val is_sub_row : row * row -> bool
 
 (* check for free aliases *)
 exception UndefinedAlias of string

@@ -51,7 +51,8 @@ OCAMLDOCFLAGS=-pp deriving
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli PP.ml
+OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
+      getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                		\
           utility.ml            		\
@@ -69,6 +70,7 @@ SOURCES = $(OPC)                		\
           sqlcompile.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
+          sugarTraversals.mli sugarTraversals.ml\
           sugar.mli sugar.ml    		\
           parser.mly            		\
           result.mli result.ml         		\
@@ -102,10 +104,9 @@ SOURCES = $(OPC)                		\
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
+          sqlcompileTest.ml                     \
           links.ml              		\
           rewriteexamples.ml                    \
-
-
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

@@ -146,7 +146,7 @@ sig
 
   val xmlnode : string * (value sem) StringMap.t * (value sem) list -> value sem
   val record : (value sem) StringMap.t * (value sem) option * datatype -> value sem
-(* record_selection? *)
+
   val project : name * value sem * datatype -> value sem
 (* erase? *)
   val erase :  name * value sem * datatype -> value sem
@@ -164,7 +164,7 @@ sig
   val comprehension : var_info * value sem * (var -> tail_computation sem) -> tail_computation sem
 *)
   val database : value sem -> tail_computation sem
-  val table_query : (value sem) StringMap.t * SqlQuery.sqlQuery * datatype -> tail_computation sem
+  val table_query : SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) * datatype -> tail_computation sem
 (* sortby? *)
   val callcc : value sem * datatype -> tail_computation sem
@@ -459,16 +459,13 @@ struct
 
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
-  let table_query (tables, query, t) =
-    let tables = lift_stringmap tables
-    in
-      M.bind tables
-        (fun tables -> lift (`Special (`TableQuery (tables, query)), t))
+  let table_query (query, t) =
+    lift (`Special (`Query query), t)
   let table_handle (database, table, ts, t) =
     bind database
       (fun database ->
          bind table
-           (fun table -> lift (`Special (`TableHandle (database, table, ts)), t)))
+           (fun table -> lift (`Special (`Table (database, table, ts)), t)))
 
   let callcc (s, t) = bind s (fun v -> lift (`Special (`CallCC v), t))
   let wrong t = lift (`Special `Wrong, t)
@@ -600,17 +597,6 @@ struct
                            field_map StringMap.empty,
                          opt_map ev r,
                          node_datatype e))
-        | Record_selection (label, x, y, e, body, _) ->
-(*
-            let t, r = split_record_type label (node_datatype e) in
-            cofv
-              (I.recordselection (
-                 make_local_info (t, x),
-                 make_local_info (r, y),
-                 ec e,
-                 fun (v, p) -> eval (Env.extend env [x; y] [v; p]) body))
-*)
-            failwith "eval (Record_selection _) not implemented yet"
         | Project (e, name, _) ->
             cofv (I.project (name, ev e, t))
         | Erase (e, name, _) ->
@@ -676,14 +662,8 @@ struct
             I.database (ev e)
         | TableHandle (database, table, ts, _) ->
             I.table_handle (ev database, ev table, ts, node_datatype e)
-        | TableQuery (tables, query, _) ->
-            I.table_query
-              (List.fold_right
-                 (fun (name, e) tables ->
-                    StringMap.add name (ev e) tables)
-                 tables StringMap.empty,
-               query,
-               node_datatype e)
+        | TableQuery (query, _) ->
+            I.table_query (query, node_datatype e)
         | SortBy (expr, byExpr, _) ->
             failwith "eval (SortyBy _) not implemented yet"
         | Call_cc (e, _) ->
@@ -733,7 +713,7 @@ struct
                             location,
                             fun v -> eval_defs (Env.extend env [f] [v]) defss rest)
             | Define (x, e, _, _) ->
-                Debug.print("compiling def: " ^ x);
+(*                 Debug.print("compiling def: " ^ x); *)
                 I.comp (make_global_info (node_datatype e, x),
                         eval env e,
                         fun v -> eval_defs (Env.extend env [x] [v]) defss rest)

@@ -220,9 +220,9 @@ class mysql_result (result: result) db = object
   method nfields : int = 
     fields result
   method fname  n : string = 
-    (Utility.valOf (fetch_field_dir result n)).name
+    (Utility.val_of (fetch_field_dir result n)).name
   method ftype  n : db_field_type = 
-    match (Utility.valOf (fetch_field_dir result n)).ty with
+    match (Utility.val_of (fetch_field_dir result n)).ty with
       | IntTy | Int64Ty -> IntField
       | StringTy | BlobTy -> TextField
       | other -> SpecialField (new otherfield other)
@@ -230,14 +230,14 @@ class mysql_result (result: result) db = object
     match !rows with
       | None ->
           let toList row = 
-            List.map (Utility.fromOption "!!NULL!!") (Array.to_list row) in
+            List.map (Utility.from_option "!!NULL!!") (Array.to_list row) in
           let r = List.map toList (slurp fetch result)
           in
             rows := Some r;
             r
       | Some r -> r
   method error : string = 
-    Utility.valOf (errmsg db)
+    Utility.val_of (errmsg db)
 end
 
 class mysql_database spec = object

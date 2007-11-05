@@ -83,7 +83,7 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
 let map_fold_increasing = ocaml_version_atleast [3; 8; 4]
 *)
 (*
-  [NOTE]
+  NOTE:
   
   We use Map.fold and Set.fold too often to support OCaml versions prior to 3.08.4
 *)
@@ -384,6 +384,8 @@ let unwrap_row : row -> (row * row_var option) =
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
 let bool_type = `Primitive `Bool
+let int_type = `Primitive `Int
+let float_type = `Primitive `Float
 let xml_type = `Application ("Xml", [])
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
@@ -498,8 +500,6 @@ and free_alias_check_row alias_env = fun rec_vars row ->
 (* interface *)
 let free_alias_check alias_env = free_alias_check alias_env TypeVarSet.empty
 let free_alias_check_row alias_env = free_alias_check_row alias_env TypeVarSet.empty
-
-
 
 let rec is_mailbox_free alias_env = fun rec_vars t ->
   let imb = is_mailbox_free alias_env rec_vars in
@@ -1019,6 +1019,55 @@ let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
     (IntMap.map (fun _ -> fresh_type_variable ()) tenv,
      IntMap.map (fun _ -> fresh_row_variable ()) renv)
 
+
+(* subtyping *)
+let is_sub_type, is_sub_row =
+  let module S = TypeVarSet in
+  let rec is_sub_type = fun rec_vars ->
+    function
+      | `Not_typed, `Not_typed -> true
+      | `Primitive p, `Primitive q -> p=q
+      | `Function _, `Function _ -> failwith "not implemented subtyping on functions yet"
+      | `Record row', `Record row
+      | `Variant row, `Variant row' ->
+          let lrow, _ = unwrap_row row
+          and rrow, _ = unwrap_row row' in
+            is_sub_row rec_vars (lrow, rrow)
+      | `Table _, `Table _ -> failwith "not implemented subtyping on tables yet"
+      | `Application _, _ -> failwith "not implemented subtyping on applications yet"
+      | _, `Application _ -> failwith "not implemented subtyping on applications yet"
+      | `MetaTypeVar _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | `MetaTypeVar _, _ -> failwith "not implemented subtyping on metatypevars yet"
+      | _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | _, _ -> false
+  and is_sub_row =
+    fun rec_vars ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
+      let sub_fields =
+        FieldEnv.fold (fun name t b ->
+                         match t with
+                           | `Present t ->
+                               if FieldEnv.mem name rfield_env then
+                                 match FieldEnv.find name rfield_env with
+                                   | `Present t' ->
+                                       is_sub_type rec_vars (t, t')
+                                   | `Absent -> false
+                               else
+                                 false
+                           | `Absent ->
+                               true) lfield_env true in
+      let sub_row_vars =
+        match Unionfind.find lrow_var, Unionfind.find rrow_var with
+          | `Flexible var, `Flexible var'
+          | `Rigid var, `Rigid var' -> var=var'
+          | `Closed, _ -> true
+          | _, _ -> false
+      in
+        sub_fields && sub_row_vars
+  in
+    ((fun t -> is_sub_type S.empty t),
+     (fun row -> is_sub_row S.empty row))
+
+
 (* alias lookup *)
 exception AliasMismatch of string
 
@@ -1034,13 +1083,6 @@ let lookup_alias (s, ts) alias_env =
                   string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
     else
       vars, alias
-
-let make_record_type (ts : (string*datatype) list) : datatype =
-  `Record 
-    (List.fold_left
-       (fun row (name, t) -> row_with (name, `Present t) row)
-       (make_empty_closed_row ())
-       ts)
 
 let make_tuple_type (ts : datatype list) : datatype =
   `Record 
@@ -1063,4 +1105,4 @@ let make_row ts =
 let make_record_type ts = `Record (make_row ts)
 let make_variant_type ts = `Variant (make_row ts)
 
-let make_table_type (r, w) =`Table (r, w)
+let make_table_type (r, w) = `Table (r, w)

@@ -20,11 +20,12 @@ let debug = Settings.add_bool("debug_sqlcompile", false, `User)
    SQL type. *)
 let sqlable_primtype ty = 
   match Types.concrete_type ty with
-      `Primitive ty' -> (match ty' with 
-                            `Bool | `Int | `Char | `Float -> true
-                          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
-                                              Types.string_of_datatype ty));
-                              false)
+      `Primitive ty' -> (
+        match ty' with 
+            `Bool | `Int | `Char | `Float -> true
+          | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
+                                             Types.string_of_datatype ty));
+              false)
     | `Application ("String", []) -> true
     | `Application ("List", [`Primitive `Char]) -> true
     | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
@@ -64,31 +65,20 @@ struct
         -> Some body
     | _ -> None
 
-    (* This module will go away once we stop using Record_selection *)
   module NormalizeProjections : 
   sig
     val normalize_projections : RewriteSyntax.rewriter
   end =
   struct
-    (** The purpose of this set of rewrite rules is to replace all
-        occurrences of Record_selection with Project and Erase
-        (minimising the number of times Erase occurs.) *)
-    
     open RewriteSyntax
-      
-    (** eliminate all occurrences of Record_selection in favour of
-        Project and Erase *)
+
     let convert_projections : rewriter = function
-      | Record_selection (label, labelvar, etcvar, (Variable _ as v), body, data) ->
-          Some (Let (labelvar, Project (v, label, data),
-                     Let (etcvar, Erase (v, label, data),
-                          body, data), data))
-      | Record_selection (label, labelvar, etcvar, value, body, data) ->
-          let name = gensym ~prefix:"recordvar" () in
-            Some(Let(name, value, 
-                     Let(labelvar, Project (Variable (name, data), label, data),
-                         Let(etcvar, Erase (Variable (name, data), label, data),
-                             body, data), data), data))
+      | Project (Variable _, _, _) -> None
+      | Project (e, label, data) ->
+          let e_data = expression_data e in
+          let var = gensym ~prefix:"recordvar" () in
+            Some(Let(var, e, Project(Variable (var, e_data), label, data),
+                     data))
       | _ -> None
           
     (** Replace projection from an etc. var with projection from the
@@ -116,19 +106,11 @@ struct
           Some (subst_fast var p body)
       | _ -> None
           
-    (** Check post conditions hold (not really a rewriter) *)
-    let check_projections : rewriter = function
-      | Project (Variable _, _, _) -> None
-      | Project  _
-      | Record_selection _         -> assert false
-      | _                          -> None
-
     let normalize_projections = bottomup (all [
-                                            convert_projections;
+(*                                             convert_projections; *)
                                             replace_erase;
                                             remove_unused_variables;
-                                            inline_projections;
-                                            check_projections
+(*                                             inline_projections; *)
                                           ])
   end
 
@@ -188,21 +170,50 @@ struct
               Some result
     | _ -> None
 
+  (** [asList_anf] puts applications of asList in ANF, so that the
+      argument can only be a variable; this would go away if we had
+      ANF in the IR *)
+  let asList_anf : RewriteSyntax.rewriter = function 
+    | (Apply(Variable("asList", d1), [Variable _], d2) as expr) -> None
+    | (Apply(Variable("asList", d1), [th], d2) as expr) -> 
+        let th_data = expression_data th in
+        let th_var = gensym ~prefix:"_t" () in
+          Some (Let (th_var, th,
+                     Apply(Variable("asList", d1),
+                           [Variable(th_var, th_data)], d2), d2))
+    | _ -> None
+
+  (** [lift_let_past_sortby] does some limited re-normalization (or
+      let-flattening). This is presently just used to get SortBy
+      applications in the right form for query compilation. This, too,
+      would go away if the source was a flattened ANF representation.
+      (Note: presumes that all binders are unique *)
+  let lift_let_past_sortby =
+    function
+      | For(b, y, Let(x, e1, e2, d1), d2) ->
+          Some (Let(x, e1, For(b, y, e2, d2), d1))
+      | SortBy(Let(x, e1, e2, d1), e3, d2) ->
+          Some (Let(x, e1, SortBy(e2, e3, d2), d1))
+      | _ -> None
+
   let normalize : Syntax.expression -> Syntax.expression =
     let rules = [
+      Syntax.RewriteSyntax.bottomup asList_anf;
       NormalizeProjections.normalize_projections;
       Syntax.RewriteSyntax.bottomup lift_nonrecord_compn;
       Simplify.simplify;
       Syntax.RewriteSyntax.topdown simplify_table_query;
       Syntax.RewriteSyntax.topdown remove_unused_variables;
+      Syntax.RewriteSyntax.bottomup lift_let_past_sortby;
     ] in
-      fun e -> fromOption (Variable("FUD", Syntax.no_expr_data)) (Syntax.RewriteSyntax.all rules e)
+      fun e -> from_option (Variable("FUD", Syntax.no_expr_data))
+        (Syntax.RewriteSyntax.all rules e)
         
   let normalize e = 
     let r = normalize e in
       (if !trace_normalize then
          prerr_endline ("normalize output : " ^ 
-(*          Syntax.Show_expression.show r)); *)
+                          (*          Syntax.Show_expression.show r)); *)
          Syntax.Show_stripped_expression.show (Syntax.strip_data r)));
       r
 end
@@ -300,7 +311,6 @@ struct
       | e -> uncompilable e
     in compile e
 
-
   let rec compileB (env : Env.t) : expression -> baseexpr = function
     | Apply (Variable ("not", _), [b], _)  -> 
         `Not ((trycompile "B" compileB) env b)
@@ -345,10 +355,9 @@ struct
                     let fields = present_fields row in
                     let fieldinfo = 
                       List.map (fun (label, _) -> 
-                                  (
-                                    (let l = {Env.var = var; Env.label = label} in
-                                       Debug.if_set_l debug(lazy("binding : " ^ Env.Show_field.show l));
-                                       l), gensym())) fields in
+                                  ((let l = {Env.var = var; Env.label = label} in
+                                      Debug.if_set_l debug(lazy("binding : " ^ Env.Show_field.show l));
+                                      l), gensym())) fields in
                     let env' = fold_right (uncurry Env.bindf) fieldinfo env in
                     let env' = Env.bindv var (`Rec (List.map (fun (f,v) -> f.Env.label, `Var v) fieldinfo)) env' in
                       begin
@@ -362,50 +371,41 @@ struct
                 | _ -> uncompilable e
               end
           | t -> 
-              Debug.if_set_l debug(lazy ("comprehension source: wrong type : " ^
-                            Types.Show_datatype.show t));
+              Debug.if_set_l debug(lazy("comprehension source: wrong type : " ^
+                                   Types.Show_datatype.show t));
               uncompilable e
         end
 
-    | SortBy(TableQuery(th, query, data1),
-             Abstr([loopVar], sortByExpr, _), _) as e ->
-        let read_proj = function
-          | Project (record, name, _) -> Some (record, name)
-          | _ -> None in
-        let add_sorting query col = 
-          {query with SqlQuery.sort = col :: query.SqlQuery.sort}
+    | SortBy(listExpr, Abstr([loopVar], sortByExpr, _), _) as e ->
+        begin
+          match (trycompile "S" compileS) env listExpr with
+              `Table(fields, th_var, table_alias, sort) ->
+                begin
+                  match read_proj sortByExpr with
+                    | Some(Variable(sortByRecVar, _), sortByFld)
+                        when sortByRecVar = loopVar ->
+                          `Table(fields, th_var, table_alias,
+                                 sort @ [`Asc(table_alias, sortByFld)])
+                    | _ -> uncompilable e
+                end
+            | _ -> uncompilable e
+        end
+
+    | (Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) as expr)
+      ->
+        Debug.if_set_l debug(lazy("attempting to compile asList application"));
+        let fields = match Types.concrete_type (node_datatype th) with
+          | `Table (`Record (fields, _), _) -> fields
+          | _ -> failwith "Internal Error: tables must have concrete table type"
         in
-          begin
-            match read_proj sortByExpr with
-              | Some (Variable(sortByRecVar, _), sortByFld)
-                  when sortByRecVar = loopVar ->
-                  (trycompile "S" compileS) env
-                    (TableQuery(th, add_sorting query
-                                  (`Asc(SqlQuery.owning_table sortByFld query,
-				        sortByFld)), data1))
-              | _ -> uncompilable e
-          end
+        let th_var = match th with
+          | Variable(var, _) -> var
+          | _ -> Debug.print("Internal error: asList arg was not var"); 
+              uncompilable expr
+        in
+        let table_alias = gensym ~prefix:"Table_" () in
+          `Table(present_fields fields, th_var, table_alias, [])
 
-    | TableQuery ([table_alias, Variable(th_var, _)], q, `T (_,ty,_)) as e ->
-        Debug.if_set_l debug(lazy("attempting to compile table query"));
-        begin match q, Types.concrete_type ty with 
-          | {cols = _;
-	     tabs = [_]; (* single table *)
-	     cond = [`True];
-	     most = Inf;
-	     from = Int 0;
-             sort = _},
-            ty ->
-              let fields = (match ty with
-                              | `Application ("List", [`Record (fields,_)]) -> fields
-                              | s -> failwith ("Unexpected table type in:" ^
-                                               Types.Show_datatype.show s)) in
-                `Table(present_fields fields, th_var, table_alias)
-          | _ -> 
-              Debug.if_set_l debug(lazy "could not compile table query");
-              uncompilable e
-        end
-    | TableQuery _ -> failwith "Unexpected form of TableQuery"
     | Condition (c, t, Nil _, _) ->
         `Where ((trycompile "B" compileB) env c, (trycompile "S" compileS) env t)
     | Condition (c, Nil _, t, _) ->
@@ -417,7 +417,7 @@ struct
             | `Rec _ as b -> `Return b
             | _ -> uncompilable e
         else (Debug.if_set_l debug(lazy("List_of body was not a tuple, it was: " ^ 
-                           Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
+                                   Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
               uncompilable e)
     | e -> uncompilable e
 
@@ -485,6 +485,14 @@ struct
          `F {f with table=assoc t substs}
       |`F _ as f -> f
 
+  let rec subst_tabsort substs : sorting -> sorting =
+    function
+      | `Asc (t, f) when mem_assoc t substs ->
+          `Asc (assoc t substs, f)
+      | `Desc (t, f) when mem_assoc t substs ->
+          `Desc (assoc t substs, f)
+      | s -> s          
+
   let rec evalb env : baseexpr -> sqlexpr = function
     | `Op (op, l, r) -> `Op (op, evalb env l, evalb env r)
     | `Not b -> `Not (evalb env b)
@@ -505,7 +513,8 @@ struct
         let tab_alias_map = map (fun (_,oldas,newas) -> (oldas,newas)) tab_map in
         let q1 = {q1 with cols = map (fun (expr, alias) -> (subst_tabnames tab_alias_map expr, alias)) q1.cols
                         ; tabs = map (fun (t,_,newas) -> `TableVar(t, newas)) tab_map
-                        ; cond = map (subst_tabnames tab_alias_map) q1.cond} in
+                        ; cond = map (subst_tabnames tab_alias_map) q1.cond
+                        ; sort = map (subst_tabsort tab_alias_map) q1.sort} in
         (* (substitute expressions: see JOIN rule) *)
         let env' = (fold_right
                       (fun (l,v) -> Env.binde v (Auxiliary.find_output_column q1 l))
@@ -517,20 +526,21 @@ struct
             cond = q1.cond @ q2.cond;
             most = (match q1.most, q2.most with Inf, Inf -> Inf | _ -> assert false);
             from = (match q1.from, q2.from with Int 0, Int 0 -> Int 0 | _ -> assert false);
-            sort = []}
+            sort = q1.sort @ q2.sort }
+
     | `Let (v, b, e) -> evalS (Env.binde v (evalb env b) env) e
     | `Where (b, s) -> 
         let cond = evalb env b
         and q = evalS env s in
           {q with cond = cond :: q.cond}
-    | `Table (cols, table_var, table_alias) ->
+    | `Table (cols, table_var, table_alias, sort) ->
         { cols = map (fun (col,ty) ->
                         (`F {table=table_alias; column=col; ty=ty}, col)) cols;
           tabs = [`TableVar(table_var, table_alias)];
           cond = [];
           most = Inf;
           from = num_of_int 0;
-          sort = []}
+          sort = sort}
     | `Return b ->
         begin match evalb env b with
           | `Rec fields -> 
@@ -557,17 +567,8 @@ struct
   let eval = evalE
 end
 
-(* For now, we have to reconstruct the pairings of the 
-   aliases with the variables that hold the actual table 
-   value *)
-let table_names q =
-  map (function
-           (`TableVar(x, alias)) -> 
-             alias, (Syntax.Variable(x, (Syntax.no_expr_data)))
-         | `TableName _ -> assert false) q.tabs
-
 let underscore_numeric_names cols =
-  map (fun (expr, col) ->
+  map (fun (_expr, col) ->
          if is_numeric col then
            (col, "_" ^ col) 
          else
@@ -585,12 +586,11 @@ let rename_cols renamings q =
     here because it involves both an operation on the query and also a
     wrapping expression that projects out the needed data at the end. *)
 let injectQuery q data =
-  let names = table_names q in
   let needs_renaming = exists (snd ->- is_numeric) q.cols in
   let renamings = underscore_numeric_names q.cols in
   let renamer =
     let fields = map
-      (fun (expr, name) ->
+      (fun (_expr, name) ->
          (name,
           (Syntax.Project(Syntax.Variable("row", Syntax.no_expr_data),
                           (try List.assoc name renamings
@@ -606,12 +606,12 @@ let injectQuery q data =
     if needs_renaming then
       Syntax.Apply(Syntax.Variable("map", Syntax.no_expr_data),
                    [renamer;
-                    Syntax.TableQuery(names, q, data)],
+                    Syntax.TableQuery(q, data)],
                    Syntax.no_expr_data)
     else
-      Syntax.TableQuery(names, q, data)
+      Syntax.TableQuery(q, data)
       
-let sql_compile_prepared (expr : Syntax.expression) : Syntax.expression option =
+let sql_compile_prepared (expr : Syntax.expression) :Syntax.expression option =
   let expr_data = Syntax.expression_data expr in
   match Compile.compile expr with
       None -> None
@@ -626,4 +626,3 @@ let sql_compile_prepared (expr : Syntax.expression) : Syntax.expression option =
 let sql_compile (expr : Syntax.expression) : Syntax.expression option =
   let expr = Prepare.normalize expr in
     Syntax.RewriteSyntax.maxonce_td sql_compile_prepared expr
-

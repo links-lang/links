@@ -58,6 +58,7 @@ struct
     | `TupleLit ps -> List.for_all is_generalisable ps
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
+    | `Upcast (p, _, _)
     | `Escape (_, p) -> is_generalisable p
     | `ConstructorLit (_, p) -> opt_generalisable p
     | `RecordLit (fields, p) ->
@@ -79,9 +80,8 @@ struct
     | `Regex r -> is_generalisable_regex r
     | `Iteration _ (* could do a little better in some of these cases *)
     | `Page _
-    | `Pagelet _
     | `FormletPlacement _
-    | `PageletPlacement _
+    | `PagePlacement _
     | `UnaryAppl _
     | `FormBinding _
     | `InfixAppl _
@@ -580,7 +580,8 @@ let rec extract_formlet_bindings (expr, pos) =
             children Env.empty
       | _ -> Env.empty
           
-let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : context -> Untyped.phrase -> Typed.phrase = 
+let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) 
+    : context -> Untyped.phrase -> Typed.phrase = 
   let rec type_check ({tenv = (env, alias_env)} as context) (expr, pos) =
     let unify = Utils.unify alias_env
     and (++) (env, alias_env) env' = (Env.extend env env', alias_env)
@@ -607,8 +608,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
           binders ([], []) in
       let pt = close_pattern_type pats pt in
 
-      (* NOTE: it is important to type the patterns in isolation first in order to
-         allow them to be closed before typing the bodies *)
+      (* NOTE: it is important to type the patterns in isolation first in order
+         to allow them to be closed before typing the bodies *)
 
       let binders = 
         List.fold_right
@@ -624,7 +625,6 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
       match (expr : Untyped.phrasenode) with
         | `Var v            -> `Var v, Utils.instantiate env v
         | `Section _ as s   -> type_section env s
-
 
         (* literals *)
         | `Constant c as c' -> c', constant_type c
@@ -835,9 +835,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
               unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
         | `Page _ -> assert false
-        | `Pagelet _ -> assert false
         | `FormletPlacement _ -> assert false
-        | `PageletPlacement _ -> assert false
+        | `PagePlacement _ -> assert false
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
@@ -955,6 +954,17 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position) : cont
             and t' = Sugar.desugar_datatype' (context.tvars, context.rvars) t in
               unify (typ e, t');
               `TypeAnnotation (e, t), t'
+        | `Upcast (e, t1, t2) ->
+            let e = tc e
+            and t1' = Sugar.desugar_datatype' (context.tvars, context.rvars) t1
+            and t2' = Sugar.desugar_datatype' (context.tvars, context.rvars) t2 in
+              if Types.is_sub_type (t2', t1') then
+                begin
+                  unify (typ e, t2');
+                  `Upcast (e, t1, t2), t1'
+                end
+              else
+                failwith "upcast failure (TODO: implement this error message!)"
         | `Switch (e, binders) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in

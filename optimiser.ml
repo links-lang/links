@@ -82,7 +82,7 @@ let perform_function_inlining location name var rhs (Program (defs, body)) =
              Syntax.rewrite_def (RewriteSyntax.bottomup replace_application) def
            else
              def) defs,
-      fromOption body (RewriteSyntax.bottomup replace_application body))
+      from_option body (RewriteSyntax.bottomup replace_application body))
 
 let inline (Program (defs, body) as program) = 
   let valuedefp = function
@@ -162,13 +162,6 @@ let uniquify_names : RewriteSyntax.rewriter =
           Some (Rec (List.map (fun (n, v, t) ->
                                  (List.assoc n bindings, rename v, t)) vs,
                      rename b, data))
-    | Record_selection (lab, lvar, var, value, body, data) ->
-        let lvar' = gensym ~prefix:lvar ()
-        and var'  = gensym ~prefix:var () in
-          Some(Record_selection(lab, lvar', var', value, 
-                                Syntax.rename_fast var var' 
-                                  (Syntax.rename_fast lvar lvar' body),
-                                data))
     | For (b, v, src, data) -> 
         let name = gensym ~prefix:v () in
           Some (For (Syntax.rename_fast v name b, name, src, data))
@@ -201,7 +194,6 @@ let renaming : RewriteSyntax.rewriter =
       | Let (v, _, _, _)
           when v = var -> true
       | Abstr (vs, _, _) when mem var vs -> true
-      | Record_selection (_, v1, v2, _, _, _)
       | Variant_selection (_, _, v1, _, v2, _, _) when var = v1 || var = v2 -> true
       | Rec (bindings, _, _) when List.exists (fun (v,_,_) -> v = var) bindings -> true
       | other -> default other
@@ -260,46 +252,6 @@ let simplify_regex : RewriteSyntax.rewriter = function
     that can be applied to an expression. Generally, they try to push
     as much calculation to the DBMS as possible. {e Beware:} some
     optimisers have dependencies with other optimisers. *)
-
-let sql_aslist : RewriteSyntax.rewriter =
-  function 
-    | Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) ->
-        let th_type = Types.concrete_type (node_datatype th) in
-        let th_row = match th_type with
-          |  `Table (`Record th_row, _) -> th_row
-          | _ -> failwith "Internal Error: tables must have concrete table type"
-        in
-        let table_alias = gensym ~prefix:"Table_" () in
-	let rowFieldToTableCol colName = function
-	  | `Present fieldType -> (`F{SqlQuery.table = table_alias;
-                                      SqlQuery.column = colName;
-                                      SqlQuery.ty = fieldType}, colName)
-	  | _ -> failwith "Internal Error: missing field in row"
-	in
-	let fields, _ = th_row in
-	let columns = StringMap.to_list rowFieldToTableCol fields in
-        let th_var = match th with
-          | Variable(var, _) -> var
-          | _ -> gensym ~prefix:"_t" () in
-          (* With the new SQL compiler, this no longer serves a purpose. *)
-	let select_all = {SqlQuery.cols = columns;
-			  SqlQuery.tabs = [`TableVar(th_var, table_alias)];
-			  SqlQuery.cond = [`True];
-			  SqlQuery.most = SqlQuery.Inf;
-			  SqlQuery.from = Num.Int 0;
-                          SqlQuery.sort = []} in
-        let th_list_type = `Application ("List", [`Record(th_row)]) in
-          (* With the new SQL compiler, this TableQuery is needed only
-             to hold the variable and the generated alias. *)
-        let table_query = TableQuery([table_alias, 
-                                      Variable(th_var, `T(pos, th_type, None))],
-                                     select_all,
-                                     `T (pos, th_list_type, None))
-        in
-          (match th with
-             | Variable _ -> Some table_query
-             | _ -> Some (Let (th_var, th, table_query, data)))
-    | _ -> None
 
 let lift_lets : RewriteSyntax.rewriter = function
   | For(loopbody, loopvar, Let(letvar, letval, letbody, letdata), data) 
@@ -377,21 +329,20 @@ let print_definition of_name ?msg:msg def =
  (match def with
     | Define (name, value, locn, _) when name = of_name 
         -> Debug.if_set show_optimisation
-        (fun () -> fromOption "" msg ^ string_of_definition def)
+        (fun () -> from_option "" msg ^ string_of_definition def)
     | _ -> ());
   None
 
 
 let rewriters env = [
   uniquify_names;
-  RewriteSyntax.bottomup no_project_erase;
+(*  RewriteSyntax.bottomup no_project_erase; *)
   RewriteSyntax.bottomup renaming;
   RewriteSyntax.bottomup unused_variables;
   if Settings.get_value reduce_recs then
     RewriteSyntax.topdown reduce_recursion
   else RewriteSyntax.never;
   RewriteSyntax.topdown simplify_regex;
-  RewriteSyntax.topdown sql_aslist;
   RewriteSyntax.loop (RewriteSyntax.bottomup lift_lets);
   RewriteSyntax.bottomup fold_constant;
   RewriteSyntax.topdown remove_trivial_extensions;
@@ -423,7 +374,7 @@ let optimise' env expr =
     in
       expr'
     
-let optimise env expr = fromOption expr (optimise' env expr)
+let optimise env expr = from_option expr (optimise' env expr)
 
 let optimise_program (env, (Program (defs, body))) =
   Program (

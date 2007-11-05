@@ -109,7 +109,7 @@ echo " $libdir/"
 if [ ! -e $libdir/yahoo ]; then
     mkdir -p $libdir/yahoo
 fi
-cp lib/js/yahoo/YAHOO.js $libdir/yahoo
+cp lib/js/yahoo/yahoo.js $libdir/yahoo
 cp lib/js/yahoo/event.js $libdir/yahoo
 cp lib/js/jslib.js $libdir/
 cp lib/js/json.js $libdir/
