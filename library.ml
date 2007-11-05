@@ -441,9 +441,8 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   PURE);
   
   "alertDialog",
-  (client_only_1 "alertDialog",
-   datatype "(String) -> ()",
-  IMPURE);
+  (`Client, datatype "(String) -> ()",
+   IMPURE);
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
@@ -452,15 +451,15 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   IMPURE);
 
   "debugObj",
-  (client_only_1 "debugObj", datatype "(a) -> ()",
+  (`Client, datatype "(a) -> ()",
   IMPURE);
   
   "dump",
-  (client_only_1 "dump", datatype "(a) -> ()",
+  (`Client, datatype "(a) -> ()",
   IMPURE);
   
   "textContent",
-  (client_only_1 "textContent", datatype "(DomNode) -> String",
+  (`Client, datatype "(DomNode) -> String",
   IMPURE);
 
   "print",
@@ -492,7 +491,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (* HACK *)
   (*   [DEACTIVATED] *)
   (*   "callForeign", *)
-  (*    (client_only_1 "callForeign", datatype "((a) -> b) -> (a) -> b"); *)
+  (*    (`Client, datatype "((a) -> b) -> (a) -> b"); *)
 
   (* DOM API *)
 
@@ -1002,6 +1001,12 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
     PURE));
   
   (** non-deterministic random number generator *)
+  ("server_concat",
+  (`Server (p2 (fun a b -> 
+                  box_string (unbox_string a ^ unbox_string b))),
+   datatype "(String, String) -> String",
+   PURE));
+
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",
@@ -1024,16 +1029,22 @@ let primitive_location (name:string) = match fst3 (assoc name env) with
   | `Server _ -> `Server
   | #primitive -> `Unknown
 
+let primitive_arity (name : string) = 
+  let _, (_, t), _ = assoc name env in
+    match t with 
+      | `Function(`Record (l, _), _, _) -> (Some (StringMap.size l))
+      | _ -> None
+
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
     | Some (#result as r) -> r
     | Some _ -> `PrimitiveFunction name
     | None  -> `ClientFunction name
 
-
 let apply_pfun name args = 
   match StringMap.find name (!value_env) with
-    | Some #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
+    | Some #result -> failwith("Attempt to apply primitive non-function (" ^
+                                 name ^")")
     | Some (`PFun p) -> p args
     | None -> assert false
 

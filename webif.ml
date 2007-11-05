@@ -95,11 +95,12 @@ let stubify_client_funcs globals (Syntax.Program(defs,body) as program) : Result
           Interpreter.run_defs globals [] server_defs
             @ client_env
 
-let get_remote_call_args env cgi_args = 
+let get_remote_call_args lookup cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
   let args = untuple (Json.parse_json args) in
-    RemoteCall(List.assoc fname env, args)
+  let func = lookup fname in
+    RemoteCall(func, args)
 
 let decode_continuation (cont : string) : Result.continuation =
   let fixup_cont = 
@@ -205,16 +206,13 @@ let perform_request
           (Utility.base64encode 
              result_json)
     | RemoteCall(func, args) ->
-
         Interpreter.has_client_context := true;
         let args = List.rev args in
         let cont, value = 
-          ApplyCont(Result.empty_env, args) :: toplevel_cont, func
-        in
+          ApplyCont(Result.empty_env, args) :: toplevel_cont, func in
+        let result = Interpreter.apply_cont_safe globals cont value in
 	  Library.print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode
-               (Json.jsonize_result
-                  (Interpreter.apply_cont_safe globals cont value)))
+            (Utility.base64encode (Json.jsonize_result result))
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
@@ -240,9 +238,14 @@ let serve_request prelude (valenv, typenv) filename =
       else
         Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
+    let lookup name = 
+      try List.assoc name defs
+      with Not_found -> Library.primitive_stub name
+        | _ -> failwith("Internal error: called unknown server function " ^ name)
+    in
     let request = 
       if is_remote_call cgi_args then
-        get_remote_call_args defs cgi_args
+        get_remote_call_args lookup cgi_args
       else if is_client_call_return cgi_args then
         client_return_req cgi_args
       else if (is_contin_invocation cgi_args) then

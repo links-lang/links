@@ -41,6 +41,7 @@ val apply_pfun : string -> result list -> result
 val primitive_stub : string -> result
 
 val primitive_location : string -> Syntax.location
+val primitive_arity : string -> int option
 val cgi_parameters : (string * string) list ref 
 
 val print_http_response : (string * string) list -> string -> unit

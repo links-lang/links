@@ -21,8 +21,6 @@ let lookup globals locals name =
   with Not_found -> 
     raise(RuntimeUndefVar name)
 
-
-
 (** [bind_rec env defs] extends [env] with bindings for the [defs],
     where each one defines a function and all the functions are
     mutually recursive. *)
@@ -30,7 +28,6 @@ let bind_rec locals defs =
   let new_defs = map (fun (name, _) -> 
                         (name, `RecFunction(defs, locals, name))) defs in
     trim_env (new_defs @ locals)
-
 
 (** Given a label and a record, returns the value of that field in the record,
     together with the remaining fields of the record. *)

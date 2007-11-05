@@ -406,18 +406,25 @@ let rename_prefixed name = Str.global_replace (Str.regexp ":") "___" name
 let strip_lcolon evName = 
   String.sub evName 2 ((String.length evName) - 2)
 
+let js_tuple elems = Dict (
+  List.map2
+    (fun n e -> string_of_int n, e) 
+    (Utility.fromTo 1 (1 + List.length elems))
+    elems
+)
+
+let server_stub name arglist = 
+  Defs [name, Fn (arglist @ ["__kappa"], 
+                Call(Call(Var "LINKS.remoteCall", [Var "__kappa"]),
+                     [strlit name; 
+                      js_tuple (map (fun v -> Var v) arglist)
+                     ]))]
+
 (* Generate a server stub that calls the corresponding server function *)
 let generate_server_stub = function
   | Define (n, Abstr (arglist,_,_), `Server, _)
   | Define (n, Rec ([_, (Abstr (arglist,_,_)), _], Variable _, _), `Server, _) ->
-        Defs [n, Fn (arglist @ ["__kappa"], 
-                 Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
-                      [strlit n; Dict (
-                         List.map2
-                           (fun n v -> string_of_int n, Var v) 
-                           (Utility.fromTo 1 (1 + List.length arglist))
-                           arglist
-                       )]))]
+      server_stub n arglist
   | def
     -> failwith ("Cannot generate server stub for " ^
                    Syntax.Show_definition.show def)
@@ -600,6 +607,7 @@ let rec generate : 'a expression' -> code =
       let innermost_call =
         match f with
           | Variable (l, _) when Library.is_primitive l && not (mem l cps_prims)
+              && Library.primitive_location l <> `Server 
               -> 
               (* Don't yield when calling library functions.
                  In the future library functions should be "native". *)
@@ -615,7 +623,8 @@ let rec generate : 'a expression' -> code =
         fold_right wrap_cps_terms cps_args innermost_call
       in
         (match f with 
-          | Variable (l, _) when Library.is_primitive l && not (mem l cps_prims) ->
+          | Variable (l, _) when Library.is_primitive l && not (mem l cps_prims)
+              && Library.primitive_location l <> `Server ->
               Fn (["__kappa"],  arg_tower)
           | _ -> 
               Fn (["__kappa"],  Call(f_cps, [Fn ([f_name], arg_tower)])))
@@ -1103,7 +1112,11 @@ let make_boiler_page ?(onload="") ?(body="") defs =
 let get_alien_names defs = 
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
-      
+
+let rec some_vars = function 
+    0 -> []      
+  | n -> ("x"^string_of_int n) :: some_vars (n-1)
+
 let generate_program_defs defs root_names =
   let aliens = get_alien_names defs in
   let defs = List.map Symbols.rename_def defs in
@@ -1115,12 +1128,22 @@ let generate_program_defs defs root_names =
     else Program (defs, body)
   in
   let library_names = aliens @ StringSet.elements (Env.String.domain (fst Library.typing_env)) in
+  let prim_server_stubs =
+    concat_map (fun (name, _) -> 
+           match Library.primitive_arity name with
+               None -> []
+             | Some arity ->
+                 [server_stub name (some_vars arity)])
+      (filter (fun (name,_) -> Library.primitive_location name = `Server) 
+         (StringMap.to_alist !Library.value_env)) in
   let defs =
     (if Settings.get_value elim_dead_defs then
        Callgraph.elim_dead_defs library_names defs root_names
      else defs) in
   let global_names = Syntax.defined_names defs @ library_names in
-    map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- show_pp) defs
+    map show_pp prim_server_stubs @
+      map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- 
+             show_pp) defs
 
 let generate_program ?(onload = "") (Program(defs,expr)) =
   let expr = Symbols.rename expr in
