@@ -1000,13 +1000,14 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
     datatype "(a) -> b",
     PURE));
   
-  (** non-deterministic random number generator *)
+  (** A silly server-side function, just for testing server-side primitives 
+      called from client. Remove this if there is a better one for testing. *)
   ("server_concat",
-  (`Server (p2 (fun a b -> 
-                  box_string (unbox_string a ^ unbox_string b))),
+  (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
    datatype "(String, String) -> String",
    PURE));
 
+  (** non-deterministic random number generator *)
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",

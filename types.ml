@@ -112,7 +112,8 @@ let _ =
                 | `Rigid _
                 | `Flexible _ -> false
                 | `Recursive (var, row) ->
-                    ((TypeVarSet.mem var rec_vars) or (is_closed (TypeVarSet.add var rec_vars) row))
+                    ((TypeVarSet.mem var rec_vars)
+                     or (is_closed (TypeVarSet.add var rec_vars) row))
                 | `Body row ->
                     is_closed rec_vars row
             end

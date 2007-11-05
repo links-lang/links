@@ -221,6 +221,7 @@ let options : opt list =
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
+    (* TBD: load config from $LINKS_CONFIG if --config not set *)
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);

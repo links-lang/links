@@ -278,7 +278,6 @@ fun last(list) {
   }
 }
 
-
 # lines :: String -> [String]
 # unlines :: [String] -> String
 # unwords :: [String] -> String
