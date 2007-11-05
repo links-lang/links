@@ -223,6 +223,7 @@ let options : opt list =
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
     (noshort, "config",              None,                             Some Settings.load_file);
     (noshort, "dump",                None,                             Some Loader.dump_cached);
+    (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None);
