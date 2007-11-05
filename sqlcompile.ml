@@ -44,7 +44,6 @@ let sqlable_record =
                                  sqlable_primtype ty) fields
     | _ -> false
 
-
 module Prepare =
 struct
   open Syntax
@@ -63,6 +62,9 @@ struct
     | Let (var, expr, body, _) when Syntax.pure expr
                                     && not (StringSet.mem var (freevars body))
         -> Some body
+    | Let (x, Variable(y, _), body, _) (* does what Optimiser.renamings does, 
+                                          but that is not available here. *)
+        -> Some (rename_fast x y body)
     | _ -> None
 
   module NormalizeProjections : 
@@ -87,12 +89,12 @@ struct
     let replace_erase : rewriter =
       fun expr ->
         let rec aux default expression env = match expression with
-          | Project (Variable (var, d), l, d') when mem_assoc var env ->
-              Project (Variable (assoc var env, d), l, d')
-          | Let (etcvar, Erase (Variable (var, d), l, d'), body, d'') ->
-              Let (etcvar, 
-                   Erase (Variable (var, d), l, d'), 
-                   aux default body ((etcvar,var)::env), 
+          | Project (Variable (var, d), lbl, d') when mem_assoc var env ->
+              Project (Variable (assoc var env, d), lbl, d')
+          | Let (tgtVar, Erase (Variable (srcVar, d), lbl, d'), body, d'') ->
+              Let (tgtVar, 
+                   Erase (Variable (srcVar, d), lbl, d'), 
+                   aux default body ((tgtVar, srcVar)::env), 
                    d'')
           | e -> default e env in 
         let combiner (exp, subnodes) env : expression =
@@ -107,10 +109,10 @@ struct
       | _ -> None
           
     let normalize_projections = bottomup (all [
-(*                                             convert_projections; *)
+                                            convert_projections;
                                             replace_erase;
                                             remove_unused_variables;
-(*                                             inline_projections; *)
+                                            inline_projections;
                                           ])
   end
 
@@ -213,7 +215,7 @@ struct
     let r = normalize e in
       (if !trace_normalize then
          prerr_endline ("normalize output : " ^ 
-                          (*          Syntax.Show_expression.show r)); *)
+                          (*Syntax.Show_expression.show r)); *)
          Syntax.Show_stripped_expression.show (Syntax.strip_data r)));
       r
 end
@@ -330,19 +332,25 @@ struct
               uncompilable e
         end
     | Record_intro (fields, None, _) ->
-        `Rec (StringMap.fold (fun label expr output ->
-                                (label, (trycompile "B" compileB) env expr)::output) fields [])
+        `Rec (StringMap.fold
+                (fun label expr output ->
+                   (label, (trycompile "B" compileB) env expr)::output) 
+                fields [])
     | Constant(Boolean true, _)      -> `True
     | Constant(Boolean false, _)     -> `False
     | Constant(Integer n, _)         -> `N n
     | Constant(String  s, _)         -> `Str s
-    | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "B" compileB) env s)
+    | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, 
+                                (trycompile "B" compileB) env s)
     | Comparison (l, c, r,_) -> 
-        `Op ((c:>op), (trycompile "B" compileB) env l, (trycompile "B" compileB) env r)
+        `Op ((c:>op), (trycompile "B" compileB) env l, 
+             (trycompile "B" compileB) env r)
     | Condition (c,s,Constant(Boolean false, _),_) ->
-        `Op (`And, (trycompile "B" compileB) env c, (trycompile "B" compileB) env s)
+        `Op (`And, (trycompile "B" compileB) env c, 
+             (trycompile "B" compileB) env s)
     | Condition (c, Constant(Boolean true, _), b, _) ->
-        `Op (`Or, (trycompile "B" compileB) env c, (trycompile "B" compileB) env b)
+        `Op (`Or, (trycompile "B" compileB) env c, 
+             (trycompile "B" compileB) env b)
     | e                      -> uncompilable e
 
   let rec compileS env : expression -> simpleExpr = function
@@ -409,8 +417,10 @@ struct
     | Condition (c, t, Nil _, _) ->
         `Where ((trycompile "B" compileB) env c, (trycompile "S" compileS) env t)
     | Condition (c, Nil _, t, _) ->
-        `Where (`Not ((trycompile "B" compileB) env c), (trycompile "S" compileS) env t)
-    | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, (trycompile "S" compileS) env s)
+        `Where (`Not ((trycompile "B" compileB) env c), 
+                (trycompile "S" compileS) env t)
+    | Let (v, b, s, _) -> `Let (v, (trycompile "B" compileB) env b, 
+                                (trycompile "S" compileS) env s)
     | List_of (b, _) as e -> 
         if (sqlable_record(Types.concrete_type (node_datatype b))) then 
           match (trycompile "B" compileB) env b with

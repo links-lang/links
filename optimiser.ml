@@ -181,9 +181,9 @@ let uniquify_names : RewriteSyntax.rewriter =
 (** {0 Renaming} *)
 
 (** renaming
-    I think this is meant to "remove renamings", that is places where the user
-    has written { var x = y; ... }
-    It is incomplete, becuase the guard is very conservative. If we used
+    I think this is meant to "remove renamings", that is, remove instances of
+    { var x = y; ... }
+    It is incomplete, because the guard is very conservative. If we used
     capture-avoiding substitution, or ensured binder uniqueness in advance,
     we would be more complete.
 *)
