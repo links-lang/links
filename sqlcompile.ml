@@ -145,31 +145,82 @@ struct
   let simplify_table_query : Syntax.RewriteSyntax.rewriter = function
     | Syntax.Let (_, Syntax.TableHandle _,(Syntax.TableQuery _ as t),_) -> Some t
     | _ -> None
-        
+
+  let table_type ty = 
+    match Types.concrete_type ty with
+        `Table(_, _) -> true | _ -> false
+
+  let is_list_of_type pred ty = 
+    match Types.concrete_type ty with
+      | `Application("List", [ty]) -> pred ty
+      | _ -> false
+
+  let rec leaf_inject_as_record field_name ty = function
+    | For(body, x, src, d) ->
+        For (leaf_inject_as_record field_name ty body, x, src, d)
+    | Condition(cond, t, Nil d', d) ->
+        Condition(cond, leaf_inject_as_record field_name ty t, Nil d', d)
+    | Condition(cond, Nil d', f, d) ->
+        Condition(cond, Nil d', leaf_inject_as_record field_name ty f, d)
+    | Let(x, def, body, d) ->
+        Let(x, def, leaf_inject_as_record field_name ty body, d)
+    | List_of(elem, d) ->
+        List_of(leaf_inject_as_record field_name ty elem, d)
+    | base_expr ->
+        let recd_ty = Types.make_record_type[(field_name, ty)] in
+          set_node_datatype(Record_intro(StringMap.from_alist
+                                           [(field_name, base_expr)], 
+                                         None, expression_data base_expr),
+                            recd_ty)
+
+  let rec is_asList_expr = function
+      Let (var, src, body, _) -> is_asList_expr body
+    | Apply(Variable("asList", _), [_], _) -> true
+    | _ -> false
+
   let lift_nonrecord_compn : RewriteSyntax.rewriter = function
       For(List_of(elem, data_body), var, src, data_for) 
         when sqlable_primtype(node_datatype elem)
           -> 
             Debug.if_set_l debug(lazy("Lifting non-record in comp'n body"));
-
+            
             let ty = Types.concrete_type(node_datatype elem) in
-            let recd_ty = Types.make_record_type[("a", ty)] in
             let field_name = "a" in
+            let recd_ty = Types.make_record_type[(field_name, ty)] in
             let elem_record = 
               set_node_datatype(Record_intro(StringMap.from_alist
                                                [(field_name, elem)], 
                                              None, data_body), recd_ty) in
-            let proj = Abstr(["x"], Project(Variable("x", data_for), field_name,
-                                            data_for), 
-                             data_for) in
+            let projFunc = Abstr(["x"],
+                                 Project(Variable("x", data_for), field_name,
+                                         data_for), 
+                                 data_for) in
             let result = Apply(Variable("map", data_for),
-                               [proj;
-                                For(List_of(elem_record, 
-                                            data_body),
+                               [projFunc;
+                                For(List_of(elem_record, data_body),
                                     var, src, data_for)], data_for) in
               Debug.if_set_l debug(lazy(" to: " ^
-                           string_of_expression(result)));
+                                          string_of_expression result));
               Some result
+    | For(body, var, src, data_for) 
+        when is_list_of_type sqlable_primtype (node_datatype body)
+          && is_asList_expr src -> 
+        let ty = match 
+          Types.concrete_type(node_datatype body) with
+              `Application("List", [ty]) -> ty
+            | _ -> assert false in
+        let field_name = "a" in
+        let body = leaf_inject_as_record field_name ty body in
+        let projFunc = Abstr(["x"],
+                             Project(Variable("x", data_for), field_name,
+                                     data_for),
+                             data_for) in
+        let result = Apply(Variable("map", data_for),
+                           [projFunc;
+                            For(body, var, src, data_for)], data_for) in
+          Debug.if_set_l debug(lazy(" to: " ^
+                                      string_of_expression result));
+          Some result
     | _ -> None
 
   (** [asList_anf] puts applications of asList in ANF, so that the
@@ -243,7 +294,10 @@ struct
   struct
     type field = {var : var; label : string} deriving (Show)
     type key =  field deriving (Show)
-    module C = (struct type t = key let compare = Pervasives.compare module Show_t = Show_key end)
+    module C = (struct type t = key 
+                       let compare = Pervasives.compare 
+                       module Show_t = Show_key 
+                end)
     module Mfield = Map.Make(C) 
     module Mvar = StringMap
     type t = var Mfield.t * baseexpr Mvar.t
@@ -261,7 +315,9 @@ struct
   open Syntax
 
   exception Uncompilable of expression
+  exception UncompilableQuiet of expression
   let uncompilable e = raise (Uncompilable e)
+  let uncompilableQuiet e = raise (UncompilableQuiet e)
 
   let present_fields fields = 
     StringMap.fold (fun name spec fields ->
@@ -285,7 +341,9 @@ struct
               Debug.if_set_l debug(lazy(string_of_int i ^ " success!"));
               r
           with (Uncompilable _) as ex -> 
-            Debug.if_set_l debug(lazy(string_of_int i ^ " " ^ msg ^ " failure!"));
+            Debug.if_set_l debug(lazy(string_of_int i^ " " ^ msg ^ " failure!"));
+            raise ex
+            | (UncompilableQuiet _) as ex -> 
             raise ex
 
   let compileRegex (e : 'a Syntax.expression') : like_expr = 
@@ -401,7 +459,7 @@ struct
 
     | (Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) as expr)
       ->
-        Debug.if_set_l debug(lazy("attempting to compile asList application"));
+        Debug.if_set_l debug(lazy("     attempting to compile asList application"));
         let fields = match Types.concrete_type (node_datatype th) with
           | `Table (`Record (fields, _), _) -> fields
           | _ -> failwith "Internal Error: tables must have concrete table type"
@@ -426,9 +484,10 @@ struct
           match (trycompile "B" compileB) env b with
             | `Rec _ as b -> `Return b
             | _ -> uncompilable e
-        else (Debug.if_set_l debug(lazy("List_of body was not a tuple, it was: " ^ 
-                                   Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
-              uncompilable e)
+        else
+         (Debug.if_set_l debug(lazy("     List_of body was not a tuple, it was: "
+                                    ^ Types.Show_datatype.show(Types.concrete_type(node_datatype b))));
+          uncompilable e)
     | e -> uncompilable e
 
   let rec compileE env : expression -> expr = function
@@ -441,7 +500,8 @@ struct
 
   let compile e = 
     try Some ((trycompile "E" compileE) Env.empty e)
-    with Uncompilable _ -> None
+    with Uncompilable _
+      | UncompilableQuiet _ -> None
 end
 
 

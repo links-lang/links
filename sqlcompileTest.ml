@@ -24,6 +24,33 @@ let query_expr =
               d),
         d))
 
+(** Tests that non-record results are correctly handled. *)
+let query_nonrecord_expr =
+  (For (List_of(Project(Variable("x", d), "a", d), d),
+        "x",
+        Apply(Variable("asList", d), 
+              [TableHandle(database_expr, 
+                           Syntax.Constant(Syntax.String "foo", d),
+                           (Types.make_record_type [("a", Types.int_type)], 
+                            Types.unit_type), d)],
+              d),
+        d))
+
+let query_nonrecord_comparison_expr =
+  (For (Condition (Comparison(Project(Variable("x", d), "a", d),
+                              `Equal,
+                              Constant(Integer (Num.num_of_int 87), d), d),
+                   List_of(Project(Variable("x", d), "a", d), d),
+                   Nil d, d),
+        "x",
+        Apply(Variable("asList", d), 
+              [TableHandle(database_expr, 
+                           Syntax.Constant(Syntax.String "foo", d),
+                           (Types.make_record_type [("a", Types.int_type)], 
+                            Types.unit_type), d)],
+              d),
+        d))
+
 (** Tests compilation despite renamings *)
 let query2_expr =
   (For (Let("y", Variable("x", d), List_of(Variable("y", d), d), d),
@@ -105,11 +132,23 @@ let run_tests tests =
     prerr_endline(Printf.sprintf "%d tests executed. %d succeeded. %d failed." 
                     num_tests num_successes (num_tests - num_successes))
 
+(** checks that the given expression is a map application and that the 
+    list it's applied to satisfies [pred] *)
+let maps_on pred = 
+  function
+    | Apply(Variable("map", _), [f; src], _) when pred src -> true
+    | _ -> false
+
 let compiles_to_sql expr = 
   (expr, typecheck_sql_compile, at_Some is_TableQuery, show_expr_option)
 
+let compiles_to_mapped_sql expr = 
+  (expr, typecheck_sql_compile, at_Some(maps_on is_TableQuery), show_expr_option)
+
 let sqlcompile_tests =
   [compiles_to_sql query_expr;
+   compiles_to_mapped_sql query_nonrecord_expr;
+   compiles_to_mapped_sql query_nonrecord_comparison_expr;
    compiles_to_sql query2_expr;
    compiles_to_sql query3_expr;
    compiles_to_sql sorted_query_expr]
