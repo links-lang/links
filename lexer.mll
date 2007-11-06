@@ -133,7 +133,7 @@ let setprec table assoc level name =
 let precedence table x =
   try
     List.assoc x table x
-  with Not_found ->
+  with Not_found | NotFound _ ->
     infixl9 x
 
 let bump_lines lexbuf n = 
