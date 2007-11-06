@@ -1025,7 +1025,7 @@ let value_env =
     env
     StringMap.empty)
 
-let primitive_location (name:string) = match fst3 (assoc name env) with
+let primitive_location (name:string) = match fst3 (List.assoc name env) with
   | `Client ->  `Client
   | `Server _ -> `Server
   | #primitive -> `Unknown

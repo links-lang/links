@@ -63,7 +63,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
     let env = env @ globals in
     let rec nle =
       function
-        | `Var x -> `Str (quote (Result.unbox_string (assoc x env)))
+        | `Var x -> `Str (quote (Result.unbox_string (List.assoc x env)))
         | (`Percent | `Str _) as l -> l
         | `Seq ls -> `Seq (List.map nle ls)
     in
@@ -266,7 +266,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 let args = List.rev args_rev in
                 begin match value with
                   | `RecFunction (defs, fnlocals, name) ->
-                      let Syntax.Abstr(vars, body, _data) = assoc name defs in
+                      let Syntax.Abstr(vars, body, _data) = List.assoc name defs in
                      
                       let recPeers = (* recursively-defined peers *)
                         map(fun (name, Syntax.Abstr(args, body, _)) -> 

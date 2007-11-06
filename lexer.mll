@@ -278,7 +278,7 @@ rule lex optable lexers nl = parse
   | "prefix"                            { PREFIX (setprec optable) }
   | "postfix"                           { POSTFIX (setprec optable) }
   | def_id as var                       { try List.assoc var keywords 
-                                          with Not_found -> 
+                                          with Not_found | NotFound _ -> 
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | "'" def_id as var                   { QUOTEDVAR var }

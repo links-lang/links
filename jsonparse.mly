@@ -1,4 +1,6 @@
 %{
+open Utility
+
 let unparse_label = function
   | `Char c -> String.make 1 c
   | `List (`Char _::_) as s -> Result.unbox_string s
