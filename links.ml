@@ -212,6 +212,8 @@ let run_tests tests () =
     exit 0
   end
 
+let config_file = (ref None : string option ref)
+
 let options : opt list = 
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
@@ -222,7 +224,7 @@ let options : opt list =
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
     (* TBD: load config from $LINKS_CONFIG if --config not set *)
-    (noshort, "config",              None,                             Some Settings.load_file);
+    (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
@@ -232,8 +234,11 @@ let options : opt list =
     ]
 
 let main () =
+  config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
+  (match !config_file with None -> () 
+     | Some file -> Settings.load_file file);
   (* load prelude: *)
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
