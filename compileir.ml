@@ -10,7 +10,6 @@ let make_local_info (t, name) = (t, name, `Local)
 let make_global_info (t, name) = (t, name, `Global)
 
 type datatype = Types.datatype
-type assumption = Types.assumption
 
 (*** To be moved into Types ***)
 (* [BUG]
@@ -175,7 +174,7 @@ sig
     (var -> tail_computation sem) ->
     tail_computation sem
   val alias : tyname * tyvar list * datatype * (unit -> tail_computation sem) -> tail_computation sem
-  val alien : var_info * language * assumption * (var -> tail_computation sem) -> tail_computation sem
+  val alien : var_info * language * datatype * (var -> tail_computation sem) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -252,7 +251,7 @@ struct
 (*    val for_binding : var_info * value -> var M.sem*)
 
     val alias_binding : tyname * tyvar list * datatype -> unit M.sem
-    val alien_binding : var_info * language * assumption -> var M.sem
+    val alien_binding : var_info * language * datatype -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -324,9 +323,9 @@ struct
     let alias_binding (typename, quantifiers, datatype) =
       lift_binding (`Alias (typename, quantifiers, datatype)) ()
 
-    let alien_binding (x_info, language, assumption) =
+    let alien_binding (x_info, language, datatype) =
       let xb, x = fresh_var x_info in
-        lift_binding (`Alien (xb, language, assumption)) x
+        lift_binding (`Alien (xb, language, datatype)) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (`Variable x, t))
@@ -473,8 +472,8 @@ struct
   let letfun (f_info, xs_info, body, location, rest) =
      M.bind (fun_binding (f_info, xs_info, body, location)) rest
 
-  let alien (x_info, language, assumption, rest) =
-    M.bind (alien_binding (x_info, language, assumption)) rest
+  let alien (x_info, language, datatype, rest) =
+    M.bind (alien_binding (x_info, language, datatype)) rest
 
   let alias (typename, quantifiers, datatype, rest) =
     M.bind (alias_binding (typename, quantifiers, datatype)) rest
@@ -720,9 +719,9 @@ struct
             | Alias (typename, quantifiers, datatype, _) ->
                 I.alias (typename, quantifiers, datatype,
                          fun () -> eval_defs env defss rest)
-            | Alien (language, name, assumption, _) ->
-                let x_info = make_global_info (snd assumption, name) in
-                  I.alien (x_info, language, assumption,
+            | Alien (language, name, datatype, _) ->
+                let x_info = make_global_info (datatype, name) in
+                  I.alien (x_info, language, datatype,
                            fun v -> eval_defs (Env.extend env [name] [v]) defss rest)
 
   let eval_program env (Program (defs, body)) =

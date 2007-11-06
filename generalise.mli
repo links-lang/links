@@ -1,1 +1,1 @@
-val generalise : Types.environment -> Types.datatype -> Types.assumption
+val generalise : Types.environment -> Types.datatype -> Types.datatype

@@ -58,7 +58,7 @@ type 'a expression' =
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
-  | Alien of (string * string * Types.assumption * 'a)
+  | Alien of (string * string * Types.datatype * 'a)
 
 type 'a program' = Program of ('a definition' list * 'a expression')
 

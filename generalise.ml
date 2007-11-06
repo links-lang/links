@@ -37,6 +37,8 @@ let rec get_quantifiers : TypeVarSet.t -> datatype -> quantifier list =
       | `Record row
       | `Variant row -> get_row_quantifiers bound_vars row 
       | `Table (r, w) -> unduplicate (=) (get_quantifiers bound_vars r @ get_quantifiers bound_vars w)
+      | `ForAll (qs, t) -> 
+          get_quantifiers (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
       | `Application (_, args) ->
           unduplicate (=) (Utility.concat_map (get_quantifiers bound_vars) args)
 
@@ -72,15 +74,16 @@ and get_row_quantifiers : TypeVarSet.t -> row -> quantifier list =
       in
 	field_vars @ row_vars
 
-let env_type_vars env =
-  TypeVarSet.union_all (List.map (free_type_vars -<- snd) (Env.String.range env))
+let env_type_vars (env : Types.environment) =
+  TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
 (** generalise: 
     Universally quantify any free type variables in the expression.
 *)
-let generalise : environment -> datatype -> assumption = 
+let generalise : environment -> datatype -> datatype = 
   fun env t ->
     let vars_in_env = env_type_vars env in
     let quantifiers = get_quantifiers vars_in_env t in
-      Debug.if_set (show_generalisation) (fun () -> "Generalised: " ^ (string_of_assumption (quantifiers, t)));
-      (quantifiers, t) 
+    let quantified = Types.for_all (quantifiers, t) in 
+      Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
+      quantified 

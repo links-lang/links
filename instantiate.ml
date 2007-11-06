@@ -46,6 +46,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 	  | `Record row -> `Record (inst_row rec_env row)
 	  | `Variant row ->  `Variant (inst_row rec_env row)
 	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
+          | `ForAll (_,t) -> inst rec_env t
 	  | `Application (n, elem_type) ->
 	      `Application (n, List.map (inst rec_env) elem_type)
     and inst_row : inst_env -> row -> row = fun rec_env row ->
@@ -96,29 +97,34 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
     in
       inst (IntMap.empty, IntMap.empty)
 
-
-let instantiate_alias (vars, alias) ts =
-  let _, tenv =
-    List.fold_left (fun (ts, tenv) tv ->
-                      match ts, tv with
-                        | (t::ts), `TypeVar var ->
-                            ts, IntMap.add var t tenv
-                        | _ -> assert false) (ts, IntMap.empty) vars
-  in
-    instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
+(*
+  This is just type application.
+  
+  (forall x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
+*)
+let instantiate_alias lhs ts =
+  match lhs with
+    | `ForAll (vars, alias) ->
+        let _, tenv =
+          List.fold_left (fun (ts, tenv) tv ->
+                            match ts, tv with
+                              | (t::ts), `TypeVar var ->
+                                  ts, IntMap.add var t tenv
+                              | _ -> assert false) (ts, IntMap.empty) vars
+        in
+          instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
+    | t -> t
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
   try
-    let quantifiers, t = Env.String.lookup env var in
-      if quantifiers = [] then
-	t
-      else
+    match Env.String.lookup env var with
+      | `ForAll (quantifiers, t) as dtype ->
 	(
 	  let _ = Debug.if_set (show_instantiation)
-	    (fun () -> "Instantiating assumption: " ^ (string_of_assumption (quantifiers, t))) in
+	    (fun () -> "Instantiating assumption: " ^ string_of_datatype dtype) in
 
 	  let tenv, renv = List.fold_left
 	    (fun (tenv, renv) -> function
@@ -128,9 +134,11 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    ) (IntMap.empty, IntMap.empty) quantifiers
 	  in
 	    instantiate_datatype (tenv, renv) t)
+      | t -> t
+
   with NotFound _ ->
     raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
-let var = instantiate
+let var      = instantiate
 and datatype = instantiate_datatype
-and alias = instantiate_alias
+and alias    = instantiate_alias
