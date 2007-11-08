@@ -1743,7 +1743,7 @@ module Desugarer =
                | `Flexible var | `Rigid var -> var
                | _ -> assert false
            in
-             if alias_is_closed (List.fold_right StringSet.add args StringSet.empty) rhs then
+             if alias_is_closed (StringSet.from_list args) rhs then
                Alias (name,
                       List.map get_var args,
                       desugar_datatype' var_env rhs, pos)
