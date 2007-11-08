@@ -19,7 +19,7 @@ let query_expr =
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
                            Syntax.Constant(Syntax.String "foo", d),
-                           (Types.make_record_type [("a", Types.int_type)], 
+                           (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
         d))
@@ -31,7 +31,7 @@ let query_nonrecord_expr =
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
                            Syntax.Constant(Syntax.String "foo", d),
-                           (Types.make_record_type [("a", Types.int_type)], 
+                           (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
         d))
@@ -46,7 +46,7 @@ let query_nonrecord_comparison_expr =
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
                            Syntax.Constant(Syntax.String "foo", d),
-                           (Types.make_record_type [("a", Types.int_type)], 
+                           (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
         d))
@@ -58,7 +58,7 @@ let query2_expr =
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
                            Syntax.Constant(Syntax.String "foo", d),
-                           (Types.make_record_type [("a", Types.int_type)], 
+                           (Types.make_record_type (StringMap.singleton "a" Types.int_type), 
                             Types.unit_type), d)],
               d),
         d))
@@ -73,8 +73,8 @@ let query3_expr =
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
                            Syntax.Constant(Syntax.String "foo", d),
-                           (Types.make_record_type [("a", Types.int_type);
-                                                    ("b", Types.int_type)], 
+                           (Types.make_record_type (StringMap.add "a" Types.int_type
+                                                      (StringMap.singleton "b" Types.int_type)), 
                             Types.unit_type), d)],
               d),
         d))
@@ -86,7 +86,7 @@ let sorted_query_expr =
        SortBy(Apply(Variable("asList", d), 
                     [TableHandle(database_expr, 
                                  Syntax.Constant(Syntax.String "foo", d),
-                                 (Types.make_record_type[("a",Types.int_type)],
+                                 (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                                   Types.unit_type), d)],
                     d), 
               Abstr(["x"], Project(Variable("x", d), "a", d), d),

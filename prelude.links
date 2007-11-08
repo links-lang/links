@@ -606,10 +606,10 @@ typename RecForms = [mu a.(([a]) -> Xml)];
 typename MultiXmlContext = ([Xml]) -> Xml;
 
 typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -> Xml;
-typename Pagelet = (Int, MultiXmlContext, (Gen) -> ([CheckedFormBuilder], Gen));
+typename Page = (Int, MultiXmlContext, (Gen) -> ([CheckedFormBuilder], Gen));
 
-sig renderPagelet : (Pagelet) -> Xml
-fun renderPagelet((n, k, fs)) {
+sig renderPage : (Page) -> Xml
+fun renderPage((n, k, fs)) {
   var (ms, _) = fs(0);
   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
   k(map (fun (z) {z(zs)}, zs))
@@ -618,12 +618,6 @@ fun renderPagelet((n, k, fs)) {
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a)) -> (MultiXmlContext, RecForms, Int) -> Xml
 fun mkCheckedFormBuilder(x, c, h)(k, zs, i) {
   mkForm(validate(c, h, k, zs, i), x)   
-}
-
-
-sig renderPage : (([Xml]) -> Xml, [mu a.(([a]) -> Xml)]) -> Xml
-fun renderPage(k, zs) {
-  k(map (fun (z) {z(zs)}, zs))
 }
 
 sig validate :
@@ -642,10 +636,10 @@ fun validate(c, h, k, zs, i) (env) {
   }
 }
 
-sig unitP : Pagelet
+sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
 
-sig joinP : (Pagelet, Pagelet) -> Pagelet
+sig joinP : (Page, Page) -> Page
 fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
   (i1+i2,
    fun (xs) {
@@ -658,22 +652,22 @@ fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
    })
 }
 
-sig joinManyP : ([Pagelet]) -> Pagelet
+sig joinManyP : ([Page]) -> Page
 fun joinManyP(gs) {
   fold_left(joinP, unitP, gs)
 }
 
-sig bodyP : (Xml) -> Pagelet
+sig bodyP : (Xml) -> Page
 fun bodyP(xml) {
   (0, fun ([]) {xml}, fun (gen) {([], gen)})
 }
 
-sig plugP : (XmlContext, Pagelet) -> Pagelet
+sig plugP : (XmlContext, Page) -> Page
 fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig formP : (Formlet(a), Handler(a)) -> Pagelet
+sig formP : (Formlet(a), Handler(a)) -> Page
 fun formP(f, h) {
   (1,
    fun ([x]) {x},

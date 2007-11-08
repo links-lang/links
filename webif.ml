@@ -4,6 +4,8 @@ open Performance
 open Utility
 open Result
 
+let correct_optimised_types = Settings.add_bool ("correct_optimised_types", false, `User)
+
 (*
  Whether to cache programs after the optimization phase
 *)
@@ -50,9 +52,15 @@ let read_and_optimise_program prelude typenv filename =
        it through again. *)
     tenv, with_prelude prelude (lazy((Optimiser.optimise_program(tenv, program)))
        <|measure_as|> "optimise") in
-  let tenv, program = tenv, Syntax.labelize program in
-    tenv, program
-              
+  let tenv, program =
+    if Settings.get_value (correct_optimised_types) then
+      lazy(Inference.type_program Library.typing_env (Syntax.erase program))
+        <|measure_as|> "type again"
+    else
+      tenv, program
+  in
+    tenv, Syntax.labelize program
+
 let read_and_optimise_program prelude env arg 
     : Types.typing_environment * Syntax.program
   = 

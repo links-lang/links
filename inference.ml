@@ -143,10 +143,13 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                   else type_of_expression value in
       let body = type_check (Env.bind env (variable, vtype), alias_env) body in        
 	Let (variable, value, body, `T (pos, type_of_expression body, None))
-  | Rec (variables, body, `U pos) ->
-      let best_typing_env, vars = type_check_mutually typing_env variables in
+  | Rec (defs, body, `U pos) ->
+      let best_typing_env, defs =
+        type_check_mutually
+          typing_env
+          (List.map (fun (name, body, t) -> (name, name, body, t)) defs) in
       let body = type_check best_typing_env body in
-	Rec (vars, body, `T (pos, type_of_expression body, None))
+	Rec (defs, body, `T (pos, type_of_expression body, None))
   | Xml_node (tag, atts, cs, `U pos) -> 
       let contents = map (type_check typing_env) cs in
       let atts = map (fun (k,v) -> k, type_check typing_env v) atts in
@@ -206,8 +209,11 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         Project (expr, label, `T (pos, label_variable_type, None))
   | Erase (value, label, `U pos) ->
       let value = type_check typing_env value in
-      let value_row = extract_row typing_env (type_of_expression value) in
-        Erase (value, label, `T (pos, `Record (row_with (label, `Absent) value_row), None))
+      let fields, row_var = (make_singleton_open_row (label, `Present (fresh_type_variable ()))) in
+      let vt = `Record (fields, row_var) in
+      let t = `Record (StringMap.empty, row_var) in
+        unify (type_of_expression value, vt);
+        Erase (value, label, `T (pos, t, None))
   | Variant_injection (label, value, `U pos) ->
       let value = type_check typing_env value in
       let type' = `Variant (make_singleton_open_row (label, `Present (type_of_expression value))) in
@@ -366,22 +372,26 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       - do the functions have to be recursive?
 *)
 and
-    type_check_mutually (env, alias_env) (defns : (string * untyped_expression * Types.datatype option) list) =
-      let var_env = (fold_right (fun (name, _, t) env' ->
-                                   Env.bind env' (name,
-                                     (match t with
-                                        | Some t -> (generalise env t)
-                                        | None -> fresh_type_variable ())))
-		       defns Env.empty) in
+    type_check_mutually (env, alias_env) (defs : (string * string * untyped_expression * Types.datatype option) list) =
+      let var_env =
+        fold_right
+          (fun (outer_name, inner_name, _, t) env' ->
+             let t =
+               (match t with
+                  | Some t -> (generalise env t)
+                  | None -> fresh_type_variable ()) in
+               Env.bind (Env.bind env' (inner_name, t)) (outer_name, t))
+	  defs
+          Env.empty in
       let inner_env = Env.extend env var_env in
-      let type_check result (name, expr, t) =
+      let type_check result (outer_name, inner_name, expr, t) =
         let expr = type_check (inner_env, alias_env) expr in
         let t' = type_of_expression expr in
           match t' with
             | `Function _ as f  ->
-                let t'' = Env.lookup var_env name in
+                let t'' = Env.lookup var_env inner_name in
 		  unify alias_env (f, t'');
-                  (* [HACK]
+                  (* HACK:
 
                      This allows aliases to persist providing no
                      mailbox types have been instantiated.
@@ -392,22 +402,20 @@ and
                     else
                       expr
                   in
-		    (name, expr, t) :: result
+		    (outer_name, expr, t) :: result
             | datatype -> Errors.letrec_nonfunction (pos_of_expression expr) (expr, datatype) in
 
-      let defns = fold_left type_check [] defns in
-      let defns = rev defns in
+      let defs = List.rev (fold_left type_check [] defs) in
 
       let env = Env.extend env 
-        (List.fold_right (fun (name, value,_) env' -> 
-		            Env.bind env' (name, (generalise env (type_of_expression value)))) defns Env.empty)
-	
+        (List.fold_right (fun (outer_name, value, _) env' -> 
+		            Env.bind env' (outer_name, (generalise env (type_of_expression value)))) defs Env.empty)	
       in
-        (env, alias_env), defns     
+        (env, alias_env), defs     
 
 let mutually_type_defs
     ((env, alias_env) : Types.typing_environment)
-    (defs : (string * untyped_expression * 'a option) list)
+    (defs : (string * string * untyped_expression * 'a option) list)
     : (Types.typing_environment * (string * expression * 'c) list) =
   let (new_type_env, new_alias_env), new_defs = type_check_mutually (env, alias_env) defs
   in
@@ -447,13 +455,13 @@ let type_program : Types.typing_environment -> untyped_program -> (Types.typing_
               typing_env, typed_defs @ [def]
         | xs  -> (* A group of potentially mutually-recursive definitions *)
             let defparts = map (fun (Define x) -> x) xs in
-            let defbodies = map (fun (name, Rec ([(_, expr, t)], _, _), _, _) -> 
-                                   name, expr, t) defparts in
+            let defbodies = map (fun (outer_name, Rec ([(inner_name, expr, t)], _, _), _, _) -> 
+                                   outer_name, inner_name, expr, t) defparts in
             let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
-            let defs = (map2 (fun (name, Rec ([(_, _, t)], _, _), location, _) (_, expr, _) ->
+            let defs = (map2 (fun (outer_name, Rec ([(inner_name, _, t)], _, _), location, _) (_, expr, _) ->
                                 let ed = expression_data expr in
-                                let expr = Rec ([(name, expr, t)], Variable (name, ed), ed) in
-                                  Define(name, expr, location, ed))
+                                let expr = Rec ([(inner_name, expr, t)], Variable (inner_name, ed), ed) in
+                                  Define(outer_name, expr, location, ed))
 			  defparts defs) in
               typing_env, typed_defs @ defs
 

@@ -155,7 +155,7 @@ type data = [untyped_data | typed_data]
 val data_position : [<data] -> position
 val position : [<data] expression' -> position
 
-val erase : expression -> untyped_expression
+val erase : program -> untyped_program
 val labelize : program -> program
 
 val dummy_position : position

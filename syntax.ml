@@ -287,9 +287,9 @@ let labelled_string_of_program p = show_program show_label p
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
-let erase : expression -> untyped_expression = 
-  Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
-     
+let erase : program -> untyped_program = 
+  Functor_program'.map (fun (`T (pos, _, _)) -> `U pos)
+
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)

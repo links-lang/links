@@ -167,7 +167,7 @@ struct
     | List_of(elem, d) ->
         List_of(leaf_inject_as_record field_name ty elem, d)
     | base_expr ->
-        let recd_ty = Types.make_record_type[(field_name, ty)] in
+        let recd_ty = Types.make_record_type (StringMap.singleton field_name ty) in
           set_node_datatype(Record_intro(StringMap.from_alist
                                            [(field_name, base_expr)], 
                                          None, expression_data base_expr),
@@ -186,7 +186,7 @@ struct
             
             let ty = Types.concrete_type(node_datatype elem) in
             let field_name = "a" in
-            let recd_ty = Types.make_record_type[(field_name, ty)] in
+            let recd_ty = Types.make_record_type (StringMap.singleton "a" ty) in
             let elem_record = 
               set_node_datatype(Record_intro(StringMap.from_alist
                                                [(field_name, elem)], 

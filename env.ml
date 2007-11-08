@@ -13,6 +13,7 @@ sig
   val range : 'a t -> 'a list
 
   val map : ('a -> 'b) -> 'a t -> 'b t
+  val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   module Show_t (A : Show.Show) 
     : Show.Show with type a = A.a t
 end
@@ -36,6 +37,7 @@ struct
   let domain map = M.fold (fun k _ -> Dom.add k) map Dom.empty
   let range map = M.fold (fun _ v l -> v::l) map []
   let map = M.map
+  let fold = M.fold
   module Show_t = M.Show_t
 end
 

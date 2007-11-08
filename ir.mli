@@ -59,11 +59,11 @@ and binding =
   [ `Let of binder * tail_computation
   | `Fun of binder * binder list * computation * location
   | `Rec of (binder * binder list * computation * location) list
-  | `Alien of binder * language * Types.datatype
+  | `Alien of binder * language
   | `Alias of tyname * tyvar list * Types.datatype ]
 and special =
   [ `App of value * value
-  | `Wrong
+  | `Wrong of Types.datatype
   | `Database of value
   | `Query of SqlQuery.sqlQuery
   | `Table of value * value * (Types.datatype * Types.datatype)
@@ -77,6 +77,5 @@ val is_atom : value -> bool
 
 module Inline :
 sig
-  val program : program -> program
+  val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program
 end
-

@@ -66,7 +66,7 @@ sig
   (** construct a map from an association list *)
 
   val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
-  (** construct a new map from two existing maps *)
+  (** contruct a list from a map *)
 
   val megamap : (key * 'a -> key * 'b) -> 'a t -> 'b t
 

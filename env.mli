@@ -40,6 +40,8 @@ sig
 
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+
   module Show_t (A : Show.Show) 
     : Show.Show with type a = A.a t
   (** Printing for environments *)

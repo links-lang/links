@@ -166,16 +166,52 @@ let _ =
 (*** end of type_basis ***)
 
 
-(* remove any top-level `MetaTypeVars from a type *)
-let rec concrete_type t =
-  match t with
-    | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-            | `Body t -> concrete_type t
-            | _ -> t
-        end
-    | _ -> t
+(* alias lookup *)
+exception AliasMismatch of string
+
+let lookup_alias (s, ts) alias_env =
+  let vars, alias =
+    match Env.find alias_env s with
+      | Some (`ForAll (vars, s)) -> vars, s
+      | Some s -> [], s
+      | None -> raise (AliasMismatch ("Unbound typename "^s))
+  in
+    if List.length vars <> List.length ts then
+      raise (AliasMismatch
+               ("Alias '"^s^"' takes "^string_of_int(List.length vars)^" arguments but is applied to "^
+                  string_of_int(List.length ts)^" arguments"))
+    else
+      for_all (vars, alias)
+
+(** remove any top-level `MetaTypeVars from a type and optionally
+    expand top-level aliases using a user-supplied alias environment.
+*)
+let concrete_type ?(aenv=Env.empty) t =
+  let rec ct rec_names aenv t : datatype =
+    match t with
+      | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Body t -> ct rec_names aenv t
+              | `Recursive (_, t) ->
+                  ct rec_names aenv t
+              | _ -> t
+          end
+      | `Application (name, ts) when Env.has aenv name ->
+          if Env.Dom.mem name rec_names then
+            failwith ("Cannot instantiate unguarded recursive alias" ^ name)
+          else
+            let t' = lookup_alias (name, ts) aenv in
+              begin
+                match t' with
+                  | `ForAll (_, `Primitive `Abstract)
+                  | `Primitive `Abstract -> t
+                  | _ ->
+                      ct (Env.Dom.add name rec_names) aenv t'
+              end
+      | _ -> t
+  in
+    ct (StringSet.empty) aenv t
 
 let free_type_vars, free_row_type_vars =
   let module S = TypeVarSet in
@@ -238,7 +274,7 @@ type inference_type_map =
 let field_env_union : (field_spec_map * field_spec_map) -> field_spec_map =
   fun (env1, env2) ->
     FieldEnv.fold (fun label field_spec env' ->
-                      FieldEnv.add label field_spec env') env1 env2
+                     FieldEnv.add label field_spec env') env1 env2
 
 let contains_present_fields field_env =
   FieldEnv.fold
@@ -270,8 +306,8 @@ let is_rigid_row : row -> bool =
     is_rigid TypeVarSet.empty
 
 (* is_rigid_row_with_var var row
-     returns true if row is rigid and has var as its row var
- *)
+   returns true if row is rigid and has var as its row var
+*)
 let is_rigid_row_with_var : int -> row -> bool =
   fun var ->
     let rec is_rigid rec_vars (_, row_var) =
@@ -392,6 +428,7 @@ let unwrap_row : row -> (row * row_var option) =
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Application ("String", [])
+let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
 let float_type = `Primitive `Float
@@ -587,7 +624,12 @@ let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
           b && (allow_onetuples || n <> 1)
     | _ -> false
 
-
+let extract_tuple (field_env, _) =
+  FieldEnv.to_list (fun _ ->
+                      function
+                        | `Present t -> t
+                        | `Absent -> assert false) field_env
+    
 (* whether to display mailbox annotations on arrow types
    [NOTE]
       unused mailbox parameters are never shown
@@ -980,6 +1022,22 @@ let string_of_environment env =
                                               end)) in
     M.show env
 
+
+(*
+  HACK:
+
+  This redefinition is to cope with string_of_datatype not being
+  defined until here. Error reporting shouldn't really be tied up with
+  the lookup_alias function at all.
+*)
+let lookup_alias (s, ts) alias_env =
+  try
+    lookup_alias (s, ts) alias_env
+  with
+      AliasMismatch msg ->
+        raise (AliasMismatch
+                 (msg ^" ("^String.concat "," (List.map string_of_datatype ts)^")"))
+
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in
   let empties = M.empty, M.empty in
@@ -1084,23 +1142,6 @@ let is_sub_type, is_sub_row =
      (fun row -> is_sub_row S.empty row))
 
 
-(* alias lookup *)
-exception AliasMismatch of string
-
-let lookup_alias (s, ts) alias_env =
-  let vars, alias =
-    match Env.find alias_env s with
-      | Some (`ForAll (vars, s)) -> vars, s
-      | Some s -> [], s
-      | None -> raise (AliasMismatch ("Unbound typename "^s))
-  in
-    if List.length vars <> List.length ts then
-      raise (AliasMismatch
-               ("Alias '"^s^"' takes "^string_of_int(List.length vars)^" arguments but is applied to "^
-                  string_of_int(List.length ts)^" arguments ("^String.concat "," (List.map string_of_datatype ts)^")"))
-    else
-      (for_all (vars, alias) : datatype)
-
 let make_tuple_type (ts : datatype list) : datatype =
   `Record 
     (snd 
@@ -1113,13 +1154,98 @@ let make_formlet_type t = `Application ("Formlet", [t])
 let make_list_type t = `Application ("List", [t])
 let make_mailbox_type t = `Application ("Mailbox", [t])
 
-let make_row ts =
-  (List.fold_left
-     (fun row (name, t) -> row_with (name, `Present t) row)
-     (make_empty_closed_row ())
-     ts)
+let extend_row fields (fields', row_var) =
+  (FieldEnv.fold
+     (fun name t fields -> FieldEnv.add name (`Present t) fields)
+     fields
+     fields',
+   row_var)
+
+let make_row fields =
+  (FieldEnv.map (fun t -> `Present t) fields), closed_row_var
 
 let make_record_type ts = `Record (make_row ts)
 let make_variant_type ts = `Variant (make_row ts)
 
 let make_table_type (r, w) = `Table (r, w)
+
+(** type destructors *)
+exception TypeDestructionError of string
+
+let split_row name row =
+  let (field_env, row_var) = fst (unwrap_row row) in
+  let t =
+    if StringMap.mem name field_env then
+      match (StringMap.find name field_env) with
+        | `Present t -> t
+        | `Absent ->
+            raise (TypeDestructionError
+                     ("Attempt to split row "^string_of_row row ^" on absent field" ^ name))
+    else
+      raise (TypeDestructionError
+               ("Attempt to split row "^string_of_row row ^" on absent field" ^ name))
+  in
+    t, (StringMap.remove name field_env, row_var)
+
+let split_variant_type ?(aenv=Env.empty) name =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `Variant row ->
+           let t, row = split_row name row in
+             `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
+       | t ->
+           raise (TypeDestructionError
+                    ("Attempt to split non-variant type "^string_of_datatype t)))
+
+let project_type ?(aenv=Env.empty) name =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `Record row ->
+           let t, _ = split_row name row in
+             t
+       | t -> 
+           raise (TypeDestructionError
+                    ("Attempt to project non-record type "^string_of_datatype t)))
+
+let erase_type ?(aenv=Env.empty) name =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `Record row ->
+           let t, row = split_row name row in
+             `Record row
+       | t ->
+           raise (TypeDestructionError
+                    ("Attempt to erase field from non-record type "^string_of_datatype t)))
+
+let return_type ?(aenv=Env.empty) =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `ForAll (_, `Function (_, _, t))
+       | `Function (_, _, t) -> t
+       | t -> 
+           raise (TypeDestructionError
+                    ("Attempt to take return type of non-function: " ^ string_of_datatype t)))
+
+let arg_types ?(aenv=Env.empty) =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `ForAll (_, (`Function (`Record row, _, _)))
+       | `Function (`Record row, _, _) ->
+           extract_tuple row
+       | t ->
+           raise (TypeDestructionError
+                    ("Attempt to take arg types of non-function: " ^ string_of_datatype t)))
+
+let element_type ?(aenv=Env.empty) =
+  (concrete_type ~aenv:aenv) ->-
+    (function
+       | `Application ("List", [t]) -> t
+       | t ->
+           raise (TypeDestructionError
+                    ("Attempt to take element type of non-list: " ^ string_of_datatype t)))
+
+let inject_type ?(aenv=Env.empty) name t =
+  `Variant (make_singleton_open_row (name, `Present t))
+
+let abs_type ?(aenv=Env.empty) _ = assert false
+let app_type ?(aenv=Env.empty) _ _ = assert false
