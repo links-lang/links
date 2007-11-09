@@ -274,5 +274,5 @@ let serve_request prelude (valenv, typenv) filename =
     | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request envs filename =
-  Errors.display (lazy (serve_request envs filename))
+let serve_request prelude envs filename =
+  Errors.display (lazy (serve_request prelude envs filename))
