@@ -212,7 +212,7 @@ let rec format_exception_html = function
       mapstrcat "<br/>" Syntax.string_of_expression es
   | Result.UnrealizableContinuation ->
       "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>"
-  | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
+  | exn -> raise exn (*"<h1>Links Error</h1>\n" ^ Printexc.to_string exn*)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) = 
   try 

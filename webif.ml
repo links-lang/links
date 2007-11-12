@@ -31,7 +31,7 @@ let is_client_program (Syntax.Program (defs, _) as program) =
                         | _ -> [])) defs
   and is_client_prim p = 
     try Library.primitive_location p = `Client
-    with Not_found -> false in
+    with Not_found | NotFound _ -> false in
   let freevars = StringSet.elements (Syntax.freevars_program program) in
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
@@ -145,7 +145,7 @@ let expr_eval_req valenv program params =
           let json_args = try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
                                  | `Record fields -> fields
                                  | _ -> assert false) 
-          with Not_found -> [] in
+          with NotFound _ | Not_found -> [] in
           let env = List.filter (not -<- is_special_param) params in
           let env = (List.fold_right
                        (fun pair env -> 
@@ -248,7 +248,7 @@ let serve_request prelude (valenv, typenv) filename =
       Library.cgi_parameters := cgi_args;
     let lookup name = 
       try List.assoc name defs
-      with Not_found -> Library.primitive_stub name
+      with Not_found | NotFound _ -> Library.primitive_stub name
         | _ -> failwith("Internal error: called unknown server function " ^ name)
     in
     let request = 

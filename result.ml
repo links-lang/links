@@ -92,7 +92,7 @@ let register_driver : (string * db_constructor) -> unit
 
 let db_connect driver params =
   let constructor = 
-    try assoc driver !database_drivers 
+    try List.assoc driver !database_drivers 
     with Not_found -> failwith ("No driver for database type `" ^ driver ^ "'")
   in constructor params
 
@@ -562,7 +562,7 @@ let val_label_table value =
 *)
 let resolve_label table label : 'a expression' =
   try
-    assoc label table
+    List.assoc label table
   with
       Not_found -> failwith("Program point not found.")
         (* Note: This is a serious sort of error that could arise in the
