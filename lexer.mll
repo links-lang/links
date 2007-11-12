@@ -133,7 +133,7 @@ let setprec table assoc level name =
 let precedence table x =
   try
     List.assoc x table x
-  with Not_found | NotFound _ ->
+  with Not_found ->
     infixl9 x
 
 let bump_lines lexbuf n = 
@@ -278,7 +278,7 @@ rule lex optable lexers nl = parse
   | "prefix"                            { PREFIX (setprec optable) }
   | "postfix"                           { POSTFIX (setprec optable) }
   | def_id as var                       { try List.assoc var keywords 
-                                          with Not_found | NotFound _ -> 
+                                          with Not_found -> 
                                             if isupper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | "'" def_id as var                   { QUOTEDVAR var }

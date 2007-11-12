@@ -49,7 +49,7 @@ let execute_select (field_types:(string * Types.datatype) list) (query:string) (
                     temp_fields := 
                       (result#fname count, 
                        result#ftype count, 
-                       (List.assoc (result#fname count) field_types))
+                       (assoc (result#fname count) field_types))
                     :: !temp_fields
                   with Not_found -> (* Could probably remove this. *)
                     failwith("Column " ^ (result#fname count) ^ 

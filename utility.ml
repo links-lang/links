@@ -239,9 +239,6 @@ struct
     include Set.Make(Ord)
     let union_all sets = List.fold_right union sets empty
     let from_list l = List.fold_right add l empty
-    let min_elt t = try min_elt t with Not_found -> invalid_arg "Set.min_elt"
-    let max_elt t = try max_elt t with Not_found -> invalid_arg "Set.max_elt"
-    let choose t = try choose t with Not_found -> invalid_arg "Set.choose"
     module Show_t = Show.Show_set(Ord)(Ord.Show_t)
   end
 end
@@ -422,29 +419,25 @@ struct
   let push_front f list = list := f :: !list
 end
 include ListUtils
-
-let nasty_is_string x = Obj.tag (Obj.repr x) = Obj.string_tag
-let not_found v = 
-  raise
-    (if nasty_is_string v then
-       NotFound (Obj.magic v : string)
-     else
-       Not_found)
-
   
 (** {1 Association-list utilities} *)
 module AList = 
 struct
-  let rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = 
-    fun value l -> 
-      try fst (List.find (snd ->- eq value) l)
-      with Not_found -> not_found value
-
+  let rec rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = fun value ->
+    function
+      | (k, v) :: _ when eq v value -> k
+      | _ :: rest -> rassoc_eq eq value rest
+      | [] -> raise Not_found
+          
   let rassoc i l = rassoc_eq (=) i l
   and rassq i l = rassoc_eq (==) i l
     
-  let rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
-    fun value -> List.filter (not -<- eq value -<- snd)
+  let rec rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
+    fun value ->
+      function
+        | (_, v) :: rest when eq v value -> rest
+        | other :: rest -> other :: rremove_assoc_eq eq value rest
+        | [] -> []
           
   let rremove_assoc i l = rremove_assoc_eq (=) i l
   and rremove_assq i l = rremove_assoc_eq (==) i l
@@ -829,14 +822,6 @@ let catch_notfound_l msg e =
   try
     Lazy.force e
   with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
-
-module List =
-struct
-  include List
-  let assoc v l = 
-      try List.assoc v l
-      with Not_found -> not_found v
-end
 
 (** Initialise the random number generator *)
 let _ = Random.self_init()
