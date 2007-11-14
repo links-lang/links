@@ -647,10 +647,12 @@ let string_of_primitive : primitive -> string = function
   | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
   | `XmlItem -> "XmlItem" | `DB -> "Database" | `Abstract -> "(abstract)" | `NativeString -> "NativeString"
 
-let string_of_quantifier = function
-  | `TypeVar var -> string_of_int var
-  | `RigidTypeVar var -> string_of_int var
-  | `RowVar var -> "'" ^ string_of_int var
+let string_of_quantifier' : string IntMap.t -> quantifier -> string =
+  fun vars ->
+    function
+      | `TypeVar var -> "'" ^ IntMap.find var vars
+      | `RigidTypeVar var -> IntMap.find var vars
+      | `RowVar var -> IntMap.find var vars
 
 let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> string =
   fun rec_vars vars datatype ->
@@ -710,7 +712,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
 	       else "(" ^ string_of_row' "," rec_vars vars row ^ ")")
         | `Variant row    -> "[|" ^ string_of_row' "|" rec_vars vars row ^ "|]"
         | `ForAll (tvars, body) -> 
-            "forall "^ mapstrcat "," string_of_quantifier tvars ^"."^ sd body
+            "forall "^ mapstrcat "," (string_of_quantifier' vars) tvars ^"."^ sd body
         | `Table (r, w)   ->
             "TableHandle(" ^
               string_of_datatype' rec_vars vars r ^ "," ^
