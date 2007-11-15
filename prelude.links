@@ -980,3 +980,50 @@ fun inputIntValue(v) {
 
 sig inputFloat : Formlet(Float)
 var inputFloat = transform(input, isFloat, fun (s) {s ++ "is not an integer"}, stringToFloat);
+
+# Things that should be in their own file
+var cookieName = "linkside";
+
+typename User = (name:String, password:String);
+
+# Databases to access
+var users = table "users" with (
+    id : Int,
+    email: String,
+    password: String
+) from (database "ide");
+
+var files = table "files" with (
+    id : Int,
+    pid : Int,
+    name : String,
+    last_mod : String,
+    created : String, 
+    data : String
+) from (database "ide");
+
+# Count the number of elements in a list
+fun numElems(lst) 
+{
+  switch(lst)
+  {
+    case [] -> 0
+    case x::xs -> 1 + numElems(xs)
+  }
+}
+
+# Logout from the IDE
+fun logout() server
+{
+  setCookie("linkside","");
+  redirect("login.links");
+  <#></#>
+  #main(Just(false))
+}
+
+# Check whether the user is logged in
+# TODO: Make this more robust
+fun isLoggedIn() client
+{
+  numElems(getCookie("linkside")) > 0
+}

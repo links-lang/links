@@ -122,6 +122,11 @@ let string_to_xml : result -> result = function
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
+let rec xml_to_string : result -> result = function 
+  | `List (x::xs) -> (xml_to_string x) :: (xml_to_string xs)
+  | `XML _ as c -> string_as_charlist(string_of_primitive c)
+  | _ -> failwith "internal error: non-xml value passed to string conversion routine"
+
 let char_test_op fn pure = 
   (`PFun (fun [c] -> (`Bool (fn (unbox_char c)))),
    datatype "(Char) -> Bool",
@@ -236,10 +241,17 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type PURE;
   "stringToFloat", conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
+  (*"xmlToString", conversion_op ~from:(`Primitive `XmlItem) ~unbox:unbox_xml ~conv:string_of_primitive_type ~box:box_string ~into:Type.string_type PURE;*)
+
   "stringToXml",
   ((p1 string_to_xml),
    datatype "(String) -> Xml",
   PURE);
+
+  "xmlToString", 
+  ((p1 xml_to_string), 
+   datatype "(Xml) -> String",
+   PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-
@@ -686,27 +698,6 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (* # stopEvent : ??? *)
   (* # stopPropagation : ??? *)
   (* # preventDefault : ??? *)
-  (* Extended functionality *)
-  "getModifiers",
-  (`Client, datatype "(Event) -> [Char]",
-  PURE);
-
-  "getElementsByTagName",
-  (`Client, datatype "(String) -> [DomNode]",
-  PURE);
-
-  "getContentDocument",
-  (`Client, datatype "(DomNode) -> (DomNode)",
-  PURE);
-
-  "execBold",
-  (`Client, datatype "(DomNode) -> ()",
-   IMPURE);
-
-  "execInsertImage",
-  (`Client, datatype "(DomNode, String) -> ()",
-   IMPURE);
-
 
   (* Cookies *)
   "setCookie",
@@ -1029,6 +1020,34 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
         (box_string (Digest.to_hex(Digest.string(input))))),
   datatype "(String) -> String",
   PURE);
+
+     "getModifiers",
+  (`Client, datatype "(Event) -> [Char]",
+  PURE);
+
+  "getElementsByTagName",
+  (`Client, datatype "(String) -> [DomNode]",
+  PURE);
+
+  "getElementsByTagNameFromRef",
+  (`Client, datatype "(String, DomNode) -> [DomNode]",
+  PURE);
+
+  "getContentDocument",
+  (`Client, datatype "(DomNode) -> (DomNode)",
+  PURE);
+
+  "execBold",
+  (`Client, datatype "(DomNode) -> ()",
+   IMPURE);
+
+  "execInsertImage",
+  (`Client, datatype "(DomNode, String) -> ()",
+   IMPURE);
+
+  "getInnerHtml",
+  (`Client, datatype "(DomNode) -> String",
+   PURE);
 
   (* end of Tom's fns *)
 
