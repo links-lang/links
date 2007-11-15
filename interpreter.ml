@@ -21,8 +21,6 @@ let lookup globals locals name =
   with Not_found -> 
     raise(RuntimeUndefVar name)
 
-
-
 (** [bind_rec env defs] extends [env] with bindings for the [defs],
     where each one defines a function and all the functions are
     mutually recursive. *)
@@ -30,7 +28,6 @@ let bind_rec locals defs =
   let new_defs = map (fun (name, _) -> 
                         (name, `RecFunction(defs, locals, name))) defs in
     trim_env (new_defs @ locals)
-
 
 (** Given a label and a record, returns the value of that field in the record,
     together with the remaining fields of the record. *)
@@ -66,7 +63,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
     let env = env @ globals in
     let rec nle =
       function
-        | `Var x -> `Str (quote (Result.unbox_string (assoc x env)))
+        | `Var x -> `Str (quote (Result.unbox_string (List.assoc x env)))
         | (`Percent | `Str _) as l -> l
         | `Seq ls -> `Seq (List.map nle ls)
     in
@@ -269,7 +266,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 let args = List.rev args_rev in
                 begin match value with
                   | `RecFunction (defs, fnlocals, name) ->
-                      let Syntax.Abstr(vars, body, _data) = assoc name defs in
+                      let Syntax.Abstr(vars, body, _data) = List.assoc name defs in
                      
                       let recPeers = (* recursively-defined peers *)
                         map(fun (name, Syntax.Abstr(args, body, _)) -> 

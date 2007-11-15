@@ -47,7 +47,7 @@ let rec directives
        (fun _ ->
           StringSet.iter (fun n ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (snd (Env.String.lookup Library.type_env n))))
+                         n (Types.string_of_datatype (Env.String.lookup Library.type_env n)))
             (Env.String.domain Library.type_env)),
      "list builtin functions and values");
 
@@ -58,7 +58,7 @@ let rec directives
     ((fun ((_, (typeenv, _)) as envs) _ ->
         StringSet.iter (fun k ->
                 Printf.fprintf stderr " %-16s : %s\n"
-                  k (Types.string_of_datatype (snd (Env.String.lookup typeenv k))))
+                  k (Types.string_of_datatype (Env.String.lookup typeenv k)))
           (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Library.type_env));
         envs),
      "display the current type environment");
@@ -92,12 +92,12 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let (_,t), _ = Parse.parse_string ~pp:(Settings.get_value pp) Parse.datatype (String.concat " " args) in
+          | _ -> let t, _ = Parse.parse_string ~pp:(Settings.get_value pp) Parse.datatype (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then
                         (try begin
-                           let _, t' = Env.String.lookup tenv id in
+                           let t' = Env.String.lookup tenv id in
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
                            let t' = Instantiate.datatype fresh_envs t' in 
@@ -212,6 +212,8 @@ let run_tests tests () =
     exit 0
   end
 
+let config_file = (ref None : string option ref)
+
 let options : opt list = 
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
@@ -221,7 +223,7 @@ let options : opt list =
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
-    (noshort, "config",              None,                             Some Settings.load_file);
+    (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
@@ -231,8 +233,11 @@ let options : opt list =
     ]
 
 let main () =
+  config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
+  (match !config_file with None -> () 
+     | Some file -> Settings.load_file file);
   (* load prelude: *)
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
@@ -249,9 +254,7 @@ let main () =
       else max m (Types.TypeVarSet.max_elt set) in
     let max_prelude_tvar =
       List.fold_right max_or 
-        (Env.String.range (Env.String.map 
-                             (snd ->- Types.free_bound_type_vars)
-                             (fst prelude_types)))
+        (Env.String.range (Env.String.map Types.free_bound_type_vars (fst prelude_types)))
         (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
       Types.bump_variable_counter max_prelude_tvar
   in

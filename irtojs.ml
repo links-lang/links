@@ -390,10 +390,14 @@ let comparison_name = function
 let href_rewrite globals : RewriteSyntax.rewriter = function
   | Apply (Variable ("pickleCont",_), 
            [Abstr ([_], e, _) as abs], data) ->
-      let fv = StringSet.diff (freevars e) globals 
-      and `T (_,_,Some label) = expression_data e in
-      let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f"))
-      and json_args = Apply (Variable ("stringifyB64", data),
+      let fv = StringSet.diff (freevars e) globals in
+      let `T (_,_,Some label) = expression_data e in
+      let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f")) in
+      (* correct the type of stringifyB64 *)
+      let stringifyB64 = set_node_datatype (Variable ("stringifyB64", data),
+                                            (Parse.parse_string Parse.datatype ->- fst) "(a) -> String") in
+      (* BUG: some of the other expressions still have the wrong type *)
+      let json_args = Apply (stringifyB64,
                              [Record_intro (StringSet.fold 
                                               (fun k r -> StringMap.add k (Variable (k, data)) r)
                                               fv StringMap.empty,
@@ -596,7 +600,7 @@ and generate_special env : special -> code -> code = fun sp kappa ->
       | `App (f, vs) ->
           Call (Var "_yield",
                 Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
-      | `Wrong -> Die "Internal Error: Pattern matching failed"
+      | `Wrong _ -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
       | `Query _ ->
@@ -808,22 +812,12 @@ let get_alien_names defs =
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
 
-let invert_env env =
-  StringMap.fold
-    (fun name var env ->
-       if IntMap.mem var env then
-         failwith ("crappy error message: duplicate var")
-       else
-         IntMap.add var name env)
-    env IntMap.empty
-
-
 let elim_defs defs root_names =
   (*
-    [HACK]
+    HACK:
     
     There is a bug in Callgraph.elim_dead_defs that sometimes causes definitions
-    to be reorderedreorders definitions. The code either side of the call to
+    to be reordered. The code either side of the call to
     this function ensures that the order of definitions is maintained.
 
     Once Callgraph.elim_dead_defs is fixed, we should get rid of the hack.
@@ -867,41 +861,39 @@ let generate_program_defs defs root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
 
-  let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
-  let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ library_names))) defs in
-
-(*   let _ = Debug.print ("defs(1): "^String.concat "\n" (List.map string_of_definition defs)) in *)
+  let library_names = Env.String.domain (fst Library.typing_env) in
+  let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ (StringSet.elements library_names)))) defs in
 
   let defs =
     (if Settings.get_value elim_dead_defs then
        elim_defs defs root_names
      else defs) in
 
-  let initial_env = Compileir.make_initial_env ("map" :: "stringifyB64" :: library_names) in
-(*   let _ = Debug.print ("initial_env: "^Env'.Show_env.show (invert_env initial_env)) in *)
-(*   let _ = Debug.print ("defs(2): "^String.concat "\n" (List.map string_of_definition defs)) in *)
-(*     Debug.print ("hmm... "^string_of_bool(Library.is_primitive "+")); *)
+  let dt = Parse.parse_string Parse.datatype ->- fst in
+  let initial_env, tenv, aenv =
+    Compileir.make_initial_env
+      (Env.String.bind
+         (Env.String.bind Library.type_env
+            ("map", dt "((a) -> b, [a]) -> [b]"))
+         ("stringifyB64", dt "(a) -> String")) Library.alias_env in
 
-  let ((defs', _) as p, _) = Compileir.compile_program initial_env (Program (defs, body)) in
-(*  let _ = Debug.print (Show_computation.show p) in*)
+  let ((defs', _) as p, _) = Compileir.compile_program (initial_env, tenv, aenv) (Program (defs, body)) in
 
-  let env = Compileir.add_globals_to_env initial_env defs' in
-  let env' = invert_env env in
-(*   let _ = Debug.print ("env': "^Env'.Show_env.show env') in *)
+  let env, tenv, aenv = Compileir.add_globals_to_env (initial_env, tenv, aenv) defs' in
+  let env' = Compileir.invert_env env in
   let env', js_defs = gen_defs env' defs' in
   let js_defs = [show js_defs] in
-    (env, env'), js_defs
+    (env, env', tenv, aenv), js_defs
 
 let generate_program ?(onload = "") (Program (defs, body)) =
   let (Program (defs, body)) = rewrite_program
     (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
     (Program (defs, body)) in
 
-  let (env, env'), js_defs = generate_program_defs defs (Syntax.freevars body) in
+  let (env, env', tenv, aenv), js_defs = generate_program_defs defs (Syntax.freevars body) in
   let body = Symbols.rename body in
  
-  let (e, _) = Compileir.compile_program env (Program ([], body)) in 
-(*  let _ = Debug.print (Show_computation.show e) in*)
+  let (e, _) = Compileir.compile_program (env, tenv, aenv) (Program ([], body)) in 
   let js_root_expr = snd (gen env' e) in
     (make_boiler_page ~body:(show js_root_expr) js_defs)
 

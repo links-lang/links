@@ -4,6 +4,8 @@ open Performance
 open Utility
 open Result
 
+let correct_optimised_types = Settings.add_bool ("correct_optimised_types", false, `User)
+
 (*
  Whether to cache programs after the optimization phase
 *)
@@ -29,7 +31,7 @@ let is_client_program (Syntax.Program (defs, _) as program) =
                         | _ -> [])) defs
   and is_client_prim p = 
     try Library.primitive_location p = `Client
-    with Not_found -> false in
+    with Not_found | NotFound _ -> false in
   let freevars = StringSet.elements (Syntax.freevars_program program) in
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
@@ -50,9 +52,15 @@ let read_and_optimise_program prelude typenv filename =
        it through again. *)
     tenv, with_prelude prelude (lazy((Optimiser.optimise_program(tenv, program)))
        <|measure_as|> "optimise") in
-  let tenv, program = tenv, Syntax.labelize program in
-    tenv, program
-              
+  let tenv, program =
+    if Settings.get_value (correct_optimised_types) then
+      lazy(Inference.type_program Library.typing_env (Syntax.erase program))
+        <|measure_as|> "type again"
+    else
+      tenv, program
+  in
+    tenv, Syntax.labelize program
+
 let read_and_optimise_program prelude env arg 
     : Types.typing_environment * Syntax.program
   = 
@@ -95,11 +103,12 @@ let stubify_client_funcs globals (Syntax.Program(defs,body) as program) : Result
           Interpreter.run_defs globals [] server_defs
             @ client_env
 
-let get_remote_call_args env cgi_args = 
+let get_remote_call_args lookup cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
   let args = untuple (Json.parse_json args) in
-    RemoteCall(List.assoc fname env, args)
+  let func = lookup fname in
+    RemoteCall(func, args)
 
 let decode_continuation (cont : string) : Result.continuation =
   let fixup_cont = 
@@ -136,7 +145,7 @@ let expr_eval_req valenv program params =
           let json_args = try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
                                  | `Record fields -> fields
                                  | _ -> assert false) 
-          with Not_found -> [] in
+          with NotFound _ | Not_found -> [] in
           let env = List.filter (not -<- is_special_param) params in
           let env = (List.fold_right
                        (fun pair env -> 
@@ -205,16 +214,13 @@ let perform_request
           (Utility.base64encode 
              result_json)
     | RemoteCall(func, args) ->
-
         Interpreter.has_client_context := true;
         let args = List.rev args in
         let cont, value = 
-          ApplyCont(Result.empty_env, args) :: toplevel_cont, func
-        in
+          ApplyCont(Result.empty_env, args) :: toplevel_cont, func in
+        let result = Interpreter.apply_cont_safe globals cont value in
 	  Library.print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode
-               (Json.jsonize_result
-                  (Interpreter.apply_cont_safe globals cont value)))
+            (Utility.base64encode (Json.jsonize_result result))
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
@@ -240,9 +246,14 @@ let serve_request prelude (valenv, typenv) filename =
       else
         Cgi.parse_args () in
       Library.cgi_parameters := cgi_args;
+    let lookup name = 
+      try List.assoc name defs
+      with Not_found | NotFound _ -> Library.primitive_stub name
+        | _ -> failwith("Internal error: called unknown server function " ^ name)
+    in
     let request = 
       if is_remote_call cgi_args then
-        get_remote_call_args defs cgi_args
+        get_remote_call_args lookup cgi_args
       else if is_client_call_return cgi_args then
         client_return_req cgi_args
       else if (is_contin_invocation cgi_args) then
@@ -263,5 +274,5 @@ let serve_request prelude (valenv, typenv) filename =
     | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request envs filename =
-  Errors.display (lazy (serve_request envs filename))
+let serve_request prelude envs filename =
+  Errors.display (lazy (serve_request prelude envs filename))

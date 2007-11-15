@@ -167,7 +167,7 @@ module Eval = struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env cont : Ir.special -> Value.t = function
-    | `Wrong                      -> raise Wrong
+    | `Wrong _                    -> raise Wrong
     | `Database v                 -> `Database (db_connect (value env v))
     | `Query q                    -> do_query env q
     | `App (f, p)                 -> apply cont env (value env f,

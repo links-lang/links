@@ -34,7 +34,7 @@ let var_of_quantifier =
 module Utils : sig
   val unify : Types.alias_environment -> Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string -> Types.datatype
-  val generalise : Types.environment -> Types.datatype -> Types.assumption
+  val generalise : Types.environment -> Types.datatype -> Types.datatype
   val register_alias : name * int list * Types.datatype -> Types.alias_environment -> Types.alias_environment
 
   val is_generalisable : Typed.phrase -> bool
@@ -135,18 +135,22 @@ struct
     | `Replace (r, `Literal _) -> is_generalisable_regex r
     | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
 
-  let quantify_env env quantifiers =
-    Env.map
-      (fun (_, t) ->
-         let tvs = Types.free_type_vars t in
-         let qs = 
-           concat_map
+  let quantify_env
+      : Types.environment -> Types.quantifier list -> Types.environment
+    = fun env quantifiers ->
+      Env.map
+        (function
+           | `ForAll (qs, t) ->
+               let tvs = Types.free_type_vars t in
+               let qs = 
+                 concat_map
              (fun q ->
                 if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
                 else []) quantifiers
-         in
-           (qs, t))
-      env
+               in
+                 Types.for_all (qs, t)
+           | t -> t)
+        env
 end
 
 module Errors :
@@ -261,7 +265,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (Types.make_tuple_type [r], mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let datatype = Parse.parse_string Parse.datatype ->- fst ->- snd
+let datatype = Parse.parse_string Parse.datatype ->- fst
 
 let type_unary_op env = function
   | `Minus      -> datatype "(Int) -> Int"
@@ -430,6 +434,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | `Variant _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
             `Application ("List", [cpt pats t])
+      | `ForAll (qs, t) -> assert false (* Sam to fix *)
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
@@ -483,7 +488,7 @@ let type_pattern closed lookup_pos alias_env tenvs : Untyped.ppattern -> Typed.p
         | `Variable x            -> 
             let xtype = Types.fresh_type_variable () in
               (`Variable x,
-               (Env.bind Env.empty (x, ([], xtype))),
+               (Env.bind Env.empty (x, xtype)),
                xtype)
         | `Cons (p1, p2)         -> 
             let p1 = type_pattern p1
@@ -537,7 +542,7 @@ let type_pattern closed lookup_pos alias_env tenvs : Untyped.ppattern -> Typed.p
               `Tuple ps', env', typ'
         | `As (x, p)             -> 
             let p = type_pattern p in
-            let env' = Env.bind (env p) (x, ([], typ p)) in
+            let env' = Env.bind (env p) (x, typ p) in
               `As (x, p), env', (typ p)
         | `HasType (p, t)        -> 
             let p = type_pattern p in
@@ -563,8 +568,7 @@ let rec extract_row : Types.alias_environment -> Types.datatype -> Types.row
                  ^ Types.string_of_datatype t)
         end
     | `Application (s, ts) ->
-        let vars, alias = Types.lookup_alias (s, ts) alias_env in
-          extract_row alias_env (Instantiate.alias (vars, alias) ts)
+        extract_row alias_env (Instantiate.alias (Types.lookup_alias (s, ts) alias_env) ts)
     | _ -> failwith
         ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
          ^ Types.string_of_datatype t)
@@ -686,7 +690,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
             let env', aliases = List.fold_left fold_in_envs context.tenv pats in
-            let body = type_check {context with tenv = (Env.bind env' (mailbox, ([], Types.fresh_type_variable ())), aliases)} body in
+            let body = type_check {context with tenv = (Env.bind env' (mailbox, Types.fresh_type_variable ()), aliases)} body in
             let ftype = 
               List.fold_right
                 (fun pat rtype ->
@@ -726,8 +730,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
                   raise (Syntax.ASTSyntaxError(lookup_pos pos, "Tables must take a non-empty record type")) in
             let write_row = Sugar.make_write_row read_row constraints  in
               `TableLit (tname, dtype, constraints, db), 
-              `Table (snd (Sugar.desugar_datatype (RecordType read_row)),
-                      snd (Sugar.desugar_datatype (RecordType write_row)))
+              `Table (Sugar.desugar_datatype (RecordType read_row),
+                      Sugar.desugar_datatype (RecordType write_row))
 
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat 
@@ -770,14 +774,14 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
             let () = unify (pid_type, `Application ("Mailbox", [Types.fresh_type_variable()])) in
-            let context' = {context with tenv = Env.bind env (mailbox, ([], pid_type)), alias_env} in
+            let context' = {context with tenv = Env.bind env (mailbox, pid_type), alias_env} in
             let p = type_check context' p in
               `Spawn p, pid_type
         | `SpawnWait p ->
             (* (() -{b}-> d) -> d *)
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
-            let context' = {context with tenv = Env.bind env (mailbox, ([], pid_type)), alias_env} in
+            let context' = {context with tenv = Env.bind env (mailbox, pid_type), alias_env} in
             let p = type_check context' p in
               unify (return_type, typ p);
               `Spawn p, return_type
@@ -906,7 +910,7 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
             and t = Types.fresh_type_variable ()
             and m = Types.fresh_type_variable () in
             let cont_type = `Function (Types.make_tuple_type [f], m, t) in
-            let context' = {context with tenv = Env.bind env (name, ([], cont_type)), alias_env} in
+            let context' = {context with tenv = Env.bind env (name, cont_type), alias_env} in
             let e = type_check context' e in
             let () = unify (f, typ e) in
               `Escape (name, e), (typ e)
@@ -989,20 +993,24 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
             let bt = typ body in
             let () = unify (bt, pattern_typ pat) in
             let _ = opt_iter (fun t -> unify (bt, Sugar.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
-            let (quantifiers, bt) =
+            let quantified = 
               if Utils.is_generalisable body then
                 Utils.generalise env (typ body)
               else 
-                ([], typ body) in
-            let penv = Utils.quantify_env (pattern_env pat) quantifiers in
-              (`Val (pat, body, location, datatype),
-               (Env.extend env penv, alias_env))
+                typ body in
+              begin match quantified with
+                | `ForAll (quantifiers, bt) ->
+                    let penv = Utils.quantify_env (pattern_env pat) quantifiers in
+                      (`Val (pat, body, location, datatype),
+                       (Env.extend env penv, alias_env))
+                | t -> `Val (pat, body, location, datatype), (env, alias_env)
+              end
         | `Fun (name, (pats, body), location, t) ->
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
             let body_env, alias_env = List.fold_left fold_in_envs context.tenv pats in
             let mt = Types.fresh_type_variable () in
-            let body = type_check {context with tenv = (Env.bind body_env (mailbox, ([], mt)), alias_env)} body in
+            let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
             let ft =
               let rec makeft =
                 function
@@ -1030,10 +1038,10 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
                           pats (Types.fresh_type_variable ()) in
                       let fb =
                         match t with
-                          | None -> ([], ft)
+                          | None -> ft
                           | Some t ->
                               let fb = Utils.generalise env (Sugar.desugar_datatype' (context.tvars, context.rvars) t) in
-                              let () = unify (ft, snd fb) in
+                              let () = unify (ft, fb) in
                                 fb
                       in
                         ((name, fb), pats)) defs) in
@@ -1045,7 +1053,7 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
                      (fun defs (name, (_, body), location, t) pats ->
                         let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
                         let mt = Types.fresh_type_variable () in
-                        let body = type_check {context with tenv = (Env.bind body_env (mailbox, ([], mt)), alias_env)} body in
+                        let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
                         let ft =
                           let rec makeft =
                             function
@@ -1056,11 +1064,11 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
                                                           makeft pats)
                           in
                             makeft pats in
-                        let () = unify (ft, snd (Env.lookup body_env name)) in
+                        let () = unify (ft, Env.lookup body_env name) in
                           (name, (pats, body), location, t) :: defs) [] defs patss) in
             let env =
               List.fold_left (fun env (name, fb) ->
-                                Env.bind env (name, Utils.generalise env (snd fb))) env fbs in
+                                Env.bind env (name, Utils.generalise env fb)) env fbs in
             let typing_env = env, alias_env in
               (`Funs defs, typing_env)
         | `Foreign (language, name, datatype) ->

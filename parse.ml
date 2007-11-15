@@ -184,7 +184,7 @@ let program : (Syntax.untyped_program,
                  if Settings.get_value Basicsettings.web_mode then
                    opt_map (fun body ->
                               let _, pos = body in
-                                `FnAppl ((`Var "renderPagelet", pos), [body]), pos) body
+                                `FnAppl ((`Var "renderPage", pos), [body]), pos) body
                  else
                    body in
                let pos = lookup code in
@@ -194,7 +194,7 @@ let program : (Syntax.untyped_program,
   parse = Parser.file
 }
 
-let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
+let datatype : (Types.datatype, Sugartypes.datatype) grammar = {
     desugar =  (fun _ -> Sugar.desugar_datatype);
     parse = Parser.just_datatype
   }

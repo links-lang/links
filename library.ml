@@ -97,12 +97,12 @@ type located_primitive = [ `Client | `Server of primitive | primitive ]
 
 let datatype = Parse.parse_string Parse.datatype ->- fst
 
-let int_op impl pure : located_primitive * Types.assumption * pure = 
+let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
   datatype "(Int, Int) -> Int",
   pure
 
-let float_op impl pure : located_primitive * Types.assumption * pure = 
+let float_op impl pure : located_primitive * Types.datatype * pure = 
   `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
   datatype "(Float, Float) -> Float",
   pure
@@ -112,20 +112,15 @@ let conversion_op' ~unbox ~conv ~(box :'a->result): result list -> result =
 
 let make_type_variable = Types.make_type_variable
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_primitive * Types.assumption * pure =
+let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let a = Types.fresh_raw_variable () in
-     (([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.assumption)),
+     (`ForAll ([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.datatype)),
    pure)
 
 let string_to_xml : result -> result = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
-
-let rec xml_to_string : result -> result = function 
-  | `List (x::xs) -> (xml_to_string x) :: (xml_to_string xs)
-  | `XML _ as c -> string_as_charlist(string_of_primitive c)
-  | _ -> failwith "internal error: non-xml value passed to string conversion routine"
 
 let char_test_op fn pure = 
   (`PFun (fun [c] -> (`Bool (fn (unbox_char c)))),
@@ -168,7 +163,7 @@ let rec equal l r =
                                      | [] -> false
                                      | (label, result) :: _ when label = ref_label -> equal result ref_result
                                      | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
-          for_all (one_equal_all rfields) lfields && for_all (one_equal_all lfields) rfields
+          List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> length l = length r &&
             fold_left2 (fun result x y -> result && equal x y) true l r
@@ -220,7 +215,7 @@ let add_attribute : result * result -> result -> result =
 let add_attributes : (result * result) list -> result -> result =
   List.fold_right add_attribute
 
-let env : (string * (located_primitive * Types.assumption * pure)) list = [
+let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+/) PURE;
   "-", int_op (-/) PURE;
   "*", int_op ( */) PURE;
@@ -241,17 +236,10 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type PURE;
   "stringToFloat", conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
-  (*"xmlToString", conversion_op ~from:(`Primitive `XmlItem) ~unbox:unbox_xml ~conv:string_of_primitive_type ~box:box_string ~into:Type.string_type PURE;*)
-
   "stringToXml",
   ((p1 string_to_xml),
    datatype "(String) -> Xml",
   PURE);
-
-  "xmlToString", 
-  ((p1 xml_to_string), 
-   datatype "(Xml) -> String",
-   PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-
@@ -345,7 +333,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
       (* Deliberately non-quantified type.  Mailboxes are
          non-polymorphic, so this is a so-called "weak type
          variable". *)
-      ([], u)),
+      u),
    PURE);
 
   (** Lists and collections **)
@@ -453,9 +441,8 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   PURE);
   
   "alertDialog",
-  (client_only_1 "alertDialog",
-   datatype "(String) -> ()",
-  IMPURE);
+  (`Client, datatype "(String) -> ()",
+   IMPURE);
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
@@ -464,15 +451,15 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   IMPURE);
 
   "debugObj",
-  (client_only_1 "debugObj", datatype "(a) -> ()",
+  (`Client, datatype "(a) -> ()",
   IMPURE);
   
   "dump",
-  (client_only_1 "dump", datatype "(a) -> ()",
+  (`Client, datatype "(a) -> ()",
   IMPURE);
   
   "textContent",
-  (client_only_1 "textContent", datatype "(DomNode) -> String",
+  (`Client, datatype "(DomNode) -> String",
   IMPURE);
 
   "print",
@@ -504,7 +491,7 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
   (* HACK *)
   (*   [DEACTIVATED] *)
   (*   "callForeign", *)
-  (*    (client_only_1 "callForeign", datatype "((a) -> b) -> (a) -> b"); *)
+  (*    (`Client, datatype "((a) -> b) -> (a) -> b"); *)
 
   (* DOM API *)
 
@@ -1057,6 +1044,13 @@ let env : (string * (located_primitive * Types.assumption * pure)) list = [
     datatype "(a) -> b",
     PURE));
   
+  (** A silly server-side function, just for testing server-side primitives 
+      called from client. Remove this if there is a better one for testing. *)
+  ("server_concat",
+  (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
+   datatype "(String, String) -> String",
+   PURE));
+
   (** non-deterministic random number generator *)
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
@@ -1074,10 +1068,16 @@ let value_env =
     env
     StringMap.empty)
 
-let primitive_location (name:string) = match fst3 (assoc name env) with
+let primitive_location (name:string) = match fst3 (List.assoc name env) with
   | `Client ->  `Client
   | `Server _ -> `Server
   | #primitive -> `Unknown
+
+let primitive_arity (name : string) = 
+  let _, t, _ = assoc name env in
+    match t with 
+      | `Function(`Record (l, _), _, _) -> (Some (StringMap.size l))
+      | _ -> None
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
@@ -1085,10 +1085,10 @@ let primitive_stub (name : string): result =
     | Some _ -> `PrimitiveFunction name
     | None  -> `ClientFunction name
 
-
 let apply_pfun name args = 
   match StringMap.find name (!value_env) with
-    | Some #result -> failwith ("Attempt to apply primitive non-function (" ^name ^")")
+    | Some #result -> failwith("Attempt to apply primitive non-function (" ^
+                                 name ^")")
     | Some (`PFun p) -> p args
     | None -> assert false
 
@@ -1098,16 +1098,16 @@ let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
 and alias_env : Types.alias_environment =
   List.fold_right
-    (fun (name, assumption) env ->
-       Env.bind env (name, assumption))
+    (fun (name, datatype) env ->
+       Env.bind env (name, datatype))
     [
-      "DomNode", ([], `Primitive `Abstract);
-      "Event", ([], `Primitive `Abstract);
-      "List", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
-      "String", ([], `Application ("List", [`Primitive `Char]));
-      "Xml", ([], `Application ("List", [`Primitive `XmlItem]));
-      "Mailbox", ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
-      "Regex", datatype Linksregex.Regex.datatype;
+      "DomNode" , `Primitive `Abstract;
+      "Event"   , `Primitive `Abstract;
+      "List"    , `ForAll ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "String"  , `Application ("List", [`Primitive `Char]);
+      "Xml"     , `Application ("List", [`Primitive `XmlItem]);
+      "Mailbox" , `ForAll ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "Regex"   , datatype Linksregex.Regex.datatype;
     ]
     Env.empty
 

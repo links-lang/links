@@ -36,6 +36,13 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
+    deriving (Typeable, Show, Pickle)
+type quantifier = type_variable
+    deriving (Typeable, Show, Pickle)
+
+val type_var_number : type_variable -> int
+
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
@@ -44,7 +51,8 @@ type datatype =
     | `Variant of row
     | `Table of datatype * datatype
     | `Application of (string * (datatype) list)
-    | `MetaTypeVar of meta_type_var ]
+    | `MetaTypeVar of meta_type_var 
+    | `ForAll of (quantifier list * datatype)]
 and field_spec = [ `Present of datatype | `Absent ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
@@ -53,25 +61,19 @@ and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-val concrete_type : datatype -> datatype
+type environment        = datatype Env.String.t
+ and alias_environment  = datatype Env.String.t
+ and typing_environment = environment * alias_environment
+    deriving (Show)
 
-type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Typeable, Show, Pickle)
-type quantifier = type_variable
-    deriving (Typeable, Show, Pickle)
+val concrete_type : ?aenv:alias_environment -> datatype -> datatype
 
-type assumption = ((quantifier list) * datatype)
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
-type environment = assumption Env.String.t
-    deriving (Show)
-type alias_environment = assumption Env.String.t
-    deriving (Show)
-type typing_environment = environment * alias_environment
-    deriving (Show)
+val for_all : quantifier list * datatype -> datatype
 
 (* useful types *)
 val unit_type : datatype
 val string_type : datatype
+val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
 val float_type : datatype
@@ -124,25 +126,14 @@ val is_tuple : ?allow_onetuples:bool -> row -> bool
 (* row_var retrieval *)
 val get_row_var : row -> int option
 
-(* row update *)
+(* building rows *)
+val make_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
+val extend_row : datatype field_env -> row -> row
 
 (* constants *)
 val empty_field_env : field_spec_map
 val closed_row_var : row_var
-
-val make_formlet_type : datatype -> datatype
-
-val make_tuple_type : datatype list -> datatype
-val make_list_type : datatype -> datatype
-val make_mailbox_type : datatype -> datatype
-
-val make_row : (string * datatype) list -> row
-
-val make_record_type  : (string * datatype) list -> datatype
-val make_variant_type : (string * datatype) list -> datatype
-
-val make_table_type : datatype * datatype -> datatype
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
@@ -179,11 +170,38 @@ or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
 
-(* subtyping *)
+val extract_tuple : row -> datatype list
+
+(** type constructors *)
+val make_formlet_type : datatype -> datatype
+val make_tuple_type : datatype list -> datatype
+val make_list_type : datatype -> datatype
+val make_mailbox_type : datatype -> datatype
+val make_record_type  : datatype field_env -> datatype
+val make_variant_type : datatype field_env -> datatype
+val make_table_type : datatype * datatype -> datatype
+
+(** type destructors *)
+exception TypeDestructionError of string
+
+val project_type : ?aenv:alias_environment -> string -> datatype -> datatype
+val erase_type : ?aenv:alias_environment -> string -> datatype -> datatype
+val inject_type : ?aenv:alias_environment -> string -> datatype -> datatype
+val return_type : ?aenv:alias_environment -> datatype -> datatype
+val arg_types : ?aenv:alias_environment -> datatype -> datatype list
+val element_type : ?aenv:alias_environment -> datatype -> datatype
+val abs_type : ?aenv:alias_environment -> datatype -> datatype
+val app_type : ?aenv:alias_environment -> datatype -> datatype -> datatype
+
+val split_row : string -> row -> (datatype * row)
+val split_variant_type : ?aenv:alias_environment -> string -> datatype -> (datatype * datatype)
+
+
+(** subtyping *)
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
 
-(* check for free aliases *)
+(** type aliases *)
 exception UndefinedAlias of string
 
 type type_alias_set = Utility.StringSet.t
@@ -199,32 +217,29 @@ val is_mailbox_free_row : alias_environment -> row -> bool
 val type_aliases : datatype -> type_alias_set
 val row_type_aliases : row -> type_alias_set
 
+(* alias lookup *)
+exception AliasMismatch of string
+val lookup_alias : string * datatype list -> alias_environment -> datatype
+
+(** environments *)
 type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
        (row Unionfind.point) Utility.IntMap.t ref)
 
-(*type context = environment * inference_type_map*)
-
-(* environments *)
 val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
-
-(* mailboxes *)
-val show_mailbox_annotations : bool Settings.setting
-
-(* pretty printing *)
-val string_of_datatype : datatype -> string
-val string_of_datatype_raw : datatype -> string
-val string_of_row : row -> string
-val string_of_row_var : row_var -> string
-
-(* val string_of_quantifier : quantifier -> string *)
-val string_of_assumption : assumption -> string
-val string_of_environment : environment -> string
 
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 
-(* alias lookup *)
-exception AliasMismatch of string
-val lookup_alias : string * datatype list -> alias_environment -> assumption
+(** mailboxes *)
+val show_mailbox_annotations : bool Settings.setting
+
+(** pretty printing *)
+val string_of_datatype : datatype -> string
+val string_of_datatype_raw : datatype -> string
+val string_of_row : row -> string
+val string_of_row_var : row_var -> string
+val string_of_environment : environment -> string
+
+

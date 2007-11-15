@@ -3,7 +3,7 @@
 type ('result, 'intermediate) grammar
 
 (* Grammar for types *)
-val datatype    :  (Types.assumption, Sugartypes.datatype) grammar
+val datatype    :  (Types.datatype, Sugartypes.datatype) grammar
 (* Grammar for interactive shell *)
 val interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar
 (* Grammar for programs stored in files etc. *)

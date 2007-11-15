@@ -99,7 +99,7 @@ type 'data expression' =
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
-  | Alien of (string * string * Types.assumption * 'a)
+  | Alien of (string * string * Types.datatype * 'a)
       deriving (Functor, Rewriter, Show)
 
 (* [HACK]
@@ -250,7 +250,7 @@ let show_definition t : 'a definition' -> string = function
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
   | Alias (typename, quantifiers, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
-  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_assumption k) ^ t data
+  | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_datatype k) ^ t data
 
 let show_program t : 'a program' -> string =
   fun (Program (ds, body)) ->
@@ -287,9 +287,9 @@ let labelled_string_of_program p = show_program show_label p
 let strip_data : 'a expression' -> stripped_expression =
   fun e -> Functor_expression'.map (fun _ -> ()) e
 
-let erase : expression -> untyped_expression = 
-  Functor_expression'.map (fun (`T (pos, _, _)) -> `U pos)
-     
+let erase : program -> untyped_program = 
+  Functor_program'.map (fun (`T (pos, _, _)) -> `U pos)
+
 let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
     (combine : (('a expression' * 'b list) -> 'c)) : 'a expression' -> 'c =
   (* The "default" action: do nothing, just process subnodes *)
@@ -460,14 +460,8 @@ let free_bound_type_vars_def def =
   let fbtv = Types.free_bound_type_vars in
     match def with
       | Define (_, e, _, _) -> free_bound_type_vars e
-      | Alias (_, vars, t, _) ->
-          S.union (S.from_list vars) (fbtv t)
-      | Alien (_, _, (vars, t), _) ->
-          S.union
-            (S.from_list
-               (List.map (function
-                            | `TypeVar var | `RigidTypeVar var | `RowVar var -> var) vars))
-            (fbtv t)
+      | Alias (_, vars, t, _) -> S.union (S.from_list vars) (fbtv t)
+      | Alien (_, _, t, _) -> fbtv t
 
 let free_bound_type_vars_program (Program (defs, body))=
   let module S = Types.TypeVarSet in
