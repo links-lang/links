@@ -1035,7 +1035,38 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "getInnerHtml",
   (`Client, datatype "(DomNode) -> String",
    PURE);
+   
+  "writeToFile",
+   (`Server (p2 (fun name data ->
+                   try
+                     let file = open_out(charlist_as_string name) in
+                     let data = charlist_as_string data in
+                       output_string file data; 
+                       close_out file;
+                       `Record[]
+                   with (Sys_error _) -> failwith "Could not write to file. Check permissions.")),
+   datatype "(String, String) -> ()",
+   IMPURE);
 
+  "escapeString",
+  (`Server (p1 (fun string -> 
+                  let string = charlist_as_string string in
+                    (box_string(String.escaped(string))))),
+  datatype "(String) -> String",
+  IMPURE);
+
+  "replace",
+  (`Server (p3 (fun pattern repl string ->
+                  let string = charlist_as_string string in
+                  let repl = charlist_as_string repl in
+                  let pattern = charlist_as_string pattern in
+                    (box_string(
+                      (Str.global_replace (
+                        Str.regexp_string pattern) repl) 
+                        string)))),
+  datatype "(String, String, String) -> String",
+  IMPURE);
+                  
   (* end of Tom's fns *)
 
   (* HACK *)
