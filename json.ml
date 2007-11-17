@@ -87,12 +87,6 @@ let rec jsonize_result : Result.result -> string = function
 let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
-let rec jsonize_call continuation name args = 
-  Printf.sprintf 
-    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
-    (encode_continuation continuation) name 
-    (String.concat ", " (List.map jsonize_result args))
-
 let jsonize_result result = 
   Debug.if_set show_json
     (fun () -> "jsonize_result => " ^ Result.string_of_result result);
@@ -100,6 +94,12 @@ let jsonize_result result =
     Debug.if_set show_json
       (fun () -> "jsonize_result <= " ^ rv);
     rv
+
+let rec jsonize_call continuation name args = 
+  Printf.sprintf 
+    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
+    (encode_continuation continuation) name 
+    (String.concat ", " (List.map jsonize_result args))
 
 let parse_json str =
   Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
