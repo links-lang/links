@@ -1483,9 +1483,12 @@ module Desugarer =
                      dp phrase
                in
                  desugar (desugar_page e)
-           | `FormletPlacement _
-           | `PagePlacement _
-           | `FormBinding _
+           | `FormletPlacement _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "A formlet can only be rendered in a page expression"))
+           | `PagePlacement _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "An embedded page can only appear in a page expression"))
+           | `FormBinding _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
            | `Regex _ -> assert false
      and extract_placements : phrase -> phrase * (phrase * phrase) list =
        fun (phrase, pos) ->
