@@ -277,14 +277,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          let pid = int_of_num (unbox_int pid) in
            (try 
               Queue.push msg (Hashtbl.find messages pid)
-            with Not_found -> 
+            with NotFound _ -> 
               (* Is this really an internal error? Maybe target has finished? *)
               failwith ("Internal error while sending message: no mailbox for "
                         ^ string_of_int pid));
            (try 
               Queue.push(Hashtbl.find blocked_processes pid) suspended_processes;
               Hashtbl.remove blocked_processes pid
-            with Not_found -> ());
+            with NotFound _ -> ());
            `Record []),
    datatype "(Mailbox (a), a) -{b}-> ()",
   IMPURE);
@@ -435,7 +435,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                      (try match find attr_match children with
                         | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
                         | _ -> failwith "Internal error in `attribute'"
-                      with Not_found -> none)
+                      with NotFound _ -> none)
                | _ -> none),
    datatype "(Xml,String) -> [|Some:String | None:()|]",
   PURE);
@@ -908,7 +908,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let m = Str.matched_group i string in 
         accumMatches ((box_string m)::l) (i - 1)
 	with 
-	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
+	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
      datatype "(String, Regex) -> [String]",
    PURE));
@@ -928,7 +928,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let m = Str.matched_group i string in 
         accumMatches ((box_string m)::l) (i - 1)
 	with 
-	   Not_found -> accumMatches ((`List [])::l) (i - 1)) in
+	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
     datatype "(NativeString, Regex) -> [String]",
     PURE));

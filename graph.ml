@@ -9,7 +9,7 @@ open List
 (* Utility function for hashtables *)
 let hashfind_dflt table elem def = 
   try Hashtbl.find table elem
-  with Not_found -> def
+  with NotFound _ -> def
 
 (** Crazy notation for hashtable updates. Suggestions are welcomed.
 
@@ -23,9 +23,7 @@ let hashfind_dflt table elem def =
 let ( *->!) table k v = Hashtbl.replace table k v
 (* let ($) op arg = op arg*)
 
-let ( *-> ) table k default =
-  try Hashtbl.find table k
-  with Not_found -> default
+let ( *-> ) = hashfind_dflt
 let (|->) op arg = op arg
 
 

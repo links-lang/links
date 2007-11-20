@@ -113,7 +113,7 @@ let rec directives
 let execute_directive (name, args) (valenv, typingenv) = 
   let envs = 
     (try fst (assoc name (Lazy.force directives)) (valenv, typingenv) args; 
-     with Not_found -> 
+     with NotFound _ -> 
        Printf.fprintf stderr "unknown directive : %s\n" name;
        (valenv, typingenv))
   in

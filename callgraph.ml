@@ -102,7 +102,7 @@ module DeadCode = struct
  		List.map (fun name -> 
                             try
                               List.find (defines name) clique_info
-                            with Not_found ->
+                            with NotFound _ ->
                               failwith("Internal error: missing definition in elim_dead_defs: " ^ name)) 
                   names 
               in
@@ -118,7 +118,7 @@ module DeadCode = struct
     in
     try
       other @ (close expr_info).defs
-    with Not_found -> failwith("Not_found in elim_dead_defs")
+    with NotFound s -> failwith("NotFound "^s^" in elim_dead_defs")
 
 end
 

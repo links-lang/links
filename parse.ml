@@ -52,7 +52,7 @@ let extract_line_range
                     Hashtbl.find code.lines finishline)
     in
       trim_initial_newline (Buffer.sub code.text (start) (finish - start))
-  with Not_found -> "<unknown>"
+  with NotFound _ -> "<unknown>"
 
 (* Return one line of the source code *)
 let extract_line

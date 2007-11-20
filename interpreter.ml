@@ -18,8 +18,8 @@ let lookup globals locals name =
       | None -> match Utility.lookup name globals with
           | Some v -> v
           | None -> Library.primitive_stub name)
-  with Not_found -> 
-    raise(RuntimeUndefVar name)
+  with NotFound _ -> 
+    raise (RuntimeUndefVar name)
 
 (** [bind_rec env defs] extends [env] with bindings for the [defs],
     where each one defines a function and all the functions are
@@ -83,8 +83,8 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
                               " in query "^ SqlQuery.string_of_query qry ^ 
                               " had unexpected type at runtime: " ^ 
                               string_of_result r)
-        with Not_found-> failwith("Internal error: undefined query variable '"
-                                  ^ name ^ "'")
+        with NotFound _ -> failwith ("Internal error: undefined query variable '"^
+                                       name^"'")
       end
     | `Op (symbol, left, right) ->
         `Op(symbol, normalise_expression left, normalise_expression right)
@@ -606,7 +606,7 @@ let run_program (globals : environment) locals (Program (defs, body)) : (environ
     failwith "boom"
   ) with
     | TopLevel s -> s
-    | Not_found -> failwith "Internal error: Not_found while interpreting."
+    | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
 
 let run_defs (globals : environment) locals defs : environment =
   let env, _ =
@@ -619,4 +619,4 @@ let apply_cont_safe x y z =
   try apply_cont x y z
   with
     | TopLevel s -> snd s
-    | Not_found -> failwith "Internal error: Not_found while interpreting."
+    | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")

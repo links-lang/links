@@ -93,7 +93,7 @@ let register_driver : (string * db_constructor) -> unit
 let db_connect driver params =
   let constructor = 
     try List.assoc driver !database_drivers 
-    with Not_found -> failwith ("No driver for database type `" ^ driver ^ "'")
+    with NotFound _ -> failwith ("No driver for database type `" ^ driver ^ "'")
   in constructor params
 
 let parse_db_string : string -> (string * string) = 
@@ -564,7 +564,7 @@ let resolve_label table label : 'a expression' =
   try
     List.assoc label table
   with
-      Not_found -> failwith("Program point not found.")
+      NotFound _ -> failwith("Program point not found.")
         (* Note: This is a serious sort of error that could arise in the
            course of programming in Links. It would be important to
            provide good diagnostics in this case. *)
@@ -672,7 +672,7 @@ let unmarshal_exprenv valenv program : string -> (expression * environment)
                    @ concat_map val_label_table valenv) in
         (resolve_placeholders_expr table expr, 
          resolve_placeholders_env table env) 
-    with Not_found ->
+    with NotFound _ ->
       Debug.print("\nlabel didn't match code: " ^
                     labelled_string_of_expression expr);
       raise UnrealizableContinuation
