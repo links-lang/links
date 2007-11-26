@@ -197,6 +197,10 @@ let perform_request
           (Result.string_of_result 
              (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
+        let pos = Syntax.position expr in
+        let data s =
+            `T (pos, fst (Parse.parse_string Parse.datatype s), None) in
+
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
         assert(Syntax.is_closed_wrt expr 
@@ -205,7 +209,10 @@ let perform_request
                     (Env.String.domain (fst Library.typing_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
-             (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
+             (snd (Interpreter.run_program globals env
+                     (Syntax.Program
+                        ([],
+                         Syntax.Apply (Syntax.Variable ("renderPage", data "(Page) -> Xml"), [expr], data "Xml"))))))
     | ClientReturn(cont, value) ->
         Interpreter.has_client_context := true;
         let result_json = (Json.jsonize_result 

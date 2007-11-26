@@ -456,11 +456,15 @@ fun sendSuspend(xmlf) {
 typename Env = [(String,String)];
 typename Gen = Int;
 typename State (d,a) = [|State:(d) ->(a,d)|];
-typename Handler (a) = (a) -> Xml;
 typename Collector (a) = (Env) -> a;
 typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
 typename XmlContext = (Xml) -> Xml;
+
+typename Attributes = [(String, String)];
+
+# attributes for a multipart form
+var multipart = [("enctype", "multipart/form-data")];
 
 infixr 0 $;
 sig $ : ((a) -> b, a) -> b
@@ -548,93 +552,14 @@ fun formlets(fs) {
   }
 }
 
-sig mkForm : ((Env) -> Xml, Xml) -> Xml
-fun mkForm(cont, contents) {
-  <form enctype="application/x-www-form-urlencoded"
-        action="#" method="POST">
-    <input type="hidden"
-           name="_k"
-           value="{pickleCont(fun (_) {cont(environment())})}" />
-    {contents}
-  </form>
-}
-
-sig mkFormMultipart : ((Env) -> Xml, Xml) -> Xml
-fun mkFormMultipart(cont, contents) {
-  <form enctype="multipart/form-data"
-        action="#" method="POST">
-    <input type="hidden"
-           name="_k"
-           value="{pickleCont(fun (_) {cont(environment())})}" />
-    {contents}
-  </form>
-}
-
-# A formlet is rendered to become a form, and a handler applied, using the 
-# render function
-sig render : (Formlet (a), (a) -> Xml) -> Xml
-fun render(frm, nextPage) {
-   var ((xml, extractor),_) = runState(frm,0);
-   fun continuation(env) {
-     var (xml, val) = extractor(env);
-     switch (val) {
-       case (Just (v)) -> nextPage(v)
-       case (Nothing)  -> error("Validation used in formlet with no 'page' context")
-     }
-   }
-   mkForm(continuation, xml)
-}
-
-sig renderToo : (Formlet (a), (a) -> Xml, XmlContext) -> Xml
-fun renderToo (form, nextPage, pageContext) {
-   var ((xml, extractor),_) = runState(form,0);
-   fun continuation(cc, env) {
-     var (xml, val) = extractor(env);
-     switch (val) {
-       case (Just (v)) -> nextPage(v)
-       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
-     }
-   }
-
-   fun cc(form) { exit(pageContext(form)) }
-   mkForm(fun (env) { continuation(cc, env) }, xml)
-}
-
-# Pagelet stuff
+# Page stuff
 
 typename RecForms = [mu a.(([a]) -> Xml)];
 typename MultiXmlContext = ([Xml]) -> Xml;
 
 typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) -> ([CheckedFormBuilder], Gen));
-
-sig renderPage : (Page) -> Xml
-fun renderPage((n, k, fs)) {
-  var (ms, _) = fs(0);
-  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-  k(map (fun (z) {z(zs)}, zs))
-}
-
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a)) -> (MultiXmlContext, RecForms, Int) -> Xml
-fun mkCheckedFormBuilder(x, c, h)(k, zs, i) {
-  mkForm(validate(c, h, k, zs, i), x)   
-}
-
-sig validate :
-  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int) -> (Env) -> Xml
-fun validate(c, h, k, zs, i) (env) {
-  var (xml, v) = c(env);
-  switch (v) {
-    case Just(v) -> h(v)
-    case Nothing  -> {
-      fun z(zs) {
-        mkForm(validate(c, h, k, zs, i), xml)
-      }
-      var zs = substAt(zs, i, z);
-      exit(k(map (fun (z) {z(zs)}, zs)))
-    }
-  }
-}
+typename Handler (a) = (a) -> Page;
 
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
@@ -667,33 +592,58 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig formP : (Formlet(a), Handler(a)) -> Page
-fun formP(f, h) {
+sig formP : (Formlet(a), Handler(a), Attributes) -> Page
+fun formP(f, h, attributes) {
   (1,
    fun ([x]) {x},
    fun (gen) {
      var ((x, c), gen) = runState(f, gen);
-     ([mkCheckedFormBuilder(x, c, h)], gen)
+     ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
    })
 }
 
+sig pickleCont : (([(String,String)]) -> Page) -> String
+fun pickleCont(cont) {unsafePickleCont(cont)}
 
-# end of pagelet stuff
-
-# Render formlet to a multipart form, which allows file-upload inputs
-# (using [inputFile])
-sig renderMultipart : (Formlet (a), (a) -> Xml) -> Xml
-fun renderMultipart(frm, nextPage) {
-   var ((xml, extractor),_) = runState(frm,0);
-   fun continuation(cc, env) {
-     var (xml, val) = extractor(env);
-     switch (val) {
-       case (Just (v)) -> nextPage(v)
-       case (Nothing)  -> cc(mkForm((fun (env) { continuation(cc, env) }), xml))
-     }
-   }
-   escape cc in mkFormMultipart(fun (env) { continuation(cc, env) }, xml)
+sig mkForm : ((Env) -> Page, Xml, Attributes) -> Xml
+fun mkForm(cont, contents, attributes) {
+  <form enctype="application/x-www-form-urlencoded"
+        action="#" method="POST" {attributes}>
+    <input type="hidden"
+           name="_k"
+           value="{pickleCont(fun (_) {cont(environment())})}" />
+    {contents}
+  </form>
 }
+
+sig renderPage : (Page) -> Xml
+fun renderPage((n, k, fs)) {
+  var (ms, _) = fs(0);
+  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) -> Xml
+fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
+  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)   
+}
+
+sig validate :
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) -> Page
+fun validate(c, h, k, zs, i, attributes) (env) {
+  var (xml, v) = c(env);
+  switch (v) {
+    case Just(v) -> h(v)
+    case Nothing  -> {
+      fun z(zs) {
+        mkForm(validate(c, h, k, zs, i, attributes), xml, attributes)
+      }
+      var zs = substAt(zs, i, z);
+      bodyP(k(map (fun (z) {z(zs)}, zs)))
+    }
+  }
+}
+# end of pagelet stuff
 
 # Types of input we need to handle:
 #   text (done)
@@ -721,11 +671,9 @@ sig input : Formlet (String)
 var input = mkInput(fun(name) { <input name="{name}"/> },
                     fun(name,v) { <input name="{name}" value="{v}"/> });
 
-typename Attributes = [(String, String)];
-
 # QUESTION:
 #   Should we change the semantics of attribute expressions such that
-#   the *do not* override literal attributes?
+#   they *do not* override literal attributes?
 #
 #   An advantage of doing this would be that we wouldn't have to use
 #   removeAssoc in formlet library functions. A disadvantage is that
@@ -959,11 +907,11 @@ fun transform(f, predicate, error, g) {
 ### checked input components
 
 sig inputInt : Formlet(Int)
-var inputInt = transform(input, isInt, fun (s) {s ++ "is not an integer"}, stringToInt);
+var inputInt = transform(input, isInt, fun (s) {s ++ " is not an integer"}, stringToInt);
 
 sig inputIntA : (Attributes) -> Formlet(Int)
 fun inputIntA(attributes) {
-  transform(inputA(attributes), isInt, fun (s) {s ++ "is not an integer"}, stringToInt)
+  transform(inputA(attributes), isInt, fun (s) {s ++ " is not an integer"}, stringToInt)
 }
 
 sig inputIntValue : (Int) -> Formlet(Int)
@@ -972,4 +920,4 @@ fun inputIntValue(v) {
 }
 
 sig inputFloat : Formlet(Float)
-var inputFloat = transform(input, isFloat, fun (s) {s ++ "is not an integer"}, stringToFloat);
+var inputFloat = transform(input, isFloat, fun (s) {s ++ " is not an integer"}, stringToFloat);

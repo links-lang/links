@@ -151,7 +151,7 @@ type ('ppattern, 'phrase, 'binding) phrasenode' = [
 | `TextNode of (string)
 | `Formlet of ('phrase * 'phrase)
 | `Page of 'phrase
-| `FormletPlacement of ('phrase * 'phrase)
+| `FormletPlacement of ('phrase * 'phrase * 'phrase)
 | `PagePlacement of ('phrase)
 | `FormBinding of ('phrase * 'ppattern) ]
     deriving (Show)
@@ -240,9 +240,9 @@ struct
     | `TupleLit ps -> union_map phrase ps
 
     | `Escape (v, p) -> diff (phrase p) (singleton v)
+    | `FormletPlacement (p1, p2, p3)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | `Block b -> block b
-    | `FormletPlacement (p1, p2)
     | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
     | `Regex r -> regex r
     | `UnaryAppl (_, p) -> phrase p

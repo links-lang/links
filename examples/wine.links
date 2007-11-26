@@ -160,22 +160,26 @@ fun htmlHead() {
   <head> <link href="wine.css" rel="StyleSheet"/> </head>
 }
 
-sig sign_up : (Int, String, String) -> Xml
-
+sig sign_up : (Int, String, String) -> Page
 fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
+
   insert (usersTable) values
     [( cust_id = new_cust_id, user_name = username, password = password )];
   if (order_id <> -1)
     claimCart(order_id, new_cust_id) else ();
+
   freshResource();
-  <div>
+
+  page
+   <div>
     Welcome, {stringToXml(username)}!
     <a l:href="{search_results(new_cust_id, order_id, 1, 1, 0)}">Continue shopping</a>
-  </div>
+   </div>
 }
 
 fun sign_up_form(order_id) {
+ page
   <html> {htmlHead()}
     <form l:action="{sign_up(order_id, username, password)}">
       <table>
@@ -212,6 +216,7 @@ fun sign_in(order_id, username, password) {
 }
 
 fun sign_in_form(order_id) {
+ page
   <html> {htmlHead()}
     <h1>Log In</h1>
     <form l:action="{sign_in(order_id, username, password)}">
@@ -236,10 +241,13 @@ fun logout() {
 }
 
 fun errorPage(msg) {
- <#>
-  <h1>Sorry, an error occured</h1>
-  <p>{stringToXml(msg)}</p>
- </#>
+ page
+  <html>
+   <body>
+    <h1>Sorry, an error occured</h1>
+    <p>{stringToXml(msg)}</p>
+   </body>
+  </html>
 }
 
 fun customerName(cust_id) {
@@ -272,50 +280,51 @@ fun valid_cc_details(card_no, expiry) {
 fun purchase_confirmation(cust_id, order_id, total) {
   debug("arrived at purchase confirmation with " ++ intToString(cust_id)
         ++ " " ++ intToString(order_id) ++ " " ++ floatToString(total));
-  <html> {htmlHead()}
-    <h1>Success!</h1>
-    <p class="instructions">
-     Thanks, {if (cust_id <> -1) customerName(cust_id) else []},
-     your order has been dispatched. Your order reference number is
-     {intToXml(cust_id)} - {intToXml(order_id)}.
-     Please quote this number in any correspondence.</p>
+  page
+   <html> {htmlHead()}
+     <h1>Success!</h1>
+     <p class="instructions">
+      Thanks, {if (cust_id <> -1) customerName(cust_id) else []},
+      your order has been dispatched. Your order reference number is
+      {intToXml(cust_id)} - {intToXml(order_id)}.
+      Please quote this number in any correspondence.</p>
 
-    <p class="instructions">If it existed, the order would have been
-      shipped to:
-    <blockquote>(TBD: Insert shipping details)</blockquote></p>
+     <p class="instructions">If it existed, the order would have been
+       shipped to:
+     <blockquote>(TBD: Insert shipping details)</blockquote></p>
 
-    <p class="instructions">We have billed your fictional credit card.</p>
+     <p class="instructions">We have billed your fictional credit card.</p>
 
-    <table class="data-entry">
-      <tr>
-        <th class="quantity-col"> Quantity </th>
-        <th class="wine-name-col"> Wine </th>
-        <th class="price-col"> Unit Price </th>
-        <th class="total-col"> Total </th>
-      </tr>
-      {
-        for (var item <-- cartItemsTable)
-          for (var wine <-- wineTable)
-            where (item.wine_id == wine.wine_id && item.order_id == order_id)
-              <tr>
-                <td class="quantity-col"> {intToXml(item.qty)} </td>
-                <td class="wine-name-col"> {stringToXml(wine.wine_name)} </td>
-                <td class="price-col"> ${floatToXml(item.price)} </td>
-                <td class="total-col"> ${floatToXml(item.price *. intToFloat(item.qty))} </td>
-              </tr>
-      }
-    <tr>
-     <td colspan="3">Total of this order:</td>
-         <td class="total-col"> ${floatToXml(total)} </td>
-    </tr>
-    </table>
+     <table class="data-entry">
+       <tr>
+         <th class="quantity-col"> Quantity </th>
+         <th class="wine-name-col"> Wine </th>
+         <th class="price-col"> Unit Price </th>
+         <th class="total-col"> Total </th>
+       </tr>
+       {
+         for (var item <-- cartItemsTable)
+           for (var wine <-- wineTable)
+             where (item.wine_id == wine.wine_id && item.order_id == order_id)
+               <tr>
+                 <td class="quantity-col"> {intToXml(item.qty)} </td>
+                 <td class="wine-name-col"> {stringToXml(wine.wine_name)} </td>
+                 <td class="price-col"> ${floatToXml(item.price)} </td>
+                 <td class="total-col"> ${floatToXml(item.price *. intToFloat(item.qty))} </td>
+               </tr>
+       }
+     <tr>
+      <td colspan="3">Total of this order:</td>
+          <td class="total-col"> ${floatToXml(total)} </td>
+     </tr>
+     </table>
 
-    <p class="instructions">An email confirmation has <em>NOT</em> been sent to you.
-       Thank you for shopping with Linkswine.</p>
-    <p class="navigation">
-      Return to <a l:href="{search_results(cust_id, -1, 1, 1, 0)}">main page</a>.
-    </p>
-  </html>
+     <p class="instructions">An email confirmation has <em>NOT</em> been sent to you.
+        Thank you for shopping with Linkswine.</p>
+     <p class="navigation">
+       Return to <a l:href="{search_results(cust_id, -1, 1, 1, 0)}">main page</a>.
+     </p>
+   </html>
 }
 
 sig order_total : (Int, Int) -> Float
@@ -368,6 +377,7 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
 }
 
 fun begin_checkout(cust_id, order_id) {
+ page
   <html> {htmlHead()}
     <h1>Finalize Your Order</h1>
 
@@ -447,7 +457,7 @@ fun cart_itemlist(cust_id, order_id) {
     };
   debug("got results in cart_items");
   if (length(cart_items) == 0)
-    <p>Your cart is empty.</p>
+    page <p>Your cart is empty.</p>
   else {
     var total_cost = floatToString(sum_float(map(fun (i){
                                                    i.cost *. intToFloat(i.qty)},
@@ -455,8 +465,9 @@ fun cart_itemlist(cust_id, order_id) {
     debug("got total cost");
     var total_items = intToString(length(cart_items));
     debug("got total items");
-    var cart_form = render(
-      withButton("Update Cart",
+    var cartForm =
+      page <#>{
+       withButton("Update Cart",
         formlet
           <table width="100%">
             <tr>
@@ -490,37 +501,37 @@ fun cart_itemlist(cust_id, order_id) {
             </tr>
           </table> 
         yields
-          item_qtys),
+          item_qtys) =>
       # handler
       fun (qtys) { update_cart(cust_id,order_id,qtys);
                    show_cart(cust_id, order_id,
                              "Your cart has been updated.")
-                 }
-    );
+                 }}</#>;
     debug("constructed cart form");
-    var pageText = cart_form ++
-    (if (cust_id <> -1)
-      <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
-        <input type="submit" value="Check out" />
-      </form>
-     else {<div>To make a purchase, you must be a member. 
-             You may <a l:href="{sign_in_form(order_id)}">sign in</a> or
-             <a l:href="{sign_up_form(order_id)}">create an account</a>.
-           </div>}
-    );
+    var pageText = page <#>
+      {|cartForm|}
+      {if (cust_id <> -1)
+        <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
+          <input type="submit" value="Check out" />
+        </form>
+       else {<div>To make a purchase, you must be a member. 
+               You may <a l:href="{sign_in_form(order_id)}">sign in</a> or
+               <a l:href="{sign_up_form(order_id)}">create an account</a>.
+             </div>}}</#>;
     debug("done composing cart page");
     pageText
   }
 }
 
 fun show_cart(cust_id, order_id, msg) {
+ page
   <html> {htmlHead()}
     <h1>Your Shopping Cart</h1>
     <div>
       {stringToXml(msg)}
     </div>
     <div>
-      {cart_itemlist(cust_id, order_id)}
+      {|cart_itemlist(cust_id, order_id)|}
     </div>
     <a l:href="{search_results(cust_id, order_id, 1, 1, 0)}">Continue shopping</a>
   </html>
@@ -656,73 +667,73 @@ fun cartSummary(cust_id, order_id) {
   </div>
 }
 
-sig search_results : (Int, Int, Int, Int, Int) -> Xml
+sig search_results : (Int, Int, Int, Int, Int) -> Page
 fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
   var winesOnThisPage = minimum(page_size, [numWines - (pageNum) * page_size]);
-  <html> {htmlHead()}
-    {header(cust_id, order_id)}
-    {cartSummary(cust_id, order_id)}
-    <div class="filter-box">
-      <h2>Filter wines by:</h2>
-      { render(
-          formlet <#>
-            <table>
-              <tr><td class="label">Region:</td>
-                <td>
-                  {choiceDefault(for (var region <-- regionTable)
-                                  [(region.region_id, region.region_name)],
-                                region_id) -> search_region_id}
-                </td></tr>
-              <tr><td class="label">Wine type:</td>
-                 <td>
-                  {choiceDefault(for (var type <-- wineTypeTable)
-                                  [(type.wine_type_id, type.wine_type)],
-                                wine_type) -> search_wine_type}
-                </td></tr>
-                <tr>
-                  <td></td>
-                  <td>
-                  { submit("Show wines") }
-                  </td>
-                </tr>
-             </table>
-          </#>
-        yields 
-          search_results(cust_id, order_id,
-                         search_region_id,
-                         search_wine_type,
-                         1),
-        fun (p) { p } ) }
-    </div>
-    <h1>Wines for region {stringToXml(get_region_name(region_id))},
-        {wineTypeName(wine_type)}</h1>
-    Page {intToXml(pageNum+1)} of {intToXml(numPages)}
-    <ul class="wine-listing">
-      {wine_listing(cust_id, order_id, region_id, wine_type, pageNum)}
-    </ul>
-    Showing wines {intToXml(page_size*pageNum+1)} thru
-      {intToXml(page_size*pageNum+winesOnThisPage)}.<br />
-    {if (pageNum <> 0)
-      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum-1)}">Previous</a> else []}
-    {for (var i <- range(numPages-1)) {
-       (if (i == pageNum) {intToXml(i+1)}
-       else 
-         <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
-       ++ <span> </span> 
-    }}
-    {if (pageNum <> numPages)
-      <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum+1)}">Next</a> else []
-    }
-    {footer(cust_id)}
-  </html>
+  page
+   <html> {htmlHead()}
+     {header(cust_id, order_id)}
+     {cartSummary(cust_id, order_id)}
+     <div class="filter-box">
+       <h2>Filter wines by:</h2>
+       { (formlet <#>
+           <table>
+            <tr><td class="label">Region:</td>
+             <td>
+              {choiceDefault(for (var region <-- regionTable)
+                               [(region.region_id, region.region_name)],
+                             region_id) -> search_region_id}
+             </td></tr>
+             <tr>
+              <td class="label">Wine type:</td>
+              <td>
+               {choiceDefault(for (var type <-- wineTypeTable)
+                                [(type.wine_type_id, type.wine_type)],
+                              wine_type) -> search_wine_type}
+              </td>
+             </tr>
+             <tr><td></td>
+              <td>
+               { submit("Show wines") }
+              </td>
+             </tr>
+            </table>
+           </#>
+         yields 
+           search_results(cust_id, order_id,
+                          search_region_id,
+                          search_wine_type,
+                          1)) =>
+         fun (p) { p } }
+     </div>
+     <h1>Wines for region {stringToXml(get_region_name(region_id))},
+         {wineTypeName(wine_type)}</h1>
+     Page {intToXml(pageNum+1)} of {intToXml(numPages)}
+     <ul class="wine-listing">
+       {wine_listing(cust_id, order_id, region_id, wine_type, pageNum)}
+     </ul>
+     Showing wines {intToXml(page_size*pageNum+1)} thru
+       {intToXml(page_size*pageNum+winesOnThisPage)}.<br />
+     {if (pageNum <> 0)
+       <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum-1)}">Previous</a> else []}
+     {for (var i <- range(numPages-1)) {
+        (if (i == pageNum) {intToXml(i+1)}
+        else 
+          <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
+        ++ <span> </span> 
+     }}
+     {if (pageNum <> numPages)
+       <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum+1)}">Next</a> else []
+     }
+     {footer(cust_id)}
+   </html>
 }
 
-sig main : () -> Xml
+sig main : () -> Page
 fun main() {
   search_results(-1, -1, 1, 1, 0)
 }
 
-page
-  <#>{main()}</#>
+main()

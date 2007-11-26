@@ -459,7 +459,11 @@ formlet_binding:
 | LBRACE logical_expression RARROW pattern RBRACE              { `FormBinding($2, $4), pos()}
 
 formlet_placement:
-| LBRACE logical_expression FATRARROW logical_expression RBRACE { `FormletPlacement ($2, $4), pos () }
+| LBRACE logical_expression
+         FATRARROW logical_expression RBRACE                   { `FormletPlacement ($2, $4, (`ListLit [], pos())), pos () }
+| LBRACE logical_expression
+         FATRARROW logical_expression
+         WITH logical_expression RBRACE                        { `FormletPlacement ($2, $4, $6), pos () }
 
 page_placement:
 | LBRACEBAR exp BARRBRACE                                      { `PagePlacement $2, pos() }

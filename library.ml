@@ -996,9 +996,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (datatype ("(NativeString) -> String")),
     PURE));
 	
-  ("pickleCont",
+  ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(([(String,String)])->Xml) -> String",
+    datatype "(([(String,String)]) -> a) -> String",
     IMPURE));
 
   (* Serialize values to DB *)

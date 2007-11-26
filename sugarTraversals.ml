@@ -69,7 +69,7 @@ object (o)
     | `TextNode of (string)
     | `Formlet of ('phrase * 'phrase)
     | `Page of 'phrase
-    | `FormletPlacement of ('phrase * 'phrase)
+    | `FormletPlacement of ('phrase * 'phrase * 'phrase)
     | `PagePlacement of ('phrase)
     | `FormBinding of ('phrase * 'ppattern) ]
     *)
@@ -235,8 +235,8 @@ object (o)
       | `Page x -> `Page (btoe x)
       | `FormletPlacement x ->
           `FormletPlacement
-            ((fun (_x0, _x1) ->
-                ((btoe _x0), (btoe _x1)))
+            ((fun (_x0, _x1, _x2) ->
+                ((btoe _x0), (btoe _x1), (btoe _x2)))
                x)
       | `PagePlacement x -> `PagePlacement (btoe x)
       | `FormBinding x ->
@@ -684,7 +684,7 @@ class fold =
        | `TextNode of (string)
        | `Formlet of ('phrase * 'phrase)
        | `Page of 'phrase
-       | `FormletPlacement of ('phrase * 'phrase)
+       | `FormletPlacement of ('phrase * 'phrase * 'phrase)
        | `PagePlacement of ('phrase)
        | `FormBinding of ('phrase * 'ppattern) ]
     *)    
@@ -807,7 +807,7 @@ class fold =
           (fun (_x0, _x1) -> phrase (phrase o _x0) _x1) x
       | `Page x -> phrase o x
       | `FormletPlacement x ->
-          (fun (_x0, _x1) -> phrase (phrase o _x0) _x1) x
+          (fun (_x0, _x1, _x2) -> phrase (phrase (phrase o _x0) _x1) _x2) x
       | `PagePlacement x -> phrase o x
       | `FormBinding x ->
           (fun (_x0, _x1) -> ppattern (phrase o _x0) _x1)

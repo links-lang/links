@@ -972,7 +972,7 @@ module Desugarer =
              | `Xml (_, attrs, attrexp, subnodes) ->
                  flatten ((List.map (fun (_, es) -> phrases es) attrs) @ [opt_phrase attrexp] @ [phrases subnodes])
              | `TextNode _ -> empty
-             | `FormletPlacement (e1, e2)
+             | `FormletPlacement (e1, e2, e3) -> flatten [phrase e1; phrase e2; phrase e3]
              | `Formlet (e1, e2) -> flatten [phrase e1; phrase e2]
              | `PagePlacement e -> phrase e
              | `Page e -> phrase e
@@ -1462,8 +1462,8 @@ module Desugarer =
                    let dp : phrasenode -> phrase = function
                      | e when is_raw (e, pos) ->
                          (`FnAppl ((`Var "bodyP", pos), [e, pos]), pos)
-                     | `FormletPlacement (formlet, handler) ->
-                         (`FnAppl ((`Var "formP", pos), [formlet; handler]), pos)
+                     | `FormletPlacement (formlet, handler, attributes) ->
+                         (`FnAppl ((`Var "formP", pos), [formlet; handler; attributes]), pos)
                      | `PagePlacement (page) ->
                          page
                      | `Xml _ as x when LAttrs.has_lattrs x ->
@@ -1490,32 +1490,6 @@ module Desugarer =
            | `FormBinding _ ->
                raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
            | `Regex _ -> assert false
-     and extract_placements : phrase -> phrase * (phrase * phrase) list =
-       fun (phrase, pos) ->
-         let arg = gensym ~prefix:"xml" () in
-         let rec extract n : phrasenode -> int * (phrase * (phrase * phrase) list) = function
-           | `Xml (name, attrs, dynattrs, children) ->
-               let n, childfns, child_placements = 
-                 fold_right
-                   (fun (child,_) (n, templates, placements') ->
-                      let n, (template, placements) = extract n child in
-                        (n, (template :: templates), placements @ placements'))
-                   children
-                   (n, [], []) in
-                 (n,
-                  ((`Xml (name, attrs, dynattrs, childfns), pos),
-                   child_placements))
-           | `FormletPlacement (formlet, continuation) ->
-               n+1,
-               ((`FnAppl ((`Var "select", pos),
-                          [(`Var arg, pos);
-                           (`Constant (`Int (Num.num_of_int n)), pos)]), pos),
-                [formlet, continuation])
-           | `TextNode _ as t -> n, ((t, pos), [])
-           | e -> 
-               raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal"))
-         in let _, (body, placements) = extract 0 phrase in
-           (`FunLit (([[`Variable arg, pos]]), body), pos), rev placements
 
      and forest_to_form_expr trees yieldsClause 
          (pos:Syntax.untyped_data) 
