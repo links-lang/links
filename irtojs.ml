@@ -27,6 +27,7 @@ type code = | Var    of string
             | LetFun of ((string * string list * code * location) * code)
             | LetRec of ((string * string list * code * location) list * code)
             | Call   of (code * code list)
+            | Unop   of (string * code)
             | Binop  of (code * string * code)
             | If     of (code * code * code)
             | Case   of (string * (string * code) stringmap * (string * code) option)
@@ -68,6 +69,7 @@ struct
     | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
     | Call(func, args) -> Call(rename' renamer func,
                                map (rename' renamer) args)
+    | Unop(op, body) -> Unop (op, rename' renamer body)
     | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
                                    rename' renamer rhs)
     | If(test, yes, no) ->  If(rename' renamer test,
@@ -191,6 +193,7 @@ struct
         | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
         | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
+        | Unop (op, body) -> op ^ paren body
         | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
         | If (cond, e1, e2) ->
             "if (" ^ show cond ^ ") {" ^ show e1 ^ "} else {" ^ show e2 ^ "}"
@@ -268,6 +271,7 @@ struct
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
         | Call (fn, args) -> maybe_parenise fn ^^ 
             (PP.arglist (map show args))
+        | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
         | If (cond, c1, c2) ->
             PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
@@ -518,6 +522,8 @@ let rec generate_value env : value -> code =
 *)
       | `Comparison (v, `Equal, w) ->
           Call(Var "LINKS.eq", [gv v; gv w])
+      | `Comparison (v, `NotEq, w) ->
+          Unop("!", Call (Var "LINKS.eq", [gv v; gv w]))
       | `Comparison (v, op, w) ->
           Binop(gv v, comparison_name op, gv w)
       | `XmlNode (name, attributes, children) ->

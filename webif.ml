@@ -4,7 +4,7 @@ open Performance
 open Utility
 open Result
 
-let correct_optimised_types = Settings.add_bool ("correct_optimised_types", false, `User)
+let correct_optimised_types = Settings.add_bool ("correct_optimised_types", true, `User)
 
 (*
  Whether to cache programs after the optimization phase
