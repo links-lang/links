@@ -464,6 +464,13 @@ let bind_continuation kappa body =
     | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
 
 
+let apply_yielding (f, args) =
+  Call(Var "_yield", f :: args)
+
+let callk_yielding kappa arg =
+  Call(Var "_yieldCont", [kappa; arg]) 
+
+
 (** generate
     Generate javascript code for a Links expression
     
@@ -488,7 +495,7 @@ let rec generate_value env : value -> code =
               | "map" -> Var ("LINKS.accum")
               | name ->
                   if Binop.is name then
-                    Fn (["x"; "y"], Ret(Binop(Var "x", Binop.js_name name, Var "y")))
+                    Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Binop(Var "x", Binop.js_name name, Var "y")))
                   else
                     Var name
           end
@@ -557,12 +564,6 @@ let generate_remote_call f_name xs_names =
             (Utility.fromTo 1 (1 + List.length xs_names))
             xs_names
         )])
-
-let apply_yielding (f, args) =
-  Call(Var "_yield", f :: args)
-
-let callk_yielding kappa arg =
-  Call(Var "_yieldCont", [kappa; arg]) 
 
 let rec generate_tail_computation env : tail_computation -> code -> code = fun tc kappa ->
   let gv v = generate_value env v in
