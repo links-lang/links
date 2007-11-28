@@ -55,6 +55,7 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                		\
+          notfound.ml				\
           utility.ml            		\
           env.mli env.ml                        \
           settings.mli settings.ml 		\

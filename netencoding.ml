@@ -6,6 +6,20 @@
 (* Extracted part of the base64 encoder for use in the Links project.
    Jeremy Yallop, 2006-05-11 *)
 
+(* SL:
+   
+   Changed the default setting to rfc_pattern to match up with the
+   base64 code we use on the client.
+
+   -/ does not appear to be standard for URLs anyway!
+
+   WARNING:
+
+   If changing the plus and slash characters make sure that the base64
+   code on the client is adjusted accordingly and test it on a large
+   string!
+*)
+
 module Base64 = struct
   let b64_pattern plus slash =
     [| 'A'; 'B'; 'C'; 'D'; 'E'; 'F'; 'G'; 'H'; 'I'; 'J'; 'K'; 'L'; 'M';
@@ -13,7 +27,6 @@ module Base64 = struct
        'a'; 'b'; 'c'; 'd'; 'e'; 'f'; 'g'; 'h'; 'i'; 'j'; 'k'; 'l'; 'm';
        'n'; 'o'; 'p'; 'q'; 'r'; 's'; 't'; 'u'; 'v'; 'w'; 'x'; 'y'; 'z';
        '0'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9'; plus; slash |];;
-
 
   let rfc_pattern = b64_pattern '+' '/';;
   let url_pattern = b64_pattern '-' '/';;
@@ -140,7 +153,7 @@ module Base64 = struct
   let encode ?(pos=0) ?len ?(linelength=0) ?(crlf=false) s =
     let l = match len with None -> String.length s - pos | Some x -> x in
     let s,_ = 
-      encode_with_options url_pattern '=' s pos l linelength linelength crlf in
+      encode_with_options rfc_pattern '=' s pos l linelength linelength crlf in
     s
   ;;
 

@@ -31,7 +31,7 @@ let is_client_program (Syntax.Program (defs, _) as program) =
                         | _ -> [])) defs
   and is_client_prim p = 
     try Library.primitive_location p = `Client
-    with Not_found | NotFound _ -> false in
+    with NotFound _ -> false in
   let freevars = StringSet.elements (Syntax.freevars_program program) in
   let prims = List.filter (not -<- flip List.mem toplevels) freevars
   in 
@@ -145,7 +145,7 @@ let expr_eval_req valenv program params =
           let json_args = try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
                                  | `Record fields -> fields
                                  | _ -> assert false) 
-          with NotFound _ | Not_found -> [] in
+          with NotFound _ -> [] in
           let env = List.filter (not -<- is_special_param) params in
           let env = (List.fold_right
                        (fun pair env -> 
@@ -224,11 +224,10 @@ let perform_request
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
-             catch_notfound_l "generate_program"
-               (lazy(if Settings.get_value (Basicsettings.use_monadic_ir) then
-                       Irtojs.generate_program program
-                     else
-                       Js.generate_program program))
+             if Settings.get_value (Basicsettings.use_monadic_ir) then
+               Irtojs.generate_program program
+             else
+               Js.generate_program program
            else 
              let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
                Result.string_of_result rslt)
@@ -237,8 +236,7 @@ let serve_request prelude (valenv, typenv) filename =
   try 
     let _, (Syntax.Program (defs, main) as program) =
       read_and_optimise_program prelude typenv filename in
-    let defs = Utility.catch_notfound_l "stubifying" 
-      (lazy (stubify_client_funcs valenv program)) in
+    let defs = stubify_client_funcs valenv program in
     let cgi_args =
       if is_multipart () then
         List.map (fun (name, {Cgi.value=value}) ->
@@ -248,7 +246,7 @@ let serve_request prelude (valenv, typenv) filename =
       Library.cgi_parameters := cgi_args;
     let lookup name = 
       try List.assoc name defs
-      with Not_found | NotFound _ -> Library.primitive_stub name
+      with NotFound _ -> Library.primitive_stub name
         | _ -> failwith("Internal error: called unknown server function " ^ name)
     in
     let request = 
@@ -263,8 +261,7 @@ let serve_request prelude (valenv, typenv) filename =
       else
         CallMain
     in
-      Utility.catch_notfound_l "performing request"
-        (lazy (perform_request program (defs @ valenv) main request))
+      perform_request program (defs @ valenv) main request
   with
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)

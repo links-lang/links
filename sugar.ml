@@ -475,7 +475,7 @@ module PatternCompiler =
        try
          StringMap.find var env
        with
-           Not_found -> failwith ("Variable: "^var^" not in environment (lookup)")
+           NotFound _ -> failwith ("Variable: "^var^" not in environment (lookup)")
 
      let is_trivial var (env : pattern_env) =
        match lookup var env with
@@ -851,9 +851,9 @@ module Desugarer =
        let lookup_type = flip StringMap.find tenv in
          function
            | TypeVar s -> (try `MetaTypeVar (lookup_type s)
-                           with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
+                           with NotFound _ -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
            | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
-                                with Not_found -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
+                                with NotFound _ -> failwith ("Not found `"^ s ^ "' while desugaring assumption"))
            | FunctionType (f, m, t) ->
                `Function (Types.make_tuple_type (List.map (desugar var_env) f), 
                           desugar var_env m, 
@@ -1483,9 +1483,12 @@ module Desugarer =
                      dp phrase
                in
                  desugar (desugar_page e)
-           | `FormletPlacement _
-           | `PagePlacement _
-           | `FormBinding _
+           | `FormletPlacement _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "A formlet can only be rendered in a page expression"))
+           | `PagePlacement _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "An embedded page can only appear in a page expression"))
+           | `FormBinding _ ->
+               raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
            | `Regex _ -> assert false
      and extract_placements : phrase -> phrase * (phrase * phrase) list =
        fun (phrase, pos) ->

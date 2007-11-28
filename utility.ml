@@ -1,6 +1,8 @@
 (*pp deriving *)
 (**** Various utility functions ****)
 
+open Notfound
+
 let fst3(x, _, _) = x
 let snd3(_, y, _) = y
 let thd3(_, _, z) = z
@@ -36,8 +38,6 @@ module type OrderedShow = sig
   module Show_t : Show.Show 
     with type a = t
 end
-
-exception NotFound of string
 
 module type Map = 
 sig
@@ -149,7 +149,7 @@ struct
 
     let find elem map = 
       try find elem map 
-      with Not_found -> raise (NotFound (Ord.Show_t.show elem))
+      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem))
       
     let for_all p m =
       fold (fun _ v b -> b && p v) m true
@@ -239,9 +239,6 @@ struct
     include Set.Make(Ord)
     let union_all sets = List.fold_right union sets empty
     let from_list l = List.fold_right add l empty
-    let min_elt t = try min_elt t with Not_found -> invalid_arg "Set.min_elt"
-    let max_elt t = try max_elt t with Not_found -> invalid_arg "Set.max_elt"
-    let choose t = try choose t with Not_found -> invalid_arg "Set.choose"
     module Show_t = Show.Show_set(Ord)(Ord.Show_t)
   end
 end
@@ -423,14 +420,6 @@ struct
 end
 include ListUtils
 
-let nasty_is_string x = Obj.tag (Obj.repr x) = Obj.string_tag
-let not_found v = 
-  raise
-    (if nasty_is_string v then
-       NotFound (Obj.magic v : string)
-     else
-       Not_found)
-
   
 (** {1 Association-list utilities} *)
 module AList = 
@@ -438,7 +427,7 @@ struct
   let rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = 
     fun value l -> 
       try fst (List.find (snd ->- eq value) l)
-      with Not_found -> not_found value
+      with NotFound _ -> not_found "rassoc_eq" value
 
   let rassoc i l = rassoc_eq (=) i l
   and rassq i l = rassoc_eq (==) i l
@@ -513,7 +502,7 @@ struct
     let rec aux offset occurrences = 
       try let index = String.index_from s offset c in
             aux (index + 1) (index :: occurrences)
-      with Not_found -> occurrences
+      with NotFound _ -> occurrences
     in List.rev (aux 0 [])
       
   let mapstrcat glue f list = String.concat glue (List.map f list)
@@ -528,8 +517,7 @@ struct
       else
         try ignore (Str.search_forward (Str.regexp_string is) s (slen - ilen));
           true
-        with Not_found -> 
-          false
+        with NotFound _ -> false
 end
 include StringUtils
 
@@ -594,7 +582,7 @@ let lookup_in alist x = List.assoc x alist
 
 (** lookup is like assoc but uses option types instead of
    exceptions to signal absence *)
-let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
+let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
 
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
@@ -816,27 +804,24 @@ let any_true = List.exists identity
 let getenv : string -> string option =
   fun name ->
     try Some (Sys.getenv name)
-    with Not_found -> None
-
-(** {0 Exception-handling helpers} *)
-
-let catch_notfound msg f a =
-  try
-    f a
-  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
-
-let catch_notfound_l msg e =
-  try
-    Lazy.force e
-  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
-
-module List =
-struct
-  include List
-  let assoc v l = 
-      try List.assoc v l
-      with Not_found -> not_found v
-end
+    with NotFound _ -> None
 
 (** Initialise the random number generator *)
 let _ = Random.self_init()
+
+
+(* This is unpleasant, but we can't just say "include Notfound"
+   because of name clashes.
+*)
+module Buffer = Notfound.Buffer
+module Hashtbl = Notfound.Hashtbl
+module List = Notfound.List
+module ListLabels = Notfound.ListLabels
+module MoreLabels = Notfound.MoreLabels
+module Str = Notfound.Str
+module StringLabels = Notfound.StringLabels
+module Sys = Notfound.Sys
+module Unix = Notfound.Unix
+module UnixLabels = Notfound.UnixLabels
+
+exception NotFound = Notfound.NotFound

@@ -55,7 +55,7 @@ struct
         try 
           let item, rest = StringMap.pop (string_of_int n) input in
             aux (n+1) rest (item::output)
-        with Not_found -> None
+        with NotFound _ -> None
     in fun map -> aux 1 map []
 
   let remove_unused_variables : RewriteSyntax.rewriter = function
@@ -648,7 +648,7 @@ let underscore_numeric_names cols =
 let rename_cols renamings q =
   {q with cols = 
       map (fun (e, name) ->
-             (e, try assoc name renamings with Not_found -> name))
+             (e, try assoc name renamings with NotFound _ -> name))
         q.cols}
     
 (** Inject a query as a Links expression. 
@@ -664,7 +664,7 @@ let injectQuery q data =
          (name,
           (Syntax.Project(Syntax.Variable("row", Syntax.no_expr_data),
                           (try List.assoc name renamings
-                           with Not_found -> name),
+                           with NotFound _ -> name),
                           Syntax.no_expr_data))))
       q.cols in
     let record = Syntax.record_expr fields Syntax.no_expr_data in
