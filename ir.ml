@@ -98,8 +98,53 @@ let rec is_atom =
     | _ -> false
 
 type program = computation
-  
-module MapTy =
+
+module type MAPTY =
+sig
+  type environment = Types.datatype Env.Int.t
+  type alias_environment = Types.alias_environment
+  type typing_environment = environment * alias_environment
+
+  class maptyenv : typing_environment ->
+  object ('self_type)
+    val tyenv : typing_environment
+    val tenv : environment
+    val alias_env : alias_environment
+
+    method lookup_type : var -> Types.datatype
+    method constant : constant -> (constant * Types.datatype)
+    method option :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a option -> 'a option * Types.datatype option
+    method list :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a list -> 'a list * Types.datatype list
+    method name_map :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a name_map -> 'a name_map * Types.datatype name_map        
+    method var : var -> (var * Types.datatype)       
+    method value : value -> (value * Types.datatype)
+                                                
+    method tail_computation :
+      tail_computation -> (tail_computation * Types.datatype)                 
+    method special : special -> (special * Types.datatype)      
+    method bindings : binding list -> (binding list * 'self_type)
+    method computation : computation -> (computation * Types.datatype)
+    method binding : binding -> (binding * 'self_type)
+    method binder : binder -> (binder * 'self_type)
+  end  
+end
+
+(* Traversal with type reconstruction *)
+(*
+  Essentially this is a map operation over the IR datatypes that also
+  constructs the type as it goes along (using type annotations on
+  binders).
+*)
+module MapTy : MAPTY =
 struct
   open Types
 
@@ -369,7 +414,7 @@ struct
             let x, o = o#binder x in
               `Alien (x, language), o
         | `Alias (name, quantifiers, t) ->
-(*             Debug.print ("registering alias: "^name); *)
+(*             Debug.print ("registering alias: "^name);*)
             let alias_env = register_alias (name, quantifiers, t) alias_env in
 (*              Debug.print ("updated alias env: "^Types.Show_alias_environment.show alias_env);*)
               `Alias (name, quantifiers, t), {< alias_env=alias_env;  tyenv=(tenv, alias_env) >}
@@ -381,102 +426,7 @@ struct
   end
 end
 
-
-module InlineInlined =
-struct
-  (*
-    A rather ad-hoc mostly-harmless let-inliner
-    
-    This inlines atoms, projections and injections. It isn't clear
-    that it's always a good idea to inline projections and
-    injections, but it's unlikely to cost much for small examples
-    and it does lead to faster and more readable javascript.
-  *)
-  
-  let rec is_inlineable_value =
-    function
-      | v when is_atom v -> true
-      | `Project (_, v)
-      | `Inject (_, v) -> is_inlineable_value v
-      | _ -> false
-
-  (* 
-     NOTE:
-     
-     Most of this is just boilerplate. It would be nice if we could
-     generate it automatically somehow...
-  *)
-
-  let rec value env v : value =
-    let iv = value env in
-      match v with
-        | `Variable var when IntMap.mem var env -> IntMap.find var env
-        | `Constant _ | `Variable _ -> v
-        | `Extend (vmap, vopt) -> `Extend (StringMap.map iv vmap, opt_map iv vopt)
-        | `Project (name, v) -> `Project (name, iv v)
-        | `Erase (name, v) -> `Erase (name, iv v)
-        | `Inject (name, v) -> `Inject (name, iv v)
-        | `XmlNode (name, vmap, vs) -> `XmlNode (name, StringMap.map iv vmap, List.map iv vs)
-        | `ApplyPrim (v, vs) -> `ApplyPrim (iv v, List.map iv vs)
-        | `Comparison (v, c, w) -> `Comparison (iv v, c, iv w)
-        | `Coerce (v, t) -> `Coerce (iv v, t)
-        | `Abs v -> `Abs (iv v)
-
-  and tail_computation env tc : tail_computation =
-    let iv = value env in
-    let ic = computation env in
-      match tc with
-        | `Return v -> `Return (iv v)
-        | `Apply (v, vs) -> `Apply (iv v, List.map iv vs)
-        | `Special s -> `Special (special env s)
-        | `Case (v, cases, default) ->
-            `Case (iv v, StringMap.map (fun (x, c) -> (x, ic c)) cases, opt_map (fun (x, c) -> (x, ic c)) default)
-        | `If (v, c1, c2) ->
-            `If (iv v, ic c1, ic c2)
-
-  and special env s =
-    let iv = value env in
-      match s with
-        | `App (v, w) -> `App (iv v, iv w)
-        | `Wrong t -> `Wrong t
-        | `Database v -> `Database (iv v)
-        | `Query q -> `Query q
-            (* WARNING: perhaps we need to look inside the query *)
-        | `Table (v, w, t) -> `Table (iv v, iv w, t)
-        | `CallCC v -> `CallCC (iv v)
-    
-  and binding env =
-    function
-      | `Let (x, tc) -> `Let (x, tail_computation env tc)
-      | `Fun (f, xs, c, l) -> `Fun (f, xs, computation env c, l)
-      | `Rec (defs) -> `Rec (List.map (fun (f, xs, c, l) -> (f, xs, computation env c, l)) defs)
-      | (`Alien _ | `Alias _) as b -> b
-(*      | `For (x, v) -> `For (x, value env v) *)
-
-  and bindings env =
-    function
-      | `Let ((x, (_, _, `Local)), `Return v) :: bs when is_inlineable_value v ->
-          bindings (IntMap.add x (value env v) env) bs
-      | b :: bs ->
-          let b = binding env b in
-          let env, bs = bindings env bs in
-            env, b :: bs
-      | [] ->
-          env, []
-          
-  and computation env (bs, tc)  : computation =
-    let env, bs = bindings env bs in
-      (bs, tail_computation env tc)
-
-  let program typing_environment c =
-(*     Debug.print ("initial alias env: "^Types.Show_alias_environment.show (snd typing_environment)); *)
-    let o = new MapTy.maptyenv(typing_environment) in    
-    let c', _ = o#computation c in
-      computation (IntMap.empty) c
-end
-
-
-module InlineMapTy =
+module Inline =
 struct
   let rec is_inlineable_value =
     function
@@ -518,6 +468,3 @@ struct
     fst ((inliner typing_env IntMap.empty)#computation p)
 end
 
-
-module Inline = InlineMapTy
-(* module Inline = InlineInlined *)
