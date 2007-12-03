@@ -1756,6 +1756,18 @@ module Desugarer =
                (name, body) :: mr fields
      in (mr fields, rest)
 
+
+   let desugar_expression lookup_pos phrase =
+     Debug.if_set show_sugared (fun () -> Show_phrase.show phrase);
+     desugar_expression lookup_pos phrase
+
+   let desugar_definitions lookup_pos bindings =
+     Debug.if_set show_sugared
+       (fun () ->
+          (String.concat "\n"
+             (List.map Show_binding.show bindings)));
+     desugar_definitions lookup_pos bindings
+     
    let desugar_datatype = generalize ->- desugar_assumption
  end : 
   sig 

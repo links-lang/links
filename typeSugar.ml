@@ -9,6 +9,7 @@ struct
   type phrase   = (ppattern, phrase, binding) phrasenode' * (pposition * Types.datatype)
   and ppattern = ppattern pattern' * (pposition * (Types.environment * Types.datatype))
   and binding = (ppattern, phrase) binding' * pposition
+      deriving (Show)
 
   type funlit = (ppattern, phrase) funlit'
   type sentence = (phrase, binding) sentence''
@@ -38,7 +39,6 @@ module Utils : sig
   val register_alias : name * int list * Types.datatype -> Types.alias_environment -> Types.alias_environment
 
   val is_generalisable : Typed.phrase -> bool
-  val quantify_env : Types.environment -> Types.quantifier list -> Types.environment
 end =
 struct
   let unify = Unify.datatypes
@@ -135,6 +135,11 @@ struct
     | `Replace (r, `Literal _) -> is_generalisable_regex r
     | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
 
+  (* BUG:
+     
+     This isn't right... we should probably just install all the
+     quantifiers.
+  *)
   let quantify_env
       : Types.environment -> Types.quantifier list -> Types.environment
     = fun env quantifiers ->
@@ -144,9 +149,9 @@ struct
                let tvs = Types.free_type_vars t in
                let qs = 
                  concat_map
-             (fun q ->
-                if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
-                else []) quantifiers
+                   (fun q ->
+                      if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
+                      else []) quantifiers
                in
                  Types.for_all (qs, t)
            | t -> t)
@@ -154,44 +159,44 @@ struct
 end
 
 module Errors :
-  sig
+sig
   type griper = 
+      pos:Syntax.position ->
+  t1:(string * Types.datatype) ->
+  t2:(string * Types.datatype) ->
+  aliases:Types.alias_environment ->
+  error:Unify.error ->
+  unit
+
+  val condition : griper
+  val if_branches  : griper
+  val list_pattern : griper
+  val cons_pattern : griper
+  val record_pattern : griper
+  val pattern_annotation : griper
+end
+  = struct
+    type griper = 
         pos:Syntax.position ->
-        t1:(string * Types.datatype) ->
-        t2:(string * Types.datatype) ->
-        aliases:Types.alias_environment ->
-        error:Unify.error ->
-    unit
+      t1:(string * Types.datatype) ->
+      t2:(string * Types.datatype) ->
+      aliases:Types.alias_environment ->
+      error:Unify.error ->
+      unit
 
-    val condition : griper
-    val if_branches  : griper
-    val list_pattern : griper
-    val cons_pattern : griper
-    val record_pattern : griper
-    val pattern_annotation : griper
-  end
-= struct
-  type griper = 
-        pos:Syntax.position ->
-        t1:(string * Types.datatype) ->
-        t2:(string * Types.datatype) ->
-        aliases:Types.alias_environment ->
-        error:Unify.error ->
-    unit
+    let show_type = Types.string_of_datatype
 
-  let show_type = Types.string_of_datatype
+    let dief pos =
+      let die msg = raise (Errors.Type_error (pos, msg)) in
+        Printf.kprintf die
 
-  let dief pos =
-    let die msg = raise (Errors.Type_error (pos, msg)) in
-      Printf.kprintf die
-
-  let condition ~pos ~t1:_ ~t2:(expr, t) ~aliases:_ ~error:_ = 
-    dief pos "\
+    let condition ~pos ~t1:_ ~t2:(expr, t) ~aliases:_ ~error:_ = 
+      dief pos "\
 The condition of an `if (...) ... else ...' expression should have type bool\n\
 but the expression %s has type %s." expr (show_type t)
 
-  let if_branches ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~aliases:_ ~error:_ =
-    dief pos "\
+    let if_branches ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~aliases:_ ~error:_ =
+      dief pos "\
 Both branches of an `if (...) ... else ...' expression should have the same type \
 but the expression\n
     %s
@@ -202,8 +207,8 @@ while the expression
 has type
     %s" lexpr (show_type lt) rexpr (show_type rt)
 
-  let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
-    dief pos "\
+    let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
+      dief pos "\
 All elements in a list pattern must have the same type, but the pattern
     %s
 has type
@@ -213,8 +218,8 @@ while the pattern
 has type
     %s" lexpr (show_type lt) rexpr (show_type rt)
 
-  let cons_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
-    dief pos "\
+    let cons_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
+      dief pos "\
 The two subpatterns of a cons pattern p1::p2 must have compatible types: \
 if p1 has type `t' then p2 must have type `[t]'.  However, the pattern
     %s
@@ -225,10 +230,10 @@ whereas the pattern
 has type
     %s" lexpr (show_type lt) rexpr (show_type rt)
 
-  let record_pattern ~pos:(_,_,expr as pos) ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error =
-    match error with
-      | `PresentAbsentClash (label, _, _) ->
-          (* NB: is it certain that this is what's happened? *)
+    let record_pattern ~pos:(_,_,expr as pos) ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error =
+      match error with
+        | `PresentAbsentClash (label, _, _) ->
+            (* NB: is it certain that this is what's happened? *)
           dief pos "\
 Duplicate labels are not allowed in record patterns.  However, the pattern
    %s
@@ -738,10 +743,10 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
             and from = tc from
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let () = unify (typ from, `Table (read, write))
-            and () = unify (pattern_typ pat, write) in
+            let () = unify (typ from, `Table (read, write)) in
+            let () = unify (pattern_typ pat, read) in
             let where = opt_map (type_check {context with tenv = (context.tenv ++ pattern_env pat)}) where in
-            let _     = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
+            let ()    = opt_iter (fun e -> unify (Types.bool_type, typ e)) where in
               `DBDelete (pat, from, where), Types.unit_type
         | `DBInsert (into, values) ->
             let into   = tc into
@@ -802,13 +807,13 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
                                         mailbox_type env, rettyp));
               `UnaryAppl (fst op, p), rettyp
         | `InfixAppl (op, l, r) ->
-            let op = op, (pos, type_binary_op env op)
-            and l = tc l
+            let opt = type_binary_op env op in
+            let l = tc l
             and r = tc r 
             and rettyp = Types.fresh_type_variable () in
-              unify (typ op, `Function (Types.make_tuple_type [typ l; typ r], 
-                                        mailbox_type env, rettyp));
-              `InfixAppl (fst op, l, r), rettyp
+              unify (opt, `Function (Types.make_tuple_type [typ l; typ r], 
+                                     mailbox_type env, rettyp));
+              `InfixAppl (op, l, r), rettyp
         | `FnAppl (f, ps) ->
             let f = tc f
             and ps = List.map (tc) ps
@@ -821,7 +826,8 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
         | `Xml _ as x when Sugar.LAttrs.has_lattrs x ->
             (* This doesn't belong here.  Once we've tidied things up
                a bit this will be performed in an earlier phase *)
-            let phrase, (_, t) = tc (Sugar.LAttrs.replace_lattrs (expr, pos)) in
+            let phrase = (Sugar.LAttrs.replace_lattrs (expr, pos)) in
+            let phrase, (_, t) = tc phrase in
               phrase, t
         | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
@@ -838,9 +844,25 @@ let rec type_check (lookup_pos : Sugartypes.pposition -> Syntax.position)
             let yields = type_check context' yields in
               unify (typ body, Types.xml_type);
               `Formlet (body, yields), Types.make_formlet_type (typ yields)
-        | `Page _ -> assert false
-        | `FormletPlacement _ -> assert false
-        | `PagePlacement _ -> assert false
+        | `Page e ->
+            let e = tc e in
+              unify (typ e, Types.xml_type);
+              `Page e, Types.page_type
+        | `FormletPlacement (f, h, attributes) ->
+            let t = Types.fresh_type_variable () in
+
+            let f = tc f
+            and h = tc h
+            and attributes = tc attributes in
+
+            let () = unify (typ f, `Application ("Formlet", [t])) in
+            let () = unify (typ h, `Application ("Handler", [t])) in
+            let () = unify (typ attributes, `Application ("Attributes", [])) in
+              `FormletPlacement (f, h, attributes), Types.xml_type
+        | `PagePlacement e ->
+            let e = tc e in
+              unify (typ e, Types.page_type);
+              `PagePlacement e, Types.xml_type
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
@@ -990,21 +1012,17 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
         | `Val (pat, body, location, datatype) -> 
             let body = tc body in
             let pat = tpc pat in
+            let penv = pattern_env pat in
             let bt = typ body in
             let () = unify (bt, pattern_typ pat) in
-            let _ = opt_iter (fun t -> unify (bt, Sugar.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
-            let quantified = 
+            let () = opt_iter (fun t -> unify (bt, Sugar.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
+            let bt, penv =
               if Utils.is_generalisable body then
-                Utils.generalise env (typ body)
-              else 
-                typ body in
-              begin match quantified with
-                | `ForAll (quantifiers, bt) ->
-                    let penv = Utils.quantify_env (pattern_env pat) quantifiers in
-                      (`Val (pat, body, location, datatype),
-                       (Env.extend env penv, alias_env))
-                | t -> `Val (pat, body, location, datatype), (env, alias_env)
-              end
+                (Utils.generalise env bt, Env.map (Utils.generalise env) penv)
+              else
+                bt, penv
+            in
+              `Val (pat, body, location, datatype), (Env.extend env penv, alias_env)
         | `Fun (name, (pats, body), location, t) ->
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
@@ -1146,12 +1164,26 @@ let file lookup_pos typing_env : (Sugartypes.binding list * Sugartypes.phrase op
               binds, Some (type_check lookup_pos {tenv = env'; tvars = tvars; rvars = rvars} p)
 
 let type_sugar = Settings.add_bool("type_sugar", false, `User)
+let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
 module Check =
 struct
-  let file env (c, lookup) = 
-    if Settings.get_value type_sugar then
-      ignore (file lookup env c)
+  let file env ((bindings, body), lookup) = 
+    try
+      if Settings.get_value type_sugar then
+        begin
+          Debug.if_set show_pre_sugar_typing
+            (fun () -> 
+               (String.concat "\n" (List.map Show_binding.show bindings)) ^
+                 (opt_app
+                    (fun phrase -> "\n" ^ Show_phrase.show phrase)
+                    ""
+                    body));
+          ignore (file lookup env (bindings, body))
+        end
+    with
+        Unify.Failure (`Msg msg) ->
+          failwith msg
 
   let sentence env (c, lookup) = 
     if Settings.get_value type_sugar then

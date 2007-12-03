@@ -226,9 +226,13 @@ struct
             let t =
               match base_type with
                 | None -> make_record_type field_types
-                | Some (`Record row) ->
-                    `Record (extend_row field_types row)
-                | Some _ -> assert false
+                | Some t ->
+                    begin
+                      match Types.concrete_type ~aenv:alias_env t with
+                        | `Record row ->
+                            `Record (extend_row field_types row)
+                        | _ -> assert false
+                    end
             in
               `Extend (fields, base), t
         | `Project (name, v) ->

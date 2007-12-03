@@ -4,12 +4,13 @@ fun intForm(label) {
      yields
        i,
    h=fun (i) {
-       <html>
-        <head><title>Page test</title></head>
-        <body>
-         For '{stringToXml(label)}' you entered the integer '{intToXml(i)}'.
-        </body>
-       </html>
+       page
+        <html>
+         <head><title>Page test</title></head>
+         <body>
+          For '{stringToXml(label)}' you entered the integer '{intToXml(i)}'.
+         </body>
+        </html>
    }
   )
 }
