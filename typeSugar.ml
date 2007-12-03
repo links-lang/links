@@ -417,7 +417,7 @@ let rec close_pattern_type : Typed.ppattern list -> Types.datatype -> Types.data
               | `Variant _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
             `Application ("List", [cpt pats t])
-      | `ForAll (qs, t) -> assert false (* Sam to fix *)
+      | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
