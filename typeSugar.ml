@@ -134,28 +134,6 @@ struct
     | `Splice p -> is_generalisable p
     | `Replace (r, `Literal _) -> is_generalisable_regex r
     | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
-
-  (* BUG:
-     
-     This isn't right... we should probably just install all the
-     quantifiers.
-  *)
-  let quantify_env
-      : Types.environment -> Types.quantifier list -> Types.environment
-    = fun env quantifiers ->
-      Env.map
-        (function
-           | `ForAll (qs, t) ->
-               let tvs = Types.free_type_vars t in
-               let qs = 
-                 concat_map
-                   (fun q ->
-                      if Types.TypeVarSet.mem (var_of_quantifier q) tvs then [q]
-                      else []) quantifiers
-               in
-                 Types.for_all (qs, t)
-           | t -> t)
-        env
 end
 
 module Errors :
