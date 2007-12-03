@@ -438,6 +438,7 @@ let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
 let float_type = `Primitive `Float
 let xml_type = `Application ("Xml", [])
+let page_type = `Application ("Page", [])
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
 

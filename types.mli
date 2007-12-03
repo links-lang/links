@@ -79,6 +79,7 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
+val page_type : datatype
 val native_string_type : datatype
 
 (* get type variables *)
