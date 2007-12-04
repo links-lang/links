@@ -70,7 +70,7 @@ val concrete_type : ?aenv:alias_environment -> datatype -> datatype
 
 val for_all : quantifier list * datatype -> datatype
 
-(* useful types *)
+(** useful types *)
 val unit_type : datatype
 val string_type : datatype
 val char_type : datatype
@@ -82,14 +82,14 @@ val xml_type : datatype
 val page_type : datatype
 val native_string_type : datatype
 
-(* get type variables *)
+(** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
 val free_bound_type_vars : datatype -> TypeVarSet.t
 val free_bound_row_type_vars : row -> TypeVarSet.t
 
-(* used to freshen mailboxes in typename aliases *)
+(** used to freshen mailboxes in typename aliases *)
 val freshen_mailboxes : datatype -> datatype
 
 (** Fresh type variables *)
@@ -97,42 +97,42 @@ val fresh_raw_variable : unit -> int
 
 val bump_variable_counter : int -> unit
 
-(* type variable construction *)
+(** type variable construction *)
 val make_type_variable : int -> datatype
 val make_rigid_type_variable : int -> datatype
 val make_row_variable : int -> row_var
   
-(* fresh type variable generation *)
+(** fresh type variable generation *)
 val fresh_type_variable : unit -> datatype
 val fresh_rigid_type_variable : unit -> datatype
 
 val fresh_row_variable : unit -> row_var
 val fresh_rigid_row_variable : unit -> row_var
 
-(** rows *)
-(* empty row constructors *)
+(** {0 rows} *)
+(** empty row constructors *)
 val make_empty_closed_row : unit -> row
 val make_empty_open_row : unit -> row
 
-(* singleton row constructors *)
+(** singleton row constructors *)
 val make_singleton_closed_row : (string * field_spec) -> row
 val make_singleton_open_row : (string * field_spec) -> row
 
-(* row predicates *)
+(** row predicates *)
 val is_closed_row : row -> bool
 val is_absent_from_row : string -> row -> bool
 
 val is_tuple : ?allow_onetuples:bool -> row -> bool
 
-(* row_var retrieval *)
+(** row_var retrieval *)
 val get_row_var : row -> int option
 
-(* building rows *)
+(** building rows *)
 val make_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 
-(* constants *)
+(** constants *)
 val empty_field_env : field_spec_map
 val closed_row_var : row_var
 
@@ -197,7 +197,6 @@ val app_type : ?aenv:alias_environment -> datatype -> datatype -> datatype
 val split_row : string -> row -> (datatype * row)
 val split_variant_type : ?aenv:alias_environment -> string -> datatype -> (datatype * datatype)
 
-
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
@@ -218,7 +217,7 @@ val is_mailbox_free_row : alias_environment -> row -> bool
 val type_aliases : datatype -> type_alias_set
 val row_type_aliases : row -> type_alias_set
 
-(* alias lookup *)
+(** alias lookup *)
 exception AliasMismatch of string
 val lookup_alias : string * datatype list -> alias_environment -> datatype
 
@@ -242,5 +241,3 @@ val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
-
-
