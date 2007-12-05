@@ -286,6 +286,8 @@ object (o)
             ((fun (_x0, _x1, _x2) ->
                 ((o#name _x0), (o#name _x1), (o#datatype _x2)))
                x)
+      | `Include str ->
+          `Include str
       | `Type x ->
           `Type
             ((fun (_x0, _x1, _x2) ->
@@ -861,6 +863,8 @@ class fold =
             x
       | `Foreign x ->
           (fun (_x0, _x1, _x2) -> ((o#name _x0)#name _x1)#datatype _x2) x
+      | `Include x ->
+          (fun  _x0  -> (o#string _x0)) x
       | `Type x ->
           (fun (_x0, _x1, _x2) ->
              ((o#name _x0)#list (fun o -> o#name) _x1)#datatype _x2)

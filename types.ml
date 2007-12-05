@@ -1030,6 +1030,8 @@ let string_of_environment env =
                                               end)) in
     M.show env
 
+let string_of_typing_environment (env, alias_env) = 
+  string_of_environment env ^ "\n" ^ string_of_environment alias_env
 
 (*
   HACK:
@@ -1257,3 +1259,5 @@ let inject_type ?(aenv=Env.empty) name t =
 
 let abs_type ?(aenv=Env.empty) _ = assert false
 let app_type ?(aenv=Env.empty) _ _ = assert false
+
+let extend_env (a,b) (a',b') = (Env.extend a a', Env.extend b b')

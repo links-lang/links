@@ -755,7 +755,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             (match string_as_charlist(marshal_continuation k) with
+             let k = minimize k in
+               (match string_as_charlist(marshal_continuation k) with
                   `List _ as result -> result
                 | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
@@ -1043,7 +1044,8 @@ let value_env =
     env
     StringMap.empty)
 
-let primitive_location (name:string) = match fst3 (List.assoc name env) with
+let primitive_location (name:string) = 
+  match fst3 (List.assoc name env) with
   | `Client ->  `Client
   | `Server _ -> `Server
   | #primitive -> `Unknown
@@ -1088,7 +1090,10 @@ and alias_env : Types.alias_environment =
 
 let typing_env = (type_env, alias_env)
 
+let primitive_names = StringSet.elements (Env.domain type_env)
+
 let is_primitive name = List.mem_assoc name env
+
 let is_pure_primitive name =
   if List.mem_assoc name env then
     match List.assoc name env with

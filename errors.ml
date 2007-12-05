@@ -139,7 +139,6 @@ let rec format_exception = function
   | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
-
 let rec format_exception_html = function
   | RichSyntaxError s ->
       ("<h1>Links Syntax Error</h1>\n<p>Syntax error in <code>" ^ s.filename ^ "</code> line "
@@ -164,23 +163,23 @@ let rec format_exception_html = function
         format_exception_html(Type_error(pos, msg))
      
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression(s) <code class=\"typeError\">" ^ 
-        mapstrcat "<br />" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
-        "</code> have type(s) <code class=\"typeError\">" ^ 
-        mapstrcat "<br />" (indent 2 -<- xml_escape -<- string_of_datatype) paramtype ^
-        "</code> and cannot be passed to function <code class=\"typeError\">"^ xml_escape(fexpr) ^
+      let msg = "The expression(s) <pre class=\"typeError\">" ^ 
+        mapstrcat "</pre><pre class=\"typeError\">" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
+        "</pre> have type(s) <code class=\"typeError\">" ^ 
+        mapstrcat "</code><pre class=\"typeError\">" (indent 2 -<- xml_escape -<- string_of_datatype) paramtype ^
+        "</code> and cannot be passed to function <pre class=\"typeError\">"^ xml_escape(fexpr) ^
         (* TBD: report the error in terms of argument types ? *)
-        "</code>which has type <code class=\"typeError\">"^ 
+        "</pre>which has type <code class=\"typeError\">"^ 
         xml_escape(string_of_datatype fntype) ^ "</code>"
       in
         format_exception_html(Type_error(pos, msg))
 
   | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression <code class=\"typeError\">"^ 
-        xml_escape fexpr ^"</code> which has type <code class=\"typeError\">"^ 
+      let msg = "The expression <pre class=\"typeError\">"^ 
+        xml_escape fexpr ^"</pre> which has type <code class=\"typeError\">"^ 
         string_of_datatype fntype ^
-        "</code> cannot be applied to <code class=\"typeError\">"^ 
-        xml_escape (String.concat ", " pexpr) ^"</code>, of types <code class=\"typeError\">" ^ 
+        "</code> cannot be applied to <pre class=\"typeError\">"^ 
+        xml_escape (String.concat ", " pexpr) ^"</pre>, of types <code class=\"typeError\">" ^ 
         mapstrcat ", " string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
       in
         format_exception_html(Type_error(pos, msg))
@@ -213,6 +212,7 @@ let rec format_exception_html = function
   | Result.UnrealizableContinuation ->
       "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>"
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
+      (* raise exn (* use for backtraces *) *)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) = 
   try 

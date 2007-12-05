@@ -47,7 +47,7 @@ class virtual database = object
   method virtual equal_types : Types.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
-  method make_insert_query : (string * string list * string list list) -> string =
+  method make_insert_query : (string * string list * string list list) -> string=
     fun (table_name, field_names, vss) ->
       "insert into " ^ table_name ^
         "("^String.concat "," field_names ^") values "^
@@ -120,7 +120,7 @@ module Pickle_rexpr : Pickle.Pickle with type a = rexpr = Pickle.Pickle_defaults
     let pickle buffer e = 
       match expression_data e with
         | `T(_, _, Some l) -> Syntax.Pickle_label.pickle buffer l
-        | _             -> failwith ("Not labeled: " ^ string_of_expression e)
+        | _                -> failwith ("Not labeled: " ^ string_of_expression e)
     and unpickle stream = 
       let label = Syntax.Pickle_label.unpickle stream in
         (* sadly, we can't do resolution here at present because there's
@@ -221,8 +221,9 @@ type result = [
   |  primitive_value
 ]
 and contin_frame = 
-(* the frame ... represents an eval'n context like ... (M is a term, V a value)*)
-  | Definition of (environment * string)          (* ??? *)
+(* the frame ... represents an eval'n context like ... *)
+(* (here M is a term, V a value, and D a definition (qua (name, expr) pair)) *)
+  | Definition of (environment * string)          (* Define(str, [ ]); *)
   | FuncEvalCont of (environment * rexpr list)    (* [ ]( Ms ) *)
   | ArgEvalCont of (environment * result * rexpr list * result list)
                                                   (* V(Vs, [ ], Ms) *)
@@ -233,7 +234,7 @@ and contin_frame =
   | BinopApply of (environment * binop * result)  (* V `op` [ ] *)
   | UnopApply of (environment * unop )            (* op [ ] *)
   | RecSelect of (environment * string * string * string * rexpr)
-                                                  (* (l=x | xs) = [ ] *)
+                                                  (* (l=x | xs) = [ ]; M *)
   | CollExtn of (environment * 
 		   string * rexpr * 
 		   result list list * 
@@ -251,7 +252,7 @@ and contin_frame =
                                                        or
                                                      <tag attrs>Vs [ ] Ms</tag>*)
   | Ignore of (environment * rexpr)               (* let _ = [ ] in M *)
-  | IgnoreDef of (environment * rdef)             (* ??? *)
+  | EvalDef of (environment * rdef)               (* [ ]; Define(D) *)
   | Recv                                          (* receive([ ]) *)
 and continuation = contin_frame list
 and binding = (string * result)
@@ -312,11 +313,11 @@ let make_tuple fields =
   `Record(List.map2 (fun exp n -> string_of_int n, exp) fields 
             (fromTo 1 (1 + length fields)))
 
-exception NotARecord of result
+let is_record = function | `Record _ -> true | _ -> false
  
 let recfields = function
-  | `Record (fields) -> fields
-  | value -> raise(NotARecord(value))
+  | `Record fields -> fields
+  | value -> assert false
 
 exception Match of string
 
@@ -459,8 +460,8 @@ and map_contframe result_f expr_f contframe_f : contin_frame -> contin_frame =
                           alistmap (map_expr result_f expr_f contframe_f) attr_exprs, map (map_expr result_f expr_f contframe_f) elem_exprs))
   | Ignore(env, next) -> 
       contframe_f(Ignore((map_env result_f expr_f contframe_f) env, (map_expr result_f expr_f contframe_f) next))
-  | IgnoreDef(env, next) -> 
-      contframe_f(IgnoreDef((map_env result_f expr_f contframe_f) env, (map_def result_f expr_f contframe_f) next))
+  | EvalDef(env, next) -> 
+      contframe_f(EvalDef((map_env result_f expr_f contframe_f) env, (map_def result_f expr_f contframe_f) next))
 and map_expr _ expr_f _ expr =
   expr_f expr
 and map_def _ expr_f _ = 
@@ -638,10 +639,14 @@ let retain names env = filter (fun (x, _) -> StringSet.mem x names) env
 module Pickle_ExprEnv = Pickle.Pickle_2(Pickle_rexpr)(Pickle_environment)
 
 let marshal_continuation (c : continuation) : string
-  = (* Debug.print("marshaling:"^ string_of_cont c); *)
+  = 
   let pickle = Pickle_continuation.pickleS c in
-    Debug.print("marshalled continuation size: " ^ 
+    Debug.print("marshalled continuation size: " ^
                   string_of_int(String.length pickle));
+    if (String.length pickle > 4096) then (
+      prerr_endline "Marshalled continuation larger than 4K:";
+      Debug.print("marshaling:"^ string_of_cont c)
+    );
     let result = base64encode pickle in
       result
     
@@ -719,3 +724,43 @@ let trim_env =
 (** Remove toplevel bindings from an environment *)
 let remove_toplevel_bindings toplevel env = 
   filter (fun pair -> mem pair toplevel) env
+
+
+(** {0 Continuation-frame utilities } *)
+let minimize_frame = function
+  | FuncEvalCont(locals, args) ->
+      FuncEvalCont(retain (freevars_all args) locals, args)
+  | ArgEvalCont(locals, func, unevald_args, evald_args) ->
+      ArgEvalCont(retain (freevars_all unevald_args) locals, func,
+                  unevald_args, evald_args)
+  | ApplyCont(locals, args) -> ApplyCont([], args)
+  | LetCont(locals, letvar, body) -> LetCont(retain (freevars body) locals,
+                                             letvar, body)
+  | BranchCont(locals, true_branch, false_branch) ->
+      BranchCont(retain (freevars_all [true_branch; false_branch]) locals,
+                 true_branch, false_branch)
+  | BinopRight(locals, op, r_arg) ->
+      BinopRight(retain (freevars r_arg) locals, op, r_arg)
+  | BinopApply(locals, op, l_arg) -> BinopApply([], op, l_arg)
+  | UnopApply(locals, VrntSelect(label, case_var, case_body, etc_var, Some body))
+    -> UnopApply(retain (freevars body) locals,
+                 VrntSelect(label, case_var, case_body, etc_var, Some body))
+  | UnopApply(locals, op) -> UnopApply([], op)
+  | RecSelect(locals, label, label_var, etc_var, body) ->
+      RecSelect(retain (freevars body) locals, label, label_var, etc_var, body)
+      (* (l=x | xs) = [ ]; M *)
+  | CollExtn(locals, loop_var, body, results, source) ->
+      CollExtn(retain (freevars body) locals, loop_var, body, results, source)
+  | StartCollExtn(locals, loop_var, body) ->
+      StartCollExtn(retain (freevars body) locals, loop_var, body)
+  | XMLCont(locals, tag, attr, children, unevald_attrs, unevald_children) ->
+      let free_vars = freevars_all (map snd unevald_attrs)
+                      <|StringSet.union|> freevars_all unevald_children in
+      XMLCont(retain free_vars locals, tag, attr, children,
+              unevald_attrs, unevald_children)
+  | Ignore(locals, expr) ->
+      Ignore(retain (freevars expr) locals, expr)
+  | frame -> frame
+
+let minimize = map minimize_frame
+

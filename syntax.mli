@@ -59,6 +59,7 @@ type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.datatype * 'a)
+  | Module of (string option * 'a definition' list option * 'a)
 
 type 'a program' = Program of ('a definition' list * 'a expression')
 
@@ -91,6 +92,7 @@ val list_expr : 'a -> 'a expression' list -> 'a expression'
 val record_expr : (string * 'a expression') list -> 'a -> 'a expression'
 
 val is_value : 'a expression' -> bool
+val is_unit_expr : 'a expression' -> bool
 
 val defined_names : 'a definition' list -> string list
 
@@ -164,8 +166,9 @@ val no_expr_data : typed_data
 (** extract the target and field name from an expression if it's a projection. *)
 val read_proj : 'a expression' -> ('a expression' * string) option
 
-val is_closed : expression -> bool
-val is_closed_wrt : expression -> Utility.StringSet.t -> bool
+val expr_closed : 'a expression' -> bool
+val expr_closed_wrt : 'a expression' -> Utility.StringSet.t -> bool
+val program_closed_wrt : 'a program' -> Utility.StringSet.t -> bool
 
 module RewriteUntypedExpression : Rewrite.Rewrite with type t = untyped_expression
 module RewriteSyntax : Rewrite.Rewrite with type t = expression
@@ -183,3 +186,9 @@ val rewrite_program :
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
 
 val record_selection : (string * string * string * 'a expression' * 'a expression' * 'a) -> 'a expression'
+
+val defname : 'a definition' -> string
+
+val defined_names : 'a definition' list -> string list
+
+val deflist_to_alist : 'a definition' list -> (string * 'a expression') list

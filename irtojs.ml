@@ -748,7 +748,7 @@ struct
         '|', "pipe";
         '_', "underscore"]
 
-  let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+  let js_keywords = ["break";"else";"new";"var";"case";"finally";"return";"void";
                      "catch";"for";"switch";"while";"continue";"function";"this";
                      "with";"default";"if";"throw";"delete";"in";"try";"do";
                      "instanceof";"typeof";
@@ -806,7 +806,8 @@ struct
       | _ -> def
 end
 
-let make_boiler_page ?(onload="") ?(body="") defs =
+let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
+  assert (head = ""); (* head is not implemented yet *)
   boiler_1 ()
   ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
   ^ boiler_2 ()
@@ -819,7 +820,7 @@ let get_alien_names defs =
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
 
-let elim_defs defs root_names =
+let elim_defs global_names defs root_names =
   (*
     HACK:
     
@@ -842,8 +843,8 @@ let elim_defs defs root_names =
 
   let aliens = get_alien_names defs in
   let library_names = Env.String.domain (fst Library.typing_env) in
-  let elim_free_names = "stringifyB64" :: aliens @ (StringSet.elements library_names) in
-  let defs = Callgraph.elim_dead_defs elim_free_names defs root_names in
+  let global_names = "stringifyB64" :: aliens @ (StringSet.elements library_names) @ global_names in
+  let defs = Callgraph.elim_dead_defs global_names defs root_names in
 
   let defMap =
     List.fold_right
@@ -859,7 +860,7 @@ let elim_defs defs root_names =
            defs)
       names []
 
-let generate_program_defs defs root_names =
+let generate_program_defs global_names defs root_names =
   let defs = List.map Symbols.rename_def defs in
   (* NOTE: the body is not really used here *)
   let body = Syntax.unit_expression Syntax.no_expr_data in
@@ -873,7 +874,7 @@ let generate_program_defs defs root_names =
 
   let defs =
     (if Settings.get_value elim_dead_defs then
-       elim_defs defs root_names
+       elim_defs global_names defs root_names
      else defs) in
 
   let dt = Parse.parse_string Parse.datatype ->- fst in
@@ -892,17 +893,17 @@ let generate_program_defs defs root_names =
   let js_defs = [show js_defs] in
     (env, env', tenv, aenv), js_defs
 
-let generate_program ?(onload = "") (Program (defs, body)) =
+let generate_program ?(onload = "") global_names (Program (defs, body)) =
   let (Program (defs, body)) = rewrite_program
     (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
     (Program (defs, body)) in
 
-  let (env, env', tenv, aenv), js_defs = generate_program_defs defs (Syntax.freevars body) in
+  let (env, env', tenv, aenv), js_defs = generate_program_defs global_names defs (Syntax.freevars body) in
   let body = Symbols.rename body in
  
   let (e, _) = Compileir.compile_program (env, tenv, aenv) (Program ([], body)) in 
   let js_root_expr = snd (gen env' e) in
     (make_boiler_page ~body:(show js_root_expr) js_defs)
 
-let generate_program_defs defs root_names =
-  snd (generate_program_defs defs root_names)
+let generate_program_defs global_names defs root_names =
+  snd (generate_program_defs global_names defs root_names)

@@ -23,7 +23,7 @@ let welcome_note = Settings.add_string ("welcome_note",
 Welcome to Links version 0.4 (Crostorfyn)", `System)
 
 (** Use the monadic IR *)
-let use_monadic_ir = Settings.add_bool ("use_monadic_ir", true, `User)
+let use_monadic_ir = Settings.add_bool ("use_monadic_ir", false, `User)
 
 (** JS stuff *)
 (* needs to go here as long as we have two different JS compilers *)
@@ -34,3 +34,9 @@ struct
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 end
+
+(* Caveat: don't [Open basicsettings] because the above module
+   conflicts with the Js module from js.ml*)
+
+(* Installed preprocessor *)
+let pp = Settings.add_string("preprocessor", "", `System)

@@ -98,10 +98,10 @@ SOURCES = $(OPC)                		\
           ir.ml ir.mli                          \
           compileir.ml                          \
           irtojs.mli irtojs.ml                  \
+          loader.ml                             \
           js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
           evalir.ml                             \
-          loader.ml                             \
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \

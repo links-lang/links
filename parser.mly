@@ -63,7 +63,7 @@ let parseRegexFlags f =
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN SIG
+%token MU ALIEN SIG INCLUDE
 %token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -107,6 +107,7 @@ let parseRegexFlags f =
 %%
 
 interactive:
+| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -115,9 +116,9 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| declarations exp END                                          { $1, Some $2 }
-| exp END                                                       { [], Some $1 }
-| declarations END                                              { $1, None }
+| preamble declarations exp END                                { $1 @ $2, Some $3 }
+| preamble exp END                                             { $1, Some $2 }
+| preamble declarations END                                    { $1 @ $2, None }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -135,6 +136,10 @@ arg:
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 
+preamble:
+| preamble_declaration preamble                                { $1 :: $2 }
+| /* empty */                                                  { [] }
+
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
@@ -142,6 +147,9 @@ declarations:
 declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
+
+preamble_declaration:
+| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
@@ -156,13 +164,13 @@ fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
 | fun_declaration                                              { [$1] }
 
-perhaps_uinteger:
-| /* empty */                                                  { None }
-| UINTEGER                                                     { Some $1 }
-
 fun_declaration:
 | tlfunbinding                                                 { let (d,p,l, pos) = $1 in `Fun (d,p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+
+perhaps_uinteger:
+| /* empty */                                                  { None }
+| UINTEGER                                                     { Some $1 }
 
 tlfunbinding:
 | FUN VARIABLE arg_lists perhaps_location block                { ($2, ($3, (`Block $5, pos ())), $4, pos()) }

@@ -22,7 +22,7 @@ let pos_of_expression : expression -> position =
 
 type typing_environment = environment * alias_environment
 
-let rec extract_row : typing_environment -> datatype -> row = fun ((env, alias_env) as typing_env) t ->
+let rec extract_row : typing_environment -> datatype -> row = fun ((_, alias_env) as typing_env) t ->
   match t with
     | `Record row -> row
     | `Variant row -> row
@@ -425,8 +425,15 @@ let type_expression : Types.typing_environment -> untyped_expression -> (Types.t
   fun typing_env exp ->
     typing_env, type_check typing_env exp
 
-let type_definition : Types.typing_environment -> untyped_definition -> (Types.typing_environment * definition) =
-  fun (env, alias_env) def ->
+let group_defs defs =
+  let bothdefs l r = match l, r with
+    | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
+    | _ ->  false
+  in groupBy bothdefs defs
+
+let rec type_definition : Types.typing_environment -> untyped_definition -> 
+                          (Types.typing_environment * definition) =
+  fun ((env, alias_env) as typing_env) def ->
     let (env', alias_env'), def' =
       match def with
 	| Define (variable, value, loc, `U pos) ->
@@ -434,48 +441,66 @@ let type_definition : Types.typing_environment -> untyped_definition -> (Types.t
 	    let value_type = if is_value value then 
               generalise env (type_of_expression value)
             else type_of_expression value in
-              ((Env.bind env (variable, value_type)), alias_env),
-    	    Define (variable, value, loc, `T (pos, type_of_expression value, None))
+              ((Env.bind env (variable, value_type), alias_env),
+    	       Define (variable, value, loc, 
+                       `T (pos, type_of_expression value, None)))
         | Alias (typename, vars, datatype, `U pos) ->
             (env,
              register_alias (typename, vars, datatype) alias_env),
-            Alias (typename, vars, datatype, `T (pos, `Record (make_empty_closed_row ()), None))
-        | Alien (language, name, t, `U pos)  ->
-            ((Env.bind env (name, t)), alias_env), Alien (language, name, t, `T (pos, t, None))
+            Alias (typename, vars, datatype, `T (pos, unit_type, None))
+        | Alien (language, name, t, `U pos) ->
+            ((Env.bind env (name, t)), alias_env),
+            Alien (language, name, t, `T (pos, t, None))
+        | Module (path, Some defs, `U pos) ->
+            let typing_env, defs = type_definitions typing_env defs in
+              (typing_env,
+               Module (path, Some defs,
+                       `T(pos, unit_type, None)))
+        | Module (Some path, None, `U pos) ->
+            failwith("Internal error: included file '"^path^"' never loaded.")
+        | Module (None, None, `U pos) -> assert false
     in
       (env', alias_env'), def'
 
-
-let type_program : Types.typing_environment -> untyped_program -> (Types.typing_environment * program) =
-  fun typing_env (Program (defs, body)) ->
-    let type_group (typing_env, typed_defs) : untyped_definition list ->
-      Types.typing_environment * definition list = function
+and type_definitions : Types.typing_environment -> untyped_definition list ->
+                       (Types.typing_environment * definition list) =
+  fun typing_env defs ->
+    let type_group (typing_env, typed_defs)
+        : untyped_definition list -> Types.typing_environment * definition list =
+      function
         | [x] -> (* A single node *)
-	    let typing_env, def = type_definition typing_env x in 
+            let typing_env, def = type_definition typing_env x in 
               typing_env, typed_defs @ [def]
         | xs  -> (* A group of potentially mutually-recursive definitions *)
             let defparts = map (fun (Define x) -> x) xs in
-            let defbodies = map (fun (outer_name, Rec ([(inner_name, expr, t)], _, _), _, _) -> 
-                                   outer_name, inner_name, expr, t) defparts in
-            let (typing_env : Types.typing_environment), defs = mutually_type_defs typing_env defbodies in
-            let defs = (map2 (fun (outer_name, Rec ([(inner_name, _, t)], _, _), location, _) (_, expr, _) ->
+            let defbodies = map (fun (outer_name,
+                                      Rec ([(inner_name, expr, t)], _, _), _, _)
+                                   -> outer_name, inner_name, expr, t) 
+                                defparts in
+            let (typing_env : Types.typing_environment), defs = 
+              mutually_type_defs typing_env defbodies in
+            let defs = (map2 (fun (outer_name, 
+                                   Rec ([(inner_name, _, t)], _, _), 
+                                   location, _)
+                                  (_, expr, _) ->
                                 let ed = expression_data expr in
-                                let expr = Rec ([(inner_name, expr, t)], Variable (inner_name, ed), ed) in
+                                let expr = Rec ([(inner_name, expr, t)], 
+                                                Variable (inner_name, ed), ed) in
                                   Define(outer_name, expr, location, ed))
-			  defparts defs) in
+                          defparts defs) in
               typing_env, typed_defs @ defs
-
-    and bothdefs l r = match l, r with
-      | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
-      | _ ->  false
     in
-    let def_seqs = groupBy bothdefs defs in
-    let mutrec_groups = (Callgraph.refine_def_groups def_seqs) in
-    let typing_env, defs =
-      fold_left type_group (typing_env, []) mutrec_groups in
-    let typing_env, body = type_expression typing_env body in
-      typing_env, (Program (defs, body))
+    let def_groups = group_defs defs in
+    let mutrec_groups = Callgraph.refine_def_groups def_groups in
+      fold_left type_group (typing_env, []) mutrec_groups
 
+let type_program : Types.typing_environment -> untyped_program ->
+                     (Types.typing_environment * program) =
+  fun typing_env (Program(defs, body)) ->
+  let typing_env, defs = type_definitions typing_env defs in
+  let typing_env, body = type_expression typing_env body in
+    typing_env, Program (defs, body)
+      
 (* Check for duplicate top-level definitions.  This probably shouldn't
    appear in the type inference module.
 
@@ -501,7 +526,8 @@ let check_for_duplicate_defs
     if not (StringMap.is_empty duplicates) then
       raise (Errors.MultiplyDefinedToplevelNames duplicates)
 
-let type_program (typing_env : Types.typing_environment) (Program (defs, _) as program) =
+let type_program (typing_env : Types.typing_environment)
+    (Program (defs, _) as program) =
   check_for_duplicate_defs typing_env defs;
   Debug.if_set (show_typechecking) (fun () -> "Typechecking program...");
   type_program typing_env program
