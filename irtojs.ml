@@ -133,7 +133,7 @@ let optimise e =
   LINKS.union(r, s)
     return the union of the records r and s
     precondition: r and s have disjoint labels 
-  LINKS.project(record, label, value)
+  LINKS.project(record, label)
     project a field of a record
   LINKS.remove(record, label)
     return a record like "record" but without the field labeled "label"
@@ -189,7 +189,7 @@ struct
             (show_func name (Fn (vars, body))) ^ show rest
         | LetRec (defs, rest) ->
             String.concat ";\n" (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs) ^ show rest
-        | Call (Var "LINKS.project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+        | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
         | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
         | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
@@ -263,7 +263,7 @@ struct
               break ^^ show rest
 
         | Fn _ as f -> show_func "" f
-        | Call (Var "LINKS.project", [label; record]) -> 
+        | Call (Var "LINKS.project", [record; label]) -> 
             maybe_parenise record ^^ (brackets (show label))
         | Call (Var "hd", [list;kappa]) -> 
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
@@ -514,9 +514,9 @@ let rec generate_value env : value -> code =
                     Call (Var "LINKS.union", [gv v; dict])
             end
       | `Project (name, v) ->
-          Call (Var "LINKS.project", [strlit name; gv v])
+          Call (Var "LINKS.project", [gv v; strlit name])
       | `Erase (name, v) ->
-          gv v
+          Call (Var "LINKS.erase", [gv v; strlit name])
       | `Inject (name, v) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
@@ -867,6 +867,8 @@ let generate_program_defs defs root_names =
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
+
+    Debug.print("program: "^Syntax.string_of_program (Program(defs, body)));
 
   let library_names = Env.String.domain (fst Library.typing_env) in
   let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ (StringSet.elements library_names)))) defs in

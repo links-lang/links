@@ -147,9 +147,9 @@ let optimise e =
   LINKS.union(r, s)
     return the union of the records r and s
     precondition: r and s have disjoint labels 
-  LINKS.project(record, label, value)
+  LINKS.project(record, label)
     project a field of a record
-  LINKS.remove(record, label)
+  LINKS.erase(record, label)
     return a record like "record" but without the field labeled "label"
 
   _start(tree)
@@ -215,7 +215,7 @@ let rec show : code -> string =
       | Lit s -> s
       | Defs (defs) -> String.concat ";\n" (map show_def defs) ^ ";"
       | Fn _ as f -> show_func "" f
-      | Call (Var "LINKS.project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+      | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
@@ -273,7 +273,7 @@ let rec format_code c : PP.doc =
     | Lit literal -> PP.text literal
     | Defs (defs) -> PP.vsep (punctuate ";" (map show_def_pp defs)) ^^ PP.text ";"
     | Fn _ as f -> show_func_pp "" f
-    | Call (Var "LINKS.project", [label; record]) -> 
+    | Call (Var "LINKS.project", [record; label]) -> 
         maybe_parenize record ^^ (brackets (format_code label))
     | Call (Var "hd", [list;kappa]) -> 
         (maybe_parenize kappa) ^^ (parens (maybe_parenize list ^^ PP.text "[0]"))
@@ -664,11 +664,12 @@ let rec generate : 'a expression' -> code =
       let expr_cps = generate' expr in
          Fn(["__kappa"],
            (Call(expr_cps, 
-                 [Fn(["__v"], callk_yielding (Call (Var "LINKS.project", [strlit label; Var "__v"])))])))
+                 [Fn(["__v"], callk_yielding (Call (Var "LINKS.project", [Var "__v"; strlit label])))])))
   | Erase (expr, label, _) -> 
-      (* should we do something here? *)
-      generate' expr
-
+      let expr_cps = generate' expr in
+         Fn(["__kappa"],
+           (Call(expr_cps, 
+                 [Fn(["__v"], callk_yielding (Call (Var "LINKS.erase", [Var "__v"; strlit label])))])))
 
   (* Variants *)
   | Variant_injection (l, e, _) -> 
@@ -844,7 +845,9 @@ and generate_direct_style : 'a expression' -> code =
                 Call (Var "LINKS.union", [dict; generate r])
         end
   | Project (expr, label, _) ->
-      Call (Var "LINKS.project", [strlit label; gd expr])
+      Call (Var "LINKS.project", [gd expr; strlit label])
+  | Erase (expr, label, _) ->
+      Call (Var "LINKS.erase", [gd expr; strlit label])
   | Erase (expr, label, _) -> 
       (* should we do anything here? *)
       gd expr
