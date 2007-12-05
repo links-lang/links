@@ -18,7 +18,7 @@ fun todo(items) client {
       {for (var item <- items)
         <tr><td>{stringToXml(item)}</td>
             <td><form l:onsubmit="{replaceDocument(todo(remove(item,items)))}">
-                 <button type="submit">Done</button>
+                 <button type="submit">Completed</button>
                 </form>
             </td>
         </tr>}
