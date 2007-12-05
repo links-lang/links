@@ -1,5 +1,5 @@
 fun change() client {
-  replaceDocument(
+  domReplaceDocument(
    <html>
     <body> 
        new page

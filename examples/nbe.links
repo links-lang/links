@@ -33,7 +33,7 @@ fun nl() {"
 var nameSupply = spawn {
  fun gen(count) {
   receive {
-   case (Fresh(pid, prefix)) -> {
+   case Fresh(pid, prefix) -> {
     var count = count+1;
     pid ! (prefix ++ (intToString(count)));
      gen(count)

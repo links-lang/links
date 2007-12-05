@@ -67,29 +67,29 @@ let reverse = List.rev
 (** Depth-first search *)
 let dfs nodes edges = 
   let nnodes = List.length nodes in
-  let color = Hashtbl.create nnodes in
-  let parent = Hashtbl.create nnodes in
-  let discover = Hashtbl.create nnodes in
-  let finish = Hashtbl.create nnodes in
-  List.iter (fun u ->
-               Hashtbl.add color u `white;
-               Hashtbl.add parent u None;
-            ) nodes;
-  let time = ref 0 in
-  let rec dfs_visit u = 
-    Hashtbl.replace color u `grey;
-    Hashtbl.replace discover u (incr time; !time);
-    List.iter (fun (_, v) -> if Hashtbl.find color v = `white 
-               then (Hashtbl.replace parent v (Some u);
-                     dfs_visit v))
-      (List.filter ((=) u -<- fst) edges);
-    Hashtbl.replace color u `black ;
-    Hashtbl.replace finish u (incr time; !time)
-  in
+  let color = Hashtbl.create nnodes 
+  and parent = Hashtbl.create nnodes 
+  and discover = Hashtbl.create nnodes 
+  and finish = Hashtbl.create nnodes in
     List.iter (fun u ->
-		 if Hashtbl.find color u = `white
-		 then dfs_visit u) nodes;
-    (finish, discover, parent)
+		 Hashtbl.add color u `white;
+		 Hashtbl.add parent u None;
+              ) nodes;
+    let time = ref 0 in
+    let rec dfs_visit u = 
+      Hashtbl.replace color u `grey;
+      Hashtbl.replace discover u (incr time; !time);
+      List.iter (fun (_, v) -> if Hashtbl.find color v = `white 
+                 then (Hashtbl.replace parent v (Some u);
+                       dfs_visit v))
+        (List.filter ((=) u -<- fst) edges);
+      Hashtbl.replace color u `black ;
+      Hashtbl.replace finish u (incr time; !time)
+    in
+      List.iter (fun u ->
+		   if Hashtbl.find color u = `white
+		   then dfs_visit u) nodes;
+      (finish, discover, parent)
 
 (* CLR 23.4 *)
 let topological_sort' nodes edges = 
@@ -158,7 +158,7 @@ let topo_sort_cliques (adj_list : (string * string list) list) : string list lis
   *)
   (* [clique_of cliques]: lookup (in [cliques]) the clique that [v] belongs to *)
   let clique_of cliques v = List.find (List.mem v) cliques in
-
+    
   let nodes = map fst adj_list in
     (*  unfold adj_list: let `edges' be the list of all 
         (u, v) where (u, v) is an edge in the graph *)
@@ -175,5 +175,5 @@ let topo_sort_cliques (adj_list : (string * string list) list) : string list lis
     (* Now unroll that to get a list of pairs (U, V) where U and V are
        cliques and there is an edge from U to V *)
   let clique_edges = unroll_edges clique_innodes in
-  let result = reverse (topological_sort cliques clique_edges) in
-    result
+    let result = reverse (topological_sort cliques clique_edges) in
+      result

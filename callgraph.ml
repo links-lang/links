@@ -39,12 +39,14 @@ let group_and_order_bindings_by_callgraph
   let call_graph = make_callgraph bindings in
     Graph.topo_sort_cliques call_graph
 
-(** Find definition of a symbol in a list of definitions.
-    (Perhaps this should work in the other direction, bottom-to-top?) *)
+let deflist_to_alist l = 
+  map (fun (Define (name, body, _, _)) -> name, body) l
+
+let deflist_defined_names l = 
+  map (fun (Define (name, body, _, _)) -> name) l
+
 let rec defn_of symbol = function
   | Define(n, _, _, _) as expr :: _ when n = symbol -> expr
-  | Module(_, Some defs, _) :: more_defs -> 
-      defn_of symbol (defs@more_defs)
   | _ :: defns -> defn_of symbol defns
 
 let find_defn_in x y = defn_of y x
@@ -78,24 +80,17 @@ module DeadCode = struct
     defs : definition list
   }
 
-  (** [elim_dead_defs global_names defs root_names] will return the
-      elements of [defs] that are referenced (transitively) by the
-      definitions of the names in [root_names]; all names referenced
-      in defs must be defined somewhere in defs, except that names in
-      [global_names] are treated as external, thus don't need to be
-      defined. *)
   let elim_dead_defs globals defs root_names =
     let remove_globals s = difference (StringSet.elements s) globals in
-    let defs, other = partition (function Module _ | Define _ -> true
-                                   | _ -> false) defs in
-    (* Debug.print("definitions in elim_dead_defs (" ^ string_of_int(length defs) ^ "):\n  " ^ mapstrcat "," defname defs); *)
+    let defs, other = either_partition  (function Define _ as d -> Left d 
+                                           | e -> Right e) defs in
     let groupings = refine_def_groups [defs] in
     let clique_info = map (fun defs ->
                              {free_names = remove_globals (StringSet.union_all (List.map freevars_def defs));
-                              exposed_names = Syntax.defined_names defs;
+                              exposed_names = deflist_defined_names defs;
                               defs = defs})
-                        groupings in
-    let expr_info = { free_names = remove_globals root_names;
+                        groupings
+    and expr_info = { free_names = remove_globals root_names;
                       exposed_names = [];
                       defs = [] } in
     let rec close env =

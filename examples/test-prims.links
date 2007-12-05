@@ -132,6 +132,10 @@ ignore(debugObj(xml));
 
 ignore(dump(xml));
 
+# textContent      : (b) -> String
+
+ignore(textContent(xml));
+
 # print            : (String) -> ()
 
 ignore(print("monkeys"));
@@ -153,10 +157,6 @@ ignore(negatef(7.5));
 # getNodeById      : (String) -> DomNode
 
 var node = getNodeById("node");
-
-# textContent      : (DomNode) -> String
-
-ignore(textContent(node));
 
 # isElementNode    : (DomNode) -> Bool
 
@@ -322,7 +322,5 @@ ignore(sqrt(49.0));
 ignore(error("All tests completed!"));
 }
 
-{
-  test();
-  page <html><body>ok</body></html>
-}
+test()
+

@@ -1,5 +1,3 @@
-include "web.links"
-
 var db = database "winestore";
 
 var page_size = 12;
@@ -525,7 +523,6 @@ fun cart_itemlist(cust_id, order_id) {
   }
 }
 
-sig show_cart : (Int, Int, String) -> Page
 fun show_cart(cust_id, order_id, msg) {
  page
   <html> {htmlHead()}
@@ -558,7 +555,6 @@ fun cartStats(cust_id, order_id) {
   (total_cost, total_items)
 }
 
-sig add_to_cart : (Int, Int, Int) -> Page
 fun add_to_cart(cust_id, order_id, wine_id) {
   var price = get_wine_price(wine_id);
   var max_item_id = maximum(0,
@@ -707,10 +703,10 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
            </#>
          yields 
            search_results(cust_id, order_id,
-            search_region_id,
-            search_wine_type,
-            1)) => id
-          }
+                          search_region_id,
+                          search_wine_type,
+                          1)) =>
+         fun (p) { p } }
      </div>
      <h1>Wines for region {stringToXml(get_region_name(region_id))},
          {wineTypeName(wine_type)}</h1>
