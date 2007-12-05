@@ -30,7 +30,7 @@ let use_monadic_ir = Settings.add_bool ("use_monadic_ir", false, `User)
 module Js =
 struct
   let optimise = Settings.add_bool("optimise_javascript", true, `User)
-  let elim_dead_defs = Settings.add_bool("elim_dead_defs", true, `User)
+  let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 end
