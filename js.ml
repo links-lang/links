@@ -21,6 +21,7 @@ type code = | Var   of string
             | Defs  of ((string * code) list)
             | Fn    of (string list * code)
             | Call  of (code * code list)
+            | Unop  of (string * code)
             | Binop of (code * string * code)
             | Cond  of (code * code * code)
             | Dict  of ((string * code) list)
@@ -43,6 +44,7 @@ let freevars_list : code -> string list =
     | Defs (ds) -> concat_map (aux ((List.map fst ds) @ bound)) (List.map snd ds)
     | Fn (args, body) -> aux (args @ bound) body
     | Call (f, ps) -> aux bound f @ concat_map (aux bound) ps
+    | Unop(_, body) -> aux bound body
     | Seq (l, r)
     | Binop (l,_,r) -> aux bound l @ aux bound r
     | Cond (i,t,e) ->  aux bound i @ aux bound t @ aux bound e
@@ -67,6 +69,7 @@ let rec rename' renamer = function
   | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
   | Call(func, args) -> Call(rename' renamer func,
                              map (rename' renamer) args)
+  | Unop(op, body) -> Unop (op, rename' renamer body)
   | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
                                  rename' renamer rhs)
   | Cond(test, yes, no) ->  Cond(rename' renamer test,
@@ -179,6 +182,7 @@ let rec local_names : code -> string list = function
   | Cond (a, b, c) -> local_names a @ local_names b @ local_names c
   | Dict cs -> List.concat (map (local_names -<- snd) cs)
   | Lst  cs -> List.concat (map local_names cs)
+  | Unop (_, body) -> local_names body
   | Binop (l, _, r)
   | Seq (l, r) -> local_names l @ local_names r
   | Bind (l, c1, c2) -> l :: local_names c1 @ local_names c2
@@ -219,6 +223,7 @@ let rec show : code -> string =
       | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
       | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
       | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
+      | Unop (op, body) -> op ^ paren body
       | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
       | Cond (if_, then_, else_) -> "(" ^ show if_ ^ " ? " ^ show then_ ^ " : " ^ show else_ ^ ")"
       | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
@@ -281,6 +286,7 @@ let rec format_code c : PP.doc =
         (maybe_parenize kappa) ^^ (parens (maybe_parenize list ^^ PP.text ".slice(1)"))
     | Call (fn, args) -> maybe_parenize fn ^^ 
         (PP.arglist (map format_code args))
+    | Unop (op, body) -> parens (PP.text op ^+^ (maybe_parenize body))
     | Binop (l, op, r) -> (maybe_parenize l) ^+^ PP.text op ^+^ (maybe_parenize r)
     | Cond (if_, then_, else_) -> 
         PP.parens(PP.trinop (format_code if_) "?"
@@ -532,6 +538,24 @@ let rec generate : 'a expression' -> code =
            Call(l_cps, [Fn(["__l"],
               Call(r_cps, [Fn(["__r"],
                  callk_yielding (Call(Var "LINKS.eq", [Var "__l"; Var "__r"])))]))]))
+  | Comparison (l, `NotEq, r, _)         -> 
+      let l_cps = generate' l in
+      let r_cps = generate' r in
+        Fn(["__kappa"],
+           Call(l_cps, [Fn(["__l"],
+              Call(r_cps, [Fn(["__r"],
+                 callk_yielding (
+                   Unop("!", Call(Var "LINKS.eq", [Var "__l"; Var "__r"]))
+                 ))]))]))
+(*   | Comparison (l, `NotEq, r, _)         ->  *)
+(*       let l_cps = generate' l in *)
+(*       let r_cps = generate' r in *)
+(*         Fn(["__kappa"], *)
+(*            Call(l_cps, [Fn(["__l"], *)
+(*               Call(r_cps, [Fn(["__r"], *)
+(*                  callk_yielding ( *)
+(*                    Unop("!", Call(Var "LINKS.eq", [Var "__l"; Var "__r"])) *)
+(*                  ))]))])) *)
   | Comparison (l, op, r, _)           -> 
       let l_cps = generate' l in
       let r_cps = generate' r in
@@ -801,6 +825,8 @@ and generate_direct_style : 'a expression' -> code =
   | Variable (name, _)                   -> Var name
   | Comparison (l, `Equal, r, _)         -> 
       Call(Var "LINKS.eq", [gd l; gd r])
+  | Comparison (l, `NotEq, r, _)         -> 
+      Unop("!", Call (Var "LINKS.eq", [gd l; gd r]))
   | Comparison (l, op, r, _)           -> 
       Binop(gd l, comparison_name op, gd r)
       (* Should strings be handled differently at this level? *)
@@ -901,6 +927,7 @@ let rec freevars =
   | Defs _              -> S.empty
   | Fn (args, body)     -> S.diff (fv body) (S.from_list args)
   | Call (func, args)   -> S.union (fv func) (S.union_all (map fv args))
+  | Unop (_, body)      -> fv body
   | Binop (l, _, r)     -> S.union (fv l) (fv r)
   | Cond (a, b, c)      -> S.union (S.union (fv a) (fv b)) (fv c)
   | Dict terms          -> S.union_all (map (snd ->- fv) terms)
@@ -927,6 +954,8 @@ let rec replace' var replcmt fvs = function
         Fn(args, replace' var replcmt fvs body)
   | Call(func, args) -> Call(replace' var replcmt fvs func,
                              map (replace' var replcmt fvs) args)
+  | Unop(op, body) -> Unop(op,
+                           replace' var replcmt fvs body)
   | Binop(lhs, op, rhs) -> Binop(replace' var replcmt fvs lhs, op,
                                  replace' var replcmt fvs rhs)
   | Cond(test, yes, no) ->  Cond(replace' var replcmt fvs test,
@@ -960,6 +989,7 @@ let rec uses x = function
   | Fn (args, body) when (mem x args) -> 0
   | Fn (args, body) -> uses x body
   | Call (f, args) -> uses x f + sum (map (uses x) args)
+  | Unop(op, body) -> uses x body
   | Binop(l, op, r) -> uses x l + uses x r
   | Cond(test, tbranch, fbranch) -> uses x test + 
       (max (uses x tbranch) (uses x fbranch))
