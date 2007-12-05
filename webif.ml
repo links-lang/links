@@ -112,9 +112,6 @@ let expr_eval_req valenv program params =
 let is_remote_call params =
   List.mem_assoc "__name" params && List.mem_assoc "__args" params
 
-let is_func_appln params =
-  List.mem_assoc "__name" params && List.mem_assoc "__args" params
-
 let is_client_call_return params = 
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
@@ -191,13 +188,15 @@ let perform_request
         let result_encoded = Utility.base64encode(Json.jsonize_result result) in
           Library.print_http_response [("Content-type", "text/plain")]
             result_encoded
+
     | RemoteCall(fname, args) ->
         Interpreter.has_client_context := true;
         let args = List.rev args in
-        let result = Interpreter.interpret globals Result.empty_env
+        let _, result = Interpreter.run_expr globals Result.empty_env
           (Syntax.Variable(fname, Syntax.no_expr_data))
           (ApplyCont(Result.empty_env, args) :: toplevel_cont)
-        in Library.print_http_response [("Content-type", "text/plain")]
+        in
+          Library.print_http_response [("Content-type", "text/plain")]
              (Utility.base64encode (Json.jsonize_result result))
 
     | GetIncludeFile filename ->
@@ -263,7 +262,10 @@ let serve_request prelude (valenv, typenv) filename =
       Failure msg -> prerr_endline msg;
         Library.print_http_response [("Content-type", "text/html; charset=utf-8")] 
         (error_page (Errors.format_exception_html (Failure msg)))
-    | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
+    | exc -> 
+        prerr_endline("exiting web mode with HTML page; error: " ^
+                        Errors.format_exception exc);
+        Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
 
 let serve_request prelude envs filename =

@@ -618,6 +618,14 @@ let run_program (globals : environment) locals (Program (defs, body))
     | TopLevel s -> s
     | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
 
+let run_expr (globals: environment) locals expr cont : (environment * result) =
+  try (
+    interpret globals locals expr cont;
+    failwith "boom"
+  ) with
+    | TopLevel s -> s
+    | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+
 let run_defs (globals : environment) locals defs : environment =
   let env, _ =
     run_program globals locals
