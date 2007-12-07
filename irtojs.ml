@@ -833,7 +833,7 @@ let elim_defs defs root_names =
     function
       | Define (name, _, _, _)
       | Alias (name, _, _, _)
-      | Alien (name, _, _, _) -> name in
+      | Alien (_, name, _, _) -> name in
 
   let names =
     List.fold_right
@@ -867,8 +867,6 @@ let generate_program_defs defs root_names =
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
-
-    Debug.print("program: "^Syntax.string_of_program (Program(defs, body)));
 
   let library_names = Env.String.domain (fst Library.typing_env) in
   let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ (StringSet.elements library_names)))) defs in
