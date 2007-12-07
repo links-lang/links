@@ -1048,11 +1048,16 @@ let primitive_location (name:string) = match fst3 (List.assoc name env) with
   | `Server _ -> `Server
   | #primitive -> `Unknown
 
+let rec function_arity =
+  function
+    | `Function(`Record (l, _), _, _) ->
+        (Some (StringMap.size l))
+    | `ForAll(qs, t) -> function_arity t
+    | _ -> None
+
 let primitive_arity (name : string) = 
   let _, t, _ = assoc name env in
-    match t with 
-      | `Function(`Record (l, _), _, _) -> (Some (StringMap.size l))
-      | _ -> None
+    function_arity t
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
@@ -1087,6 +1092,8 @@ and alias_env : Types.alias_environment =
     Env.empty
 
 let typing_env = (type_env, alias_env)
+
+let primitive_names = StringSet.elements (Env.domain type_env)
 
 let is_primitive name = List.mem_assoc name env
 let is_pure_primitive name =
