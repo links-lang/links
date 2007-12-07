@@ -1023,7 +1023,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   ("server_concat",
   (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
    datatype "(String, String) -> String",
-   PURE));
+   IMPURE));
 
   (** non-deterministic random number generator *)
   "random",
