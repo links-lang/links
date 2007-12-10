@@ -58,7 +58,7 @@ sig
   val abs : value sem -> value sem
   val app : value sem * value sem * datatype -> tail_computation sem
   val apply : (value sem * (value sem) list * datatype) -> tail_computation sem
-  val applyprim : (value sem * (value sem) list * datatype) -> value sem
+  val apply_pure : (value sem * (value sem) list * datatype) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 (* comparison? *)
   val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
@@ -288,13 +288,13 @@ struct
            M.bind ss
              (fun vs -> lift (`Apply (v, vs), t)))
 
-  let applyprim (s, ss, t) =
+  let apply_pure (s, ss, t) =
     let ss = lift_list ss
     in
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`ApplyPrim (v, vs), t)))
+             (fun vs -> lift (`ApplyPure (v, vs), t)))
 
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
@@ -439,7 +439,7 @@ struct
         | App (e1, e2, _) -> I.app (ev e1, ev e2, t)
         | Apply (Variable (f, _) as e, es, _)
             when (Library.is_pure_primitive f)
-              -> cofv (I.applyprim(I.var (VEnv.lookup env f, node_datatype e), evs es, t))
+              -> cofv (I.apply_pure(I.var (VEnv.lookup env f, node_datatype e), evs es, t))
         | Apply (e', es, _) ->
 (*             Debug.print ("apply: "^string_of_expression e); *)
             I.apply (ev e', evs es, t)
@@ -547,12 +547,12 @@ struct
             let cons_type = `Function (Types.make_tuple_type [elem_type; t],
                                        Types.fresh_type_variable (),
                                        t) in
-              cofv (I.applyprim(I.var (cons, cons_type), [ev elem; nil], t))
+              cofv (I.apply_pure(I.var (cons, cons_type), [ev elem; nil], t))
         | Concat (left, right, _) ->
             let concat_type = `Function (Types.make_tuple_type [t; t],
                                          Types.fresh_type_variable (),
                                          t) in
-              cofv (I.applyprim(I.var (VEnv.lookup env "Concat", concat_type), [ev left; ev right], t))
+              cofv (I.apply_pure(I.var (VEnv.lookup env "Concat", concat_type), [ev left; ev right], t))
         | For (body, x, e, _) ->
             (*
               compile comprehensions into map
