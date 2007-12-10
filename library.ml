@@ -1024,7 +1024,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   ("server_concat",
   (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
    datatype "(String, String) -> String",
-   PURE));
+   IMPURE));
 
   (** non-deterministic random number generator *)
   "random",
@@ -1050,11 +1050,16 @@ let primitive_location (name:string) =
   | `Server _ -> `Server
   | #primitive -> `Unknown
 
+let rec function_arity =
+  function
+    | `Function(`Record (l, _), _, _) ->
+        (Some (StringMap.size l))
+    | `ForAll(qs, t) -> function_arity t
+    | _ -> None
+
 let primitive_arity (name : string) = 
   let _, t, _ = assoc name env in
-    match t with 
-      | `Function(`Record (l, _), _, _) -> (Some (StringMap.size l))
-      | _ -> None
+    function_arity t
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with

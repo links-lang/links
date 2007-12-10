@@ -42,7 +42,7 @@ type value =
   | `Inject of name * value
 
   | `XmlNode of name * value name_map * value list
-  | `ApplyPrim of value * value list
+  | `ApplyPure of value * value list
   | `Comparison of value * Syntaxutils.comparison * value    (* should really be implemented as constants *)
 
   | `Coerce of value * Types.datatype

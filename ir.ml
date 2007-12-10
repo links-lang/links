@@ -52,7 +52,7 @@ type value =
 
   | `XmlNode of (name * value name_map * value list)
 
-  | `ApplyPrim of (value * value list)
+  | `ApplyPure of (value * value list)
 
   (* should really be implemented as constants *)
   | `Comparison of (value * Syntaxutils.comparison * value)
@@ -259,11 +259,11 @@ struct
                 let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
               *)
               `XmlNode (tag, attributes, children), xml_type              
-        | `ApplyPrim (f, args) ->
+        | `ApplyPure (f, args) ->
             let (f, ft) = o#value f in
             let (args, arg_types) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPrim (f, args), deconstruct (return_type ~aenv:alias_env) ft
+              `ApplyPure (f, args), deconstruct (return_type ~aenv:alias_env) ft
         | `Comparison (v, op, w) ->
             let v, _ = o#value v
             and w, _ = o#value w in
