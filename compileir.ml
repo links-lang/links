@@ -637,7 +637,7 @@ struct
             | Alias (name, quantifiers, t, _) ->
                 I.alias (name, quantifiers, t,
                          fun () ->
-(*                           let alias_env = register_alias (name, quantifiers, t) alias_env in*)
+                           let alias_env = Types.register_alias (name, quantifiers, t) alias_env in
                              eval_defs alias_env env defss rest)
             | Alien (language, name, datatype, _) ->
                 let x_info = make_global_info (datatype, name) in

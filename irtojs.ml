@@ -911,11 +911,7 @@ let generate_program_defs defs root_names =
       prim_server_calls
       code
   in
-  let defs = List.map (fixup_hrefs_def
-                         (StringSet.from_list(Syntax.defined_names defs @
-                                                Library.primitive_names))) defs in
 
-  let defs = Callgraph.elim_dead_defs Library.primitive_names defs root_names in
   let dt = Parse.parse_string Parse.datatype ->- fst in
   let initial_env, tenv, aenv =
     Compileir.make_initial_env
