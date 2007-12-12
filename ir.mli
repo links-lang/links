@@ -75,6 +75,46 @@ type program = computation
 
 val is_atom : value -> bool
 
+module MapTy :
+sig
+  type environment = Types.datatype Env.Int.t
+  type alias_environment = Types.alias_environment
+  type typing_environment = environment * alias_environment
+
+  class maptyenv : typing_environment ->
+  object ('self_type)
+    val tyenv : typing_environment
+    val tenv : environment
+    val alias_env : alias_environment
+
+    method lookup_type : var -> Types.datatype
+    method constant : constant -> (constant * Types.datatype)
+    method option :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a option -> 'a option * Types.datatype option
+    method list :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a list -> 'a list * Types.datatype list
+    method name_map :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype)) ->
+      'a name_map -> 'a name_map * Types.datatype name_map        
+    method var : var -> (var * Types.datatype)       
+    method value : value -> (value * Types.datatype)
+                                                
+    method tail_computation :
+      tail_computation -> (tail_computation * Types.datatype)                 
+    method special : special -> (special * Types.datatype)      
+    method bindings : binding list -> (binding list * 'self_type)
+    method computation : computation -> (computation * Types.datatype)
+    method binding : binding -> (binding * 'self_type)
+    method binder : binder -> (binder * 'self_type)
+  end  
+end
+
+
 module Inline :
 sig
   val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program

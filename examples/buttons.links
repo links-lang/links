@@ -16,6 +16,7 @@ var f =
   yields (action=firstButton(plus,times), l=l,r=r);
 
 fun run ((action=action, l=l, r=r)) {
+  page
    <html>
     <body>
      {intToXml(l `action` r)}
@@ -24,9 +25,9 @@ fun run ((action=action, l=l, r=r)) {
 }
 
 page
-  <html>
-    <body>
-      {f => run}
-    </body>
-  </html>
+ <html>
+  <body>
+   {f => run}
+  </body>
+ </html>
 

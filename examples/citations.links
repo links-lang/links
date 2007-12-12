@@ -75,22 +75,23 @@ fun getPapersAndCollaborators(author) server {
   (papers, [])
 }
 
-sig showAuthorInfo : (Author) -> Xml
+sig showAuthorInfo : (Author) -> Page
 fun showAuthorInfo(author) server {
-   var (papers, collaborators) = getPapersAndCollaborators(author);
+  var (papers, collaborators) = getPapersAndCollaborators(author);
 
-  <html>
-   {header(author.name)}
-   <body>
-    <h1>{stringToXml(author.name)}</h1>
-    <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
-      <input type="text" class="input" l:name="authorName" value="{author.name}"/>
-      <button type="submit">update name</button>
-    </form>
-    <h2>Papers</h2>
-    <div class="suggestions">{formatPaperList(papers)}</div>
-   </body>
-  </html>
+  page
+   <html>
+    {header(author.name)}
+    <body>
+     <h1>{stringToXml(author.name)}</h1>
+     <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
+       <input type="text" class="input" l:name="authorName" value="{author.name}"/>
+       <button type="submit">update name</button>
+     </form>
+     <h2>Papers</h2>
+     <div class="suggestions">{formatPaperList(papers)}</div>
+    </body>
+   </html>
 
 
 # Removed because the query isn't being optimised properly
@@ -124,22 +125,23 @@ fun updateAuthor(author) server {
   showAuthorInfo(author)
 }
 
-sig showPaperInfo : (Paper) -> Xml
+sig showPaperInfo : (Paper) -> Page
 fun showPaperInfo(paper) server {
   var authors = getAuthors(paper);
 
-  <html>
-   {header(paper.title)}
-   <body>
-    <h1>{stringToXml(paper.title)}</h1>
-    <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
-      <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
-      <button type="submit">update title</button>
-    </form>
-    <h2>Authors</h2>
-    <div class="suggestions">{formatAuthorList(authors)}</div>
-   </body>
-  </html>
+  page
+   <html>
+    {header(paper.title)}
+    <body>
+     <h1>{stringToXml(paper.title)}</h1>
+     <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
+       <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
+       <button type="submit">update title</button>
+     </form>
+     <h2>Authors</h2>
+     <div class="suggestions">{formatAuthorList(authors)}</div>
+    </body>
+   </html>
 }
 
 sig completions : (String, String) -> (Xml, Xml)

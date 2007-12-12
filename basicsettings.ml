@@ -23,7 +23,7 @@ let welcome_note = Settings.add_string ("welcome_note",
 Welcome to Links version 0.4 (Crostorfyn)", `System)
 
 (** Use the monadic IR *)
-let use_monadic_ir = Settings.add_bool ("use_monadic_ir", false, `User)
+let use_monadic_ir = Settings.add_bool ("use_monadic_ir", true, `User)
 
 (** JS stuff *)
 (* needs to go here as long as we have two different JS compilers *)

@@ -20,18 +20,19 @@ fun query(n,c) {
 fun showPage(n, c) {
  var title = stringToXml("Results: page "++ intToString(n));
 
- <html>
-  <head><title>{title}</title></head>
-  <body>
-   <h1>{title}</h1>
-   <dl>
-    {for (var result <- query(n, c))
-    <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
-   </dl>
-   {if (n <> 1) <a l:href="{showPage(n-1,c)}">previous</a> else <span/>}
-   <a l:href="{showPage(n+1,c)}">next</a>
-  </body>
- </html>
+ page
+  <html>
+   <head><title>{title}</title></head>
+   <body>
+    <h1>{title}</h1>
+    <dl>
+     {for (var result <- query(n, c))
+     <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
+    </dl>
+    {if (n <> 1) <a l:href="{showPage(n-1,c)}">previous</a> else <span/>}
+    <a l:href="{showPage(n+1,c)}">next</a>
+   </body>
+  </html>
 }
 
 page

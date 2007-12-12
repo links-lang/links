@@ -27,6 +27,7 @@ type code = | Var    of string
             | LetFun of ((string * string list * code * location) * code)
             | LetRec of ((string * string list * code * location) list * code)
             | Call   of (code * code list)
+            | Unop   of (string * code)
             | Binop  of (code * string * code)
             | If     of (code * code * code)
             | Case   of (string * (string * code) stringmap * (string * code) option)
@@ -68,6 +69,7 @@ struct
     | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
     | Call(func, args) -> Call(rename' renamer func,
                                map (rename' renamer) args)
+    | Unop(op, body) -> Unop (op, rename' renamer body)
     | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
                                    rename' renamer rhs)
     | If(test, yes, no) ->  If(rename' renamer test,
@@ -131,7 +133,7 @@ let optimise e =
   LINKS.union(r, s)
     return the union of the records r and s
     precondition: r and s have disjoint labels 
-  LINKS.project(record, label, value)
+  LINKS.project(record, label)
     project a field of a record
   LINKS.remove(record, label)
     return a record like "record" but without the field labeled "label"
@@ -187,10 +189,11 @@ struct
             (show_func name (Fn (vars, body))) ^ show rest
         | LetRec (defs, rest) ->
             String.concat ";\n" (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs) ^ show rest
-        | Call (Var "LINKS.project", [label; record]) -> (paren record) ^ "[" ^ show label ^ "]"
+        | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
         | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
         | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
+        | Unop (op, body) -> op ^ paren body
         | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
         | If (cond, e1, e2) ->
             "if (" ^ show cond ^ ") {" ^ show e1 ^ "} else {" ^ show e2 ^ "}"
@@ -260,7 +263,7 @@ struct
               break ^^ show rest
 
         | Fn _ as f -> show_func "" f
-        | Call (Var "LINKS.project", [label; record]) -> 
+        | Call (Var "LINKS.project", [record; label]) -> 
             maybe_parenise record ^^ (brackets (show label))
         | Call (Var "hd", [list;kappa]) -> 
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
@@ -268,6 +271,7 @@ struct
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
         | Call (fn, args) -> maybe_parenise fn ^^ 
             (PP.arglist (map show args))
+        | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
         | If (cond, c1, c2) ->
             PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
@@ -419,7 +423,7 @@ let strip_lcolon evName =
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"]
 
 (** {0 Code generation} *)
 
@@ -460,6 +464,13 @@ let bind_continuation kappa body =
     | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
 
 
+let apply_yielding (f, args) =
+  Call(Var "_yield", f :: args)
+
+let callk_yielding kappa arg =
+  Call(Var "_yieldCont", [kappa; arg]) 
+
+
 (** generate
     Generate javascript code for a Links expression
     
@@ -484,7 +495,7 @@ let rec generate_value env : value -> code =
               | "map" -> Var ("LINKS.accum")
               | name ->
                   if Binop.is name then
-                    Fn (["x"; "y"], Ret(Binop(Var "x", Binop.js_name name, Var "y")))
+                    Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Binop(Var "x", Binop.js_name name, Var "y")))
                   else
                     Var name
           end
@@ -503,9 +514,9 @@ let rec generate_value env : value -> code =
                     Call (Var "LINKS.union", [gv v; dict])
             end
       | `Project (name, v) ->
-          Call (Var "LINKS.project", [strlit name; gv v])
+          Call (Var "LINKS.project", [gv v; strlit name])
       | `Erase (name, v) ->
-          gv v
+          Call (Var "LINKS.erase", [gv v; strlit name])
       | `Inject (name, v) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
@@ -518,6 +529,8 @@ let rec generate_value env : value -> code =
 *)
       | `Comparison (v, `Equal, w) ->
           Call(Var "LINKS.eq", [gv v; gv w])
+      | `Comparison (v, `NotEq, w) ->
+          Unop("!", Call (Var "LINKS.eq", [gv v; gv w]))
       | `Comparison (v, op, w) ->
           Binop(gv v, comparison_name op, gv w)
       | `XmlNode (name, attributes, children) ->
@@ -525,7 +538,10 @@ let rec generate_value env : value -> code =
 
       | `ApplyPrim (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
           Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)
-      | `ApplyPrim (`Variable f, vs) when Library.is_primitive (Env'.lookup env f) && not (mem (Env'.lookup env f) cps_prims) ->
+      | `ApplyPrim (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
+          && not (mem (Env'.lookup env f) cps_prims)
+          && Library.primitive_location (Env'.lookup env f) <> `Server 
+          ->
           Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)
       | `ApplyPrim (v, vs) ->
           Call (gv v, List.map gv vs)
@@ -541,8 +557,6 @@ and generate_xml env tag attrs children =
           Dict (StringMap.fold (fun name v bs -> (name, generate_value env v) :: bs) attrs []);
           Lst (List.map (generate_value env) children)])
 
-
-
 let generate_remote_call f_name xs_names =
   Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
        [strlit f_name; Dict (
@@ -552,12 +566,6 @@ let generate_remote_call f_name xs_names =
             xs_names
         )])
 
-let apply_yielding (f, args) =
-  Call(Var "_yield", f :: args)
-
-let callk_yielding kappa arg =
-  Call(Var "_yieldCont", [kappa; arg]) 
-
 let rec generate_tail_computation env : tail_computation -> code -> code = fun tc kappa ->
   let gv v = generate_value env v in
   let gc c kappa = snd (generate_computation env c kappa) in
@@ -566,7 +574,10 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
           callk_yielding kappa (gv v)
       | `Apply (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
           callk_yielding kappa (Binop (gv l, Binop.js_name (Env'.lookup env op), gv r))
-      | `Apply (`Variable f, vs) when Library.is_primitive (Env'.lookup env f) && not (mem (Env'.lookup env f) cps_prims) ->
+      | `Apply (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
+          && not (mem (Env'.lookup env f) cps_prims)
+          && Library.primitive_location (Env'.lookup env f) <> `Server 
+          ->
           Call (kappa, [Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)])
       | `Apply (v, vs) ->
           apply_yielding (gv v, [Lst (map gv vs); kappa])
@@ -826,7 +837,7 @@ let elim_defs defs root_names =
     function
       | Define (name, _, _, _)
       | Alias (name, _, _, _)
-      | Alien (name, _, _, _) -> name in
+      | Alien (_, name, _, _) -> name in
 
   let names =
     List.fold_right
@@ -861,13 +872,45 @@ let generate_program_defs defs root_names =
       Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
     else Program (defs, body) in
 
-  let library_names = Env.String.domain (fst Library.typing_env) in
-  let defs = List.map (fixup_hrefs_def (StringSet.from_list (Syntax.defined_names defs @ (StringSet.elements library_names)))) defs in
+  let defs = List.map (fixup_hrefs_def
+                         (StringSet.from_list
+                            (Syntax.defined_names defs @ 
+                               Library.primitive_names))) defs in
 
   let defs =
     (if Settings.get_value elim_dead_defs then
        elim_defs defs root_names
      else defs) in
+
+  let server_library_funcs = (filter (fun (name,_) -> 
+                                        Library.primitive_location name =`Server)
+                                (StringMap.to_alist !Library.value_env)) in
+
+  let rec some_vars = function 
+      0 -> []      
+    | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
+
+  let prim_server_calls =
+    concat_map (fun (name, _) -> 
+                  match Library.primitive_arity name with
+                      None -> []
+                    | Some arity ->
+                        let args = some_vars arity in
+                          [(name, args, generate_remote_call name args)])
+      server_library_funcs in
+    
+  let wrap_with_server_stubs code = 
+    fold_right 
+      (fun (name, args, body) code ->
+         LetFun
+           ((name,
+             args @ ["__kappa"],
+             body,
+             `Server),
+            code))
+      prim_server_calls
+      code
+  in
 
   let dt = Parse.parse_string Parse.datatype ->- fst in
   let initial_env, tenv, aenv =
@@ -882,6 +925,7 @@ let generate_program_defs defs root_names =
   let env, tenv, aenv = Compileir.add_globals_to_env (initial_env, tenv, aenv) defs' in
   let env' = Compileir.invert_env env in
   let env', js_defs = gen_defs env' defs' in
+  let js_defs = wrap_with_server_stubs js_defs in
   let js_defs = [show js_defs] in
     (env, env', tenv, aenv), js_defs
 

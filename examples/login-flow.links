@@ -1,20 +1,21 @@
 
 var noMsg = "";
 
+sig login_widget : (String, Handler((username:String, pass:String))) -> Page
 fun login_widget(msg, return) {
    page
     <html>
       <body>
       <div class="error">{stringToXml(msg)}</div>
-      <form l:handler="{return}" method="post">
+      <form l:action="{return((username=username, pass=pass))}" method="post">
         <table>
           <tr>
             <td>Username:</td>
-            <td> <input name="username" value="" /></td>
+            <td> <input l:name="username" value="" /></td>
           </tr>
           <tr>
             <td>Password:</td>
-            <td><input type="password" name="userpass" value="" /></td>
+            <td><input type="password" l:name="pass" value="" /></td>
           </tr>
         </table>
         <input type="submit" />
@@ -24,20 +25,22 @@ fun login_widget(msg, return) {
     </html>
 }
 
+sig validAuth : (String, String) -> Bool
 fun validAuth(name, pass) {
   name == "ezra" && pass == "knock"
 }
 
+sig get_user : (String) -> String
 fun get_user(msg) {
   var current_user = getCookie("loginname");
   if (current_user <> "")     # User is logged in! Return creds.
     current_user
   else {                      # User is not logged in, show login page.
-    var (username=name, userpass=pass) = 
-        sendSuspend(fun (r){login_widget(msg, r)});
+    var (username=name, pass=pass) =
+      sendSuspend(fun (r){login_widget(msg, r)});
     if (validAuth(name, pass)) {
       # User logged in successfully, set cookie and return creds.
-      setCookie("loginname")(name);
+      setCookie("loginname", name);
       name
     } else
       # User failed to log in, show page again.
@@ -45,10 +48,12 @@ fun get_user(msg) {
   }
 }
 
+sig logout : () -> ()
 fun logout() {
-  setCookie("loginname")("");
+  setCookie("loginname", "");
 }
 
+sig logoutLink : (() -> Page) -> Xml
 fun logoutLink(target) {
   <a l:href="{logout(); freshResource(); target()}">Logout</a>
 }

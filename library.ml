@@ -699,20 +699,38 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(String, String) -> unit",
   IMPURE);
 
+
+  (* WARNING:
+
+     getCookie returns "" to indicate either that the cookie is not
+     present or that the header is ill-formed (in debug mode a warning
+     will also be sent to stderr if the header is ill-formed).
+
+     When we add exceptions we may want to change the semantics to throw an
+     exception instead of returning "".
+  *)
   "getCookie",
-  (p1 (fun cookieName -> 
-         let cookieName = charlist_as_string cookieName in
+  (p1 (fun name ->
+         let name = charlist_as_string name in
+         let value =
            match getenv "HTTP_COOKIE" with
-             | Some cookie_header ->
-                 (let cookies = Str.split (Str.regexp ",") cookie_header in
-                  let cookies = concat_map (fun str -> 
-                                       match Str.split (Str.regexp "=") str with
-                                           [nm; vl] -> [nm, vl]
-                                         | [nm] -> [nm, ""] (* ? *)
-                                         | _ -> assert false) cookies in
-                    box_string (snd (find (fun (nm, _) -> nm = cookieName) 
-                                       cookies)))
-             | None -> `List []),
+             | Some header ->
+                 let cookies = Str.split (Str.regexp "[ \t]*;[ \t]*") header in
+                 let cookies =
+                   concat_map
+                     (fun str -> 
+                        match Str.split (Str.regexp "[ \t]*=[ \t]*") str with
+                          | [nm; vl] -> [nm, vl]
+                          | _ -> Debug.print ("Warning: ill-formed cookie: "^str); [])
+                     cookies
+                 in
+                   if List.mem_assoc name cookies then
+                     List.assoc name cookies
+                   else
+                     ""
+             | None -> ""
+         in
+           box_string value),
    datatype "(String) -> String",
   IMPURE);
 
@@ -982,9 +1000,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (datatype ("(NativeString) -> String")),
     PURE));
 	
-  ("pickleCont",
+  ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(([(String,String)])->Xml) -> String",
+    datatype "(([(String,String)]) -> a) -> String",
     IMPURE));
 
   (* Serialize values to DB *)
@@ -1080,7 +1098,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   ("server_concat",
   (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
    datatype "(String, String) -> String",
-   PURE));
+   IMPURE));
 
   (** non-deterministic random number generator *)
   "random",
@@ -1104,11 +1122,16 @@ let primitive_location (name:string) = match fst3 (List.assoc name env) with
   | `Server _ -> `Server
   | #primitive -> `Unknown
 
+let rec function_arity =
+  function
+    | `Function(`Record (l, _), _, _) ->
+        (Some (StringMap.size l))
+    | `ForAll(qs, t) -> function_arity t
+    | _ -> None
+
 let primitive_arity (name : string) = 
   let _, t, _ = assoc name env in
-    match t with 
-      | `Function(`Record (l, _), _, _) -> (Some (StringMap.size l))
-      | _ -> None
+    function_arity t
 
 let primitive_stub (name : string): result =
   match StringMap.find name (!value_env) with
@@ -1143,6 +1166,8 @@ and alias_env : Types.alias_environment =
     Env.empty
 
 let typing_env = (type_env, alias_env)
+
+let primitive_names = StringSet.elements (Env.domain type_env)
 
 let is_primitive name = List.mem_assoc name env
 let is_pure_primitive name =

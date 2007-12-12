@@ -49,18 +49,23 @@ var theFormlet =
      file=file);
 
 fun renderer (formData) {
-   if (formData.cmd == Checkout)
-     <#> 
+  page
+   <html>
+    <body>
+    {if (formData.cmd == Checkout)
+      <#> 
        <div> Bike style code: {intToXml(formData.bikeStyle)} </div> 
        <div> Add-ons: {stringToXml(join(", ", map(intToString, formData.addons)))} </div>
        <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
        <div> Comments: {stringToXml(formData.comments)} </div>
        <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>
        <div> File: {stringToXml(formData.file)}</div>
-     </#>
-   else
-   <#> Order Cancelled. Thanks for visiting! </#>
+      </#>
+     else
+      <#>Order Cancelled. Thanks for visiting!</#>}
+    </body>
+   </html>  
 }
 
 page
- <#>{renderMultipart(theFormlet, renderer)}</#>
+ <#>{theFormlet => renderer with multipart}</#>

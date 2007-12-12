@@ -209,6 +209,11 @@ let concrete_type ?(aenv=Env.empty) t =
                   | _ ->
                       ct (Env.Dom.add name rec_names) aenv t'
               end
+(*
+      | `Application (name, ts) ->
+          Debug.print ("Unbound alias: " ^ name);
+          t
+*)
       | _ -> t
   in
     ct (StringSet.empty) aenv t
@@ -433,6 +438,7 @@ let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
 let float_type = `Primitive `Float
 let xml_type = `Application ("Xml", [])
+let page_type = `Application ("Page", [])
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
 
@@ -1219,19 +1225,19 @@ let erase_type ?(aenv=Env.empty) name =
            raise (TypeDestructionError
                     ("Attempt to erase field from non-record type "^string_of_datatype t)))
 
-let return_type ?(aenv=Env.empty) =
+let rec return_type ?(aenv=Env.empty) =
   (concrete_type ~aenv:aenv) ->-
     (function
-       | `ForAll (_, `Function (_, _, t))
+       | `ForAll (_, t) -> return_type ~aenv:aenv t
        | `Function (_, _, t) -> t
        | t -> 
            raise (TypeDestructionError
                     ("Attempt to take return type of non-function: " ^ string_of_datatype t)))
 
-let arg_types ?(aenv=Env.empty) =
+let rec arg_types ?(aenv=Env.empty) =
   (concrete_type ~aenv:aenv) ->-
     (function
-       | `ForAll (_, (`Function (`Record row, _, _)))
+       | `ForAll (_, t) -> arg_types ~aenv:aenv t
        | `Function (`Record row, _, _) ->
            extract_tuple row
        | t ->
