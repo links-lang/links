@@ -1,0 +1,100 @@
+.editor { 
+  margin-top:13px;
+  _margin-top:14px;
+  background:white;
+  font-family:monospace;
+  font-size:11px;
+  white-space:pre;
+  line-height:15px;
+  background-position: 0 0px;
+  background-image: url('CodePress/line-numbers.png');
+  margin-left: 32px;
+  background-repeat: repeat-y;
+}
+
+iframe { 
+  margin-top: 0px;
+  /*_margin-top: 0px;
+   margin-top:13px;
+  _margin-top:14px;*/
+  background:white;
+  font-family:monospace;
+  font-size:11px;
+  white-space:pre;
+  line-height:15px;
+  background-position: 0 0px;
+  background-image: url('CodePress/line-numbers.png');
+  margin-left: 32px;
+  background-repeat: repeat-y;
+}
+
+.editbox {
+  margin: .4em;
+  padding: 0;
+  font-family: monospace;
+  font-size: 10pt;
+  color: black;
+}
+
+.editbox p {
+  margin: 0;
+}
+
+span.keyword {
+  color: #770088;
+}
+
+span.atom {
+  color: #228811;
+}
+
+span.variable {
+  color: black;
+}
+
+span.variabledef {
+  color: #0000FF;
+}
+
+span.localvariable {
+  color: #004499;
+}
+
+span.property {
+  color: black;
+}
+
+span.comment {
+  color: #AA7700;
+}
+
+span.string {
+  color: #DC143C;
+}
+
+/* Tom's additions */
+span.variant { 
+  color: #8B7355;
+}
+
+span.location { 
+  color: #228811;
+  font-style: italic;
+}
+
+span.char { 
+  color: #8F0D27;
+}
+
+span.type { 
+  color: #B55810;
+}
+
+span.html { 
+  color: black;
+  font-style: italic;
+}
+
+pre.code, .editbox {
+  color: #666666;
+}

@@ -1,0 +1,117 @@
+;var cookieName = "linkside";
+
+typename User = (name:String, password:String);
+
+# Database to access
+var users = table "users" with (
+    id : Int,
+    email: String,
+    password: String
+) from (database "ide");
+
+# Count the number of elements in a list
+fun numElems(lst) 
+{
+  switch(lst)
+  {
+    case [] -> 0
+    case x::xs -> 1 + numElems(xs)
+  }
+}
+
+# Login formlet
+var loginForm =
+  formlet
+    <#>
+      <div id="loginform">
+        <label>e-mail address</label>
+         { input -> email }
+        <label>pass</label>
+         { inputPassword -> pass}
+      {submitButton("log in") -> change}
+      </div>
+    </#>
+  yields
+    (name=email,password=pass);
+
+# Login function
+fun login (data) server
+{
+  var uid =
+  for (var user <-- users)
+   where ((user.email == data.name) && (user.password == (md5(data.password))))
+    [user.id];
+
+  if (numElems (uid) == 1)
+  {
+    debug(md5(data.password));
+    var id = md5(floatToString(random() *. (intToFloat(hd(uid)))));
+    #delete (var session <-- sessionsTable)
+    # where (session.uid == hd(uid));
+    #insert sessionsTable values [(id=id,uid=hd(uid),creation_time=0,update_time=0,valid=0)];
+    setCookie(cookieName, id);
+    #freshResource();
+    #renderObject()
+  }
+  else {};
+  
+  main(Just(true))
+}
+
+fun displayForm () server
+{
+  render(loginForm, login)
+}
+
+fun renderObject()
+{
+  <#>
+    <object id="main" class="main" type="text/html" data="CodeMirror/index.html">
+      <div>Alternate text</div>
+    </object>
+    <div id="values"><a l:href="{logout()}">logout</a></div>
+  </#>
+  #  <input type="submit" l:onclick="{execBold(getContentDocument(hd(getElementsByTagName("object"))))}" />
+}
+
+fun logout() server
+{
+  setCookie("linkside","");
+#  freshResource();
+  debug("in");
+#  redirect("login.links");
+  main(Just(false))
+}
+
+fun main(flag) {
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        #debug(getCookie("linkside"));
+        var loggedIn =
+          switch (flag) {
+            case Nothing -> (numElems(getCookie("linkside")) > 0)
+            case Just(loggedIn) -> loggedIn
+          };
+            
+        if (loggedIn)
+        {
+          renderObject()
+        } 
+        else
+        {
+          displayForm()
+        }
+      }
+      </div>
+    </body>
+  </html>
+}
+
+page
+  <#>{main(Nothing)}</#>

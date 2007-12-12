@@ -1,0 +1,12 @@
+#!/usr/local/src/links-0.4/links --config=/usr/lib/cgi-bin/config
+
+fun logout() server {
+  var id = getCookie(cookieName);
+  delete (var session <-- sessionsTable)
+   where (session.id == id);
+  setCookieUncurried(cookieName, "");
+  redirect("main.links");
+  <#></#>
+}
+
+logout()

@@ -1,0 +1,202 @@
+# Login formlet
+var loginForm =
+  formlet
+    <#>
+      <div id="loginform">
+        <label>e-mail address</label>
+         { input -> email }
+        <label>pass</label>
+         { inputPassword -> pass}
+      {submitButton("log in") -> change}
+      </div>
+    </#>
+  yields
+    (name=email,password=pass);
+
+# Save formlet
+var saveForm = 
+  formlet
+    <#>
+      <div id="saveform">
+        <label>filename</label>
+        { input -> filename }
+        { submitButton("save") -> change}
+      </div>
+    </#>
+  yields
+    filename;
+
+# Login function
+fun login (data) server
+{
+  var uid =
+  for (var user <-- users)
+   where ((user.email == data.name) && (user.password == (md5(data.password))))
+    [user.id];
+
+  if (numElems (uid) == 1)
+  {
+    debug(md5(data.password));
+    var id = md5(floatToString(random() *. (intToFloat(hd(uid)))));
+    #delete (var session <-- sessionsTable)
+    # where (session.uid == hd(uid));
+    #insert sessionsTable values [(id=id,uid=hd(uid),creation_time=0,update_time=0,valid=0)];
+    setCookie(cookieName, id);
+  }
+  else {};
+  
+  main(Just(true))
+}
+
+# Get the body tag of the document being edited
+fun getDocumentBody() client
+{
+  # Get the HTML: find the object, then the iframe, then the doc
+  var lObj = getContentDocument(hd(getElementsByTagName("object")));
+  var lIfr = getContentDocument(hd(getElementsByTagNameFromRef("iframe", lObj)));
+   hd(getElementsByTagNameFromRef("body", lIfr))
+}
+
+# Save the contents of the current buffer to database
+fun saveFile(name) client
+{
+  var lBody = getDocumentBody();
+  
+  # Get the text
+  var lCode = getCode(firstChild(lBody));
+
+  # Store the code in the database
+  storeFile(name, lCode);
+}
+
+# Store the code in the database
+fun storeFile(name, code) server 
+{
+  # Insert if new, update otherwise
+  if (not(fileExists(name)))
+  {
+    insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=code)];
+  }
+  else {
+    update (var lFile <-- files)
+     where ((lFile.pid == 1) && (lFile.name == name))
+     set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = code)
+  };
+  
+}
+
+# Load code from the database and insert it
+fun loadFile(name) client
+{
+  var lData = getFile(name);
+  debug("Data: " ++ lData);
+  var lBody = getDocumentBody();
+  replaceChildren(stringToXml(lData), lBody);
+}
+
+# Load a file from the database
+fun getFile(name) server
+{
+  var res = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    {
+      debug("in: " ++ lFile.data);
+      [lFile.data]
+    };
+
+  if (numElems(res) == 0)
+    "No such file '" ++ name ++ "'."
+  else
+   hd(res)
+}
+
+# Check if a file exists
+fun fileExists(name) server
+{
+  var lCount = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    [1];
+
+  numElems(lCount) >= 1
+}
+
+
+# Parse the HTML in the children of the reference, getting all the text nodes
+fun getCode(ref) client
+{
+  if (isNull(ref))
+  {
+    ""
+  }
+  else
+  {
+    var tagName = domGetTagNameFromRef(ref);
+    var nextSib = nextSibling(ref);
+    
+    var outText = switch (tagName)
+    { 
+      case "BR" -> "\n" ++ getCode(nextSib)
+      case "SPAN" -> getTextContent(getChildNodes(getValue(ref))) ++ getCode(nextSib)
+      case _ -> getCode(nextSib)
+    };
+
+    outText
+  }
+}
+
+fun displayForm() server
+{
+  render(loginForm, login)
+}
+
+fun renderObject()
+{
+  <#>
+    <object id="main" class="main" type="text/html" data="CodeMirror/index.html">
+      <div>Alternate text</div>
+    </object>
+    <div id="values">
+      <form>
+        <input type="text" id="filename" value="filename"/>
+        <input type="submit" l:onclick="{saveFile("file")}" value="Save" />
+        <input type="submit" l:onclick="{loadFile("file")}" value="load" />
+      </form>
+      <br />
+      <a l:href="{logout(redirect("login.links"))}">logout</a>
+    </div>
+  </#>
+  #  <input type="submit" l:onclick="{execBold(getContentDocument(hd(getElementsByTagName("object"))))}" />
+}
+
+fun main(flag) client {
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        #debug(getCookie("linkside"));
+        var loggedIn =
+          switch (flag) {
+            case Nothing -> (numElems(getCookie("linkside")) > 0)
+            case Just(loggedIn) -> loggedIn
+          };
+            
+        if (loggedIn)
+        {
+          renderObject()
+        } 
+        else
+        {
+          displayForm()
+        }
+      }
+      </div>
+    </body>
+  </html>
+}
+
+page
+  <#>{main(Nothing)}</#>

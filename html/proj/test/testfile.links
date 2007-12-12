@@ -1,0 +1,10 @@
+sig dblFun : (Int) -> Xml
+fun dblFun(inp)
+{
+  var output = 2 * inp;
+  intToXml(output)
+}
+
+page
+  <#>Result (double of 2): {dblFun(2)}</#>
+ 

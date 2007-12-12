@@ -1,0 +1,415 @@
+alien javascript highlightCode : () -> ();
+alien javascript splitEscapedLinesJS : (String) -> [String];
+alien javascript getValueFromRef : (DomNode) -> String; 
+alien javascript escapeHtml : (String) -> String;
+alien javascript unescapeHtml: (String) -> String;
+alien javascript convertSpaces : (String) -> String;
+alien javascript loadEditor: () -> DomNode;
+
+# Save formlet
+var saveForm = 
+  formlet
+    <#>
+      <div id="saveform">
+        <label>filename</label>
+        { input -> filename }
+        { submitButton("save") -> change}
+      </div>
+    </#>
+  yields
+    filename;
+
+# Check whether the user is logged in
+# TODO: Make this more robust
+fun isLoggedIn() client
+{
+  numElems(getCookie("linkside")) > 0
+}
+
+fun fileOp() client
+{
+  receive {
+    case SaveFile(name, escp, code) -> {storeFile(name, escp, code); fileOp()}
+    case LoadFile() -> 
+    {
+       var name =  getValueFromRef(getNodeById("filename"));
+       var lData = getFile(name);
+       var rval = convertData(lData) : Xml;
+       
+       insertCode(rval);
+       fileOp()
+    }
+  }
+}
+
+# Get the body tag of the document being edited
+# Store the code in the database
+sig storeFile : (String, String, String) -> ()
+fun storeFile(name, escp, code) server 
+{
+  debug("storing file..");
+  # Insert if new, update otherwise
+  if (not(fileExists(name)))
+  {
+    insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=escp)];
+  }
+  else {
+    debug("updating!");
+    update (var lFile <-- files)
+     where ((lFile.pid == 1) && (lFile.name == name))
+     set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp)
+  };  
+  writeToFile("/home/tom/public_html/proj/tmp/" ++ name, code);
+}
+
+# Save the contents of the current buffer to database
+sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun saveFile(handler) client
+{
+  var lBody = getDocumentBody();
+  
+  # Get the text
+  var lCode = convertSpaces(getCode(firstChild(lBody)));
+  var lEscapedCode = escapeHtml(lCode);
+
+  # Store the code in the database
+  var fileName = getValueFromRef(getNodeById("filename"));
+  handler ! SaveFile(fileName, lEscapedCode, lCode);
+}
+
+# Load a file from the database
+sig getFile : (String) -> String
+fun getFile(name) server
+{
+  debug("get data");
+  var res = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    {
+      [lFile.data]
+    };
+  debug("done");
+  if (numElems(res) == 0)
+    "No such file '" ++ name ++ "'."
+  else
+   hd(res)
+}
+
+# Check if a file exists
+sig fileExists : (String) -> Bool
+fun fileExists(name) server
+{
+  var lCount = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    [lFile.pid];
+
+  numElems(lCount) >= 1
+}
+
+# Get the body tag containing code
+sig getDocumentBody : () -> DomNode
+fun getDocumentBody() client
+{
+  # Get the HTML: find the iframe, then the doc
+  var lIfr = getContentDocument(hd(getElementsByTagName("iframe")));
+  hd(getElementsByTagNameFromRef("body", lIfr))
+}
+
+# Insert code into the document, then highlight it.
+sig insertCode : (Xml) -> ()
+fun insertCode(code) client
+{
+  replaceChildren(code, getDocumentBody());
+  highlightCode();
+}
+
+# Recursive version of splitlines. Works, but is slow.
+sig splitLines : (String) -> [String]
+fun splitLines(datalist)
+{ 
+  switch (datalist)
+  { 
+    case [] -> []
+    case xs -> 
+    {
+      var listHead = takeUntilBreak(xs) : String;
+      var listTail = dropUntilBreak(xs) : String;
+      [listHead] ++ splitLines(listTail)
+    }
+  }
+}
+
+# Recursive function, taking all chars until a line break is found. Slow.
+sig takeUntilBreak : (String) -> String
+fun takeUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        []
+      else
+        x :: takeUntilBreak(y::zs)
+    }
+  }
+}
+
+# Recursive function, dropping all chars until a line break is found. Slow.
+sig dropUntilBreak : (String) -> String
+fun dropUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        zs
+      else
+        dropUntilBreak(y::zs)
+    }
+  }
+}
+
+# Convert escaped string to Xml forest
+sig convertData : (String) -> Xml
+fun convertData(data) client
+{
+  var dataList = splitEscapedLinesJS(data) : [String]; 
+  printEach(dataList);
+  getXmlList(dataList)
+}
+
+# Print each member of a list to debug.
+sig printEach : ([String]) -> ()
+fun printEach(datalist) client
+{
+  var lList = datalist : [String];
+  var p = for (var item <- lList)
+    {debug("item: " ++ item);
+    []};
+
+  ()
+}
+
+# Turn a list of strings into XML.
+sig getXmlList : ([String]) -> Xml
+fun getXmlList(stringList) server
+{
+    for (var item <- stringList)
+    {
+      #debug("item: " ++ item);
+      #debug("Replaced: " ++ replace(['\'], ['\','\'], item));
+      <#>{stringToXml(replace(['\'], ['\','\'], item))} <br /></#>
+    } : Xml
+}
+
+# Parse the HTML in the children of the reference, getting all the text nodes
+sig getCode : (DomNode) -> String
+fun getCode(ref) client
+{
+  if (isNull(ref))
+  {
+    ""
+  }
+  else
+  {
+    var tagName = domGetTagNameFromRef(ref);
+    var nextSib = nextSibling(ref);
+    
+    var outText = switch (tagName)
+    { 
+      case "BR" -> "\n" ++ getCode(nextSib)
+      case "SPAN" -> getTextContent(getChildNodes(getValue(ref))) ++ getCode(nextSib)
+      case _ -> getCode(nextSib)
+    };
+
+    outText
+  }
+}
+
+# Unescape a string recursively.
+sig unescape : (String, Char) -> String
+fun unescape(text, previous)
+{
+  switch (text)
+  {
+    case [] -> []
+    case (x::xs) -> 
+    {
+      debug("Curr: " ++ [x]);
+      if ((x == '\\') && (previous == '\\'))
+      { 
+        unescape(xs, ' ')
+      }
+      else
+      {
+        x :: unescape(xs, x)
+      }
+    }
+  }
+}
+
+fun navClick(xiEvent) client
+{
+  var targetElem = findFirstParentList(getTarget(xiEvent));
+  var firstIm = nextElementSibling(firstChild(targetElem));
+  var sndIm = nextElementSibling(nextSibling(firstIm));
+
+  switch (domGetAttributeFromRef(targetElem, "name"))
+  { 
+    case "open" -> 
+    {
+      var void1 = domSetAttributeFromRef(targetElem, "name", "closed");
+      var void2 = domSetAttributeFromRef(firstIm, "src", "images/add-blue-box.png");
+      var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-close.png");
+      ()
+    }
+    case "closed" ->
+    {
+      var void1 = domSetAttributeFromRef(targetElem, "name", "open");
+      var void2 = domSetAttributeFromRef(firstIm, "src", "images/rem-blue-box.png");
+      var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-open.png");
+      ()
+    }
+  };
+}
+
+sig findFirstParentList : (DomNode) -> DomNode
+fun findFirstParentList(xiNode) client
+{
+  debug("Current node: " ++ getTagName(getValue(xiNode)));
+  switch (getTagName(getValue(xiNode)))
+  {
+    case "LI" -> xiNode
+    case _    -> 
+    {
+      var parent = parentNode(xiNode);
+      if (isNull(parent))
+      {
+        error("No list element found!")
+      }
+      else
+      {
+        findFirstParentList(parent)
+      }
+    }
+  }
+}
+
+# Returns the first element sibling.
+# Expects the first sibling to be the node passed in.
+sig nextElementSibling : (DomNode) -> DomNode
+fun nextElementSibling(xiNode) client
+{
+  if (isElementNode(xiNode))
+  {
+    xiNode
+  }
+  else
+  {
+    var sibl = nextSibling(xiNode);
+    if (isNull(sibl))
+    {
+      error("No element siblings found")
+    }
+    else
+    {
+      nextElementSibling(sibl)
+    }
+  }
+}
+
+sig getProjects : () -> Xml
+fun getProjects()
+{
+  <li l:onclick="{navClick(event)}" name="closed">
+    <img src="images/add-blue-box.png" />
+    <img src="images/proj-close.png" />  
+  </li>
+}
+
+# Render the editor.
+# TODO: This needs to be cleaned up. 
+sig renderObject : () -> Xml
+fun renderObject()
+{
+  # Spawn file handling object.
+  var opHandler = spawn { fileOp() };
+
+  <#>
+    <div id="proj-browser" class="proj-browser">
+      <div id="proj-caption-bg" class="caption-bg">
+        <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
+      </div>
+      <div id="proj-items" class="proj-items">
+        <ul class="proj-list">
+          {
+            getProjects()
+          }
+        </ul>
+      </div>
+    </div>
+    <div id="space" class="space"></div>
+    <div id="editor" class="editor">
+      <script type="text/javascript">
+        var editor = new CodeMirror((document.getElementById("editor")), {{width: "480", height: "400"}});
+        window.document.editor = editor;
+      </script>
+    </div>
+    <div id="values" class="menu">
+      <input type="text" id="filename" value="filename" title="title!"/>
+      <input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
+      <input type="submit" l:onclick="{opHandler ! LoadFile()}" value="load" />
+      <a l:href="{logout()}">logout</a>
+    </div>
+  </#>
+}
+
+# Redirect to login. 
+# TODO: Broken.
+sig redir : () -> Xml
+fun redir() server 
+{
+  redirect("login.links");
+  <div>not redirected</div>
+}
+
+# Main function. 
+sig main : () -> Xml
+fun main() client 
+{
+  if (not(isLoggedIn()))
+  {
+    <div><a href="login.links">Not logged in</a></div>
+  }
+  else
+  {
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <script src="CodeMirror/Mochi.js" type="text/javascript"></script>
+    <script src="CodeMirror/util.js" type="text/javascript"></script>
+    <script src="CodeMirror/tokenizelinks.js" type="text/javascript"></script>
+    <script src="CodeMirror/parselinks.js" type="text/javascript"></script>
+    <script src="CodeMirror/stringstream.js" type="text/javascript"></script>
+    <script src="CodeMirror/select.js" type="text/javascript"></script>
+    <script src="CodeMirror/codemirror.js" type="text/javascript"></script>
+    
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        renderObject()
+      }
+      </div>
+    </body>
+  </html>
+  }
+}
+
+page
+  <#>{main()}</#>
+  

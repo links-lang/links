@@ -1,0 +1,110 @@
+# Databases to access
+var users = table "users" with (
+    id : Int,
+    email: String,
+    password: String
+) from (database "ide");
+
+var sessionsTable = table "sessions" with (
+    id : String,
+    uid : Int,
+    creation_time : Int,
+    update_time : Int
+) from (database "ide");
+
+# Count the number of elements in a list
+fun numElems(lst) server
+{
+  switch(lst)
+  {
+    case [] -> 0
+    case x::xs -> 1 + numElems(xs)
+  }
+}
+
+var cookieName = "linkside";
+
+# Login formlet
+var loginForm =
+  formlet
+    <#>
+      <div id="loginform">
+        <label>e-mail address</label>
+         { input -> email }
+        <label>pass</label>
+         { inputPassword -> pass}
+      {submitButton("log in") -> change}
+      </div>
+    </#>
+  yields
+    (name=email,password=pass);
+
+# Login function
+fun login (data) server
+{
+  var foundIds =
+  for (var user <-- users)
+   where ((user.email == data.name) && (user.password == (md5(data.password))))
+    [user.id];
+
+  if (numElems (foundIds) == 1)
+  {
+    var uid = hd(foundIds);
+
+    # Create a hash-value to use for the cookie. This is
+    # also used to identify the session and the user.
+    var id = md5(floatToString(random() *. (intToFloat(uid))));
+  
+    # Clean up any old sessions
+    delete (var session <-- sessionsTable)
+     where (session.uid == uid);
+        
+    # Create a new one
+    insert sessionsTable values [(id = id, uid = uid, creation_time = 0, update_time = 0)];
+
+    # Set cookie and redirect
+    setCookie(cookieName, id);
+    redirect("main.links");
+    page
+      <#></#>
+  }
+  else
+  {
+    main(Just(true))
+  }
+}
+
+#fun displayForm() server
+#{
+#  render(loginForm, login)
+#}
+
+fun main(flag) {
+  page
+  #var loggedIn =
+  #        switch (flag) {
+  #          case Nothing -> isLoggedIn()
+  #          case Just(loggedIn) -> loggedIn
+  #        };   
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        #if (isJust(flag))
+        #{
+        # debug("Log-in failed");
+        #} else {};
+        
+        #displayForm()
+        loginForm => login
+      }
+      </div>
+    </body>
+  </html>
+}
+
+main(Nothing)

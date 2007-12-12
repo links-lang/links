@@ -1,0 +1,79 @@
+# Login formlet
+var loginForm =
+  formlet
+    <#>
+      <div id="loginform">
+        <label>e-mail address</label>
+         { input -> email }
+        <label>pass</label>
+         { inputPassword -> pass}
+      {submitButton("log in") -> change}
+      </div>
+    </#>
+  yields
+    (name=email,password=pass);
+
+# Login function
+fun login (data) server
+{
+  var uid =
+  for (var user <-- users)
+   where ((user.email == data.name) && (user.password == (md5(data.password))))
+    [user.id];
+
+  if (numElems (uid) == 1)
+  {
+    debug(md5(data.password));
+    var id = md5(floatToString(random() *. (intToFloat(hd(uid)))));
+
+    # Clean up any old sessions
+    delete (var session <-- sessionsTable)
+     where (session.uid == hd(uid));
+
+    # Create a new one
+   # insert sessionsTable values [(id=id,uid=hd(uid),creation_time=0,update_time=0,valid=0)];
+
+    # Set cookie and redirect
+    setCookie(cookieName, id);
+    redirect("main.links");
+    <#></#>
+  }
+  else
+  {
+    main(Just(true))
+  }
+}
+
+fun displayForm() server
+{
+  render(loginForm, login)
+}
+
+fun main(flag) client {
+  #var loggedIn =
+  #        switch (flag) {
+  #          case Nothing -> isLoggedIn()
+  #          case Just(loggedIn) -> loggedIn
+  #        };
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        #if (isJust(flag))
+        #{
+        # debug("Log-in failed");
+        #} else {};
+        
+        displayForm()
+      }
+      </div>
+    </body>
+  </html>
+}
+
+page
+  <#>{main(Nothing)}</#>

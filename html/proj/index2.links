@@ -1,0 +1,26 @@
+fun renderObject()
+{
+  <#>
+    <object id="main" class="main" type="text/html" data="embed.links">
+      <div>Alternate text</div>
+    </object>
+    <input type="submit" l:onclick="{execBold(getContentDocument(hd(getElementsByTagName("object"))))}" />
+  </#>
+}
+
+
+
+<html>
+  <head>
+    <title>ug4proj: Links</title>
+  </head>
+  <link rel="stylesheet" type="text/css" href="../proj/proj.css" />
+  <body>
+    <div id="main">
+    {
+      renderObject()
+    }
+    </div>
+    <div id="values"> </div>
+  </body>
+</html>

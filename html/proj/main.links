@@ -1,0 +1,756 @@
+alien javascript splitEscapedLinesJS : (String) -> [String];
+alien javascript highlightCode : () -> ();
+alien javascript getValueFromRef : (DomNode) -> String; 
+alien javascript escapeHtml : (String) -> String;
+alien javascript unescapeHtml: (String) -> String;
+alien javascript convertSpaces : (String) -> String;
+alien javascript loadEditor: () -> DomNode;
+alien javascript stringToString: (String) -> String;
+
+typename Attribute = (attr: String, val: String);
+
+# Things that should be in their own file
+var cookieName = "linkside";
+var fileLoc = "/home/tom/public_html/proj/";
+
+typename User = (name:String, password:String);
+typename ProjConts = (Int, String);
+#typename Folder = (name: String, data: [ProjConts]);
+typename Projects = [| Project : ProjConts | Folder : ProjConts | File : ProjConts |];
+
+# Databases to access
+var users = table "users" with (
+    id : Int,
+    email: String,
+    password: String
+) from (database "ide");
+
+var projectTable = table "projects" with (
+    id : Int,
+    uid : Int,
+    name : String
+) from (database "ide");
+
+var files = table "files" with (
+    id : Int,
+    pid : Int,
+    name : String,
+    last_mod : String,
+    created : String, 
+    data : String,
+    parent : Int,
+    isfolder : Int
+) from (database "ide");
+
+var sessionsTable = table "sessions" with (
+    id : String,
+    uid : Int,
+    creation_time : Int,
+    update_time : Int
+) from (database "ide");
+
+var validSessions = table "valid_sessions" with (
+    id : String,
+    uid : Int
+) from (database "ide");
+
+# Count the number of elements in a list
+fun numElems(lst) server
+{
+  switch(lst)
+  {
+    case [] -> 0
+    case x::xs -> 1 + numElems(xs)
+  }
+}
+
+# Logout from the IDE
+fun logout() server
+{
+  delete (var sessId <-- sessionsTable)
+    where (sessId.id == (getCookie("linkside")));
+
+  setCookie("linkside","");
+  redirect("login.links");
+
+  page
+  <#></#>
+  #main(Just(false))
+}
+
+#################################################
+# Return the uid of the current sessions' owner.
+sig getUid : () -> Int
+fun getUid() server
+{
+  var uids = for (var sid <-- sessionsTable)
+             where (sid.id == getCookie("linkside"))
+              [sid.uid];
+  if (numElems(uids) == 0)
+    1
+  else
+    hd(uids)
+}
+
+# Userid of session owner
+var userId = 1; #getUid();
+
+# Check whether the user is logged in
+fun isLoggedIn() server
+{
+  var sessId = getCookie(cookieName);
+  debug("cookie: " ++ sessId);
+  # Check that the sessid exists in the database
+  var p = numElems(for (var lSess <-- validSessions)
+    where (lSess.id == sessId)
+      [lSess.id]) == 1;
+  (if (p)
+    debug("logged in")
+  else
+    debug("not logged in"));
+  p
+}
+
+
+# Perform file operations (load, save).
+fun fileOp() client
+{
+  receive {
+    case SaveFile(name, escp, code) -> 
+    {
+      storeFile(name, escp, code); 
+      updateSession();
+      fileOp()
+    }
+    case LoadFile(name) -> 
+    {
+       #var name =  getValueFromRef(getNodeById("filename"));
+       var lData = getFile(name);
+       var rval = convertData(lData) : Xml;
+       
+       insertCode(rval);
+       updateSession();
+       fileOp()
+    }
+  }
+}
+
+# Update the last-access time of the session
+sig updateSession : () -> ()
+fun updateSession() server
+{
+  update (var sid <-- sessionsTable)
+    where (sid.uid == 1)
+    set (id = sid.id, uid = userId, creation_time = 0, update_time = 0)
+}
+
+# Get the body tag of the document being edited
+# Store the code in the database
+sig storeFile : (String, String, String) -> ()
+fun storeFile(name, escp, code) server 
+{
+  # Insert if new, update otherwise
+  if (not(fileExists(name)))
+  {
+    insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=escp, parent = -1, isfolder = 0)];
+  }
+  else {
+    update (var lFile <-- files)
+     where ((lFile.pid == 1) && (lFile.name == name))
+     set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
+  };
+  
+  writeToFile(fileLoc ++ "test/" ++ name, code);
+}
+
+# Save the contents of the current buffer to database
+sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun saveFile(handler) client
+{
+  var lBody = getDocumentBody();
+  
+  # Get the text
+  var lCode = convertSpaces(getCode(firstChild(lBody)));
+  var lEscapedCode = escapeHtml(lCode);
+
+  # Store the code in the database
+  var fileName = getValueFromRef(getNodeById("filename"));
+  handler ! SaveFile(fileName, lEscapedCode, lCode);
+}
+
+# Load a file from the database
+sig getFile : (String) -> String
+fun getFile(name) server
+{
+  var res = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    {
+      [lFile.data]
+    };
+ 
+  if (numElems(res) == 0)
+    "No such file '" ++ name ++ "'."
+  else
+   hd(res)
+}
+
+# Check if a file exists
+sig fileExists : (String) -> Bool
+fun fileExists(name) server
+{
+  var lCount = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    [lFile.pid];
+
+  numElems(lCount) >= 1
+}
+
+# Get the body tag containing code
+sig getDocumentBody : () -> DomNode
+fun getDocumentBody() client
+{
+  # Get the HTML: find the iframe, then the doc
+  var lIfr = getContentDocument(hd(getElementsByTagName("iframe")));
+  hd(getElementsByTagNameFromRef("body", lIfr))
+}
+
+# Insert code into the document, then highlight it.
+sig insertCode : (Xml) -> ()
+fun insertCode(code) client
+{
+  replaceChildren(code, getDocumentBody());
+  highlightCode();
+}
+
+# Recursive version of splitlines. Works, but is slow.
+sig splitLines : (String) -> [String]
+fun splitLines(datalist)
+{ 
+  switch (datalist)
+  { 
+    case [] -> []
+    case xs -> 
+    {
+      var listHead = takeUntilBreak(xs) : String;
+      var listTail = dropUntilBreak(xs) : String;
+      [listHead] ++ splitLines(listTail)
+    }
+  }
+}
+
+# Recursive function, taking all chars until a line break is found. Slow.
+sig takeUntilBreak : (String) -> String
+fun takeUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        []
+      else
+        x :: takeUntilBreak(y::zs)
+    }
+  }
+}
+
+# Recursive function, dropping all chars until a line break is found. Slow.
+sig dropUntilBreak : (String) -> String
+fun dropUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        zs
+      else
+        dropUntilBreak(y::zs)
+    }
+  }
+}
+
+# Convert escaped string to Xml forest
+sig convertData : (String) -> Xml
+fun convertData(data) client
+{
+  var dataList = splitEscapedLinesJS(data) : [String]; 
+  #printEach(dataList);
+  getXmlList(dataList)
+}
+
+# Print each member of a list to debug.
+sig printEach : ([String]) -> ()
+fun printEach(datalist) client
+{
+  var lList = datalist : [String];
+  var p = for (var item <- lList)
+    {debug("item: " ++ item);
+    []};
+
+  ()
+}
+
+# Turn a list of strings into XML.
+sig getXmlList : ([String]) -> Xml
+fun getXmlList(stringList) server
+{
+    for (var item <- stringList)
+    {
+      <#>{stringToXml(replace(['\'], ['\','\'], item))} <br /></#>
+    } : Xml
+}
+
+# Parse the HTML in the children of the reference, getting all the text nodes
+sig getCode : (DomNode) -> String
+fun getCode(ref) client
+{
+  # If this is is null, there's no text
+  if (isNull(ref))
+  {
+    ""
+  }
+  else
+  {
+    var tagName = domGetTagNameFromRef(ref);
+    var nextSib = nextSibling(ref);
+    
+    # Recurse
+    var outText = switch (tagName)
+    { 
+      case "BR" -> "\n" ++ getCode(nextSib)
+      case "SPAN" -> getTextContent(getChildNodes(getValue(ref))) ++ getCode(nextSib)
+      case _ -> getCode(nextSib)
+    };
+
+    outText
+  }
+}
+
+# Unescape a string recursively.
+sig unescape : (String, Char) -> String
+fun unescape(text, previous)
+{
+  switch (text)
+  {
+    case [] -> []
+    case (x::xs) -> 
+    {
+      debug("Curr: " ++ [x]);
+      if ((x == '\\') && (previous == '\\'))
+      { 
+        unescape(xs, ' ')
+      }
+      else
+      {
+        x :: unescape(xs, x)
+      }
+    }
+  }
+}
+
+# Handle click events in the project browser.
+sig navClick : (Event) -> ()
+fun navClick(xiEvent) client
+{
+  #var targetElem = findFirstParentDiv(getTarget(xiEvent));
+  #var firstIm = findFirstMatchingSibling(firstChild(targetElem), 
+  #                                     "IMG", 
+  #                                     [(attr = "name", val ="box")]);
+  var im = getTarget(xiEvent);
+  var sndIm = nextElementSibling(nextSibling(im));
+  var firstList = findFirstMatchingSibling(nextElementSibling(sndIm), "UL", []);  
+  
+  switch (domGetAttributeFromRef(getTarget(xiEvent), "src"))
+  { 
+    case "images/rem-blue-box.png" -> 
+    {
+     # var void1 = domSetAttributeFromRef(targetElem, "name", "closed");
+      var void2 = domSetAttributeFromRef(im, "src", "images/add-blue-box.png");
+      var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-close.png");
+      var void4 = domSetStyleAttrFromRef(firstList, "display", "none");
+      ()
+    }
+    case "images/add-blue-box.png" ->
+    {
+      #var void1 = domSetAttributeFromRef(targetElem, "name", "open");
+      var void2 = domSetAttributeFromRef(im, "src", "images/rem-blue-box.png");
+      var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-open.png");
+      var void4 = domSetStyleAttrFromRef(firstList, "display", "");
+      ()
+    }
+  };
+}
+
+sig findFirstParentDiv : (DomNode) -> DomNode
+fun findFirstParentDiv(xiNode) client
+{
+  switch (getTagName(getValue(xiNode)))
+  {
+    case "DIV" ->
+    {
+      xiNode
+    }
+    case _    -> 
+    {
+      var parent = parentNode(xiNode);
+      if (isNull(parent))
+      {
+        error("No div element found!")
+      }
+      else
+      {
+        findFirstParentDiv(parent)
+      }
+    }
+  }
+}
+
+# Returns the first element sibling.
+# Expects the first sibling to be the node passed in.
+sig nextElementSibling : (DomNode) -> DomNode
+fun nextElementSibling(xiNode) client
+{
+  if (isElementNode(xiNode))
+  {
+    xiNode
+  }
+  else
+  {
+    var sibl = nextSibling(xiNode);
+
+    if (isNull(sibl))
+    {
+      error("No element siblings found")
+    }
+    else
+    {
+      nextElementSibling(sibl)
+    }
+  }
+}
+
+sig findFirstMatchingSibling : (DomNode, String, [Attribute]) -> DomNode
+fun findFirstMatchingSibling(xiNode, xiType, xiConstraints) client
+{
+  # Check that the node is an element node of the right type and
+  # that the constraints match.
+  if ((isElementNode(xiNode)) && (getTagName(getValue(xiNode)) == xiType) && 
+      (nodeAttributesMatch(xiNode, xiConstraints)))
+  {
+    # All constraints match - return
+    xiNode
+  } 
+  else
+  {
+    var child = nextSibling(xiNode);
+    if (isNull(child))
+    {
+      # Child is null - return it.
+      child  
+    }
+    else
+    {
+      findFirstMatchingSibling(child, xiType, xiConstraints)
+    }
+  }
+}
+
+sig nodeAttributesMatch : (DomNode, [Attribute]) -> Bool
+fun nodeAttributesMatch(xiNode, xiAttrs) client
+{
+  and(for (var attribute <- xiAttrs)
+       [domGetAttributeFromRef(xiNode, attribute.attr) == attribute.val])
+}
+
+# Defunct
+#sig getProjects : (Mailbox ([|LoadFile:(String)|a|])) -> Xml
+#fun getProjects(opHandler) client
+#{
+#  var projects = getProjList();
+#  <#>
+#  {
+#    for (var project <- projects)
+#    {
+#      var fileList = getFileList(project.id);
+#      <li class="proj-list-item">
+#        <div l:onclick="{navClick(event)}" name="closed" style="position: relative;">
+#          <img src="images/add-blue-box.png" />
+#          <img src="images/proj-close.png" />  
+#          <span style="position: absolute; top: 3px; margin-left: 4px">{stringToXml(project.name)}</span>
+#       
+#      {
+#      if (numElems(fileList) > 0)
+#      {
+#          <ul class="proj-list" style="display: none;">
+#        {
+#        for (var file <- fileList)
+#        {
+#            <li class="proj-list-item">
+#              <div class="proj-node"> 
+#                <img src="images/blank.png" />
+#                <img src="images/blank.png" class="proj-blank" />
+#                <span class="proj-text" l:onclick="{opHandler ! LoadFile(file.name)}">{stringToXml(file.name)}</span>
+#              </div>
+#            </li>
+#        }
+#        }
+#          </ul>
+#      } else {<#></#>}
+#      }
+#       </div>
+#      </li> 
+#    }
+#  }
+#  </#>
+#}
+
+# Recursive function. Takes a Project at a particular level, looks 
+# at its type and either tries to find more files/folders or returns
+# the XML gathered.
+sig getProjectList : (Projects, Int, Mailbox ([| LoadFile: String|a|])) -> Xml
+fun getProjectList(currItem, currLevel, opHandler) client
+{
+  var width = intToString(currLevel * 16);
+      
+  # Determine what type of file we've got
+  switch (currItem)
+  {
+    case Project(id, name) ->
+    {
+      # This is a top-level node. Start a new list and find all files that
+      # belong to the project.
+      <li class="proj-list-item">
+        <div name="closed" style="position: relative;">
+          <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}" />
+          <img src="images/proj-close.png" />  
+          <span style="position: absolute; top: 3px; margin-left: 4px">
+            {stringToXml(name)}
+          </span> 
+          <ul class="proj-list" style="display: none;">
+          {
+            # Get the contents of this project
+            var contents = findFiles(currItem);
+                       
+            # Get the XML
+            for (var file <- contents)
+              getProjectList(file, 1, opHandler)
+          }
+          </ul>
+        </div>
+      </li>
+      
+    }
+    case Folder(id, name)  ->
+    {
+      serverDbg("Folder: " ++ name);
+      # This is a folder. Print the folder name, then list files.
+      <li class="proj-list-item">
+        <div name="closed"> 
+          <img src="images/blank.png" style="width: {width}; height: 1px;"/>
+          <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}"/>
+          <img src="images/proj-close.png" class="proj-blank" />
+          <span class="proj-text">
+            {stringToXml(name)}
+          </span>
+          <ul class="proj-list" style="display: none;">
+          {
+            var folderData = findFiles(currItem);
+            for (var file <- folderData)
+            {
+              switch (file)
+              {
+                case File(id, name) -> 
+                {
+                  debug("folder-file.name: " ++ name);
+                  #<li>{stringToXml(name)}</li>
+                  getProjectList(file, (currLevel + 1), opHandler)
+                }
+                case _ -> 
+                {
+                  debug("Error!!");
+                  <li>error</li>
+                }
+              }
+            } 
+          }
+          </ul>
+        </div>
+      </li>
+    }
+    case File(id, name) ->
+    {
+      serverDbg("File: " ++ name);
+    
+      # This is a file. Display it.
+      <li class="proj-list-item">
+        <div class="proj-node"> 
+          <img src="images/blank.png" style="width: {width}; height: 1px;" />
+          <img src="images/blank.png" class="proj-blank" />
+          <span class="proj-text" l:onclick="{opHandler ! LoadFile(name)}">
+          {stringToXml(name)}
+          </span>
+        </div>
+      </li>
+    }
+  }
+}
+
+fun serverDbg(text) server
+{
+  debug(text);
+  #(handle ! LoadFile(name));
+}
+
+sig findFiles : (Projects) -> [Projects]
+fun findFiles(container) server
+{
+  # Check what type of files we're looking for.
+  switch (container)
+  {
+    case Project(id, name) ->
+    {
+      # It's a project. Only choose files without a parent.
+      for (var file <-- files)
+        where ((file.pid == id) && (file.parent < 0))
+        orderby (file.name)
+        {
+          debug("Looking at file " ++ file.name);
+          switch (file.isfolder)
+          {
+            case 1 -> [Folder(file.id, file.name)]
+            case _ -> [File(file.id, file.name)]
+          } 
+        }
+    }
+    case Folder(id, name) ->
+    {
+      # It's a folder. Find all files/subfolders.
+      for (var file <-- files)
+        where (file.parent == id)
+        orderby (file.name)
+        {
+          switch (file.isfolder)
+          {
+            case 1 -> [Folder(file.id, file.name)]
+            case _ -> [File(file.id, file.name)]
+          }
+        } 
+    }
+    case _ -> error("Not folder or project")
+  }
+}
+
+sig getProjList : () -> [(id: Int, name: String)]
+fun getProjList() server
+{
+  for (var projs <-- projectTable)
+    where (projs.uid == userId)
+      [(id = projs.id, name = projs.name)]
+}
+
+fun getProjs() server
+{
+  for (var projs <-- projectTable)
+    where (projs.uid == userId)
+    orderby (projs.name)
+      [Project(projs.id, projs.name)]
+}
+
+fun getFileList(projId) server
+{
+  for (var file <-- files)
+    where (file.pid == projId)
+      [(id = file.id, name = file.name)]
+}
+      
+
+# Render the editor.
+# TODO: This needs to be cleaned up. 
+sig renderObject : () -> Xml
+fun renderObject() client
+{
+  # Spawn file handling object.
+  var opHandler = spawn { fileOp() };
+
+  <#>
+    <div id="proj-browser" class="proj-browser">
+      <div id="proj-caption-bg" class="caption-bg">
+        <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
+      </div>
+      <div id="proj-items" class="proj-items">
+        <ul class="proj-list">
+          {
+            var projects = getProjs();
+            
+            for (var project <- projects)
+              getProjectList(project, 0, opHandler)
+          }
+        </ul>
+      </div>
+    </div>
+    <div id="space" class="space"></div>
+    <div id="editor" class="editor">
+      <script type="text/javascript">
+        var editor = new CodeMirror((document.getElementById("editor")), {{width: "480", height: "400"}});
+        window.document.editor = editor;
+      </script>
+    </div>
+    <div id="values" class="menu">
+      <input type="text" id="filename" value="filename" title="title!"/>
+      <input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
+      
+      <a l:href="{logout()}">logout</a>
+    </div>
+  </#>
+  #<input type="submit" l:onclick="{opHandler ! LoadFile()}" value="load" />
+}
+
+# Redirect to login. 
+# TODO: Broken.
+sig redir : () -> Xml
+fun redir() server 
+{
+  redirect("login.links");
+  <div>not redirected</div>
+}
+
+# Main function. 
+sig main : () -> Xml
+fun main() client 
+{
+  if (not(isLoggedIn()))
+  {
+    <div><a href="login.links">Not logged in</a></div>
+  }
+  else
+  {
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <script src="CodeMirror/Mochi.js" type="text/javascript"></script>
+    <script src="CodeMirror/util.js" type="text/javascript"></script>
+    <script src="CodeMirror/tokenizelinks.js" type="text/javascript"></script>
+    <script src="CodeMirror/parselinks.js" type="text/javascript"></script>
+    <script src="CodeMirror/stringstream.js" type="text/javascript"></script>
+    <script src="CodeMirror/select.js" type="text/javascript"></script>
+    <script src="CodeMirror/codemirror.js" type="text/javascript"></script>
+    
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        renderObject()
+      }
+      </div>
+    </body>
+  </html>
+  }
+}
+
+page
+  <#>{main()}</#>
+  

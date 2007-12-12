@@ -1,0 +1,71 @@
+# Login formlet
+var loginForm =
+  formlet
+    <#>
+      <div id="loginform">
+        <label>e-mail address</label>
+         { input -> email }
+        <label>pass</label>
+         { inputPassword -> pass}
+      {submitButton("log in") -> change}
+      </div>
+    </#>
+  yields
+    (name=email,password=pass);
+
+# Login function
+fun login (data) server
+{
+  var uids =
+  for (var user <-- users)
+   where ((user.email == data.name) && (user.password == (md5(data.password))))
+    [user.id];
+
+  if (numElems (uids) == 1)
+  {
+    var uid = hd(uids);
+    var id = md5(floatToString(random() *. (intToFloat(uid))));   
+
+    # Clean up any old sessions
+    delete (var session <-- sessionsTable)
+     where (session.uid == uid);
+
+    # Create a new one
+   # insert (sessionsTable) values [(id = id, uid = uid, creation_time = "", update_time = "", valid = 0)];
+    #insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=escp)];
+
+    # Set cookie and redirect
+    setCookie(cookieName, id);
+    redirect("main.links");
+    page
+     <#></#>
+  }
+  else
+  {
+    main(Just(true))
+  }
+}
+
+#fun displayForm() server
+#{
+#  render(loginForm, login)
+#}
+
+fun main(flag) {
+  page
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        loginForm => login
+      }
+      </div>
+    </body>
+  </html>
+}
+
+main(Nothing)

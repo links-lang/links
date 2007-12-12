@@ -1,0 +1,289 @@
+alien javascript highlightCode : (DomNode) -> ();
+alien javascript splitLinesJS : (String) -> [String];
+alien javascript getValueFromRef : (DomNode) -> String; 
+
+# Save formlet
+var saveForm = 
+  formlet
+    <#>
+      <div id="saveform">
+        <label>filename</label>
+        { input -> filename }
+        { submitButton("save") -> change}
+      </div>
+    </#>
+  yields
+    filename;
+
+fun fileOp() client
+{
+  receive {
+    case SaveFile(name, code) -> {storeFile(name, code); fileOp()}
+    case LoadFile() -> 
+    {
+       var name =  getValueFromRef(getNodeById("filename"));
+       var lData = getFile(name);
+       var rval = convertData(lData) : Xml;
+       var editor = hd(getElementsByTagName("object"));
+       
+       insertCode(rval);
+       fileOp()
+    }
+  }
+}
+
+# Get the body tag of the document being edited
+fun getDocumentBody() client
+{
+  # Get the HTML: find the object, then the iframe, then the doc
+  var lObj = getContentDocument(hd(getElementsByTagName("object")));
+  var lIfr = getContentDocument(hd(getElementsByTagNameFromRef("iframe", lObj)));
+   hd(getElementsByTagNameFromRef("body", lIfr))
+}
+
+# Save the contents of the current buffer to database
+fun saveFile(handler) client
+{
+  var lBody = getDocumentBody();
+  
+  # Get the text
+  var lCode = getCode(firstChild(lBody));
+
+  # Store the code in the database
+  #storeFile(name, lCode);
+  var fileName = getValueFromRef(getNodeById("filename"));
+  handler ! SaveFile(fileName, lCode);
+}
+
+# Store the code in the database
+fun storeFile(name, code) server 
+{
+  debug("storing file..");
+  # Insert if new, update otherwise
+  if (not(fileExists(name)))
+  {
+    insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=code)];
+  }
+  else {
+    debug("updating!");
+    update (var lFile <-- files)
+     where ((lFile.pid == 1) && (lFile.name == name))
+     set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = code)
+  };  
+  writeToFile("/home/tom/public_html/proj/tmp/" ++ name, code);
+}
+
+# Load code from the database and insert it
+fun loadFile(name) client
+{
+  var lData = getFile(name);
+  var lBody = getDocumentBody();
+  var rval = convertData(lData) : Xml;
+  
+  debug("Calling replace");
+  replaceChildren(rval, lBody);
+  debug("done parsing");
+  highlightCode(getContentDocument(hd(getElementsByTagName("object"))));
+}
+
+fun insertCode(code) client
+{
+  replaceChildren(code, getDocumentBody());
+  highlightCode(getContentDocument(hd(getElementsByTagName("object"))));
+}
+
+sig splitLines : (String) -> [String]
+fun splitLines(datalist)
+{ 
+  switch (datalist)
+  { 
+    case [] -> []
+    case xs -> 
+    {
+      var listHead = takeUntilBreak(xs) : String;
+      var listTail = dropUntilBreak(xs) : String;
+      [listHead] ++ splitLines(listTail)
+    }
+  }
+}
+
+fun takeUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        []
+      else
+        x :: takeUntilBreak(y::zs)
+    }
+  }
+}
+
+fun dropUntilBreak(data)
+{
+  switch (data)
+  {
+    case [] -> []
+    case (x::y::zs) ->
+    {
+      if ((x == '\') && (y == 'n'))
+        zs
+      else
+        dropUntilBreak(y::zs)
+    }
+  }
+}
+
+# Insert data, replacing \n with <br />
+sig convertData : (String) -> Xml
+fun convertData(data) client
+{
+  var dataList = splitLinesJS(data) : [String]; 
+  printEach(dataList);
+  var out = getXmlList(dataList);
+  debug("returning");
+  out
+}
+
+sig printEach : ([String]) -> ()
+fun printEach(datalist) client
+{
+  var lList = datalist : [String];
+  var p = for (var item <- lList)
+    {debug("item: " ++ item);
+    []};
+
+  ()
+}
+
+fun getXmlList(stringList) server
+{
+    for (var item <- stringList)
+    {
+      debug("item: " ++ item);
+      <#>{stringToXml(item)} <br /></#>
+    } : Xml
+}
+
+# Load a file from the database
+fun getFile(name) server
+{
+  debug("get data");
+  var res = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    {
+      [lFile.data]
+    };
+  debug("done");
+  if (numElems(res) == 0)
+    "No such file '" ++ name ++ "'."
+  else
+   hd(res)
+}
+
+# Check if a file exists
+fun fileExists(name) server
+{
+  var lCount = for (var lFile <-- files)
+    where ((lFile.pid == 1) && (lFile.name == name))
+    [lFile.pid];
+
+  numElems(lCount) >= 1
+}
+
+
+# Parse the HTML in the children of the reference, getting all the text nodes
+fun getCode(ref) client
+{
+  if (isNull(ref))
+  {
+    ""
+  }
+  else
+  {
+    var tagName = domGetTagNameFromRef(ref);
+    var nextSib = nextSibling(ref);
+    
+    var outText = switch (tagName)
+    { 
+      case "BR" -> "\\n" ++ getCode(nextSib)
+      case "SPAN" -> getTextContent(getChildNodes(getValue(ref))) ++ getCode(nextSib)
+      case _ -> getCode(nextSib)
+    };
+
+    outText
+  }
+}
+
+fun unescape(text, previous)
+{
+  switch (text)
+  {
+    case [] -> []
+    case (x::xs) -> 
+    {
+      debug("Curr: " ++ [x]);
+      if ((x == '\\') && (previous == '\\'))
+      { 
+        unescape(xs, ' ')
+      }
+      else
+      {
+        x :: unescape(xs, x)
+      }
+    }
+  }
+}
+
+fun renderObject()
+{
+  var opHandler = spawn { fileOp() };
+  <#>
+    <object id="main" class="main" type="text/html" data="CodeMirror/index.html">
+      <div>Alternate text</div>
+    </object>
+    <div id="values">
+      <input type="text" id="filename" value="filename" />
+      <input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
+      <input type="submit" l:onclick="{opHandler ! LoadFile()}" value="load" />
+      <br />
+      <a l:href="{logout()}">logout</a>
+    </div>
+  </#>
+}
+
+fun redir() server 
+{
+  redirect("login.links");
+  <div>not redirected</div>
+}
+
+fun main() client {
+  if (not(isLoggedIn()))
+  {
+    <div><a href="login.links">Not logged in</a></div>
+  }
+  else
+  {
+  <html>
+    <head>
+      <title>ug4proj: Links</title>
+    </head>
+    <link rel="stylesheet" type="text/css" href="proj.css" />
+    <body>
+      <div id="main">
+      {
+        renderObject()
+      }
+      </div>
+    </body>
+  </html>
+  }
+}
+
+page
+  <#>{main()}</#>
+  

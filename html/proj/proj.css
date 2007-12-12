@@ -1,0 +1,121 @@
+html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fieldset, input, p, blockquote, th, td {
+  margin:0pt;
+  padding:0pt;
+}
+
+.editor { 
+  width: 480px;
+  height: 400px;
+  border: 1px solid #85B1FF;
+  position: absolute;
+  left: 160px;
+  top: 40px;
+}
+
+.space { 
+  width: 10px;
+  height: 400px;
+  position: absolute;
+  left: 152px;
+  top: 40px;
+  background-image: url('images/bg-grad-vert.jpg');
+  border-top: 1px solid #85B1FF;
+  border-bottom: 1px solid #85B1FF;
+}
+
+.proj-browser { 
+  border: 1px solid #85B1FF;
+  width: 150px;
+  height: 400px;
+  position: absolute;
+  left: 0px;
+  top: 40px;
+  margin-top: 0px;
+  margin-left: 0px;
+}
+
+.proj-items { 
+  overflow: auto;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+  font-size-adjust: none;
+  font-style: normal;
+  font-variant :normal;
+  font-weight: normal;
+  line-height: normal;
+  white-space: nowrap;
+  vertical-align: top;
+  height: 375px;
+}
+
+.proj-text { 
+  padding:1px 3px 1px 2px;
+  display: compact;
+  text-decoration: none;
+  float: middle;
+  position: top;
+}
+
+ul.proj-list { 
+  margin: 0px;
+  padding: 0px;
+  list-style-position: outside;
+  list-style-type: none;
+  vertical-align: top;
+  height: 300px:
+}
+
+li.proj-list-item { 
+  vertical-align: top;
+  position: relative;
+  margin: 0px;
+  padding: 0px;
+  border: 0px;
+}
+
+.proj-node { 
+  vertical-align: top;
+  height: 16px;
+}
+
+.proj-blank { 
+  background-image: url("images/dots.png");
+  background-repeat: no-repeat;
+}
+
+.caption-bg { 
+  background-image: url('images/bg-grad.jpg');
+  width: 150px;
+  height: 25px;
+  vertical-align: bottom;
+  border-bottom: 1px solid #85B1FF;
+}
+
+.caption-text { 
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+  padding: 6px;
+  height: 19px;
+  -moz-user-select: none;
+  display: block;
+}
+
+.values { 
+  position: absolute;
+  left: 0px;
+  top: 425px;
+}
+
+div.index {
+  font-weight: bold;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+object.main { 
+  width: 600px;
+  height: 400px;
+  border: 1px solid;
+}
+

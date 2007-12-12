@@ -1,0 +1,524 @@
+/* Tokenizer for Links code */
+
+/* Extrapolated from the original tokenizejavascript.js */
+
+var tokenizeLinks = function(){
+  // A map of JavaScript's keywords. The a/b/c keyword distinction is
+  // very rough, but it gives the parser enough information to parse
+  // correct code correctly (we don't care much how we parse incorrect
+  // code). The style information included in these objects is used by
+  // the highlighter to pick the correct CSS style for a token.
+  var keywords = function(){
+    function result(type, style){
+      return {type: type, style: style};
+    }
+    // keywords that take a parenthised expression, and then a
+    // statement (if)
+    var keywordA = result("keyword a", "keyword");
+    // keywords that take just a statement (else)
+    var keywordB = result("keyword b", "keyword");
+    // keywords that optionally take an expression, and form a
+    // statement (return)
+    var keywordC = result("keyword c", "keyword");
+    var operator = result("operator", "keyword");
+    var atom = result("atom", "atom");
+    return {
+      "if": keywordA, "switch": keywordA, "where": keywordA, "orderby": keywordA, 
+      "update": keywordA, "delete": keywordA, "debug": keywordA, "alert": keywordA,
+      "table": keywordA, "from": keywordA, "insert": keywordA,
+      "else": keywordB,
+      "return": keywordC, "break": keywordC, "continue": keywordC, "new": keywordC, "delete": keywordC, 
+      "throw": keywordC, "with": keywordC,
+      "var": result("var", "keyword"), "fun": result("function", "keyword"), "catch": result("catch", "keyword"),
+      "for": result("for", "keyword"), "case": result("case", "keyword"), "database": result("database", "keyword"),
+      "true": atom, "false": atom, "[]": atom
+    };
+  }();
+
+  // Some helper regexp matchers. 
+  var isOperatorChar = matcher(/[\+\-\^\*\&\%\/=<>!\.:\|\~]|mod|not/);
+  var isDigit        = matcher(/[0-9]/);
+  var isHexDigit     = matcher(/[0-9A-Fa-f]/);
+  var isWordChar     = matcher(/[\w\$_]/);
+  var isNameOrAttr   = matcher(/[\w:]/);
+
+  // An HTML state object
+  var htmlState = {htmlStack: [], inHTML: false, CurrTag: {name: "", closed: true, parent: null}};
+
+  function isWhiteSpace(ch){
+    // Unfortunately, IE's regexp matcher thinks non-breaking spaces
+    // aren't whitespace. Also, in our scheme newlines are no
+    // whitespace (they are another special case).
+    return ch != "\n" && (ch == nbsp || /\s/.test(ch));
+  }
+
+  // This function produces a MochiKit-style iterator that tokenizes
+  // the output of the given stringstream (see stringstream.js).
+  // Tokens are objects with a type, style, and value property. The
+  // value contains the textual content of the token. Because this may
+  // include trailing whitespace (for efficiency reasons), some
+  // tokens, such a variable names, also have a name property
+  // containing their actual textual value.
+  return function(source){
+    // Produce a value to return. Automatically skips and includes any
+    // whitespace. The base argument is prepended to the value
+    // property and assigned to the name property -- this is used when
+    // the caller has already extracted the text from the stream
+    // himself.
+    function result(type, style, base){
+      nextWhile(isWhiteSpace);
+      var value = {type: type, style: style, value: (base ? base + source.get() : source.get())};
+      if (base) value.name = base;
+      return value;
+    }
+
+    // Advance the text stream over characters for which test returns
+    // true. (The characters that are 'consumed' like this can later
+    // be retrieved by calling source.get()).
+    function nextWhile(test){
+      var next;
+      while((next = source.peek()) && test(next))
+        source.next();
+    }
+    // Advance the stream until the given character (not preceded by a
+    // backslash) is encountered (or a newline is found).
+    function nextUntilUnescaped(end){
+      var escaped = false;
+      var next;
+      while((next = source.peek()) && next != "\n"){
+        source.next();
+        if (next == end && !escaped)
+          break;
+        escaped = next == "\\";
+      }
+    }
+  
+    function readHexNumber(){
+      source.next(); // skip the 'x'
+      nextWhile(isHexDigit);
+      return result("number", "atom");
+    }
+    function readNumber(){
+      nextWhile(isDigit);
+      if (source.peek() == "."){
+        source.next();
+        nextWhile(isDigit);
+      }
+      if (source.peek() == "e" || source.peek() == "E"){
+        source.next();
+        if (source.peek() == "-")
+          source.next();
+        nextWhile(isDigit);
+      }
+      return result("number", "atom");
+    }
+    // Read a word, look it up in keywords. If not found, it is a
+    // variable, otherwise it is a keyword of the type found.
+    function readWord(){
+      nextWhile(isWordChar);
+      var word = source.get();
+      var known = keywords.hasOwnProperty(word) && keywords.propertyIsEnumerable(word) && keywords[word];
+      return known ? result(known.type, known.style, word) : result("variable", "variable", word);
+    }
+    function readRegexp(){
+      nextUntilUnescaped("/");
+      nextWhile(matcher(/[gi]/));
+      return result("regexp", "string");
+    }
+    // Fetch the next token. Dispatches on first character in the
+    // stream, or first two characters when the first is a slash. The
+    // || things are a silly trick to keep simple cases on a single
+    // line.
+    function next(){
+      var ch = source.next();
+      return linksLexer(ch);
+    }
+      
+
+    var linksLexer = function(ch)
+    {
+      var token = null;
+
+      if (ch == "\n")
+        token = result("newline", "whitespace"); //{type: "newline", style: "whitespace", value: source.get()};
+      else if (isWhiteSpace(ch))
+        token = nextWhile(isWhiteSpace) || result("whitespace", "whitespace");
+/*      else if (this.htmlState.inHTML) {
+        // We're in HTML: tokenize accordingly
+        lhtmlState = tokenizeHTML(ch, this.htmlState);
+        this.htmlState = lhtmlState.state;
+        token = lhtmlState.token;
+      }*/
+      else if (ch == "\"" || ch == "'")
+        token = nextUntilUnescaped(ch) || result("string", "string");
+      else if (ch == "[" && source.peek() == "|") {
+        // read the next character too, then set this to be a variant
+        source.next();
+        token = result("variant", "punctuation");
+      }
+      else if (ch == "|" && source.peek() == "]") {
+        // read the next character too, then set this to be punctuation
+        source.next();
+        token = result("|]", "punctuation");
+      }
+      // with punctuation, the type of the token is the symbol itself
+      else if (/[\[\]{}\(\),;\:\.]/.test(ch))
+        token = result(ch, "punctuation");
+      else if (ch == "0" && (source.peek() == "x" || source.peek() == "X"))
+        token = readHexNumber();
+      else if (isDigit(ch))
+        token = readNumber();
+      else if (ch == "#")
+        token = nextUntilUnescaped(null) || result("comment", "comment");
+      else if ((ch == "<") && (!isWhiteSpace(source.peek())) && 
+          (source.peek() != null)) {
+        // Get the name of the tag we're dealing with
+        //this.topTag = source.peekWhile(function (x) { return !isWhiteSpace(x); });
+        //this.currTag.name = this.topTag;
+
+        // Set the inHTML variable and tokenize the '<' as a tag
+        //lhtmlState = tokenizeHTML(ch, this.htmlState);
+        token = result("html", "html");
+        //this.htmlState = lhtmlState.state;
+        //this.htmlState.inHTML = true;
+      }
+      else if (ch == "/"){
+        if (this.regexp)
+          token = readRegexp();
+        else
+          token = nextWhile(isOperatorChar) || result("operator", "operator");
+      }
+      else if (isOperatorChar(ch))
+        token = nextWhile(isOperatorChar) || result("operator", "operator");
+      else
+        token = readWord();
+
+      // JavaScript's syntax rules for when a slash might be the start
+      // of a regexp and when it is just a division operator are kind
+      // of non-obvious. This decides, based on the current token,
+      // whether the next token could be a regular expression.
+      if (token.style != "whitespace" && token != "comment")
+        this.regexp = token.type == "operator" || token.type == "keyword c" || token.type.match(/[\[{}\(,;:]/);
+      return token;
+    }
+
+    // Function for tokenizing HTML.
+    function tokenizeHTML2(ch, state)
+    {
+      if (isWhiteSpace(ch))
+        token = result("whitespace", "whitespace");
+      else if ((ch == "<") && (!isWhiteSpace(source.peek())))
+      {
+        nextUntilUnescaped(">");
+        //source.next();
+        //lName = source.get();
+        token = result("tag", "html");
+      }
+/*
+      else if ((isWordChar(ch)) && (state.CurrTag.closed)) 
+      {
+        // start a new tag
+        nextWhile(isWordChar);
+        tagName = source.get();
+
+        var newTag = {name: tagName, closed: false, parent: state.CurrTag};
+        state.htmlStack.push(newTag);
+        state.CurrTag = newTag;
+
+        token = result("html", "html", tagName); 
+      }        
+      else if (ch == ">")
+      {
+        token = result("tag", "punctuation");
+        state.CurrTag.closed = true;
+      }
+      else if ((ch == "/") && (source.peek() == ">"))
+      {
+        source.next();
+        token = result("tag", "punctuation");
+        
+        nextTag = htmlStack.pop();
+
+        if (state.htmlStack.length == 0)
+          state.inHTML = false;
+        else
+          state.CurrTag = state.CurrTag.parent;
+      }*/
+      else
+      {
+        token = result("text", "text");
+      }
+      // switch to links?
+      // check if we're closing the current tag
+      // check if we're opening a new one
+      // check if we're working on an attribute
+      // otherwise it's just text - read it all.
+      return {token: token, state: state};
+      
+    }
+
+    // Wrap it in an iterator. The state (regexp, inHTML, topTag and currTag) is
+    // exposed because a parser will need to save it when making a
+    // copy of its state.
+    return {next: next, regexp: true, inHTML: false};
+  }
+}();
+
+// could we perhaps make use of a second tokenizer for HTML?
+
+var tokenizeHTML3 = function(){
+  // A map of JavaScript's keywords. The a/b/c keyword distinction is
+  // very rough, but it gives the parser enough information to parse
+  // correct code correctly (we don't care much how we parse incorrect
+  // code). The style information included in these objects is used by
+  // the highlighter to pick the correct CSS style for a token.
+  var keywords = function(){
+    function result(type, style){
+      return {type: type, style: style};
+    }
+    // keywords that take a parenthised expression, and then a
+    // statement (if)
+    var keywordA = result("keyword a", "keyword");
+    // keywords that take just a statement (else)
+    var keywordB = result("keyword b", "keyword");
+    // keywords that optionally take an expression, and form a
+    // statement (return)
+    var keywordC = result("keyword c", "keyword");
+    var operator = result("operator", "keyword");
+    var atom = result("atom", "atom");
+    return {
+      "if": keywordA, "switch": keywordA, "where": keywordA, "orderby": keywordA, 
+      "update": keywordA, "delete": keywordA, "debug": keywordA, "alert": keywordA,
+      "table": keywordA, "from": keywordA, "insert": keywordA,
+      "else": keywordB,
+      "return": keywordC, "break": keywordC, "continue": keywordC, "new": keywordC, "delete": keywordC, 
+      "throw": keywordC, "with": keywordC,
+      "var": result("var", "keyword"), "fun": result("function", "keyword"), "catch": result("catch", "keyword"),
+      "for": result("for", "keyword"), "case": result("case", "keyword"), "database": result("database", "keyword"),
+      "true": atom, "false": atom, "[]": atom
+    };
+  }();
+
+  // Some helper regexp matchers. 
+  var isOperatorChar = matcher(/[\+\-\^\*\&\%\/=<>!\.:\|\~]|mod|not/);
+  var isDigit        = matcher(/[0-9]/);
+  var isHexDigit     = matcher(/[0-9A-Fa-f]/);
+  var isWordChar     = matcher(/[\w\$_]/);
+  var isNameOrAttr   = matcher(/[\w:]/);
+
+  // An HTML state object
+  var htmlState = {htmlStack: [], inHTML: false, CurrTag: {name: "", closed: true, parent: null}};
+
+  function isWhiteSpace(ch){
+    // Unfortunately, IE's regexp matcher thinks non-breaking spaces
+    // aren't whitespace. Also, in our scheme newlines are no
+    // whitespace (they are another special case).
+    return ch != "\n" && (ch == nbsp || /\s/.test(ch));
+  }
+
+  // This function produces a MochiKit-style iterator that tokenizes
+  // the output of the given stringstream (see stringstream.js).
+  // Tokens are objects with a type, style, and value property. The
+  // value contains the textual content of the token. Because this may
+  // include trailing whitespace (for efficiency reasons), some
+  // tokens, such a variable names, also have a name property
+  // containing their actual textual value.
+  return function(source){
+    // Produce a value to return. Automatically skips and includes any
+    // whitespace. The base argument is prepended to the value
+    // property and assigned to the name property -- this is used when
+    // the caller has already extracted the text from the stream
+    // himself.
+    function result(type, style, base){
+      nextWhile(isWhiteSpace);
+      var value = {type: type, style: style, value: (base ? base + source.get() : source.get())};
+      if (base) value.name = base;
+      return value;
+    }
+
+    // Advance the text stream over characters for which test returns
+    // true. (The characters that are 'consumed' like this can later
+    // be retrieved by calling source.get()).
+    function nextWhile(test){
+      var next;
+      while((next = source.peek()) && test(next))
+        source.next();
+    }
+    // Advance the stream until the given character (not preceded by a
+    // backslash) is encountered (or a newline is found).
+    function nextUntilUnescaped(end){
+      var escaped = false;
+      var next;
+      while((next = source.peek()) && next != "\n"){
+        source.next();
+        if (next == end && !escaped)
+          break;
+        escaped = next == "\\";
+      }
+    }
+  
+    function readHexNumber(){
+      source.next(); // skip the 'x'
+      nextWhile(isHexDigit);
+      return result("number", "atom");
+    }
+    function readNumber(){
+      nextWhile(isDigit);
+      if (source.peek() == "."){
+        source.next();
+        nextWhile(isDigit);
+      }
+      if (source.peek() == "e" || source.peek() == "E"){
+        source.next();
+        if (source.peek() == "-")
+          source.next();
+        nextWhile(isDigit);
+      }
+      return result("number", "atom");
+    }
+    // Read a word, look it up in keywords. If not found, it is a
+    // variable, otherwise it is a keyword of the type found.
+    function readWord(){
+      nextWhile(isWordChar);
+      var word = source.get();
+      var known = keywords.hasOwnProperty(word) && keywords.propertyIsEnumerable(word) && keywords[word];
+      return known ? result(known.type, known.style, word) : result("variable", "variable", word);
+    }
+    function readRegexp(){
+      nextUntilUnescaped("/");
+      nextWhile(matcher(/[gi]/));
+      return result("regexp", "string");
+    }
+    // Fetch the next token. Dispatches on first character in the
+    // stream, or first two characters when the first is a slash. The
+    // || things are a silly trick to keep simple cases on a single
+    // line.
+    function next(){
+      var token = null;
+      var ch = source.next();
+      if (ch == "\n")
+        token = {type: "newline", style: "whitespace", value: source.get()};
+      else if (isWhiteSpace(ch))
+        token = nextWhile(isWhiteSpace) || result("whitespace", "whitespace");
+      else 
+        token = result("html", "html");
+      /*if (this.htmlState.inHTML) {
+        // We're in HTML: tokenize accordingly
+        lhtmlState = tokenizeHTML(ch, this.htmlState);
+        this.htmlState = lhtmlState.state;
+        token = lhtmlState.token;
+      }
+      else if (ch == "\"" || ch == "'")
+        token = nextUntilUnescaped(ch) || result("string", "string");
+      else if (ch == "[" && source.peek() == "|") {
+        // read the next character too, then set this to be a variant
+        source.next();
+        token = result("variant", "punctuation");
+      }
+      else if (ch == "|" && source.peek() == "]") {
+        // read the next character too, then set this to be punctuation
+        source.next();
+        token = result("|]", "punctuation");
+      }
+      // with punctuation, the type of the token is the symbol itself
+      else if (/[\[\]{}\(\),;\:\.]/.test(ch))
+        token = result(ch, "punctuation");
+      else if (ch == "0" && (source.peek() == "x" || source.peek() == "X"))
+        token = readHexNumber();
+      else if (isDigit(ch))
+        token = readNumber();
+      else if (ch == "#")
+        token = nextUntilUnescaped(null) || result("comment", "comment");
+      else if ((ch == "<") && (!isWhiteSpace(source.peek())) && 
+          (source.peek() != null)) {
+        // Get the name of the tag we're dealing with
+        this.topTag = source.peekWhile(function (x) { return !isWhiteSpace(x); });
+        //this.currTag.name = this.topTag;
+
+        // Set the inHTML variable and tokenize the '<' as a tag
+        lhtmlState = tokenizeHTML(ch, this.htmlState);
+        token = lhtmlState.token;
+        this.htmlState = lhtmlState.state;
+        this.htmlState.inHTML = true;
+      }
+      else if (ch == "/"){
+        if (this.regexp)
+          token = readRegexp();
+        else
+          token = nextWhile(isOperatorChar) || result("operator", "operator");
+      }
+      else if (isOperatorChar(ch))
+        token = nextWhile(isOperatorChar) || result("operator", "operator");
+      else
+        token = readWord();*/
+
+      // JavaScript's syntax rules for when a slash might be the start
+      // of a regexp and when it is just a division operator are kind
+      // of non-obvious. This decides, based on the current token,
+      // whether the next token could be a regular expression.
+      if (token.style != "whitespace" && token != "comment")
+        this.regexp = token.type == "operator" || token.type == "keyword c" || token.type.match(/[\[{}\(,;:]/);
+      return token;
+    }
+
+    // Function for tokenizing HTML.
+    function tokenizeHTML(ch, state)
+    {
+      if (isWhiteSpace(ch))
+        token = result("whitespace", "whitespace");
+      else if ((ch == "<") && (!isWhiteSpace(source.peek())))
+      {
+        nextWhile(function closeBracket(x) { return x != ">"; });
+        source.next();
+        lName = source.get();
+        token = result("tag", "html", lName);
+      }
+/*
+      else if ((isWordChar(ch)) && (state.CurrTag.closed)) 
+      {
+        // start a new tag
+        nextWhile(isWordChar);
+        tagName = source.get();
+
+        var newTag = {name: tagName, closed: false, parent: state.CurrTag};
+        state.htmlStack.push(newTag);
+        state.CurrTag = newTag;
+
+        token = result("html", "html", tagName); 
+      }        
+      else if (ch == ">")
+      {
+        token = result("tag", "punctuation");
+        state.CurrTag.closed = true;
+      }
+      else if ((ch == "/") && (source.peek() == ">"))
+      {
+        source.next();
+        token = result("tag", "punctuation");
+        
+        nextTag = htmlStack.pop();
+
+        if (state.htmlStack.length == 0)
+          state.inHTML = false;
+        else
+          state.CurrTag = state.CurrTag.parent;
+      }*/
+      else
+      {
+        token = result("text", "text");
+      }
+      // switch to links?
+      // check if we're closing the current tag
+      // check if we're opening a new one
+      // check if we're working on an attribute
+      // otherwise it's just text - read it all.
+      return {token: token, state: state};
+      
+    }
+
+    // Wrap it in an iterator. The state (regexp, inHTML, topTag and currTag) is
+    // exposed because a parser will need to save it when making a
+    // copy of its state.
+    return {next: next, regexp: true, htmlState: htmlState};
+  }
+}();

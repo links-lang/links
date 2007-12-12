@@ -1,0 +1,7 @@
+fun x() {
+  var p = <div>Hello <span style="color: #bbb666;">pigs</span></div>;
+  p
+}
+
+page
+  <#>{x()}</#>

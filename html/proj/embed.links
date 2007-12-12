@@ -1,0 +1,67 @@
+fun createDoc()
+{
+  # Make doc editable
+  domSetWinDocAttribute("designMode", "On");
+
+  <html>
+    <head>
+      <title />
+    </head>
+    <body contentEditable="true">
+      <div l:onkeydownpage="{keyHandler(event)}"> </div>
+    </body>
+  </html>
+}
+
+fun clickHandler(mEvent)
+{
+  var lMods = getModifiers(mEvent) : [Char];
+  var lOut = 
+    for (var mod <- lMods)
+      [mod];
+
+  debug(lOut);
+}
+
+fun keyHandler(mEvent)
+{
+  var lCharCode = getCharCode(mEvent);
+  var lModifs = getModifiers(mEvent);
+  var lStop = false;
+  #debug("Modifs: " ++ lModifs);
+  
+  # Check if the ctrl key was pressed
+  if (stringToInt(lModifs) == 17)
+  {
+    #debug("Charcode: " ++ intToString(lCharCode));
+    switch (chr(lCharCode))
+    {
+      case 'B' -> { 
+                    execBold(getDocument());          
+                    eventStopPropagation(mEvent);
+                  }
+      case _  -> {}
+    } 
+  }
+  else {};
+
+  if (lCharCode == 32)
+  {
+    debug("Space!");
+  }
+  else {};
+
+  if (lStop)
+  {
+    eventStopPropagation(mEvent); 
+  } else ();
+}
+
+fun fakeHandler(event)
+{
+}
+
+createDoc()
+
+
+  
