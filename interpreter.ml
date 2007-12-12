@@ -490,6 +490,8 @@ and interpret_definition :
 
 and interpret : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
+  Debug.print ("expr: "^ string_of_expression expr);
+  Debug.print ("locals: " ^ mapstrcat "," fst locals);
   let eval = interpret globals locals in
   let box_constant = function
     | Boolean b -> bool b
@@ -558,7 +560,7 @@ fun globals locals expr cont ->
                     fields []) in
       let fvs = StringSet.union_all fvss in
       eval record (StringMap.fold (fun label value cont ->
-                                     BinopRight([], `RecExt label, value) :: cont) fields cont)
+                                     BinopRight(locals, `RecExt label, value) :: cont) fields cont)
   | Syntax.Project (expr, label, _) ->
       eval expr (UnopApply ([], Result.Project label) :: cont)
   | Syntax.Erase (expr, label, _) ->
