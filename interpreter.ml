@@ -490,8 +490,6 @@ and interpret_definition :
 
 and interpret : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
-  Debug.print ("expr: "^ string_of_expression expr);
-  Debug.print ("locals: " ^ mapstrcat "," fst locals);
   let eval = interpret globals locals in
   let box_constant = function
     | Boolean b -> bool b
