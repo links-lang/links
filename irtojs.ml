@@ -784,11 +784,7 @@ and generate_program env : computation -> (Env'.env * code) = fun c ->
 
 module Symbols :
 sig
-  val rename : Syntax.expression -> Syntax.expression
-  val rename_def : Syntax.definition -> Syntax.definition
-  val rename_program : Syntax.program -> Syntax.program
-
-  val rename_env : 'a Env.String.t -> 'a Env.String.t
+  val rename : Syntax.program -> Syntax.program
 end =
 struct
   let words =
@@ -847,7 +843,7 @@ struct
       "_" ^ name (* FIXME: this could conflict with Links names. *)
     else name
       
-  let rename exp = 
+  let rename_expression exp = 
     from_option exp
       (RewriteSyntax.bottomup
          (function
@@ -855,15 +851,15 @@ struct
             | Let (name, rhs, body, d) -> 
                 Some (Let (wordify name, rhs, body, d))
             | Rec (bindings, body, d) -> 
-                let rename (nm, body, t) = (wordify nm, body, t) in
-                  Some (Rec (List.map rename bindings, body, d))
+                let rename_expression (nm, body, t) = (wordify nm, body, t) in
+                  Some (Rec (List.map rename_expression bindings, body, d))
             | _ -> None)
          exp)
 
   let rec rename_def def =
     match def with
       | Define (name, b, l, t) -> 
-          Define (wordify name, rename b, l, t)
+          Define (wordify name, rename_expression b, l, t)
       | Alias (name, _, _, _)
       | Alien (name, _, _, _) when has_symbols name ->
           assert false (* symbols shouldn't appear in types or foreign functions *)
@@ -872,14 +868,9 @@ struct
       | _ -> def
 
   let rename_program (Program(defs, expr)) = 
-    Program(List.map rename_def defs, rename expr)
+    Program(List.map rename_def defs, rename_expression expr)
 
-  let rename_env env =
-    Env.String.fold
-      (fun name v env ->
-         Env.String.bind env (wordify name, v))
-      env
-      Env.String.empty
+  let rename = rename_program
 end
 
 let script_tag body = 
@@ -978,7 +969,7 @@ let preprocess_program global_names program =
     (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
     (Program (defs, body))
   in
-    program
+    Symbols.rename program
 
 let make_initial_env (tenv, aenv) =
   let dt = Parse.parse_string Parse.datatype ->- fst in
@@ -996,8 +987,6 @@ let compile_ir tyenv global_names program =
   let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv, aenv) program in 
 
   let env, _, _ = Compileir.add_globals_to_env (env, tenv, aenv) bindings in
-  let env = Symbols.rename_env env in
-
   let env' = Compileir.invert_env env in
     e, env'
 
