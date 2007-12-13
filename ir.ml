@@ -74,7 +74,8 @@ and binding =
   | `Fun of (binder * binder list * computation * location)
   | `Rec of (binder * binder list * computation * location) list
   | `Alien of (binder * language)
-  | `Alias of (tyname * tyvar list * Types.datatype) ]
+  | `Alias of (tyname * tyvar list * Types.datatype)
+  | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
   | `Wrong of Types.datatype
@@ -422,6 +423,16 @@ struct
             let alias_env = register_alias (name, quantifiers, t) alias_env in
 (*              Debug.print ("updated alias env: "^Types.Show_alias_environment.show alias_env);*)
               `Alias (name, quantifiers, t), {< alias_env=alias_env;  tyenv=(tenv, alias_env) >}
+        | `Module (name, defs) ->
+            let defs, o =
+              match defs with
+                | None -> None, o
+                | Some defs ->
+                    let defs, o = o#bindings defs
+                    in
+                      Some defs, o
+            in
+              `Module (name, defs), o
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->

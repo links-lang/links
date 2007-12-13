@@ -1,9 +1,11 @@
 # adapted from http://www.timestretch.com/FractalBenchmark.html
 
+typename Context = Int;
+
 alien javascript jsmandelbrot : (Float, Float) -> Int;
 alien javascript getCurrentTime : () -> Int;
 
-alien javascript getCanvasById : String -> Context;
+alien javascript getCanvasById : (String) -> Context;
 alien javascript canvasSetFillStyle : (Context, String) -> ();
 alien javascript canvasFillRect : (Context, Int, Int, Int, Int) -> ();
 
@@ -137,12 +139,14 @@ fun recursive(compute, c) {
 }
 
 fun iterative(compute, c) client {
+  ignore(
   for (var y <- range(-39, 39)) {
+    ignore(
     for (var x <- range(-39,39)) {
       (if (compute(intToFloat(x)/.40.0, intToFloat(y)/.40.0) == 0) (c ! Point (x+39,y+39))
        else ()); []
-    }; []
-  };
+    }); []
+  })
 }
 
 fun lookupName(bindings, s) {
@@ -151,10 +155,10 @@ fun lookupName(bindings, s) {
   hd(fs)
 }
 
-var traversals = [("recursive", recursive), ("iterative", iterative)];
-var drawings = [("empty", nowt), ("line", line), ("block", block),
+fun traversals() {[("recursive", recursive), ("iterative", iterative)]}
+fun drawings() {[("empty", nowt), ("line", line), ("block", block),
              ("Mandlebrot set (Links computation)", mandelbrot),
-             ("Mandelbrot set (JavaScript computation)", jsmandelbrot)];
+             ("Mandelbrot set (JavaScript computation)", jsmandelbrot)]}
 
 fun dodrawing(drawingName, traversalName) client {
   var id = getfreshid("drawing");
@@ -162,9 +166,9 @@ fun dodrawing(drawingName, traversalName) client {
   var startTime = getCurrentTime();
 
 
-  var drawing = lookupName(drawings, drawingName);
+  var drawing = lookupName(drawings(), drawingName);
 
-  var traversal = lookupName(traversals, traversalName);
+  var traversal = lookupName(traversals(), traversalName);
 
   traversal(drawing, c);
 
@@ -183,7 +187,7 @@ fun dodrawing(drawingName, traversalName) client {
 # }
 
 #    <table><tr>
-#   {for ((name, drawing) <- drawings)
+#   {for ((name, drawing) <- drawings())
 #      makeButton(name)}
 #    </tr></table>
 
@@ -195,36 +199,37 @@ fun dodrawing(drawingName, traversalName) client {
 # furthermore, apparently, radio buttons don't
 # seem to work at all
 
-fun radioButtons(name, bindings) {
-  for (var (x, f) <- bindings)
-    <input type="radio" l:name="{name}" value="{x}" />
-}
+#fun radioButtons(name, bindings) {
+#  for (var (x, f) <- bindings)
+#    <input type="radio" l:name="{name}" value="{x}" />
+#}
 
-fun selection(name, bindings) {
-  <select l:name="{name}">
-    {for (var (x, f) <- bindings)
-       <option>{stringToXml(x)}</option>}
-  </select>
-}
+#fun selection(name, bindings) {
+#  <select l:name="{name}">
+#    {for (var (x, f) <- bindings)
+#       <option>{stringToXml(x)}</option>}
+#  </select>
+#}
 
 #   <select l:name="traversalName">
 #     {for ((name, traversal) <- traversals)
 #        <option>{stringToXml(name)}</option>}
 #   </select>
 
+page
 <html>
  <body>
   <h1>Mandelbrot benchmarks using the canvas API</h1>
-  <form l:onsubmit="{spawn{dodrawing(drawingName, traversalName)}}">
+  <form l:onsubmit="{ignore(spawn{dodrawing(drawingName, traversalName)})}">
   Traversal: 
   <select l:name="traversalName">
-    {for (var (name, traversal) <- traversals)
+    {for (var (name, traversal) <- traversals())
         <option>{stringToXml(name)}</option>}
   </select>
   Drawing:
   <select l:name="drawingName">
-    {debug(intToString(length(drawings)));
-     for (var (name, drawing) <- drawings)
+    {debug(intToString(length(drawings())));
+     for (var (name, drawing) <- drawings())
        <option>{stringToXml(name)}</option>}
   </select>
   <button type="submit">Draw</button>

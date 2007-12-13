@@ -14,7 +14,6 @@ type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
 (* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
 module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
 
-
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract | `NativeString ]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
@@ -1197,9 +1196,10 @@ let split_row name row =
   in
     t, (StringMap.remove name field_env, row_var)
 
-let split_variant_type ?(aenv=Env.empty) name =
+let rec split_variant_type ?(aenv=Env.empty) name =
   (concrete_type ~aenv:aenv) ->-
     (function
+       | `ForAll (_, t) -> split_variant_type ~aenv:aenv name t
        | `Variant row ->
            let t, row = split_row name row in
              `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
@@ -1207,9 +1207,10 @@ let split_variant_type ?(aenv=Env.empty) name =
            raise (TypeDestructionError
                     ("Attempt to split non-variant type "^string_of_datatype t)))
 
-let project_type ?(aenv=Env.empty) name =
+let rec project_type ?(aenv=Env.empty) name =
   (concrete_type ~aenv:aenv) ->-
     (function
+       | `ForAll (_, t) -> project_type ~aenv:aenv name t
        | `Record row ->
            let t, _ = split_row name row in
              t
@@ -1217,9 +1218,10 @@ let project_type ?(aenv=Env.empty) name =
            raise (TypeDestructionError
                     ("Attempt to project non-record type "^string_of_datatype t)))
 
-let erase_type ?(aenv=Env.empty) name =
+let rec erase_type ?(aenv=Env.empty) name =
   (concrete_type ~aenv:aenv) ->-
     (function
+       | `ForAll (_, t) -> erase_type ~aenv:aenv name t
        | `Record row ->
            let t, row = split_row name row in
              `Record row
@@ -1246,9 +1248,10 @@ let rec arg_types ?(aenv=Env.empty) =
            raise (TypeDestructionError
                     ("Attempt to take arg types of non-function: " ^ string_of_datatype t)))
 
-let element_type ?(aenv=Env.empty) =
+let rec element_type ?(aenv=Env.empty) =
   (concrete_type ~aenv:aenv) ->-
     (function
+       | `ForAll (_, t) -> element_type ~aenv:aenv t
        | `Application ("List", [t]) -> t
        | t ->
            raise (TypeDestructionError

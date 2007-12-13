@@ -60,7 +60,8 @@ and binding =
   | `Fun of binder * binder list * computation * location
   | `Rec of (binder * binder list * computation * location) list
   | `Alien of binder * language
-  | `Alias of tyname * tyvar list * Types.datatype ]
+  | `Alias of tyname * tyvar list * Types.datatype
+  | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
   | `Wrong of Types.datatype

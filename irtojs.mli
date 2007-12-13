@@ -4,7 +4,8 @@ val generate_program_defs :
   string list -> 
   Syntax.definition list -> Utility.StringSet.t -> string list
 
-val generate_program : ?onload:string -> 
+val generate_program_page : ?onload:string -> 
+  Types.typing_environment ->
   string list -> 
   Syntax.program -> string
 
@@ -14,4 +15,6 @@ val make_boiler_page :
   ?head:string ->
   string list -> string
 
-val script_tag : ?base:string -> string -> string
+val ext_script_tag : ?base:string -> string -> string
+
+val compile_file : Types.typing_environment -> string -> string

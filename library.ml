@@ -999,7 +999,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(([(String,String)]) -> a) -> String",
+    datatype "((a) -> b) -> String",
     IMPURE));
 
   (* Serialize values to DB *)

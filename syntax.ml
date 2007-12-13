@@ -137,7 +137,8 @@ let defname = function (Define(name, _, _, _)) -> name
 
 let rec defined_names defs = 
   concat_map (function
-                | Define (n, _, _, _) -> [n]
+                | Define (n, _, _, _)
+                | Alien (_, n, _, _) -> [n]
                 | Module (_, Some defs, _) -> defined_names defs
                 | _ -> []) defs
   

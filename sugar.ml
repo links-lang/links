@@ -19,7 +19,8 @@ struct
 
   let server_use name pos = 
     apply pos "assoc" [(`Constant (`String name), pos);
-                       `Var "_env", pos]
+                       apply pos "environment" []]
+
   let client_use id pos = 
     apply pos "getInputValue" [(`Constant (`String id), pos)]
 
@@ -38,7 +39,7 @@ struct
             | [_,[href]], rest ->
                 (("href",
                   [`Constant (`String "?_k="), pos;
-                    apply pos "pickleCont" [`FunLit ([[`Any,pos]], href), pos]]))
+                    apply pos "pickleCont" [`FunLit ([[]], href), pos]]))
                 :: rest 
             | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
         in 
@@ -55,7 +56,7 @@ struct
                       ["type",  [`Constant (`String "hidden"), pos];
                        "name",  [`Constant (`String "_k"), pos];
                        "value", [apply pos "pickleCont"
-                                   [`FunLit ([[`Variable "_env",pos]], laction), pos]]],
+                                   [`FunLit ([[]], laction), pos]]],
                       None,
                       []), pos
               and action = ("action", [`Constant (`String "#"), pos]) 

@@ -25,6 +25,9 @@ Welcome to Links version 0.4 (Crostorfyn)", `System)
 (** Use the monadic IR *)
 let use_monadic_ir = Settings.add_bool ("use_monadic_ir", false, `User)
 
+(** Allow impure top-level definitions *)
+let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
+
 (** JS stuff *)
 (* needs to go here as long as we have two different JS compilers *)
 module Js =

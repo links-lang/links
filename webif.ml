@@ -144,6 +144,13 @@ let perform_request
     ((Syntax.Program(defs,main)) as program)
     req =
   let global_names = List.map fst globals in
+  let prelude_types () =
+    let prelude_types, _ =
+      (Errors.display_fatal Loader.load_file Library.typing_env
+         []
+         (Settings.get_value Basicsettings.prelude_file))
+    in
+      Types.extend_env Library.typing_env prelude_types in
   match req with
     | ContInvoke (cont, params) ->
         Library.print_http_response [("Content-type", "text/html")]
@@ -205,27 +212,26 @@ let perform_request
           if filename = "prelude.links" then
             Library.typing_env 
           else 
-            let prelude_types, (Syntax.Program (prelude, _)) =
-              (Errors.display_fatal Loader.load_file Library.typing_env
-                 []
-                 (Settings.get_value Basicsettings.prelude_file)) in
-              Types.extend_env Library.typing_env prelude_types
+            prelude_types ()
         in
           Library.print_http_response[("Content-type", "application/javascript")]
-            (Js.compile_file tyenv filename)
+            (if Settings.get_value (Basicsettings.use_monadic_ir) then
+               Irtojs.compile_file tyenv filename
+             else
+               Js.compile_file tyenv filename)
 
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then
              if Settings.get_value (Basicsettings.use_monadic_ir) then
-               Irtojs.generate_program global_names program
+               Irtojs.generate_program_page (prelude_types ()) global_names program
              else
                Js.generate_program global_names program
            else 
              let _env, rslt = Interpreter.run_program globals []
                                 (Syntax.Program (defs, main)) in
                Result.string_of_result rslt)
-                                                        
+
 let serve_request prelude (valenv, typenv) filename = 
   try 
     let _, (Syntax.Program (defs, main) as program) =

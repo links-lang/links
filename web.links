@@ -1,5 +1,4 @@
 #### WEB-RELATED ####
-include "formlets.links"
 
 # [freshResource] is a bit of magic that makes the subsequent actions a
 # new resource.  That is, it redirects the user to a new URL for the
