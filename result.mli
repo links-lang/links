@@ -103,11 +103,12 @@ and contin_frame =
         (environment * string * string option * xml *
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
-    | IgnoreDef of (environment * Syntax.definition)
+    | EvalDef of (environment * Syntax.definition)
     | Recv 
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Pickle)
+
 val toplevel_cont : continuation
 val expr_of_prim_val : result -> Syntax.expression option
 val prim_val_of_expr : Syntax.expression -> result option
@@ -164,3 +165,5 @@ val unmarshal_result : result list -> Syntax.program -> string -> result
 val bind : environment -> string -> result -> environment
 val empty_env : environment
 val trim_env : environment -> environment
+
+val minimize : continuation -> continuation

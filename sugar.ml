@@ -19,7 +19,8 @@ struct
 
   let server_use name pos = 
     apply pos "assoc" [(`Constant (`String name), pos);
-                       `Var "_env", pos]
+                       apply pos "environment" []]
+
   let client_use id pos = 
     apply pos "getInputValue" [(`Constant (`String id), pos)]
 
@@ -38,7 +39,7 @@ struct
             | [_,[href]], rest ->
                 (("href",
                   [`Constant (`String "?_k="), pos;
-                    apply pos "pickleCont" [`FunLit ([[`Any,pos]], href), pos]]))
+                    apply pos "pickleCont" [`FunLit ([[]], href), pos]]))
                 :: rest 
             | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
         in 
@@ -55,7 +56,7 @@ struct
                       ["type",  [`Constant (`String "hidden"), pos];
                        "name",  [`Constant (`String "_k"), pos];
                        "value", [apply pos "pickleCont"
-                                   [`FunLit ([[`Variable "_env",pos]], laction), pos]]],
+                                   [`FunLit ([[]], laction), pos]]],
                       None,
                       []), pos
               and action = ("action", [`Constant (`String "#"), pos]) 
@@ -926,6 +927,7 @@ module Desugarer =
                  flatten [funlit f; opt_app tv [] k]
              | `Val (p, e, _, k) -> flatten [ptv p; phrase e; opt_app tv [] k]
              | `Foreign (_, _, datatype) -> tv datatype
+             | `Include _ -> []
              | `Type (_, args, datatype) -> [List.map (fun k -> `RigidTypeVar k) args] @ tv datatype
              | `Funs fs -> 
                  concat_map
@@ -1318,6 +1320,7 @@ module Desugarer =
                              | `Infix
                              | `Funs _
                              | `Type _
+                             | `Include _
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
 
@@ -1710,7 +1713,8 @@ module Desugarer =
            Define (name, HasType (desugar_expression p, desugar_datatype' var_env t, pos), location, pos)
        | `Val _ -> assert false (* TODO: handle other patterns *)
        | `Fun (name, funlit, location, dtype) ->
-           Define (name,  Rec ([name, desugar_expression (`FunLit funlit, pos'), opt_map (desugar_datatype' var_env) dtype],
+           Define (name, Rec ([name, desugar_expression (`FunLit funlit, pos'), 
+                               opt_map (desugar_datatype' var_env) dtype],
                                 Variable (name, pos),
                                pos),
                    location, pos)
@@ -1728,10 +1732,12 @@ module Desugarer =
                failwith ("Free variable(s) in alias")
        | `Foreign (language, name, datatype) -> 
            Alien (language, name, desugar_assumption (generalize datatype), pos) 
+       | `Include path -> 
+           Module(Some path, None, pos)
        | _ -> assert false in
      let result = ds s
      in
-       (Debug.if_set show_desugared (fun ()-> string_of_definition result);
+       (Debug.if_set show_desugared (fun () -> string_of_definition result);
         result)
 
    let desugar_definitions lookup_pos =

@@ -21,7 +21,7 @@ let get_js_lib_url () = Settings.get_value js_lib_url
 (* Intermediate language *)
 type code = | Var    of string
             | Lit    of string
-            | DeclareVar of string
+            | DeclareVar of string * code option
             | Fn     of (string list * code)
 
             | LetFun of ((string * string list * code * location) * code)
@@ -52,8 +52,9 @@ struct
       | Var x               -> S.singleton x
       | Fn (args, body)     -> S.diff (fv body) (S.from_list args)
       | Call (func, args)   -> S.union (fv func) (S.union_all (map fv args))
+      | Unop (_, body)      -> fv body
       | Binop (l, _, r)     -> S.union (fv l) (fv r)
-      | If (a, b, c)      -> S.union (S.union (fv a) (fv b)) (fv c)
+      | If (a, b, c)        -> S.union (S.union (fv a) (fv b)) (fv c)
       | Dict terms          -> S.union_all (map (snd ->- fv) terms)
       | Lst terms           -> S.union_all (map fv terms)
       | Bind (var, e, body) -> S.union (fv e) (S.remove var (fv body))
@@ -183,7 +184,7 @@ struct
         | Var s -> s
         | Lit s -> s
         | Fn _ as f -> show_func "" f
-        | DeclareVar x -> "var "^x
+        | DeclareVar (x, c) -> "var "^x^(opt_app (fun c -> " = " ^ show c) "" c)
 
         | LetFun ((name, vars, body, location), rest) ->
             (show_func name (Fn (vars, body))) ^ show rest
@@ -251,7 +252,8 @@ struct
         | Var x -> PP.text x
         | Nothing -> PP.text ""
 
-        | DeclareVar x -> PP.text "var" ^+^ PP.text x
+        | DeclareVar (x, c) -> PP.text "var" ^+^ PP.text x
+            ^+^ (opt_app (fun c -> PP.text "=" ^+^ show c) PP.empty c)
 
         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
         | Lit literal -> PP.text literal
@@ -327,7 +329,7 @@ let chrlistlit s  = Lst(map chrlit (explode s))
      (e.g. int_of_string, xml)
  *)
 
-let script_tag ?(base=get_js_lib_url()) file =
+let ext_script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
 let inline_script file = (* makes debugging with firebug easier *)
@@ -336,33 +338,6 @@ let inline_script file = (* makes debugging with firebug easier *)
   let file_contents = String.make file_len '\000' in
     really_input file_in file_contents 0 file_len;
     "  <script type='text/javascript'>" ^file_contents^ "</script>"
-
-let boiler_1 () = "<html>
-  <head>
-  "^script_tag "json.js"^"
-  "^script_tag "regex.js"^"
-  "^script_tag "yahoo/yahoo.js"^"
-  "^script_tag "yahoo/event.js"^"
-    <script type='text/javascript'>var DEBUGGING="
-and boiler_2 () = ";</script>
-  "^script_tag "jslib.js"^"
-    <script type='text/javascript'><!-- "^"
-    function _getDatabaseConfig() {
-      return {driver:'" ^ Settings.get_value Library.database_driver ^
- "', args:'" ^ Settings.get_value Library.database_args ^"'}
-    }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n"
-and boiler_3 onload =    "\n--> </script>
-  <!-- $Id: js.ml 1001 2007-05-25 16:01:33Z ezra $ -->
-  </head>
-  <body onload=\'" ^ onload ^ "\'>
-    <script type='text/javascript'>
-     _startTimer();" 
-and  boiler_4 () = ";
-    </script>
-  </body>
-</html>"
-
 
 module Binop :
 sig
@@ -393,7 +368,12 @@ let comparison_name = function
 
 let href_rewrite globals : RewriteSyntax.rewriter = function
   | Apply (Variable ("pickleCont",_), 
-           [Abstr ([_], e, _) as abs], data) ->
+           [Abstr ([], e, _) as abs], data) as exp ->
+(* WARNING (SL):
+
+   I'm not at all convinced that the correct globals are being passed in here.
+*)
+
       let fv = StringSet.diff (freevars e) globals in
       let `T (_,_,Some label) = expression_data e in
       let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f")) in
@@ -640,6 +620,12 @@ and generate_computation env : computation -> code -> (Env'.env * code) = fun (b
 
 and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding ->
   match binding with
+    | `Let (b, `Return v) ->
+        let (x, x_name) = name_binder b in
+        let env' = Env'.extend env [(x, x_name)] in
+          (env',
+           fun code ->
+             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
     | `Let (b, tc) ->
         let (x, x_name) = name_binder b in
         let env' = Env'.extend env [(x, x_name)] in
@@ -687,48 +673,118 @@ and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding 
                         body,
                         location) :: defs, code)
                   defs ([], code)))
+    | `Module _
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
-and generate_defs env : binding list -> (Env'.env * code) =
+and generate_declaration env
+    : binding -> (Env'.env * (code -> code)) = fun binding ->
+  match binding with
+    | `Let (b, `Return v) ->
+        let (x, x_name) = name_binder b in
+        let env' = Env'.extend env [(x, x_name)] in
+          (env',
+           fun code ->
+             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
+    | `Let (b, tc) ->
+        if Settings.get_value (Basicsettings.allow_impure_defs) then
+          let (x, x_name) = name_binder b in
+          let env' = Env'.extend env [(x, x_name)] in
+            (env',
+             fun code ->
+               Seq (DeclareVar (x_name, None), code))
+        else
+          failwith "Top-level definitions must be values"
+    | `Fun (fb, xsb, body, location) ->
+        let (f, f_name) = name_binder fb in
+        let bs = List.map name_binder xsb in
+        let xs, xs_names = List.split bs in
+        let body_env = Env'.extend env bs in
+        let env' = Env'.extend env [(f, f_name)] in
+          (env',
+           fun code ->
+             let body =
+               match location with
+                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                 | `Server -> generate_remote_call f_name xs_names
+                 | `Native -> failwith ("Not implemented native calls yet")
+             in
+               LetFun
+                 ((f_name,
+                   xs_names @ ["__kappa"],
+                   body,
+                   location),
+                  code))        
+    | `Rec defs ->
+        let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
+        let env' = Env'.extend env fs in
+          (env',
+           fun code ->
+             LetRec
+               (List.fold_right
+                  (fun (fb, xsb, body, location) (defs, code) ->
+                     let (f, f_name) = name_binder fb in
+                     let bs = List.map name_binder xsb in
+                     let _, xs_names = List.split bs in
+                     let body_env = Env'.extend env (fs @ bs) in
+                     let body =
+                       match location with
+                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                         | `Server -> generate_remote_call f_name xs_names
+                         | `Native -> failwith ("Not implemented native calls yet")
+                     in
+                       (f_name,
+                        xs_names @ ["__kappa"],
+                        body,
+                        location) :: defs, code)
+                  defs ([], code)))
+    | `Module _
+    | `Alien _
+    | `Alias _ -> env, (fun code -> code)
+
+
+and generate_definition env
+    : binding -> code -> code =
+  function
+    | `Let (_, `Return _) -> (fun code -> code)
+    | `Let (b, tc) ->
+        let (x, x_name) = name_binder b in
+          (fun code ->
+             generate_tail_computation env tc
+               (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
+    | `Fun _
+    | `Rec _
+    | `Module _
+    | `Alien _
+    | `Alias _ -> (fun code -> code)
+
+and generate_defs env : binding list -> (Env'.env * (code -> code)) =
   fun bs ->
-    let rec gbs env c =
+    let rec declare env c =
       function
-        | [] -> env, c Nothing
-        | b :: bs -> 
-            begin
-              match b with
-                | `Let (b, tc) ->
-                    let (x, x_name) = name_binder b in
-                    let env' = Env'.extend env [(x, x_name)] in
-                    let c' =
-                      (fun code ->
-                         Seq (DeclareVar (x_name),
-                             Seq (generate_tail_computation env tc (Fn (["__x"], Binop(Var x_name, "=", Var "__x"))), code)))
-                    in
-                      gbs env' (c -<- c') bs
-                | _ ->
-                    let env, c' = generate_binding env b in
-                      gbs env (c -<- c') bs
-            end
+        | [] -> env, c
+        | b :: bs ->
+            let env, c' = generate_declaration env b in
+              declare env (c -<- c') bs in
+    let env, with_declarations = declare env (fun code -> code) bs in
+    let rec define c =
+      function
+        | [] -> c
+        | b :: bs ->
+            let c' = generate_definition env b in
+              define (c -<- c') bs
     in
-      gbs env (fun code -> code) bs
+      if Settings.get_value Basicsettings.allow_impure_defs then
+        env, fun code -> with_declarations (define (fun code -> code) bs code)
+      else
+        env, with_declarations
 
-and generate_prog env : computation -> (Env'.env * code) = fun c ->
+and generate_program env : computation -> (Env'.env * code) = fun c ->
   generate_computation env c (Var "_start")
-
-let gen_defs env defs =
-  let env, code = generate_defs env defs in
-    env, optimise(code)
-
-let gen env e =
-  let env, code = generate_prog env e in
-    env, optimise(code)
 
 module Symbols :
 sig
-  val rename : Syntax.expression -> Syntax.expression
-  val rename_def : Syntax.definition -> Syntax.definition
+  val rename : Syntax.program -> Syntax.program
 end =
 struct
   let words =
@@ -752,7 +808,7 @@ struct
         '|', "pipe";
         '_', "underscore"]
 
-  let js_keywords = ["break"; "else";"new";"var";"case";"finally";"return";"void";
+  let js_keywords = ["break";"else";"new";"var";"case";"finally";"return";"void";
                      "catch";"for";"switch";"while";"continue";"function";"this";
                      "with";"default";"if";"throw";"delete";"in";"try";"do";
                      "instanceof";"typeof";
@@ -787,7 +843,7 @@ struct
       "_" ^ name (* FIXME: this could conflict with Links names. *)
     else name
       
-  let rename exp = 
+  let rename_expression exp = 
     from_option exp
       (RewriteSyntax.bottomup
          (function
@@ -795,93 +851,70 @@ struct
             | Let (name, rhs, body, d) -> 
                 Some (Let (wordify name, rhs, body, d))
             | Rec (bindings, body, d) -> 
-                let rename (nm, body, t) = (wordify nm, body, t) in
-                  Some (Rec (List.map rename bindings, body, d))
+                let rename_expression (nm, body, t) = (wordify nm, body, t) in
+                  Some (Rec (List.map rename_expression bindings, body, d))
             | _ -> None)
          exp)
 
-  let rename_def def =
+  let rec rename_def def =
     match def with
       | Define (name, b, l, t) -> 
-          Define (wordify name, rename b, l, t)
+          Define (wordify name, rename_expression b, l, t)
       | Alias (name, _, _, _)
       | Alien (name, _, _, _) when has_symbols name ->
           assert false (* symbols shouldn't appear in types or foreign functions *)
+      | Module (name, defs, data) ->
+          Module (name, opt_map (fun defs -> List.map rename_def defs) defs, data)
       | _ -> def
+
+  let rename_program (Program(defs, expr)) = 
+    Program(List.map rename_def defs, rename_expression expr)
+
+  let rename = rename_program
 end
 
-let make_boiler_page ?(onload="") ?(body="") defs =
-  boiler_1 ()
-  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
-  ^ boiler_2 ()
-  ^ String.concat "\n" defs
-  ^ boiler_3 onload
-  ^ body
-  ^ boiler_4 ()
-    
-let get_alien_names defs = 
-  let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
-    List.map (function Alien(_, s, _, _) -> s) alienDefs
+let script_tag body = 
+  "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
-let elim_defs defs root_names =
-  (*
-    HACK:
-    
-    There is a bug in Callgraph.elim_dead_defs that sometimes causes definitions
-    to be reordered. The code either side of the call to
-    this function ensures that the order of definitions is maintained.
-
-    Once Callgraph.elim_dead_defs is fixed, we should get rid of the hack.
-  *)
-  let name_of =
-    function
-      | Define (name, _, _, _)
-      | Alias (name, _, _, _)
-      | Alien (_, name, _, _) -> name in
-
-  let names =
-    List.fold_right
-      (fun def names -> name_of def :: names)
-      defs [] in
-
-  let aliens = get_alien_names defs in
-  let library_names = Env.String.domain (fst Library.typing_env) in
-  let elim_free_names = "stringifyB64" :: aliens @ (StringSet.elements library_names) in
-  let defs = Callgraph.elim_dead_defs elim_free_names defs root_names in
-
-  let defMap =
-    List.fold_right
-      (fun def defMap ->
-         StringMap.add (name_of def) def defMap)
-      defs StringMap.empty
+let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
+  let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
+  let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^ 
+    string_of_bool onoff ^ ";</script>"
   in
-    List.fold_right
-      (fun name defs ->
-         if StringMap.mem name defMap then
-           StringMap.find name defMap :: defs
-         else
-           defs)
-      names []
+  let extLibs = ext_script_tag "json.js"^"
+  "            ^ext_script_tag "regex.js"^"
+  "            ^ext_script_tag "yahoo/yahoo.js"^"
+  "            ^ext_script_tag "yahoo/event.js" in
+  let db_config_script = script_tag("    function _getDatabaseConfig() {
+      return {driver:'" ^ Settings.get_value Library.database_driver ^
+    "', args:'" ^ Settings.get_value Library.database_args ^"'}
+    }
+    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n")
+  in
+  let version_comment = "<!-- $Id: js.ml 1367 2007-12-10 16:24:38Z sam $ -->" in
+    in_tag "html" (in_tag "head"
+                     (  extLibs
+                      ^ debug_flag (Settings.get_value Debug.debugging_enabled)
+                      ^ ext_script_tag "jslib.js" ^ "\n"
+                      ^ db_config_script
+                      ^ head
+                      ^ script_tag (String.concat "\n" defs)
+                      ^ version_comment
+                     )
+                   ^ "<body onload=\'" ^ onload ^ "\'>
+  <script type='text/javascript'>
+  _startTimer();" ^ body ^ ";
+  </script>")
+    
+let generate_inclusions defs = 
+  (ext_script_tag ~base:"?__include=" "prelude.links") ::
+    concat_map (function
+                    Module (Some path, _, _) -> 
+                      [ext_script_tag ~base:"?__include=" path]
+                  | _ -> []) 
+    defs
 
-let generate_program_defs defs root_names =
-  let defs = List.map Symbols.rename_def defs in
-  (* NOTE: the body is not really used here *)
-  let body = Syntax.unit_expression Syntax.no_expr_data in
-  let (Program (defs, body)) =
-    if Settings.get_value optimising then
-      Optimiser.inline (Optimiser.inline (Optimiser.inline (Program (defs, body)))) 
-    else Program (defs, body) in
-
-  let defs = List.map (fixup_hrefs_def
-                         (StringSet.from_list
-                            (Syntax.defined_names defs @ 
-                               Library.primitive_names))) defs in
-
-  let defs =
-    (if Settings.get_value elim_dead_defs then
-       elim_defs defs root_names
-     else defs) in
-
+let wrap_with_server_stubs code = 
   let server_library_funcs = (filter (fun (name,_) -> 
                                         Library.primitive_location name =`Server)
                                 (StringMap.to_alist !Library.value_env)) in
@@ -889,17 +922,16 @@ let generate_program_defs defs root_names =
   let rec some_vars = function 
       0 -> []      
     | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
-
+    
   let prim_server_calls =
     concat_map (fun (name, _) -> 
                   match Library.primitive_arity name with
-                      None -> []
+                        None -> []
                     | Some arity ->
                         let args = some_vars arity in
                           [(name, args, generate_remote_call name args)])
-      server_library_funcs in
-    
-  let wrap_with_server_stubs code = 
+      server_library_funcs
+  in
     fold_right 
       (fun (name, args, body) code ->
          LetFun
@@ -910,36 +942,73 @@ let generate_program_defs defs root_names =
             code))
       prim_server_calls
       code
-  in
 
+
+let preprocess_program global_names program =
+  let (Program (defs, body)) =
+    if Settings.get_value optimising then
+      Optimiser.inline (Optimiser.inline (Optimiser.inline program)) 
+    else program in
+
+  (* 
+     QUESTION:
+     
+     How are we supposed to know that the collection of names passed
+     to fixup_hrefs_def is correct?
+  *)
+  let defs = List.map (fixup_hrefs_def
+                         (StringSet.from_list
+                            (Syntax.defined_names defs @ 
+                               Library.primitive_names @ global_names))) defs in
+
+  (*  
+      The following transformation may or may not be helpful. We can defer
+      thinking about it until after we get rid of the expression datatype.
+  *)
+  let program = rewrite_program
+    (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
+    (Program (defs, body))
+  in
+    Symbols.rename program
+
+let make_initial_env (tenv, aenv) =
   let dt = Parse.parse_string Parse.datatype ->- fst in
-  let initial_env, tenv, aenv =
     Compileir.make_initial_env
       (Env.String.bind
-         (Env.String.bind Library.type_env
+         (Env.String.bind tenv
             ("map", dt "((a) -> b, [a]) -> [b]"))
-         ("stringifyB64", dt "(a) -> String")) Library.alias_env in
+         ("stringifyB64", dt "(a) -> String"), aenv)
 
-  let ((defs', _) as p, _) = Compileir.compile_program (initial_env, tenv, aenv) (Program (defs, body)) in
+let compile_ir tyenv global_names program =
+  let program = preprocess_program global_names program in
 
-  let env, tenv, aenv = Compileir.add_globals_to_env (initial_env, tenv, aenv) defs' in
+  let env, tenv, aenv = make_initial_env tyenv in
+
+  let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv, aenv) program in 
+
+  let env, _, _ = Compileir.add_globals_to_env (env, tenv, aenv) bindings in
   let env' = Compileir.invert_env env in
-  let env', js_defs = gen_defs env' defs' in
-  let js_defs = wrap_with_server_stubs js_defs in
-  let js_defs = [show js_defs] in
-    (env, env', tenv, aenv), js_defs
+    e, env'
 
-let generate_program ?(onload = "") (Program (defs, body)) =
-  let (Program (defs, body)) = rewrite_program
-    (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
-    (Program (defs, body)) in
+let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) as program) = 
+  let (bindings, body) as e, env = compile_ir tyenv global_names program in
+  let _, code = generate_program env e in
+  let code = optimise(wrap_with_server_stubs code) in
+    (make_boiler_page
+       ~body:(show code)
+       ~head:(String.concat "\n" (generate_inclusions defs))
+       [])
 
-  let (env, env', tenv, aenv), js_defs = generate_program_defs defs (Syntax.freevars body) in
-  let body = Symbols.rename body in
- 
-  let (e, _) = Compileir.compile_program (env, tenv, aenv) (Program ([], body)) in 
-  let js_root_expr = snd (gen env' e) in
-    (make_boiler_page ~body:(show js_root_expr) js_defs)
+let generate_program_defs tyenv global_names defs root_names =
+  let (bindings, _), env = compile_ir tyenv global_names (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
+  let _, code = generate_defs env bindings in
+    [show (code Nothing)]
 
-let generate_program_defs defs root_names =
-  snd (generate_program_defs defs root_names)
+let compile_file tyenv filename = 
+  let global_names = StringSet.elements (Env.String.domain (fst tyenv)) in
+  let _, Program(defs, expr) = Loader.load_file tyenv [] filename in
+  let js_defs = generate_program_defs tyenv global_names defs (Syntax.freevars expr) in
+    String.concat "\n" js_defs
+
+let generate_program_defs global_names defs root_names =
+  generate_program_defs Library.typing_env global_names defs root_names

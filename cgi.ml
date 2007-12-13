@@ -293,7 +293,7 @@ let parse_multipart_args () =
        let data = String.create data_len in
        really_input stdin data 0 data_len; data))
 
-(*s PATH\_INFO *)
+(* PATH_INFO *)
 
 let path_info =
   try

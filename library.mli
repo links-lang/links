@@ -46,3 +46,5 @@ val primitive_arity : string -> int option
 val cgi_parameters : (string * string) list ref 
 
 val print_http_response : (string * string) list -> string -> unit
+
+val primitive_names : string list

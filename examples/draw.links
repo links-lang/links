@@ -3,11 +3,11 @@
 # Create a canvas and return its id to the calling process.
 # The canvas can receive messages of the form Point (x,y)
 fun canvas (x, y, id) {
-  domAppendChild(
+  appendChildren(
          <div id="{id}"
               style="width: {intToString(x)}px;
                      height: {intToString(y)}px"> </div>,
-         domGetRefById("body"));
+         getNodeById("body"));
   spawn{ draw(id) }
 }
 
@@ -16,14 +16,14 @@ fun canvas (x, y, id) {
 fun draw(id) client {
   receive {
     case Point(x,y) -> {
-     domAppendChild(
+     appendChildren(
                <div style="position: absolute;
                            background-color: red; 
                            width: 1px;
                            height: 1px;
                            left: {intToString(x)}px;
                            top: {intToString(y)}px"> </div>,
-               domGetRefById(id))
+               getNodeById(id))
     }
   };
   draw(id)
@@ -37,10 +37,9 @@ fun range(f, to) {
 
 fun scribble() {
   var c = canvas (100,100, "pad");
-  for (var i <- range(0,50))
+  ignore(for (var i <- range(0,50))
     for (var j <- range(0,50))
-      [c ! Point(i*2,j*2)];
-  ()
+      [c ! Point(i*2,j*2)]);
 }
 
 page

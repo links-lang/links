@@ -161,6 +161,7 @@ type ('ppattern, 'phrase) binding' = [
 | `Fun of name * ('ppattern, 'phrase) funlit' * location * datatype option
 | `Funs of (name * ('ppattern, 'phrase) funlit' * location * datatype option) list
 | `Foreign of name * name * datatype
+| `Include of string
 | `Type of (name * name list * datatype)
 | `Infix
 | `Exp of 'phrase ]
@@ -311,6 +312,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign (name, _, _) -> singleton name, empty
+    | `Include _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
@@ -356,6 +358,7 @@ let refine_bindings : binding list -> binding list =
                  | `Funs _ -> assert false
                  | `Exp _
                  | `Foreign _
+                 | `Include _
                  | `Type _
                  | `Val _ ->
                      (* collapse the group we're collecting, then start a

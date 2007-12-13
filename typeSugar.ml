@@ -101,6 +101,7 @@ struct
     | `Funs _
     | `Infix
     | `Type _
+    | `Include _
     | `Foreign _ -> true
     | `Exp p -> is_generalisable p
     | `Val (pat, rhs, _, _) ->
@@ -987,6 +988,7 @@ and type_binding lookup_pos : context -> Untyped.binding -> Typed.binding * Type
     and pattern_env  (_,(_,(e,_))) = e
     and (++) (env, alias_env) env' = (Env.extend env env', alias_env) in
     let typed, env = match def with
+        | `Include _ -> assert false
         | `Val (pat, body, location, datatype) -> 
             let body = tc body in
             let pat = tpc pat in

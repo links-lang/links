@@ -232,9 +232,9 @@ let rec show : code -> string =
       | Bind (name, value, body) -> "("^ name ^" = "^ 
           show value ^", "^ show body ^")"
       | Seq (l, r) -> "(" ^ show l ^", "^ show r ^ ")"
-      | Nothing -> ""
       | Die msg -> "error('" ^ msg ^ "', __kappa)"
       | Ret a -> "return "^show a
+      | Nothing -> ""
 
 open PP
 
@@ -320,7 +320,7 @@ let chrlit ch = Lit(string_js_quote(string_of_char ch))
     string. *)
 let chrlistlit s  = Lst(map chrlit (explode s))
 
-let script_tag ?(base=get_js_lib_url()) file =
+let ext_script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
 let inline_script file = (* makes debugging with firebug easier *)
@@ -329,32 +329,6 @@ let inline_script file = (* makes debugging with firebug easier *)
   let file_contents = String.make file_len '\000' in
     really_input file_in file_contents 0 file_len;
     "  <script type='text/javascript'>" ^file_contents^ "</script>"
-
-let boiler_1 () = "<html>
-  <head>
-  "^script_tag "json.js"^"
-  "^script_tag "regex.js"^"
-  "^script_tag "yahoo/yahoo.js"^"
-  "^script_tag "yahoo/event.js"^"
-    <script type='text/javascript'>var DEBUGGING="
-and boiler_2 () = ";</script>
-  "^script_tag "jslib.js"^"
-    <script type='text/javascript'><!-- "^"
-    function _getDatabaseConfig() {
-      return {driver:'" ^ Settings.get_value Library.database_driver ^
- "', args:'" ^ Settings.get_value Library.database_args ^"'}
-    }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n"
-and boiler_3 onload =    "\n--> </script>
-  <!-- $Id$ -->
-  </head>
-  <body onload=\'" ^ onload ^ "\'>
-    <script type='text/javascript'>
-     _startTimer();" 
-and  boiler_4 () = ";
-    </script>
-  </body>
-</html>"
 
 module Binop :
 sig
@@ -435,7 +409,7 @@ let generate_server_stub = function
     -> failwith ("Cannot generate server stub for " ^
                    Syntax.Show_definition.show def)
 
- let apply_no_yield (f, args) =
+let apply_no_yield (f, args) =
   Call (Var f, args)
 
 let apply_yielding (f, args) =
@@ -784,18 +758,17 @@ and generate_concat : 'a expression' -> code =
 
 and generate_def : 'a definition' -> code = 
   function
+    | Module (Some path, _, _) ->  Nothing
       (* Binding *)
     | Define (_, _, `Server, _) as d -> generate_server_stub d
     | Define (_, _, `Native, _) as d -> generate_native_stub d
     | Define (n, e, (`Client|`Unknown), _) -> 
-(* [NOTE]
-     Passing in _idy doesn't work because we are not in traditional CPS.
-     Traditional CPS terms return a value, but ours don't (because JavaScript
-     requires you to write an explicit return). To get round this problem, we
-     capture the return value by imperative assignment. An alternative would be
-     to modify our CPS transform to produce CPS terms that explicitly return
-     values.
-*)
+        (* [NOTE] We can't use _idy as a toplevel continuation because
+           our terms do not actually return a value. To get round this
+           problem, we capture the return value with imperative
+           assignment. An alternative would be to modify our CPS
+           transform to produce CPS terms that explicitly return
+           values.  *)
         Defs ([n, Call (generate e, [Fn (["__x"], Binop(Var n, "=", Var "__x"))])])
     | Alias _ 
     | Alien _ -> Nothing
@@ -919,7 +892,15 @@ and generate_native_stub = function
       let arglist = arg in
         Defs [n, Fn (arglist @ ["__kappa"], callk_yielding (generate_direct_style body))]
   | def -> failwith ("Cannot generate native stub for " ^ string_of_definition def)
-      
+
+let generate_inclusions defs = 
+  (ext_script_tag ~base:"?__include=" "prelude.links") ::
+    concat_map (function
+                    Module (Some path, _, _) -> 
+                      [ext_script_tag ~base:"?__include=" path]
+                  | _ -> []) 
+    defs
+
 let rec freevars = 
   let fv = freevars in
   let module S = StringSet in function
@@ -1047,6 +1028,7 @@ module Symbols :
 sig
   val rename : Syntax.expression -> Syntax.expression
   val rename_def : Syntax.definition -> Syntax.definition
+  val rename_program : Syntax.program -> Syntax.program
 end =
 struct
   let words =
@@ -1126,22 +1108,44 @@ struct
       | Alien (name, _, _, _) when has_symbols name ->
           assert false (* symbols shouldn't appear in types or foreign functions *)
       | _ -> def
+
+  let rename_program (Program(defs, expr)) = 
+    Program(List.map rename_def defs, rename expr)
 end
 
+let script_tag body = 
+  "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
+let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
+  let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
+  let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^ 
+    string_of_bool onoff ^ ";</script>"
+  in
+  let extLibs = ext_script_tag "json.js"^"
+  "            ^ext_script_tag "regex.js"^"
+  "            ^ext_script_tag "yahoo/yahoo.js"^"
+  "            ^ext_script_tag "yahoo/event.js" in
+  let db_config_script = script_tag("    function _getDatabaseConfig() {
+      return {driver:'" ^ Settings.get_value Library.database_driver ^
+    "', args:'" ^ Settings.get_value Library.database_args ^"'}
+    }
+    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n")
+  in
+  let version_comment = "<!-- $Id$ -->" in
+    in_tag "html" (in_tag "head"
+                     (  extLibs
+                      ^ debug_flag (Settings.get_value Debug.debugging_enabled)
+                      ^ ext_script_tag "jslib.js" ^ "\n"
+                      ^ db_config_script
+                      ^ head
+                      ^ script_tag (String.concat "\n" defs)
+                      ^ version_comment
+                     )
+                   ^ "<body onload=\'" ^ onload ^ "\'>
+  <script type='text/javascript'>
+  _startTimer();" ^ body ^ ";
+  </script>")
 
-
-
-
-let make_boiler_page ?(onload="") ?(body="") defs =
-  boiler_1 ()
-  ^ string_of_bool(Settings.get_value(Debug.debugging_enabled))
-  ^ boiler_2 ()
-  ^ String.concat "\n" defs
-  ^ boiler_3 onload
-  ^ body
-  ^ boiler_4 ()
-    
 let get_alien_names defs = 
   let alienDefs = List.filter (function Alien _ -> true | _ -> false) defs in
     List.map (function Alien(_, s, _, _) -> s) alienDefs
@@ -1150,9 +1154,10 @@ let rec some_vars = function
     0 -> []      
   | n -> ("x"^string_of_int n) :: some_vars (n-1)
 
-let generate_program_defs defs root_names =
+let generate_program_defs global_names defs root_names =
   let aliens = get_alien_names defs in
   let defs = List.map Symbols.rename_def defs in
+  let defs = List.filter (function Module _ -> false | _ -> true) defs in
   (* NOTE: the body is not really used here. *)
   let body = Syntax.unit_expression Syntax.no_expr_data in
   let (Program (defs, body)) =
@@ -1160,7 +1165,7 @@ let generate_program_defs defs root_names =
       Optimiser.inline(Optimiser.inline(Optimiser.inline(Program(defs, body))))
     else Program (defs, body)
   in
-  let library_names = aliens @ StringSet.elements (Env.String.domain (fst Library.typing_env)) in
+  let library_names = aliens @ Library.primitive_names @ global_names in
   let prim_server_stubs =
     concat_map (fun (name, _) -> 
            match Library.primitive_arity name with
@@ -1178,19 +1183,29 @@ let generate_program_defs defs root_names =
       map (fixup_hrefs_def (StringSet.from_list global_names) ->- gen_def ->- 
              show_pp) defs
 
-let generate_program ?(onload = "") (Program(defs,expr)) =
-  let expr = Symbols.rename expr in
-  let defs = map Symbols.rename_def defs in
-  let js_defs = generate_program_defs defs (Syntax.freevars expr) in
-  let library_names = StringSet.elements (Env.String.domain (fst Library.typing_env)) in
+let generate_program ?(onload = "") global_names (Program(defs,expr)) =
+  let (Program(defs,expr)) = Symbols.rename_program (Program(defs,expr)) in
+  let js_defs = generate_program_defs global_names defs (Syntax.freevars expr) in
+  let library_names = Library.primitive_names in
   let global_names = Syntax.defined_names defs @ library_names in
   let js_root_expr = 
     (gen
        ~pre_opt:(fun expr -> Call(expr, [Var "_start"]))
        (fixup_hrefs (StringSet.from_list global_names) expr))
   in
-    (make_boiler_page ~body:(show_pp js_root_expr) js_defs)
-     
+    (make_boiler_page ~body:(show_pp js_root_expr)
+       ~head:(String.concat "\n" (generate_inclusions defs)) js_defs)
+
+let compile_file tyenv filename = 
+  let global_names = StringSet.elements (Env.String.domain (fst tyenv)) in
+  let tyenv, Program(defs, expr) = Loader.load_file tyenv [] filename in
+  let (Program(defs,expr)) = Symbols.rename_program (Program(defs,expr)) in
+  let js_defs = generate_program_defs global_names defs (Syntax.freevars expr) in
+    String.concat "\n" js_defs
+
+(* *************************************** *)
+(*             Hereafter tests             *)
+
 (* FIXME: The tests below create an unnecessary dependency on
    Inference (maybe other modules to? I'd like to remove this. Can we
    move the tests into a different module?
@@ -1231,8 +1246,8 @@ let run_tests() =
              ) !test_list)
 
 
-(* ******************* *)
-(*   Hereafter tests   *)
+(* *************************************** *)
+(*                the tests                *)
 
 let _ = add_qtest("1+1",
                   fun rslt ->
@@ -1304,7 +1319,3 @@ let test () =
 
     (*Nested scopes*)
     assert (equal (jsresult "{ x = 3; ({ x = 4; x }, x)}") "(4, 3)")
-
-
-
-

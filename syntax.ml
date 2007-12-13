@@ -100,6 +100,9 @@ type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
   | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.datatype * 'a)
+  | Module of ((* pathname: *)string option * 
+      (* definitions in the module: *) 'a definition' list option * 
+      'a)
       deriving (Functor, Rewriter, Show)
 
 (* [HACK]
@@ -114,12 +117,6 @@ type 'a definition' =
    documenting the code.
 *)
 
-let visit_def unit visitor def =
-  match def with
-    | Define(name, expr, loc_annotation, d) -> visitor expr
-    | Alias _
-    | Alien _ -> unit
-
 type 'a program' = Program of ('a definition' list * 'a expression')
   deriving (Functor, Rewriter, Show)
 
@@ -131,8 +128,20 @@ let program_defs :'a program' -> 'a definition' list =
 
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
-let defined_names exprs = 
-  concat_map (function Define(f, _, _, _) -> [f] | _ -> []) exprs
+let is_unit_expr = function
+    Record_intro (fields, None, data) when fields = StringMap.empty -> true
+  | _ -> false
+
+let defname = function (Define(name, _, _, _)) -> name
+  | _ -> "NONE"
+
+let rec defined_names defs = 
+  concat_map (function
+                | Define (n, _, _, _)
+                | Alien (_, n, _, _) -> [n]
+                | Module (_, Some defs, _) -> defined_names defs
+                | _ -> []) defs
+  
 
 (* Whether a syntax node is a value for the purposes of generalization.
    This means, approximately "it doesn't contain any applications" *)
@@ -165,6 +174,19 @@ let rec is_value : 'a expression' -> bool = function
 type typed_data = [`T of (position * Types.datatype * label option)] deriving (Eq, Typeable, Show)
 type untyped_data = [`U of position] deriving (Eq, Typeable, Show)
 type data = [untyped_data | typed_data] deriving (Typeable, Show)
+
+(** [visit_def unit visitor combiner def] should be called with
+    combiner having the property [combiner \[x\] = x]
+*)
+let rec visit_def (unit : 'a) (visitor : _ expression' -> 'a)
+    (combiner : 'a list -> 'a) def : 'a =
+  match def with
+    | Define(name, expr, loc_annotation, d) -> visitor expr
+    | Module(path, Some defs, d) ->
+        combiner (map (visit_def unit visitor combiner) defs)
+    | Module(_, None, _) 
+    | Alias _
+    | Alien _ -> unit
 
 let is_symbolic_ident name = 
   (Str.string_match (Str.regexp "^[!$%&*+/<=>?@\\^-.|_]+$") name 0)
@@ -243,7 +265,7 @@ let rec show t : 'a expression' -> string = function
       "sort (" ^ show t expr ^ ") by (" ^ show t byExpr ^ ")" ^ t data
   | Wrong data -> "wrong" ^ t data
 
-let show_definition t : 'a definition' -> string = function
+let rec show_definition t : 'a definition' -> string = function
   | Define (variable, value, location, data) -> 
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
@@ -251,6 +273,8 @@ let show_definition t : 'a definition' -> string = function
   | Alias (typename, quantifiers, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_datatype k) ^ t data
+  | Module (Some path, None, data) -> "include \"" ^ path ^ "\";" ^ t data
+  | Module (Some path, Some defs, data) -> "module { " ^ mapstrcat ";\n" (show_definition t) defs ^ "} from \"" ^ path ^ "\";" ^ t data
 
 let show_program t : 'a program' -> string =
   fun (Program (ds, body)) ->
@@ -333,11 +357,14 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
   in
     visitor visit_children
 
-let reduce_definition visitor combine combine_def def =
+let rec reduce_definition visitor combine combine_def def =
   combine_def(def,
               match def with
                 | Define(name, expr, loc_annotation, d) ->
                     [reduce_expression visitor combine expr]
+                | Module(path, Some defs, d) ->
+                    map (reduce_definition visitor combine
+                           combine_def) defs
                 | Alias _
                 | Alien _ -> [])
 
@@ -433,10 +460,32 @@ let freevars (expression : 'a expression') : StringSet.t =
 
 let freevars_all expr = StringSet.union_all (map freevars expr)
 
-let freevars_def def = visit_def StringSet.empty freevars def
+let freevars_def def = visit_def StringSet.empty freevars StringSet.union_all def
+
+(** Beware: untested. *)
+let rec freevars_defs defs = 
+  fold_left (fun (fvs, env) def ->
+                    match def with
+                      | Define(name, expr, _, _) -> 
+                          ((freevars expr <|StringSet.diff|> 
+                                (name <|StringSet.add|> env))
+                           <|StringSet.union|> fvs,
+                           name <|StringSet.add|> env)
+                      | Module(_, Some defs, _) -> 
+                          let (fvs', env') = freevars_defs defs in
+                          (fvs' <|StringSet.diff|> env
+                             <|StringSet.union|> fvs,
+                           env <|StringSet.union|>
+                               env' <|StringSet.union|>
+                                   StringSet.from_list(defined_names defs))
+                      | Alien(name, _, _, _) -> 
+                          (fvs, name <|StringSet.add|> env)
+                      | _ -> (fvs, env)
+            ) (StringSet.empty, StringSet.empty) defs
 
 let freevars_program (Program (defs, body)) =
-  StringSet.union_all (freevars body :: List.map freevars_def defs)
+  let (fvs, env) = freevars_defs defs in
+    fvs <|StringSet.union|> (freevars body <|StringSet.diff|> env)
 
 let free_bound_type_vars expression =
   let module S = Types.TypeVarSet in
@@ -597,19 +646,20 @@ let pure : expression -> bool =
   and all_true l = fold_right (&&) l true in
     reduce_expression pure (all_true -<- snd)
 
-(* apply a transformer (map) on expressions to a definition *)
-let transform_def transformer def =
+(** Apply a transformer (map) on expressions to a definition *)
+let rec transform_def transformer def =
   match def with
     | Define(name, expr, loc_annotation, d) ->
         Define (name, transformer expr, loc_annotation, d)
-    | Alias _
-    | Alien _ -> def
+    | Module(path, defs, d) -> 
+        Module (path, opt_map(map (transform_def transformer)) defs, d)
+    | Alias _ | Alien _ -> def
 
 let transform_program transformer (Program (defs, body)) =
   Program (List.map (transform_def transformer) defs,
            transformer body)
 
-(* apply a rewriter on expressions to a definition *)
+(** Apply a rewriter on expressions to a definition *)
 let rewrite_def rewriter =
   transform_def (fun expr -> from_option expr (rewriter expr))
 
@@ -680,9 +730,12 @@ let rename_fast name replacement expr =
 
 (** {0 Sanity Checks} *)
 
-let is_closed expr = StringSet.is_empty (freevars expr)
+let expr_closed expr = StringSet.is_empty (freevars expr)
 
-let is_closed_wrt expr freebies = freevars expr <|StringSet.subset|> freebies
+let expr_closed_wrt expr freebies = freevars expr <|StringSet.subset|> freebies
+
+let program_closed_wrt program freebies = 
+  freevars_program program <|StringSet.subset|> freebies
 
 (** {0 Labelizing} *)
 
@@ -698,12 +751,28 @@ let has_label expr =
 let label_for_expr expr =
   (Digest.string -<- string_of_expression) expr
 
-let labelize =
+let fully_labelized_expr (expr : expression) = 
+  reduce_expression 
+    (fun revisit expr -> match expression_data expr with
+         `T(_, _, Some label) -> revisit expr | _ -> false)
+    (fun(_, blist) -> for_all identity blist)
+    expr
+
+let rec fully_labelized_def = function
+  | Define(_, expr, _, _) -> fully_labelized_expr expr
+  | Module(_, Some defs, _) -> for_all fully_labelized_def defs
+  | Module(_, None, _) -> assert false
+  | Alien _ | Alias _ -> true (* ? *)
+    
+let fully_labelized (Program(defs, expr)) =
+  for_all identity (fully_labelized_expr expr :: map fully_labelized_def defs)
+
+let labelize p =
   rewrite_program
     (RewriteSyntax.topdown 
        (fun expr -> 
-          Some(set_label expr (Some(label_for_expr expr)))))
-
+          Some(set_label expr (Some(label_for_expr expr))))) p
+    
 (** {0 Utilities to construct various kinds of expressions given 
     sub-expressions} *)
 
@@ -771,8 +840,11 @@ let skeleton = function
 let definition_skeleton = function
   | Define(name, expr, loc_annotation, d) ->
       Define(name, expr, loc_annotation, d)
+  | Module(path, defs_option, d) ->
+      Module(path, defs_option, d)
   | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
-  | Alias(typename, quantifiers, datatype, d) -> Alias(typename, quantifiers, datatype, d)
+  | Alias(typename, quantifiers, datatype, d) -> 
+      Alias(typename, quantifiers, datatype, d)
 
 let program_skeleton =
   fun (ds, body) ->
@@ -792,3 +864,8 @@ let record_selection (name, label_variable, extension_variable, scrutinee, body,
             data),
         data)
  
+let rec deflist_to_alist l = 
+  concat_map (function (Define (name, body, _, _)) -> [name, body]
+                | Module(_, Some defs, _) -> deflist_to_alist defs
+                | Module(_, None, _) -> assert false) l
+

@@ -145,6 +145,7 @@ module Eval = struct
           | `Alien _ 
           | `Alias _       -> (* just skip it *)
               computation env cont (bs, tailcomp)
+          | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) -> 

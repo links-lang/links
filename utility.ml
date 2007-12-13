@@ -276,7 +276,6 @@ struct
   let shelve  _ = failwith "shelve stringmap nyi"
 end
 
-
 (** {1 Lists} *)
 module ListUtils = 
 struct
@@ -445,8 +444,8 @@ struct
       new alist *)
   let alistmap f = List.map (cross identity f)
 
-  let alistmapstrcat glue f = 
-    (List.map (fun (k, v) -> k ^ " => " ^ f v))
+  let show_fgraph ?(glue=", ") f = 
+    (List.map (fun x -> x ^ " => " ^ f x))
     ->- (String.concat glue) 
     
   (** alistmap' produces an alist by applying f to each element of the
@@ -752,7 +751,7 @@ let base64decode s =
   with Invalid_argument "Netencoding.Base64.decode" 
       -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
 
-and base64encode = Netencoding.Base64.encode
+let base64encode = Netencoding.Base64.encode
 
 (** (0 Ocaml Version Comparison) ***)
 let ocaml_version_number = (List.map int_of_string

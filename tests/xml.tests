@@ -59,12 +59,12 @@ stderr : @.*
 exit : 1
 
 Reject nonsense l:name attributes
-<form><input l:name="{1+1}" /></form>
+include "formlets.links" <form><input l:name="{1+1}" /></form>
 stderr : @.*
 exit : 1
 
 Accept okay l:name attributes
-<form l:action="{<html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
+include "formlets.links" <form l:action="{page <html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
 stdout : @<form action="#">.*</form> : Xml
 
 Looping in XML quasis
@@ -93,5 +93,5 @@ XML forest
 stdout : foo<a/><b>bar</b>fubar : Xml
 
 Labelization bug
-(escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
+include "formlets.links" (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
 stdout : @.* : Xml

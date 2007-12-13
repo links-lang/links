@@ -66,6 +66,8 @@ type environment        = datatype Env.String.t
  and typing_environment = environment * alias_environment
     deriving (Show)
 
+val extend_env : typing_environment -> typing_environment -> typing_environment
+
 val concrete_type : ?aenv:alias_environment -> datatype -> datatype
 
 val for_all : quantifier list * datatype -> datatype
@@ -241,3 +243,4 @@ val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
+val string_of_typing_environment : typing_environment -> string
