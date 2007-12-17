@@ -149,11 +149,12 @@ let interact envs =
       fun _ -> 
         print_string dots;
         flush stdout in
+  let parsing_context = Parse.fresh_context () in
   let rec interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
-           (match (measure "parse" parse input :   Sugartypes.sentence' * (Sugartypes.sentence * (Sugartypes.pposition -> Syntax.position)))
+           (match (measure "parse" parse input)
             with 
               | `Definitions [], _ -> envs
               | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
@@ -179,7 +180,11 @@ let interact envs =
               | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
-      interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
+      interact (evaluate_replitem (Parse.parse_channel
+                                     ~in_context:parsing_context
+                                     ~interactive:(make_dotter ps1) 
+                                     Parse.interactive) 
+                  envs (stdin, "<stdin>"))
   in 
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs

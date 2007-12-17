@@ -96,18 +96,19 @@ type ('a,'b) desugarer = (source_code -> 'a -> 'b)
 (* Read and parse Links source code from the source named `name' via
    the function `infun'.
 *)
-let read : parse:('intermediate parser_)
+let read : context:Lexer.lexer_context
+        -> ?nlhook:(unit -> unit)
+        -> parse:('intermediate parser_)
         -> desugarer:('intermediate, 'result) desugarer
         -> infun:(string -> int -> int)
         -> name:string
-        -> ?nlhook:(unit -> unit)
         -> 'result * ('intermediate * (Sugartypes.pposition -> Syntax.position)) =
-fun ~parse ~desugarer ~infun ~name ?nlhook ->
+fun ~context ?nlhook ~parse ~desugarer ~infun ~name ->
   let code = code_create () in
   let lexbuf = {(from_function (parse_into code infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      let p = parse (Lexer.lexer (from_option identity nlhook)) lexbuf in
+      let p = parse (Lexer.lexer context (from_option identity nlhook)) lexbuf in
         (desugarer code p, (p, lookup code))
     with 
       | Parsing.Parse_error -> 
@@ -204,29 +205,44 @@ let normalize_pp = function
   | Some "" -> None
   | pp -> pp
 
-(** Public functions: parse some data source containing Links source
-    code and return a list of ASTs. 
+(* We parse in a "context", which at the moment means the set of
+   operator precedences, but more generally is an environment with
+   respect to which any parse-time resolution takes place.
+*)
+type context = Lexer.lexer_context
+let fresh_context = Lexer.fresh_context
 
-    We use Lexing.from_function in every case rather than
-    Lexing.from_channel, Lexing.from_string etc. so that we can
-    intercept and retain the code that has been read (in order to give
-    better error messages).
-**)
-let parse_string ?pp grammar string =
-  let pp = normalize_pp pp in
-    read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string ?pp string) ~name:"<string>" ?nlhook:None
+let normalize_context = function
+  | None -> fresh_context ()
+  | Some c -> c
 
-let parse_channel ?interactive grammar (channel, name) =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name ?nlhook:interactive
+    (** Public functions: parse some data source containing Links source
+        code and return a list of ASTs. 
 
-let parse_file ?pp grammar filename =
+        We use Lexing.from_function in every case rather than
+        Lexing.from_channel, Lexing.from_string etc. so that we can
+        intercept and retain the code that has been read (in order to give
+        better error messages).
+    **)
+let parse_string ?pp ?in_context:context grammar string =
+  let pp = normalize_pp pp 
+  and context = normalize_context context in 
+    read ?nlhook:None ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
+
+let parse_channel ?interactive ?in_context:context grammar (channel, name) =
+  let context = normalize_context context in
+    read ?nlhook:interactive ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name ~context
+
+let parse_file ?pp ?in_context:context grammar filename =
   match normalize_pp pp with
-    | None -> parse_channel grammar (open_in filename, filename)
+    | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
     | Some pp ->
         Utility.call_with_open_infile filename
           (fun channel ->
-             read ~parse:grammar.parse
+             let context = normalize_context context in
+             read ~nlhook:ignore
+                  ~parse:grammar.parse
                   ~desugarer:grammar.desugar
                   ~infun:(reader_of_string ~pp (String.concat "\n" (Utility.lines channel)))
                   ~name:filename 
-                  ?nlhook:None)
+                  ~context)
