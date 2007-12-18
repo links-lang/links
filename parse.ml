@@ -88,7 +88,7 @@ let read : context:Lexer.lexer_context
         -> desugarer:('intermediate, 'result) desugarer
         -> infun:(string -> int -> int)
         -> name:string
-        -> 'result * ('intermediate * (Sugartypes.pposition -> Syntax.position)) =
+        -> 'result * ('intermediate * (Sugartypes.position -> Syntax.position)) =
 fun ~context ?nlhook ~parse ~desugarer ~infun ~name ->
   let code = new source_code in
   let lexbuf = {(from_function (code#parse_into infun))

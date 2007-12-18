@@ -4,6 +4,6 @@ module Check :
     val file :
       Types.typing_environment ->
       (binding list * phrase option) *
-      (pposition -> Syntax.position) -> unit
+      (position -> Syntax.position) -> unit
   end
 

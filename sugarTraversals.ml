@@ -7,6 +7,7 @@
    generate all this automatically instead of maintaining this file.
 *)
 
+(*
 open Sugartypes
 
 class map =
@@ -1134,3 +1135,4 @@ class fold =
     method assumption : assumption -> 'SELF =
       fun (_x0, _x1) -> (o#list (fun o -> o#quantifier) _x0)#datatype _x1
   end
+*)

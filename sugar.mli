@@ -9,8 +9,8 @@ module LAttrs : sig
   val replace_lattrs : Sugartypes.phrase -> Sugartypes.phrase
 end
 
-val desugar_expression : (Sugartypes.pposition -> Syntax.position) -> Sugartypes.phrase -> Syntax.untyped_expression
-val desugar_definitions : (Sugartypes.pposition -> Syntax.position) -> Sugartypes.binding list -> Syntax.untyped_definition list
+val desugar_expression : (Sugartypes.position -> Syntax.position) -> Sugartypes.phrase -> Syntax.untyped_expression
+val desugar_definitions : (Sugartypes.position -> Syntax.position) -> Sugartypes.binding list -> Syntax.untyped_definition list
 val desugar_datatype : Sugartypes.datatype -> Types.datatype
 val desugar_datatype' : (Types.meta_type_var Utility.StringMap.t *
                            Types.meta_row_var Utility.StringMap.t) -> Sugartypes.datatype -> Types.datatype

@@ -9,7 +9,7 @@ let ensure_match (start, finish) (opening : string) (closing : string) = functio
   | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
                                            (start, finish)))
 
-let pos () : Sugartypes.pposition = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
+let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
 let default_fixity = Num.num_of_int 9
 
@@ -23,10 +23,10 @@ let annotate (signame, datatype) : _ -> binding =
     function
       | `Fun (name, phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun (name, phrase, location, Some datatype), dpos
+            `Fun ((name, None), phrase, location, Some datatype), dpos
       | `Var ((name, phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ((`Variable name, dpos), phrase, location, Some datatype), dpos
+            `Val ((`Variable (name, None), dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -94,12 +94,12 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.ppattern> pattern
-%type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.pposition> tlfunbinding
+%type <Sugartypes.pattern> pattern
+%type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
-%type <Sugartypes.constant * Sugartypes.pposition> constant
+%type <Sugartypes.constant * Sugartypes.position> constant
 %type <(string * Sugartypes.phrase list) list> attr_list
 %type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
@@ -156,7 +156,7 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) $3; 
                                                                    (`Infix, pos()) }
-| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable d, pos),p,l,None), pos }
+| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable (d, None), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -165,7 +165,7 @@ fun_declarations:
 | fun_declaration                                              { [$1] }
 
 fun_declaration:
-| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `Fun (d,p,l,None), pos }
+| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `Fun ((d, None),p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 perhaps_uinteger:
@@ -531,7 +531,7 @@ perhaps_orderby:
 
 escape_expression:
 | iteration_expression                                         { $1 }
-| ESCAPE VARIABLE IN postfix_expression                        { `Escape ($2, $4), pos() }
+| ESCAPE VARIABLE IN postfix_expression                        { `Escape (($2, None), $4), pos() }
 
 formlet_expression:
 | escape_expression                                            { $1 }
@@ -572,7 +572,7 @@ database_expression:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
-| FUN VARIABLE arg_lists block                                 { `Fun ($2, ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| FUN VARIABLE arg_lists block                                 { `Fun (($2, None), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
 
 bindings:
 | binding                                                      { [$1] }
@@ -738,7 +738,7 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS VARIABLE                                  { `As ($3, $1), pos() }
+| cons_pattern AS VARIABLE                                  { `As (($3, None), $1), pos() }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
@@ -757,7 +757,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable $1, pos() }
+| VARIABLE                                                  { `Variable ($1, None), pos() }
 | UNDERSCORE                                                { `Any, pos() }
 | constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }

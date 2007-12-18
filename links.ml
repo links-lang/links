@@ -126,7 +126,7 @@ let print_result rtype result =
 
 (** type, optimise and evaluate a program *)
 let process_program ?(printer=print_result) (valenv, typingenv) 
-    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
+    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.position -> Syntax.position)))) = 
   let () = TypeSugar.Check.file typingenv sugar in
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
@@ -154,8 +154,7 @@ let interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
-           (match (measure "parse" parse input :   Sugartypes.sentence' * (Sugartypes.sentence * (Sugartypes.pposition -> Syntax.position)))
-            with 
+           (match measure "parse" parse input with 
               | `Definitions [], _ -> envs
               | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =

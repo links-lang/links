@@ -44,7 +44,7 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae
+OCAMLFLAGS=-dtypes -w ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -71,7 +71,6 @@ SOURCES = $(OPC)                		\
           sqlcompile.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
-          sugarTraversals.mli sugarTraversals.ml\
           sugar.mli sugar.ml    		\
           parser.mly            		\
           result.mli result.ml         		\
@@ -90,7 +89,6 @@ SOURCES = $(OPC)                		\
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
           inference.mli inference.ml 		\
-          showsugar.ml                          \
           typeSugar.mli typeSugar.ml            \
           linksregex.ml                         \
           library.mli library.ml 		\
