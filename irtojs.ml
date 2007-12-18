@@ -906,14 +906,6 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   _startTimer();" ^ body ^ ";
   </script>")
     
-let generate_inclusions defs = 
-  (ext_script_tag ~base:"?__include=" "prelude.links") ::
-    concat_map (function
-                    Module (Some path, _, _) -> 
-                      [ext_script_tag ~base:"?__include=" path]
-                  | _ -> []) 
-    defs
-
 let wrap_with_server_stubs code = 
   let server_library_funcs = (filter (fun (name,_) -> 
                                         Library.primitive_location name =`Server)
@@ -996,19 +988,13 @@ let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) a
   let code = optimise(wrap_with_server_stubs code) in
     (make_boiler_page
        ~body:(show code)
-       ~head:(String.concat "\n" (generate_inclusions defs))
+(*       ~head:(String.concat "\n" (generate_inclusions defs))*)
        [])
 
 let generate_program_defs tyenv global_names defs root_names =
   let (bindings, _), env = compile_ir tyenv global_names (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
   let _, code = generate_defs env bindings in
     [show (code Nothing)]
-
-let compile_file tyenv filename = 
-  let global_names = StringSet.elements (Env.String.domain (fst tyenv)) in
-  let _, Program(defs, expr) = Loader.load_file tyenv [] filename in
-  let js_defs = generate_program_defs tyenv global_names defs (Syntax.freevars expr) in
-    String.concat "\n" js_defs
 
 let generate_program_defs global_names defs root_names =
   generate_program_defs Library.typing_env global_names defs root_names

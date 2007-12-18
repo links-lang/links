@@ -1,5 +1,3 @@
-include "web.links"
-
 var db = database "winestore";
 
 var page_size = 12;

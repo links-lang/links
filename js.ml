@@ -1196,13 +1196,6 @@ let generate_program ?(onload = "") global_names (Program(defs,expr)) =
     (make_boiler_page ~body:(show_pp js_root_expr)
        ~head:(String.concat "\n" (generate_inclusions defs)) js_defs)
 
-let compile_file tyenv filename = 
-  let global_names = StringSet.elements (Env.String.domain (fst tyenv)) in
-  let tyenv, Program(defs, expr) = Loader.load_file tyenv [] filename in
-  let (Program(defs,expr)) = Symbols.rename_program (Program(defs,expr)) in
-  let js_defs = generate_program_defs global_names defs (Syntax.freevars expr) in
-    String.concat "\n" js_defs
-
 (* *************************************** *)
 (*             Hereafter tests             *)
 

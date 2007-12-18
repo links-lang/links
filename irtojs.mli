@@ -16,5 +16,3 @@ val make_boiler_page :
   string list -> string
 
 val ext_script_tag : ?base:string -> string -> string
-
-val compile_file : Types.typing_environment -> string -> string

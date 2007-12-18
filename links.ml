@@ -73,11 +73,15 @@ let rec directives
     ((fun (envs : Result.environment * Types.typing_environment) args ->
         match args with
           | [filename] ->
-              let (valenv, tyenv) = envs in
-              let (tyenv, program) = (Errors.display_fatal Loader.load_file
-                                        tyenv ["prelude.links"] filename) in
-                (fst ((Interpreter.run_program valenv []) program),
-                 (tyenv : Types.typing_environment))
+              let library_types, libraries =
+                (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
+              let libraries, _ = Interpreter.run_program [] [] libraries in
+              let program, sugar = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
+              let () = TypeSugar.Check.file library_types sugar in
+              let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
+              let program = Optimiser.optimise_program (typingenv, program) in
+              let program = Syntax.labelize program in
+                (fst ((Interpreter.run_program libraries []) program), (typingenv : Types.typing_environment))
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, replacing the current environment");
 
@@ -85,7 +89,7 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let t, _ = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.datatype (String.concat " " args) in
+          | _ -> let t, _ = Parse.parse_string ~pp:(Settings.get_value pp) Parse.datatype (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then
@@ -122,16 +126,13 @@ let print_result rtype result =
 
 (** type, optimise and evaluate a program *)
 let process_program ?(printer=print_result) (valenv, typingenv) 
-    ((program : Syntax.untyped_program),
-     (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
-  let program = Loader.resolve_includes [] ""  program in
+    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.pposition -> Syntax.position)))) = 
   let () = TypeSugar.Check.file typingenv sugar in
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
     <|measure_as|> "optimise_program" in
   let Syntax.Program (_, body) as program = Syntax.labelize program in
-  Interpreter.program_source := program;
   let valenv, result = lazy (Interpreter.run_program valenv [] program)
     <|measure_as|> "run_program" 
   in
@@ -149,12 +150,11 @@ let interact envs =
       fun _ -> 
         print_string dots;
         flush stdout in
-  let parsing_context = Parse.fresh_context () in
   let rec interact envs =
     let evaluate_replitem parse envs input = 
       Errors.display ~default:(fun _ -> envs)
         (lazy
-           (match (measure "parse" parse input)
+           (match (measure "parse" parse input :   Sugartypes.sentence' * (Sugartypes.sentence * (Sugartypes.pposition -> Syntax.position)))
             with 
               | `Definitions [], _ -> envs
               | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
@@ -176,15 +176,11 @@ let interact envs =
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
               | `Expression expr, (`Expression sexpr, lookup) -> 
-                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), (([], Some sexpr), lookup)) in envs
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), (([], Some sexpr), lookup)) in envs 
               | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
-      interact (evaluate_replitem (Parse.parse_channel
-                                     ~in_context:parsing_context
-                                     ~interactive:(make_dotter ps1) 
-                                     Parse.interactive) 
-                  envs (stdin, "<stdin>"))
+      interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
   in 
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
@@ -192,19 +188,18 @@ let interact envs =
 let run_file prelude envs filename = 
   Settings.set_value interacting false;
   begin match Utility.getenv "REQUEST_METHOD" with 
-    | Some _ -> Settings.set_value web_mode true
+    | Some _ -> 
+        Settings.set_value web_mode true
     | None -> ()
   end;
   if Settings.get_value web_mode then 
     Webif.serve_request prelude envs filename
   else 
-    ignore (evaluate (Loader.parse_file [filename]) envs filename)
-      
+    ignore (evaluate (Parse.parse_file ~pp:(Settings.get_value pp) Parse.program) envs filename)
+
 let evaluate_string_in envs v =
   (Settings.set_value interacting false;
-   let parser = (Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) 
-                   Parse.program) in
-   ignore(evaluate parser envs v))
+   ignore(evaluate (Parse.parse_string ~pp:(Settings.get_value pp) Parse.program) envs v))
 
 let cmd_line_actions = ref []
 
@@ -226,58 +221,53 @@ let options : opt list =
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
-    (noshort, "dump",                None,                             Some(Loader.dump_cached Library.typing_env));
+    (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None);
-    (noshort, "pp",                  None,                             Some (Settings.set_value Basicsettings.pp));
-  ]
+    (noshort, "pp",                  None,                             Some (Settings.set_value pp));
+    ]
 
 let main () =
   config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
-  Errors.display_fatal_l(lazy(parse_cmdline options
-                                (fun i -> push_back i file_list)));
+  Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
-
   (* load prelude: *)
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
-    (Errors.display_fatal Loader.load_file Library.typing_env
-       [] (Settings.get_value prelude_file)) in
+    (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
-  (* Make sure the fresh type variable counter does not clash with any
-     type variables from the prelude.
-     
+  (* make sure the fresh type variable counter does not clash with any
+     type variables from the prelude
+
      BUG: we should really do something similar for term variables
   *)
   let _ =
-    let max_or (set : Types.TypeVarSet.t) (m : int) =
+    let max_or (set : Types.TypeVarSet.t) (m : int) = 
       if Types.TypeVarSet.is_empty set then
         m
       else max m (Types.TypeVarSet.max_elt set) in
     let max_prelude_tvar =
-      List.fold_right max_or
+      List.fold_right max_or 
         (Env.String.range (Env.String.map Types.free_bound_type_vars (fst prelude_types)))
         (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
       Types.bump_variable_counter max_prelude_tvar
   in
     
   let prelude_compiled = Interpreter.run_defs [] [] prelude in
-  let (stdvalenv, stdtypeenv) = !stdenvs in
-    stdenvs := 
-      (stdvalenv @ prelude_compiled,
-       Types.concat_typing_environment stdtypeenv prelude_types);
+    (let (stdvalenv, stdtypeenv) = !stdenvs in
+       stdenvs := 
+         (stdvalenv @ prelude_compiled,
+          Types.concat_typing_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in !stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)
-  ListLabels.iter ~f:(run_file prelude (prelude_compiled, prelude_types))
-    !file_list;
-
+  ListLabels.iter ~f:(run_file prelude (prelude_compiled, prelude_types)) !file_list;
   if Settings.get_value(interacting) then
     begin
-      print_endline (Settings.get_value welcome_note);
+      print_endline (Settings.get_value(welcome_note));
       interact (prelude_compiled, prelude_types)
     end
 

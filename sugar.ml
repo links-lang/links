@@ -1732,8 +1732,8 @@ module Desugarer =
                failwith ("Free variable(s) in alias")
        | `Foreign (language, name, datatype) -> 
            Alien (language, name, desugar_assumption (generalize datatype), pos) 
-       | `Include path -> 
-           Module(Some path, None, pos)
+       | `Include path ->
+           failwith "Includes not supported"
        | _ -> assert false in
      let result = ds s
      in
