@@ -1,4 +1,14 @@
-include "silly.links"
+fun waiting(id) client {
+ receive {
+  case MouseDown(elem)  ->
+   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+    dragging(id, elem)
+   else
+    waiting(id)
+  case MouseUp          -> waiting(id)
+  case MouseOut(toElem) -> waiting(id)
+ }
+}
 
 fun dragging(id, elem) client {
  receive {
