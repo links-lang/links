@@ -332,7 +332,9 @@ struct
                             [x] :: result)
         in
           group predx new_result etc
-    in if (list == []) then [] else  group (pred (List.hd list)) [] list
+    in match list with
+      | [] -> []
+      | hd::_ -> group (pred hd) [] list
 
   (** [groupByPred']: Alternate implementation of groupByPred. *)
   let groupByPred' pred : 'a list -> 'a list list = 
