@@ -367,7 +367,7 @@ and regexrepl ctxt nl = parse
   | '/' (regex_flags as f)              { Stack.pop ctxt.lexers; Stack.pop ctxt.lexers; SLASHFLAGS (f) }
 
 {
- let lexer ctxt nlhook = 
-   Stack.push (lex ctxt nlhook) ctxt.lexers;
+ let lexer ctxt ~newline_hook = 
+   Stack.push (lex ctxt newline_hook) ctxt.lexers;
    fun lexbuf -> Stack.top ctxt.lexers lexbuf
 }

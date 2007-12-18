@@ -79,7 +79,7 @@ SOURCES = $(OPC)                		\
           errors.mli errors.ml                  \
           $(DB_CODE)            		\
           database.mli database.ml 		\
-          lexer.mll             		\
+          lexer.mli lexer.mll         		\
           parse.mli parse.ml    		\
           jsonparse.mly         		\
           jsonlex.mll           		\
