@@ -120,42 +120,43 @@ let initial_optable =
     ">>" , infixl1;
   ]
 
-type lexer_context = { 
-  mutable optable : (string * (string -> Parser.token)) list;
-          lexers  : (Lexing.lexbuf -> Parser.token) Stack.t;
-}
-let fresh_context : unit -> lexer_context =
-  fun () ->
-    { optable = initial_optable;
-      lexers  = Stack.create ()}
+let default_precedence = infixl9
 
-let precedence table x =
-  try
-    List.assoc x table x
-  with Not_found | NotFound _ ->
-    infixl9 x
+class lexer_context =
+object
+  val mutable optable = initial_optable
+  val          lexers = Stack.create ()
 
-let setprec ctxt assoc level name =
-  let value = match List.nth precs level, assoc with
-    | (a,_,_), `None -> a
-    | (_,a,_), `Left -> a
-    | (_,_,a), `Right -> a 
-    | _,       `Pre -> prefix
-    | _,       `Post -> postfix
-  in
-    ctxt.optable <- (name, value) :: ctxt.optable
+  method precedence name =
+    try List.assoc name optable name
+    with NotFound _ -> default_precedence name
+
+  method setprec (assoc : [`None|`Left|`Right|`Pre|`Post]) level name =
+    let value = match List.nth precs level, assoc with
+      | (a,_,_), `None -> a
+      | (_,a,_), `Left -> a
+      | (_,_,a), `Right -> a 
+      | _,       `Pre -> prefix
+      | _,       `Post -> postfix
+    in
+      optable <- (name, value) :: optable
+
+  method push_lexer (lexer : Lexing.lexbuf -> Parser.token) =
+    Stack.push lexer lexers
+
+  method pop_lexer = 
+    Stack.pop lexers
+
+  method next_lexer = 
+    Stack.top lexers
+end
+
+let fresh_context () = new lexer_context
 
 let bump_lines lexbuf n = 
   lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_lnum = lexbuf.lex_curr_p.pos_lnum + n}
 
-let count_newlines str = 
-  let newlines = ref 0 in
-    String.iter (function
-                   | '\n' -> incr newlines
-                   | _    -> ()) str;
-    !newlines
-      
-let isupper = function 'A'..'Z' -> true | _ -> false
+let count_newlines = StringUtils.count '\n'
 
 let keywords = [
  "abs"      , ABS;
@@ -249,14 +250,14 @@ rule lex ctxt nl = parse
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
-  | "{|"                                { Stack.push (lex ctxt nl) ctxt.lexers; LBRACEBAR }
-  | '{'                                 { Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
-  | "|}"                                { Stack.pop ctxt.lexers (* fall back *); BARRBRACE }
-  | '}'                                 { Stack.pop ctxt.lexers (* fall back *); RBRACE }
+  | "{|"                                { ctxt#push_lexer (lex ctxt nl); LBRACEBAR }
+  | '{'                                 { ctxt#push_lexer (lex ctxt nl); LBRACE }
+  | "|}"                                { ctxt#pop_lexer (* fall back *); BARRBRACE }
+  | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
   | "<-"                                { LARROW }
   | "<--"                               { LLARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
-                                          Stack.push (starttag ctxt nl) ctxt.lexers; LXML id }
+                                          ctxt#push_lexer (starttag ctxt nl); LXML id }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
@@ -264,15 +265,15 @@ rule lex ctxt nl = parse
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
-  | '~'                                 { Stack.push (regex' ctxt nl) ctxt.lexers; TILDE }
+  | '~'                                 { ctxt#push_lexer (regex' ctxt nl); TILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
-  | opchar + as op                      { precedence ctxt.optable op }
-  | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || isupper var.[0] then
+  | opchar + as op                      { ctxt#precedence op }
+  | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
-                                          else precedence ctxt.optable var }
+                                          else ctxt#precedence var }
   | "'\\\\'"                            { CHAR '\\' }
   | "'\\''"                             { CHAR '\'' }
   | "'" (_ as c) "'"                    { CHAR c }
@@ -281,14 +282,14 @@ rule lex ctxt nl = parse
   | def_integer as var                  { UINTEGER (Num.num_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
-  | "infix"                             { INFIX (setprec ctxt) }
-  | "infixl"                            { INFIXL (setprec ctxt) }
-  | "infixr"                            { INFIXR (setprec ctxt) }
-  | "prefix"                            { PREFIX (setprec ctxt) }
-  | "postfix"                           { POSTFIX (setprec ctxt) }
+  | "infix"                             { INFIX ctxt#setprec }
+  | "infixl"                            { INFIXL ctxt#setprec }
+  | "infixr"                            { INFIXR ctxt#setprec }
+  | "prefix"                            { PREFIX ctxt#setprec }
+  | "postfix"                           { POSTFIX ctxt#setprec }
   | def_id as var                       { try List.assoc var keywords 
                                           with Not_found | NotFound _ -> 
-                                            if isupper var.[0] then CONSTRUCTOR var
+                                            if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | "'" def_id as var                   { QUOTEDVAR var }
   | def_blank                           { lex ctxt nl lexbuf }
@@ -298,12 +299,12 @@ and starttag ctxt nl = parse
   | '='                                 { EQ }
   | '#' ([^ '\n'] *)                    { starttag ctxt nl lexbuf }
   | '>'                                 { (* Switch to `xmllex' *)
-                                          Stack.pop ctxt.lexers;  Stack.push (xmllex ctxt nl) ctxt.lexers; RXML }
+                                          ctxt#pop_lexer;  ctxt#push_lexer (xmllex ctxt nl); RXML }
   | '"'                                 { (* Come back here after scanning the attr value *)
-                                          Stack.push (attrlex ctxt nl) ctxt.lexers; LQUOTE }
+                                          ctxt#push_lexer (attrlex ctxt nl); LQUOTE }
   | '{'                                 { (* Come back here after scanning the attribute block *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
-  | "/>"                                { Stack.pop ctxt.lexers (* fall back *); SLASHRXML }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACE }
+  | "/>"                                { ctxt#pop_lexer (* fall back *); SLASHRXML }
   | '\n'                                { nl () ; bump_lines lexbuf 1; starttag ctxt nl lexbuf }
   | def_blank                           { starttag ctxt nl lexbuf }
   | eof                                 { END }
@@ -317,34 +318,34 @@ and xmllex ctxt nl = parse
   | "&lt;"                              { CDATA "<" } 
   | "&gt;"                              { CDATA ">" } 
   | "{|"                                { (* scan the expression, then back here *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACEBAR }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACEBAR }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACE }
   | "</" (def_qname as var) '>'         { (* fall back *)
-                                          Stack.pop ctxt.lexers; ENDTAG var }
+                                          ctxt#pop_lexer; ENDTAG var }
   | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
-                                          Stack.push (starttag ctxt nl) ctxt.lexers; LXML var }
+                                          ctxt#push_lexer (starttag ctxt nl); LXML var }
   | eof                                 { END }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and attrlex ctxt nl = parse
   | '"'                                 { (* fall back *)
-                                          Stack.pop ctxt.lexers; RQUOTE }
+                                          ctxt#pop_lexer; RQUOTE }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACE }
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and regex' ctxt nl = parse
-  | '/'                                 { Stack.push (regex ctxt nl) ctxt.lexers; SLASH }
-  | "s/"                                { Stack.push (regexrepl ctxt nl) ctxt.lexers; (* push twice is intentional *)
-					  Stack.push (regexrepl ctxt nl) ctxt.lexers;
-					  Stack.push (regex ctxt nl) ctxt.lexers; 
+  | '/'                                 { ctxt#push_lexer (regex ctxt nl); SLASH }
+  | "s/"                                { ctxt#push_lexer (regexrepl ctxt nl); (* push twice is intentional *)
+					  ctxt#push_lexer (regexrepl ctxt nl);
+					  ctxt#push_lexer (regex ctxt nl); 
 					  SSLASH }
   | '#' ([^ '\n'] *)                    { regex' ctxt nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' ctxt nl lexbuf }
   | def_blank                           { regex' ctxt nl lexbuf }
 and regex ctxt nl = parse
-  | '/'                                 { Stack.pop ctxt.lexers; Stack.pop ctxt.lexers; SLASH }
-  | '/' (regex_flags as f)              { Stack.pop ctxt.lexers; Stack.pop ctxt.lexers; SLASHFLAGS (f) }
+  | '/'                                 { ctxt#pop_lexer; ctxt#pop_lexer; SLASH }
+  | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
   | '.'                                 { DOT }
   | '[' (_ as f) '-' (_ as t) ']'       { RANGE (f,t) }
   | '?'                                 { QUESTION }
@@ -356,18 +357,18 @@ and regex ctxt nl = parse
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACE }
   | '\\' (_ as c)                       { QUOTEDMETA (String.make 1 c)}
   | (_ as c)                            { STRING (String.make 1 c) }
 and regexrepl ctxt nl = parse
   | regexrepl_fsa as var                { REGEXREPL(var) }
   | '{'                                 { (* scan the expression, then back here *)
-                                          Stack.push (lex ctxt nl) ctxt.lexers; LBRACE }
-  | '/'                                 { Stack.pop ctxt.lexers; Stack.pop ctxt.lexers; SLASH}
-  | '/' (regex_flags as f)              { Stack.pop ctxt.lexers; Stack.pop ctxt.lexers; SLASHFLAGS (f) }
+                                          ctxt#push_lexer (lex ctxt nl); LBRACE }
+  | '/'                                 { ctxt#pop_lexer; ctxt#pop_lexer; SLASH}
+  | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
 
 {
  let lexer ctxt ~newline_hook = 
-   Stack.push (lex ctxt newline_hook) ctxt.lexers;
-   fun lexbuf -> Stack.top ctxt.lexers lexbuf
+   ctxt#push_lexer (lex ctxt newline_hook);
+   fun lexbuf -> ctxt#next_lexer lexbuf
 }

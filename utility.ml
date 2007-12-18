@@ -519,6 +519,16 @@ struct
         try ignore (Str.search_forward (Str.regexp_string is) s (slen - ilen));
           true
         with NotFound _ -> false
+
+  let count c str = 
+    let count = ref 0 in
+      begin
+        String.iter (function
+                       | c' when c = c' -> incr count
+                       | _              -> ()) 
+          str;
+        !count
+      end
 end
 include StringUtils
 
