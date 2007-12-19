@@ -100,40 +100,40 @@ let rec is_atom =
 
 type program = computation
 
-module type MAPTY =
+module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
   type alias_environment = Types.alias_environment
   type typing_environment = environment * alias_environment
 
-  class maptyenv : typing_environment ->
+  class visitor : typing_environment ->
   object ('self_type)
     val tyenv : typing_environment
     val tenv : environment
     val alias_env : alias_environment
 
     method lookup_type : var -> Types.datatype
-    method constant : constant -> (constant * Types.datatype)
+    method constant : constant -> (constant * Types.datatype * 'self_type)
     method option :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a option -> 'a option * Types.datatype option
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a option -> 'a option * Types.datatype option * 'self_type
     method list :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a list -> 'a list * Types.datatype list
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a list -> 'a list * Types.datatype list * 'self_type
     method name_map :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a name_map -> 'a name_map * Types.datatype name_map        
-    method var : var -> (var * Types.datatype)       
-    method value : value -> (value * Types.datatype)
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
+    method var : var -> (var * Types.datatype * 'self_type)
+    method value : value -> (value * Types.datatype * 'self_type)
                                                 
     method tail_computation :
-      tail_computation -> (tail_computation * Types.datatype)                 
-    method special : special -> (special * Types.datatype)      
+      tail_computation -> (tail_computation * Types.datatype * 'self_type)
+    method special : special -> (special * Types.datatype * 'self_type)      
     method bindings : binding list -> (binding list * 'self_type)
-    method computation : computation -> (computation * Types.datatype)
+    method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
   end  
@@ -141,11 +141,11 @@ end
 
 (* Traversal with type reconstruction *)
 (*
-  Essentially this is a map operation over the IR datatypes that also
+  Essentially this is a map-fold operation over the IR datatypes that also
   constructs the type as it goes along (using type annotations on
   binders).
 *)
-module MapTy : MAPTY =
+module Transform : TRANSFORM =
 struct
   open Types
 
@@ -178,7 +178,7 @@ struct
 
   module Env = Env.Int
 
-  class maptyenv ((tenv, alias_env) as tyenv : typing_environment) =
+  class visitor ((tenv, alias_env) as tyenv : typing_environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
     val tenv = tenv
@@ -187,42 +187,64 @@ struct
     method lookup_type : var -> datatype = fun var ->
       Env.lookup tenv var
         
-    method constant : constant -> (constant * datatype) = fun c ->
+    method constant : constant -> (constant * datatype * 'self_type) = fun c ->
       match c with
-        | Syntax.Boolean _ -> c, bool_type
-        | Syntax.Integer _ -> c, int_type
-        | Syntax.Char _ -> c, char_type
-        | Syntax.String _ -> c, string_type
-        | Syntax.Float _ -> c, float_type
+        | Syntax.Boolean _ -> c, bool_type, o
+        | Syntax.Integer _ -> c, int_type, o
+        | Syntax.Char _ -> c, char_type, o
+        | Syntax.String _ -> c, string_type, o
+        | Syntax.Float _ -> c, float_type, o
 
     method option :
       'a.
-      ('self_type -> 'a -> ('a * datatype)) ->
-      'a option -> 'a option * datatype option =
-      fun f -> opt_split -<- (opt_map (f o))
+      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
+      'a option -> 'a option * datatype option * 'self_type =
+      fun f v ->
+        match v with
+          | None -> None, None, o
+          | Some v ->
+              let v, t, o = f o v in
+                Some v, Some t, o
         
     method list :
       'a.
-      ('self_type -> 'a -> ('a * datatype)) ->
-      'a list -> 'a list * datatype list =
-      fun f -> List.split -<- (List.map (f o))
-
+      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
+      'a list -> 'a list * datatype list * 'self_type =
+      fun f v ->
+        let vs, ts, o =
+          List.fold_left
+            (fun (vs, ts, o) v ->
+               let (v, t, o) = f o v in
+                 v::vs, t::ts, o)
+            ([], [], o)
+            v
+        in
+          List.rev vs, List.rev ts, o
+          
     method name_map :
       'a.
-      ('self_type -> 'a -> ('a * datatype)) ->
-      'a name_map -> 'a name_map * datatype name_map =
-      fun f -> StringMap.split -<- (StringMap.map (f o))
+      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
+      'a name_map -> 'a name_map * datatype name_map * 'self_type =
+      fun f vmap ->
+        StringMap.fold
+          (fun name v (vmap, tmap, o) ->
+             let (v, t, o) = f o v in
+               (StringMap.add name v vmap,
+                StringMap.add name t tmap,
+                o))
+          vmap
+          (StringMap.empty, StringMap.empty, o)
+
+    method var : var -> (var * datatype * 'self_type) =
+      fun var -> (var, o#lookup_type var, o)
         
-    method var : var -> (var * datatype) =
-      fun var -> (var, o#lookup_type var)
-        
-    method value : value -> (value * datatype) =
+    method value : value -> (value * datatype * 'self_type) =
       function
-        | `Constant c -> let (c, t) = o#constant c in `Constant c, t
-        | `Variable x -> let (x, t) = o#var x in `Variable x, t
+        | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
+        | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o
         | `Extend (fields, base) ->
-            let (fields, field_types) = o#name_map (fun o -> o#value) fields in
-            let (base, base_type) = o#option (fun o -> o#value) base in
+            let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
+            let (base, base_type, o) = o#option (fun o -> o#value) base in
 
             let t =
               match base_type with
@@ -235,102 +257,102 @@ struct
                         | _ -> assert false
                     end
             in
-              `Extend (fields, base), t
+              `Extend (fields, base), t, o
         | `Project (name, v) ->
             (*             Debug.print ("project_e: " ^ Show_value.show (`Project (name, v))); *)
-            let (v, vt) = o#value v in
+            let (v, vt, o) = o#value v in
 (*               Debug.print ("project_vt: " ^ Types.string_of_datatype vt); *)
-              `Project (name, v), deconstruct (project_type ~aenv:alias_env name) vt
+              `Project (name, v), deconstruct (project_type ~aenv:alias_env name) vt, o
         | `Erase (name, v) ->
 (*             Debug.print ("erase_e: " ^ Show_value.show (`Erase (name, v))); *)
-            let (v, vt) = o#value v in
+            let (v, vt, o) = o#value v in
             let t = deconstruct (erase_type ~aenv:alias_env name) vt in
 (*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
 (*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
-              `Erase (name, v), t
+              `Erase (name, v), t, o
         | `Inject (name, v) ->
-            let (v, t) = o#value v in
-              `Inject (name, v), inject_type name t
+            let v, t, o = o#value v in
+              `Inject (name, v), inject_type name t, o
         | `XmlNode (tag, attributes, children) ->
-            let (attributes, attribute_types) = o#name_map (fun o -> o#value) attributes in
-            let (children, children_types) = o#list (fun o -> o#value) children in
+            let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
+            let (children, children_types, o) = o#list (fun o -> o#value) children in
 
               (*
                 let _ = assert (StringMap.for_all (fun t -> t=string_type) attribute_types) in
                 let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
               *)
-              `XmlNode (tag, attributes, children), xml_type              
+              `XmlNode (tag, attributes, children), xml_type, o            
         | `ApplyPure (f, args) ->
-            let (f, ft) = o#value f in
-            let (args, arg_types) = o#list (fun o -> o#value) args in
+            let (f, ft, o) = o#value f in
+            let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct (return_type ~aenv:alias_env) ft
+              `ApplyPure (f, args), deconstruct (return_type ~aenv:alias_env) ft, o
         | `Comparison (v, op, w) ->
-            let v, _ = o#value v
-            and w, _ = o#value w in
-              `Comparison (v, op, w), bool_type
+            let v, _, o = o#value v in
+            let w, _, o = o#value w in
+              `Comparison (v, op, w), bool_type, o
             (* TODO: get rid of comparison *)
         | `Coerce (v, t) ->
-            let (v, vt) = o#value v in
+            let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
-              `Coerce (v, t), t
+              `Coerce (v, t), t, o
         | `Abs v ->
-            let (v, t) = o#value v in
-              `Abs v, abs_type t
-                                                         
+            let v, t, o = o#value v in
+              `Abs v, abs_type t, o
+
     method tail_computation :
-      tail_computation -> (tail_computation * datatype) =
+      tail_computation -> (tail_computation * datatype * 'self_type) =
       function
           (* TODO: type checking *)
         | `Return v ->
-            let (v, t) = o#value v in
-              `Return v, t
+            let v, t, o = o#value v in
+              `Return v, t, o
         | `Apply (f, args) ->
-            let (f, ft) = o#value f in
-            let (args, arg_types) = o#list (fun o -> o#value) args in
+            let f, ft, o = o#value f in
+            let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
 (*               Debug.print ("apply: " ^ Show_tail_computation.show (`Apply (f, args))); *)
-              `Apply (f, args), deconstruct (return_type ~aenv:alias_env) ft
+              `Apply (f, args), deconstruct (return_type ~aenv:alias_env) ft, o
         | `Special special ->
-            let (special, t) = o#special special in
-              `Special special, t
+            let special, t, o = o#special special in
+              `Special special, t, o
 
         | `Case (v, cases, default) ->
-            let v, _ = o#value v in
-            let cases, case_types =
+            let v, _, o = o#value v in
+            let cases, case_types, o =
               o#name_map
                 (fun o (b, c) ->
-                   let (b, o) = o#binder b in
-                   let (c, t) = o#computation c in
-                     (b, c), t) cases in
-            let default, default_type =
+                   let b, o = o#binder b in
+                   let c, t, o = o#computation c in
+                     (b, c), t, o) cases in
+            let default, default_type, o =
               o#option (fun o (b, c) ->
-                          let (b, o) = o#binder b in
-                          let (c, t) = o#computation c in
-                            (b, c), t) default in
+                          let b, o = o#binder b in
+                          let c, t, o = o#computation c in
+                            (b, c), t, o) default in
             let t =
               if not (StringMap.is_empty case_types) then
                 (StringMap.to_alist ->- List.hd ->- snd) case_types
               else
                 val_of default_type
             in
-              `Case (v, cases, default), t
+              `Case (v, cases, default), t, o
         | `If (v, left, right) ->
-            let v, _ = o#value v in
-            let left, t = o#computation left in
-            let right, _ = o#computation right in
-              `If (v, left, right), t
+            let v, _, o = o#value v in
+            let left, t, o = o#computation left in
+            let right, _, o = o#computation right in
+              `If (v, left, right), t, o
                  
-    method special : special -> (special * datatype) =
+    method special : special -> (special * datatype * 'self_type) =
       function
         | `App (v, w) ->
-            let v, vt = o#value v in
-            let w, wt = o#value w in
-              `App (v, w), app_type vt wt
-        | `Wrong t -> `Wrong t, t
+            let v, vt, o = o#value v in
+            let w, wt, o = o#value w in
+              `App (v, w), app_type vt wt, o
+        | `Wrong t -> `Wrong t, t, o
         | `Database v ->
-            let v, _ = o#value v in
-              `Database v, `Primitive `DB
+            let v, _, o = o#value v in
+              `Database v, `Primitive `DB, o
         | `Query q ->
             let row =
 	      (List.fold_right
@@ -341,14 +363,14 @@ struct
                       | _ -> assert(false) (* can't handle other kinds of expressions *))
 	         q.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
             let t =  `Application ("List", [`Record row]) in
-              `Query q, t
+              `Query q, t, o
         | `Table (db, table_name, (rt, wt)) ->
-            let db, _ = o#value db in
-            let table_name, _ = o#value table_name in
-              `Table (db, table_name, (rt, wt)), `Table (rt, wt)
+            let db, _, o = o#value db in
+            let table_name, _, o = o#value table_name in
+              `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
         | `CallCC v ->
-            let v, t = o#value v in
-              `CallCC v, deconstruct (return_type ~aenv:alias_env) t
+            let v, t, o = o#value v in
+              `CallCC v, deconstruct (return_type ~aenv:alias_env) t, o
       
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -362,23 +384,23 @@ struct
         in
           List.rev bs, o
 
-    method computation : computation -> (computation * datatype) =
+    method computation : computation -> (computation * datatype * 'self_type) =
       fun (bs, tc) ->
 (*         Debug.print ("computation: " ^ Show_computation.show (bs, tc)); *)
         let bs, o = o#bindings bs in
-        let tc, t = o#tail_computation tc in
-          (bs, tc), t
+        let tc, t, o = o#tail_computation tc in
+          (bs, tc), t, o
                                                        
     method binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, tc) ->
             let (xv, (xt, _, _) as x), o = o#binder x in
-            let (tc, t) = o#tail_computation tc in
+            let tc, t, o = o#tail_computation tc in
 (*               Debug.print ("bound "^string_of_int(xv)^" of type "^string_of_datatype xt^ *)
 (*                              " to expression of type "^string_of_datatype t); *)
               `Let (x, tc), o
         | `Fun (f, xs, body, location) ->
-            let xs, body =
+            let xs, body, o =
               let (xs, o) =
                 List.fold_right
                   (fun x (xs, o) ->
@@ -386,11 +408,11 @@ struct
                        (x::xs, o))
                   xs
                   ([], o) in
-              let (body, _) = o#computation body in
-                xs, body in
-            let (f, o) = o#binder f in
+              let body, _, o = o#computation body in
+                xs, body, o in
+            let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              `Fun (f, xs, body, location), o             
+              `Fun (f, xs, body, location), o
         | `Rec defs ->
             let fs, o =
               List.fold_right
@@ -400,20 +422,21 @@ struct
                 defs
                 ([], o) in
 
-            let defs =
-              List.map
-                (fun (f, xs, body, location) ->
-                  let (xs, o) =
-                    List.fold_right
-                      (fun x (xs, o) ->
-                         let (x, o) = o#binder x in
-                           (x::xs, o))
-                      xs
-                      ([], o) in
-                  let (body, _) = o#computation body in
-                    (f, xs, body, location))
-                defs
-            in
+            let defs, o =
+              List.fold_left
+                (fun (defs, o) (f, xs, body, location) ->
+                   let xs, o =
+                     List.fold_right
+                       (fun x (xs, o) ->
+                          let (x, o) = o#binder x in
+                            (x::xs, o))
+                       xs
+                       ([], o) in
+                  let body, _, o = o#computation body in
+                    (f, xs, body, location)::defs, o)
+                ([], o)
+                defs in
+            let defs = List.rev defs in
               `Rec defs, o
         | `Alien (x, language) ->
             let x, o = o#binder x in
@@ -452,7 +475,7 @@ struct
 
   let inliner tyenv env =
   object (o)
-    inherit MapTy.maptyenv(tyenv) as super
+    inherit Transform.visitor(tyenv) as super
 
     val env = env
 
@@ -461,7 +484,7 @@ struct
 
     method value =
       function
-        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var
+        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
         | v -> super#value v
 
     method bindings =
@@ -471,7 +494,7 @@ struct
               begin
                 match b with
                   | `Let ((x, (_, _, `Local)), `Return v) when is_inlineable_value v ->
-                      (o#with_env (IntMap.add x (fst (o#value v)) env))#bindings bs
+                      (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
                   | _ ->
                       let bs, o = o#bindings bs in
                         b :: bs, o
@@ -480,6 +503,153 @@ struct
   end
 
   let program typing_env p =
-    fst ((inliner typing_env IntMap.empty)#computation p)
+    fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 
+(*
+  Eliminate dead functions and value bindings.
+
+  Currently this is very basic. It only does one pass, and it only
+  eliminates variables if they are never used anywhere.
+
+  A much more effective approach is to use one of Appel and Jim's
+  algorithms described in `Shrinking lambda reductions in linear
+  time'.
+
+  They describe three algorithms. All of them eliminate all dead
+  variables (as well as inlining linear variables, though that aspect
+  is neither here nor there really).
+
+  The naive algorithm gathers a census of variable counts, uses it to
+  perform inlining, and is applied repeatedly until there are no dead
+  variables left.
+
+  The improved algorithm does the same, but updates the census as it
+  goes along (e.g. whenever it deletes a function it passes over the
+  body of the function and adjusts the census to take account of any
+  uses of variables that have just been deleted).
+
+  Both the naive algorithm and the improved algorithm are quadratic in
+  the worst case, though the improved algorithm works quite well in
+  practice. The improved algorithm is used in SML/NJ and MLton, and it
+  used to be used in SML.NET. Appel and Jim suggest just bounding the
+  number of times the improved algorithm is iterated rather than
+  trying to run it exhaustively. In all but pathological cases this
+  gets rid of most dead functions.
+
+  The graphical algorithm depends on a graphical representation of
+  terms (connecting definitions to uses of variables). It takes linear
+  time and is the algorithm now used in SML.NET. It is extremely fast
+  in practice and eliminates all dead variables in one
+  pass. Unfortunately our terms are represented as trees, so we cannot
+  use this algorithm here.
+*)
+module ElimDeadDefs =
+struct
+  let counter tyenv =
+  object (o)
+    inherit Transform.visitor(tyenv) as super
+      
+    val env = IntMap.empty
+      
+    method with_env env =
+      {< env = env >}
+
+    method init (x, (_, name, _)) =
+      (*      Debug.print ("init "^name^" as: "^string_of_int x);*)
+      o#with_env (IntMap.add x 0 env)
+
+    method inc x =
+(*      Debug.print ("use of: "^string_of_int x);*)
+      o#with_env (IntMap.add x ((IntMap.find x env)+1) env)
+
+    method var =
+      fun x ->
+        if IntMap.mem x env then
+          x, o#lookup_type x, o#inc x
+        else
+          super#var x
+
+    method super_binding = super#binding
+
+    method binding b =
+      match b with
+        | `Let (x, `Return _) ->
+            let b, o = super#binding b in
+              b, o#init x
+        | `Fun (f, _, _, _) ->
+            let b, o = super#binding b in
+              b, o#init f
+        | `Rec defs ->
+            let o =
+              List.fold_left
+                (fun o (f, _, _, _) -> o#init f)
+                o
+                defs
+            in
+              o#super_binding b
+        | _ ->
+            super#binding b
+
+    method get_env () = env
+  end
+
+  let eliminator tyenv env =
+  object (o)
+    inherit Transform.visitor(tyenv) as super
+      
+    val env = env
+      
+    method is_dead (x, _) =
+      IntMap.mem x env && (IntMap.find x env = 0)
+
+    method bindings =
+      function
+        | b :: bs ->
+            begin
+              let b, o = o#binding b in
+                match b with
+                  | `Let ((_, (_, name, _)) as x, _) when o#is_dead x ->
+(*                      Debug.print ("Eliminating let-val: "^name);*)
+                      o#bindings bs
+                  | `Fun ((_, (_, name, _)) as f, _, _, _) when o#is_dead f ->
+(*                      Debug.print ("Eliminating non-rec fun: "^name);*)
+                      o#bindings bs
+                  | `Rec defs ->
+                      let defs =
+                        List.fold_left
+                          (fun defs (((_, (_, name, _)) as f, _, _, _) as def) ->
+                             if o#is_dead f then
+                               begin
+(*                                 Debug.print ("Eliminating rec fun: "^name);*)
+                                 defs
+                               end
+                             else def :: defs)
+                          []
+                          defs in
+                      let defs = List.rev defs in
+                        begin
+                          match defs with
+                            | [] -> o#bindings bs
+                            | defs ->
+                                let bs, o = o#bindings bs in
+                                  `Rec defs :: bs, o
+                        end                              
+                  | _ ->
+                      let bs, o = o#bindings bs in
+                        b :: bs, o
+            end
+        | [] -> [], o
+  end
+
+  let count tyenv p =
+    let _, _, o = (counter tyenv)#computation p in
+      o#get_env()
+
+  let program tyenv p =
+    let env = count tyenv p in
+(*      Debug.print ("before elim dead defs: " ^ Show_computation.show p);*)
+    let p, _, _ = (eliminator tyenv env)#computation p in
+(*      Debug.print ("after elim dead defs: " ^ Show_computation.show p);*)
+      p
+end

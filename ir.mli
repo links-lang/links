@@ -76,47 +76,53 @@ type program = computation
 
 val is_atom : value -> bool
 
-module MapTy :
+module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
   type alias_environment = Types.alias_environment
   type typing_environment = environment * alias_environment
 
-  class maptyenv : typing_environment ->
+  class visitor : typing_environment ->
   object ('self_type)
     val tyenv : typing_environment
     val tenv : environment
     val alias_env : alias_environment
 
     method lookup_type : var -> Types.datatype
-    method constant : constant -> (constant * Types.datatype)
+    method constant : constant -> (constant * Types.datatype * 'self_type)
     method option :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a option -> 'a option * Types.datatype option
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a option -> 'a option * Types.datatype option * 'self_type
     method list :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a list -> 'a list * Types.datatype list
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a list -> 'a list * Types.datatype list * 'self_type
     method name_map :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype)) ->
-      'a name_map -> 'a name_map * Types.datatype name_map        
-    method var : var -> (var * Types.datatype)       
-    method value : value -> (value * Types.datatype)
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
+    method var : var -> (var * Types.datatype * 'self_type)
+    method value : value -> (value * Types.datatype * 'self_type)
                                                 
     method tail_computation :
-      tail_computation -> (tail_computation * Types.datatype)                 
-    method special : special -> (special * Types.datatype)      
+      tail_computation -> (tail_computation * Types.datatype * 'self_type)
+    method special : special -> (special * Types.datatype * 'self_type)      
     method bindings : binding list -> (binding list * 'self_type)
-    method computation : computation -> (computation * Types.datatype)
+    method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
   end  
 end
 
+module Transform : TRANSFORM
 
 module Inline :
+sig
+  val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program
+end
+
+module ElimDeadDefs :
 sig
   val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program
 end

@@ -971,19 +971,24 @@ let make_initial_env (tenv, aenv) =
             ("map", dt "((a) -> b, [a]) -> [b]"))
          ("stringifyB64", dt "(a) -> String"), aenv)
 
-let compile_ir tyenv global_names program =
+let compile_ir ?(elim=false) tyenv global_names program =
   let program = preprocess_program global_names program in
 
   let env, tenv, aenv = make_initial_env tyenv in
 
   let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv, aenv) program in 
+  let ((bindings, _) as e) =
+    if elim then
+      Ir.ElimDeadDefs.program (tenv, aenv) e
+    else
+      e in
 
   let env, _, _ = Compileir.add_globals_to_env (env, tenv, aenv) bindings in
   let env' = Compileir.invert_env env in
     e, env'
 
 let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) as program) = 
-  let (bindings, body) as e, env = compile_ir tyenv global_names program in
+  let e, env = compile_ir ~elim:true tyenv global_names program in
   let _, code = generate_program env e in
   let code = optimise(wrap_with_server_stubs code) in
     (make_boiler_page
