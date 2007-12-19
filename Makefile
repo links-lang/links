@@ -72,6 +72,7 @@ SOURCES = $(OPC)                		\
           regex.ml                              \
           sugartypes.ml                         \
           sugar.mli sugar.ml    		\
+          sugarTraversals.mli sugarTraversals.ml\
           parser.mly            		\
           result.mli result.ml         		\
           value.mli value.ml                    \
