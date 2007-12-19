@@ -106,7 +106,7 @@ fun ~context ?nlhook ~parse ~desugarer ~infun ~name ->
                   Errors.message = "";
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
-      | Sugar.ConcreteSyntaxError (msg, (start, finish)) ->
+      | Sugartypes.ConcreteSyntaxError (msg, (start, finish)) ->
           let linespec = 
             if start.pos_lnum = finish.pos_lnum 
             then string_of_int start.pos_lnum

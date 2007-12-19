@@ -5,147 +5,12 @@ open Utility
 open Syntax
 open Sugartypes
 
-exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
-exception PatternDuplicateNameError of (Syntax.position * string * string)
-
-module LAttrs : sig
-  val has_lattrs : phrasenode -> bool
-  val replace_lattrs : phrase -> phrase
-end = 
+module LAttrs = 
 struct
-  (* See http://frege/wiki/LAttributeSugar *)
-
-  let apply pos name args : phrase = `FnAppl ((`Var name,pos), args), pos
-
-  let server_use name pos = 
-    apply pos "assoc" [(`Constant (`String name), pos);
-                       apply pos "environment" []]
-
-  let client_use id pos = 
-    apply pos "getInputValue" [(`Constant (`String id), pos)]
-
-  let fresh_names = 
-    let counter = ref 0 in
-      (fun () -> 
-         incr counter;
-         ("_lnameid_" ^ string_of_int !counter,
-          "lname_" ^ string_of_int !counter))
-
-  let desugar_lhref : phrase -> phrase = function
-    | `Xml (("a"|"A") as a, attrs, attrexp, children), pos
-        when mem_assoc "l:href" attrs -> 
-        let attrs =
-          match partition (fst ->- (=)"l:href") attrs with
-            | [_,[href]], rest ->
-                (("href",
-                  [`Constant (`String "?_k="), pos;
-                    apply pos "pickleCont" [`FunLit ([[]], href), pos]]))
-                :: rest 
-            | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
-        in 
-          `Xml (a, attrs, attrexp, children), pos
-    | e -> e
-
-  let desugar_laction : phrase -> phrase = function
-    | `Xml (("form"|"FORM") as form, attrs, attrexp, children), pos 
-        when mem_assoc "l:action" attrs ->
-        begin match partition (fst ->- (=)"l:action") attrs with
-          | [_,[laction]], rest ->
-              let hidden : phrase = 
-                `Xml ("input",
-                      ["type",  [`Constant (`String "hidden"), pos];
-                       "name",  [`Constant (`String "_k"), pos];
-                       "value", [apply pos "pickleCont"
-                                   [`FunLit ([[]], laction), pos]]],
-                      None,
-                      []), pos
-              and action = ("action", [`Constant (`String "#"), pos]) 
-              in 
-                `Xml (form, action::rest, attrexp, hidden::children), pos
-          | _ -> assert false (* multiple l:actions, or an invalid rhs *)
-        end
-    | e -> e
-
-
-  let desugar_lonevent : phrase -> phrase = 
-    let pair pos = function
-      | (name, [rhs]) ->
-          let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
-            `TupleLit [`Constant (`String event), pos;
-                       `FunLit ([[`Variable ("event", None), pos]], rhs), pos], pos
-      | _ -> assert false
-    in function
-      | `Xml (tag, attrs, attrexp, children), pos
-          when exists (fst ->- start_of ~is:"l:on") attrs ->
-          let lons, others = partition (fst ->- start_of ~is:"l:on") attrs in
-          let idattr =
-            ("key", 
-             [apply pos "registerEventHandlers" 
-                [`ListLit (List.map (pair pos) lons), pos]]) in
-            `Xml (tag, idattr::others, attrexp, children), pos
-      | e -> e
-
-  let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t = 
-    let lnames = ref StringMap.empty in
-    let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
-    let attr : string * phrase list -> (string * phrase list) list = function
-      | "l:name", [`Constant (`String v), pos] -> 
-          let id, name = fresh_names () in
-            add v (id,name);
-            [("name", [`Constant (`String name), pos]); ("id", [`Constant (`String id), pos])]
-      | "l:name", _ -> failwith ("Invalid l:name binding")
-      | a -> [a] in
-    let rec aux (p,pos as node : phrase) = match p with
-      | `Xml (tag, attrs, attrexp, children) ->
-          let attrs = concat_map attr attrs
-          and children = List.map aux children in
-            `Xml (tag, attrs, attrexp, children), pos
-      | _ -> node
-    in 
-      let p' = aux p in
-        p', !lnames
-
-  let rec has_lattrs : phrasenode -> bool = function
-    | `Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
-    | _ -> false
-
-  let let_in pos name rhs body : phrase = 
-    `Block ([`Val ((`Variable (name,None), pos), rhs, `Unknown, None), pos], body), pos
-
-  let bind_lname_vars pos lnames = function
-    | "l:action" as attr, es -> 
-        attr, (List.map (StringMap.fold 
-                           (fun var (_,name) -> let_in pos var (server_use name pos))
-                           lnames) 
-                 es)
-    | attr, es when start_of attr ~is:"l:on" -> 
-      attr, (List.map (StringMap.fold
-                         (fun var (id,_) -> let_in pos var (client_use id pos))
-                         lnames)
-               es)
-    | attr -> attr
-
-  let desugar_form = function
-    | `Xml (("form"|"FORM") as form, attrs, attrexp, children), pos ->
-        let children, lnames = List.split (List.map desugar_lnames children) in
-        let lnames = 
-          try List.fold_left StringMap.union_disjoint StringMap.empty lnames 
-          with StringMap.Not_disjoint (item, _) ->
-            raise (ConcreteSyntaxError ("Duplicate l:name binding: " ^ item, pos)) in
-        let attrs = List.map (bind_lname_vars pos lnames) attrs in
-          `Xml (form, attrs, attrexp, children), pos
-    | e -> e
-
-  let replace_lattrs = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-
-    (fun (xml, pos) ->
-       if (has_lattrs xml) then
-         match xml with
-           | `Xml (_tag, _attributes, _, _) ->
-               raise (ConcreteSyntaxError ("Illegal l: attribute in XML node", pos))
-           | _ -> assert false
-       else
-         xml, pos)
+  include DesugarLAttributes
+  let replace_lattrs = desugar_lattributes#phrase
 end
+
 
 (* Internal representation for patterns. 
 
@@ -198,7 +63,6 @@ let show_sugared = Settings.add_bool("show_sugared", false, `User)
 let unit_hack = Settings.add_bool("pattern_unit_hack", false, `User)
 let cons_unit_hack = Settings.add_bool("pattern_cons_unit_hack", true, `User)
 
-exception RedundantPatternMatch of Syntax.position
 module PatternCompiler =
   (*** pattern matching compiler ***)
   (*

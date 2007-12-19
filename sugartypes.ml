@@ -180,6 +180,10 @@ and sentence' = [
 | `Directive   of directive ]
     deriving (Show)
 
+exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
+exception PatternDuplicateNameError of (Syntax.position * string * string)
+exception RedundantPatternMatch of Syntax.position
+
 module Freevars =
 struct
   open Utility

@@ -1,9 +1,5 @@
 (** Converts the tree returned by the parser into our internal
     representation *)
-exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
-exception PatternDuplicateNameError of (Syntax.position * string * string)
-exception RedundantPatternMatch of Syntax.position
-
 module LAttrs : sig
   val has_lattrs : Sugartypes.phrasenode -> bool
   val replace_lattrs : Sugartypes.phrase -> Sugartypes.phrase

@@ -71,8 +71,10 @@ SOURCES = $(OPC)                		\
           sqlcompile.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
-          sugar.mli sugar.ml    		\
           sugarTraversals.mli sugarTraversals.ml\
+          refineBindings.mli refineBindings.ml  \
+          desugarLAttributes.mli desugarLAttributes.ml\
+          sugar.mli sugar.ml    		\
           parser.mly            		\
           result.mli result.ml         		\
           value.mli value.ml                    \

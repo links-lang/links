@@ -120,10 +120,10 @@ let rec format_exception = function
   | ASTSyntaxError ((pos,_,expr), s) -> 
       Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
         pos.pos_fname pos.pos_lnum s expr
-  | Sugar.RedundantPatternMatch (pos,_,expr) -> 
+  | Sugartypes.RedundantPatternMatch (pos,_,expr) -> 
       Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n" 
         pos.pos_fname pos.pos_lnum expr
-  | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
+  | Sugartypes.PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
       Printf.sprintf
         "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s" 
         pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
@@ -201,7 +201,7 @@ let rec format_exception_html = function
   | ASTSyntaxError ((pos,_,expr), s) -> 
       Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
         pos.pos_fname pos.pos_lnum s (xml_escape expr)
-  | PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
+  | Sugartypes.PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
       Printf.sprintf
         "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
         pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)

@@ -6,8 +6,8 @@ open Sugartypes
 
 let ensure_match (start, finish) (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                           (start, finish)))
+  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
+                                     (start, finish)))
 
 let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
 
@@ -16,7 +16,7 @@ let default_fixity = Num.num_of_int 9
 let annotate (signame, datatype) : _ -> binding = 
   let checksig signame name =
     if signame <> name then 
-      raise (Sugar.ConcreteSyntaxError
+      raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
                 ^ signame ^ "', not `"^ name ^"'.",
                 pos ())) in

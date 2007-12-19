@@ -1163,7 +1163,7 @@ let file lookup_pos typing_env : (binding list * phrase option)
                                        (Sugar.get_type_vars (`Exp p, pos))) in
               binds, Some (type_check lookup_pos {tenv = env'; tvars = tvars; rvars = rvars} p)
 
-let type_sugar = Settings.add_bool("type_sugar", true, `User)
+let type_sugar = Settings.add_bool("type_sugar", false, `User)
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
 module Check =
