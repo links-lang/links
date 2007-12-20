@@ -70,36 +70,34 @@ SOURCES = $(OPC)                		\
           syntax.mli syntax.ml        		\
           sqlcompile.ml                         \
           regex.ml                              \
-          result.mli result.ml         		\
           sugartypes.ml                         \
+          sugarTraversals.mli sugarTraversals.ml\
+          refineBindings.mli refineBindings.ml  \
+          desugarLAttributes.mli desugarLAttributes.ml\
+          sugar.mli sugar.ml    		\
           parser.mly            		\
-          lexer.mli lexer.mll         		\
+          result.mli result.ml         		\
+          value.mli value.ml                    \
           errors.mli errors.ml                  \
+          $(DB_CODE)            		\
+          database.mli database.ml 		\
+          lexer.mli lexer.mll         		\
           parse.mli parse.ml    		\
-          desugarDatatype.mli desugarDatatype.ml\
+          jsonparse.mly         		\
+          jsonlex.mll           		\
+          json.ml               		\
+          callgraph.ml                          \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
-          callgraph.ml                          \
-          sugarTraversals.mli sugarTraversals.ml\
-          refineBindings.mli refineBindings.ml  \
-          desugarLAttributes.mli desugarLAttributes.ml\
-          typeSugar.mli typeSugar.ml            \
-          sugar.mli sugar.ml    		\
-          value.mli value.ml                    \
-          $(DB_CODE)            		\
-          database.mli database.ml 		\
           inference.mli inference.ml 		\
-          jsonparse.mly         		\
-          jsonlex.mll           		\
-          json.ml               		\
+          typeSugar.mli typeSugar.ml            \
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
           ir.ml ir.mli                          \
           compileir.ml                          \
-          frontend.ml                           \
           loader.ml                             \
           irtojs.mli irtojs.ml                  \
           js.mli js.ml          		\
@@ -110,6 +108,7 @@ SOURCES = $(OPC)                		\
           tests.ml                              \
           sqlcompileTest.ml                     \
           links.ml              		\
+          rewriteexamples.ml                    \
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

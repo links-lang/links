@@ -460,12 +460,6 @@ class map =
         let _x = o#list (fun o -> o#quantifier) _x in
         let _x_i1 = o#datatype _x_i1 in (_x, _x_i1)
       
-    method program : program -> program = 
-      fun (bindings, phrase) ->
-        let bindings = o#list (fun o -> o#binding) bindings in
-        let phrase = o#option (fun o -> o#phrase) phrase in
-          (bindings, phrase)
-
     method unknown : 'a. 'a -> 'a = fun x -> x
       
   end
@@ -860,13 +854,6 @@ class fold =
         let o = o#list (fun o -> o#quantifier) _x in
         let o = o#datatype _x_i1 in o
       
-    method program : program -> 'self_type = 
-      fun (bindings, phrase) ->
-        let o = o#list (fun o -> o#binding) bindings in
-        let o = o#option (fun o -> o#phrase) phrase in
-          o
-
-
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
       
   end

@@ -51,7 +51,8 @@ object_:
                                         and name = Result.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
-                                            match DesugarDatatype.read_datatype (Result.unbox_string (List.assoc "row" bs)) with
+                                            match fst (Parse.parse_string Parse.datatype
+                                                         (Result.unbox_string (List.assoc "row" bs))) with
                                                 | `Record row -> row
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end

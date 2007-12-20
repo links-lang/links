@@ -180,8 +180,6 @@ and sentence' = [
 | `Directive   of directive ]
     deriving (Show)
 
-type program = binding list * phrase option 
-
 exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
 exception PatternDuplicateNameError of (Syntax.position * string * string)
 exception RedundantPatternMatch of Syntax.position
