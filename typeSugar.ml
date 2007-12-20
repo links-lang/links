@@ -232,7 +232,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (Types.make_tuple_type [r], mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let datatype = Parse.parse_string Parse.datatype ->- fst
+let datatype = DesugarDatatype.read_datatype
 
 let type_unary_op env = function
   | `Minus      -> datatype "(Int) -> Int"
@@ -515,7 +515,7 @@ let type_pattern closed lookup_pos alias_env tenvs : pattern -> pattern * Types.
         | `HasType (p, t)        -> 
             let p = type_pattern p in
             let () = unify ~handle:Errors.pattern_annotation ((pos p, typ p), 
-                                                              (_UNKNOWN_POS_, Sugar.desugar_datatype' tenvs t)) in
+                                                              (_UNKNOWN_POS_, DesugarDatatype.desugar_datatype' tenvs t)) in
               `HasType (erase p, t), env p, typ p
     in
       (p, pos'), e, t
@@ -717,10 +717,10 @@ let rec type_check (lookup_pos : Sugartypes.position -> Syntax.position)
                   raise (Syntax.ASTSyntaxError(lookup_pos pos, "Tables must have at least one field"))
               | _ ->
                   raise (Syntax.ASTSyntaxError(lookup_pos pos, "Tables must take a non-empty record type")) in
-            let write_row = Sugar.make_write_row read_row constraints  in
+            let write_row = DesugarDatatype.make_write_row read_row constraints  in
               `TableLit (erase tname, dtype, constraints, erase db), 
-               `Table (Sugar.desugar_datatype (RecordType read_row),
-                       Sugar.desugar_datatype (RecordType write_row))
+               `Table (DesugarDatatype.desugar_datatype (RecordType read_row),
+                       DesugarDatatype.desugar_datatype (RecordType write_row))
                  
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat 
@@ -808,11 +808,6 @@ let rec type_check (lookup_pos : Sugartypes.position -> Syntax.position)
               `FnAppl (erase f, List.map erase ps), rettyp
 
         (* xml *)
-        | `Xml _ as x when Sugar.LAttrs.has_lattrs x ->
-            (* This doesn't belong here.  Once we've tidied things up
-               a bit this will be performed in an earlier phase *)
-            let (p, _), t = tc (Sugar.LAttrs.replace_lattrs (expr, pos)) in
-               p, t
         | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
             and attrexp = opt_map tc attrexp
@@ -931,10 +926,6 @@ let rec type_check (lookup_pos : Sugartypes.position -> Syntax.position)
               unify (typ t, typ e);
               `Conditional (erase i, erase t, erase e), (typ t)
         | `Block (bindings, e) ->
-            (* This step (refine_bindings) should be moved outside the
-               type checker eventually *)
-
-            let bindings = Sugartypes.refine_bindings bindings in
             let rec type_bindings context =
               function
                 | [] -> [], context.tenv
@@ -967,13 +958,13 @@ let rec type_check (lookup_pos : Sugartypes.position -> Syntax.position)
               `With (erase r, alistmap erase fields), rtype
         | `TypeAnnotation (e, t) ->
             let e = tc e
-            and t' = Sugar.desugar_datatype' (context.tvars, context.rvars) t in
+            and t' = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t in
               unify (typ e, t');
               `TypeAnnotation (erase e, t), t'
         | `Upcast (e, t1, t2) ->
             let e = tc e
-            and t1' = Sugar.desugar_datatype' (context.tvars, context.rvars) t1
-            and t2' = Sugar.desugar_datatype' (context.tvars, context.rvars) t2 in
+            and t1' = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t1
+            and t2' = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t2 in
               if Types.is_sub_type (t2', t1') then
                 begin
                   unify (typ e, t2');
@@ -1008,7 +999,7 @@ and type_binding lookup_pos : context -> binding -> binding * Types.typing_envir
             let penv = pattern_env pat in
             let bt = typ body in
             let () = unify (bt, pattern_typ pat) in
-            let () = opt_iter (fun t -> unify (bt, Sugar.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
+            let () = opt_iter (fun t -> unify (bt, DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
             let bt, penv =
               if Utils.is_generalisable (erase body) then
                 (Utils.generalise env bt, Env.map (Utils.generalise env) penv)
@@ -1032,7 +1023,7 @@ and type_binding lookup_pos : context -> binding -> binding * Types.typing_envir
                                             makeft pats)
               in
                 makeft pats in
-            let _ = opt_iter (fun t -> unify (ft, Sugar.desugar_datatype' (context.tvars, context.rvars) t)) in
+            let _ = opt_iter (fun t -> unify (ft, DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t)) in
               (`Fun ((name, Some ft), (List.map (List.map erase_pat) pats, erase body), location, t),
                (Env.bind env (name, Utils.generalise env ft), alias_env))
         | `Funs (defs) ->
@@ -1051,7 +1042,7 @@ and type_binding lookup_pos : context -> binding -> binding * Types.typing_envir
                         match t with
                           | None -> ft
                           | Some t ->
-                              let fb = Utils.generalise env (Sugar.desugar_datatype' (context.tvars, context.rvars) t) in
+                              let fb = Utils.generalise env (DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t) in
                               let () = unify (ft, fb) in
                                 fb
                       in
@@ -1086,11 +1077,11 @@ and type_binding lookup_pos : context -> binding -> binding * Types.typing_envir
                                   (List.map (List.map erase_pat) ppats, erase body),
                                   location, dtopt) defs), typing_env)
         | `Foreign (language, name, datatype) ->
-            let assumption = Sugar.desugar_datatype datatype in
+            let assumption = DesugarDatatype.desugar_datatype datatype in
               (`Foreign (language, name, datatype),
                (Env.bind env (name, assumption), alias_env))
         | `Type (typename, args, datatype) as t ->
-            let dtype = Sugar.desugar_datatype' (context.tvars, context.rvars) datatype in
+            let dtype = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) datatype in
             let args =
               List.fold_right
                 (fun name args ->
@@ -1135,61 +1126,59 @@ let mkContext : Types.typing_environment -> context =
 let type_bindings lookup_pos typing_env bindings = 
   List.fold_left
     (fun ((tenv : Types.typing_environment), binds) (bind : binding) ->
-       let _, (tvars, rvars) = Sugar.generate_var_mapping (Sugar.get_type_vars bind) in
+       let _, (tvars, rvars) = DesugarDatatype.generate_var_mapping (DesugarDatatype.get_type_vars bind) in
        let ctxt =  {tenv = tenv; tvars = tvars; rvars = rvars} in
        let bind, tenv' = type_binding lookup_pos ctxt bind in
          Types.concat_typing_environment tenv tenv', bind::binds)
-    (* The refine_bindings step should be moved outside the type
-       checker eventually *)
-    (typing_env, []) (Sugartypes.refine_bindings bindings)
+    (typing_env, []) bindings
 
-let sentence lookup_pos typing_env : sentence -> sentence = 
+let sentence lookup_pos typing_env : sentence -> sentence * Types.typing_environment * Types.datatype = 
   let erase (e, _) = e in
   function
     | `Definitions binds -> 
-        let _, binds = type_bindings lookup_pos typing_env binds in
-          `Definitions binds
-    | `Expression p -> `Expression (erase (type_check lookup_pos {tenv = typing_env; tvars = failwith "TODO"; rvars = failwith "TODO"} p))
-    | `Directive d -> `Directive d
+        let te, binds = type_bindings lookup_pos typing_env binds in
+          `Definitions binds, te, Types.unit_type
+    | `Expression p -> 
+        let p, t = (type_check lookup_pos {tenv = typing_env; tvars = failwith "TODO"; rvars = failwith "TODO"} p) in
+        `Expression p, (Env.empty, Env.empty), t
+    | `Directive d -> `Directive d, (Env.empty, Env.empty), Types.unit_type
 
-let file lookup_pos typing_env : (binding list * phrase option)
-    -> (binding list * (phrase * Types.datatype) option) =
+let file lookup_pos typing_env : program -> program * Types.datatype * Types.typing_environment =
   fun (binds, p) -> 
     let env', binds = type_bindings lookup_pos typing_env binds in 
       match p with
-        | None -> binds, None
+        | None -> (binds, None), Types.unit_type, env'
         | Some (_,pos as p) ->
-            let _, (tvars, rvars) = (Sugar.generate_var_mapping 
-                                       (Sugar.get_type_vars (`Exp p, pos))) in
-              binds, Some (type_check lookup_pos {tenv = env'; tvars = tvars; rvars = rvars} p)
+            let _, (tvars, rvars) = (DesugarDatatype.generate_var_mapping 
+                                       (DesugarDatatype.get_type_vars (`Exp p, pos))) in
+            let (p, typ) = type_check lookup_pos {tenv = env'; tvars = tvars; rvars = rvars} p in
+              (binds, Some p), typ, env'
 
 let type_sugar = Settings.add_bool("type_sugar", false, `User)
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
 module Check =
 struct
-  let file env ((bindings, body), lookup) = 
+  let program env lookup (bindings, body) = 
     try
-      if Settings.get_value type_sugar then
-        begin
-          Debug.if_set show_pre_sugar_typing
-            (fun () -> 
-               (String.concat "\n" (List.map Show_binding.show bindings)) ^
-                 (opt_app
-                    (fun phrase -> "\n" ^ Show_phrase.show phrase)
-                    ""
-                    body));
-          ignore (file lookup env (bindings, body))
-        end
+      Debug.if_set show_pre_sugar_typing
+        (fun () -> 
+           (String.concat "\n" (List.map Show_binding.show bindings)) ^
+             (opt_app
+                (fun phrase -> "\n" ^ Show_phrase.show phrase)
+                ""
+                body));
+      file lookup env (bindings, body)
     with
-        Unify.Failure (`Msg msg) ->
-          failwith msg
+        Unify.Failure (`Msg msg) -> failwith msg
 
-  let sentence env (c, lookup) = 
-    if Settings.get_value type_sugar then
-      ignore (sentence lookup env c)
+  let sentence env lookup c = 
+    sentence lookup env c
 
   let expression env (c, lookup) = 
     if Settings.get_value type_sugar then
       ignore (type_check lookup env c)
 end
+
+
+

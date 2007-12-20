@@ -42,11 +42,13 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude typenv filename = 
-  let program, sugar = lazy(Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename)
-    <|measure_as|> "parse" in
-  let () = TypeSugar.Check.file typenv sugar in
-  let tenv, program = lazy(Inference.type_program typenv program)
-    <|measure_as|> "type" in
+  let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
+  let resolve = Parse.retrieve_code pos_context in
+  let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env resolve sugar in
+  let defs = Sugar.desugar_definitions resolve bindings in
+  let expr = opt_map (Sugar.desugar_expression resolve) expr in
+  let program = Syntax.Program (defs, from_option (Syntax.unit_expression (`U Syntax.dummy_position)) expr) in
+  let tenv, program = measure "type" (Inference.type_program typenv) program in
   let tenv, program = 
     (* The prelude is already optimized (via loader.ml) so we don't run 
        it through again. *)
@@ -199,7 +201,7 @@ let perform_request
     | ExprEval(expr, env) ->
         let pos = Syntax.position expr in
         let data s =
-            `T (pos, fst (Parse.parse_string Parse.datatype s), None) in
+            `T (pos, DesugarDatatype.read_datatype s, None) in
 
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)

@@ -53,6 +53,7 @@ class map :
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
     method assumption      : assumption -> assumption
+    method program         : program -> program
     method unknown         : 'a. 'a -> 'a
   end
 
@@ -111,6 +112,7 @@ class fold :
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
     method assumption      : assumption -> 'self
+    method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
   
