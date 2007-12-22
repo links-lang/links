@@ -4,12 +4,20 @@ open Utility
 open List
 open Sugartypes
 
-let ensure_match (start, finish) (opening : string) (closing : string) = function
+(* Generation of fresh type variables *)
+      
+let type_variable_counter = ref 0
+  
+let fresh_type_variable : unit -> datatype =
+  function () -> 
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
+
+let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                     (start, finish)))
+                                     (start, finish, None)))
 
-let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
+let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos (), None
 
 let default_fixity = Num.num_of_int 9
 
@@ -608,7 +616,7 @@ just_datatype:
 datatype:
 | mu_datatype                                                  { $1 }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               Sugar.fresh_type_variable (),
+                                                                               fresh_type_variable (),
                                                                                $3) }
 | parenthesized_datatypes 
        MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,

@@ -31,7 +31,7 @@ deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
 deriving (Show)
 
-type position = Lexing.position * Lexing.position (* start * end *)
+type position = Lexing.position * Lexing.position * SourceCode.source_code option (* start * end * code *)
 
 module Show_position = Show.ShowDefaults(
 struct
@@ -180,7 +180,10 @@ and sentence' = [
 | `Directive   of directive ]
     deriving (Show)
 
-exception ConcreteSyntaxError of (string * (Lexing.position * Lexing.position))
+type program = binding list * phrase option 
+  deriving (Show)
+
+exception ConcreteSyntaxError of (string * position)
 exception PatternDuplicateNameError of (Syntax.position * string * string)
 exception RedundantPatternMatch of Syntax.position
 

@@ -119,8 +119,18 @@ let instantiate_alias lhs ts =
     Get the type of `var' from the environment, and rename bound typevars.
  *)
 let instantiate : environment -> string -> datatype = fun env var ->
-  try
-    match Env.String.lookup env var with
+  let rec collapse qs t =
+    match qs, t with
+      | qs, `ForAll (qs', t) -> collapse (qs @ qs') t
+      | [], t -> t
+      | qs, t -> `ForAll (qs, t) in
+  let t =
+    try
+      Env.String.lookup env var
+    with NotFound _ ->
+      raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
+  in
+    match collapse [] t with
       | `ForAll (quantifiers, t) as dtype ->
 	(
 	  let _ = Debug.if_set (show_instantiation)
@@ -135,9 +145,6 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	  in
 	    instantiate_datatype (tenv, renv) t)
       | t -> t
-
-  with NotFound _ ->
-    raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
 
 let var      = instantiate
 and datatype = instantiate_datatype

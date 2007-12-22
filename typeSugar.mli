@@ -1,9 +1,12 @@
 module Check :
   sig
     open Sugartypes
-    val file :
-      Types.typing_environment ->
-      (binding list * phrase option) *
-      (position -> Syntax.position) -> unit
-  end
 
+    val program : Types.typing_environment
+            -> program
+            -> program * Types.datatype * Types.typing_environment
+
+    val sentence : Types.typing_environment
+                -> sentence
+                -> sentence * Types.datatype * Types.typing_environment
+  end

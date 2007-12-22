@@ -126,8 +126,10 @@ class map =
       | `RowVar _x -> let _x = o#string _x in `RowVar _x
       
     method position : position -> position =
-      fun (_x, _x_i1) ->
-        let _x = o#unknown _x in let _x_i1 = o#unknown _x_i1 in (_x, _x_i1)
+      fun (_x, _x_i1, _x_i2) ->
+        let _x = o#unknown _x in
+        let _x_i1 = o#unknown _x_i1 in
+        let _x_i2 = o#unknown _x_i2 in (_x, _x_i1, _x_i2)
       
     method phrasenode : phrasenode -> phrasenode =
       function
@@ -460,6 +462,12 @@ class map =
         let _x = o#list (fun o -> o#quantifier) _x in
         let _x_i1 = o#datatype _x_i1 in (_x, _x_i1)
       
+    method program : program -> program = 
+      fun (bindings, phrase) ->
+        let bindings = o#list (fun o -> o#binding) bindings in
+        let phrase = o#option (fun o -> o#phrase) phrase in
+          (bindings, phrase)
+
     method unknown : 'a. 'a -> 'a = fun x -> x
       
   end
@@ -569,7 +577,10 @@ class fold =
       | `RowVar _x -> let o = o#string _x in o
       
     method position : position -> 'self_type =
-      fun (_x, _x_i1) -> let o = o#unknown _x in let o = o#unknown _x_i1 in o
+      fun (_x, _x_i1, _x_i2) ->
+        let o = o#unknown _x in
+        let o = o#unknown _x_i1 in
+        let o = o#unknown _x_i2 in o
       
     method phrasenode : phrasenode -> 'self_type =
       function
@@ -854,6 +865,13 @@ class fold =
         let o = o#list (fun o -> o#quantifier) _x in
         let o = o#datatype _x_i1 in o
       
+    method program : program -> 'self_type = 
+      fun (bindings, phrase) ->
+        let o = o#list (fun o -> o#binding) bindings in
+        let o = o#option (fun o -> o#phrase) phrase in
+          o
+
+
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
       
   end

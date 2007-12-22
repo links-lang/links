@@ -76,8 +76,11 @@ let rec directives
               let library_types, libraries =
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
-              let program, sugar = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
-              let () = TypeSugar.Check.file library_types sugar in
+              let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
+              let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+              let defs = Sugar.desugar_definitions bindings in
+              let expr = opt_map Sugar.desugar_expression expr in
+              let program = Syntax.Program (defs, from_option (Syntax.unit_expression (`U Syntax.dummy_position)) expr) in
               let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in
               let program = Optimiser.optimise_program (typingenv, program) in
               let program = Syntax.labelize program in
@@ -89,7 +92,7 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let t, _ = Parse.parse_string ~pp:(Settings.get_value pp) Parse.datatype (String.concat " " args) in
+          | _ -> let t = DesugarDatatype.read_datatype (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then
@@ -126,8 +129,9 @@ let print_result rtype result =
 
 (** type, optimise and evaluate a program *)
 let process_program ?(printer=print_result) (valenv, typingenv) 
-    ((program : Syntax.untyped_program), (sugar : ((Sugartypes.binding list * Sugartypes.phrase option) * (Sugartypes.position -> Syntax.position)))) = 
-  let () = TypeSugar.Check.file typingenv sugar in
+    ((program : Syntax.untyped_program),
+     (sugar : (Sugartypes.binding list * Sugartypes.phrase option))) = 
+
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
@@ -140,8 +144,8 @@ let process_program ?(printer=print_result) (valenv, typingenv)
     (valenv, typingenv), result, program
 
 (* Read Links source code, then type, optimize and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse program = 
-  handle_errors (measure "parse" parse ->- process_program program)
+let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv as envs) = 
+  handle_errors (measure "parse" parse tyenv ->- process_program envs)
 
 (* Interactive loop *)
 let interact envs =
@@ -155,14 +159,14 @@ let interact envs =
       Errors.display ~default:(fun _ -> envs)
         (lazy
            (match measure "parse" parse input with 
-              | `Definitions [], _ -> envs
-              | `Definitions defs, ((`Definitions sugar : Sugartypes.sentence), lookup) -> 
+              | (`Definitions [] : Sugartypes.sentence'), _ -> envs
+              | `Definitions defs, (`Definitions sugar : Sugartypes.sentence) -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =
                     process_program
                       ~printer:(fun _ _ -> ())
                       envs
                       ((Syntax.Program (defs, Syntax.unit_expression (`U Syntax.dummy_position))),
-                       ((sugar, None), lookup))
+                       (sugar, None))
                   in
                     ListLabels.iter defs'
                        ~f:(function
@@ -174,31 +178,55 @@ let interact envs =
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
                     envs
-              | `Expression expr, (`Expression sexpr, lookup) -> 
-                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), (([], Some sexpr), lookup)) in envs 
+              | `Expression expr, `Expression sexpr -> 
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in envs 
               | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
-      interact (evaluate_replitem (Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive) envs (stdin, "<stdin>"))
+
+      let _, tyenv = envs in
+
+      let parse_and_desugar input = 
+        let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
+        let sentence, _, _ = Frontend.Pipeline.interactive tyenv pos_context sugar in
+        let sentence' = match sentence with
+          | `Definitions defs -> `Definitions (Sugar.desugar_definitions defs)
+          | `Expression e -> `Expression (Sugar.desugar_expression e) 
+          | `Directive d -> `Directive d in
+          sentence', sentence in
+
+      interact (evaluate_replitem parse_and_desugar envs (stdin, "<stdin>"))
   in 
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
 
-let run_file prelude envs filename = 
-  Settings.set_value interacting false;
-  begin match Utility.getenv "REQUEST_METHOD" with 
-    | Some _ -> 
-        Settings.set_value web_mode true
-    | None -> ()
-  end;
-  if Settings.get_value web_mode then 
-    Webif.serve_request prelude envs filename
-  else 
-    ignore (evaluate (Parse.parse_file ~pp:(Settings.get_value pp) Parse.program) envs filename)
+let run_file prelude envs filename =
+  let parse_and_desugar tyenv filename = 
+    let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
+    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let program = Sugar.desugar_program program in
+      program, (bindings, expr)
+  in
+    Settings.set_value interacting false;
+    begin match Utility.getenv "REQUEST_METHOD" with 
+      | Some _ -> 
+          Settings.set_value web_mode true
+      | None -> ()
+    end;
+    if Settings.get_value web_mode then 
+      Webif.serve_request prelude envs filename
+    else
+      ignore (evaluate parse_and_desugar envs filename)
 
 let evaluate_string_in envs v =
-  (Settings.set_value interacting false;
-   ignore(evaluate (Parse.parse_string ~pp:(Settings.get_value pp) Parse.program) envs v))
+  let parse_and_desugar tyenv s = 
+    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
+    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let program = Sugar.desugar_program program in
+      program, (bindings, expr)
+  in
+    (Settings.set_value interacting false;
+     ignore(evaluate parse_and_desugar envs v))
 
 let cmd_line_actions = ref []
 
@@ -270,4 +298,5 @@ let main () =
       interact (prelude_compiled, prelude_types)
     end
 
-let _ = main ()
+let _ = 
+  main ()

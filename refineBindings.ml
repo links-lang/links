@@ -10,6 +10,12 @@ object (self)
          `Block (Sugartypes.refine_bindings bindings, body)
     | p -> super#phrasenode p
 
+  method program : program -> program =
+    fun (bindings, body) ->
+      let bindings = self#list (fun o -> o#binding) bindings in
+      let body = self#option (fun o -> o#phrase) body in
+        Sugartypes.refine_bindings bindings, body
+
   method sentence : sentence -> sentence = function
     |`Definitions defs -> 
        let defs = self#list (fun o -> o#binding) defs in
