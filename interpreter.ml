@@ -182,16 +182,11 @@ let client_call_impl globals name cont (args:Result.result list) =
   in
     if (not !has_client_context) then 
       begin
-        let make_boiler_page, generate_program_defs =
-          if Settings.get_value (Basicsettings.use_monadic_ir) then
-            Irtojs.make_boiler_page, Irtojs.generate_program_defs
-          else
-            Js.make_boiler_page, Js.generate_program_defs in
         let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
         let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
-            (make_boiler_page ~onload:start_script
-               (generate_program_defs globals defs (StringSet.singleton name)))
+            (Irtojs.make_boiler_page ~onload:start_script
+               (Irtojs.generate_program_defs globals defs (StringSet.singleton name)))
           ; exit 0
       end
     else begin

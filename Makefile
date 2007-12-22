@@ -104,7 +104,6 @@ SOURCES = $(OPC)                		\
           frontend.ml                           \
           loader.ml                             \
           irtojs.mli irtojs.ml                  \
-          js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
           evalir.ml                             \
           webif.mli webif.ml           	        \

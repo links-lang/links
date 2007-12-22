@@ -22,9 +22,6 @@ let welcome_note = Settings.add_string ("welcome_note",
  |_____|_|_| \\___|_| \\_|____/
 Welcome to Links version 0.4 (Crostorfyn)", `System)
 
-(** Use the monadic IR *)
-let use_monadic_ir = Settings.add_bool ("use_monadic_ir", true, `User)
-
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
 

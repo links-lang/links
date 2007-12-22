@@ -233,10 +233,7 @@ let perform_request
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then             
-             if Settings.get_value (Basicsettings.use_monadic_ir) then
-               Irtojs.generate_program_page Library.typing_env (List.map fst globals) program
-             else
-               Js.generate_program (List.map fst globals) program
+             Irtojs.generate_program_page Library.typing_env (List.map fst globals) program
            else
              let _env, rslt = Interpreter.run_program globals [] (wrap_with_render_page (Syntax.Program([], main))) in
                Result.string_of_result rslt)
