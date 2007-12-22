@@ -1128,7 +1128,7 @@ let type_bindings typing_env bindings =
   let tyenv, bindings =
     List.fold_left
       (fun ((tenv : Types.typing_environment), bindings) (binding : binding) ->
-         let _, (tvars, rvars) = DesugarDatatype.generate_var_mapping (DesugarDatatype.get_type_vars binding) in
+         let _, (tvars, rvars) = DesugarDatatype.var_mapping_from_binding binding in
          let ctxt =  {tenv = tenv; tvars = tvars; rvars = rvars} in
          let binding, tenv' = type_binding ctxt binding in
            Types.concat_typing_environment tenv tenv', binding::bindings)
@@ -1153,8 +1153,7 @@ struct
           match body with
             | None -> (bindings, None), Types.unit_type, env'
             | Some (_,pos as body) ->
-                let _, (tvars, rvars) = (DesugarDatatype.generate_var_mapping 
-                                           (DesugarDatatype.get_type_vars (`Exp body, pos))) in
+                let _, (tvars, rvars) = DesugarDatatype.var_mapping_from_binding (`Exp body, pos) in
                 let (body, typ) = type_check {tenv = env'; tvars = tvars; rvars = rvars} body in
                   (bindings, Some body), typ, env'
         in
@@ -1172,8 +1171,7 @@ struct
               let te, bindings = type_bindings tyenv bindings in
                 `Definitions bindings, Types.unit_type, te
           | `Expression (_, pos as body) -> 
-              let _, (tvars, rvars) = (DesugarDatatype.generate_var_mapping 
-                                         (DesugarDatatype.get_type_vars (`Exp body, pos))) in
+              let _, (tvars, rvars) = DesugarDatatype.var_mapping_from_binding (`Exp body, pos) in
               let body, t = (type_check {tenv = tyenv; tvars = tvars; rvars = rvars} body) in
                 `Expression body, t, tyenv
           | `Directive d -> `Directive d, Types.unit_type, tyenv

@@ -116,3 +116,12 @@ class fold :
     method unknown         : 'a. 'a -> 'self
   end
   
+
+(*
+  The special casse of a predicate class
+*)
+class virtual predicate :
+object
+  inherit fold
+  method virtual satisfied : bool
+end

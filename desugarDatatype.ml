@@ -230,3 +230,5 @@ let rec get_type_vars : binding -> quantifier list =
 let read_datatype s = 
   let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in
     desugar_datatype dt
+
+let var_mapping_from_binding = generate_var_mapping -<- get_type_vars

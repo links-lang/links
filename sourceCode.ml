@@ -19,7 +19,7 @@ object (self)
   val text = Buffer.create default_chars
 
   (* Return the portion of source code that falls between two positions *)
-  method extract_substring (start : position) (finish : position) =
+  method private extract_substring (start : position) (finish : position) =
     if start == dummy_pos || finish == dummy_pos then
       "*** DUMMY POSITION ****"
     else
@@ -38,7 +38,7 @@ object (self)
     with NotFound _ -> "<unknown>"
       
   (* Return one line of the source code *)
-  method extract_line (line : int) =
+  method private extract_line (line : int) =
     self#extract_line_range (line - 1) line
 
   (* Given a function `infun' as required by Lexing.from_function,

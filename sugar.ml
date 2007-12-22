@@ -1339,10 +1339,10 @@ module Desugarer =
         result)
 
    let desugar_expression (_,pos as e) =
-     desugar_expression' ((DesugarDatatype.generate_var_mapping -<- DesugarDatatype.get_type_vars) ((`Exp e), pos)) e
+     desugar_expression' (DesugarDatatype.var_mapping_from_binding ((`Exp e), pos)) e
 
    let desugar_definition ((s, pos') : binding) : untyped_definition list =
-     let _, ((tenv, _) as var_env) = DesugarDatatype.generate_var_mapping (DesugarDatatype.get_type_vars (s, pos')) in
+     let _, ((tenv, _) as var_env) = DesugarDatatype.var_mapping_from_binding (s, pos') in
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression in
      let ds : bindingnode -> _ Syntax.definition' list = function
@@ -1370,7 +1370,7 @@ module Desugarer =
              else
                failwith ("Free variable(s) in alias")
        | `Foreign (language, name, datatype) -> 
-           [Alien (language, name, DesugarDatatype.desugar_assumption (DesugarDatatype.generalize datatype), pos) ]
+           [Alien (language, name, DesugarDatatype.desugar_datatype datatype, pos) ]
        | `Include path ->
            failwith "Includes not supported"
        | `Funs defs ->

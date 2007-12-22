@@ -146,3 +146,15 @@ object
         super#phrasenode (replace_lattrs x)
     | e -> super#phrasenode e
 end
+
+let has_no_lattributes =
+object (self)
+  inherit SugarTraversals.predicate as super
+
+  val no_lattributes = true
+  method satisfied = no_lattributes
+
+  method phrasenode = function
+    | `Xml _ as x when has_lattrs x -> {< no_lattributes = false >}
+    | e -> super#phrasenode e
+end

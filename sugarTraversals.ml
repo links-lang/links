@@ -876,3 +876,8 @@ class fold =
       
   end
   
+class virtual predicate =
+object
+  inherit fold
+  method virtual satisfied : bool
+end
