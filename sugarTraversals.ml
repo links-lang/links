@@ -70,6 +70,7 @@ class map =
       function
       | `Closed -> `Closed
       | `Open _x -> let _x = o#string _x in `Open _x
+      | `OpenRigid _x -> let _x = o#string _x in `OpenRigid _x
       | `Recursive ((_x, _x_i1)) ->
           let _x = o#string _x in
           let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
@@ -124,6 +125,7 @@ class map =
       | `TypeVar _x -> let _x = o#string _x in `TypeVar _x
       | `RigidTypeVar _x -> let _x = o#string _x in `RigidTypeVar _x
       | `RowVar _x -> let _x = o#string _x in `RowVar _x
+      | `RigidRowVar _x -> let _x = o#string _x in `RigidRowVar _x
       
     method position : position -> position =
       fun (_x, _x_i1, _x_i2) ->
@@ -527,6 +529,7 @@ class fold =
       function
       | `Closed -> o
       | `Open _x -> let o = o#string _x in o
+      | `OpenRigid _x -> let o = o#string _x in o
       | `Recursive ((_x, _x_i1)) ->
           let o = o#string _x in let o = o#row _x_i1 in o
       
@@ -575,6 +578,7 @@ class fold =
       | `TypeVar _x -> let o = o#string _x in o
       | `RigidTypeVar _x -> let o = o#string _x in o
       | `RowVar _x -> let o = o#string _x in o
+      | `RigidRowVar _x -> let o = o#string _x in o
       
     method position : position -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->

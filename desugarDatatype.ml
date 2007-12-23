@@ -3,14 +3,14 @@ open Sugartypes
 open Utility
 open List
 
-
 let rec typevars : datatype -> quantifier list = 
   let rec rvars (fields, rv) =
     let rowvars = match rv with
       | `Closed   -> []
+      | `OpenRigid s -> [`RigidRowVar s]
       | `Open s -> [`RowVar s]
       | `Recursive (s, r) ->
-          snd (partition ((=)(`RowVar s)) (rvars r))
+          snd (partition ((=)(`RigidRowVar s)) (rvars r))
     in
       (Utility.concat_map 
          (function (_, `Present k) -> typevars k
@@ -69,6 +69,7 @@ let desugar_datatype', desugar_row =
     let lookup_row = flip StringMap.find renv in
     let seed = match rv with
       | `Closed    -> Types.make_empty_closed_row ()
+      | `OpenRigid rv
       | `Open rv ->
           (StringMap.empty, lookup_row rv)
       | `Recursive (name, r) ->
@@ -107,7 +108,13 @@ let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) 
              | `RowVar name ->
                  (`RowVar var::vars,
                   (tenv, StringMap.add name
-                     (Unionfind.fresh (`Flexible var)) renv))) vars ([], (StringMap.empty, StringMap.empty))
+                     (Unionfind.fresh (`Flexible var)) renv))
+             | `RigidRowVar name ->
+                 (`RigidRowVar var::vars,
+                  (tenv, StringMap.add name
+                     (Unionfind.fresh (`Rigid var)) renv)))
+      vars
+      ([], (StringMap.empty, StringMap.empty))
 
 let desugar_assumption ((vars, k)  : assumption) : Types.datatype = 
   let vars, var_env = generate_var_mapping vars in

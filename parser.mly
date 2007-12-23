@@ -696,7 +696,8 @@ record_label:
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 row_variable:
-| VARIABLE                                                     { `Open $1 }
+| VARIABLE                                                     { `OpenRigid $1 }
+| QUOTEDVAR                                                    { `Open $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 /*

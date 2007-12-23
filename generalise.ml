@@ -48,8 +48,8 @@ and get_row_var_quantifiers : TypeVarSet.t -> row_var -> quantifier list =
       | `Closed -> []
       | `Flexible var
       | `Rigid var when TypeVarSet.mem var bound_vars -> []
-      | `Flexible var
-      | `Rigid var -> [`RowVar var]
+      | `Flexible var -> [`RowVar var]
+      | `Rigid var -> [`RigidRowVar var]
       | `Recursive (var, rec_row) ->
 	  Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_quantifiers): " ^(string_of_int var));
 	  (if TypeVarSet.mem var bound_vars then

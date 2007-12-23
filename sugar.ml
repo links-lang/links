@@ -644,6 +644,7 @@ module Desugarer =
      function
        | `Closed -> true
        | `Open var -> StringSet.mem var vars
+       | `OpenRigid var -> StringSet.mem var vars
        | `Recursive (v, r) ->
            row_alias_is_closed (StringSet.add v vars) r
 

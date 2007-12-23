@@ -56,12 +56,18 @@ type datatype =
   | PrimitiveType   of Types.primitive
   | DBType
 and row = (string * fieldspec) list * row_var
-and row_var = [ `Closed | `Open of string | `Recursive of string * row ]
+and row_var =
+    [ `Closed
+    | `Open of string
+    | `OpenRigid of string
+    | `Recursive of string * row ]
 and fieldspec = [`Present of datatype | `Absent]
     deriving (Show)
 
-type quantifier = [`TypeVar of string | `RigidTypeVar of string | `RowVar of string]
-    deriving (Show)
+type quantifier =
+    [`TypeVar of string | `RigidTypeVar of string
+    |`RowVar of string | `RigidRowVar of string]
+      deriving (Show)
 
 type assumption = quantifier list * datatype
     deriving (Show)

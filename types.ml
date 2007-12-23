@@ -29,8 +29,11 @@ type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+type type_variable =
+    [`TypeVar of int | `RigidTypeVar of int
+    |`RowVar of int | `RigidRowVar of int]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type quantifier = type_variable
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
@@ -59,7 +62,8 @@ let for_all : quantifier list * datatype -> datatype = function
 let type_var_number = function
   | `TypeVar x
   | `RigidTypeVar x
-  | `RowVar x -> x
+  | `RowVar x
+  | `RigidRowVar x -> x
 
 module Env = Env.String
 
@@ -655,9 +659,10 @@ let string_of_primitive : primitive -> string = function
 let string_of_quantifier' : string IntMap.t -> quantifier -> string =
   fun vars ->
     function
-      | `TypeVar var -> "'" ^ IntMap.find var vars
-      | `RigidTypeVar var -> IntMap.find var vars
-      | `RowVar var -> IntMap.find var vars
+      | `TypeVar var
+      | `RowVar var -> "'" ^ IntMap.find var vars
+      | `RigidTypeVar var
+      | `RigidRowVar var -> IntMap.find var vars
 
 let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> string =
   fun rec_vars vars datatype ->

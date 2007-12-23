@@ -13,7 +13,8 @@ let var_of_quantifier =
   function
     | `RigidTypeVar var
     | `TypeVar var
-    | `RowVar var -> var
+    | `RowVar var
+    | `RigidRowVar var -> var
 
 module Utils : sig
   val unify : Types.alias_environment -> Types.datatype * Types.datatype -> unit

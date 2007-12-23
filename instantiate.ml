@@ -141,6 +141,7 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	       | `TypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
 	       | `RigidTypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
 	       | `RowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
+	       | `RigidRowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
 	    ) (IntMap.empty, IntMap.empty) quantifiers
 	  in
 	    instantiate_datatype (tenv, renv) t)
