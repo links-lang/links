@@ -167,7 +167,7 @@ var CodeMirror = function(){
     // display: block occasionally suppresses some Firefox bugs, so we
     // always add it, redundant as it sounds.
     this.frame = createDOM("IFRAME", {style: "border: 0; width: " + options.width + 
-      "; " + "height: " + options.height + ";"});
+      "; " + "height: " + options.height + ";", name: ""});
     if (place.appendChild)
       place.appendChild(this.frame);
     else

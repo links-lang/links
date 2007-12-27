@@ -1,0 +1,8 @@
+jsliburl=/lib/
+prelude=/home/tom/links/prelude.links
+database_driver=mysql
+database_args=:3306:web:
+debug=on
+show_json=off
+use_monadic_ir=on
+

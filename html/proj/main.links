@@ -11,7 +11,7 @@ typename Attribute = (attr: String, val: String);
 
 # Things that should be in their own file
 var cookieName = "linkside";
-var fileLoc = "/home/tom/public_html/proj/";
+var fileLoc = "/home/tom/links/html/proj/";
 
 typename User = (name:String, password:String);
 typename ProjConts = (Int, String);
@@ -65,6 +65,7 @@ fun numElems(lst) server
 }
 
 # Logout from the IDE
+sig logout : () -> ()
 fun logout() server
 {
   delete (var sessId <-- sessionsTable)
@@ -72,9 +73,6 @@ fun logout() server
 
   setCookie("linkside","");
   redirect("login.links");
-
-  page
-  <#></#>
   #main(Just(false))
 }
 
@@ -93,7 +91,7 @@ fun getUid() server
 }
 
 # Userid of session owner
-var userId = 1; #getUid();
+var userId = getUid();
 
 # Check whether the user is logged in
 fun isLoggedIn() server
@@ -108,7 +106,8 @@ fun isLoggedIn() server
     debug("logged in")
   else
     debug("not logged in"));
-  p
+  #p
+  true
 }
 
 
@@ -119,7 +118,8 @@ fun fileOp() client
     case SaveFile(name, escp, code) -> 
     {
       storeFile(name, escp, code); 
-      updateSession();
+      #updateSession();
+      setFrameName(name);
       fileOp()
     }
     case LoadFile(name) -> 
@@ -129,7 +129,8 @@ fun fileOp() client
        var rval = convertData(lData) : Xml;
        
        insertCode(rval);
-       updateSession();
+       #updateSession();
+       setFrameName(name);
        fileOp()
     }
   }
@@ -144,7 +145,6 @@ fun updateSession() server
     set (id = sid.id, uid = userId, creation_time = 0, update_time = 0)
 }
 
-# Get the body tag of the document being edited
 # Store the code in the database
 sig storeFile : (String, String, String) -> ()
 fun storeFile(name, escp, code) server 
@@ -161,6 +161,7 @@ fun storeFile(name, escp, code) server
   };
   
   writeToFile(fileLoc ++ "test/" ++ name, code);
+  updateSession();
 }
 
 # Save the contents of the current buffer to database
@@ -174,8 +175,14 @@ fun saveFile(handler) client
   var lEscapedCode = escapeHtml(lCode);
 
   # Store the code in the database
-  var fileName = getValueFromRef(getNodeById("filename"));
-  handler ! SaveFile(fileName, lEscapedCode, lCode);
+  var lFrameName = getFrameName();
+  var lFileName = 
+    (if (lFrameName == "")
+      getValueFromRef(getNodeById("filename"))
+    else
+      lFrameName);
+
+  handler ! SaveFile(lFileName, lEscapedCode, lCode);
 }
 
 # Load a file from the database
@@ -187,7 +194,10 @@ fun getFile(name) server
     {
       [lFile.data]
     };
- 
+  
+  # Update the session while we're here
+  updateSession();
+
   if (numElems(res) == 0)
     "No such file '" ++ name ++ "'."
   else
@@ -212,6 +222,23 @@ fun getDocumentBody() client
   # Get the HTML: find the iframe, then the doc
   var lIfr = getContentDocument(hd(getElementsByTagName("iframe")));
   hd(getElementsByTagNameFromRef("body", lIfr))
+}
+
+# Set the name of the IFrame 
+sig setFrameName : (String) -> ()
+fun setFrameName(xiName) client
+{
+  var lIfr = hd(getElementsByTagName("iframe"));
+  var lNull = domSetAttributeFromRef(lIfr, "name", xiName);
+  ()
+}
+
+# Get the name of the IFrame
+sig getFrameName : () -> String
+fun getFrameName() client
+{
+  var lIfr = hd(getElementsByTagName("iframe"));
+  domGetAttributeFromRef(lIfr, "name")
 }
 
 # Insert code into the document, then highlight it.
@@ -465,48 +492,6 @@ fun nodeAttributesMatch(xiNode, xiAttrs) client
        [domGetAttributeFromRef(xiNode, attribute.attr) == attribute.val])
 }
 
-# Defunct
-#sig getProjects : (Mailbox ([|LoadFile:(String)|a|])) -> Xml
-#fun getProjects(opHandler) client
-#{
-#  var projects = getProjList();
-#  <#>
-#  {
-#    for (var project <- projects)
-#    {
-#      var fileList = getFileList(project.id);
-#      <li class="proj-list-item">
-#        <div l:onclick="{navClick(event)}" name="closed" style="position: relative;">
-#          <img src="images/add-blue-box.png" />
-#          <img src="images/proj-close.png" />  
-#          <span style="position: absolute; top: 3px; margin-left: 4px">{stringToXml(project.name)}</span>
-#       
-#      {
-#      if (numElems(fileList) > 0)
-#      {
-#          <ul class="proj-list" style="display: none;">
-#        {
-#        for (var file <- fileList)
-#        {
-#            <li class="proj-list-item">
-#              <div class="proj-node"> 
-#                <img src="images/blank.png" />
-#                <img src="images/blank.png" class="proj-blank" />
-#                <span class="proj-text" l:onclick="{opHandler ! LoadFile(file.name)}">{stringToXml(file.name)}</span>
-#              </div>
-#            </li>
-#        }
-#        }
-#          </ul>
-#      } else {<#></#>}
-#      }
-#       </div>
-#      </li> 
-#    }
-#  }
-#  </#>
-#}
-
 # Recursive function. Takes a Project at a particular level, looks 
 # at its type and either tries to find more files/folders or returns
 # the XML gathered.
@@ -523,10 +508,10 @@ fun getProjectList(currItem, currLevel, opHandler) client
       # This is a top-level node. Start a new list and find all files that
       # belong to the project.
       <li class="proj-list-item">
-        <div name="closed" style="position: relative;">
+        <div name="closed">
           <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}" />
           <img src="images/proj-close.png" />  
-          <span style="position: absolute; top: 3px; margin-left: 4px">
+          <span>
             {stringToXml(name)}
           </span> 
           <ul class="proj-list" style="display: none;">
@@ -665,7 +650,48 @@ fun getFileList(projId) server
     where (file.pid == projId)
       [(id = file.id, name = file.name)]
 }
-      
+
+fun getMenu(opHandler) client
+{
+ #    <span l:onclick="{logout()}" class="menu" unselectable="on">Logout</span>
+ #     <input type="text" id="filename" value="filename" title="title!"/>
+ #     <span l:onclick="{saveFile(opHandler)}" class="menu" unselectable="on">Save</span>
+  <#>
+    <div id="menubar">
+      <dl>
+        <dt l:onclick="{toggleVisible("menu-file");}">File</dt>
+        <dd id="menu-file">
+          <ul id="menulist">
+            <li l:onclick="{setInvisible("menu-file"); toggleVisible("save-file");}" unselectable="on">Save</li>
+            <li l:onclick="{logout();}" unselectable="on">Logout</li>
+          </ul>
+        </dd>
+      </dl>
+    </div>
+  </#>
+}
+
+# Toggle an element's visibility on/off
+sig toggleVisible : (String) -> ()
+fun toggleVisible(xiName) client
+{
+  var lNode = getNodeById(xiName);
+
+  var lVoid = switch (domGetStyleAttrFromRef(lNode, "display"))
+  {
+    case "block" -> domSetStyleAttrFromRef(lNode, "display", "none")
+    case _      -> domSetStyleAttrFromRef(lNode, "display", "block")
+  };
+  ()
+}
+
+# Set a node to be invisible
+sig setInvisible : (String) -> ()
+fun setInvisible(xiName) client
+{
+  var lVoid = domSetStyleAttrFromRef(getNodeById(xiName), "display", "none");
+  ();
+}
 
 # Render the editor.
 # TODO: This needs to be cleaned up. 
@@ -674,20 +700,38 @@ fun renderObject() client
 {
   # Spawn file handling object.
   var opHandler = spawn { fileOp() };
-
+ #<legend class="legend">Save file</legend>
   <#>
+    <div class="overlay" id="save-file">
+      <fieldset class="fieldset">
+        
+          <label for="filename">Name: </label><br/>
+          <input class="textfield" type="text" id="filename" value="filename" title="title!"/>
+          <span l:onclick="{saveFile(opHandler)}" class="menu link" unselectable="on">Save</span>
+      </fieldset>
+    </div>
+    <div id="values" class="menu">
+      {
+        getMenu(opHandler)
+      }
+    </div>
     <div id="proj-browser" class="proj-browser">
       <div id="proj-caption-bg" class="caption-bg">
         <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
       </div>
       <div id="proj-items" class="proj-items">
         <ul class="proj-list">
-          {
-            var projects = getProjs();
-            
-            for (var project <- projects)
-              getProjectList(project, 0, opHandler)
-          }
+         {
+           var projects = []; #getProjs();
+           
+           if (length(projects) > 0)
+           {
+             for (var project <- projects)
+               getProjectList(project, 0, opHandler)
+           }
+           else
+             <#></#>
+           }   
         </ul>
       </div>
     </div>
@@ -698,14 +742,9 @@ fun renderObject() client
         window.document.editor = editor;
       </script>
     </div>
-    <div id="values" class="menu">
-      <input type="text" id="filename" value="filename" title="title!"/>
-      <input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
-      
-      <a l:href="{logout()}">logout</a>
-    </div>
   </#>
   #<input type="submit" l:onclick="{opHandler ! LoadFile()}" value="load" />
+  #<input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
 }
 
 # Redirect to login. 
@@ -723,7 +762,8 @@ fun main() client
 {
   if (not(isLoggedIn()))
   {
-    <div><a href="login.links">Not logged in</a></div>
+    #<div><a href="login.links">Not logged in</a></div>
+    redir()
   }
   else
   {
@@ -741,7 +781,7 @@ fun main() client
     
     <link rel="stylesheet" type="text/css" href="proj.css" />
     <body>
-      <div id="main">
+      <div id="main" style="z-index: 1;">
       {
         renderObject()
       }

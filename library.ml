@@ -1062,10 +1062,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                        output_string file data; 
                        close_out file;
                        `Record[]
-                   with (Sys_error _) -> failwith "Could not write to file. Check permissions.")),
+                   with (Sys_error x) -> failwith x)), 
    datatype "(String, String) -> ()",
    IMPURE);
 
+  (*"Could not write to file. Check permissions.")),*)
   "escapeString",
   (`Server (p1 (fun string -> 
                   let string = charlist_as_string string in

@@ -1,7 +1,10 @@
-fun x() {
-  var p = <div>Hello <span style="color: #bbb666;">pigs</span></div>;
-  p
-}
-
-page
-  <#>{x()}</#>
+fun x()  
+{  
+  var p = "hej hej";  
+  stringToXml(p)  
+}  
+  
+page  
+  <#>{x()}</#>  
+  
+ 

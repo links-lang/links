@@ -1,6 +1,7 @@
 html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fieldset, input, p, blockquote, th, td {
   margin:0pt;
   padding:0pt;
+  list-style-type: none;
 }
 
 .editor { 
@@ -9,7 +10,7 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
   border: 1px solid #85B1FF;
   position: absolute;
   left: 160px;
-  top: 40px;
+  top: 25px;
 }
 
 .space { 
@@ -17,7 +18,7 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
   height: 400px;
   position: absolute;
   left: 152px;
-  top: 40px;
+  top: 25px;
   background-image: url('images/bg-grad-vert.jpg');
   border-top: 1px solid #85B1FF;
   border-bottom: 1px solid #85B1FF;
@@ -29,7 +30,7 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
   height: 400px;
   position: absolute;
   left: 0px;
-  top: 40px;
+  top: 25px;
   margin-top: 0px;
   margin-left: 0px;
 }
@@ -54,6 +55,9 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
   text-decoration: none;
   float: middle;
   position: top;
+  offset: 0px 0px 0px 38px;
+  top: -6px;
+  cursor: pointer;
 }
 
 ul.proj-list { 
@@ -71,6 +75,7 @@ li.proj-list-item {
   margin: 0px;
   padding: 0px;
   border: 0px;
+  cursor: pointer;
 }
 
 .proj-node { 
@@ -119,3 +124,121 @@ object.main {
   border: 1px solid;
 }
 
+span.menu {
+  text-decoration: underline;
+  -moz-user-select: none;
+}
+
+#menubar {
+  position: relative;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+  padding: 6px;
+  height: 19px;
+  -moz-user-select: none;
+}
+
+div.menu {
+  background-image: url('images/bg-grad.jpg');
+  width: 640px;
+  height: 25px;
+  border-right: 1px solid #85B1FF;
+  border-left: 1px solid #85B1FF;
+  border-bottom: 1px solid #85B1FF; 
+  position: absolute;
+  left: 0px;
+  top: -1px;
+}
+
+.centre {
+  border: 1px solid;
+  position: absolute;
+  left: 321px;
+  top: 241px;
+  width: 200px;
+  height: 150px;
+}
+
+.fieldset {
+  font-family: Verdana;
+  color: #000000;
+  background: #85A0FF;
+  border: 2px solid #85B1FF;
+  padding: 5px;
+  width: 210px;
+  position: absolute; 
+  left: 50%;
+  top: 50%;
+}
+
+.fieldset .br {
+  display: none;
+}
+
+.fieldset .button {
+  font-family: Verdana;
+  font-size: 10px;
+}
+
+.fieldset label {
+  font-family: Verdana;
+  font-size: 10px;
+  margin: 2px;
+  text-align: left;
+  width: 50px;
+  float: left;
+}
+
+.fieldset .textfield {
+  font-family: Verdana;
+  font-size: 10px;
+  margin-left: 3px;
+  width: 130px;
+  border: 1px solid;
+}
+
+.fieldset .legend {
+  font-family: Verdana;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.overlay {
+  display: none;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: 642;
+  height: 481;
+  background: #ffffff;
+  z-index: 101;
+  transparency: 50%;
+}
+
+#menubar dt {
+  margin-left: 1px;
+  cursor: pointer;
+}
+
+#menubar dl {
+  float: left;
+  width: 10em;
+}
+
+#menubar dd {
+  display: none;
+  z-index: 100;
+  background: #ccc;
+  border: 1px solid #85B1FF;
+  position: absolute;
+  margin-right: 2px;
+  width: 8em;
+}
+
+#menulist {
+  cursor: pointer;
+}
+ 
+.link {
+  cursor: pointer;
+}
