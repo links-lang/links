@@ -22,7 +22,7 @@ class map :
     method char            : char -> char
     method bool            : bool -> bool
     method unary_op        : unary_op -> unary_op
-    method typed_name      : typed_name -> typed_name
+    method binder          : binder -> binder
     method sentence'       : sentence' -> sentence'
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
@@ -81,7 +81,7 @@ class fold :
     method char            : char -> 'self
     method bool            : bool -> 'self
     method unary_op        : unary_op -> 'self
-    method typed_name      : typed_name -> 'self
+    method binder          : binder -> 'self
     method sentence'       : sentence' -> 'self
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self

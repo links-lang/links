@@ -40,10 +40,11 @@ class map =
       | `Name _x -> let _x = o#name _x in `Name _x
       | `Abs -> `Abs
       
-    method typed_name : typed_name -> typed_name =
-      fun (_x, _x_i1) ->
+    method binder : binder -> binder =
+      fun (_x, _x_i1, _x_i2) ->
         let _x = o#name _x in
-        let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in (_x, _x_i1)
+        let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
+        let _x_i2 = o#position _x_i2 in (_x, _x_i1, _x_i2)
       
     method sentence' : sentence' -> sentence' =
       function
@@ -148,7 +149,7 @@ class map =
           let _x_i3 = o#option (fun o -> o#phrase) _x_i3
           in `Iteration ((_x, _x_i1, _x_i2, _x_i3))
       | `Escape ((_x, _x_i1)) ->
-          let _x = o#typed_name _x in
+          let _x = o#binder _x in
           let _x_i1 = o#phrase _x_i1 in `Escape ((_x, _x_i1))
       | `Section _x -> let _x = o#sec _x in `Section _x
       | `Conditional ((_x, _x_i1, _x_i2)) ->
@@ -313,9 +314,9 @@ class map =
           in `Record ((_x, _x_i1))
       | `Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in `Tuple _x
       | `Constant _x -> let _x = o#constant _x in `Constant _x
-      | `Variable _x -> let _x = o#typed_name _x in `Variable _x
+      | `Variable _x -> let _x = o#binder _x in `Variable _x
       | `As ((_x, _x_i1)) ->
-          let _x = o#typed_name _x in
+          let _x = o#binder _x in
           let _x_i1 = o#pattern _x_i1 in `As ((_x, _x_i1))
       | `HasType ((_x, _x_i1)) ->
           let _x = o#pattern _x in
@@ -426,7 +427,7 @@ class map =
           let _x_i3 = o#option (fun o -> o#datatype) _x_i3
           in `Val ((_x, _x_i1, _x_i2, _x_i3))
       | `Fun ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let _x = o#typed_name _x in
+          let _x = o#binder _x in
           let _x_i1 = o#funlit _x_i1 in
           let _x_i2 = o#location _x_i2 in
           let _x_i3 = o#option (fun o -> o#datatype) _x_i3
@@ -435,7 +436,7 @@ class map =
           let _x =
             o#list
               (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-                 let _x = o#typed_name _x in
+                 let _x = o#binder _x in
                  let _x_i1 = o#funlit _x_i1 in
                  let _x_i2 = o#location _x_i2 in
                  let _x_i3 = o#option (fun o -> o#datatype) _x_i3
@@ -502,9 +503,11 @@ class fold =
       | `Name _x -> let o = o#name _x in o
       | `Abs -> o
       
-    method typed_name : typed_name -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#name _x in let o = o#option (fun o -> o#unknown) _x_i1 in o
+    method binder : binder -> 'self_type =
+      fun (_x, _x_i1, _x_i2) ->
+        let o = o#name _x in
+        let o = o#option (fun o -> o#unknown) _x_i1 in
+        let o = o#position _x_i2 in o
       
     method sentence' : sentence' -> 'self_type =
       function
@@ -600,7 +603,7 @@ class fold =
           let o = o#option (fun o -> o#phrase) _x_i2 in
           let o = o#option (fun o -> o#phrase) _x_i3 in o
       | `Escape ((_x, _x_i1)) ->
-          let o = o#typed_name _x in let o = o#phrase _x_i1 in o
+          let o = o#binder _x in let o = o#phrase _x_i1 in o
       | `Section _x -> let o = o#sec _x in o
       | `Conditional ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
@@ -736,9 +739,9 @@ class fold =
           let o = o#option (fun o -> o#pattern) _x_i1 in o
       | `Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
       | `Constant _x -> let o = o#constant _x in o
-      | `Variable _x -> let o = o#typed_name _x in o
+      | `Variable _x -> let o = o#binder _x in o
       | `As ((_x, _x_i1)) ->
-          let o = o#typed_name _x in let o = o#pattern _x_i1 in o
+          let o = o#binder _x in let o = o#pattern _x_i1 in o
       | `HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype _x_i1 in o
       
@@ -835,7 +838,7 @@ class fold =
           let o = o#location _x_i2 in
           let o = o#option (fun o -> o#datatype) _x_i3 in o
       | `Fun ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let o = o#typed_name _x in
+          let o = o#binder _x in
           let o = o#funlit _x_i1 in
           let o = o#location _x_i2 in
           let o = o#option (fun o -> o#datatype) _x_i3 in o
@@ -843,7 +846,7 @@ class fold =
           let o =
             o#list
               (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-                 let o = o#typed_name _x in
+                 let o = o#binder _x in
                  let o = o#funlit _x_i1 in
                  let o = o#location _x_i2 in
                  let o = o#option (fun o -> o#datatype) _x_i3 in o)

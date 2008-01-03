@@ -4,7 +4,6 @@ open Utility
 (** The syntax tree created by the parser. *)
 
 type name = string deriving (Show)
-type typed_name = name * Types.datatype option deriving (Show)
 
 type num = Num.num
 
@@ -38,6 +37,9 @@ struct
   type a = position
   let format formatter _ = Format.pp_print_string formatter "..."
 end)
+
+type binder = name * Types.datatype option * position
+    deriving (Show)
 
 type location = Syntax.location
     deriving (Show)
@@ -92,8 +94,8 @@ type patternnode = [
 | `Record   of (string * pattern) list * pattern option
 | `Tuple    of pattern list
 | `Constant of constant
-| `Variable of typed_name
-| `As       of typed_name * pattern
+| `Variable of binder
+| `As       of binder * pattern
 | `HasType  of pattern * datatype
 ]
 and pattern = patternnode * position
@@ -133,7 +135,7 @@ and phrasenode = [
 | `Iteration        of iterpatt list * phrase
                     * (*where:*)   phrase option 
                     * (*orderby:*) phrase option
-| `Escape           of typed_name * phrase
+| `Escape           of binder * phrase
 | `Section          of sec
 | `Conditional      of phrase * phrase * phrase
 | `Block            of binding list * phrase
@@ -166,8 +168,8 @@ and phrasenode = [
 and phrase = phrasenode * position
 and bindingnode = [
 | `Val     of pattern * phrase * location * datatype option
-| `Fun     of typed_name * funlit * location * datatype option
-| `Funs    of (typed_name * funlit * location * datatype option) list
+| `Fun     of binder * funlit * location * datatype option
+| `Funs    of (binder * funlit * location * datatype option) list
 | `Foreign of name * name * datatype
 | `Include of string
 | `Type    of name * name list * datatype
@@ -212,8 +214,8 @@ struct
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)
-    | `Variable (v,_)        -> singleton v
-    | `As ((v,_), pat)       -> add v (pattern pat)
+    | `Variable (v,_,_)      -> singleton v
+    | `As ((v,_,_), pat)     -> add v (pattern pat)
     | `HasType (pat, _)      -> pattern pat
 
 
@@ -242,7 +244,7 @@ struct
     | `ListLit ps
     | `TupleLit ps -> union_map phrase ps
 
-    | `Escape ((v,_), p) -> diff (phrase p) (singleton v)
+    | `Escape ((v,_,_), p) -> diff (phrase p) (singleton v)
     | `FormletPlacement (p1, p2, p3)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | `Block b -> block b
@@ -304,11 +306,11 @@ struct
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Fun ((name,_), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Fun ((name,_,_), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs -> 
         let names, rhss = 
           List.fold_right
-            (fun ((n,_), rhs, _, _) (names, rhss) ->
+            (fun ((n,_,_), rhs, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in
@@ -379,7 +381,7 @@ let refine_bindings : binding list -> binding list =
     let callgraph : _ -> (string * (string list)) list
       = fun defs -> 
         let defs = List.map (function
-                               | `Fun ((name,_), funlit, _, _), _ -> (name, funlit)
+                               | `Fun ((name,_,_), funlit, _, _), _ -> (name, funlit)
                                | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
@@ -394,7 +396,7 @@ let refine_bindings : binding list -> binding list =
         | _ -> assert false in
       let find_fun name = 
         List.find (function
-                     | `Fun ((n,_), _, _, _), _ when name = n -> true
+                     | `Fun ((n,_,_), _, _, _), _ when name = n -> true
                      | _ -> false) 
           funs in
       let graph = callgraph funs in

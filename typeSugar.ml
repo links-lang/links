@@ -453,24 +453,24 @@ let type_pattern closed alias_env tenvs : pattern -> pattern * Types.environment
     and (++) = Env.extend in
     let (p, e, t : patternnode * Types.environment * Types.datatype) =
       match pattern with
-        | `Any                   -> `Any,
-            Env.empty, Types.fresh_type_variable ()
-        | `Nil                   -> `Nil,
-            Env.empty, (Types.make_list_type
-                          (Types.fresh_type_variable ()))
-        | `Constant c as c'      -> c', Env.empty, constant_type c
-        | `Variable (x,_)        -> 
+        | `Any ->
+            `Any, Env.empty, Types.fresh_type_variable ()
+        | `Nil ->
+            `Nil, Env.empty, (Types.make_list_type
+                                (Types.fresh_type_variable ()))
+        | `Constant c as c' -> c', Env.empty, constant_type c
+        | `Variable (x,_,pos) -> 
             let xtype = Types.fresh_type_variable () in
-              (`Variable (x, Some xtype),
+              (`Variable (x, Some xtype, pos),
                Env.bind Env.empty (x, xtype),
                xtype)
-        | `Cons (p1, p2)         -> 
+        | `Cons (p1, p2) -> 
             let p1 = type_pattern p1
             and p2 = type_pattern p2 in
             let () = unify ~handle:Errors.cons_pattern ((pos p1, Types.make_list_type (typ p1)), 
                                                         (pos p2, typ p2)) in
               `Cons (erase p1, erase p2), env p1 ++ env p2, typ p2
-        | `List ps               -> 
+        | `List ps -> 
             let ps' = List.map type_pattern ps in
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let element_type = 
@@ -481,14 +481,14 @@ let type_pattern closed alias_env tenvs : pattern -> pattern * Types.environment
                                                                                     (pos p', typ p'))) ps in
                       typ p
             in `List (List.map erase ps'), env', Types.make_list_type element_type
-        | `Variant (name, None)       -> 
+        | `Variant (name, None) -> 
             let vtype = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
               `Variant (name, None), Env.empty, vtype
-        | `Variant (name, Some p)     -> 
+        | `Variant (name, Some p) -> 
             let p = type_pattern p in
             let vtype = `Variant (make_singleton_row (name, `Present (typ p))) in
               `Variant (name, Some (erase p)), env p, vtype
-        | `Record (ps, default)  -> 
+        | `Record (ps, default) -> 
             let ps = alistmap type_pattern ps
             and default = opt_map type_pattern default in
             let initial, denv = match default with
@@ -509,16 +509,16 @@ let type_pattern closed alias_env tenvs : pattern -> pattern * Types.environment
             and penv = 
               List.fold_right (snd ->- env ->- (++)) ps Env.empty in
               `Record (alistmap erase ps, opt_map erase default), penv ++ denv, rtype
-        | `Tuple ps              -> 
+        | `Tuple ps -> 
             let ps' = List.map type_pattern ps in
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let typ' = Types.make_tuple_type (List.map typ ps') in
               `Tuple (List.map erase ps'), env', typ'
-        | `As ((x, _), p)             -> 
+        | `As ((x, _, pos), p) -> 
             let p = type_pattern p in
             let env' = Env.bind (env p) (x, typ p) in
-              `As ((x, Some (typ p)), erase p), env', (typ p)
-        | `HasType (p, t)        -> 
+              `As ((x, Some (typ p), pos), erase p), env', (typ p)
+        | `HasType (p, t) -> 
             let p = type_pattern p in
             let () = unify ~handle:Errors.pattern_annotation ((pos p, typ p), 
                                                               (_UNKNOWN_POS_, DesugarDatatype.desugar_datatype' tenvs t)) in
@@ -563,10 +563,10 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | `List ps
     | `Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | `Variable (v, Some t) -> Env.bind Env.empty (v, t)
-    | `Variable (_, None) -> assert false
-    | `As       ((v, Some t), p) -> Env.bind (pattern_env p) (v, t)
-    | `As       ((_, None), _) -> assert false
+    | `Variable (v, Some t, _) -> Env.bind Env.empty (v, t)
+    | `Variable (_, None, _) -> assert false
+    | `As       ((v, Some t, _), p) -> Env.bind (pattern_env p) (v, t)
+    | `As       ((_, None, _), _) -> assert false
 
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
@@ -892,7 +892,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               opt_iter (fun where -> unify (Types.bool_type, typ where)) where;
               `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby), (typ body)
 
-        | `Escape ((name,_), e) ->
+        | `Escape ((name,_,pos), e) ->
             (* There's a question here whether to generalise the
                return type of continuations.  With `escape'
                continuations are let-bound, so generalising the return
@@ -922,7 +922,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let context' = {context with tenv = Env.bind env (name, cont_type), alias_env} in
             let e = type_check context' e in
             let () = unify (f, typ e) in
-              `Escape ((name, Some cont_type), erase e), typ e
+              `Escape ((name, Some cont_type, pos), erase e), typ e
         | `Conditional (i,t,e) ->
             let i = tc i
             and t = tc t
@@ -1011,7 +1011,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                 bt, penv
             in
               `Val (erase_pat pat, erase body, location, datatype), (Env.extend env penv, alias_env)
-        | `Fun ((name, _), (pats, body), location, t) ->
+        | `Fun ((name, _, pos), (pats, body), location, t) ->
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
             let body_env, alias_env = List.fold_left fold_in_envs context.tenv pats in
@@ -1028,13 +1028,13 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
               in
                 makeft pats in
             let _ = opt_iter (fun t -> unify (ft, DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t)) in
-              (`Fun ((name, Some ft), (List.map (List.map erase_pat) pats, erase body), location, t),
+              (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
                (Env.bind env (name, Utils.generalise env ft), alias_env))
         | `Funs (defs) ->
             let fbs, patss =
               List.split 
                 (List.map
-                   (fun ((name,_), (pats, body), _, t) ->
+                   (fun ((name,_,_), (pats, body), _, t) ->
                       let pats = List.map (List.map tpc) pats in
                       let ft =
                         List.fold_right
@@ -1056,7 +1056,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
               let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
                 List.rev
                   (List.fold_left2
-                     (fun defs ((name, _), (_, body), location, t) pats ->
+                     (fun defs ((name, _, pos), (_, body), location, t) pats ->
                         let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
                         let mt = Types.fresh_type_variable () in
                         let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
@@ -1071,13 +1071,13 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                           in
                             makeft pats in
                         let () = unify (ft, Env.lookup body_env name) in
-                          ((name, Some ft), (pats, body), location, t) :: defs) [] defs patss) in
+                          ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
             let env =
               List.fold_left (fun env (name, fb) ->
                                 Env.bind env (name, Utils.generalise env fb)) env fbs in
             let typing_env = env, alias_env in
-              (`Funs (List.map (fun (typed_name, (ppats, body), location, dtopt) -> 
-                                  typed_name, 
+              (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) -> 
+                                  binder, 
                                   (List.map (List.map erase_pat) ppats, erase body),
                                   location, dtopt) defs), typing_env)
         | `Foreign (language, name, datatype) ->
