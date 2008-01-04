@@ -5,8 +5,6 @@ open List
 let appPrim pos name args = 
   (`FnAppl ((`Var name, pos), args), pos : phrase)
 
-let make_xml_context _ = assert false
-
 (** Construct a Links list out of a list of Links expressions; all
     will have the source position [pos].
 *)
