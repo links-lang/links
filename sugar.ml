@@ -32,19 +32,6 @@ let appPrim pos name args =
 
 type simple_pattern = simple_pattern a_pattern * Syntax.untyped_data
 
-(** Construct a Links list out of a list of Links expressions; all
-    will have the source position [pos].
-*)
-let make_links_list pos elems =
-  let concat_expr l r = Concat(l, r, pos) in
-    fold_right concat_expr elems (Nil pos)
-
-(** Returns a (Syntax-format) function that plugs some given XML in as
-    the contents of an XML element having the given tag name and attributes. *)
-let make_xml_context tag (attrs:(string * untyped_expression) list) pos = 
-  let hole = gensym() in
-    Abstr([hole], Xml_node(tag, attrs, [Variable(hole, pos)], pos), pos)
-
 (* Various specializations of [gensym] *)
 let unique_name () = Utility.gensym ()
 let db_unique_name = Utility.gensym ~prefix:"Table"
@@ -925,9 +912,6 @@ module Desugarer =
                              pos))
                  patternized
                  (desugar body)
-(*           | `FunLit (Some name, patterns, body) -> Rec ([name, desugar (`FunLit (None, patterns, body), pos'), None],
-                                                        Variable (name, pos),
-                                                        pos)*)
            | `Block (es, exp) ->
                let es = 
                  concat_map (fst ->- (function (* pattern * untyped_expression * position * recursivep *)
@@ -1073,8 +1057,7 @@ module Desugarer =
                                  pos)
                    end
 
-           | `Formlet (formExpr, formHandler) ->
-               fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
+           | `Formlet _ -> failwith "formlet found after formlet desugaring"
            | `Page _ -> failwith "page found after page desugaring"
            | `FormletPlacement _ ->
                raise (ASTSyntaxError (lookup_pos pos', "A formlet can only be rendered in a page expression"))
@@ -1083,81 +1066,6 @@ module Desugarer =
            | `FormBinding _ ->
                raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
            | `Regex _ -> assert false
-
-     and forest_to_form_expr trees yieldsClause 
-         (pos:Syntax.untyped_data) 
-         (trees_ppos:Sugartypes.position)
-         : (Syntax.untyped_expression * Sugartypes.pattern list list) = 
-       (* We pass over the forest finding the bindings and construct a
-          term-context representing all of the form/yields expression
-          except the `yields' part (the handler). Here bindings
-          is a list of lists, each list representing a tuple returned
-          from an inner instance of forest_to_form_expr--or, if it's a
-          singleton, a single value as bound by a binder.  *)
-       let ctxt, bindings =
-         fold_right
-           (fun l (ctxt, bs) -> 
-              let l_unsugared, bindings = desugar_form_expr l in
-                (fun r -> appPrim pos "@@@"  [l_unsugared; ctxt r]),
-              bindings @ bs) 
-           trees
-           (identity, []) in
-         (* Next we construct the handler body from the yieldsClause,
-            if any.  The yieldsClause is the user's handler; if it is
-            None then we construct a default handler that just bundles
-            up all the bound variables and returns them as a tuple.
-            Here we also form a list of the values we're
-            returning. returning_bindings is a list of lists,
-            representing a list of tuples of values.  *)
-       let handlerBody, bindings, returning_bindings = 
-         match yieldsClause with
-             Some formHandler -> 
-               formHandler, bindings, ([]:Sugartypes.pattern list list)
-           | None ->
-               let fresh_bindings = map (map (fun (_, ppos) -> `Variable (unique_name (), None, ppos), ppos)) bindings in
-               let variables = map (fun (`Variable (x,_,_), ppos) -> `Var x, ppos) (flatten fresh_bindings) in
-                 ((`TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos, None)),
-                  fresh_bindings,
-                  [flatten bindings])
-       in
-         (* The handlerFunc is simply formed by abstracting the
-            handlerBody with all the binding names, appropriately
-            destructing tuples. *)
-         (* Note: trees_ppos will become the position for each tuple;
-            the position of the tuple is what's reported when duplicate
-            bindings are present within one form. *)
-       let handlerFunc =  `FunLit (map (function
-                                          | [b] -> [b]
-                                          | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
-                                   handlerBody), trees_ppos in
-         ctxt (Apply(Variable("pure", pos), [desugar' handlerFunc], pos)), returning_bindings
-           
-     and desugar_form_expr (formExpr, ppos) : untyped_expression * pattern list list =
-       let pos = `U(lookup_pos ppos) 
-       and desugar = desugar' in
-       let appPrim = appPrim pos in
-       if not (has_form_binding (formExpr,ppos)) then
-         Apply (Variable("xml", pos), [desugar (formExpr,ppos)], pos), [[]]
-       else
-         match formExpr with
-           | `FormBinding (phrase, ppattern) -> desugar phrase, [[ppattern]]
-           | `Xml ("#", [], attrexp, contents) -> forest_to_form_expr contents None pos ppos
-           | `Xml ("#", _, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos,
-                                                      "XML forest literals cannot have attributes"))
-           | `Xml(tag, attrs, attrexp, contents) ->
-               let form, bindings = forest_to_form_expr contents None pos ppos in
-               let attrs' = alistmap (map desugar ->- make_links_list pos) attrs in
-                 (appPrim "plug" [make_xml_context tag attrs' pos; form],
-                  bindings)
-                   
-           | `TextNode text -> 
-               appPrim "xml" [appPrim "stringToXml" [Constant (String text, pos)]], [[]]
-           | _ -> assert false
-
-     and has_form_binding = function
-       | `Xml (_, _, _, subnodes),_ -> exists has_form_binding subnodes
-       | `FormBinding _,_      -> true
-       |  _                    -> false
      and simple_pattern_of_pattern var_env ((pat,pos') : pattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern var_env
        and pos = `U (lookup_pos pos') in

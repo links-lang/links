@@ -30,6 +30,7 @@ struct
 (*      ->- show "after refining bindings" *)
       ->- TypeSugar.Check.program tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#program
+      ->- after_typing DesugarFormlets.desugar_formlets#program
       ->- after_typing DesugarPages.desugar_pages#program)
       program
 
@@ -40,6 +41,7 @@ struct
       ->- RefineBindings.refine_bindings#sentence
       ->- TypeSugar.Check.sentence tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#sentence
+      ->- after_typing DesugarFormlets.desugar_formlets#sentence
       ->- after_typing DesugarPages.desugar_pages#sentence)
       sentence
 end
