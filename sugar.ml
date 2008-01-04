@@ -1075,44 +1075,7 @@ module Desugarer =
 
            | `Formlet (formExpr, formHandler) ->
                fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos')
-           | `Page e ->               
-               let rec desugar_page : phrase -> phrase =
-                 fun (phrase, pos) ->
-                   let rec is_raw (phrase, pos) =
-                     match phrase with
-                       | `TextNode _
-                       | `Block _ -> true
-                       | `FormletPlacement _
-                       | `PagePlacement _ -> false
-                       | `Xml (_, _, _, children) ->
-                           List.for_all is_raw children
-                       | _ ->
-                           raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal")) in
-
-                   let desugar_pages : phrase list -> phrase = fun children ->
-                     (`FnAppl ((`Var "joinManyP", pos), [`ListLit (map desugar_page children), pos]), pos) in
-                   let dp : phrasenode -> phrase = function
-                     | e when is_raw (e, pos) ->
-                         (`FnAppl ((`Var "bodyP", pos), [e, pos]), pos)
-                     | `FormletPlacement (formlet, handler, attributes) ->
-                         (`FnAppl ((`Var "formP", pos), [formlet; handler; attributes]), pos)
-                     | `PagePlacement (page) ->
-                         page
-                     | `Xml ("#", [], _, children) ->
-                         desugar_pages children
-                     | `Xml (name, attrs, dynattrs, children) ->
-                         let x = gensym ~prefix:"xml" () in
-                           (`FnAppl ((`Var "plugP", pos),
-                                     [(`FunLit([[`Variable (x,None,pos), pos]],
-                                               (`Xml (name, attrs, dynattrs, [`Block ([], (`Var x, pos)), pos]), pos)), pos);
-                                      desugar_pages children
-                                     ]), pos)
-                     | _ ->
-                         raise (ASTSyntaxError (lookup_pos pos, "Invalid element in page literal"))
-                   in
-                     dp phrase
-               in
-                 desugar (desugar_page e)
+           | `Page _ -> failwith "page found after page desugaring"
            | `FormletPlacement _ ->
                raise (ASTSyntaxError (lookup_pos pos', "A formlet can only be rendered in a page expression"))
            | `PagePlacement _ ->

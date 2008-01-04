@@ -82,13 +82,14 @@ SOURCES = $(OPC)                		\
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
-          callgraph.ml                          \
-          sugarTraversals.mli sugarTraversals.ml\
-	  resolvePositions.mli resolvePositions.ml \
-          refineBindings.mli refineBindings.ml  \
-          desugarLAttributes.mli desugarLAttributes.ml\
-          desugarRegexes.mli desugarRegexes.ml\
-          typeSugar.mli typeSugar.ml            \
+          callgraph.ml					\
+          sugarTraversals.mli sugarTraversals.ml	\
+	  resolvePositions.mli resolvePositions.ml	\
+          refineBindings.mli refineBindings.ml		\
+          desugarLAttributes.mli desugarLAttributes.ml	\
+          desugarPages.mli desugarPages.ml		\
+          desugarRegexes.mli desugarRegexes.ml		\
+          typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           value.mli value.ml                    \
           $(DB_CODE)            		\
