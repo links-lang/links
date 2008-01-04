@@ -19,6 +19,8 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
     program
 
+  let after_typing f (a, b, c) = (f a, b, c)
+
   let program =
     fun tyenv pos_context program ->
       ((ResolvePositions.resolve_positions pos_context)#program
@@ -26,12 +28,16 @@ struct
 (*      ->- show "before refining bindings"*)
       ->- RefineBindings.refine_bindings#program
 (*      ->- show "after refining bindings" *)
-      ->- TypeSugar.Check.program tyenv) program
+      ->- TypeSugar.Check.program tyenv
+      ->- after_typing DesugarRegexes.desugar_regexes#program)
+      program
 
   let interactive =
     fun tyenv pos_context sentence ->
       ((ResolvePositions.resolve_positions pos_context)#sentence
       ->- DesugarLAttributes.desugar_lattributes#sentence
       ->- RefineBindings.refine_bindings#sentence
-      ->- TypeSugar.Check.sentence tyenv) sentence
+      ->- TypeSugar.Check.sentence tyenv
+      ->- after_typing DesugarRegexes.desugar_regexes#sentence)
+      sentence
 end

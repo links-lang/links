@@ -87,6 +87,7 @@ SOURCES = $(OPC)                		\
 	  resolvePositions.mli resolvePositions.ml \
           refineBindings.mli refineBindings.ml  \
           desugarLAttributes.mli desugarLAttributes.ml\
+          desugarRegexes.mli desugarRegexes.ml\
           typeSugar.mli typeSugar.ml            \
           sugar.mli sugar.ml    		\
           value.mli value.ml                    \

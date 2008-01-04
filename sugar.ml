@@ -790,26 +790,12 @@ module Desugarer =
                let `U (a,_,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
            | `InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | `InfixAppl (`RegexMatch flags, e1, (`Regex((`Replace(_,_) as r)), _)) -> 
-	       let libfn = 
-		 if(List.exists (function `RegexNative -> true | _ -> false) flags) then "sntilde" else "stilde" in
-	       (appPrim libfn
-		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch flags, e1, (`Regex r, _)) -> 
-	       let native = (List.exists (function `RegexNative -> true | _ -> false) flags) in
-	       let libfn = 
-		 if (List.exists (function `RegexList -> true | _ -> false) flags) then 
-		   if native then "lntilde" else "ltilde"
-		 else 
-		   if native then "ntilde" else "tilde" in
-	       (appPrim libfn
-		  [desugar e1;desugar (desugar_regex pos' r, pos')])
-           | `InfixAppl (`RegexMatch _, _, _) -> raise (ASTSyntaxError(Syntax.data_position pos, "Internal error: unexpected rhs of regex operator"))
            | `InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | `InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
            | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
            | `InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(Boolean true, pos), desugar e2, pos)
            | `InfixAppl (`App, e1, e2) -> App (desugar e1, desugar e2, pos)
+           | `InfixAppl (`RegexMatch _, _, _) -> failwith "regex found after regex desugaring"
            | `ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
            | `ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | `Escape ((name,_,_), e) -> 
@@ -1209,43 +1195,6 @@ module Desugarer =
        | `Xml (_, _, _, subnodes),_ -> exists has_form_binding subnodes
        | `FormBinding _,_      -> true
        |  _                    -> false
-
-     and desugar_repeat _ : Regex.repeat -> phrasenode = function
-       | Regex.Star      -> `ConstructorLit ("Star", None)
-       | Regex.Plus      -> `ConstructorLit ("Plus", None)
-       | Regex.Question  -> `ConstructorLit ("Question", None)
-     and desugar_regex pos : regex -> phrasenode = 
-       (* Desugar a regex, making sure that only variables are embedded
-          within.  Any expressions that are spliced into the regex must be
-          let-bound beforehand.  *)
-       let exprs = ref [] in
-       let expr e = 
-         let v = gensym ~prefix:"_regex_" () in
-           begin
-             exprs := (v, e) :: !exprs;
-             `Var v, pos
-           end in
-       let rec aux : regex -> phrasenode = 
-         function
-           | `Range (f, t)    -> `ConstructorLit ("Range", Some (`TupleLit [`Constant (`Char f), pos; `Constant (`Char t), pos], pos))
-           | `Simply s        -> `ConstructorLit ("Simply", Some (`Constant (`String s), pos))
-           | `Quote s        -> `ConstructorLit ("Quote", Some (aux s, pos))
-           | `Any             -> `ConstructorLit ("Any", None)
-           | `StartAnchor   -> `ConstructorLit ("StartAnchor", None)
-           | `EndAnchor     -> `ConstructorLit ("EndAnchor", None)
-           | `Seq rs          -> `ConstructorLit ("Seq", Some (`ListLit (List.map (fun s -> aux s, pos) 
-                                                                        rs), pos))
-           | `Alternate (r1, r2)  -> `ConstructorLit ("Alternate",  Some (`TupleLit [aux r1, pos; aux r2, pos], pos))
-           | `Group s          -> `ConstructorLit ("Group", Some (aux s, pos))
-           | `Repeat (rep, r) -> `ConstructorLit ("Repeat", Some (`TupleLit [desugar_repeat pos rep, pos; 
-                                                                             aux r, pos], pos))
-           | `Splice e        -> `ConstructorLit ("Quote", Some(`ConstructorLit ("Simply", Some (expr e)), pos))
-	   | `Replace (re, (`Literal tmpl)) -> `ConstructorLit("Replace", Some(`TupleLit ([(aux re, pos); (`Constant (`String tmpl), pos)]), pos))
-	   | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some(`TupleLit ([(aux re, pos); expr e]), pos))
-       in fun e ->
-         let e = aux e in
-           `Block (List.map (fun (v, e1) -> (`Val ((`Variable (v, None,pos), pos), e1, `Unknown, None), pos)) !exprs,
-		   (e, pos))
      and simple_pattern_of_pattern var_env ((pat,pos') : pattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern var_env
        and pos = `U (lookup_pos pos') in
