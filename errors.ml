@@ -1,6 +1,5 @@
 open Types
 open Syntax
-open Sugar
 open Lexing
 open Utility
 
