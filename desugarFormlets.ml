@@ -94,13 +94,13 @@ and desugar_form_expr (formExpr, pos) : Sugartypes.phrase * pattern list list =
             appPrim pos "xml" [appPrim pos "stringToXml" [`Constant (`String text), pos]], [[]]
         | _ -> assert false
 
-let desugar_formlets = 
-object
+let desugar_formlets =
+object(o)
   inherit SugarTraversals.map as super
 
   method phrase = function
     | `Formlet (formExpr, formHandler), pos ->
-        fst (forest_to_form_expr [formExpr] (Some formHandler) pos pos)
+        fst (forest_to_form_expr [o#phrase formExpr] (Some (o#phrase formHandler)) pos pos)
     | e -> super#phrase e
 end
 
