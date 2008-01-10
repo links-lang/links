@@ -197,8 +197,8 @@ let rec get_type_vars : binding -> quantifier list =
       | `TypeAnnotation(e, k) -> flatten [phrase e; tv k]
       | `Upcast(e, t1, t2) -> flatten [phrase e; tv t1; tv t2]
       | `ConstructorLit (_, e) -> opt_phrase e
-      | `Switch (exp, binders) -> flatten [phrase exp; btvs binders]
-      | `Receive (binders) -> btvs binders
+      | `Switch (exp, binders, _) -> flatten [phrase exp; btvs binders]
+      | `Receive (binders, _) -> btvs binders
 
       | `DatabaseLit (name, (opt_driver, opt_args)) -> flatten [phrase name; opt_phrase opt_driver; opt_phrase opt_args]
       | `TableLit (_, datatype, _, db) -> flatten [tv datatype; phrase db]
@@ -221,6 +221,7 @@ let rec get_type_vars : binding -> quantifier list =
       | `Nil
       | `Variable _
       | `Constant _
+      | `Negative _
       | `Variant (_, None)   -> []
       | `Variant (_, Some p)
       | `As (_, p)           -> get_pattern_type_vars p

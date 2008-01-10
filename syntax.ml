@@ -194,17 +194,18 @@ let is_symbolic_ident name =
 let is_alphanumeric_ident name = 
   (Str.string_match (Str.regexp "^[a-zA-Z_][a-zA-Z_0-9]*$") name 0)
 
+let string_of_constant =
+  function
+    | Boolean value -> string_of_bool value
+    | Integer value -> string_of_num value
+    | Char c -> "'"^ Char.escaped c ^"'" 
+    | String s -> "\"" ^ s ^ "\""
+    | Float value   -> string_of_float value
+
 let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
   | Constant(c, data) ->
-      begin
-        match c with
-          | Boolean value -> string_of_bool value ^ t data
-          | Integer value -> string_of_num value ^ t data
-          | Char c -> "'"^ Char.escaped c ^"'" ^ t data
-          | String s -> "\"" ^ s ^ "\"" ^ t data
-          | Float value   -> string_of_float value ^ t data
-      end
+      string_of_constant c ^ t data
   | Variable (name, data) when is_symbolic_ident name -> "(" ^ name ^ ")" ^ t data
   | Variable (name, data) -> name ^ t data
   | Apply (f, ps, data)    -> show t f ^ "(" ^ String.concat "," (List.map (show t) ps) ^ ")" ^ t data

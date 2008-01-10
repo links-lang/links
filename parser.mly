@@ -512,8 +512,8 @@ perhaps_cases:
 
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6), pos() }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3), pos() }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -765,9 +765,18 @@ cons_pattern:
 | constructor_pattern COLONCOLON cons_pattern               { `Cons ($1, $3), pos() }
 
 constructor_pattern:
-| primary_pattern                                           { $1 }
+| negative_pattern                                          { $1 }
 | CONSTRUCTOR                                               { `Variant ($1, None), pos() }
 | CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }
+
+constructors:
+| CONSTRUCTOR                                               { [$1] }
+| CONSTRUCTOR COMMA constructors                            { $1 :: $3 } 
+
+negative_pattern:
+| primary_pattern                                           { $1 }
+| MINUS CONSTRUCTOR                                         { `Negative [$2], pos() }
+| MINUS LPAREN constructors RPAREN                          { `Negative $3, pos() }
 
 parenthesized_pattern:
 | LPAREN RPAREN                                             { `Tuple [], pos() }

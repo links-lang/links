@@ -95,12 +95,16 @@ struct
     | `Nil 
     | `Cons _
     | `List _ 
-    | `Constant _
-    | `Variant _ -> false
+    | `Constant _ -> false
+    (* NOTE: variant assigment is typed such that it must always succeed *)
+    | `Variant (_, None) -> true
+    | `Variant (_, Some p) -> is_safe_pattern p
+    | `Negative _ -> true
     | `Any
-    | `Record _
-    | `Variable _
-    | `Tuple _ -> true
+    | `Variable _ -> true
+    | `Record (ps, None) -> List.for_all (snd ->- is_safe_pattern) ps
+    | `Record (ps, Some p) -> List.for_all (snd ->- is_safe_pattern) ps && is_safe_pattern p
+    | `Tuple ps -> List.for_all is_safe_pattern ps
     | `HasType (p, _)
     | `As (_, p) -> is_safe_pattern p
   and is_generalisable_regex = function 
@@ -304,7 +308,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               | `As (_, p) | `HasType (p, _) -> unwrap_at i p
               | `Tuple ps ->
                   List.nth ps i
-              | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ -> assert false in
+              | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ | `Negative _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
@@ -330,7 +334,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                         | None -> assert false
                         | Some p -> unwrap_at name p
                     end
-              | `Nil | `Cons _ | `List _ | `Tuple _ | `Variant _ -> assert false in
+              | `Nil | `Cons _ | `List _ | `Tuple _ | `Variant _ | `Negative _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
@@ -343,29 +347,34 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             `Record (fields, row_var)
       | `Variant row ->
           let fields, row_var = fst (Types.unwrap_row row) in
+          let end_pos p =
+            let _, (_, end_pos, buf) = p in
+              (*
+                QUESTION:
+                
+                This indicates the position immediately after the pattern.
+                How can we indicate a 0-length position in an error message?
+              *)
+              (end_pos, end_pos, buf) in
+            
           let rec unwrap_at : string -> pattern -> pattern list = fun name p ->
             match fst p with
-              | `Variable _ | `Any | `Constant _ -> [p]
+              | `Variable _ | `Any -> [ `Any, end_pos p ]
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Variant (name', None) when name=name' ->
-                  let _, (_, end_pos, buf) = p in
-                    (*
-                      QUESTION:
-                      
-                      This indicates the position immediately after the variant pattern.
-                      How can we indicate a 0-length position in an error message?
-                    *)
-                    [(`Any, (end_pos, end_pos, buf))]
+                    [(`Record ([], None), end_pos p)]
               | `Variant (name', Some p) when name=name' -> [p]
               | `Variant _ -> []
-              | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ -> assert false in
+              | `Negative names when List.mem name names -> []
+              | `Negative _ -> [ `Any, end_pos p ]
+              | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _ -> assert false in
           let rec are_open : pattern list -> bool =
             function
               | [] -> false
-              | ((`Variable _ | `Any), _) :: _ -> true
+              | ((`Variable _ | `Any | `Negative _), _) :: _ -> true
               | ((`As (_, p) | `HasType (p, _)), _) :: ps -> are_open (p :: ps)
-              | ((`Constant _ | `Variant _), _) :: ps -> are_open ps
-              | ((`Nil | `Cons _ | `List _ | `Tuple _ | `Record _), _) :: _ -> assert false in
+              | ((`Variant _), _) :: ps -> are_open ps
+              | ((`Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _), _) :: _ -> assert false in
           let fields =
             StringMap.fold
               (fun name field_spec env ->
@@ -380,9 +389,12 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             if are_open pats then
               begin
                 let row = (fields, row_var) in
+                  (* NOTE: type annotations can lead to a closed type even though the patterns are open *)
+(*
                   if Types.is_closed_row row then
                     failwith ("Open row pattern with closed type: "^Types.string_of_row row)
                   else
+*)
                     `Variant row
               end
             else
@@ -399,7 +411,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               | `Cons (p1, p2) -> p1 :: unwrap p2 
               | `List ps -> ps
               | `As (_, p) | `HasType (p, _) -> unwrap p
-              | `Variant _ | `Record _ | `Tuple _ -> assert false in
+              | `Variant _ | `Negative _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
             `Application ("List", [cpt pats t])
       | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
@@ -442,91 +454,136 @@ let type_pattern closed alias_env tenvs : pattern -> pattern * Types.environment
     match closed with
       | `Closed -> Types.make_singleton_closed_row
       | `Open -> Types.make_singleton_open_row in
-  let rec type_pattern  (pattern, pos' : pattern) : pattern * Types.environment * Types.datatype =
+
+  let make_negative_row names =
+    (List.fold_right
+       (fun name fields ->
+          StringMap.add name `Absent fields) names StringMap.empty,
+     Types.fresh_row_variable()) in
+
+  (* type_pattern p types the pattern p returning a typed pattern, a
+     type environment for the variables bound by the pattern and two
+     types. The first type is the type of the pattern 'viewed from the
+     outside' - in the case of variant patterns it must be open in
+     order to allow cases to unify. The second type is the type of the
+     pattern 'viewed from the inside'. Type annotations are only
+     applied to the inner pattern. The type environment is constructed
+     using types from the inner type.
+
+  *)
+  let rec type_pattern (pattern, pos' : pattern) : pattern * Types.environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
+    let tp = type_pattern in
     let unify (l, r) = unify alias_env ~pos:(lookup_pos pos') (l, r)
     and erase (p,_, _) = p
-    and typ (_,_,t) = t
+    and ot (_,_,(t,_)) = t
+    and it (_,_,(_,t)) = t
     and env (_,e,_) = e
     and pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p
-    (* TODO: check for duplicate bindings *)
+                                                          (* TODO: check for duplicate bindings *)
     and (++) = Env.extend in
-    let (p, e, t : patternnode * Types.environment * Types.datatype) =
+    let (p, env, (outer_type, inner_type)) :
+           patternnode * Types.environment * (Types.datatype * Types.datatype) =
       match pattern with
         | `Any ->
-            `Any, Env.empty, Types.fresh_type_variable ()
+            let t = Types.fresh_type_variable () in
+              `Any, Env.empty, (t, t)
         | `Nil ->
-            `Nil, Env.empty, (Types.make_list_type
-                                (Types.fresh_type_variable ()))
-        | `Constant c as c' -> c', Env.empty, constant_type c
+            let t = Types.make_list_type (Types.fresh_type_variable ()) in
+              `Nil, Env.empty, (t, t)
+        | `Constant c as c' ->
+            let t = constant_type c in
+              c', Env.empty, (t, t)
         | `Variable (x,_,pos) -> 
             let xtype = Types.fresh_type_variable () in
               (`Variable (x, Some xtype, pos),
                Env.bind Env.empty (x, xtype),
-               xtype)
+               (xtype, xtype))
         | `Cons (p1, p2) -> 
-            let p1 = type_pattern p1
-            and p2 = type_pattern p2 in
-            let () = unify ~handle:Errors.cons_pattern ((pos p1, Types.make_list_type (typ p1)), 
-                                                        (pos p2, typ p2)) in
-              `Cons (erase p1, erase p2), env p1 ++ env p2, typ p2
+            let p1 = tp p1
+            and p2 = tp p2 in
+            let () = unify ~handle:Errors.cons_pattern ((pos p1, Types.make_list_type (ot p1)), 
+                                                        (pos p2, ot p2)) in
+            let () = unify ~handle:Errors.cons_pattern ((pos p1, Types.make_list_type (it p1)), 
+                                                        (pos p2, it p2)) in
+              `Cons (erase p1, erase p2), env p1 ++ env p2, (ot p2, it p2)
         | `List ps -> 
-            let ps' = List.map type_pattern ps in
+            let ps' = List.map tp ps in
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
-            let element_type = 
+            let list_type p ps typ =
+              let _ = List.iter (fun p' -> unify ~handle:Errors.list_pattern ((pos p, typ p), 
+                                                                              (pos p', typ p'))) ps
+              in
+                Types.make_list_type (typ p) in
+            let ts =
               match ps' with
-                | [] -> Types.fresh_type_variable ()
-                | p::ps -> 
-                    let _ = List.iter (fun p' -> unify ~handle:Errors.list_pattern ((pos p, typ p), 
-                                                                                    (pos p', typ p'))) ps in
-                      typ p
-            in `List (List.map erase ps'), env', Types.make_list_type element_type
+                | [] -> let t = Types.fresh_type_variable () in t, t
+                | p::ps ->
+                    list_type p ps ot, list_type p ps it
+            in                            
+              `List (List.map erase ps'), env', ts
         | `Variant (name, None) -> 
-            let vtype = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
-              `Variant (name, None), Env.empty, vtype
+            let vtype () = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
+              `Variant (name, None), Env.empty, (vtype (), vtype ())
         | `Variant (name, Some p) -> 
-            let p = type_pattern p in
-            let vtype = `Variant (make_singleton_row (name, `Present (typ p))) in
-              `Variant (name, Some (erase p)), env p, vtype
+            let p = tp p in
+            let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
+              `Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
+        | `Negative names ->
+            let outer_type = `Variant (Types.make_empty_open_row ()) in
+            let inner_type = `Variant (make_negative_row names) in
+              `Negative names, Env.empty, (outer_type, inner_type)
         | `Record (ps, default) -> 
-            let ps = alistmap type_pattern ps
-            and default = opt_map type_pattern default in
-            let initial, denv = match default with
-              | None -> (Types.make_empty_closed_row (),
-                         Env.empty)
-              | Some r -> 
-                  let row = 
-                    List.fold_right
-                      (fun (label, _) -> Types.row_with (label, `Absent))
-                      ps (Types.make_empty_open_row ()) in
-                  let () = unify ~handle:Errors.record_pattern (("", `Record row),
-                                                                (pos r, typ r)) in
-                    row, env r in
-            let rtype = 
+            let ps = alistmap tp ps
+            and default = opt_map tp default in
+            let initial_outer, initial_inner, denv =
+              match default with
+                | None ->
+                    let row = Types.make_empty_closed_row () in
+                      row, row, Env.empty
+                | Some r ->
+                    let make_row typ =
+                      let row = 
+                        List.fold_right
+                          (fun (label, _) -> Types.row_with (label, `Absent))
+                          ps (Types.make_empty_open_row ()) in
+                      let () = unify ~handle:Errors.record_pattern (("", `Record row),
+                                                                    (pos r, typ r))
+                      in
+                        row
+                    in                      
+                      make_row ot, make_row it, env r in
+            let rtype typ initial =
               `Record (List.fold_right
                          (fun (l, f) -> Types.row_with (l, `Present (typ f)))
                          ps initial)
             and penv = 
-              List.fold_right (snd ->- env ->- (++)) ps Env.empty in
-              `Record (alistmap erase ps, opt_map erase default), penv ++ denv, rtype
+              List.fold_right (snd ->- env ->- (++)) ps Env.empty
+            in
+              (`Record (alistmap erase ps, opt_map erase default),
+               penv ++ denv,
+               (rtype ot initial_outer, rtype it initial_outer))
         | `Tuple ps -> 
-            let ps' = List.map type_pattern ps in
+            let ps' = List.map tp ps in
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
-            let typ' = Types.make_tuple_type (List.map typ ps') in
-              `Tuple (List.map erase ps'), env', typ'
-        | `As ((x, _, pos), p) -> 
-            let p = type_pattern p in
-            let env' = Env.bind (env p) (x, typ p) in
-              `As ((x, Some (typ p), pos), erase p), env', (typ p)
-        | `HasType (p, t) -> 
-            let p = type_pattern p in
-            let () = unify ~handle:Errors.pattern_annotation ((pos p, typ p), 
-                                                              (_UNKNOWN_POS_, DesugarDatatype.desugar_datatype' tenvs t)) in
-              `HasType (erase p, t), env p, typ p
-    in
-      (p, pos'), e, t
+            let make_tuple typ = Types.make_tuple_type (List.map typ ps') in
+              `Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
+        | `As ((x, _, pos), p) ->
+            let p = tp p in
+            let env' = Env.bind (env p) (x, it p) in
+              `As ((x, Some (it p), pos), erase p), env', (ot p, it p)
+        | `HasType (p, t) ->
+            let p = tp p in
+            let () = unify ~handle:Errors.pattern_annotation ((pos p, it p), 
+                                                              (_UNKNOWN_POS_, DesugarDatatype.desugar_datatype' tenvs t))
+            in
+              `HasType (erase p, t), env p, (ot p, it p) in
+      (p, pos'), env, (outer_type, inner_type)
   in
-    type_pattern
+    fun pattern ->
+      let pos, env, (outer_type, _) = type_pattern pattern in
+        pos, env, outer_type
+
 
 let rec extract_row : Types.alias_environment -> Types.datatype -> Types.row
   = fun alias_env t ->
@@ -556,6 +613,7 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `HasType (p,_) -> pattern_env p
     | `Variant (_, Some p) -> pattern_env p
     | `Variant (_, None) -> Env.empty
+    | `Negative _ -> Env.empty
     | `Record (ps, Some p) ->
         List.fold_right (snd ->- pattern_env ->- Env.extend) ps (pattern_env p)
     | `Record (ps, None) ->
@@ -776,17 +834,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* (() -{b}-> d) -> d *)
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
+            let () = unify (pid_type, `Application ("Mailbox", [Types.fresh_type_variable()])) in
             let context' = {context with tenv = Env.bind env (mailbox, pid_type), alias_env} in
             let p = type_check context' p in
               unify (return_type, typ p);
-              `Spawn (erase p), return_type
-        | `Receive binders ->
+              `SpawnWait (erase p), return_type
+        | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type env in
             let () = unify (boxed_mbtype, `Application ("Mailbox", [mbtype])) in
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify (pattern_type, mbtype) in
-              `Receive (erase_cases binders), body_type
+              `Receive (erase_cases binders, Some pattern_type), body_type
 
         (* applications of various sorts *)
         | `UnaryAppl (op, p) -> 
@@ -977,11 +1036,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 end
               else
                 failwith "upcast failure (TODO: implement this error message!)"
-        | `Switch (e, binders) ->
+        | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify (pattern_type, typ e) in
-              `Switch (erase e, erase_cases binders), body_type
+              `Switch (erase e, erase_cases binders, Some pattern_type), body_type
     in (e, pos), t
 and type_binding : context -> binding -> binding * Types.typing_environment =
   fun ({tenv = (env, alias_env)} as context) (def, pos) ->

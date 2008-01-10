@@ -20,6 +20,7 @@ type 'r a_pattern = [
   | `Nil
   | `Cons of ('r * 'r)
   | `Variant of (string * 'r)
+  | `Negative of string list
   | `Record of (string * 'r * 'r)
   | `Constant of untyped_expression
   | `Variable of string
@@ -73,16 +74,32 @@ module PatternCompiler =
 
      let string_of_equation = string_of_expression -<- fst -<- snd
 
-     type pattern_env = untyped_expression StringMap.t
+     module Const = struct
+       type t = Syntax.constant
+       let compare = Pervasives.compare
+       module Show_t = Syntax.Show_constant
+     end
+
+     module type CONSTSET = Set with type elt = Syntax.constant
+     module ConstSet = Set.Make(Const)
+     module ConstMap = Map.Make(Const)
+
+     type context =
+         [ `Nil | `Cons
+         | `Variant of string | `NVariant of StringSet.t
+         | `Constant of Syntax.constant | `NConstant of ConstSet.t ]
+
+     type pattern_env = (context * untyped_expression) StringMap.t
 
      type bound_expression = pattern_env -> untyped_expression
 
-     type pattern_type = [ | `List | `Variant | `Record | `Constant | `Variable ]
+     type pattern_type = [ | `List | `Variant | `Negative | `Record | `Constant | `Variable ]
 
      let rec get_pattern_type : simple_pattern -> pattern_type = 
        fun (p,_) -> match p with
          | `Nil | `Cons _ -> `List
          | `Variant _ -> `Variant
+         | `Negative _ -> `Negative
          | `Record _ -> `Record
          | `Constant _ -> `Constant
          | `Variable _ -> `Variable
@@ -132,7 +149,7 @@ module PatternCompiler =
                     let t' = get_equation_pattern_type equation in
                     let es', ess' =
                       (* group non-variable patterns of the same type *)
-                      if es = [] || ((t' = t) && (t' <> `Variable)) then
+                      if es = [] || (t' = t && t' <> `Variable && t' <> `Negative) then
                         equation::es, ess
                       else
                         [equation], es::ess
@@ -229,15 +246,36 @@ module PatternCompiler =
         apply an annotation to an expression
          - rename variables
          - move type annotations into the expression
+
+        BUG:
+        
+        The as patterns and type annotations should be ordered in a
+        single heterogeneous list.
+
+        Consider:
+
+        switch (A) {
+        case (A as x : [|A|rho|]) as y : [|A|] -> (x,y)
+        }
      *)
      let apply_annotation : Syntax.untyped_data -> untyped_expression -> annotation * untyped_expression -> untyped_expression =
-       fun pos exp ((names, datatypes), body) ->
-         let body = List.fold_right (fun name body ->
-                                      bind_or_subst (name, exp, body, pos)) names body in
-         let body = List.fold_right (fun datatype body ->
-                                      Let ("_", HasType (exp, datatype, pos), body, pos)) datatypes body
+       fun pos exp ((vars, datatypes), body) ->
+         let annotate datatypes exp body =
+           Let ("_",
+                List.fold_right (fun datatype exp -> HasType (exp, datatype, pos)) datatypes exp,
+                body,
+                pos) in
+         let subst var vars body =
+           List.fold_right (fun var' body -> Syntax.rename_free var' var body) vars body
          in
-           body
+           match vars, datatypes with
+             | [], datatypes -> annotate datatypes exp body
+             | first_var::vars, datatypes ->
+                 bind_or_subst
+                   (first_var,
+                    exp,
+                    annotate datatypes (Variable (first_var, pos)) (subst first_var vars body),
+                    pos)
 
      (* apply annotations in an annotated equation list *)
      let apply_annotations : Syntax.untyped_data -> untyped_expression -> annotated_equation list -> equation list =
@@ -312,14 +350,6 @@ module PatternCompiler =
        list patterns.
      *)
 
-     (*
-       [NOTE]
-         this abstraction is deliberate as we may want to change it - e.g.
-         if we want to share default continuations in the resulting term
-         rather than simply inlining them as we do now.
-     *)
-     let apply_default def env =
-       def env
 
      let lookup var (env : pattern_env) =
        try
@@ -327,31 +357,18 @@ module PatternCompiler =
        with
            NotFound _ -> failwith ("Variable: "^var^" not in environment (lookup)")
 
-     let is_trivial var (env : pattern_env) =
-       match lookup var env with
-         | Variable (var', _) when var=var' -> true
-         | _ -> false
 
      (* add a binding to the environment
         first applying it to all the other expressions in the environment
      *)
-     let extend var exp (env : pattern_env) =
+     let extend var (context, exp) (env : pattern_env) =
        let env = StringMap.fold
-         (fun var' exp' env ->
-            StringMap.add var' (Syntax.subst_free var exp exp') env) env StringMap.empty 
+         (fun var' (context', exp') env ->
+            StringMap.add var' (context', Syntax.subst_free var exp exp') env) env StringMap.empty 
        in
-         StringMap.add var exp env
+         StringMap.add var (context, exp) env
 
-     (* extend the environment with a list of trivial bindings
-        i.e binding each var_i to Variable(var_i, pos)
-
-        (we assume the bindings do not occur in the existing environment,
-        so do not have to traverse the existing environment)
-     *)
-     let extend_trivial pos vars : pattern_env -> pattern_env =
-       List.fold_right (fun var env ->
-                          extend var (Variable (var, pos)) env) vars
-         
+     
      (* the entry point to the pattern-matching compiler *)
      let rec match_cases
          : Syntax.untyped_data -> string list -> equation list ->
@@ -359,7 +376,7 @@ module PatternCompiler =
          =
        fun pos vars equations def (env : pattern_env) ->
          match vars, equations with 
-           | [], [] -> apply_default def (env : pattern_env)
+           | [], [] -> def (env : pattern_env)
            | [], ([], (body, used))::_ -> used := true; body
 (* identical patterns could be detected here if we wanted *)
 (*           | [], ([], _)::_ -> failwith "Redundant pattern"*)
@@ -372,6 +389,9 @@ module PatternCompiler =
                              match_list pos vars (partition_list_equations equations) exp var
                          | `Variant ->
                              match_variant pos vars (partition_variant_equations equations) exp var
+                         | `Negative ->
+                             assert (List.length equations == 1);
+                             match_negative pos vars (hd equations) exp var
                          | `Variable ->
                              match_var pos vars equations exp var
                          | `Record ->
@@ -387,7 +407,7 @@ module PatternCompiler =
        fun pos vars equations def var (env : pattern_env) ->
          match_cases pos vars
            (List.map (fun ((annotation, pattern)::ps, (body, used)) ->
-                        let var_exp = lookup var env in
+                        let var_exp = Variable (var, pos) in
                         let body = apply_annotation pos var_exp (annotation, body)
                         in
                           match pattern with
@@ -399,124 +419,200 @@ module PatternCompiler =
      and match_list
          : Syntax.untyped_data -> string list -> (annotated_equation list * annotated_equation list)
            -> bound_expression -> string -> bound_expression =
-       fun pos vars (nil_equations, cons_equations) def var env ->
-         let var_exp = lookup var env in
+       fun pos vars (nil_equations, cons_equations) def var (env : pattern_env) ->
+         let var_exp = Variable (var, pos) in
 
-         let nil_equations = apply_annotations pos var_exp nil_equations in
-         let cons_equations = apply_annotations pos var_exp cons_equations in
-         let nil_branch =
-           match nil_equations with
-             | [] -> apply_default def env
-             | _ ->
-                 match_cases pos vars nil_equations def env in
-         let cons_branch =
-           match cons_equations with
-             | [] -> apply_default def env
-             | _ ->
-                 let x = unique_name () in
-                 let xs = unique_name () in
-                 let env = extend_trivial pos [x; xs] env
-                 in
-                   Let(x, list_head var_exp pos,
-                       Let(xs, list_tail var_exp pos,
-                           match_cases pos (x::xs::vars) cons_equations def env,
-                           pos), pos)
-         in
+         let nil_branch () =
+           let env = StringMap.add var (`Nil, Nil pos) env in
+           let nil_equations = apply_annotations pos var_exp nil_equations in
+             match nil_equations with
+               | [] -> def env
+               | _ ->
+                   match_cases pos vars nil_equations def env in
+
+         let cons_branch () =
+           let env = StringMap.add var (`Cons, var_exp) env in
+           let cons_equations = apply_annotations pos var_exp cons_equations in
+             match cons_equations with
+               | [] -> def env
+               | _ ->
+                   let x = unique_name () in
+                   let xs = unique_name () in
+                     Let(x, list_head var_exp pos,
+                         Let(xs, list_tail var_exp pos,
+                             match_cases pos (x::xs::vars) cons_equations def env,
+                             pos), pos) in
+
+         if StringMap.mem var env then
+           match StringMap.find var env with
+             | `Nil, Nil _ -> nil_branch ()
+             | `Cons, _ -> cons_branch ()
+             | _ -> assert false
+         else
            (Condition(Comparison(var_exp, `Equal, Syntax.Nil pos, pos),
-                      nil_branch,
-                      cons_branch, pos))
+                      nil_branch (),
+                      cons_branch (), pos))
+
+     and match_negative
+         : Syntax.untyped_data -> string list -> equation -> 
+         bound_expression -> string -> bound_expression =
+       fun pos vars equation def var (env : pattern_env) ->
+         let var_as_exp var = Variable (var, pos) in
+         let inject var name = Variant_injection(name, var_as_exp var, pos) in
+
+         let ((annotation, pattern)::ps, (body, used)) = equation in
+         let var_exp = Variable (var, pos) in
+           match pattern with
+             | (`Negative names,_) ->
+                 let names = StringSet.from_list names in
+                 let context, cexp =
+                   if StringMap.mem var env then             
+                     match StringMap.find var env with
+                       | `Variant name, cexp -> `Variant name, cexp
+                       | `NVariant names, cexp -> `NVariant names, cexp
+                       | _ -> assert false
+                   else
+                     `NVariant StringSet.empty, var_exp
+                 in
+                   begin  
+                     match context with
+                       | `Variant name when StringSet.mem name names ->
+                           def env
+                       | `Variant name ->
+                          let body = apply_annotation pos var_exp (annotation, body) in
+                             match_cases pos vars [(ps, (body, used))] def env
+                       | `NVariant names' ->
+                           let diff = StringSet.diff names names' in
+
+                           let match_branch name case_exp =
+                             let match_env = StringMap.add var (`Variant name, case_exp) env in
+                               def match_env in
+
+                           let default_branch default_exp =
+                             let default_env =
+                               StringMap.add
+                                 var
+                                 (`NVariant (StringSet.union names names'), default_exp)
+                                 env in
+                               Debug.print ("applying annotation to" ^ string_of_expression default_exp);
+                             let body = apply_annotation pos default_exp (annotation, body) in
+                               (match_cases pos vars [(ps, (body, used))] def default_env)
+                           in
+                             if StringSet.is_empty diff then
+                               default_branch cexp
+                             else
+                               let last_name = StringSet.max_elt diff in
+                               let last_case_variable = unique_name () in
+                               let diff = StringSet.remove last_name diff in
+                               let default_var = unique_name () in
+                                 StringSet.fold
+                                   (fun name exp ->
+                                      let case_variable = unique_name () in
+                                        Variant_selection(var_exp,
+                                                          name, case_variable, match_branch name (inject case_variable name),
+                                                          "_", exp,
+                                                          pos))
+                                   diff
+                                   (Variant_selection(var_exp,
+                                                      last_name, last_case_variable, match_branch last_name (inject last_case_variable last_name),
+                                                      default_var, default_branch (Variable (default_var, pos)),
+                                                      pos))
+                                                      
+                       | _ -> assert false
+                   end
+             | _ -> assert false
 
      and match_variant
          : Syntax.untyped_data -> string list -> ((string * ((string * string) * annotated_equation list)) list) ->
-           bound_expression -> string -> bound_expression =
-       fun pos vars bs def var env ->
-         match bs with
-           | [] ->
-               apply_default def env
-           | (name, ((case_variable, default_variable), annotated_equations))::bs ->
-               let var_exp = lookup var env in
+         bound_expression -> string -> bound_expression =
+       fun pos vars bs def var (env : pattern_env) ->
+         let var_as_exp var = Variable (var, pos) in
+         let inject var name = Variant_injection(name, var_as_exp var, pos) in
+         let empty var = Variant_selection_empty(var_as_exp var, pos) in
 
-               let var_as_exp var = Variable (var, pos) in
-               let inject var = Variant_injection(name, var_as_exp var, pos) in
-               let empty var = Variant_selection_empty(var_as_exp var, pos) in
+         let context, cexp =
+           if StringMap.mem var env then             
+             match StringMap.find var env with
+               | `Variant name, cexp -> `Variant name, cexp
+               | `NVariant names, cexp -> `NVariant names, cexp
+               | _ -> assert false
+           else
+             `NVariant StringSet.empty, var_as_exp var in
+
+         (* returns true if we have already matched this name in this branch *)
+         let active name =
+           match context with
+             | `Variant name' -> name=name'
+             | _ -> false in
+
+         (* returns true if this name is compatible with the current context *)
+         let eligible name =
+           match context with
+             | `Variant name' -> name=name'
+             | `NVariant names -> not (StringSet.mem name names) in
+
+
+         (*
+           close variant types when possible
+           
+           NOTE:
+           this has the side-effect of manifesting non-exhaustive matches
+           on polymorphic variants as type errors.
+         *)
+         let massage_wrong var = function
+           | Wrong _ -> empty var
+           | e -> e
+         in         
+           match bs with
+             | [] -> def env
+             | (name, ((case_variable, default_variable), annotated_equations))::bs ->
+                 let var_exp = Variable (var, pos) in
                    
-               let equations = apply_annotations pos (inject case_variable) annotated_equations in
-                 (*
-                     close variant types when possible
-                     
-                   [NOTE]
-                   this has the side-effect of manifesting non-exhaustive matches
-                   on polymorphic variants as type errors.
-                 *)
-               let massage_wrong var = function
-                 | Wrong _ ->
-                     empty var
-                 | e -> e in
-
-
-               let match_branch case_variable =
-                 let match_env =
-                   extend_trivial pos [case_variable]
-                     (extend var (inject case_variable) env)
-                 in
-                   match_cases pos (case_variable::vars) equations def match_env in
-               let default_branch default_variable =
-                 let default_env = 
-                   extend_trivial pos [default_variable]
-                     (extend var (var_as_exp default_variable) env)
-                 in
-                   massage_wrong default_variable
-                     (match_variant pos vars bs def default_variable default_env) (*in*)
-
-               in
-(* is this worth doing here / does it ever happen? *)
-(*
-                 match lookup var env with
-                   | Variant_injection(name', Variable(case_variable, _), _) ->
-                       if name=name' then
-                          match_branch case_variable
+                 let default_branch default_variable =
+                   let default_env =
+                     match context with
+                       | `NVariant names ->
+                           StringMap.add
+                             var
+                             (`NVariant (StringSet.add name names), var_as_exp default_variable)
+                             env
+                       | `Variant name -> env
+                       | _ -> assert false
+                   in
+                     massage_wrong default_variable
+                       (match_variant pos vars bs def default_variable default_env) in
+                   
+                   if eligible name then
+                     let equations = apply_annotations pos (inject case_variable name) annotated_equations in                       
+                     let match_branch case_variable =
+                       let match_env = StringMap.add var (`Variant name, inject case_variable name) env in
+                         match_cases pos (case_variable::vars) equations def match_env
+                     in
+                       if active name then
+                         match cexp with
+                           | Variant_injection(_, Variable (case_variable, _), _) ->
+                               match_branch case_variable
+                           | _ -> assert false
                        else
-                         default_branch default_variable
-                   | _ ->
-*)
                          Variant_selection(var_exp, name,
                                            case_variable,
                                            match_branch case_variable,
                                            default_variable,
                                            default_branch default_variable,
-                                           pos)       
+                                           pos)
+                   else
+                     default_branch default_variable
+
      and match_record
          : Syntax.untyped_data -> string list ->
            ((string * ((string * string) * annotated_equation list)) list) ->
            bound_expression -> string -> bound_expression =
-       fun pos vars bs def var env ->
+       fun pos vars bs def var (env : pattern_env) ->
          match bs with
-           | [] -> apply_default def env
+           | [] -> def env
            | (name, ((label_variable, extension_variable), annotated_equations))::bs ->
-               let var_exp = lookup var env in
+               let var_exp = Variable (var, pos) in
                let equations = apply_annotations pos var_exp annotated_equations in
-(* is this worth doing here / does it ever happen? *)
-(*
-                 match var_exp with
-                   | Record_intro(StringMap.add name' (Variable (label_variable, _)) StringMap.empty,
-                                      Some (Variable (extension_variable, _)),
-                                      _) when name=name' ->
-                       match_cases
-                         pos
-                         (label_variable::extension_variable::vars)
-                         equations
-                         (match_record pos vars bs def var)
-                         env
-                   | _ ->
-*)
-               let env =
-                 extend_trivial pos [label_variable; extension_variable]
-                   (extend var (Record_intro(
-                                  StringMap.add name (Variable (label_variable, pos)) StringMap.empty,
-                                  Some (Variable (extension_variable, pos)),
-                                  pos))
-                      env)
-               in
                  record_selection
                    (name,
                     label_variable,
@@ -533,11 +629,11 @@ module PatternCompiler =
      and match_constant
          : Syntax.untyped_data -> string list -> (string * (untyped_expression * annotated_equation list)) list
            -> bound_expression -> string -> bound_expression =
-       fun pos vars bs def var env ->
+       fun pos vars bs def var (env : pattern_env) ->
          match bs with
-           | [] -> apply_default def env
+           | [] -> def env
            | (_name, (exp, annotated_equations))::bs ->
-               let var_exp = lookup var env in
+               let var_exp = Variable (var, pos) in
                let equations = apply_annotations pos var_exp annotated_equations in
                  (match exp with
                     | Record_intro (fields, None, _)
@@ -566,9 +662,10 @@ module PatternCompiler =
                                    pos)))
                    
      (* the interface to the pattern-matching compiler *)
-     let match_cases
-         : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression =
-       fun (`U (p1, _, _) as pos, exp, raw_equations) ->
+     let compile_cases
+         : (Types.datatype option * Syntax.untyped_data *
+              untyped_expression * raw_equation list) -> untyped_expression =
+       fun (_, (`U (p1, _, _) as pos), exp, raw_equations) ->
          Debug.if_set (show_pattern_compilation)
            (fun () -> "Compiling pattern match: "^ p1.Lexing.pos_fname);
          let var, wrap =
@@ -578,9 +675,9 @@ module PatternCompiler =
              | _ ->
                  let var = unique_name()
                  in
-                   var, fun body -> Let (var, exp, body, pos)
-         and equations = map reduce_equation raw_equations in
-         let initial_env = StringMap.add var (Variable (var, pos)) StringMap.empty in
+                   var, fun body -> Let (var, exp, body, pos) in
+         let equations = map reduce_equation raw_equations in
+         let initial_env = StringMap.empty in
          let result = wrap (match_cases pos [var] equations (fun _ -> Wrong pos) (initial_env : pattern_env))
          in
            Debug.if_set (show_pattern_compilation)
@@ -593,7 +690,8 @@ module PatternCompiler =
      : 
     sig
       type raw_equation = simple_pattern list * untyped_expression
-      val match_cases : (Syntax.untyped_data * untyped_expression * raw_equation list) -> untyped_expression
+      val compile_cases : (Types.datatype option * Syntax.untyped_data *
+                             untyped_expression * raw_equation list) -> untyped_expression
     end)
 
 module Desugarer =
@@ -675,6 +773,8 @@ module Desugarer =
                                    variable,
                                    Variant_selection_empty(Variable(variable, pos), pos),
                                    pos)
+           | `Negative _ ->
+               Let ("_", value, body, pos)
            | `Record (label, patt, rem_patt) ->
                let temp_var_field = unique_name () in
                let temp_var_ext = unique_name () in
@@ -727,6 +827,7 @@ module Desugarer =
        | `Constant _ -> S.empty
        | (`HasType ((p,_), _):simple_pattern a_pattern)
        | `Variant (_, (p,_)) -> names p
+       | `Negative _ -> S.empty
        | `Cons ((l,_),(r,_))
        | `Record (_,(l,_),(r,_)) -> union (names l) (names r)
        | `Variable name -> S.singleton name 
@@ -747,7 +848,97 @@ module Desugarer =
      | `String v -> Constant(String v, pos)
      | `Bool v   -> Constant(Boolean v, pos)
      | `Char v   -> Constant(Char v,  pos)
-  
+
+   let rec simple_pattern_of_pattern var_env ((pat,pos') : pattern) : simple_pattern = 
+       let desugar = simple_pattern_of_pattern var_env
+       and pos = `U (lookup_pos pos') in
+       let rec aux : patternnode -> _ = function
+         | `Variable (v,_,_) -> `Variable v, pos
+         | `Nil            -> `Nil, pos
+         | `Any            -> `Variable (unique_name ()), pos
+         | `Constant p     -> `Constant (desugar_constant pos p), pos
+         | `Cons (l,r) -> `Cons (desugar l, desugar r), pos
+         | `List ps ->
+             List.fold_right
+               (fun pattern list ->
+                  `Cons (desugar pattern, list), pos)
+               ps
+               (`Nil, pos)
+         | `As ((name,_,_), p) -> `As (name, desugar p), pos
+         | `HasType (p, datatype) -> `HasType (desugar p, DesugarDatatype.desugar_datatype' var_env datatype), pos
+         | `Variant (l, Some v) ->
+             `Variant (l, desugar v), pos
+         | `Negative ls -> `Negative ls, pos
+         | `Variant (l, None) ->
+             if Settings.get_value cons_unit_hack then
+               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Types.unit_type), pos)), pos
+             else
+               `Variant (l, (`Constant (unit_expression pos), pos)), pos
+               (* 
+                  When cons_unit_hack is enabled (the default), elimination of A is identified with
+                  elimination of A(x:()) which allows us to have programs such as:
+
+                    (-)  switch (A) {case A -> B; case x -> x;}
+
+                  compile, even when unit_hack is disabled.
+
+                  When cons_unit_hack is disabled (which makes sense
+                  when unit_hack is enabled) we instead identify
+                  elimination of A with elimination of A().
+                  
+                  If cons_unit_hack is disabled and unit_hack is enabled
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> if y = () then B
+                                else let x = A(y) in x
+                        x -> let _ = x:[|-A|rho|] in x
+
+                  which does not type check as [|A:()|rho'|] cannot be unifed with [|-A|rho|].
+
+                  If cons_unit_hack is disabled and unit_hack is enabled
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> B
+                        x -> let _ = x:[|-A|rho|] in x
+
+                  which does type check.
+
+                  If cons_unit_hack is enabled and unit_hack is disabled (the default)
+                  then (-) compiles to:
+
+                    let z = A in
+                      case z of
+                        A(y) -> let _ = (y:()); B
+                         x -> let _ = x:[|-A|rho|] in x
+                  
+                  which again type checks.
+
+                  The latter case is chosen as the default, as it will remain sound even if we
+                  disable static typing.
+               *)
+         | `Record (labs, base) ->
+             List.fold_right
+               (fun (label, patt) base ->
+                  `Record (label, desugar patt, base), pos)
+               labs
+               ((from_option (`Constant (unit_expression pos), pos) (Utility.opt_map desugar base)))
+         | `Tuple ps ->
+             List.fold_right2
+               (fun patt n base ->
+                  `Record (string_of_int n, desugar patt, base), pos)
+               ps
+               (Utility.fromTo 1 (1 + List.length ps))
+               ((`Constant (unit_expression pos)), pos) in
+       let p = aux pat in
+         begin
+           check_for_duplicate_names p;
+           p
+         end
+     
    let desugar_expression' env (e : phrase) : untyped_expression =
      let _, var_env = env in
      let rec desugar' ((s, pos') : phrase) : untyped_expression =
@@ -987,13 +1178,13 @@ module Desugarer =
                raise (ASTSyntaxError(data_position pos,
                                      "orderby clause with multiple generators is not yet implemented."))
                
-           | `Switch (exp, patterns) ->
-               PatternCompiler.match_cases
-                 (pos, desugar exp, 
+           | `Switch (exp, patterns, t) ->
+               PatternCompiler.compile_cases
+                 (t, pos, desugar exp, 
                   (List.map (fun (patt, body) -> ([patternize patt], desugar body)) patterns))
-           | `Receive patterns -> 
+           | `Receive (patterns, t) -> 
                desugar (`Switch ((`FnAppl ((`Var "recv", pos'), []), pos'),
-                                patterns), pos')
+                                patterns, t), pos')
 
            (*  TBD: We should die if the XML text literal has bare ampersands or
                is otherwise ill-formed. It should also be made to properly handle
@@ -1065,96 +1256,7 @@ module Desugarer =
                raise (ASTSyntaxError (lookup_pos pos', "An embedded page can only appear in a page expression"))
            | `FormBinding _ ->
                raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
-           | `Regex _ -> assert false
-     and simple_pattern_of_pattern var_env ((pat,pos') : pattern) : simple_pattern = 
-       let desugar = simple_pattern_of_pattern var_env
-       and pos = `U (lookup_pos pos') in
-       let rec aux : patternnode -> _ = function
-         | `Variable (v,_,_) -> `Variable v, pos
-         | `Nil            -> `Nil, pos
-         | `Any            -> `Variable (unique_name ()), pos
-         | `Constant p     -> `Constant (desugar_constant pos p), pos
-         | `Cons (l,r) -> `Cons (desugar l, desugar r), pos
-         | `List ps ->
-             List.fold_right
-               (fun pattern list ->
-                  `Cons (desugar pattern, list), pos)
-               ps
-               (`Nil, pos)
-         | `As ((name,_,_), p) -> `As (name, desugar p), pos
-         | `HasType (p, datatype) -> `HasType (desugar p, DesugarDatatype.desugar_datatype' var_env datatype), pos
-         | `Variant (l, Some v) ->
-             `Variant (l, desugar v), pos
-         | `Variant (l, None) ->
-             if Settings.get_value cons_unit_hack then
-               `Variant (l, (`HasType (((`Variable (unique_name ())), pos), Types.unit_type), pos)), pos
-             else
-               `Variant (l, (`Constant (unit_expression pos), pos)), pos
-               (* 
-                  When cons_unit_hack is enabled (the default), elimination of A is identified with
-                  elimination of A(x:()) which allows us to have programs such as:
-
-                    (-)  switch (A) {case A -> B; case x -> x;}
-
-                  compile, even when unit_hack is disabled.
-
-                  When cons_unit_hack is disabled (which makes sense
-                  when unit_hack is enabled) we instead identify
-                  elimination of A with elimination of A().
-                  
-                  If cons_unit_hack is disabled and unit_hack is enabled
-                  then (-) compiles to:
-
-                    let z = A in
-                      case z of
-                        A(y) -> if y = () then B
-                                else let x = A(y) in x
-                        x -> let _ = x:[|-A|rho|] in x
-
-                  which does not type check as [|A:()|rho'|] cannot be unifed with [|-A|rho|].
-
-                  If cons_unit_hack is disabled and unit_hack is enabled
-                  then (-) compiles to:
-
-                    let z = A in
-                      case z of
-                        A(y) -> B
-                        x -> let _ = x:[|-A|rho|] in x
-
-                  which does type check.
-
-                  If cons_unit_hack is enabled and unit_hack is disabled (the default)
-                  then (-) compiles to:
-
-                    let z = A in
-                      case z of
-                        A(y) -> let _ = (y:()); B
-                         x -> let _ = x:[|-A|rho|] in x
-                  
-                  which again type checks.
-
-                  The latter case is chosen as the default, as it will remain sound even if we
-                  disable static typing.
-               *)
-         | `Record (labs, base) ->
-             List.fold_right
-               (fun (label, patt) base ->
-                  `Record (label, desugar patt, base), pos)
-               labs
-               ((from_option (`Constant (unit_expression pos), pos) (Utility.opt_map desugar base)))
-         | `Tuple ps ->
-             List.fold_right2
-               (fun patt n base ->
-                  `Record (string_of_int n, desugar patt, base), pos)
-               ps
-               (Utility.fromTo 1 (1 + List.length ps))
-               ((`Constant (unit_expression pos)), pos) in
-       let p = aux pat in
-         begin
-           check_for_duplicate_names p;
-           p
-         end
-     in
+           | `Regex _ -> assert false in
      let result = desugar' e in
        (Debug.if_set show_desugared (fun()-> string_of_expression result);
         result)

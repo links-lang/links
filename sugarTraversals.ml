@@ -205,23 +205,25 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1))
-      | `Switch ((_x, _x_i1)) ->
+      | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             o#list
               (fun o (_x, _x_i1) ->
                  let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x_i1
-          in `Switch ((_x, _x_i1))
-      | `Receive _x ->
+              _x_i1 in
+          let _x_i2 = o#option (fun o -> o#unknown) _x_i2
+          in `Switch ((_x, _x_i1, _x_i2))
+      | `Receive ((_x, _x_i1)) ->
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
                  let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x
-          in `Receive _x
+              _x in
+          let _x_i1 = o#option (fun o -> o#unknown) _x_i1
+          in `Receive (_x, _x_i1)
       | `DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -303,6 +305,9 @@ class map =
           let _x = o#string _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
           in `Variant ((_x, _x_i1))
+      | `Negative _x ->
+          let _x = o#list (fun o -> o#string) _x
+          in `Negative _x
       | `Record ((_x, _x_i1)) ->
           let _x =
             o#list
@@ -646,20 +651,22 @@ class fold =
       | `ConstructorLit ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | `Switch ((_x, _x_i1)) ->
+      | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#pattern _x in let o = o#phrase _x_i1 in o)
-              _x_i1
+              _x_i1 in
+          let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | `Receive _x ->
+      | `Receive ((_x, _x_i1)) ->
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#pattern _x in let o = o#phrase _x_i1 in o)
-              _x
+              _x in
+          let o = o#option (fun o -> o#unknown) _x_i1
           in o
       | `DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
@@ -730,6 +737,8 @@ class fold =
       | `Variant ((_x, _x_i1)) ->
           let o = o#string _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
+      | `Negative _x ->
+          let o = o#list (fun o -> o#string) _x in o
       | `Record ((_x, _x_i1)) ->
           let o =
             o#list

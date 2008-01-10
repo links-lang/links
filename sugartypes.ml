@@ -91,6 +91,7 @@ type patternnode = [
 | `Cons     of pattern * pattern
 | `List     of pattern list
 | `Variant  of string * pattern option
+| `Negative of string list
 | `Record   of (string * pattern) list * pattern option
 | `Tuple    of pattern list
 | `Constant of constant
@@ -150,8 +151,8 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype
 | `Upcast           of phrase * datatype * datatype
 | `ConstructorLit   of name * phrase option
-| `Switch           of phrase * (pattern * phrase) list
-| `Receive          of (pattern * phrase) list
+| `Switch           of phrase * (pattern * phrase) list * Types.datatype option
+| `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
 | `TableLit         of phrase * datatype * (string * fieldconstraint list) list * phrase
 | `DBDelete         of pattern * phrase * phrase option
@@ -206,7 +207,8 @@ struct
   let rec pattern (p, _ : pattern) : StringSet.t = match p with
     | `Any
     | `Nil
-    | `Constant _            -> empty
+    | `Constant _
+    | `Negative _            -> empty
     | `Tuple ps
     | `List ps               -> union_map pattern ps
     | `Cons (p1, p2)         -> union (pattern p1) (pattern p2)
@@ -291,8 +293,8 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Switch (p, cases) -> union (phrase p) (union_map case cases)
-    | `Receive cases -> union_map case cases 
+    | `Switch (p, cases, _) -> union (phrase p) (union_map case cases)
+    | `Receive (cases, _) -> union_map case cases 
     | `DBDelete (pat, p, where) -> 
         union (phrase p) 
           (diff (option_map phrase where)

@@ -96,6 +96,8 @@ val is_unit_expr : 'a expression' -> bool
 
 val defined_names : 'a definition' list -> string list
 
+val string_of_constant : constant -> string
+
 val string_of_expression : 'a expression' -> string
 val labelled_string_of_expression : expression -> string
 
