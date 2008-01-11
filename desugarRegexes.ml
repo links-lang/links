@@ -45,7 +45,7 @@ let appl pos name args =
   (`FnAppl ((`Var name, pos), args), pos : phrase)
 
 let desugar_regexes = 
-object
+object(self)
   inherit SugarTraversals.map as super
 
   method phrase (p, pos) = match p with
@@ -54,7 +54,7 @@ object
           if List.exists ((=)`RegexNative) flags
           then "sntilde" 
           else "stilde" in
-          appl pos libfn [e1; (desugar_regex pos r, pos)]
+          self#phrase (appl pos libfn [e1; (desugar_regex pos r, pos)])
     | `InfixAppl (`RegexMatch flags, e1, (`Regex r, _)) -> 
         let nativep = List.exists ((=) `RegexNative) flags 
         and listp   = List.exists ((=) `RegexList)   flags in
@@ -63,7 +63,7 @@ object
           | true, false  -> "ltilde"
           | false, false -> "tilde"
           | false, true  -> "ntilde" in
-          appl pos libfn [e1; (desugar_regex pos r, pos)]
+          self#phrase (appl pos libfn [e1; (desugar_regex pos r, pos)])
     | `InfixAppl (`RegexMatch _, _, _) -> 
         raise (ConcreteSyntaxError ("Internal error: unexpected rhs of regex operator",
                                     pos))
