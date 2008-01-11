@@ -215,7 +215,8 @@ let def_qname = ('#' | def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
-let string_contents = ([^ '\"' '\\']* |"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))*
+let char_contents = ([^ '\"' '\\']|"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))
+let string_contents = char_contents*
 let regexrepl_fsa =  [^ '{' '/']* (* this regex is too restrictive. But can't seem to get a more precise one to work  :( *) 
 let regex_flags = ['l' 'n' 'g']*
 
@@ -274,11 +275,9 @@ rule lex ctxt nl = parse
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
                                           else ctxt#precedence var }
-  | "'\\\\'"                            { CHAR '\\' }
-  | "'\\''"                             { CHAR '\'' }
-  | "'" (_ as c) "'"                    { CHAR c }
-  | "'\\" (octal_code as c) "'"         { CHAR (read_octal c) }
-  | "'\\" ['x''X'](hex_code as c) "'"   { CHAR (read_hex c) }
+  | "'" (char_contents as c) "'"        { let c' = decode_escapes c in
+                                            if String.length c' = 1 then CHAR (c'.[0])
+                                            else raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | def_integer as var                  { UINTEGER (Num.num_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
