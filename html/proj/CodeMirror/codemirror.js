@@ -166,7 +166,8 @@ var CodeMirror = function(){
 
     // display: block occasionally suppresses some Firefox bugs, so we
     // always add it, redundant as it sounds.
-    this.frame = createDOM("IFRAME", {style: "border: 0; width: " + options.width + 
+    this.frame = createDOM("IFRAME", {style: "display: block; border: 0;" +
+      " width: " + options.width + 
       "; " + "height: " + options.height + ";", name: ""});
     if (place.appendChild)
       place.appendChild(this.frame);
@@ -576,6 +577,15 @@ var CodeMirror = function(){
         }
       }
     });
+
+    // For Lode: Mark window as "dirty".
+    if (!this.frame.name.match(/\*$/))
+    {
+      this.frame.name += "*";
+    }
+
+    // Hack: This seems to be necessary to actually get the name to stick?
+    var voidVar = this.frame.name;
 
     // The function returns some status information that is used by
     // hightlightDirty to determine whether and where it has to

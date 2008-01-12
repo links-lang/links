@@ -1,17 +1,36 @@
+# TODO:
+#
+# - Sort out right-click menu for project list.
+# - Figure out how to distinguish between left/right mouse clicks
+# - Recreate stopPropagation (is it gone?)
+# - Clean up SQL calls - there's about 5 for loading the project list..
+
+# Split lines
 alien javascript splitEscapedLinesJS : (String) -> [String];
+
+# Call the code highlighting function of the edit-box.
 alien javascript highlightCode : () -> ();
+
 alien javascript getValueFromRef : (DomNode) -> String; 
 alien javascript escapeHtml : (String) -> String;
 alien javascript unescapeHtml: (String) -> String;
 alien javascript convertSpaces : (String) -> String;
 alien javascript loadEditor: () -> DomNode;
 alien javascript stringToString: (String) -> String;
+alien javascript getSiblings: (DomNode) -> [DomNode];
+
+# Get the current location (ie URL)
+alien javascript getLocation: () -> String;
+
+# Create a new window using the URL passed in.
+alien javascript newWindow: (String) -> ();
 
 typename Attribute = (attr: String, val: String);
 
 # Things that should be in their own file
 var cookieName = "linkside";
 var fileLoc = "/home/tom/links/html/proj/";
+var fileDir = "test";
 
 typename User = (name:String, password:String);
 typename ProjConts = (Int, String);
@@ -114,26 +133,54 @@ fun isLoggedIn() server
 # Perform file operations (load, save).
 fun fileOp() client
 {
-  receive {
+  receive 
+  {
     case SaveFile(name, escp, code) -> 
     {
+      toggleWaiting("Saving file..");
       storeFile(name, escp, code); 
       #updateSession();
       setFrameName(name);
+      toggleWaiting("");
       fileOp()
     }
     case LoadFile(name) -> 
     {
-       #var name =  getValueFromRef(getNodeById("filename"));
+       toggleWaiting("Loading file..");
        var lData = getFile(name);
        var rval = convertData(lData) : Xml;
        
        insertCode(rval);
        #updateSession();
        setFrameName(name);
+       toggleWaiting("");
        fileOp()
     }
   }
+}
+
+# Show/hide loading message
+fun loading() client
+{
+  receive 
+  {
+    case Show() -> 
+    {
+      # Display the overlay on top of everything else
+      showLoading(true);
+
+      # Call loading as we're waiting for a hide-command
+      loading()
+    }
+    case Hide() -> showLoading(false);
+  }
+}
+
+sig projMenu : (Event) -> ()
+fun projMenu(xiEvent) client
+{
+  debug(intToString(getCharCode(xiEvent)));
+  ()  
 }
 
 # Update the last-access time of the session
@@ -160,13 +207,13 @@ fun storeFile(name, escp, code) server
      set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
   };
   
-  writeToFile(fileLoc ++ "test/" ++ name, code);
+  writeToFile(fileLoc ++ fileDir ++ name, code);
   updateSession();
 }
 
 # Save the contents of the current buffer to database
-sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
-fun saveFile(handler) client
+sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|]), String) -> ()
+fun saveFile(handler, xiName) client
 {
   var lBody = getDocumentBody();
   
@@ -175,12 +222,11 @@ fun saveFile(handler) client
   var lEscapedCode = escapeHtml(lCode);
 
   # Store the code in the database
-  var lFrameName = getFrameName();
   var lFileName = 
-    (if (lFrameName == "")
+    (if (xiName == "")
       getValueFromRef(getNodeById("filename"))
     else
-      lFrameName);
+      xiName);
 
   handler ! SaveFile(lFileName, lEscapedCode, lCode);
 }
@@ -304,7 +350,6 @@ sig convertData : (String) -> Xml
 fun convertData(data) client
 {
   var dataList = splitEscapedLinesJS(data) : [String]; 
-  #printEach(dataList);
   getXmlList(dataList)
 }
 
@@ -450,7 +495,7 @@ fun nextElementSibling(xiNode) client
 
     if (isNull(sibl))
     {
-      error("No element siblings found")
+      sibl
     }
     else
     {
@@ -485,6 +530,7 @@ fun findFirstMatchingSibling(xiNode, xiType, xiConstraints) client
   }
 }
 
+# Check whether a list of attributes exist and match for a node.
 sig nodeAttributesMatch : (DomNode, [Attribute]) -> Bool
 fun nodeAttributesMatch(xiNode, xiAttrs) client
 {
@@ -550,7 +596,6 @@ fun getProjectList(currItem, currLevel, opHandler) client
                 case File(id, name) -> 
                 {
                   debug("folder-file.name: " ++ name);
-                  #<li>{stringToXml(name)}</li>
                   getProjectList(file, (currLevel + 1), opHandler)
                 }
                 case _ -> 
@@ -583,12 +628,13 @@ fun getProjectList(currItem, currLevel, opHandler) client
   }
 }
 
+# Print a debug message on the server
 fun serverDbg(text) server
 {
   debug(text);
-  #(handle ! LoadFile(name));
 }
 
+# Get a list of files belonging to a particular container.
 sig findFiles : (Projects) -> [Projects]
 fun findFiles(container) server
 {
@@ -628,6 +674,7 @@ fun findFiles(container) server
   }
 }
 
+# Get the project list.
 sig getProjList : () -> [(id: Int, name: String)]
 fun getProjList() server
 {
@@ -636,6 +683,8 @@ fun getProjList() server
       [(id = projs.id, name = projs.name)]
 }
 
+# Get the list of projects
+sig getProjs : () -> [Projects]
 fun getProjs() server
 {
   for (var projs <-- projectTable)
@@ -644,6 +693,8 @@ fun getProjs() server
       [Project(projs.id, projs.name)]
 }
 
+# Get the list of files
+sig getFileList : (Int) -> [(id: Int, name: String)]
 fun getFileList(projId) server
 {
   for (var file <-- files)
@@ -651,6 +702,49 @@ fun getFileList(projId) server
       [(id = file.id, name = file.name)]
 }
 
+# Add a new file.
+# @TODO: How to add to project tree? Wherever, or in folder?
+sig newFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun newFile(xiHandler) client
+{
+  # Check if doc has changed
+  if (docHasChanged())
+  {
+    # Show box asking if user wants to save
+    debug("Doc has changed!");
+    ();
+  }
+  else {};
+
+  # Replace the contents of the document with nothing
+  replaceChildren(<#></#>, getDocumentBody());
+  
+  # Set the name to be nothing
+  setFrameName("");
+}
+
+# Run the current file.
+sig runFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun runFile(xiHandler) client
+{
+  # Get the current location, but drop the filename.
+  var lLoc = reverse(dropWhile(fun (x) { x <> '/' }, reverse(getLocation())));
+  
+  # Check if the file is saved, and request that the user saves it first
+  if (docHasChanged())
+  {
+    ()
+  }
+  else {};
+
+  
+  # Open a new window pointing to the correct location
+  newWindow(lLoc ++ fileDir ++ "/" ++ getFrameName());
+}
+
+# Get the menubar. Currently a drop-down style thing, perhaps a button set
+# would be better as there's not a lot of options to change?
+sig getMenu : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
 fun getMenu(opHandler) client
 {
  #    <span l:onclick="{logout()}" class="menu" unselectable="on">Logout</span>
@@ -659,11 +753,17 @@ fun getMenu(opHandler) client
   <#>
     <div id="menubar">
       <dl>
-        <dt l:onclick="{toggleVisible("menu-file");}">File</dt>
+        <dt id="menu-file-cap" l:onclick="{toggleMenu("menu-file");}" class="menuhead"><span>File</span></dt>
         <dd id="menu-file">
-          <ul id="menulist">
-            <li l:onclick="{setInvisible("menu-file"); toggleVisible("save-file");}" unselectable="on">Save</li>
-            <li l:onclick="{logout();}" unselectable="on">Logout</li>
+          <ul id="menulist" class="menulist">
+            <li l:onclick="{toggleMenu("menu-file"); newFile(opHandler);}" unselectable="on"><span>New file</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); maybeSaveFile(opHandler);}" unselectable="on"><span>Save</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
+            <li style="height: 1px;"><hr style="height: 2px;" /> </li>
+            <li l:onclick="{toggleMenu("menu-file"); runFile(opHandler);}" unselectable="on"><span>Run</span></li>
+
+            <li style="height: 1px;"><hr style="height: 2px;" /> </li>
+            <li l:onclick="{logout();}" unselectable="on"><span>Logout</span></li>
           </ul>
         </dd>
       </dl>
@@ -671,18 +771,114 @@ fun getMenu(opHandler) client
   </#>
 }
 
+sig maybeSaveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun maybeSaveFile(xiHandler) client
+{
+  # Check if the iFrame is named - 'save as' if it isn't
+  var lFrameName = getFrameName();
+  switch (lFrameName)
+  {
+    case "*" -> toggleVisible("overlay"); toggleVisible("save-file")
+    case ""  -> debug("No name!")
+    case _   ->
+    {
+      var lMatchFun = fun (x) { x <> '*' };
+
+      # Check if a save is needed
+      if (length(dropWhile(lMatchFun, lFrameName)) == 1)
+      {
+        var lRealName = takeWhile(lMatchFun, lFrameName);
+        saveFile(xiHandler, lRealName);
+        setFrameName(lRealName);
+      }
+      else {};
+      ()
+    }
+  }
+}
+
+# Check if the document has been altered.
+sig docHasChanged : () -> Bool
+fun docHasChanged() client
+{
+  # See if there's a star in the framename.
+  length(dropWhile(fun (x) { x <> '*' }, getFrameName())) == 1
+}
+
+# Hide all menu items
+sig toggleMenu : (String) -> ()
+fun toggleMenu(xiName) client
+{
+  var lNode = getNodeById(xiName);
+  var lVoid = switch (domGetStyleAttrFromRef(lNode, "display"))
+  {
+    case "block" -> domSetStyleAttrFromRef(lNode, "display", "none")
+    case _       -> domSetStyleAttrFromRef(lNode, "display", "block")
+  };
+
+  toggleBgColour(xiName ++ "-cap", "rgb(133, 177, 255)");
+}
+
 # Toggle an element's visibility on/off
 sig toggleVisible : (String) -> ()
 fun toggleVisible(xiName) client
 {
   var lNode = getNodeById(xiName);
-
+  var lOverlay = getNodeById("overlay");
   var lVoid = switch (domGetStyleAttrFromRef(lNode, "display"))
   {
-    case "block" -> domSetStyleAttrFromRef(lNode, "display", "none")
-    case _      -> domSetStyleAttrFromRef(lNode, "display", "block")
+    case "block" -> 
+    {
+      var lVoid = domSetStyleAttrFromRef(lOverlay, "display", "none");
+      domSetStyleAttrFromRef(lNode, "display", "none")
+    }
+    case _      -> 
+    {
+      var lVoid = domSetStyleAttrFromRef(lOverlay, "display", "block");
+      domSetStyleAttrFromRef(lNode, "display", "block")
+    }
   };
   ()
+}
+
+# Toggle the background colour of the given node.
+sig toggleBgColour : (String, String) -> ()
+fun toggleBgColour(xiName, xiColour)
+{
+  var lNode = getNodeById(xiName);
+  var lVoid = 
+    if (length(domGetStyleAttrFromRef(lNode, "background")) > 1)
+      domSetStyleAttrFromRef(lNode, "background", "")
+    else
+      domSetStyleAttrFromRef(lNode, "background", xiColour);
+  
+  ()
+}
+
+# Toggle the "waiting" box
+sig toggleWaiting : (String) -> ()
+fun toggleWaiting(xiText) client
+{
+  var lNode = getNodeById("waiting");
+  var lTextNode = nextElementSibling(firstChild(getNodeById("waiting-text")));
+
+  # Node to use.
+  var lText = <span class="proj-list-item">{stringToXml(xiText)}</span>;
+
+  switch (domGetStyleAttrFromRef(lNode, "display"))
+  {
+    case "block" ->
+    {
+      var lVoid = domSetStyleAttrFromRef(lNode, "display", "none");
+      ();
+    }
+    case _ ->
+    {
+      var lVoid  = domSetStyleAttrFromRef(lNode, "display", "block");
+      replaceNode(lText, lTextNode);
+    }
+  };
+  toggleVisible("overlay");
 }
 
 # Set a node to be invisible
@@ -691,6 +887,55 @@ fun setInvisible(xiName) client
 {
   var lVoid = domSetStyleAttrFromRef(getNodeById(xiName), "display", "none");
   ();
+}
+
+# Recursive function to get a node's siblings.
+# Only works for element nodes.
+sig getSiblingsLinks : (DomNode) -> [DomNode]
+fun getSiblingsLinks(xiNode) client
+{
+  var lXmlNode = getValue(xiNode);
+  serverDbg("Tagname: " ++ getTagName(lXmlNode));
+  serverDbg("Type? " ++ getAttribute(lXmlNode, "type"));
+  if ((not(isElementNode(xiNode))) || (isNull(xiNode)))
+    []
+  else
+    [xiNode] ++ getSiblingsLinks(nextElementSibling(xiNode))
+}
+
+# Clean the contents of a form.
+# @TODO: broken. Looping doesn't work for DomNode lists?
+sig cleanForm : (String) -> ()
+fun cleanForm(xiName) client
+{
+  var lFirst = nextElementSibling(firstChild(getNodeById(xiName)));
+  var lVoid = for (var lNode <- getSiblings(lFirst))
+  {
+    var lXmlNode = getValue(lNode);
+    var lVoid = (if ((getTagName(lXmlNode) == "INPUT") && (getAttribute(lXmlNode, "type") == "text"))
+        domSetAttributeFromRef(lNode, "value", "")
+      else
+        "");
+    []
+  };
+  
+  # Hide the overlay and the form
+  setInvisible("overlay");
+  setInvisible(xiName);
+}
+
+# Show/Hide the loading window
+sig showLoading : (Bool) -> ()
+fun showLoading(xiToggle) client
+{
+  var lNode = getNodeById("loading");
+  var lState = 
+    if (xiToggle)
+      "block"
+    else
+      "none";
+  var lVoid = domSetStyleAttrFromRef(lNode, "display", lState);
+  ()
 }
 
 # Render the editor.
@@ -702,13 +947,28 @@ fun renderObject() client
   var opHandler = spawn { fileOp() };
  #<legend class="legend">Save file</legend>
   <#>
-    <div class="overlay" id="save-file">
-      <fieldset class="fieldset">
-        
-          <label for="filename">Name: </label><br/>
-          <input class="textfield" type="text" id="filename" value="filename" title="title!"/>
-          <span l:onclick="{saveFile(opHandler)}" class="menu link" unselectable="on">Save</span>
-      </fieldset>
+    <div class="overlay" id="overlay"></div>
+    <div id="save-file" class="invisible">
+      <div class="centered box">
+        <div class="topbar">
+          <span class="caption-text" unselectable="on">Save file</span>
+        </div>
+        <div class="container-box">
+          <span class="proj-items padded">
+            Name:<br />
+            <input type="text" class="input-box proj-items" id="filename" />
+          </span>
+        </div>
+        <div class="bottombar">
+          <input type="button" name="save" l:onclick="{saveFile(opHandler, ""); cleanForm("save-file")}" value="Save" />
+          <input type="button" name="cancel" l:onclick="{cleanForm("save-file")}" value="Cancel" />
+        </div>
+      </div>
+    </div>
+    <div id="waiting" class="invisible">
+      <div class="centered box" id="waiting-text">
+        <span></span>
+      </div>
     </div>
     <div id="values" class="menu">
       {
@@ -719,10 +979,10 @@ fun renderObject() client
       <div id="proj-caption-bg" class="caption-bg">
         <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
       </div>
-      <div id="proj-items" class="proj-items">
+      <div id="proj-items" class="proj-items" l:onmousedown="{projMenu(event)}">
         <ul class="proj-list">
          {
-           var projects = []; #getProjs();
+           var projects = getProjs();
            
            if (length(projects) > 0)
            {
@@ -767,6 +1027,8 @@ fun main() client
   }
   else
   {
+    # Could possibly introduce a loading bar - but how to do so without
+    # rendering everything first? CodeMirror needs the editor div.
   <html>
     <head>
       <title>ug4proj: Links</title>
@@ -792,5 +1054,5 @@ fun main() client
 }
 
 page
-  <#>{main()}</#>
+  <#>{ main() }</#>
   

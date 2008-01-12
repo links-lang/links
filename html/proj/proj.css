@@ -4,6 +4,12 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
   list-style-type: none;
 }
 
+input {
+  border: 1px solid;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+}
+
 .editor { 
   width: 480px;
   height: 400px;
@@ -78,6 +84,11 @@ li.proj-list-item {
   cursor: pointer;
 }
 
+.proj-list-item span {
+  position: relative;
+  top: -4px;
+}
+
 .proj-node { 
   vertical-align: top;
   height: 16px;
@@ -92,7 +103,7 @@ li.proj-list-item {
   background-image: url('images/bg-grad.jpg');
   width: 150px;
   height: 25px;
-  vertical-align: bottom;
+  //vertical-align: bottom;
   border-bottom: 1px solid #85B1FF;
 }
 
@@ -159,17 +170,68 @@ div.menu {
   height: 150px;
 }
 
-.fieldset {
-  font-family: Verdana;
-  color: #000000;
-  background: #85A0FF;
-  border: 2px solid #85B1FF;
-  padding: 5px;
-  width: 210px;
-  position: absolute; 
-  left: 50%;
-  top: 50%;
+.centered {
+  position: absolute;
+  left: 33%;
+  top: 33%;
 }
+
+.box {
+  color: #000000;
+  background: #85B0FF;
+  border: 1px solid #000000;
+  padding: 3px;
+  width: 210px;
+  z-index: 102;
+  opacity: 1.0;
+  filter: alpha(opacity = 100); 
+  -moz-opacity: 1.0;
+}
+
+.invisible {
+  display: none;
+}
+
+bottombar {
+  position: relative;
+  left: 0px;
+  top: 75px;
+  background-image: url('images/bg-grad.jpg');
+  height: 25px;
+  align: left;
+}  
+
+.topbar {
+  position: relative;
+  left: 0px;
+  top: 0px;
+  background-image: url('images/bg-grad.jpg');
+  height: 25px;
+}
+
+.container-box {
+  background: #FFFFFF;
+  padding: 0px;
+  margin: 0px;
+  height: 100px;
+}
+
+.padded {
+  padding: 2px;
+  margin-top: 4px;
+  margin-bottom: 4px; 
+  margin-right: 0px;
+  margin-left: 4px;
+  position: relative;
+  top: 25%;
+} 
+
+.input-box {
+  border: 1px solid;
+  height: 20px;
+  width: 130px;
+  margin-left: 8px;
+}  
 
 .fieldset .br {
   display: none;
@@ -212,27 +274,67 @@ div.menu {
   height: 481;
   background: #ffffff;
   z-index: 101;
-  transparency: 50%;
+  opacity:.50;
+  filter: alpha(opacity = 50); 
+  -moz-opacity: 0.5;
 }
 
 #menubar dt {
-  margin-left: 1px;
   cursor: pointer;
+  text-align: center;
+}
+
+.menuhead span {
+  margin-left: 1em;
+  margin-right: 1em;
 }
 
 #menubar dl {
   float: left;
-  width: 10em;
+  height: 20px;
 }
 
 #menubar dd {
   display: none;
   z-index: 100;
-  background: #ccc;
+  background: #85BFFF;
   border: 1px solid #85B1FF;
   position: absolute;
   margin-right: 2px;
   width: 8em;
+}
+
+#menubar li {
+  margin-left: 0px;
+  margin-top: 0px;
+  height: 20px;
+}
+
+#menubar ul {
+  spacing: 0px;
+  padding: 0px;
+}
+
+.menulist span {
+  margin-top: 1em;
+  margin-left: 1em;
+  position: relative;
+  top: 4px;
+}
+
+.menulist hr {
+  position: relative;
+  top: -2px;
+  cursor: default;
+}
+
+#menubar li:hover {
+  background: #85B1FF;
+}
+
+.spacer {
+  background: #85B1FF;
+  height: 4px;
 }
 
 #menulist {

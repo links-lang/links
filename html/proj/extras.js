@@ -94,3 +94,38 @@ function _stringToString(string)
 }
 
 var stringToString = LINKS.kify(_stringToString, 1);
+
+function _getSiblings(node)
+{
+  var sibl = node.nextSibling;
+  var sibList = (_isElementNode(sibl)) ? [sibl] : [];
+  _debug(sibl);
+  _debug(sibList);
+  while (sibl.nextSibling)
+  {
+    sibl = sibl.nextSibling;
+    _debug("Sibling: " + sibl);
+    if (_isElementNode(sibl))
+    {
+      sibList.push(sibl);
+    }
+  }
+   
+  return sibList;
+}
+
+var getSiblings = LINKS.kify(_getSiblings, 1);
+
+function _getLocation()
+{
+  return $chr(window.location.href);
+}
+
+var getLocation = LINKS.kify(_getLocation, 0);
+
+function _newWindow(loc)
+{
+  window.open($str(loc));
+}
+
+var newWindow = LINKS.kify(_newWindow, 1);
