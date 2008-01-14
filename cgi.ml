@@ -167,34 +167,46 @@ let safe_getenv s =
   with Not_found -> 
     failwith ("Cgi: the environment variable " ^ s ^ " is not set")
 
-let parse_args () = 
+let parse_args () =
+  (* 
+     NOTE:
+     
+     We now check against the prefix of the mime_type rather than the
+     whole string. This allows Links to work with Firefox 3 Beta 2,
+     for instance, which sends the mime type:
+
+       "application/x-www-form-urlencoded; charset=UTF-8"
+     
+     Presumably this was a bug, as for multipart/form-data below we
+     were already checking against the prefix.
+  *)
   let req_method = safe_getenv "REQUEST_METHOD" in
   let s = 
     if req_method = "GET" || req_method = "HEAD" then
       safe_getenv "QUERY_STRING"
     else begin
       let mime_type = safe_getenv "CONTENT_TYPE" in
-      if req_method = "POST"
-         && mime_type = "application/x-www-form-urlencoded" then begin
-        let n = int_of_string (safe_getenv "CONTENT_LENGTH") in
-        let buf = String.create n in
-        really_input stdin buf 0 n;
-        buf
-      end else
-        failwith ("Cgi: cannot handle " ^ req_method ^ " request with type " ^
-                  mime_type)
+        if req_method = "POST"
+          && string_starts_with mime_type "application/x-www-form-urlencoded" then begin
+            let n = int_of_string (safe_getenv "CONTENT_LENGTH") in
+            let buf = String.create n in
+              really_input stdin buf 0 n;
+              buf
+          end else
+            failwith ("Cgi: cannot handle " ^ req_method ^ " request with type " ^
+                        mime_type)
     end
   in
   let assocs = split '&' s in
   let one_assoc s =
     try
       let i = String.index s '=' in
-      String.sub s 0 i, 
+        String.sub s 0 i, 
       decode (String.sub s (succ i) (String.length s - i - 1))
     with
       | Not_found -> s,""
   in
-  List.map one_assoc assocs
+    List.map one_assoc assocs
 
 (* parse_multipart_args: parsing of the CGI arguments for multipart/form-data
    encoding *)
