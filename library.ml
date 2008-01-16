@@ -215,6 +215,8 @@ let add_attribute : result * result -> result -> result =
 let add_attributes : (result * result) list -> result -> result =
   List.fold_right add_attribute
 
+let prelude_env = ref None
+
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+/) PURE;
   "-", int_op (-/) PURE;
@@ -1030,7 +1032,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",
-   IMPURE)    
+   IMPURE);
+
+    "dumpTypes",
+  (`Server (p1 (fun code ->
+                  let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+
+                  let line ({Lexing.pos_lnum=l}, _, _) = l in
+                  let start ({Lexing.pos_cnum=s}, _, _) = s in
+                  let finish (_, {Lexing.pos_cnum=e}, _) = e in
+                    
+                  let box_int = num_of_int ->- box_int in
+
+                  let resolve (name, t, pos) =                    
+                    `Record [("name", box_string name);
+                             ("t", box_string (Types.string_of_datatype t));
+                             ("pos", `Record [("line", box_int (line pos));
+                                              ("start", box_int (start pos));
+                                              ("finish", box_int (finish pos))])]
+                  in
+                    box_list (List.map resolve ts)
+               )),
+            datatype "(String) -> [(name:String, t:String, pos:(line:Int, start:Int, finish:Int))]",
+            IMPURE)
 ]
 
 let impl : located_primitive -> primitive option = function

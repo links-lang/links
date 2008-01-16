@@ -92,6 +92,8 @@ SOURCES = $(OPC)                		\
           desugarRegexes.mli desugarRegexes.ml		\
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
+          frontend.ml                           \
+	  dumpTypes.ml                          \
           value.mli value.ml                    \
           $(DB_CODE)            		\
           database.mli database.ml 		\
@@ -104,7 +106,6 @@ SOURCES = $(OPC)                		\
           optimiser.mli optimiser.ml    	\
           ir.ml ir.mli                          \
           compileir.ml                          \
-          frontend.ml                           \
           loader.ml                             \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\

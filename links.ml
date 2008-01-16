@@ -265,6 +265,8 @@ let main () =
   let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
     (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
+  let () = Library.prelude_env := Some prelude_types in
+
   (* make sure the fresh type variable counter does not clash with any
      type variables from the prelude
 
