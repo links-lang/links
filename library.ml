@@ -1039,8 +1039,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
 
                   let line ({Lexing.pos_lnum=l}, _, _) = l in
-                  let start ({Lexing.pos_cnum=s}, _, _) = s in
-                  let finish (_, {Lexing.pos_cnum=e}, _) = e in
+                  let start ({Lexing.pos_bol=s}, _, _) = s in
+                  let finish (_, {Lexing.pos_bol=e}, _) = e in
                     
                   let box_int = num_of_int ->- box_int in
 
