@@ -468,7 +468,7 @@ let rec generate_value env : value -> code =
                   let n = String.length s in
                     (* strip any trailing '.' *)
                     if n > 1 && (s.[n-1] = '.') then
-                       Lit (String.sub s 0 (n-1))
+                      Lit (String.sub s 0 (n-1))
                     else
                       Lit s
               | Boolean v  -> Lit (string_of_bool v)

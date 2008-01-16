@@ -79,6 +79,7 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
             | `List (`Char _::_) as c  
               -> `Str (db # escape_string (charlist_as_string c))
             | `List ([]) -> `Str ""
+            | `Char c -> `Str (String.make 1 c)
             | r -> failwith("Internal error: variable " ^ name ^ 
                               " in query "^ SqlQuery.string_of_query qry ^ 
                               " had unexpected type at runtime: " ^ 
