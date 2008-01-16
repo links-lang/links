@@ -201,18 +201,13 @@ let interact envs =
     interact envs
 
 let run_file prelude envs filename =
+  Settings.set_value interacting false;
   let parse_and_desugar tyenv filename = 
     let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
     let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
     let program = Sugar.desugar_program program in
       program, (bindings, expr)
   in
-    Settings.set_value interacting false;
-    begin match Utility.getenv "REQUEST_METHOD" with 
-      | Some _ -> 
-          Settings.set_value web_mode true
-      | None -> ()
-    end;
     if Settings.get_value web_mode then 
       Webif.serve_request prelude envs filename
     else
@@ -257,6 +252,10 @@ let options : opt list =
     ]
 
 let main () =
+  begin match Utility.getenv "REQUEST_METHOD" with 
+    | Some _ -> Settings.set_value web_mode true
+    | None -> ()
+  end;
   config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
   Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
