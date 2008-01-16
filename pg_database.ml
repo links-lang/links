@@ -90,14 +90,6 @@ class pg_dbresult (pgresult:Postgresql.result) = object
         
   method nfields : int = original#nfields
   method fname : int -> string = original#fname
-  method ftype : int -> db_field_type = 
-    fun n -> match original#ftype n with
-    | BOOL -> BoolField
-    | BYTEA | CHAR | TEXT | NAME | VARCHAR -> TextField
-    | INT8 | INT2 | INT4 -> IntField
-    | NUMERIC | FLOAT4 | FLOAT8 -> FloatField
-(*    | fieldtype -> SpecialField (new otherfield fieldtype)*)
-    | _ -> TextField
   method get_all_lst : string list list = pgresult#get_all_lst
   method error : string = original#error
 end
@@ -119,7 +111,6 @@ class pg_database host port dbname user password = object(self)
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method escape_string s = Postgresql.escape_string s
   method make_insert_query (table_name, field_names, vss) =
     "insert into " ^ table_name ^

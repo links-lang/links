@@ -7,20 +7,12 @@ exception UnrealizableContinuation
 class type otherfield
  = object method show : string end
 
-type db_field_type =
-    BoolField
-  | TextField
-  | IntField
-  | FloatField
-  | SpecialField of otherfield
-
 type db_status = QueryOk | QueryError of string
 
 class virtual dbresult :
   object
     method virtual error : string
     method virtual fname : int -> string
-    method virtual ftype : int -> db_field_type
     method virtual get_all_lst : string list list
     method virtual nfields : int
     method virtual status : db_status
@@ -29,7 +21,6 @@ class virtual dbresult :
 class virtual database :
   object
     method virtual driver_name : unit -> string
-    method virtual equal_types : Types.datatype -> db_field_type -> bool
     method virtual escape_string : string -> string
     method virtual exec : string -> dbresult
     method make_insert_query : (string * string list * string list list) -> string

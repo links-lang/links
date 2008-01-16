@@ -23,13 +23,6 @@ module Show_otherfield = Show.ShowDefaults(
     let format formatter obj = Format.pp_print_string formatter (obj # show)
   end)
 
-
-type db_field_type = BoolField | TextField | IntField | FloatField
-		     | SpecialField of otherfield
-                         deriving (Show)
-
-let string_of_db_field_type = Show_db_field_type.show
-
 type db_status = QueryOk | QueryError of string
   deriving (Show)
 
@@ -37,14 +30,12 @@ class virtual dbresult = object
   method virtual status : db_status
   method virtual nfields : int
   method virtual fname : int -> string
-  method virtual ftype : int -> db_field_type
   method virtual get_all_lst : string list list
   method virtual error : string
 end
 
 class virtual database = object
   method virtual driver_name : unit -> string
-  method virtual equal_types : Types.datatype -> db_field_type -> bool
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
   method make_insert_query : (string * string list * string list list) -> string=

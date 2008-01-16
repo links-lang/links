@@ -67,14 +67,6 @@ class lite3_result (stmt: stmt) = object
     snd(result_list_and_status)
   method nfields : int =  1
   method fname  n : string = column_name stmt n
-  method ftype  n : db_field_type = 
-    match column_decltype stmt n with
-      | "" -> TextField (* SQLite was untyped prior to version 3. Need to 
-                           take type information from Links context *)
-      | "TEXT"|"STRING"|"VARCHAR"    -> TextField
-      | "INT"|"INTEGER" -> IntField
-      | other -> failwith( "unknown field type : " ^ other)
-          (* others? *)
   method get_all_lst : string list list =
     fst(result_list_and_status)
   method error : string = "NYI"
@@ -89,7 +81,6 @@ class lite3_database file = object(self)
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method driver_name () = "sqlite3"
 end
 

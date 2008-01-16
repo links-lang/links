@@ -221,11 +221,6 @@ class mysql_result (result: result) db = object
     fields result
   method fname  n : string = 
     (Utility.val_of (fetch_field_dir result n)).name
-  method ftype  n : db_field_type = 
-    match (Utility.val_of (fetch_field_dir result n)).ty with
-      | IntTy | Int64Ty -> IntField
-      | StringTy | BlobTy -> TextField
-      | other -> SpecialField (new otherfield other)
   method get_all_lst : string list list =
     match !rows with
       | None ->
@@ -250,7 +245,6 @@ class mysql_database spec = object
     with
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method escape_string = Mysql.escape
 end
 

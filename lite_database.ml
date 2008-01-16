@@ -49,14 +49,6 @@ class lite_result (vm: vm) = object
       | _  -> List.length (List.hd result_list)
   method fname  n : string = 
     Array.get (column_names vm) n
-  method ftype  n : db_field_type =
-    match Array.get (column_types vm) n with
-      | "" -> TextField (* SQLite was untyped prior to version 3. Need to 
-                           take type information from Links context *)
-      | "TEXT"|"STRING"    -> TextField
-      | "INT"|"INTEGER" -> IntField
-      | other -> failwith( "unknown field type : " ^ other)
-          (* others? *)
   method get_all_lst : string list list =
     result_list
   method error : string = 
@@ -73,7 +65,6 @@ class lite_database file = object(self)
       new lite_result vm
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
 end
 
 let driver_name = "sqlite"
