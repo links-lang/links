@@ -135,6 +135,8 @@ sig
   error:Unify.error ->
   unit
 
+  val die : Syntax.position -> string -> 'a
+
   val if_condition : griper
   val if_branches  : griper
 
@@ -143,6 +145,7 @@ sig
   val switch_branches : griper
 
   val extend_record : griper
+  val record_with : griper
 
   val list_lit : griper
 
@@ -157,24 +160,57 @@ sig
   val update_table : griper
   val update_pattern : griper
   val update_where : griper
+  val update_write : griper
 
   val spawn_process : griper
   val spawn_wait_process : griper
   val spawn_wait_return : griper
 
+  val receive_mailbox : griper
+  val receive_patterns : griper
+
+  val unary_apply : griper
+  val infix_apply : griper
+  val fun_apply : griper
+
   val xml_attribute : griper
+  val xml_attributes : griper
+  val xml_child : griper
 
   val formlet_body : griper
   val page_body : griper
+
+  val render_formlet : griper
+  val render_handler : griper
+  val render_attributes : griper
+
   val page_placement : griper
 
   val form_binding_body : griper
+  val form_binding_pattern : griper
+
+  val iteration_list_body : griper
+  val iteration_list_pattern : griper
+  val iteration_table_body : griper
+  val iteration_table_pattern : griper
+  val iteration_body : griper
+  val iteration_where : griper
+
+  val escape : griper
 
   val projection : griper
 
+  val upcast_source : griper
+  val upcast_subtype : Syntax.position -> Types.datatype -> Types.datatype -> 'a
+
   val type_annotation : griper
 
-  val expression_binding : griper
+  val bind_val : griper
+  val bind_val_annotation : griper
+  val bind_fun_annotation : griper
+  val bind_rec_annotation : griper
+  val bind_rec_rec : griper
+  val bind_exp : griper
 
   val list_pattern : griper
   val cons_pattern : griper
@@ -242,7 +278,7 @@ tab() ^ (show_type rt) ^ "."
       die pos (s ^ but2things l r)
 
     let fixed_type pos thing t l =
-      with_but pos (thing ^ " must have type " ^ code (Types.string_of_datatype t)) l
+      with_but pos (thing ^ " must have type " ^ code (show_type t)) l
 
     let if_condition ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ = 
       fixed_type pos ("The condition of an " ^ code "if (...) ... else ..." ^ " expression") t l
@@ -290,7 +326,16 @@ the expression" ^ nl() ^
 tab() ^ code lexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
-"while the extension fields have type" ^ code (Types.string_of_datatype t) ^ ".")
+"while the extension fields have type" ^ code (show_type t) ^ ".")
+
+    let record_with ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~aliases:_ ~error:_ =
+      die pos ("\
+A record can only be updated with compatible fields, but
+the expression" ^ nl() ^
+tab() ^ code lexpr ^ nl() ^
+"has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"while the update fields have type" ^ code (show_type t) ^ ".")
 
     let list_lit ~pos ~t1:l ~t2:r ~aliases:_ ~error:_ =
       with_but2 pos "All elements of a list literal must have the same type" l r
@@ -307,9 +352,15 @@ tab() ^ code (show_type lt) ^ nl() ^
     let delete_where ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Where clauses" t l
 
-    let delete_pattern ~pos ~t1:l ~t2:r ~aliases:_ ~error:_ =
-      with_but2things pos
-        ("The binding must match the table in a delete expression") ("pattern", l) ("row", r)
+    let delete_pattern ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The binder must match the table in a delete generator, \
+but the pattern" ^ nl() ^
+tab () ^ code lexpr ^ nl () ^
+"has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the read row has type" ^ nl () ^
+tab () ^ code (show_type rt))
 
     let insert_table ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Tables" t l
@@ -329,7 +380,15 @@ tab () ^ code (show_type rt))
 
     let update_pattern ~pos ~t1:l ~t2:r ~aliases:_ ~error:_ =
       with_but2things pos
-        ("The binding must match the table in an update expression") ("pattern", l) ("row", r)
+        "The binding must match the table in an update expression" ("pattern", l) ("row", r)
+
+    let update_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The fields must match the table in an update expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the write row has type" ^ nl () ^
+tab () ^ code (show_type rt))
 
     let update_where ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Where clauses" t l
@@ -345,8 +404,61 @@ tab () ^ code (show_type rt))
          type variable *)
       assert false
 
+    let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The current mailbox must always have a mailbox type" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the current mailbox type is" ^ nl() ^
+code (show_type lt) ^ ".")
+
+    let receive_patterns ~pos ~t1:(_, lt) ~t2:(_, rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The current mailbox type should match the type of the patterns in a receive, but
+the current mailbox takes messages of type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the patterns have type" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let unary_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The unary operator" ^ nl() ^ 
+tab () ^ code lexpr ^ nl() ^
+"has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the argument passed to it has type" ^ nl() ^
+tab () ^ code (show_type (List.hd (Types.arg_types rt))) ^ ".")
+
+    let infix_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The infix operator" ^ nl() ^ 
+tab () ^ code lexpr ^ nl() ^
+"has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the arguments passed to it have types" ^ nl() ^
+tab () ^ code (show_type (List.hd (Types.arg_types rt))) ^ nl() ^
+"and" ^ nl() ^
+tab () ^ code (show_type (List.hd (List.tl (Types.arg_types rt)))) ^ ".")
+
+    let fun_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The function" ^ nl() ^ 
+tab () ^ code lexpr ^ nl () ^
+"has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the arguments passed to it have types" ^ nl() ^
+String.concat
+(nl() ^ "and" ^ nl())
+(List.map (fun t ->
+             tab() ^ code (show_type t)) (Types.arg_types rt)) ^ ".")
+
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "XML attributes" t l
+
+    let xml_attributes ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "A list of XML attributes" t l
+
+    let xml_child ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "XML child nodes" t l
 
     let formlet_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Formlet bodies" t l
@@ -354,31 +466,121 @@ tab () ^ code (show_type rt))
     let page_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Page bodies" t l
 
+    let render_formlet ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "Formlets" t l
+
+    let render_handler ~pos ~t1:l ~t2:r ~aliases:_ ~error:_ =
+      with_but2 pos
+        "The formlet must match its handler in a formlet placement" l r
+
+    let render_attributes ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "A list of XML attributes" t l
+
     let page_placement ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Page antiquotes" t l
 
     let form_binding_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Formlets" t l
 
+    let form_binding_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~aliases:_ ~error:_ =
+      let rt = Types.make_formlet_type rt in
+        with_but2things pos
+          ("The binding must match the formlet in a formlet binding") ("pattern", l) ("expression", (rexpr, rt))
+
+    let iteration_list_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "The body of a list generator" t l
+      
+    let iteration_list_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
+      let rt = Types.make_list_type rt in
+        with_but2things pos
+          ("The binding must match the list in a list generator") ("pattern", l) ("expression", (rexpr, rt))
+
+    let iteration_table_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "The body of a table generator" t l
+
+    let iteration_table_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
+      let rt = Types.make_table_type (rt, Types.fresh_type_variable ()) in
+        with_but2things pos
+          ("The binding must match the table in a table generator") ("pattern", l) ("expression", (rexpr, rt))
+
+    let iteration_body ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "The body of a for comprehension" t l
+
+    let iteration_where ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "Where clauses" t l
+
+    let escape ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "The argument to escape" t l
+
     let projection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~aliases:_ ~error:_ =
       die pos ("\
-Only a field that is present in a record can be projected, but\
+Only a field that is present in a record can be projected, but \
 the expression" ^ nl() ^
 tab() ^ code lexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
-"while the projection has type" ^ code (Types.string_of_datatype t) ^ ".")
+"while the projection has type" ^ code (show_type t) ^ ".")
+
+    let upcast_source ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~aliases:_ ~error:_ =
+      die pos ("\
+The source expression must match the source type of an upcast, but\
+the expression" ^ nl() ^
+tab() ^ code lexpr ^ nl() ^
+"has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"while the source type is" ^ code (show_type t) ^ ".")
+
+    let upcast_subtype pos t1 t2 =
+      die pos ("\
+An upcast must cast must be of the form" ^ code ("e : t2 <- t1") ^
+"where " ^ code "t1" ^ " is a subtype of" ^ code "t2" ^ nl() ^
+"but" ^ nl() ^
+code (show_type t1) ^ nl() ^
+"is not a subtype of" ^ nl() ^
+code (show_type t2) ^ ".")
 
     let type_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
       die pos ("\
 The inferred type of the expression" ^ nl() ^
 tab() ^ code lexpr ^ nl() ^
 "is" ^ nl() ^
-tab() ^ code (Types.string_of_datatype lt) ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
 "but it is annotated with type" ^ nl() ^
-tab() ^ code (Types.string_of_datatype rt))
+tab() ^ code (show_type rt))
 
-    let expression_binding ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+    let bind_val ~pos ~t1:l ~t2:r ~aliases:_ ~error:_ =
+      with_but2things pos
+        ("The binder must match the body of a value binding") ("pattern", l) ("expression", r)
+
+    let bind_val_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The value has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"but it is annotated with type" ^ nl() ^
+tab() ^ code (show_type rt))
+
+    let bind_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The non-recursive function definition has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"but it is annotated with type" ^ nl() ^
+tab() ^ code (show_type rt))
+
+    let bind_rec_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The recursive function definition has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"but it is annotated with type" ^ nl() ^
+tab() ^ code (show_type rt))
+
+    let bind_rec_rec ~pos ~t1:(_,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
+      die pos ("\
+The recursive function definition has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"but its previously inferred type is" ^ nl() ^
+tab() ^ code (show_type rt))
+
+    let bind_exp ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Side-effect expressions" t l
 
     (* patterns *)
@@ -422,9 +624,9 @@ tab() ^ code label)
 The inferred type of the pattern" ^ nl() ^
 tab() ^ code lexpr ^ nl() ^
 "is" ^ nl() ^
-tab() ^ code (Types.string_of_datatype lt) ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
 "but it is annotated with type" ^ nl() ^
-tab() ^ code (Types.string_of_datatype rt))
+tab() ^ code (show_type rt))
 
 end
 let mailbox = "_MAILBOX_"
@@ -849,8 +1051,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
   fun ({tenv = (env, alias_env)} as context) (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
-    let unify = Utils.unify alias_env
-    and unify' (l, r) = unify alias_env ~pos:(lookup_pos pos) (l, r)
+    let unify (l, r) = unify alias_env ~pos:(lookup_pos pos) (l, r)
     and (++) (env, alias_env) env' = (Env.extend env env', alias_env) in
     let typ (_,t) : Types.datatype = t 
     and erase (p, _) = p
@@ -876,7 +1077,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
           (fun (pat, body) (binders, pats) ->
              let pat = tpo pat in
              let () =
-               unify' ~handle:Errors.switch_patterns
+               unify ~handle:Errors.switch_patterns
                  (ppos_and_typ pat, no_pos pt)
              in
                (pat, body)::binders, pat :: pats)
@@ -890,7 +1091,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         List.fold_right
           (fun (pat, body) binders ->
              let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
-             let () = unify' ~handle:Errors.switch_branches
+             let () = unify ~handle:Errors.switch_branches
                (pos_and_typ body, no_pos bt)
              in
                (pat, body)::binders)
@@ -928,7 +1129,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                     let r : phrase * Types.datatype = tc r in
                     let rtype = typ r in
                     (* make sure rtype is a record type that doesn't match any of the existing fields *)
-                    let () = unify' ~handle:Errors.extend_record
+                    let () = unify ~handle:Errors.extend_record
                       (pos_and_typ r, no_pos (`Record (absent_field_env, Types.fresh_row_variable ()))) in
                     let (rfield_env, rrow_var), _ = Types.unwrap_row (extract_row alias_env rtype) in 
                     (* attempt to extend field_env with the labels from rfield_env
@@ -957,7 +1158,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             begin match List.map tc es with
               | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
               | e :: es -> 
-                  List.iter (fun e' -> unify' ~handle:Errors.list_lit (pos_and_typ e, pos_and_typ e')) es;
+                  List.iter (fun e' -> unify ~handle:Errors.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es)), `Application ("List", [typ e])
             end
         | `FunLit (pats, body) ->
@@ -994,8 +1195,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `TableLit (tname, dtype, constraints, db) ->
             let tname = tc tname 
             and db = tc db in
-            let () = unify' ~handle:Errors.table_name (pos_and_typ tname, no_pos Types.string_type)
-            and () = unify' ~handle:Errors.table_db (pos_and_typ db, no_pos Types.database_type) in
+            let () = unify ~handle:Errors.table_name (pos_and_typ tname, no_pos Types.string_type)
+            and () = unify ~handle:Errors.table_db (pos_and_typ db, no_pos Types.database_type) in
             let read_row = match dtype with
               | RecordType row ->
                   row
@@ -1013,13 +1214,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and from = tc from
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let () = unify' ~handle:Errors.delete_table
+            let () = unify ~handle:Errors.delete_table
               (pos_and_typ from, no_pos (`Table (read, write))) in
-            let () = unify' ~handle:Errors.delete_pattern (ppos_and_typ pat, pos_and_typ from) in
+            let () = unify ~handle:Errors.delete_pattern (ppos_and_typ pat, no_pos read) in
             let where = opt_map (type_check {context with tenv = (context.tenv ++ pattern_env pat)}) where in
             let () =
               opt_iter
-                (fun e -> unify' ~handle:Errors.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
+                (fun e -> unify ~handle:Errors.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type
         | `DBInsert (into, values) ->
@@ -1027,32 +1228,37 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and values = tc values
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let () = unify' ~handle:Errors.insert_table
+            let () = unify ~handle:Errors.insert_table
               (pos_and_typ into, no_pos (`Table (read, write))) in
-            let () = unify' ~handle:Errors.insert_values (pos_and_typ values, no_pos (Types.make_list_type write)) in
+            let () = unify ~handle:Errors.insert_values (pos_and_typ values, no_pos (Types.make_list_type write)) in
               `DBInsert (erase into, erase values), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat
             and from = tc from
             and read =  `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
-            let () = unify' ~handle:Errors.update_table
+            let () = unify ~handle:Errors.update_table
               (pos_and_typ from, no_pos (`Table (read, write))) in
-            let () = unify' ~handle:Errors.update_pattern (ppos_and_typ pat, no_pos read) in
+            let () = unify ~handle:Errors.update_pattern (ppos_and_typ pat, no_pos read) in
             let context' = {context with tenv = context.tenv ++ pattern_env pat} in
             let where = opt_map (type_check context') where in
             let () =
               opt_iter
-                (fun e -> unify' ~handle:Errors.update_where (pos_and_typ e, no_pos Types.bool_type)) where in
+                (fun e -> unify ~handle:Errors.update_where (pos_and_typ e, no_pos Types.bool_type)) where in
 
-            (* this is a bit silly... it would make more sense to first construct the whole
-               record type and *then* make a single call to unify *)
-            let set = List.map 
-              (fun (name, exp) ->
-                 let exp = type_check context' exp in
-                 let () = unify (write, `Record (Types.make_singleton_open_row
-                                                  (name, `Present (typ exp)))) in
-                   (name, exp)) set in
+            let set, field_env =
+              List.fold_right
+                (fun (name, exp) (set, field_env) ->
+                   let exp = type_check context' exp in
+                     if StringMap.mem name field_env then
+                       Errors.die (lookup_pos pos) "Duplicate fields in update expression."
+                     else
+                       (name, exp)::set, StringMap.add name (`Present (typ exp)) field_env)
+                set ([], StringMap.empty) in
+
+            let () = unify ~handle:Errors.update_write
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable ())))
+            in
               `DBUpdate (erase_pat pat, erase from, opt_map erase where, 
                          List.map (fun (n,(p,_)) -> n, p) set), Types.unit_type
 
@@ -1060,7 +1266,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `Spawn p ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
-            let () = unify' ~handle:Errors.spawn_process
+            let () = unify ~handle:Errors.spawn_process
               ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
             let context' = {context with tenv = Env.bind env (mailbox, pid_type), alias_env} in
             let p = type_check context' p in
@@ -1069,18 +1275,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* (() -{b}-> d) -> d *)
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
-            let () = unify' ~handle:Errors.spawn_wait_process
+            let () = unify ~handle:Errors.spawn_wait_process
               ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
             let context' = {context with tenv = Env.bind env (mailbox, pid_type), alias_env} in
             let p = type_check context' p in
-              unify' ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
+              unify ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p), return_type
         | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type env in
-            let () = unify (boxed_mbtype, `Application ("Mailbox", [mbtype])) in
+            let () = unify ~handle:Errors.receive_mailbox
+              (no_pos boxed_mbtype, no_pos (`Application ("Mailbox", [mbtype]))) in
             let binders, pattern_type, body_type = type_cases binders in
-            let () = unify (pattern_type, mbtype) in
+            let () = unify ~handle:Errors.receive_patterns
+              (no_pos mbtype, no_pos pattern_type)
+            in
               `Receive (erase_cases binders, Some pattern_type), body_type
 
         (* applications of various sorts *)
@@ -1088,23 +1297,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let op = op, type_unary_op env op
             and p = tc p
             and rettyp = Types.fresh_type_variable () in
-              unify (typ op, `Function (Types.make_tuple_type [typ p], 
-                                        mailbox_type env, rettyp));
+              unify ~handle:Errors.unary_apply
+                ((Sugartypes.string_of_unary_op (fst op), typ op), no_pos (`Function (Types.make_tuple_type [typ p], mailbox_type env, rettyp)));
               `UnaryAppl (fst op, erase p), rettyp
         | `InfixAppl (op, l, r) ->
             let opt = type_binary_op env op in
             let l = tc l
             and r = tc r 
             and rettyp = Types.fresh_type_variable () in
-              unify (opt, `Function (Types.make_tuple_type [typ l; typ r], 
-                                     mailbox_type env, rettyp));
+              unify ~handle:Errors.infix_apply
+                ((Sugartypes.string_of_binop op, opt), no_pos (`Function (Types.make_tuple_type [typ l; typ r], 
+                                                     mailbox_type env, rettyp)));
               `InfixAppl (op, erase l, erase r), rettyp
         | `FnAppl (f, ps) ->
             let f = tc f
             and ps = List.map (tc) ps
             and rettyp = Types.fresh_type_variable () in
-              unify (typ f, `Function (Types.make_tuple_type (List.map typ ps), 
-                                       mailbox_type env, rettyp));
+              unify ~handle:Errors.fun_apply
+                (pos_and_typ f, no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
+                                                   mailbox_type env, rettyp)));
               `FnAppl (erase f, List.map erase ps), rettyp
 
         (* xml *)
@@ -1114,10 +1325,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and children = List.map (tc) children in
             let () = List.iter
               (snd ->-
-                 List.iter (fun attr -> unify' ~handle:Errors.xml_attribute
+                 List.iter (fun attr -> unify ~handle:Errors.xml_attribute
                               (pos_and_typ attr, no_pos Types.string_type))) attrs
-            and () = opt_iter (fun e -> unify (typ e, Types.make_list_type (Types.make_tuple_type [Types.string_type; Types.string_type]))) attrexp
-            and () = List.iter (fun child -> unify (Types.xml_type, typ child)) children in
+            and () =
+              opt_iter
+                (fun e ->
+                   unify ~handle:Errors.xml_attributes
+                     (pos_and_typ e, no_pos (`Application ("Attributes", [])))) attrexp
+            and () =
+              List.iter (fun child ->
+                           unify ~handle:Errors.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
               `Xml (tag, 
                     List.map (fun (x,p) -> (x, List.map erase p)) attrs,
                     opt_map erase attrexp,
@@ -1127,11 +1344,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let body = tc body in
             let context' = {context with tenv = context.tenv ++ extract_formlet_bindings (erase body)} in
             let yields = type_check context' yields in
-              unify' ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
+              unify ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
               `Formlet (erase body, erase yields), Types.make_formlet_type (typ yields)
         | `Page e ->
             let e = tc e in
-              unify' ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
+              unify ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
               `Page (erase e), Types.page_type
         | `FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable () in
@@ -1140,54 +1357,62 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and h = tc h
             and attributes = tc attributes in
 
-            let () = unify (typ f, `Application ("Formlet", [t])) in
-            let () = unify (typ h, `Application ("Handler", [t])) in
-            let () = unify (typ attributes, `Application ("Attributes", [])) in
+            let () = unify ~handle:Errors.render_formlet
+              (pos_and_typ f, no_pos (`Application ("Formlet", [t]))) in
+            let () = unify ~handle:Errors.render_handler
+              (pos_and_typ h, (exp_pos f, `Application ("Handler", [t]))) in
+            let () = unify ~handle:Errors.render_attributes
+              (pos_and_typ attributes, no_pos (`Application ("Attributes", [])))
+            in
               `FormletPlacement (erase f, erase h, erase attributes), Types.xml_type
         | `PagePlacement e ->
             let e = tc e in
-              unify' ~handle:Errors.page_placement (pos_and_typ e, no_pos Types.page_type);
+              unify ~handle:Errors.page_placement (pos_and_typ e, no_pos Types.page_type);
               `PagePlacement (erase e), Types.xml_type
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
             let ft = Types.make_formlet_type a in
-              unify' ~handle:Errors.form_binding_body (pos_and_typ e, no_pos ft);
-              unify (pattern_typ pattern, a);
+              unify ~handle:Errors.form_binding_body (pos_and_typ e, no_pos ft);
+              unify ~handle:Errors.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               `FormBinding (erase e, erase_pat pattern), Types.xml_type
 
         (* various expressions *)
         | `Iteration (generators, body, where, orderby) ->            
             let generators, context =
-              let a = Types.fresh_type_variable () in
-              let lt = Types.make_list_type a in
-                List.fold_left
-                  (fun (generators, context) ->
-                     function
-                       | `List (pattern, e) ->
-                           let pattern = tpc pattern
-                           and e = tc e in
-                             unify (lt, typ e);
-                             unify (a, pattern_typ pattern);
-                             (`List (erase_pat pattern, erase e) :: generators,
-                              {context with tenv = context.tenv ++ pattern_env pattern})
-                       | `Table (pattern, e) ->
-                           let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
-                           let pattern = tpc pattern
-                           and e = tc e in
-                             unify (tt, typ e);
-                             unify (a, pattern_typ pattern);
-                             (`Table (erase_pat pattern, erase e) :: generators,
-                              {context with tenv = context.tenv ++ pattern_env pattern}))
-                  ([], context) generators in
+              List.fold_left
+                (fun (generators, context) ->
+                   function
+                     | `List (pattern, e) ->
+                         let a = Types.fresh_type_variable () in
+                         let lt = Types.make_list_type a in
+                         let pattern = tpc pattern
+                         and e = tc e in
+                         let () = unify ~handle:Errors.iteration_list_body (pos_and_typ e, no_pos lt) in
+                         let () = unify ~handle:Errors.iteration_list_pattern (ppos_and_typ pattern, (exp_pos e, a))
+                         in
+                           (`List (erase_pat pattern, erase e) :: generators,
+                            {context with tenv = context.tenv ++ pattern_env pattern})
+                     | `Table (pattern, e) ->
+                         let a = Types.fresh_type_variable () in
+                         let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
+                         let pattern = tpc pattern
+                         and e = tc e in
+                         let () = unify ~handle:Errors.iteration_table_body (pos_and_typ e, no_pos tt) in
+                         let () = unify ~handle:Errors.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
+                           (`Table (erase_pat pattern, erase e) :: generators,
+                            {context with tenv = context.tenv ++ pattern_env pattern}))
+                ([], context) generators in
             let generators = List.rev generators in              
             let tc = type_check context in
             let body = tc body in
             let where = opt_map tc where in
             let orderby = opt_map tc orderby in
-              unify (Types.make_list_type (Types.fresh_type_variable ()), typ body);
-              opt_iter (fun where -> unify (Types.bool_type, typ where)) where;
+              unify ~handle:Errors.iteration_body
+                (pos_and_typ body, no_pos (Types.make_list_type (Types.fresh_type_variable ())));
+              opt_iter (fun where -> unify ~handle:Errors.iteration_where
+                          (pos_and_typ where, no_pos Types.bool_type)) where;
               `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby), (typ body)
 
         | `Escape ((name,_,pos), e) ->
@@ -1219,15 +1444,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let cont_type = `Function (Types.make_tuple_type [f], m, t) in
             let context' = {context with tenv = Env.bind env (name, cont_type), alias_env} in
             let e = type_check context' e in
-            let () = unify (f, typ e) in
+            let () = unify ~handle:Errors.escape (pos_and_typ e, no_pos f) in
               `Escape ((name, Some cont_type, pos), erase e), typ e
         | `Conditional (i,t,e) ->
             let i = tc i
             and t = tc t
             and e = tc e in
-              unify' ~handle:Errors.if_condition
+              unify ~handle:Errors.if_condition
                 (pos_and_typ i, no_pos (`Primitive `Bool));
-              unify' ~handle:Errors.if_branches
+              unify ~handle:Errors.if_branches
                 (pos_and_typ t, pos_and_typ e);
               `Conditional (erase i, erase t, erase e), (typ t)
         | `Block (bindings, e) ->
@@ -1247,7 +1472,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `Projection (r,l) ->
             let r = tc r in
             let fieldtype = Types.fresh_type_variable () in
-              unify' ~handle:Errors.projection
+              unify ~handle:Errors.projection
                 (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row 
                                                    (l, `Present fieldtype))));
               `Projection (erase r, l), fieldtype
@@ -1260,12 +1485,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                          (fun (lab, rhs) row ->
                             Types.row_with (lab, `Present (Types.fresh_type_variable ())) row)
                          fields (Types.make_empty_open_row ())) in
-              unify (fields_type, rtype);
+              unify ~handle:Errors.record_with (pos_and_typ r, no_pos fields_type);
               `With (erase r, alistmap erase fields), rtype
         | `TypeAnnotation (e, t) ->
             let e = tc e
             and t' = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t in
-              unify' ~handle:Errors.type_annotation (pos_and_typ e, no_pos t');
+              unify ~handle:Errors.type_annotation (pos_and_typ e, no_pos t');
               `TypeAnnotation (erase e, t), t'
         | `Upcast (e, t1, t2) ->
             let e = tc e
@@ -1273,22 +1498,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and t2' = DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t2 in
               if Types.is_sub_type (t2', t1') then
                 begin
-                  unify (typ e, t2');
+                  unify ~handle:Errors.upcast_source (pos_and_typ e, no_pos t2');
                   `Upcast (erase e, t1, t2), t1'
                 end
               else
-                failwith "upcast failure (TODO: implement this error message!)"
+                Errors.upcast_subtype (lookup_pos pos) t2' t1'
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
-            let () = unify' ~handle:Errors.switch_pattern (pos_and_typ e, no_pos pattern_type) in
+            let () = unify ~handle:Errors.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               `Switch (erase e, erase_cases binders, Some pattern_type), body_type
     in (e, pos), t
 and type_binding : context -> binding -> binding * Types.typing_environment =
   fun ({tenv = (env, alias_env)} as context) (def, pos) ->
     let type_check = type_check in
-    let unify = Utils.unify alias_env
-    and unify' (l, r) = unify alias_env ~pos:(lookup_pos pos) (l, r)
+    let unify (l, r) = unify alias_env ~pos:(lookup_pos pos) (l, r)
     and typ (_,t) = t
     and erase (e, _) = e
     and erase_pat (e, _, _) = e
@@ -1311,8 +1535,10 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
             let pat = tpc pat in
             let penv = pattern_env pat in
             let bt = typ body in
-            let () = unify (bt, pattern_typ pat) in
-            let () = opt_iter (fun t -> unify (bt, DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t)) datatype in
+            let () = unify ~handle:Errors.bind_val (ppos_and_typ pat, pos_and_typ body) in
+            let () = opt_iter (fun t ->
+                                 unify ~handle:Errors.bind_val_annotation
+                                   (no_pos bt, no_pos (DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t))) datatype in
             let bt, penv =
               if Utils.is_generalisable (erase body) then
                 (Utils.generalise env bt, Env.map (Utils.generalise env) penv)
@@ -1336,7 +1562,9 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                                             makeft pats)
               in
                 makeft pats in
-            let _ = opt_iter (fun t -> unify (ft, DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t)) in
+            let () = opt_iter (fun t ->
+                                 unify ~handle:Errors.bind_fun_annotation
+                                   (no_pos ft, no_pos (DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t))) t in
               (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
                (Env.bind env (name, Utils.generalise env ft), alias_env))
         | `Funs (defs) ->
@@ -1356,7 +1584,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                           | None -> ft
                           | Some t ->
                               let fb = Utils.generalise env (DesugarDatatype.desugar_datatype' (context.tvars, context.rvars) t) in
-                              let () = unify (ft, fb) in
+                              let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fb) in
                                 fb
                       in
                         ((name, fb), pats)) defs) in
@@ -1379,7 +1607,8 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                                                           makeft pats)
                           in
                             makeft pats in
-                        let () = unify (ft, Env.lookup body_env name) in
+                        let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos (Env.lookup body_env name))
+                        in
                           ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
             let env =
               List.fold_left (fun env (name, fb) ->
@@ -1413,7 +1642,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
         | `Infix -> `Infix, context.tenv
         | `Exp e ->
             let e = tc e in
-            let () = unify' ~handle:Errors.expression_binding
+            let () = unify ~handle:Errors.bind_exp
               (pos_and_typ e, no_pos Types.unit_type)
             in
               `Exp (erase e), (Env.empty, Env.empty)
@@ -1448,7 +1677,7 @@ let type_bindings typing_env bindings =
   in
     tyenv, List.rev bindings
       
-let type_sugar = Settings.add_bool("type_sugar", false, `User)
+let type_sugar = Settings.add_bool("type_sugar", true, `User)
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
 module Check =

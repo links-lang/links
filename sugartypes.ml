@@ -30,6 +30,24 @@ deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
 deriving (Show)
 
+let string_of_unary_op =
+  function
+    | `Minus -> "-"
+    | `FloatMinus -> ".-"
+    | `Name name -> name
+    | `Abs -> "abs"
+
+let string_of_binop =
+  function
+    | `Minus -> "-"
+    | `FloatMinus -> ".-"
+    | `RegexMatch _ -> "<some regex nonsense>"
+    | `And -> "&&"
+    | `Or -> "||"
+    | `Cons -> "::"    
+    | `Name name -> name
+    | `App -> "app"
+
 type position = Lexing.position * Lexing.position * SourceCode.source_code option (* start * end * code *)
 
 module Show_position = Show.ShowDefaults(
