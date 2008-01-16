@@ -463,7 +463,14 @@ let rec generate_value env : value -> code =
           begin
             match c with
               | Integer v  -> Lit (string_of_num v)
-              | Float v    -> Lit (string_of_float v)
+              | Float v    ->
+                  let s = string_of_float v in
+                  let n = String.length s in
+                    (* strip any trailing '.' *)
+                    if n > 1 && (s.[n-1] = '.') then
+                       Lit (String.sub s 0 (n-1))
+                    else
+                      Lit s
               | Boolean v  -> Lit (string_of_bool v)
               | Char v     -> chrlit v
               | String v   -> chrlistlit v
@@ -474,7 +481,10 @@ let rec generate_value env : value -> code =
             match (Env'.lookup env var) with
               | "map" -> Var ("LINKS.accum")
               | name ->
-                  if Binop.is name then
+                  if name = "/" then
+                    Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa")
+                          (Call (Var "Math.floor", [Binop(Var "x", "/", Var "y")])))
+                  else if Binop.is name then
                     Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Binop(Var "x", Binop.js_name name, Var "y")))
                   else
                     Var name
@@ -552,6 +562,8 @@ let rec generate_tail_computation env : tail_computation -> code -> code = fun t
     match tc with
       | `Return v ->           
           callk_yielding kappa (gv v)
+      | `Apply (`Variable op, [l; r]) when Env'.lookup env op = "/" ->
+          callk_yielding kappa (Call (Var "Math.floor", [Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)]))
       | `Apply (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
           callk_yielding kappa (Binop (gv l, Binop.js_name (Env'.lookup env op), gv r))
       | `Apply (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
