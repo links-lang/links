@@ -282,23 +282,23 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
           | `Table (lr, lw), `Table (rr, rw) ->
               (unify' rec_env (lr, rr);
                unify' rec_env (lw, rw))
-          | `Application (ls, lts), `Application (rs, rts) when ls = rs -> List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) lts rts
-          | `Application (ls, lts), `Application (rs, rts) ->
-              let ltype = lookup_alias (ls, lts) alias_env
-              and rtype = lookup_alias (rs, rts) alias_env in
-                begin
-                  match ltype, rtype with
-                    | `ForAll (_, `Primitive `Abstract), `ForAll (_, `Primitive `Abstract) 
-                    | `Primitive `Abstract, `Primitive `Abstract ->
-                        raise (Failure
-                                 (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
-                                          "' with abstract type '"^string_of_datatype t2^"'")))
-                    | `ForAll (_, `Primitive `Abstract), _
-                    | `Primitive `Abstract, _ -> unify' rec_env (t1, Instantiate.alias rtype rts)
-                    | _, `ForAll (_, `Primitive `Abstract)
-                    | _, `Primitive `Abstract -> unify' rec_env (Instantiate.alias ltype lts, t2)
-                    | _, _ -> unify' rec_env (Instantiate.alias ltype lts, Instantiate.alias rtype rts)
-                end
+          | `Application (l, ls), `Application (r, rs) ->
+              begin match l, r, lookup_alias (l, ls) alias_env, lookup_alias (r, rs) alias_env with
+                | l, r, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract),
+                        (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract) ->
+                    if l <> r then
+                      raise (Failure
+                               (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
+                                        "' with abstract type '"^string_of_datatype t2^"'")))
+                    else
+                      List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) ls rs
+                | _, _, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract), rtype ->
+                    unify' rec_env (t1, Instantiate.alias rtype rs)
+                | _, _, ltype, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract) ->
+                    unify' rec_env (Instantiate.alias ltype ls, t2)
+                | _, _, ltype, rtype ->
+                    unify' rec_env (Instantiate.alias ltype ls, Instantiate.alias rtype rs)
+              end
           | `Application (s, ts), t | t, `Application (s, ts) ->
               begin match lookup_alias (s, ts) alias_env with
                 | `ForAll (_, `Primitive `Abstract)
