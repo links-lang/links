@@ -71,7 +71,7 @@ type environment        = datatype Env.String.t
 
 val extend_env : typing_environment -> typing_environment -> typing_environment
 
-val concrete_type : ?aenv:alias_environment -> datatype -> datatype
+val concrete_type : datatype -> datatype
 
 val for_all : quantifier list * datatype -> datatype
 
@@ -186,21 +186,6 @@ val make_mailbox_type : datatype -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype -> datatype
-
-(** type destructors *)
-exception TypeDestructionError of string
-
-val project_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val erase_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val inject_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val return_type : ?aenv:alias_environment -> datatype -> datatype
-val arg_types : ?aenv:alias_environment -> datatype -> datatype list
-val element_type : ?aenv:alias_environment -> datatype -> datatype
-val abs_type : ?aenv:alias_environment -> datatype -> datatype
-val app_type : ?aenv:alias_environment -> datatype -> datatype -> datatype
-
-val split_row : string -> row -> (datatype * row)
-val split_variant_type : ?aenv:alias_environment -> string -> datatype -> (datatype * datatype)
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

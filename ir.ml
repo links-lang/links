@@ -148,6 +148,7 @@ end
 module Transform : TRANSFORM =
 struct
   open Types
+  open TypeUtils
 
   type environment = datatype Env.Int.t
   type alias_environment = Types.alias_environment
@@ -251,7 +252,7 @@ struct
                 | None -> make_record_type field_types
                 | Some t ->
                     begin
-                      match Types.concrete_type ~aenv:alias_env t with
+                      match TypeUtils.expand_aliases ~aenv:alias_env t with
                         | `Record row ->
                             `Record (extend_row field_types row)
                         | _ -> assert false
@@ -459,6 +460,7 @@ struct
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
+(*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
         let tenv = Env.bind tenv (var, info_type info) in
           (var, info), {< tenv=tenv; tyenv=(tenv, alias_env) >}
   end
@@ -503,6 +505,7 @@ struct
   end
 
   let program typing_env p =
+(*    Debug.print (Show_computation.show p);*)
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 

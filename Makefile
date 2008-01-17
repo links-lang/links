@@ -79,6 +79,7 @@ SOURCES = $(OPC)                		\
           parse.mli parse.ml    		\
           desugarDatatype.mli desugarDatatype.ml\
           instantiate.mli instantiate.ml        \
+	  typeUtils.mli typeUtils.ml            \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
@@ -104,7 +105,7 @@ SOURCES = $(OPC)                		\
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
-          ir.ml ir.mli                          \
+          ir.mli ir.ml                          \
           compileir.ml                          \
           loader.ml                             \
           irtojs.mli irtojs.ml                  \

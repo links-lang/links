@@ -499,7 +499,7 @@ struct
         | Abstr (xs, body, _) as e ->
 (*             Debug.print ("xs: " ^ String.concat "," xs); *)
             let ft = node_datatype e in
-            let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft) in
+            let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft) in
               cofv (I.lam (ft, xs_info, (fun vs -> eval alias_env (extend env xs vs) body), `Unknown))
         | Let (x, e1, e2, _) ->
             I.comp (make_local_info (node_datatype e1, x), ec e1, fun v -> eval alias_env (extend env [x] [v]) e2)
@@ -518,7 +518,7 @@ struct
                    let xs_info, body = 
                      match e with
                        | Abstr (xs, body, _) ->
-                           (List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft),
+                           (List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft),
                             fun gs -> fun vs -> eval alias_env (extend env (fs @ xs) (gs @ vs)) body)
                        | _ -> assert false
                    in
@@ -570,12 +570,18 @@ struct
             cofv (I.inject (name, ev e, t))
         | Variant_selection (e, cname, cvar, cbody, dvar, dbody, _) ->
             let t = node_datatype e in
-            let ct, dt = Types.split_variant_type ~aenv:alias_env cname t in
+            let ctt, dt = TypeUtils.split_variant_type ~aenv:alias_env cname t in
+
             let ct =
-              match ct with
+              match ctt with
                 | `Variant row ->
-                    fst (Types.split_row cname row)
+                    fst (TypeUtils.split_row cname row)
                 | _ -> assert false in
+
+              Debug.print ("cname: "^cname^", cvar: "^cvar^
+                             ", t: "^Types.string_of_datatype t^
+                             ", ctt: "^Types.string_of_datatype ctt^
+                             ", ct: "^Types.string_of_datatype ct);
 
             let default =
               match dbody with
@@ -594,7 +600,7 @@ struct
         | List_of (elem, _) ->
             let nil = I.var (VEnv.lookup env "Nil", t)
             and cons = VEnv.lookup env "Cons"
-            and elem_type = Types.element_type ~aenv:alias_env t in
+            and elem_type = TypeUtils.element_type ~aenv:alias_env t in
             let cons_type = `Function (Types.make_tuple_type [elem_type; t],
                                        Types.fresh_type_variable (),
                                        t) in
@@ -608,7 +614,7 @@ struct
             (*
               compile comprehensions into map
             *)
-            let xt = Types.element_type ~aenv:alias_env (node_datatype e) in
+            let xt = TypeUtils.element_type ~aenv:alias_env (node_datatype e) in
             let ft = `Function (xt, Types.fresh_type_variable(), t) in
 
             let map_type = `Function (Types.make_tuple_type [ft; Types.make_list_type xt],
@@ -666,7 +672,7 @@ struct
                        let xs_info, body =
                          match e with
                            | Abstr (xs, body, _) ->
-                               (List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft),
+                               (List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft),
                                 fun gs -> fun vs -> eval alias_env (extend env (fs @ fs' @ xs) (gs @ gs @ vs)) body)
                            | _ -> assert false
                        in
@@ -677,7 +683,7 @@ struct
             | Define (f, (Abstr (xs, body, _) as e), location, _) -> 
 (*                  Debug.print("compiling non-rec fun: " ^ f); *)
                 let ft = node_datatype e in
-                let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft) in
+                let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft) in
                   I.letfun (make_global_info (ft, f),
                             xs_info,
                             (fun vs -> eval alias_env (extend env xs vs) body),
@@ -739,7 +745,8 @@ struct
     Debug.print ("compiling to IR");
     let s = eval_program aenv env p in
       Debug.print ("compiled IR");
-      (Inline.program (tenv, aenv) (I.reify s)), I.sem_type s      
+      let r = (Inline.program (tenv, aenv) (I.reify s)) in
+        r, I.sem_type s      
 
   let invert_env env =
     VEnv.fold
