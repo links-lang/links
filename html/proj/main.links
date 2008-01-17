@@ -1,22 +1,40 @@
 # TODO:
 #
 # - Sort out right-click menu for project list.
-# - Figure out how to distinguish between left/right mouse clicks
-# - Recreate stopPropagation (is it gone?)
+# - Figure out how to distinguish between left/right mouse clicks (done)
+# - Recreate stopPropagation (is it gone?) (done, but won't work)
 # - Clean up SQL calls - there's about 5 for loading the project list..
+# - Add new files to project list on creation.
+# - Figure out why logging out doesn't work.
+# - Test/Deploy configuration. Needs:
+#    * Create-dir function (done)
+#    * Delete-dir function (done)
+#    * Account creation creates user dir
+#    * Logging in needs to create new dir based on sessionId (done)
+#    * Logging out needs to delete dir (done)
+#    * Deploy copies from test to deploy (done)
 
+######
+# JavaScript functions
+##
 # Split lines
 alien javascript splitEscapedLinesJS : (String) -> [String];
 
 # Call the code highlighting function of the edit-box.
 alien javascript highlightCode : () -> ();
 
+# Return node.value.
 alien javascript getValueFromRef : (DomNode) -> String; 
+
+# Functions for (un-)escaping HTML
 alien javascript escapeHtml : (String) -> String;
 alien javascript unescapeHtml: (String) -> String;
+
+# Convert spaces to 
 alien javascript convertSpaces : (String) -> String;
+
+# Load the IDE's editor.
 alien javascript loadEditor: () -> DomNode;
-alien javascript stringToString: (String) -> String;
 alien javascript getSiblings: (DomNode) -> [DomNode];
 
 # Get the current location (ie URL)
@@ -25,16 +43,19 @@ alien javascript getLocation: () -> String;
 # Create a new window using the URL passed in.
 alien javascript newWindow: (String) -> ();
 
+alien javascript testFn: (Event) -> ();
+######
+# Attribute type
 typename Attribute = (attr: String, val: String);
 
 # Things that should be in their own file
 var cookieName = "linkside";
 var fileLoc = "/home/tom/links/html/proj/";
-var fileDir = "test";
+var testDir = "test/";
+var deplDir = "users/";
 
 typename User = (name:String, password:String);
 typename ProjConts = (Int, String);
-#typename Folder = (name: String, data: [ProjConts]);
 typename Projects = [| Project : ProjConts | Folder : ProjConts | File : ProjConts |];
 
 # Databases to access
@@ -87,15 +108,25 @@ fun numElems(lst) server
 sig logout : () -> ()
 fun logout() server
 {
+  var lId = getCookie("linkside");
   delete (var sessId <-- sessionsTable)
-    where (sessId.id == (getCookie("linkside")));
+    where (sessId.id == lId);
+
+  # Delete temporary directory (and all its contents..)
+  switch (rmdirForce(fileLoc ++ testDir ++ lId))
+  {
+    case Error(err) -> debug("Error on rmdir: " ++ err);
+    case _ -> ()
+  };
 
   setCookie("linkside","");
   redirect("login.links");
-  #main(Just(false))
 }
 
-#################################################
+##
+# Normal code.
+##
+
 # Return the uid of the current sessions' owner.
 sig getUid : () -> Int
 fun getUid() server
@@ -128,7 +159,6 @@ fun isLoggedIn() server
   #p
   true
 }
-
 
 # Perform file operations (load, save).
 fun fileOp() client
@@ -176,10 +206,13 @@ fun loading() client
   }
 }
 
+# Project list menu.
 sig projMenu : (Event) -> ()
 fun projMenu(xiEvent) client
 {
-  debug(intToString(getCharCode(xiEvent)));
+  debug(intToString(getMouseButton(xiEvent)));
+  # Stop the event from propagating - we don't want the normal menu
+  stopPropagation(xiEvent);
   ()  
 }
 
@@ -207,13 +240,16 @@ fun storeFile(name, escp, code) server
      set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
   };
   
-  writeToFile(fileLoc ++ fileDir ++ name, code);
+  # @TODO: Do we want to save the file here? No real need if test/depl,
+  # but useful for knowing which files are to be changed. The other 
+  # option is to mark modified files in the db.
+  writeToFile(fileLoc ++ testDir ++ getCookie(cookieName) ++ "/" ++ name, code);
   updateSession();
 }
 
 # Save the contents of the current buffer to database
-sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|]), String) -> ()
-fun saveFile(handler, xiName) client
+sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|]), String, Bool) -> ()
+fun saveFile(handler, xiName, xiNew) client
 {
   var lBody = getDocumentBody();
   
@@ -221,12 +257,16 @@ fun saveFile(handler, xiName) client
   var lCode = convertSpaces(getCode(firstChild(lBody)));
   var lEscapedCode = escapeHtml(lCode);
 
+  # This is potentially the name of the node containing the filename
+  var lNodeName = xiName;
+
   # Store the code in the database
   var lFileName = 
-    (if (xiName == "")
-      getValueFromRef(getNodeById("filename"))
-    else
-      xiName);
+    (if (xiNew)
+      xiName
+     else
+      getValueFromRef(getNodeById(lNodeName))
+    );
 
   handler ! SaveFile(lFileName, lEscapedCode, lCode);
 }
@@ -320,7 +360,7 @@ fun takeUntilBreak(data)
     case [] -> []
     case (x::y::zs) ->
     {
-      if ((x == '\') && (y == 'n'))
+      if ((x == '\\') && (y == 'n'))
         []
       else
         x :: takeUntilBreak(y::zs)
@@ -337,7 +377,7 @@ fun dropUntilBreak(data)
     case [] -> []
     case (x::y::zs) ->
     {
-      if ((x == '\') && (y == 'n'))
+      if ((x == '\\') && (y == 'n'))
         zs
       else
         dropUntilBreak(y::zs)
@@ -371,7 +411,7 @@ fun getXmlList(stringList) server
 {
     for (var item <- stringList)
     {
-      <#>{stringToXml(replace(['\'], ['\','\'], item))} <br /></#>
+      <#>{stringToXml(replace(['\\'], ['\\','\\'], item))} <br /></#>
     } : Xml
 }
 
@@ -427,19 +467,16 @@ fun unescape(text, previous)
 sig navClick : (Event) -> ()
 fun navClick(xiEvent) client
 {
-  #var targetElem = findFirstParentDiv(getTarget(xiEvent));
-  #var firstIm = findFirstMatchingSibling(firstChild(targetElem), 
-  #                                     "IMG", 
-  #                                     [(attr = "name", val ="box")]);
+  # Get the appropriate nodes.
   var im = getTarget(xiEvent);
   var sndIm = nextElementSibling(nextSibling(im));
   var firstList = findFirstMatchingSibling(nextElementSibling(sndIm), "UL", []);  
   
+  # Decide what to do based on the current state.
   switch (domGetAttributeFromRef(getTarget(xiEvent), "src"))
   { 
     case "images/rem-blue-box.png" -> 
     {
-     # var void1 = domSetAttributeFromRef(targetElem, "name", "closed");
       var void2 = domSetAttributeFromRef(im, "src", "images/add-blue-box.png");
       var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-close.png");
       var void4 = domSetStyleAttrFromRef(firstList, "display", "none");
@@ -447,7 +484,6 @@ fun navClick(xiEvent) client
     }
     case "images/add-blue-box.png" ->
     {
-      #var void1 = domSetAttributeFromRef(targetElem, "name", "open");
       var void2 = domSetAttributeFromRef(im, "src", "images/rem-blue-box.png");
       var void3 = domSetAttributeFromRef(sndIm, "src", "images/proj-open.png");
       var void4 = domSetStyleAttrFromRef(firstList, "display", "");
@@ -711,8 +747,7 @@ fun newFile(xiHandler) client
   if (docHasChanged())
   {
     # Show box asking if user wants to save
-    debug("Doc has changed!");
-    ();
+    #toggleActionSave();
   }
   else {};
 
@@ -727,19 +762,83 @@ fun newFile(xiHandler) client
 sig runFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
 fun runFile(xiHandler) client
 {
+  # Toggle waiting.
+  toggleWaiting("Running file..");
+
   # Get the current location, but drop the filename.
   var lLoc = reverse(dropWhile(fun (x) { x <> '/' }, reverse(getLocation())));
   
   # Check if the file is saved, and request that the user saves it first
   if (docHasChanged())
   {
-    ()
+    () #toggleActionSave()
   }
   else {};
 
+  # Write file to temp location
+  var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ getFrameName();
+  #writeFromDatabase(getFrameName());
   
   # Open a new window pointing to the correct location
-  newWindow(lLoc ++ fileDir ++ "/" ++ getFrameName());
+  newWindow(lLoc ++ lFileLoc);
+
+  # Toggle waiting.
+  toggleWaiting("");
+}
+
+sig deploy : () -> ()
+fun deploy() server
+{
+  # Get the user name
+  var lUser = hd(for (var lCurrUser <-- users)
+                where (lCurrUser.id == userId)
+                  [lCurrUser.email]);
+  var lSrcDir = fileLoc ++ testDir ++ getCookie(cookieName) ++ "/";
+  var lDstDir = fileLoc ++ deplDir ++ lUser ++ "/";
+  
+  debug("Src: " ++ lSrcDir);
+  debug("Dst: " ++ lDstDir);
+
+  # Get the list of files from this user's tmp dir
+  var lFileList = getDirContents(lSrcDir);
+
+  # Move the files one by one to the user's real dir
+  var lOk = 
+    for (var lFile <- lFileList)
+    {
+      var lRes = moveFile(lSrcDir ++ lFile, lDstDir ++ lFile);
+      switch (lRes)
+      {
+        case Error(err) -> debug(err); [false]
+        case _ -> [true]
+      }
+    };
+
+  if (and(lOk))
+    debug("Deployed successfully!")
+  else
+    debug("Deployment failed!")
+}
+
+#
+# Write data from the database to file on disk.
+# Returns file location
+sig writeFromDatabase : (String) -> String
+fun writeFromDatabase(xiName) server
+{ 
+  # Get session ID
+  var lFileLoc = testDir ++ getCookie(cookieName) ++ "/" ++ xiName;
+
+  # Get the data
+  var lFileData = getFile(xiName);
+
+  # Clean it up (calls client!)
+  var lCleanData = join("\n", splitEscapedLinesJS(lFileData));
+
+  # Write to disk
+  writeToFile(fileLoc ++ lFileLoc, lCleanData);
+
+  lFileLoc
 }
 
 # Get the menubar. Currently a drop-down style thing, perhaps a button set
@@ -747,9 +846,6 @@ fun runFile(xiHandler) client
 sig getMenu : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
 fun getMenu(opHandler) client
 {
- #    <span l:onclick="{logout()}" class="menu" unselectable="on">Logout</span>
- #     <input type="text" id="filename" value="filename" title="title!"/>
- #     <span l:onclick="{saveFile(opHandler)}" class="menu" unselectable="on">Save</span>
   <#>
     <div id="menubar">
       <dl>
@@ -761,6 +857,9 @@ fun getMenu(opHandler) client
             <li l:onclick="{toggleMenu("menu-file"); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
             <li l:onclick="{toggleMenu("menu-file"); runFile(opHandler);}" unselectable="on"><span>Run</span></li>
+
+            <li style="height: 1px;"><hr style="height: 2px;" /> </li> 
+            <li l:onclick="{toggleMenu("menu-file"); deploy();}" unselectable="on"><span>Deploy</span></li>
 
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
             <li l:onclick="{logout();}" unselectable="on"><span>Logout</span></li>
@@ -788,7 +887,7 @@ fun maybeSaveFile(xiHandler) client
       if (length(dropWhile(lMatchFun, lFrameName)) == 1)
       {
         var lRealName = takeWhile(lMatchFun, lFrameName);
-        saveFile(xiHandler, lRealName);
+        saveFile(xiHandler, lRealName, true);
         setFrameName(lRealName);
       }
       else {};
@@ -803,6 +902,41 @@ fun docHasChanged() client
 {
   # See if there's a star in the framename.
   length(dropWhile(fun (x) { x <> '*' }, getFrameName())) == 1
+}
+
+# Toggle save-before-[action] display
+sig toggleActionSave : () -> ()
+fun toggleActionSave() client
+{
+  var lNode      = getNodeById("maybe-save");
+  var lInputNode = getNodeById("maybe-save-input");
+ 
+  switch (domGetStyleAttrFromRef(lNode, "display"))
+  {
+    case "block" ->
+    {
+      var lVoid1 = domSetStyleAttrFromRef(lInputNode, "display", "none");
+      var lVoid2 = domSetStyleAttrFromRef(lNode, "display", "none");
+      ()
+    }
+    case _       ->
+    {
+      # Check if this is a new file
+      if(length(takeWhile(fun (x) { x <> '*' }, getFrameName())) == 0)
+      {
+        # Set the filename-box to visible
+        var lVoid1 = domSetStyleAttrFromRef(lInputNode, "display", "block");
+        ()
+      } else {};
+      
+      # Display the node
+      var lVoid2 = domSetStyleAttrFromRef(lNode, "display", "block");
+      ()
+    }
+  };
+  
+  # Toggle the overlay
+  toggleVisible("overlay");
 }
 
 # Hide all menu items
@@ -938,14 +1072,10 @@ fun showLoading(xiToggle) client
   ()
 }
 
-# Render the editor.
-# TODO: This needs to be cleaned up. 
-sig renderObject : () -> Xml
-fun renderObject() client
+# Returns the HTML needed for the 'hidden' objects, i.e. the various dialogs.
+sig getHiddenObjects : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
+fun getHiddenObjects(opHandler) client
 {
-  # Spawn file handling object.
-  var opHandler = spawn { fileOp() };
- #<legend class="legend">Save file</legend>
   <#>
     <div class="overlay" id="overlay"></div>
     <div id="save-file" class="invisible">
@@ -960,8 +1090,25 @@ fun renderObject() client
           </span>
         </div>
         <div class="bottombar">
-          <input type="button" name="save" l:onclick="{saveFile(opHandler, ""); cleanForm("save-file")}" value="Save" />
+          <input type="button" name="save" l:onclick="{saveFile(opHandler, "filename", false); cleanForm("save-file")}" value="Save" />
           <input type="button" name="cancel" l:onclick="{cleanForm("save-file")}" value="Cancel" />
+        </div>
+      </div>
+    </div>
+    <div id="maybe-save" class="invisible">
+      <div class="centered box">
+        <div class="topbar">
+          <span class="caption-text" unselectable="on">Save current file?</span>
+        </div>
+        <div id="maybe-save-input" class="container-box invisible">
+          <span class="proj-items padded">
+            Name:<br />
+            <input type="text" class="input-box proj-items" id="save-filename" />
+          </span>
+        </div>
+        <div class="bottombar">
+          <input type="button" name="save" l:onclick="{saveFile(opHandler, "save-filename", false); cleanForm("save-file")}" value="Save" />
+          <input type="button" name="cancel" l:onclick="{cleanForm("maybe-save")}" value="Don't Save" />
         </div>
       </div>
     </div>
@@ -970,19 +1117,21 @@ fun renderObject() client
         <span></span>
       </div>
     </div>
-    <div id="values" class="menu">
-      {
-        getMenu(opHandler)
-      }
-    </div>
+  </#>
+}
+
+# Returns the HTML needed for the project browser.
+sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
+fun getProjBrowser(opHandler) client
+{
     <div id="proj-browser" class="proj-browser">
       <div id="proj-caption-bg" class="caption-bg">
         <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
       </div>
-      <div id="proj-items" class="proj-items" l:onmousedown="{projMenu(event)}">
+      <div id="proj-items" class="proj-items" l:onmouseup="{testFn(event);}">
         <ul class="proj-list">
          {
-           var projects = getProjs();
+           var projects = []; #getProjs();
            
            if (length(projects) > 0)
            {
@@ -995,16 +1144,43 @@ fun renderObject() client
         </ul>
       </div>
     </div>
-    <div id="space" class="space"></div>
+}
+
+# Returns the HTML needed for the code editor.
+sig getEditor : () -> Xml
+fun getEditor() client
+{
     <div id="editor" class="editor">
       <script type="text/javascript">
         var editor = new CodeMirror((document.getElementById("editor")), {{width: "480", height: "400"}});
         window.document.editor = editor;
       </script>
     </div>
+}
+
+# Render the editor.
+sig renderObject : () -> Xml
+fun renderObject() client
+{
+  # Spawn file handling object.
+  var opHandler = spawn { fileOp() };
+  <#>
+    {
+      getHiddenObjects(opHandler)
+    }
+    <div id="values" class="menu">
+      {
+        getMenu(opHandler)
+      }
+    </div>
+    {
+      getProjBrowser(opHandler)
+    }
+    <div id="space" class="space"></div>
+    {
+      getEditor()
+    }
   </#>
-  #<input type="submit" l:onclick="{opHandler ! LoadFile()}" value="load" />
-  #<input type="submit" l:onclick="{saveFile(opHandler)}" value="Save" />
 }
 
 # Redirect to login. 

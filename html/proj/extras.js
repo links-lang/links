@@ -1,6 +1,12 @@
+/*
+ * Extra functionality needed for the editor.
+ * TODO: Cleanup, lots of unused stuff.
+ */
+
 var $str = LINKS.charlistToString;
 var $chr = LINKS.stringToCharlist;
 
+// Call the editor's highlight function.
 function _highlightCode()
 {
   if (window.document.editor)
@@ -15,9 +21,13 @@ function _highlightCode()
 
 var highlightCode = LINKS.kify(_highlightCode, 0);
 
+// Split lines using javascript.
 function _splitLines(text)
 {
+  // Split on new line.
   text = ($str(text)).split("%0A");
+
+  // Loop through and cleanup.
   for (var i = 0; i < text.length; i++)
   {
     text[i] = $chr(unescape(text[i].replace(/>/, "&gt;")));
@@ -28,6 +38,7 @@ function _splitLines(text)
 
 var splitEscapedLinesJS = LINKS.kify(_splitLines, 1);
 
+// Get a node's value.
 function _getValueFromRef(ref)
 {
   return LINKS.stringToCharlist(ref.value);
@@ -35,6 +46,7 @@ function _getValueFromRef(ref)
 
 var getValueFromRef = LINKS.kify(_getValueFromRef, 1);
 
+// HTML escaping.
 function _escape(text)
 {
   return $chr(escape($str(text)));
@@ -48,6 +60,7 @@ function _unescape(text)
 var escapeHtml = LINKS.kify(_escape, 1);
 var unescapeHtml = LINKS.kify(_unescape, 1);
 
+// Convert weird spaces to normal ones.
 function _convertSpaces(text)
 {
   return $chr($str(text).replace(/\u00a0/g, ' '));
@@ -55,28 +68,17 @@ function _convertSpaces(text)
 
 var convertSpaces = LINKS.kify(_convertSpaces, 1);
 
+// Create the editor.
 function _loadEditor()
 {
   var node = document.createElement("div");
   node.setAttribute("name", "editor");
-  _debug("Created node.");
   //var editor = new CodeMirror(node, {height: "100%"});
-  _debug("Editor fetched!");
   //document.editor = editor;
-  _debug("Returning..");
   return node;
 }
 
 var loadEditor = LINKS.kify(_loadEditor, 0);
-
-function _loadIncludes()
-{
-  var includes = "<script src=\"CodeMirror/Mochi.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/util.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/tokenizelinks.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/parselinks.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/stringstream.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/select.js\" type=\"text/javascript\"></script><script src=\"CodeMirror/codemirror.js\" type=\"text/javascript\"></script><link rel=\"stylesheet\" type=\"text/css\" href=\"CodeMirror/highlight.css\"/>";
-  document.write(includes);
-  _debug("Loaded includes.");
-}
-
-var loadIncludes = LINKS.kify(_loadEditor, 0);
 
 function _getIframeBody(node)
 {
@@ -93,8 +95,10 @@ function _stringToString(string)
   return out;
 }
 
-var stringToString = LINKS.kify(_stringToString, 1);
+//var stringToString = LINKS.kify(_stringToString, 1);
 
+// Get a list of sibling nodes.
+// TODO: broken (probably)
 function _getSiblings(node)
 {
   var sibl = node.nextSibling;
@@ -116,6 +120,7 @@ function _getSiblings(node)
 
 var getSiblings = LINKS.kify(_getSiblings, 1);
 
+// Get the URL of the page.
 function _getLocation()
 {
   return $chr(window.location.href);
@@ -123,9 +128,18 @@ function _getLocation()
 
 var getLocation = LINKS.kify(_getLocation, 0);
 
+// Open a new window.
 function _newWindow(loc)
 {
   window.open($str(loc));
 }
 
 var newWindow = LINKS.kify(_newWindow, 1);
+
+function testFn(xiEvent, xiNode)
+{
+  _debug("Event!");
+  xiEvent.cancelBubble = true;
+  if (xiEvent.stopPropagation) xiEvent.stopPropagation();
+  xiEvent.preventDefault();
+}

@@ -673,6 +673,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(Event) -> Int",
   PURE);
 
+  (* getMouseButton : (Event) -> Int *)
+  "getMouseButton", 
+  (`Client, datatype "(Event) -> Int",
+  PURE);
+ 
+  (* stopPropagation : (Event) -> () *)
+  "stopPropagation",
+  (`Client, datatype "(Event) -> ()",
+  PURE);
+
   "getInputValue",
   (`Client, datatype "(String) -> String",
   PURE);
@@ -1053,7 +1063,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "getInnerHtml",
   (`Client, datatype "(DomNode) -> String",
    PURE);
-   
+
+  (* Write data to a file on disk *)   
   "writeToFile",
    (`Server (p2 (fun name data ->
                    try
@@ -1066,7 +1077,153 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(String, String) -> ()",
    IMPURE);
 
-  (*"Could not write to file. Check permissions.")),*)
+  (* Create a directory with the given path. Returns a variant *)
+  "mkdir",
+  (`Server (p1 (fun name ->
+                   try
+                     let name = charlist_as_string name in
+                       Unix.mkdir name 0o755;
+                       `Variant ("Ok", `Record [])
+                   with (Unix.Unix_error(x,_,_)) -> 
+                     `Variant ("Error", string_as_charlist (Unix.error_message x)))),
+  datatype "(String) -> [| Ok:() | Error:String |]",
+  IMPURE);  
+
+  (* Remove a directory. Requires the directory to be empty *)
+  "rmdir",
+  (`Server (p1 (fun name ->
+                  try 
+                    let name = charlist_as_string name in
+                      Unix.rmdir name;
+                      `Variant ("Ok", `Record [])
+                  with (Unix.Unix_error(x,_,_)) ->
+                    `Variant ("Error", string_as_charlist (Unix.error_message x)))),
+  datatype "(String) -> [| Ok:() | Error:String |]",
+  IMPURE);
+
+  (* Remove a directory _and all its contents_ *)
+  "rmdirForce",
+  (`Server (p1 (fun name ->
+                  let checkName = (
+                    (* Ensure there's a slash at the end of the directory *)
+                    fun x -> 
+                      let matchStr = Str.regexp "/$" in
+                        if (Str.string_match matchStr x 0) then
+                          x
+                        else
+                          x ^ "/") in
+                  let isDir = 
+                    (* Check whether a file is a directory *)
+                    (fun x ->
+                      let fStat = Unix.stat (x) in
+                            match (fStat.Unix.st_kind) with
+                              | Unix.S_DIR -> true
+                              | _ -> false) in
+                  let name = checkName (charlist_as_string name) in
+                  let dir = Unix.opendir name in
+                  let matchStr = Str.regexp "^\.+$" in
+
+                  let rec rmNext () = 
+                      (* Recursively delete everything in the dir. *)
+                      (let nxtFile = Unix.readdir dir in                        
+                        if (not(Str.string_match matchStr nxtFile 0)) then
+                          (if (isDir (name ^ nxtFile)) then 
+                            Unix.rmdir (name ^ nxtFile)
+                          else
+                            Unix.unlink (name ^ nxtFile));
+                        rmNext()) in
+
+                  try
+                    rmNext();
+                    `Variant ("Ok", `Record [])
+                  with 
+                    | Unix.Unix_error(x,_,_) ->
+                      `Variant ("Error", string_as_charlist (Unix.error_message x))
+                    | End_of_file ->
+                      (* End of file reached - delete the directory *)
+                      try 
+                        Unix.closedir dir;
+                        Unix.rmdir name;
+                        `Variant ("Ok", `Record [])
+                      with (Unix.Unix_error(x,_,_)) -> 
+                        `Variant ("Error", string_as_charlist (Unix.error_message x)))),
+  datatype "(String) -> [| Ok:() | Error:String |]",
+  IMPURE);
+  
+  (* List the contents of a directory *)
+  "getDirContents",
+  (`Server (p1 (fun name ->
+                  let name = charlist_as_string name in
+                  let dir = Unix.opendir name in
+                  let matchStr = Str.regexp "^\.+$" in
+                  let rec getNext () =
+                    (* Recursively get the list of dir contents *)
+                    let nxtFile =
+                      try                        
+                        Unix.readdir dir
+                      with
+                        End_of_file -> Unix.closedir dir; ""
+                    in
+                      prerr_endline("CurrFile " ^ nxtFile);
+                      prerr_endline("  Length: " ^ (string_of_int (String.length nxtFile)));
+                      (if ((String.length nxtFile) == 0) then
+                         []
+                       else 
+                             if (not(Str.string_match matchStr nxtFile 0)) then
+                               (box_string nxtFile) :: getNext()
+                             else
+                               getNext()
+                       )
+                  in
+                    try
+                      box_list (getNext())
+                    with 
+                      Unix.Unix_error(err, fn, par) -> failwith(fn ^ "(" ^ par ^"): " ^(Unix.error_message err)))),
+   datatype "(String) -> [String]",
+   PURE);
+
+  (* 
+     Check whether a particular file location is a directory. 
+     Returns false if the file doesn't exist.
+  *)
+  "isDir",
+  (`Server (p1 (fun name -> 
+                  let name = charlist_as_string name in
+                  try
+                    let fStat = Unix.stat (name) in
+                    let isDir = 
+                      match (fStat.Unix.st_kind) with
+                        | Unix.S_DIR -> true
+                        | _ -> false
+                    in
+                      `Bool isDir
+                  with
+                    Unix.Unix_error(_,_,_) -> `Bool false)),
+  datatype "(String) -> Bool",
+  PURE);
+ 
+  (* 
+    Move a file from src to dst. Requires absolute paths, and if the 
+    file being moved is a directory, it is require to be empty. 
+   *)
+  "moveFile",
+  (`Server (p2 (fun src dst ->
+                  let matchStr = Str.regexp "^/.*" in
+                  let src = charlist_as_string src in
+                  let dst = charlist_as_string dst in
+                    if ((Str.string_match matchStr src 0) &&
+                        (Str.string_match matchStr dst 0)) then
+                      try
+                        Unix.rename src dst;
+                        `Variant("Ok", `Record [])
+                      with
+                        Unix.Unix_error(err,_,_ ) ->
+                          `Variant("Error", (box_string (Unix.error_message err)))
+                    else
+                      `Variant("Error", (box_string "Filenames must be absolute")))),
+  datatype "(String, String) -> [| Ok:() | Error:String |]",
+  IMPURE);
+ 
   "escapeString",
   (`Server (p1 (fun string -> 
                   let string = charlist_as_string string in

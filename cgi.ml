@@ -174,15 +174,15 @@ let parse_args () =
       safe_getenv "QUERY_STRING"
     else begin
       let mime_type = safe_getenv "CONTENT_TYPE" in
-      if req_method = "POST"
-         && mime_type = "application/x-www-form-urlencoded" then begin
-        let n = int_of_string (safe_getenv "CONTENT_LENGTH") in
-        let buf = String.create n in
-        really_input stdin buf 0 n;
-        buf
-      end else
-        failwith ("Cgi: cannot handle " ^ req_method ^ " request with type " ^
-                  mime_type)
+      if req_method = "POST" 
+ 	&& string_starts_with mime_type "application/x-www-form-urlencoded" then begin 
+ 	  let n = int_of_string (safe_getenv "CONTENT_LENGTH") in 
+ 	  let buf = String.create n in 
+ 	    really_input stdin buf 0 n; 
+ 	    buf 
+ 	end else 
+ 	  failwith ("Cgi: cannot handle " ^ req_method ^ " request with type " ^ 
+ 	             mime_type)
     end
   in
   let assocs = split '&' s in

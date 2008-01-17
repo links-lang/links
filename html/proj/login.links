@@ -23,6 +23,8 @@ fun numElems(lst) server
 }
 
 var cookieName = "linkside";
+var fileLoc = "/home/tom/links/html/proj/";
+var fileDir = "test/";
 
 # Login formlet
 var loginForm =
@@ -61,6 +63,13 @@ fun login (data) server
         
     # Create a new one
     insert sessionsTable values [(id = id, uid = uid, creation_time = 0, update_time = 0)];
+
+    # Create user dir
+    switch (mkdir(fileLoc ++ fileDir ++ id))
+    {
+      case Error(err) -> debug("Error: " ++ err)
+      case Ok() -> ()
+    };
 
     # Set cookie and redirect
     setCookie(cookieName, id);

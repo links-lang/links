@@ -24,20 +24,27 @@ var tokenizeLinks = function(){
     var atom = result("atom", "atom");
     var type = result("type", "type");
     return {
-      "if": keywordA, 
+      "if": keywordA, "where": keywordA, "orderby": keywordA,
       "else": keywordB, "yields": keywordB, "receive": keywordB,
-      "delete": keywordC,"where": keywordC, "orderby": keywordC, "with": keywordC, 
+      "delete": keywordC, 
       "table": keywordC, "with": keywordC, "database": keywordC, "from": keywordC,
       "insert": keywordC, "values": keywordC, "set": keywordC, "page" : keywordC,
+      "alien": keywordC, "as": keywordC, "in": keywordC,
       "var": result("var", "keyword"), "fun": result("function", "keyword"),
       "typename": result("typename", "keyword"),
       "for": result("for", "keyword"), "case": result("case", "keyword"), 
       "switch": result("switch", "keyword"), "update": result("for", "keyword"),
       "delete": result("for", "keyword"), "sig": result("sig", "keyword"),
       "formlet": result("formlet", "keyword"), "spawn": result("spawn", "keyword"), 
-      "client": result("keyword", "location"), "server": result("keyword", "location"),
-      "true": atom, "false": atom, "[]": atom,
-      "Int": type, "Bool": type, "Char": type, "Float": type, "Xml": type, "Database": type, "String": type
+      "client": result("location", "location"), "server": result("location", "location"),
+      "app": result("keyword", "keyword"), "spawnWait": result("spawn", "keyword"),
+      "native": result("keyword", "keyword"), "escape": result("keyword", "keyword"),
+      "op": result("fn", "keyword"), "mu": result("fn", "keyword"),
+      "abs": result("fn", "keyword"), "escape": result("keyword", "keyword"),
+      "infix": result("fn", "keyword"), "infixl": result("fn", "keyword"),
+      "infixr": result("fn", "keyword"),
+      "true": atom, "false": atom, "[]": atom, "readonly": atom,
+      "Int": type, "Bool": type, "Char": type, "Float": type, "Xml": type, "Database": type, "String": type, "TableHandle": type
     };
   }();
 
