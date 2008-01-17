@@ -232,7 +232,10 @@ end
       if wm() then
         "<code>" ^ s ^ "</code>"
       else
-        "`" ^ s ^ "'"
+        match getenv "TERM" with
+          | Some ("rxvt"|"aterm"|"gnome-terminal"|"xterm") ->
+              Printf.sprintf  "`\x1b[1;5;%dm" (30 + Random.int 8) ^ s ^ "\x1b[0m'"
+          | _ -> ("`"^ s ^ "'" )
       
     let nl () =
       if wm() then
