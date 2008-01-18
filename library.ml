@@ -95,7 +95,7 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
-let datatype = Parse.parse_string Parse.datatype ->- fst
+let datatype = DesugarDatatype.read_datatype
 
 let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
@@ -214,6 +214,8 @@ let add_attribute : result * result -> result -> result =
 
 let add_attributes : (result * result) list -> result -> result =
   List.fold_right add_attribute
+
+let prelude_env = ref None
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+/) PURE;
@@ -706,7 +708,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            `Record []
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
-   datatype "(String, String) -> unit",
+   datatype "(String, String) -> ()",
   IMPURE);
 
 
@@ -769,7 +771,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             (match string_as_charlist(marshal_continuation k) with
+             let k = minimize k in
+               (match string_as_charlist(marshal_continuation k) with
                   `List _ as result -> result
                 | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
@@ -1012,7 +1015,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(([(String,String)]) -> a) -> String",
+    datatype "((a) -> b) -> String",
     IMPURE));
 
   (* Serialize values to DB *)
@@ -1048,9 +1051,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(String, DomNode) -> [DomNode]",
   PURE);
 
+  "getElementsByName",
+  (`Client, datatype "(String) -> [DomNode]",
+  PURE);
+
   "getContentDocument",
   (`Client, datatype "(DomNode) -> (DomNode)",
   PURE);
+
+  "adoptNode",
+  (`Client, datatype "(DomNode, DomNode) -> DomNode",
+   IMPURE);
 
   "execBold",
   (`Client, datatype "(DomNode) -> ()",
@@ -1262,7 +1273,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",
-   IMPURE)    
+   IMPURE);
+
+    "dumpTypes",
+  (`Server (p1 (fun code ->
+                  let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+
+                  let line ({Lexing.pos_lnum=l}, _, _) = l in
+                  let start ({Lexing.pos_bol=s}, _, _) = s in
+                  let finish (_, {Lexing.pos_bol=e}, _) = e in
+                    
+                  let box_int = num_of_int ->- box_int in
+
+                  let resolve (name, t, pos) =                    
+                    `Record [("name", box_string name);
+                             ("t", box_string (Types.string_of_datatype t));
+                             ("pos", `Record [("line", box_int (line pos));
+                                              ("start", box_int (start pos));
+                                              ("finish", box_int (finish pos))])]
+                  in
+                    box_list (List.map resolve ts)
+               )),
+            datatype "(String) -> [(name:String, t:String, pos:(line:Int, start:Int, finish:Int))]",
+            IMPURE)
 ]
 let impl : located_primitive -> primitive option = function
   | `Client -> None
@@ -1275,7 +1308,8 @@ let value_env =
     env
     StringMap.empty)
 
-let primitive_location (name:string) = match fst3 (List.assoc name env) with
+let primitive_location (name:string) = 
+  match fst3 (List.assoc name env) with
   | `Client ->  `Client
   | `Server _ -> `Server
   | #primitive -> `Unknown
@@ -1328,6 +1362,7 @@ let typing_env = (type_env, alias_env)
 let primitive_names = StringSet.elements (Env.domain type_env)
 
 let is_primitive name = List.mem_assoc name env
+
 let is_pure_primitive name =
   if List.mem_assoc name env then
     match List.assoc name env with

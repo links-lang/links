@@ -420,15 +420,19 @@ fun isInt (x) { x ~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-#### WEB-RELATED ####
 
 #### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax
 ####   TBD: move to a namespaced module
 
+####   NOTE: top-level vars have been eta-expanded in order to tell
+####   the JS compiler that they are pure and hence can be safely
+####   compiled. If we had a purity analysis then all of these could
+####   be safely eta-reduced again.
+
 typename Env = [(String,String)];
 typename Gen = Int;
-typename State (d,a) = [|State:(d) ->(a,d)|];
+typename State (d,a) = (d) -> (a,d);
 typename Collector (a) = (Env) -> a;
 typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
@@ -445,16 +449,16 @@ op f $ x { f(x) }
 
 # state monad
 sig runState : (State (d,a), d) -> (a,d)
-fun runState(State (s),i) { s(i) }
+fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
 sig >>= : (State (d,a), (a) -> State(d,b)) -> State (d,b)
-op State (x) >>= f {
-   State (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
+op x >>= f {
+   (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
 
 sig return : (a) -> State (b,a)
-fun return(a) { State (fun (s) { (a,s) }) }
+fun return(a) { fun (s) { (a,s) } }
 
 sig fmap : ((a) -> b, State (c,a)) -> State (c,b)
 fun fmap(f, x) { x >>= return `compose` f } 
@@ -467,7 +471,7 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe (((a) -> b)), Maybe (a)) -> Maybe (b)
+sig applyE : (Maybe ((a) -> b), Maybe (a)) -> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -476,7 +480,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet (((a)-> b))) -> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a)-> b)) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
@@ -514,7 +518,7 @@ sig makeName : (Int) -> String
 fun makeName(i) { "input_" ++ intToString(i) }
 
 sig nextName : State (Int,String)
-var nextName = State(fun (i) { (makeName(i), i+1) });
+var nextName = fun (i) { (makeName(i), i+1) };
 
 sig formlets : ([Formlet (a)]) -> Formlet ([a])
 fun formlets(fs) { 
@@ -575,8 +579,8 @@ fun formP(f, h, attributes) {
    })
 }
 
-sig pickleCont : (([(String,String)]) -> Page) -> String
-fun pickleCont(cont) {unsafePickleCont(cont)}
+sig pickleCont : (() -> Page) -> String
+fun pickleCont(cont) {unsafePickleCont(fun (_) {cont()})}
 
 sig mkForm : ((Env) -> Page, Xml, Attributes) -> Xml
 fun mkForm(cont, contents, attributes) {
@@ -584,7 +588,7 @@ fun mkForm(cont, contents, attributes) {
         action="#" method="POST" {attributes}>
     <input type="hidden"
            name="_k"
-           value="{pickleCont(fun (_) {cont(environment())})}" />
+           value="{pickleCont(fun () {cont(environment())})}" />
     {contents}
   </form>
 }
@@ -641,8 +645,10 @@ fun mkInput(mkXml,mkFilledXml) {
 }
 
 sig input : Formlet (String)
-var input = mkInput(fun(name) { <input name="{name}"/> },
-                    fun(name,v) { <input name="{name}" value="{v}"/> });
+var input = fun (gen) {
+              mkInput(fun(name) { <input name="{name}"/> },
+                      fun(name,v) { <input name="{name}" value="{v}"/> })(gen)
+            };
 
 # QUESTION:
 #   Should we change the semantics of attribute expressions such that
@@ -679,7 +685,7 @@ fun inputFileA(attributes) {
 
 # A formlet producing a String whose contents are hidden on entry.
 sig inputPassword : Formlet (String)
-var inputPassword = inputPasswordA([]);
+var inputPassword = fun (gen) {inputPasswordA([])(gen)};
 
 # A one-element formlet populated with an initial value
 sig inputValue : (String) -> Formlet (String)
@@ -689,7 +695,7 @@ fun inputValue(v) {
 
 # A "file" type input.
 sig inputFile : Formlet (String)
-var inputFile = inputFileA([]);
+var inputFile = fun (gen) {inputFileA([])(gen)};
 
 sig textarea : (String) -> Formlet (String)
 fun textarea(value) {
@@ -735,10 +741,12 @@ fun pushButton(text) {
 
 sig checkbox : Formlet (Bool)
 var checkbox =
-  nextName >>= fun (name) {
-  var xml = <input type="checkbox" name="{name}" value="yes" />;
-  return ((xml,
-           fun (env) { (xml, pureE (memassoc(name, env))) }))};
+  fun (gen) {
+    (nextName >>= fun (name) {
+     var xml = <input type="checkbox" name="{name}" value="yes" />;
+     return ((xml,
+             fun (env) { (xml, pureE (memassoc(name, env))) }))})(gen)
+  };
 
 
 # before ++ [selected] ++ after is a list of (value, data) pairs
@@ -767,7 +775,7 @@ fun inputRadiogroup(before, selected, after, layout) {
   }
 }
 
-sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, (((String) -> [a]) -> (String) -> [a])))
+sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, ((String) -> [a]) -> (String) -> [a]))
 fun preludeOption ((a,b), selected) {
    nextName >>= fun (name) {
         if(selected) {
@@ -880,7 +888,7 @@ fun transform(f, predicate, error, g) {
 ### checked input components
 
 sig inputInt : Formlet(Int)
-var inputInt = transform(input, isInt, fun (s) {s ++ " is not an integer"}, stringToInt);
+var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ++ " is not an integer"}, stringToInt)(gen)};
 
 sig inputIntA : (Attributes) -> Formlet(Int)
 fun inputIntA(attributes) {
@@ -893,7 +901,9 @@ fun inputIntValue(v) {
 }
 
 sig inputFloat : Formlet(Float)
-var inputFloat = transform(input, isFloat, fun (s) {s ++ " is not an integer"}, stringToFloat);
+var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ++ " is not a float"}, stringToFloat)(gen)};
+
+#### WEB-RELATED ####
 
 # [freshResource] is a bit of magic that makes the subsequent actions a
 # new resource.  That is, it redirects the user to a new URL for the

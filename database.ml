@@ -12,19 +12,13 @@ end
 
 let value_of_db_string (value:string) = function
   | `Primitive `Bool -> Result.bool (value = "true")
+  | `Primitive `Char -> Result.char (String.get value 0)
   | `Application ("String", [])
   | `Application ("List", [`Primitive `Char]) -> Result.string_as_charlist value
   | `Primitive `Int  -> Result.int (num_of_string value)
   | `Primitive `Float -> (if value = "" then Result.float 0.00      (* HACK HACK *)
                    else Result.float (float_of_string value))
   | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ Types.string_of_datatype t ^"'")
-
-let datatype_of_db_type = function
-  | BoolField -> `Primitive `Bool
-  | TextField -> `Application ("String", [])
-  | IntField -> `Primitive `Int
-  | FloatField -> `Primitive `Float
-  | _ -> failwith "datatype_of_db_type: unsupported datatype"
 
 let execute_command  (query:string) (db: database) : result =
   let result = (db#exec query) in
@@ -47,8 +41,7 @@ let execute_select (field_types:(string * Types.datatype) list) (query:string) (
                 for count = result#nfields - 1 downto 0 do 
                   try 
                     temp_fields := 
-                      (result#fname count, 
-                       result#ftype count, 
+                      (result#fname count,
                        (List.assoc (result#fname count) field_types))
                     :: !temp_fields
                   with NotFound _ -> (* Could probably remove this. *)
@@ -59,20 +52,17 @@ let execute_select (field_types:(string * Types.datatype) list) (query:string) (
                                field_types)
                 done;
                 !temp_fields) in
-           let is_null = (fun (name, db_type, real_type) ->
+           let is_null = (fun (name, _) ->
                             if name = "null" then true
-                            else if mem_assoc name field_types then
-                              if (db#equal_types real_type db_type) then
-                                false 
-			      else raise (Runtime_error ("Database did not provide results compatible with specified type (query was '" ^ query ^ "')"))
+                            else if mem_assoc name field_types then false
                             else assert false) in
            let null_query = exists is_null row_fields in
              if null_query then
                `List (map (fun _ -> `Record []) result#get_all_lst)
              else
                `List (map (fun rowvalue ->
-                             `Record (map2 (fun (name, db_type, real_type) fldvalue -> 
-			                      name, value_of_db_string fldvalue real_type)
+                             `Record (map2 (fun (name, t) fldvalue -> 
+			                      name, value_of_db_string fldvalue t)
                                         row_fields rowvalue))
                         result#get_all_lst)
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

@@ -64,7 +64,7 @@ stderr : @.*
 exit : 1
 
 Accept okay l:name attributes
-<form l:action="{<html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
+<form l:action="{page <html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
 stdout : @<form action="#">.*</form> : Xml
 
 Looping in XML quasis

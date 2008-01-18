@@ -143,3 +143,17 @@ function testFn(xiEvent, xiNode)
   if (xiEvent.stopPropagation) xiEvent.stopPropagation();
   xiEvent.preventDefault();
 }
+
+function _unescape(xiString)
+{
+  return unescape(xiString);
+}
+
+var jsUnescape = LINKS.kify(_unescape, 1);
+
+function _escape(xiString)
+{
+  return escape(xiString);
+}
+
+var jsEscape = LINKS.kify(_escape, 1);

@@ -7,20 +7,12 @@ exception UnrealizableContinuation
 class type otherfield
  = object method show : string end
 
-type db_field_type =
-    BoolField
-  | TextField
-  | IntField
-  | FloatField
-  | SpecialField of otherfield
-
 type db_status = QueryOk | QueryError of string
 
 class virtual dbresult :
   object
     method virtual error : string
     method virtual fname : int -> string
-    method virtual ftype : int -> db_field_type
     method virtual get_all_lst : string list list
     method virtual nfields : int
     method virtual status : db_status
@@ -29,7 +21,6 @@ class virtual dbresult :
 class virtual database :
   object
     method virtual driver_name : unit -> string
-    method virtual equal_types : Types.datatype -> db_field_type -> bool
     method virtual escape_string : string -> string
     method virtual exec : string -> dbresult
     method make_insert_query : (string * string list * string list list) -> string
@@ -103,11 +94,12 @@ and contin_frame =
         (environment * string * string option * xml *
            (string * Syntax.expression) list * Syntax.expression list)
     | Ignore of (environment * Syntax.expression)
-    | IgnoreDef of (environment * Syntax.definition)
+    | EvalDef of (environment * Syntax.definition)
     | Recv 
 and continuation = contin_frame list
 and binding = string * result
 and environment = binding list  deriving (Show, Pickle)
+
 val toplevel_cont : continuation
 val expr_of_prim_val : result -> Syntax.expression option
 val prim_val_of_expr : Syntax.expression -> result option
@@ -164,3 +156,5 @@ val unmarshal_result : result list -> Syntax.program -> string -> result
 val bind : environment -> string -> result -> environment
 val empty_env : environment
 val trim_env : environment -> environment
+
+val minimize : continuation -> continuation

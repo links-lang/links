@@ -2,8 +2,8 @@
 
 (** {2 Running programs} *)
 val run_program : Result.environment -> Result.environment -> Syntax.program -> (Result.environment * Result.result)
+val run_expr : Result.environment -> Result.environment -> Syntax.expression -> Result.continuation -> Result.environment * Result.result
 val run_defs : Result.environment -> Result.environment -> Syntax.definition list -> Result.environment
-
 
 (** {1 Continuation functions} 
     Exposing the continuation functions is temporary, I hope. *)

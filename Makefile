@@ -44,7 +44,7 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae
+OCAMLFLAGS=-dtypes -w ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -70,44 +70,52 @@ SOURCES = $(OPC)                		\
           syntax.mli syntax.ml        		\
           sqlcompile.ml                         \
           regex.ml                              \
-          sugartypes.ml                         \
-          sugarTraversals.mli sugarTraversals.ml\
-          sugar.mli sugar.ml    		\
-          parser.mly            		\
           result.mli result.ml         		\
-          value.mli value.ml                    \
+          sourceCode.ml                         \
+          sugartypes.ml                         \
+          parser.mly            		\
+          lexer.mli lexer.mll         		\
           errors.mli errors.ml                  \
-          $(DB_CODE)            		\
-          database.mli database.ml 		\
-          lexer.mll             		\
           parse.mli parse.ml    		\
-          jsonparse.mly         		\
-          jsonlex.mll           		\
-          json.ml               		\
-          callgraph.ml                          \
+          desugarDatatype.mli desugarDatatype.ml\
           instantiate.mli instantiate.ml        \
+	  typeUtils.mli typeUtils.ml            \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
+          callgraph.ml					\
+          sugarTraversals.mli sugarTraversals.ml	\
+	  resolvePositions.mli resolvePositions.ml	\
+          refineBindings.mli refineBindings.ml		\
+          desugarLAttributes.mli desugarLAttributes.ml	\
+          desugarPages.mli desugarPages.ml		\
+          desugarFormlets.mli desugarFormlets.ml	\
+          desugarRegexes.mli desugarRegexes.ml		\
+          typeSugar.mli typeSugar.ml			\
+          sugar.mli sugar.ml    		\
+          frontend.ml                           \
+	  dumpTypes.ml                          \
+          value.mli value.ml                    \
+          $(DB_CODE)            		\
+          database.mli database.ml 		\
           inference.mli inference.ml 		\
-          showsugar.ml                          \
-          typeSugar.mli typeSugar.ml            \
+          jsonparse.mly         		\
+          jsonlex.mll           		\
+          json.ml               		\
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
-          ir.ml ir.mli                          \
+          ir.mli ir.ml                          \
           compileir.ml                          \
+          loader.ml                             \
           irtojs.mli irtojs.ml                  \
-          js.mli js.ml          		\
           interpreter.mli interpreter.ml 	\
           evalir.ml                             \
-          loader.ml                             \
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
           sqlcompileTest.ml                     \
           links.ml              		\
-          rewriteexamples.ml                    \
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

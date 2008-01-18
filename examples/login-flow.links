@@ -1,4 +1,3 @@
-
 var noMsg = "";
 
 sig login_widget : (String, Handler((username:String, pass:String))) -> Page

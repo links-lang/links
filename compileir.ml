@@ -58,7 +58,7 @@ sig
   val abs : value sem -> value sem
   val app : value sem * value sem * datatype -> tail_computation sem
   val apply : (value sem * (value sem) list * datatype) -> tail_computation sem
-  val applyprim : (value sem * (value sem) list * datatype) -> value sem
+  val apply_pure : (value sem * (value sem) list * datatype) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 (* comparison? *)
   val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
@@ -101,6 +101,9 @@ sig
     tail_computation sem
   val alias : tyname * tyvar list * datatype * (unit -> tail_computation sem) -> tail_computation sem
   val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
+
+  val modul : string * tail_computation sem *
+    (binding list -> unit -> tail_computation sem) -> tail_computation sem 
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -114,6 +117,12 @@ struct
 
   let lift_binding b a =
     ([b], a)
+
+  let rec lift_bindings v =
+    function
+      | [] -> lift v
+      | b :: bs ->
+          bind (lift_binding b ()) (fun () -> lift_bindings v bs)
 
   type 'a semt = ('a * datatype) sem
   let sem_type (_, (_, t)) = t
@@ -178,6 +187,8 @@ struct
 
     val alias_binding : tyname * tyvar list * datatype -> unit M.sem
     val alien_binding : var_info * language -> var M.sem
+
+    val module_binding : string * (binding list) option -> unit M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -253,6 +264,9 @@ struct
       let xb, x = fresh_var x_info in
         lift_binding (`Alien (xb, language)) x
 
+    let module_binding (name, bindings) =
+      lift_binding (`Module (name, bindings)) ()
+
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (`Variable x, t))
   end
@@ -288,13 +302,13 @@ struct
            M.bind ss
              (fun vs -> lift (`Apply (v, vs), t)))
 
-  let applyprim (s, ss, t) =
+  let apply_pure (s, ss, t) =
     let ss = lift_list ss
     in
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`ApplyPrim (v, vs), t)))
+             (fun vs -> lift (`ApplyPure (v, vs), t)))
 
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
@@ -401,6 +415,10 @@ struct
   let alias (typename, quantifiers, datatype, rest) =
     M.bind (alias_binding (typename, quantifiers, datatype)) rest
 
+  let modul (name, body, rest) =
+    let (bindings, _) = reify body in      
+      M.bind (module_binding (name, Some bindings)) (rest bindings)
+    
   let comp (x_info, s, body) =
     bind s
       (fun e ->
@@ -418,11 +436,43 @@ let cps_prims = ["recv"; "sleep"]
 
 module Eval(I : INTERPRETATION) =
 struct
+  let group_defs defs =
+    let bothdefs l r = match l, r with
+      | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
+      | _ ->  false
+    in
+      groupBy bothdefs defs
+
   let extend env xs vs =
     List.fold_left2
       (fun env x v ->
          VEnv.bind env (x, v))
       env xs vs
+
+  let rec add_globals_to_env : multi_env -> binding list -> multi_env = fun ((venv, tenv, aenv) as env) ->
+    List.fold_left
+      (fun ((venv, tenv, aenv) as env) ->
+         function
+           | `Let ((x, (xt, x_name, `Global)), _) ->
+               extend venv [x_name] [x], Env.Int.bind tenv (x, xt), aenv
+           | `Fun ((f, (ft, f_name, `Global)), _, _, _) ->
+               extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
+           | `Rec defs ->
+               List.fold_left
+                 (fun((venv, tenv, aenv) as env) ((f, (ft, f_name, scope)), _, _, _) ->
+                    match scope with
+                      | `Global -> extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
+                      | `Local -> env)
+                 env defs
+           | `Alien ((f, (ft, f_name, `Global)), _) ->
+               extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
+           | `Alias (name, quantifiers, t) ->
+               venv, tenv, Types.register_alias (name, quantifiers, t) aenv
+           | `Module (name, defs) ->
+               opt_app (fun defs -> add_globals_to_env env defs) env defs
+           | _ -> env)
+      env
+
 
   let rec eval : Types.alias_environment -> var VEnv.t -> Syntax.expression -> tail_computation I.sem =
     fun alias_env env e ->
@@ -439,7 +489,7 @@ struct
         | App (e1, e2, _) -> I.app (ev e1, ev e2, t)
         | Apply (Variable (f, _) as e, es, _)
             when (Library.is_pure_primitive f)
-              -> cofv (I.applyprim(I.var (VEnv.lookup env f, node_datatype e), evs es, t))
+              -> cofv (I.apply_pure(I.var (VEnv.lookup env f, node_datatype e), evs es, t))
         | Apply (e', es, _) ->
 (*             Debug.print ("apply: "^string_of_expression e); *)
             I.apply (ev e', evs es, t)
@@ -447,8 +497,9 @@ struct
         | Comparison (e1, c, e2, _) ->
             cofv (I.comparison (ev e1, c, ev e2))
         | Abstr (xs, body, _) as e ->
+(*             Debug.print ("xs: " ^ String.concat "," xs); *)
             let ft = node_datatype e in
-            let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft) in
+            let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft) in
               cofv (I.lam (ft, xs_info, (fun vs -> eval alias_env (extend env xs vs) body), `Unknown))
         | Let (x, e1, e2, _) ->
             I.comp (make_local_info (node_datatype e1, x), ec e1, fun v -> eval alias_env (extend env [x] [v]) e2)
@@ -467,7 +518,7 @@ struct
                    let xs_info, body = 
                      match e with
                        | Abstr (xs, body, _) ->
-                           (List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft),
+                           (List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft),
                             fun gs -> fun vs -> eval alias_env (extend env (fs @ xs) (gs @ vs)) body)
                        | _ -> assert false
                    in
@@ -519,12 +570,18 @@ struct
             cofv (I.inject (name, ev e, t))
         | Variant_selection (e, cname, cvar, cbody, dvar, dbody, _) ->
             let t = node_datatype e in
-            let ct, dt = Types.split_variant_type ~aenv:alias_env cname t in
+            let ctt, dt = TypeUtils.split_variant_type ~aenv:alias_env cname t in
+
             let ct =
-              match ct with
+              match ctt with
                 | `Variant row ->
-                    fst (Types.split_row cname row)
+                    fst (TypeUtils.split_row cname row)
                 | _ -> assert false in
+
+              Debug.print ("cname: "^cname^", cvar: "^cvar^
+                             ", t: "^Types.string_of_datatype t^
+                             ", ctt: "^Types.string_of_datatype ctt^
+                             ", ct: "^Types.string_of_datatype ct);
 
             let default =
               match dbody with
@@ -543,21 +600,21 @@ struct
         | List_of (elem, _) ->
             let nil = I.var (VEnv.lookup env "Nil", t)
             and cons = VEnv.lookup env "Cons"
-            and elem_type = Types.element_type ~aenv:alias_env t in
+            and elem_type = TypeUtils.element_type ~aenv:alias_env t in
             let cons_type = `Function (Types.make_tuple_type [elem_type; t],
                                        Types.fresh_type_variable (),
                                        t) in
-              cofv (I.applyprim(I.var (cons, cons_type), [ev elem; nil], t))
+              cofv (I.apply_pure(I.var (cons, cons_type), [ev elem; nil], t))
         | Concat (left, right, _) ->
             let concat_type = `Function (Types.make_tuple_type [t; t],
                                          Types.fresh_type_variable (),
                                          t) in
-              cofv (I.applyprim(I.var (VEnv.lookup env "Concat", concat_type), [ev left; ev right], t))
+              cofv (I.apply_pure(I.var (VEnv.lookup env "Concat", concat_type), [ev left; ev right], t))
         | For (body, x, e, _) ->
             (*
               compile comprehensions into map
             *)
-            let xt = Types.element_type ~aenv:alias_env (node_datatype e) in
+            let xt = TypeUtils.element_type ~aenv:alias_env (node_datatype e) in
             let ft = `Function (xt, Types.fresh_type_variable(), t) in
 
             let map_type = `Function (Types.make_tuple_type [ft; Types.make_list_type xt],
@@ -592,7 +649,8 @@ struct
   and evalv alias_env env e =
     I.value_of_comp (eval alias_env env e)
 
-  let rec eval_defs alias_env env defss rest =
+  let rec eval_defs : Types.alias_environment -> var VEnv.t -> Syntax.definition list list -> Syntax.expression -> tail_computation I.sem =
+    fun alias_env env defss rest ->
     match defss with
       | [] -> eval alias_env env rest
       | defs :: defss ->
@@ -608,12 +666,13 @@ struct
                 let defs =
                   List.map
                     (fun (f, e, location) ->
+(*                         Debug.print("compiling rec fun: " ^ f); *)
                        let ft = node_datatype e in
                        let f_info = make_global_info (ft, f) in
                        let xs_info, body =
                          match e with
                            | Abstr (xs, body, _) ->
-                               (List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft),
+                               (List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft),
                                 fun gs -> fun vs -> eval alias_env (extend env (fs @ fs' @ xs) (gs @ gs @ vs)) body)
                            | _ -> assert false
                        in
@@ -622,8 +681,9 @@ struct
                 in
                   I.recursive (defs, fun gs -> eval_defs alias_env (extend env fs gs) defss rest)
             | Define (f, (Abstr (xs, body, _) as e), location, _) -> 
+(*                  Debug.print("compiling non-rec fun: " ^ f); *)
                 let ft = node_datatype e in
-                let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (Types.arg_types ~aenv:alias_env ft) in
+                let xs_info = List.map2 (fun x xt -> make_local_info (xt, x)) xs (TypeUtils.arg_types ~aenv:alias_env ft) in
                   I.letfun (make_global_info (ft, f),
                             xs_info,
                             (fun vs -> eval alias_env (extend env xs vs) body),
@@ -642,39 +702,51 @@ struct
             | Alien (language, name, datatype, _) ->
                 let x_info = make_global_info (datatype, name) in
                   I.alien (x_info, language, fun v -> eval_defs alias_env (extend env [name] [v]) defss rest)
+            | Module (name, defs, _) ->
+(*                Debug.print (if is_some defs then ("module with defs") else ("module without defs"));*)
+                let () =
+                  match name with
+                    | None -> Debug.print ("anonymous module")
+                    | Some name -> Debug.print ("opening module: " ^ name) in
 
-  let eval_program alias_env env (Program (defs, body)) =
-    let bothdefs l r = match l, r with
-      | Define (_, Rec _, _, _), Define (_, Rec _, _, _) -> true
-      | _ ->  false in
-    let defss = groupBy bothdefs defs in
-      eval_defs alias_env env defss body
+                let defs = from_option [] defs in
+
+                let v =
+                  eval_program alias_env env
+                    (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
+
+                let name =                  
+                  match name with
+                    | None -> ""
+                    | Some name -> name
+                in
+                  I.modul (name,
+                           v,
+                           (fun bindings () ->
+                              let (env, _, alias_env) = add_globals_to_env (env, Env.Int.empty, alias_env) bindings in
+                                eval_defs alias_env env defss rest))
+                  
+                  
+
+(*                 let defss = *)
+(*                   opt_app (fun defs -> group_defs defs @ defss) defss defs *)
+(*                 in *)
+(*                   eval_defs alias_env env defss rest *)
+
+(*                 let (bindings, _) = eval_defs alias_env env defs (Syntax.unit_expression Syntax.no_expr_data) in *)
+                  
+
+(*                 I.modul (name, bindings, fun alias_env env -> eval_defs defss alias_env env rest) *)
+
+  and eval_program alias_env env (Program (defs, body)) : tail_computation I.sem =
+      eval_defs alias_env env (group_defs defs) body
 
   let compile (env, tenv, aenv) p =
+    Debug.print ("compiling to IR");
     let s = eval_program aenv env p in
-      (Inline.program (tenv, aenv) (I.reify s)), I.sem_type s      
-
-  let add_globals_to_env : multi_env -> binding list -> multi_env = fun ((venv, tenv, aenv) as env) ->
-    List.fold_left
-      (fun ((venv, tenv, aenv) as env) ->
-         function
-           | `Let ((x, (xt, x_name, `Global)), _) ->
-               extend venv [x_name] [x], Env.Int.bind tenv (x, xt), aenv
-           | `Fun ((f, (ft, f_name, `Global)), _, _, _) ->
-               extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
-           | `Rec defs ->
-               List.fold_left
-                 (fun((venv, tenv, aenv) as env) ((f, (ft, f_name, scope)), _, _, _) ->
-                    match scope with
-                      | `Global -> extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
-                      | `Local -> env)
-                 env defs
-           | `Alien ((f, (ft, f_name, `Global)), _) ->
-               extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
-           | `Alias (name, quantifiers, t) ->
-               venv, tenv, Types.register_alias (name, quantifiers, t) aenv
-           | _ -> env)
-      env
+      Debug.print ("compiled IR");
+      let r = (Inline.program (tenv, aenv) (I.reify s)) in
+        r, I.sem_type s      
 
   let invert_env env =
     VEnv.fold
@@ -685,7 +757,7 @@ struct
            IntMap.add var name env)
       env IntMap.empty
 
-  let make_initial_env : Types.environment -> Types.alias_environment -> multi_env = fun tenv aenv ->
+  let make_initial_env : Types.typing_environment -> multi_env = fun (tenv, aenv) ->
     let venv, tenv = 
       Env.String.fold
         (fun name t (venv, tenv) ->
@@ -700,7 +772,7 @@ module C = Eval(Interpretation(BindingListMonad))
 
 let compile_program : multi_env -> Syntax.program -> computation * datatype = C.compile
 
-let make_initial_env : Types.environment -> Types.alias_environment -> multi_env = C.make_initial_env
+let make_initial_env : Types.typing_environment -> multi_env = C.make_initial_env
 let invert_env : var VEnv.t -> string IntMap.t = C.invert_env
 let add_globals_to_env : multi_env -> binding list -> multi_env = C.add_globals_to_env
 

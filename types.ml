@@ -14,7 +14,6 @@ type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
 (* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
 module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
 
-
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
                  | `Abstract | `NativeString ]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
@@ -30,8 +29,11 @@ type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+type type_variable =
+    [`TypeVar of int | `RigidTypeVar of int
+    |`RowVar of int | `RigidRowVar of int]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type quantifier = type_variable
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
@@ -60,7 +62,8 @@ let for_all : quantifier list * datatype -> datatype = function
 let type_var_number = function
   | `TypeVar x
   | `RigidTypeVar x
-  | `RowVar x -> x
+  | `RowVar x
+  | `RigidRowVar x -> x
 
 module Env = Env.String
 
@@ -183,40 +186,24 @@ let lookup_alias (s, ts) alias_env =
     else
       for_all (vars, alias)
 
+
 (** remove any top-level `MetaTypeVars from a type and optionally
     expand top-level aliases using a user-supplied alias environment.
 *)
-let concrete_type ?(aenv=Env.empty) t =
-  let rec ct rec_names aenv t : datatype =
+let concrete_type t =
+  let rec ct rec_names t : datatype =
     match t with
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `Body t -> ct rec_names aenv t
+              | `Body t -> ct rec_names t
               | `Recursive (_, t) ->
-                  ct rec_names aenv t
+                  ct rec_names t
               | _ -> t
           end
-      | `Application (name, ts) when Env.has aenv name ->
-          if Env.Dom.mem name rec_names then
-            failwith ("Cannot instantiate unguarded recursive alias" ^ name)
-          else
-            let t' = lookup_alias (name, ts) aenv in
-              begin
-                match t' with
-                  | `ForAll (_, `Primitive `Abstract)
-                  | `Primitive `Abstract -> t
-                  | _ ->
-                      ct (Env.Dom.add name rec_names) aenv t'
-              end
-(*
-      | `Application (name, ts) ->
-          Debug.print ("Unbound alias: " ^ name);
-          t
-*)
       | _ -> t
   in
-    ct (StringSet.empty) aenv t
+    ct (StringSet.empty) t
 
 let free_type_vars, free_row_type_vars =
   let module S = TypeVarSet in
@@ -656,9 +643,10 @@ let string_of_primitive : primitive -> string = function
 let string_of_quantifier' : string IntMap.t -> quantifier -> string =
   fun vars ->
     function
-      | `TypeVar var -> "'" ^ IntMap.find var vars
-      | `RigidTypeVar var -> IntMap.find var vars
-      | `RowVar var -> IntMap.find var vars
+      | `TypeVar var
+      | `RowVar var -> "'" ^ IntMap.find var vars
+      | `RigidTypeVar var
+      | `RigidRowVar var -> IntMap.find var vars
 
 let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> string =
   fun rec_vars vars datatype ->
@@ -1030,6 +1018,8 @@ let string_of_environment env =
                                               end)) in
     M.show env
 
+let string_of_typing_environment (env, alias_env) = 
+  string_of_environment env ^ "\n" ^ string_of_environment alias_env
 
 (*
   HACK:
@@ -1177,83 +1167,4 @@ let make_variant_type ts = `Variant (make_row ts)
 
 let make_table_type (r, w) = `Table (r, w)
 
-(** type destructors *)
-exception TypeDestructionError of string
-
-let split_row name row =
-  let (field_env, row_var) = fst (unwrap_row row) in
-  let t =
-    if StringMap.mem name field_env then
-      match (StringMap.find name field_env) with
-        | `Present t -> t
-        | `Absent ->
-            raise (TypeDestructionError
-                     ("Attempt to split row "^string_of_row row ^" on absent field" ^ name))
-    else
-      raise (TypeDestructionError
-               ("Attempt to split row "^string_of_row row ^" on absent field" ^ name))
-  in
-    t, (StringMap.remove name field_env, row_var)
-
-let split_variant_type ?(aenv=Env.empty) name =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `Variant row ->
-           let t, row = split_row name row in
-             `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
-       | t ->
-           raise (TypeDestructionError
-                    ("Attempt to split non-variant type "^string_of_datatype t)))
-
-let project_type ?(aenv=Env.empty) name =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `Record row ->
-           let t, _ = split_row name row in
-             t
-       | t -> 
-           raise (TypeDestructionError
-                    ("Attempt to project non-record type "^string_of_datatype t)))
-
-let erase_type ?(aenv=Env.empty) name =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `Record row ->
-           let t, row = split_row name row in
-             `Record row
-       | t ->
-           raise (TypeDestructionError
-                    ("Attempt to erase field from non-record type "^string_of_datatype t)))
-
-let rec return_type ?(aenv=Env.empty) =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `ForAll (_, t) -> return_type ~aenv:aenv t
-       | `Function (_, _, t) -> t
-       | t -> 
-           raise (TypeDestructionError
-                    ("Attempt to take return type of non-function: " ^ string_of_datatype t)))
-
-let rec arg_types ?(aenv=Env.empty) =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `ForAll (_, t) -> arg_types ~aenv:aenv t
-       | `Function (`Record row, _, _) ->
-           extract_tuple row
-       | t ->
-           raise (TypeDestructionError
-                    ("Attempt to take arg types of non-function: " ^ string_of_datatype t)))
-
-let element_type ?(aenv=Env.empty) =
-  (concrete_type ~aenv:aenv) ->-
-    (function
-       | `Application ("List", [t]) -> t
-       | t ->
-           raise (TypeDestructionError
-                    ("Attempt to take element type of non-list: " ^ string_of_datatype t)))
-
-let inject_type ?(aenv=Env.empty) name t =
-  `Variant (make_singleton_open_row (name, `Present t))
-
-let abs_type ?(aenv=Env.empty) _ = assert false
-let app_type ?(aenv=Env.empty) _ _ = assert false
+let extend_env (a,b) (a',b') = (Env.extend a a', Env.extend b b')

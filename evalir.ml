@@ -82,7 +82,7 @@ module Eval = struct
                              Result.Attr (name, unbox_string (value env v)) :: attrs)
                           attrs children) in
           `XML (Result.Node (tag, children))
-    | `ApplyPrim (_, args) ->
+    | `ApplyPure (_, args) ->
         (assert false) (*Library.apply_pfun*) (assert false) (List.map (value env) args)
     | `Coerce (v, _) -> value env v
     | `Abs v         -> `Abs (value env v)
@@ -145,6 +145,7 @@ module Eval = struct
           | `Alien _ 
           | `Alias _       -> (* just skip it *)
               computation env cont (bs, tailcomp)
+          | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) -> 

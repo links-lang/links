@@ -1,11 +1,19 @@
 # TODO:
 #
 # - Sort out right-click menu for project list.
-# - Figure out how to distinguish between left/right mouse clicks (done)
-# - Recreate stopPropagation (is it gone?) (done, but won't work)
+#    * Figure out how to distinguish between left/right mouse clicks (done)
+#    * Recreate stopPropagation (is it gone?) (done, but won't work)
+#      -- Sam has been notified, appears to be Links issue.
 # - Clean up SQL calls - there's about 5 for loading the project list..
-# - Add new files to project list on creation.
+#    * Clean up client/server calls in general. Somewhere, a server function is making a client call... (done - project list getting was silly, and opHandler requires server -> client calls if used on server.
+# - 'New' menu option changes
+#    * new files added to project list on creation in right project 
+#      -- Project needs to be embedded in iFrame
+#    * add capabilities for adding new projects
+#    * new project creates new directory on disk
+#    * new project gets added
 # - Figure out why logging out doesn't work.
+#    * Possibly due to calling server function direct?
 # - Test/Deploy configuration. Needs:
 #    * Create-dir function (done)
 #    * Delete-dir function (done)
@@ -13,6 +21,7 @@
 #    * Logging in needs to create new dir based on sessionId (done)
 #    * Logging out needs to delete dir (done)
 #    * Deploy copies from test to deploy (done)
+#    * What happens when users want to test files linking to files not being tested? Maybe it's better to mark files as 'unclean' in database, then dump them out during testing, and copy them from database during deploy?
 
 ######
 # JavaScript functions
@@ -43,7 +52,12 @@ alien javascript getLocation: () -> String;
 # Create a new window using the URL passed in.
 alien javascript newWindow: (String) -> ();
 
+# Normal (un-)escaping
+alien javascript jsUnescape: (String) -> String;
+alien javascript jsEscape: (String) -> String;
+
 alien javascript testFn: (Event) -> ();
+
 ######
 # Attribute type
 typename Attribute = (attr: String, val: String);
@@ -57,6 +71,8 @@ var deplDir = "users/";
 typename User = (name:String, password:String);
 typename ProjConts = (Int, String);
 typename Projects = [| Project : ProjConts | Folder : ProjConts | File : ProjConts |];
+
+typename ProjectListing = mu proj.[| LFile : ProjConts | LProject : (ProjConts, [proj]) | LFolder : (ProjConts, [proj]) |];
 
 # Databases to access
 var users = table "users" with (
@@ -131,6 +147,7 @@ fun logout() server
 sig getUid : () -> Int
 fun getUid() server
 {
+  debug("Getting UID");
   var uids = for (var sid <-- sessionsTable)
              where (sid.id == getCookie("linkside"))
               [sid.uid];
@@ -144,6 +161,7 @@ fun getUid() server
 var userId = getUid();
 
 # Check whether the user is logged in
+sig isLoggedIn : () -> Bool
 fun isLoggedIn() server
 {
   var sessId = getCookie(cookieName);
@@ -168,25 +186,44 @@ fun fileOp() client
     case SaveFile(name, escp, code) -> 
     {
       toggleWaiting("Saving file..");
-      storeFile(name, escp, code); 
+      var lFileData = getFrameData();
+      var lTypes = getTypes(code);
+
+       var lVoid = 
+         for (var lCurr <- lTypes)
+         {
+           debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
+           []
+         };
+
+      storeFile(name, lFileData.pid, escp, code); 
       #updateSession();
-      setFrameName(name);
+      setFrameData(lFileData.pid, name);
       toggleWaiting("");
       fileOp()
     }
-    case LoadFile(name) -> 
+    case LoadFile(name, lEvent) -> 
     {
        toggleWaiting("Loading file..");
-       var lData = getFile(name);
+       var lFileData = getFileData(lEvent);
+       var lProjId = lFileData.pid;
+       var lFullName = lFileData.path ++ name;
+       var lData = getFile(lProjId, name);
        var rval = convertData(lData) : Xml;
-       
+
        insertCode(rval);
        #updateSession();
-       setFrameName(name);
+       setFrameData(lProjId, lFullName);
        toggleWaiting("");
        fileOp()
     }
   }
+}
+
+sig getTypes : (String) -> [(name:String,pos:(finish:Int,line:Int,start:Int),t:String)]
+fun getTypes(xiCode) server
+{
+  dumpTypes(xiCode)
 }
 
 # Show/hide loading message
@@ -226,24 +263,51 @@ fun updateSession() server
 }
 
 # Store the code in the database
-sig storeFile : (String, String, String) -> ()
-fun storeFile(name, escp, code) server 
+sig storeFile : (String, Int, String, String) -> ()
+fun storeFile(name, pid, escp, code) server 
 {
+  var lBaseDir = fileLoc ++ testDir ++ getCookie(cookieName) ++ "/";
+  var lFilename = reverse(takeWhile(fun (x) { x <> '/' }, reverse(name)));
+
   # Insert if new, update otherwise
-  if (not(fileExists(name)))
+  if (not(fileExists(pid, lFilename)))
   {
-    insert files values [(id=0, pid=1, name=name, last_mod="", created="", data=escp, parent = -1, isfolder = 0)];
+    insert files values [(id=0, pid=pid, name=lFilename, last_mod="", created="", data=escp, parent = -1, isfolder = 0)];
   }
   else {
     update (var lFile <-- files)
-     where ((lFile.pid == 1) && (lFile.name == name))
+     where ((lFile.pid == pid) && (lFile.name == lFilename))
      set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
   };
   
+  # Get the folders from the filename
+  debug("Getting folder list");
+  var lList = split('/', name);
+
+  debug("Checking directories");
+  var lNull = 
+    for (var lCount <- range(1, (length(lList) - 1)))
+    {
+      var lCurrDir = lBaseDir ++ join("/", take(lCount, lList));
+      debug("Checking for dir " ++ lCurrDir);
+      if (not(isDir(lCurrDir)))
+      {
+        var lRes = mkdir(lCurrDir);
+        debug("Creating dir " ++ lCurrDir);
+        switch (lRes)
+        {
+          case Ok() -> ()
+          case Error(err) -> debug(err); ()
+        }
+      }
+      else {};
+      []
+    };
+
   # @TODO: Do we want to save the file here? No real need if test/depl,
   # but useful for knowing which files are to be changed. The other 
   # option is to mark modified files in the db.
-  writeToFile(fileLoc ++ testDir ++ getCookie(cookieName) ++ "/" ++ name, code);
+  writeToFile(lBaseDir ++ name, code);
   updateSession();
 }
 
@@ -272,11 +336,11 @@ fun saveFile(handler, xiName, xiNew) client
 }
 
 # Load a file from the database
-sig getFile : (String) -> String
-fun getFile(name) server
+sig getFile : (Int, String) -> String
+fun getFile(xiProjId, xiName) server
 {
   var res = for (var lFile <-- files)
-    where ((lFile.pid == 1) && (lFile.name == name))
+    where ((lFile.pid == xiProjId) && (lFile.name == xiName))
     {
       [lFile.data]
     };
@@ -285,20 +349,47 @@ fun getFile(name) server
   updateSession();
 
   if (numElems(res) == 0)
-    "No such file '" ++ name ++ "'."
+    "No such file '" ++ xiName ++ "'."
   else
    hd(res)
 }
 
 # Check if a file exists
-sig fileExists : (String) -> Bool
-fun fileExists(name) server
+sig fileExists : (Int, String) -> Bool
+fun fileExists(xiPid, xiName) server
 {
   var lCount = for (var lFile <-- files)
-    where ((lFile.pid == 1) && (lFile.name == name))
+    where ((lFile.pid == xiPid) && (lFile.name == xiName))
     [lFile.pid];
 
   numElems(lCount) >= 1
+}
+
+# Get the full path of a file selected in the project browser
+sig getFileData : (Event) -> (pid : Int, path : String)
+fun getFileData(xiEvent) client
+{
+  # Get the events target
+  var lOrigDiv = getTargetElement(xiEvent);
+
+  # Find the project and folders that make out the full path to this file
+  getPathFromNode(parentNode(findFirstParentDiv(lOrigDiv)))
+}
+
+# Recurse up the tree from the given node, returning the proj's id and the path.
+sig getPathFromNode : (DomNode) -> (pid : Int, path : String)
+fun getPathFromNode(xiNode) client
+{
+  # Find the next parent div
+  var lParent = findFirstParentDiv(xiNode);
+
+  # Check whether it's a project or a folder and get the path
+  var lPath = (if (domGetAttributeFromRef(lParent, "type") == "folder")
+    (getPathFromNode(lParent)).path ++ (domGetAttributeFromRef(lParent, "cname")) ++ "/" 
+  else
+    domGetAttributeFromRef(lParent, "cname") ++ "/");
+
+  (pid = stringToInt(domGetAttributeFromRef(lParent, "pid")), path = lPath)
 }
 
 # Get the body tag containing code
@@ -311,20 +402,22 @@ fun getDocumentBody() client
 }
 
 # Set the name of the IFrame 
-sig setFrameName : (String) -> ()
-fun setFrameName(xiName) client
+sig setFrameData : (Int, String) -> ()
+fun setFrameData(xiPid, xiName) client
 {
   var lIfr = hd(getElementsByTagName("iframe"));
-  var lNull = domSetAttributeFromRef(lIfr, "name", xiName);
+  var lNull1 = domSetAttributeFromRef(lIfr, "name", xiName);
+  var lNull2 = domSetAttributeFromRef(lIfr, "pid", (intToString(xiPid)));
   ()
 }
 
 # Get the name of the IFrame
-sig getFrameName : () -> String
-fun getFrameName() client
+sig getFrameData : () -> (pid: Int, fname: String)
+fun getFrameData() client
 {
   var lIfr = hd(getElementsByTagName("iframe"));
-  domGetAttributeFromRef(lIfr, "name")
+  (pid = stringToInt(domGetAttributeFromRef(lIfr, "pid")),
+   fname = domGetAttributeFromRef(lIfr, "name"))
 }
 
 # Insert code into the document, then highlight it.
@@ -333,6 +426,38 @@ fun insertCode(code) client
 {
   replaceChildren(code, getDocumentBody());
   highlightCode();
+}
+
+# Recursive string handling. Fast enough for small strings.
+sig split : (Char, String) -> [String]
+fun split(xiChr, xiString)
+{
+  debug("Split at " ++ [xiChr] ++ " : " ++ xiString);
+  switch (xiString)
+  {
+    case [] -> []
+    case xs -> 
+    {
+      var lHead = takeWhile(fun (x) {x <> xiChr}, xiString);
+      var lTail = dropWhile(fun (x) {x <> xiChr}, xiString);
+        
+      # Recurse, dropping the split-char.
+      if (lTail <> [])
+        [lHead] ++ split(xiChr, tl(lTail))
+      else
+        [lHead]
+    }
+  }
+}
+
+# Create a list containing the range of numbers given
+sig range : (Int, Int) -> [Int]
+fun range(xiStart, xiFinish) 
+{
+  if (xiStart == xiFinish)
+    [xiFinish]
+  else
+    [xiStart] ++ range((xiStart + 1), xiFinish)
 }
 
 # Recursive version of splitlines. Works, but is slow.
@@ -573,25 +698,23 @@ fun nodeAttributesMatch(xiNode, xiAttrs) client
   and(for (var attribute <- xiAttrs)
        [domGetAttributeFromRef(xiNode, attribute.attr) == attribute.val])
 }
-
-# Recursive function. Takes a Project at a particular level, looks 
-# at its type and either tries to find more files/folders or returns
-# the XML gathered.
-sig getProjectList : (Projects, Int, Mailbox ([| LoadFile: String|a|])) -> Xml
-fun getProjectList(currItem, currLevel, opHandler) client
+# Look through the project files given recursively and return XML for each.
+sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String)|LoadFile: (String, Event)|])) -> Xml
+fun getLProjectList(currItem, currLevel, opHandler) client
 {
   var width = intToString(currLevel * 16);
       
   # Determine what type of file we've got
   switch (currItem)
   {
-    case Project(id, name) ->
+    case LProject((id, name), contents) ->
     {
       # This is a top-level node. Start a new list and find all files that
       # belong to the project.
+      # 
       <li class="proj-list-item">
-        <div name="closed">
-          <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}" />
+        <div name="closed" type="proj" cname="{name}" pid="{intToString(id)}" l:onclick="{navClick(event)}">
+          <img name="box" src="images/add-blue-box.png"/>
           <img src="images/proj-close.png" />  
           <span>
             {stringToXml(name)}
@@ -599,68 +722,88 @@ fun getProjectList(currItem, currLevel, opHandler) client
           <ul class="proj-list" style="display: none;">
           {
             # Get the contents of this project
-            var contents = findFiles(currItem);
+            #var contents = findFiles(currItem);
                        
             # Get the XML
             for (var file <- contents)
-              getProjectList(file, 1, opHandler)
+              getLProjectList(file, 1, opHandler)
           }
           </ul>
         </div>
       </li>
       
     }
-    case Folder(id, name)  ->
+    case LFolder((id, name), contents)  ->
     {
-      serverDbg("Folder: " ++ name);
       # This is a folder. Print the folder name, then list files.
       <li class="proj-list-item">
-        <div name="closed"> 
+        <div name="closed" type="folder" cname="{name}" l:onclick="{navClick(event)}" >  
           <img src="images/blank.png" style="width: {width}; height: 1px;"/>
-          <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}"/>
+          <img name="box" src="images/add-blue-box.png"/>
           <img src="images/proj-close.png" class="proj-blank" />
           <span class="proj-text">
             {stringToXml(name)}
           </span>
           <ul class="proj-list" style="display: none;">
           {
-            var folderData = findFiles(currItem);
-            for (var file <- folderData)
-            {
-              switch (file)
-              {
-                case File(id, name) -> 
-                {
-                  debug("folder-file.name: " ++ name);
-                  getProjectList(file, (currLevel + 1), opHandler)
-                }
-                case _ -> 
-                {
-                  debug("Error!!");
-                  <li>error</li>
-                }
-              }
-            } 
+            #var folderData = findFiles(currItem);
+            for (var file <- contents)
+              getLProjectList(file, (currLevel + 1), opHandler)
           }
           </ul>
         </div>
       </li>
     }
-    case File(id, name) ->
+    case LFile(id, name) ->
     {
-      serverDbg("File: " ++ name);
-    
       # This is a file. Display it.
+      # 
       <li class="proj-list-item">
         <div class="proj-node"> 
           <img src="images/blank.png" style="width: {width}; height: 1px;" />
           <img src="images/blank.png" class="proj-blank" />
-          <span class="proj-text" l:onclick="{opHandler ! LoadFile(name)}">
+          <span class="proj-text"  l:onclick="{opHandler ! LoadFile(name, event)}">
           {stringToXml(name)}
           </span>
         </div>
       </li>
     }
+    case _ -> <#></#>
+  }
+}
+
+# Get project listing
+sig getProjectListing : (Projects) -> ProjectListing
+fun getProjectListing(currItem) server
+{
+  switch (currItem)
+  {
+    case Project(id, name) ->
+    {
+      # Get the contents of this project
+      var lProjData = findFiles(currItem);
+                       
+      # Get the listings
+      var lContents =
+        for (var lFile <- lProjData)
+          [getProjectListing(lFile)];
+
+      LProject((id, name), lContents)
+    }
+    case Folder(id, name) -> 
+    {
+      # Find all the subcomponents of this folder
+      var lFolderData = findFiles(currItem);
+      
+      # Loop through them and add to this listing
+      var lContents = 
+        for (var lFile <- lFolderData)
+          [getProjectListing(lFile)];
+      
+      # Return the listing
+      LFolder((id, name), lContents)
+    } 
+    case File(id, name) -> LFile(id, name)
   }
 }
 
@@ -684,7 +827,6 @@ fun findFiles(container) server
         where ((file.pid == id) && (file.parent < 0))
         orderby (file.name)
         {
-          debug("Looking at file " ++ file.name);
           switch (file.isfolder)
           {
             case 1 -> [Folder(file.id, file.name)]
@@ -710,23 +852,18 @@ fun findFiles(container) server
   }
 }
 
-# Get the project list.
-sig getProjList : () -> [(id: Int, name: String)]
-fun getProjList() server
-{
-  for (var projs <-- projectTable)
-    where (projs.uid == userId)
-      [(id = projs.id, name = projs.name)]
-}
-
 # Get the list of projects
-sig getProjs : () -> [Projects]
+sig getProjs : () -> ProjectListing
 fun getProjs() server
 {
-  for (var projs <-- projectTable)
-    where (projs.uid == userId)
-    orderby (projs.name)
-      [Project(projs.id, projs.name)]
+  var lProjs = 
+    for (var projs <-- projectTable)
+      where (projs.uid == userId)
+      orderby (projs.name)
+        [Project(projs.id, projs.name)];
+
+  hd(for (var lProject <- lProjs)
+    [getProjectListing(lProject)])
 }
 
 # Get the list of files
@@ -755,7 +892,7 @@ fun newFile(xiHandler) client
   replaceChildren(<#></#>, getDocumentBody());
   
   # Set the name to be nothing
-  setFrameName("");
+  setFrameData(1, "");
 }
 
 # Run the current file.
@@ -775,8 +912,11 @@ fun runFile(xiHandler) client
   }
   else {};
 
+  # Get frame data
+  var lFrameData = getFrameData();
+
   # Write file to temp location
-  var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ getFrameName();
+  var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ lFrameData.fname;
   #writeFromDatabase(getFrameName());
   
   # Open a new window pointing to the correct location
@@ -820,17 +960,16 @@ fun deploy() server
     debug("Deployment failed!")
 }
 
-#
 # Write data from the database to file on disk.
 # Returns file location
-sig writeFromDatabase : (String) -> String
-fun writeFromDatabase(xiName) server
+sig writeFromDatabase : (Int, String) -> String
+fun writeFromDatabase(xiPid, xiName) server
 { 
   # Get session ID
   var lFileLoc = testDir ++ getCookie(cookieName) ++ "/" ++ xiName;
 
   # Get the data
-  var lFileData = getFile(xiName);
+  var lFileData = getFile(xiPid, xiName);
 
   # Clean it up (calls client!)
   var lCleanData = join("\n", splitEscapedLinesJS(lFileData));
@@ -874,8 +1013,8 @@ sig maybeSaveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
 fun maybeSaveFile(xiHandler) client
 {
   # Check if the iFrame is named - 'save as' if it isn't
-  var lFrameName = getFrameName();
-  switch (lFrameName)
+  var lFrameData = getFrameData();
+  switch (lFrameData.fname)
   {
     case "*" -> toggleVisible("overlay"); toggleVisible("save-file")
     case ""  -> debug("No name!")
@@ -884,11 +1023,11 @@ fun maybeSaveFile(xiHandler) client
       var lMatchFun = fun (x) { x <> '*' };
 
       # Check if a save is needed
-      if (length(dropWhile(lMatchFun, lFrameName)) == 1)
+      if (length(dropWhile(lMatchFun, lFrameData.fname)) == 1)
       {
-        var lRealName = takeWhile(lMatchFun, lFrameName);
+        var lRealName = takeWhile(lMatchFun, lFrameData.fname);
         saveFile(xiHandler, lRealName, true);
-        setFrameName(lRealName);
+        setFrameData(lFrameData.pid, lRealName);
       }
       else {};
       ()
@@ -900,8 +1039,9 @@ fun maybeSaveFile(xiHandler) client
 sig docHasChanged : () -> Bool
 fun docHasChanged() client
 {
+  var lFrameName = (getFrameData()).fname;
   # See if there's a star in the framename.
-  length(dropWhile(fun (x) { x <> '*' }, getFrameName())) == 1
+  length(dropWhile(fun (x) { x <> '*' }, lFrameName)) == 1
 }
 
 # Toggle save-before-[action] display
@@ -922,7 +1062,7 @@ fun toggleActionSave() client
     case _       ->
     {
       # Check if this is a new file
-      if(length(takeWhile(fun (x) { x <> '*' }, getFrameName())) == 0)
+      if(length(takeWhile(fun (x) { x <> '*' }, (getFrameData()).fname)) == 0)
       {
         # Set the filename-box to visible
         var lVoid1 = domSetStyleAttrFromRef(lInputNode, "display", "block");
@@ -1121,26 +1261,19 @@ fun getHiddenObjects(opHandler) client
 }
 
 # Returns the HTML needed for the project browser.
-sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
+sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|LoadFile:(String, Event)|])) -> Xml
 fun getProjBrowser(opHandler) client
 {
     <div id="proj-browser" class="proj-browser">
       <div id="proj-caption-bg" class="caption-bg">
         <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
       </div>
-      <div id="proj-items" class="proj-items" l:onmouseup="{testFn(event);}">
+      <div id="proj-items" class="proj-items">
         <ul class="proj-list">
          {
-           var projects = []; #getProjs();
-           
-           if (length(projects) > 0)
-           {
-             for (var project <- projects)
-               getProjectList(project, 0, opHandler)
-           }
-           else
-             <#></#>
-           }   
+           var lProjs = getProjs();
+           getLProjectList(lProjs, 0, opHandler)
+         }  
         </ul>
       </div>
     </div>

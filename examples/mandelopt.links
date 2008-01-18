@@ -121,4 +121,4 @@ fun main() client {
                 mini, minr, maxi, maxr)
 }
 
-main()
+{ main(); page <html></html>}

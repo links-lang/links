@@ -4,29 +4,37 @@ open Utility
 open List
 open Sugartypes
 
-let ensure_match (start, finish) (opening : string) (closing : string) = function
-  | result when opening = closing -> result
-  | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                           (start, finish)))
+(* Generation of fresh type variables *)
+      
+let type_variable_counter = ref 0
+  
+let fresh_type_variable : unit -> datatype =
+  function () -> 
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
 
-let pos () : Sugartypes.pposition = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
+let ensure_match (start, finish, _) (opening : string) (closing : string) = function
+  | result when opening = closing -> result
+  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
+                                     (start, finish, None)))
+
+let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos (), None
 
 let default_fixity = Num.num_of_int 9
 
 let annotate (signame, datatype) : _ -> binding = 
-  let checksig signame name =
+  let checksig (signame, _) name =
     if signame <> name then 
-      raise (Sugar.ConcreteSyntaxError
+      raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
                 ^ signame ^ "', not `"^ name ^"'.",
                 pos ())) in
     function
-      | `Fun (name, phrase, location, dpos) ->
+      | `Fun ((name, bpos), phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun (name, phrase, location, Some datatype), dpos
-      | `Var ((name, phrase, location), dpos) ->
+            `Fun ((name, None, bpos), phrase, location, Some datatype), dpos
+      | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ((`Variable name, dpos), phrase, location, Some datatype), dpos
+            `Val ((`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -63,7 +71,7 @@ let parseRegexFlags f =
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN SIG
+%token MU ALIEN SIG INCLUDE
 %token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -94,12 +102,12 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.ppattern> pattern
-%type <Sugartypes.name * Sugartypes.funlit * Sugartypes.location * Sugartypes.pposition> tlfunbinding
+%type <Sugartypes.pattern> pattern
+%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
-%type <Sugartypes.constant * Sugartypes.pposition> constant
+%type <Sugartypes.constant * Sugartypes.position> constant
 %type <(string * Sugartypes.phrase list) list> attr_list
 %type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
@@ -107,6 +115,7 @@ let parseRegexFlags f =
 %%
 
 interactive:
+| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -115,9 +124,9 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| declarations exp END                                          { $1, Some $2 }
-| exp END                                                       { [], Some $1 }
-| declarations END                                              { $1, None }
+| preamble declarations exp END                                { $1 @ $2, Some $3 }
+| preamble exp END                                             { $1, Some $2 }
+| preamble declarations END                                    { $1 @ $2, None }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -135,6 +144,13 @@ arg:
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 
+var:
+| VARIABLE                                                     { $1, pos() }
+
+preamble:
+| preamble_declaration preamble                                { $1 :: $2 }
+| /* empty */                                                  { [] }
+
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
@@ -143,12 +159,16 @@ declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
 
+preamble_declaration:
+| INCLUDE STRING                                               { `Include $2, pos() }
+
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) $3; 
+                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }
-| tlvarbinding SEMICOLON                                       { let (d,p,l), pos = $1 in `Val ((`Variable d, pos),p,l,None), pos }
+| tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
+                                                                 in `Val ((`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -156,25 +176,32 @@ fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
 | fun_declaration                                              { [$1] }
 
+fun_declaration:
+| tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
+                                                                 in `Fun ((d, None, dpos),p,l,None), pos }
+| signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
 
-fun_declaration:
-| tlfunbinding                                                 { let (d,p,l, pos) = $1 in `Fun (d,p,l,None), pos }
-| signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+prefixop:
+| PREFIXOP                                                     { $1, pos() }
+
+postfixop:
+| POSTFIXOP                                                    { $1, pos() }
 
 tlfunbinding:
-| FUN VARIABLE arg_lists perhaps_location block                { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
+| FUN var arg_lists perhaps_location block                     { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
 | OP pattern op pattern perhaps_location block                 { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
-| OP PREFIXOP pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
-| OP pattern POSTFIXOP perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
+| OP prefixop pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
+| OP pattern postfixop perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
 
 tlvarbinding:
-| VAR VARIABLE perhaps_location EQ exp                         { ($2, $5, $3), pos() }
+| VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
 
 signature: 
-| SIG VARIABLE COLON datatype                                  { $2, $4 }
+| SIG var COLON datatype                                       { $2, $4 }
 | SIG op COLON datatype                                        { $2, $4 }
 
 typedecl:
@@ -237,39 +264,39 @@ parenthesized_thing:
 binop:
 | MINUS                                                        { `Minus }
 | MINUSDOT                                                     { `FloatMinus }
-| op                                                           { `Name $1 }
+| op                                                           { `Name (fst $1) }
 
 op:
-| INFIX0                                                       { $1 }
-| INFIXL0                                                      { $1 }
-| INFIXR0                                                      { $1 }
-| INFIX1                                                       { $1 }
-| INFIXL1                                                      { $1 }
-| INFIXR1                                                      { $1 }
-| INFIX2                                                       { $1 }
-| INFIXL2                                                      { $1 }
-| INFIXR2                                                      { $1 }
-| INFIX3                                                       { $1 }
-| INFIXL3                                                      { $1 }
-| INFIXR3                                                      { $1 }
-| INFIX4                                                       { $1 }
-| INFIXL4                                                      { $1 }
-| INFIXR4                                                      { $1 }
-| INFIX5                                                       { $1 }
-| INFIXL5                                                      { $1 }
-| INFIXR5                                                      { $1 }
-| INFIX6                                                       { $1 }
-| INFIXL6                                                      { $1 }
-| INFIXR6                                                      { $1 }
-| INFIX7                                                       { $1 }
-| INFIXL7                                                      { $1 }
-| INFIXR7                                                      { $1 }
-| INFIX8                                                       { $1 }
-| INFIXL8                                                      { $1 }
-| INFIXR8                                                      { $1 }
-| INFIX9                                                       { $1 }
-| INFIXL9                                                      { $1 }
-| INFIXR9                                                      { $1 }
+| INFIX0                                                       { $1, pos() }
+| INFIXL0                                                      { $1, pos() }
+| INFIXR0                                                      { $1, pos() }
+| INFIX1                                                       { $1, pos() }
+| INFIXL1                                                      { $1, pos() }
+| INFIXR1                                                      { $1, pos() }
+| INFIX2                                                       { $1, pos() }
+| INFIXL2                                                      { $1, pos() }
+| INFIXR2                                                      { $1, pos() }
+| INFIX3                                                       { $1, pos() }
+| INFIXL3                                                      { $1, pos() }
+| INFIXR3                                                      { $1, pos() }
+| INFIX4                                                       { $1, pos() }
+| INFIXL4                                                      { $1, pos() }
+| INFIXR4                                                      { $1, pos() }
+| INFIX5                                                       { $1, pos() }
+| INFIXL5                                                      { $1, pos() }
+| INFIXR5                                                      { $1, pos() }
+| INFIX6                                                       { $1, pos() }
+| INFIXL6                                                      { $1, pos() }
+| INFIXR6                                                      { $1, pos() }
+| INFIX7                                                       { $1, pos() }
+| INFIXL7                                                      { $1, pos() }
+| INFIXR7                                                      { $1, pos() }
+| INFIX8                                                       { $1, pos() }
+| INFIXL8                                                      { $1, pos() }
+| INFIXR8                                                      { $1, pos() }
+| INFIX9                                                       { $1, pos() }
+| INFIXL9                                                      { $1, pos() }
+| INFIXR9                                                      { $1, pos() }
  
 postfix_expression:
 | primary_expression                                           { $1 }
@@ -485,8 +512,8 @@ perhaps_cases:
 
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6), pos() }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3), pos() }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -523,7 +550,7 @@ perhaps_orderby:
 
 escape_expression:
 | iteration_expression                                         { $1 }
-| ESCAPE VARIABLE IN postfix_expression                        { `Escape ($2, $4), pos() }
+| ESCAPE var IN postfix_expression                             { `Escape ((fst $2, None, snd $2), $4), pos() }
 
 formlet_expression:
 | escape_expression                                            { $1 }
@@ -564,7 +591,7 @@ database_expression:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
-| FUN VARIABLE arg_lists block                                 { `Fun ($2, ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
 
 bindings:
 | binding                                                      { [$1] }
@@ -600,7 +627,7 @@ just_datatype:
 datatype:
 | mu_datatype                                                  { $1 }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               Sugar.fresh_type_variable (),
+                                                                               fresh_type_variable (),
                                                                                $3) }
 | parenthesized_datatypes 
        MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
@@ -640,11 +667,11 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 
-| CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN datatype_list RPAREN                      { TypeApplication ($1, $3) }
 
-primary_datatype_list:
-| primary_datatype                                             { [$1] }
-| primary_datatype COMMA primary_datatype_list                 { $1 :: $3 }
+datatype_list:
+| datatype                                                     { [$1] }
+| datatype COMMA datatype_list                                 { $1 :: $3 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -680,7 +707,8 @@ record_label:
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 row_variable:
-| VARIABLE                                                     { `Open $1 }
+| VARIABLE                                                     { `OpenRigid $1 }
+| QUOTEDVAR                                                    { `Open $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 /*
@@ -730,16 +758,25 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS VARIABLE                                  { `As ($3, $1), pos() }
+| cons_pattern AS var                                       { `As ((fst $3, None, snd $3), $1), pos() }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
 | constructor_pattern COLONCOLON cons_pattern               { `Cons ($1, $3), pos() }
 
 constructor_pattern:
-| primary_pattern                                           { $1 }
+| negative_pattern                                          { $1 }
 | CONSTRUCTOR                                               { `Variant ($1, None), pos() }
 | CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }
+
+constructors:
+| CONSTRUCTOR                                               { [$1] }
+| CONSTRUCTOR COMMA constructors                            { $1 :: $3 } 
+
+negative_pattern:
+| primary_pattern                                           { $1 }
+| MINUS CONSTRUCTOR                                         { `Negative [$2], pos() }
+| MINUS LPAREN constructors RPAREN                          { `Negative $3, pos() }
 
 parenthesized_pattern:
 | LPAREN RPAREN                                             { `Tuple [], pos() }
@@ -749,7 +786,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable $1, pos() }
+| VARIABLE                                                  { `Variable ($1, None, pos()), pos() }
 | UNDERSCORE                                                { `Any, pos() }
 | constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }

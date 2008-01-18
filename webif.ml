@@ -41,12 +41,11 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
   Syntax.Program (prelude @ defs, body)
 
 (* Read in and optimise the program *)
-let read_and_optimise_program prelude typenv filename = 
-  let program, sugar = lazy(Parse.parse_file Parse.program filename)
-    <|measure_as|> "parse" in
-  let () = TypeSugar.Check.file typenv sugar in
-  let tenv, program = lazy(Inference.type_program typenv program)
-    <|measure_as|> "type" in
+let read_and_optimise_program prelude tyenv filename = 
+  let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
+  let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+  let program = Sugar.desugar_program program in
+  let tenv, program = measure "type" (Inference.type_program tyenv) program in
   let tenv, program = 
     (* The prelude is already optimized (via loader.ml) so we don't run 
        it through again. *)
@@ -188,6 +187,14 @@ let is_multipart () =
   ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
+let wrap_with_render_page (Syntax.Program (defs, body)) = 
+  let data s =
+    `T (Syntax.position body, DesugarDatatype.read_datatype s, None)
+  in
+    (Syntax.Program
+       (defs,
+        Syntax.Apply (Syntax.Variable ("renderPage", data "(Page) -> Xml"), [body], data "Xml")))
+
 let perform_request 
     program (* orig. src.: only used for gen'ing js *)
     globals main req =
@@ -197,22 +204,17 @@ let perform_request
           (Result.string_of_result 
              (Interpreter.apply_cont_safe globals cont (`Record params)))
     | ExprEval(expr, env) ->
-        let pos = Syntax.position expr in
-        let data s =
-            `T (pos, fst (Parse.parse_string Parse.datatype s), None) in
 
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
-        assert(Syntax.is_closed_wrt expr 
+        assert(Syntax.expr_closed_wrt expr 
                  (StringSet.union
                     (StringSet.from_list (dom globals @ dom env))
                     (Env.String.domain (fst Library.typing_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env
-                     (Syntax.Program
-                        ([],
-                         Syntax.Apply (Syntax.Variable ("renderPage", data "(Page) -> Xml"), [expr], data "Xml"))))))
+                     (wrap_with_render_page (Syntax.Program ([], expr))))))
     | ClientReturn(cont, value) ->
         Interpreter.has_client_context := true;
         let result_json = (Json.jsonize_result 
@@ -230,19 +232,16 @@ let perform_request
             (Utility.base64encode (Json.jsonize_result result))
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
-          (if is_client_program program then
-             if Settings.get_value (Basicsettings.use_monadic_ir) then
-               Irtojs.generate_program program
-             else
-               Js.generate_program program
-           else 
-             let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
+          (if is_client_program program then             
+             Irtojs.generate_program_page Library.typing_env (List.map fst globals) program
+           else
+             let _env, rslt = Interpreter.run_program globals [] (wrap_with_render_page (Syntax.Program([], main))) in
                Result.string_of_result rslt)
 
-let serve_request prelude (valenv, typenv) filename = 
+let serve_request prelude (valenv, tyenv) filename = 
   try 
     let _, (Syntax.Program (defs, main) as program) =
-      read_and_optimise_program prelude typenv filename in
+      read_and_optimise_program prelude tyenv filename in
     let defs = stubify_client_funcs valenv program in
     let cgi_args =
       if is_multipart () then

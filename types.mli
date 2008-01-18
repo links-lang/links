@@ -36,8 +36,11 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-type type_variable = [`TypeVar of int | `RigidTypeVar of int | `RowVar of int]
-    deriving (Typeable, Show, Pickle)
+type type_variable =
+    [`TypeVar of int | `RigidTypeVar of int
+    |`RowVar of int | `RigidRowVar of int]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type quantifier = type_variable
     deriving (Typeable, Show, Pickle)
 
@@ -66,7 +69,9 @@ type environment        = datatype Env.String.t
  and typing_environment = environment * alias_environment
     deriving (Show)
 
-val concrete_type : ?aenv:alias_environment -> datatype -> datatype
+val extend_env : typing_environment -> typing_environment -> typing_environment
+
+val concrete_type : datatype -> datatype
 
 val for_all : quantifier list * datatype -> datatype
 
@@ -182,21 +187,6 @@ val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype -> datatype
 
-(** type destructors *)
-exception TypeDestructionError of string
-
-val project_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val erase_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val inject_type : ?aenv:alias_environment -> string -> datatype -> datatype
-val return_type : ?aenv:alias_environment -> datatype -> datatype
-val arg_types : ?aenv:alias_environment -> datatype -> datatype list
-val element_type : ?aenv:alias_environment -> datatype -> datatype
-val abs_type : ?aenv:alias_environment -> datatype -> datatype
-val app_type : ?aenv:alias_environment -> datatype -> datatype -> datatype
-
-val split_row : string -> row -> (datatype * row)
-val split_variant_type : ?aenv:alias_environment -> string -> datatype -> (datatype * datatype)
-
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
@@ -241,3 +231,4 @@ val string_of_datatype_raw : datatype -> string
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
+val string_of_typing_environment : typing_environment -> string

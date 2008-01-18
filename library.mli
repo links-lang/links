@@ -38,6 +38,7 @@ val value_env : primitive option Utility.StringMap.t ref
 val type_env : Types.environment
 val alias_env : Types.alias_environment
 val typing_env : Types.typing_environment
+val prelude_env : Types.typing_environment option ref
 val apply_pfun : string -> result list -> result
 val primitive_stub : string -> result
 
@@ -46,3 +47,5 @@ val primitive_arity : string -> int option
 val cgi_parameters : (string * string) list ref 
 
 val print_http_response : (string * string) list -> string -> unit
+
+val primitive_names : string list
