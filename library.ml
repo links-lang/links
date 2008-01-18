@@ -1063,18 +1063,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(DomNode, DomNode) -> DomNode",
    IMPURE);
 
-  "execBold",
-  (`Client, datatype "(DomNode) -> ()",
-   IMPURE);
-
-  "execInsertImage",
-  (`Client, datatype "(DomNode, String) -> ()",
-   IMPURE);
-
-  "getInnerHtml",
-  (`Client, datatype "(DomNode) -> String",
-   PURE);
-
   (* Write data to a file on disk *)   
   "writeToFile",
    (`Server (p2 (fun name data ->

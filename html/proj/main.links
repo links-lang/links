@@ -4,14 +4,17 @@
 #    * Figure out how to distinguish between left/right mouse clicks (done)
 #    * Recreate stopPropagation (is it gone?) (done, but won't work)
 #      -- Sam has been notified, appears to be Links issue.
+
 # - Clean up SQL calls - there's about 5 for loading the project list..
 #    * Clean up client/server calls in general. Somewhere, a server function is making a client call... (done - project list getting was silly, and opHandler requires server -> client calls if used on server.
+
 # - 'New' menu option changes
 #    * new files added to project list on creation in right project 
 #      -- Project needs to be embedded in iFrame
 #    * add capabilities for adding new projects
 #    * new project creates new directory on disk
 #    * new project gets added
+
 # - Figure out why logging out doesn't work.
 #    * Possibly due to calling server function direct?
 # - Test/Deploy configuration. Needs:
