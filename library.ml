@@ -694,7 +694,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            `Record []
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
-   datatype "(String, String) -> unit",
+   datatype "(String, String) -> ()",
   IMPURE);
 
 
