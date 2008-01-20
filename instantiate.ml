@@ -108,33 +108,28 @@ let instantiate_alias lhs ts =
         let _, tenv =
           List.fold_left (fun (ts, tenv) tv ->
                             match ts, tv with
-                              | (t::ts), `TypeVar var ->
+                              | (t::ts), `RigidTypeVar var ->
                                   ts, IntMap.add var t tenv
                               | _ -> assert false) (ts, IntMap.empty) vars
         in
           instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
     | t -> t
 
-(** instantiate env var
-    Get the type of `var' from the environment, and rename bound typevars.
- *)
-let instantiate : environment -> string -> datatype = fun env var ->
+(** instantiate_typ t
+    remove any quantifiers and rename bound type vars accordingly
+*)
+let instantiate_typ : datatype -> datatype = fun t ->
   let rec collapse qs t =
     match qs, t with
       | qs, `ForAll (qs', t) -> collapse (qs @ qs') t
       | [], t -> t
-      | qs, t -> `ForAll (qs, t) in
-  let t =
-    try
-      Env.String.lookup env var
-    with NotFound _ ->
-      raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
+      | qs, t -> `ForAll (qs, t)
   in
     match collapse [] t with
       | `ForAll (quantifiers, t) as dtype ->
 	(
-	  let _ = Debug.if_set (show_instantiation)
-	    (fun () -> "Instantiating assumption: " ^ string_of_datatype dtype) in
+	  let () = Debug.if_set (show_instantiation)
+	    (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
 
 	  let tenv, renv = List.fold_left
 	    (fun (tenv, renv) -> function
@@ -147,6 +142,17 @@ let instantiate : environment -> string -> datatype = fun env var ->
 	    instantiate_datatype (tenv, renv) t)
       | t -> t
 
+(** instantiate env var
+    Get the type of `var' from the environment, and rename bound typevars.
+ *)
+let instantiate : environment -> string -> datatype =
+  fun env var ->
+    try
+      instantiate_typ (Env.String.lookup env var)
+    with NotFound _ ->
+      raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
+        
 let var      = instantiate
+and typ      = instantiate_typ
 and datatype = instantiate_datatype
 and alias    = instantiate_alias

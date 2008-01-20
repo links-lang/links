@@ -539,6 +539,10 @@ let working_tests = [
   "fun f() { cons(5, [6]) } fun cons(x,l) {[x] ++ l} fun g() { cons(\"a\", [\"b\"]) } (f(), g())",
   result "([5, 6], [\"a\", \"b\"])" ~with_type: "([Int], [String])";
 
+  "Value restriction",
+  "sig f : (a) -> a var f = id(id); f",
+  has_typeerror;
+
   (* records *)
 
   "Record printing",

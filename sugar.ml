@@ -494,7 +494,6 @@ module PatternCompiler =
                                  var
                                  (`NVariant (StringSet.union names names'), default_exp)
                                  env in
-                               Debug.print ("applying annotation to" ^ string_of_expression default_exp);
                              let body = apply_annotation pos default_exp (annotation, body) in
                                (match_cases pos vars [(ps, (body, used))] def default_env)
                            in
@@ -550,7 +549,6 @@ module PatternCompiler =
            match context with
              | `Variant name' -> name=name'
              | `NVariant names -> not (StringSet.mem name names) in
-
 
          (*
            close variant types when possible

@@ -115,7 +115,7 @@ let make_type_variable = Types.make_type_variable
 let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let a = Types.fresh_raw_variable () in
-     (`ForAll ([`TypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.datatype)),
+     (`ForAll ([`RigidTypeVar a], `Function (make_tuple_type [from], make_type_variable a, into)) : Types.datatype)),
    pure)
 
 let string_to_xml : result -> result = function 
@@ -1109,10 +1109,10 @@ and alias_env : Types.alias_environment =
     [
       "DomNode" , `Primitive `Abstract;
       "Event"   , `Primitive `Abstract;
-      "List"    , `ForAll ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "List"    , `ForAll ([`RigidTypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "String"  , `Application ("List", [`Primitive `Char]);
       "Xml"     , `Application ("List", [`Primitive `XmlItem]);
-      "Mailbox" , `ForAll ([`TypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
+      "Mailbox" , `ForAll ([`RigidTypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
       "Regex"   , datatype Linksregex.Regex.datatype;
     ]
     Env.empty

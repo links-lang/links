@@ -84,12 +84,9 @@ let desugar_datatype', desugar_row =
     in fold_right Types.row_with fields seed
   in desugar, desugar_row
 
-
-type assumption = quantifier list * datatype
 type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t 
-
 
 let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) =
   fun vars ->
@@ -119,8 +116,6 @@ let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) 
 let desugar_assumption ((vars, k)  : assumption) : Types.datatype = 
   let vars, var_env = generate_var_mapping vars in
     Types.for_all (vars, desugar_datatype' var_env k)
-
-
 
 let desugar_datatype = generalize ->- desugar_assumption
 

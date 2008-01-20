@@ -389,7 +389,10 @@ and
         let t' = type_of_expression expr in
           match t' with
             | `Function _ as f  ->
-                let t'' = Env.lookup var_env inner_name in
+                let t'' =
+                  match Env.lookup var_env inner_name with
+                    | `ForAll (_, t) | t -> t
+                in
 		  unify alias_env (f, t'');
                   (* HACK:
 
