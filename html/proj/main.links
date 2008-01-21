@@ -205,7 +205,7 @@ fun fileOp() client
 
       storeFile(name, lFileData.pid, escp, code); 
       #updateSession();
-      
+      attachTypes(lTypes);
       setFrameData(lFileData.pid, name);
       toggleWaiting("");
       fileOp()
@@ -239,6 +239,7 @@ fun fileOp() client
        debug("Insert code");
        insertCode(rval);
        #updateSession();
+       debug("Attach types");
        attachTypes(lTypes);
        setFrameData(lProjId, lFullName);
        toggleWaiting("");
@@ -264,6 +265,7 @@ fun attachTypes(xiList) client
   var lTypeNames = map(fun (x) { (x.name, x.t) }, lList);
 
   # Find references to functions/vars
+  debug("Match types");
   var lNodes = 
     matchTypes(lTypeNames, 
                getElementsByNameFromDocument(
@@ -305,7 +307,8 @@ fun matchTypes(xiTypes, xiList) client
     case [] -> []
     case (x::xs) -> 
     {
-      var lText = takeWhile(fun (c) { ord(c) <> 160 }, getTextValue(firstChild(x)));
+      var lSpaceFun = fun (c) { ord(c) <> 160 };
+      var lText = remSpace(getTextValue(firstChild(x)));
 
       # Allow l:events
       # We're doing this in a stupid way to work around the fact
@@ -313,13 +316,34 @@ fun matchTypes(xiTypes, xiList) client
       if ((lelem(lText, xiTypes)) || (take(2, lText) == "l:"))
         [x] ++ matchTypes(xiTypes, xs)
       else
+      {
+        debug("Dropping " ++ lText);
         matchTypes(xiTypes, xs)
+      }
     }
   }
 }
 
 fun lelem(x, l) {
   not(l==[]) && (x == first(hd(l)) || x `lelem` tl(l))
+}
+
+# Remove spaces from a string
+fun remSpace(string) 
+{
+  switch (string)
+  {
+    case [] -> []
+    case (x::xs) -> 
+    {
+      var lOrd = ord(x);
+      # Delete spaces (160) and returns (32)
+      if ((ord(x) == 160) || (ord(x) == 32))
+        remSpace(xs)
+      else
+        [x] ++ remSpace(xs)
+    }
+  }
 }
 
 # Show/hide loading message
