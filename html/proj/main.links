@@ -6,25 +6,30 @@
 #      -- Sam has been notified, appears to be Links issue.
 
 # - Clean up SQL calls - there's about 5 for loading the project list..
-#    * Clean up client/server calls in general. Somewhere, a server function is making a client call... (done - project list getting was silly, and opHandler requires server -> client calls if used on server.
+#    * Clean up client/server calls in general. Somewhere, a server function is making a client call... (done - project list getting was silly, and opHandler requires server -> client calls if used on server).
 
 # - 'New' menu option changes
 #    * new files added to project list on creation in right project 
-#      -- Project needs to be embedded in iFrame
-#    * add capabilities for adding new projects
+#      -- Project needs to be embedded in iFrame (done)
+#    * add capabilities for adding new projects/folders
 #    * new project creates new directory on disk
 #    * new project gets added
 
 # - Figure out why logging out doesn't work.
 #    * Possibly due to calling server function direct?
+
 # - Test/Deploy configuration. Needs:
 #    * Create-dir function (done)
 #    * Delete-dir function (done)
 #    * Account creation creates user dir
 #    * Logging in needs to create new dir based on sessionId (done)
-#    * Logging out needs to delete dir (done)
+#    * Logging out needs to delete dir (done, but error?)
 #    * Deploy copies from test to deploy (done)
-#    * What happens when users want to test files linking to files not being tested? Maybe it's better to mark files as 'unclean' in database, then dump them out during testing, and copy them from database during deploy?
+#    * What happens when users want to test files linking to files not being tested? Maybe it's better to mark files as 'unclean' in database, then dump them out during testing, and copy them from database during deploy? (done, but need to make sure directories are created properly (done))
+
+# - Typing information. Needs:
+#    * Types retrieved on save/load (done)
+#    * Find appropriate nodes, attach info (done - tho types not returned in order?)
 
 ######
 # JavaScript functions
@@ -37,10 +42,6 @@ alien javascript highlightCode : () -> ();
 
 # Return node.value.
 alien javascript getValueFromRef : (DomNode) -> String; 
-
-# Functions for (un-)escaping HTML
-alien javascript escapeHtml : (String) -> String;
-alien javascript unescapeHtml: (String) -> String;
 
 # Convert spaces to 
 alien javascript convertSpaces : (String) -> String;
@@ -59,7 +60,11 @@ alien javascript newWindow: (String) -> ();
 alien javascript jsUnescape: (String) -> String;
 alien javascript jsEscape: (String) -> String;
 
-alien javascript testFn: (Event) -> ();
+# Get nodes from a foreign document
+alien javascript getElementsByNameFromDocument: (DomNode, String) -> [DomNode];
+
+# Get value
+alien javascript getTextValue: (DomNode) -> String;
 
 ######
 # Attribute type
@@ -87,7 +92,8 @@ var users = table "users" with (
 var projectTable = table "projects" with (
     id : Int,
     uid : Int,
-    name : String
+    name : String,
+    dirty : Int
 ) from (database "ide");
 
 var files = table "files" with (
@@ -177,8 +183,7 @@ fun isLoggedIn() server
     debug("logged in")
   else
     debug("not logged in"));
-  #p
-  true
+  p
 }
 
 # Perform file operations (load, save).
@@ -191,16 +196,16 @@ fun fileOp() client
       toggleWaiting("Saving file..");
       var lFileData = getFrameData();
       var lTypes = getTypes(code);
-
-       var lVoid = 
-         for (var lCurr <- lTypes)
-         {
-           debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
-           []
-         };
+      var lVoid = if (lTypes == []) [] else {
+        for (var lCurr <- lTypes)
+        {
+          debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
+          []
+        }};
 
       storeFile(name, lFileData.pid, escp, code); 
       #updateSession();
+      
       setFrameData(lFileData.pid, name);
       toggleWaiting("");
       fileOp()
@@ -210,12 +215,31 @@ fun fileOp() client
        toggleWaiting("Loading file..");
        var lFileData = getFileData(lEvent);
        var lProjId = lFileData.pid;
-       var lFullName = lFileData.path ++ name;
+
+       # This could be done when getting the path, so
+       # slightly unnecessary, but just to be sure we can 
+       # choose how we want to be organised..
+       var lFullName = 
+         takeWhile(fun (x) { x <> '/' }, lFileData.path) ++ "/" ++ name;
+
        var lData = getFile(lProjId, name);
+
+       debug("Getting types");
+       var lTypes = getTypes(lData);
+       var lVoid = if (lTypes == []) [] else {
+        for (var lCurr <- reverse(lTypes))
+        {
+          debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
+          []
+        }};
+
+       debug("Convert data");
        var rval = convertData(lData) : Xml;
 
+       debug("Insert code");
        insertCode(rval);
        #updateSession();
+       attachTypes(lTypes);
        setFrameData(lProjId, lFullName);
        toggleWaiting("");
        fileOp()
@@ -227,6 +251,75 @@ sig getTypes : (String) -> [(name:String,pos:(finish:Int,line:Int,start:Int),t:S
 fun getTypes(xiCode) server
 {
   dumpTypes(xiCode)
+}
+
+sig attachTypes : ([(name:String, pos:(finish:Int, line:Int, start: Int), t:String)]) -> ()
+fun attachTypes(xiList) client
+{
+  # Find iFrame
+  var lIframe = getDocumentBody();
+
+  var lList = reverse(xiList);
+
+  var lTypeNames = map(fun (x) { (x.name, x.t) }, lList);
+
+  # Find references to functions/vars
+  var lNodes = 
+    matchTypes(lTypeNames, 
+               getElementsByNameFromDocument(
+                 getContentDocument(hd(getElementsByTagName("iframe"))), 
+                 "variable"
+               ));
+
+  var getFromList = fun (count, list) { hd(drop(count, list)) };
+
+  if (length(lList) == length(lNodes))
+  {
+    var bla = 
+      for (var lCount <- range(0, (length(lList) - 1)))
+      {
+        var lVoid = domSetAttributeFromRef(hd(drop(lCount, lNodes)), 
+                                           "title", 
+                                           (hd(drop(lCount, lList))).t); 
+        []
+       };
+    ()
+  }
+  else 
+  { 
+    debug("Lists of different length.");
+    debug("Num var nodes: " ++ intToString(length(lNodes)));
+    debug("Num types: " ++ intToString(length(xiList)));
+  };
+  # Attach 
+}
+
+# Match a list of types (given as (name, type)) to a list of Nodes, removing
+# those nodes that don't have a type. Possibility of this failing if a 
+# top-level function is overwritten by a local function of the same name?
+sig matchTypes : ([(String, String)], [DomNode]) -> [DomNode]
+fun matchTypes(xiTypes, xiList) client
+{
+  switch (xiList)
+  {
+    case [] -> []
+    case (x::xs) -> 
+    {
+      var lText = takeWhile(fun (c) { ord(c) <> 160 }, getTextValue(firstChild(x)));
+
+      # Allow l:events
+      # We're doing this in a stupid way to work around the fact
+      # that hd([String]) returns a char here..?
+      if ((lelem(lText, xiTypes)) || (take(2, lText) == "l:"))
+        [x] ++ matchTypes(xiTypes, xs)
+      else
+        matchTypes(xiTypes, xs)
+    }
+  }
+}
+
+fun lelem(x, l) {
+  not(l==[]) && (x == first(hd(l)) || x `lelem` tl(l))
 }
 
 # Show/hide loading message
@@ -261,8 +354,8 @@ sig updateSession : () -> ()
 fun updateSession() server
 {
   update (var sid <-- sessionsTable)
-    where (sid.uid == 1)
-    set (id = sid.id, uid = userId, creation_time = 0, update_time = 0)
+    where (sid.uid == userId)
+    set (id = sid.id, uid = sid.uid, creation_time = 0, update_time = 0)
 }
 
 # Store the code in the database
@@ -270,37 +363,42 @@ sig storeFile : (String, Int, String, String) -> ()
 fun storeFile(name, pid, escp, code) server 
 {
   var lBaseDir = fileLoc ++ testDir ++ getCookie(cookieName) ++ "/";
-  var lFilename = reverse(takeWhile(fun (x) { x <> '/' }, reverse(name)));
+  
+  # Get the path to the file, but drop the project
+  var lFilename = drop(1, dropWhile(fun (x) { x <> '/' }, name));
 
   # Insert if new, update otherwise
   if (not(fileExists(pid, lFilename)))
   {
     insert files values [(id=0, pid=pid, name=lFilename, last_mod="", created="", data=escp, parent = -1, isfolder = 0)];
   }
-  else {
+  else
+  {
     update (var lFile <-- files)
-     where ((lFile.pid == pid) && (lFile.name == lFilename))
-     set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
+      where ((lFile.pid == pid) && (lFile.name == lFilename))
+      set (id = lFile.id, pid = lFile.pid, name = lFile.name, last_mod=lFile.last_mod, created = lFile.created, data = escp, parent = lFile.parent, isfolder = 0)
   };
+
+  # Mark the project as dirty
+  update (var lProj <-- projectTable)
+    where (lProj.id == pid)
+    set (id = pid, uid = lProj.uid, name = lProj.name, dirty = 1);
   
   # Get the folders from the filename
-  debug("Getting folder list");
-  var lList = split('/', name);
+  var lList = split("/", name);
 
-  debug("Checking directories");
+  # Create the directories if necessary
   var lNull = 
     for (var lCount <- range(1, (length(lList) - 1)))
     {
       var lCurrDir = lBaseDir ++ join("/", take(lCount, lList));
-      debug("Checking for dir " ++ lCurrDir);
       if (not(isDir(lCurrDir)))
       {
         var lRes = mkdir(lCurrDir);
-        debug("Creating dir " ++ lCurrDir);
         switch (lRes)
         {
           case Ok() -> ()
-          case Error(err) -> debug(err); ()
+          case Error(err) -> debug("storefile: " ++ err); ()
         }
       }
       else {};
@@ -310,7 +408,7 @@ fun storeFile(name, pid, escp, code) server
   # @TODO: Do we want to save the file here? No real need if test/depl,
   # but useful for knowing which files are to be changed. The other 
   # option is to mark modified files in the db.
-  writeToFile(lBaseDir ++ name, code);
+  #writeToFile(lBaseDir ++ name, code);
   updateSession();
 }
 
@@ -322,7 +420,7 @@ fun saveFile(handler, xiName, xiNew) client
   
   # Get the text
   var lCode = convertSpaces(getCode(firstChild(lBody)));
-  var lEscapedCode = escapeHtml(lCode);
+  var lEscapedCode = replace("\\\\", lCode, "\\\\"); #jsEscape(lCode);
 
   # This is potentially the name of the node containing the filename
   var lNodeName = xiName;
@@ -387,12 +485,18 @@ fun getPathFromNode(xiNode) client
   var lParent = findFirstParentDiv(xiNode);
 
   # Check whether it's a project or a folder and get the path
-  var lPath = (if (domGetAttributeFromRef(lParent, "type") == "folder")
-    (getPathFromNode(lParent)).path ++ (domGetAttributeFromRef(lParent, "cname")) ++ "/" 
-  else
-    domGetAttributeFromRef(lParent, "cname") ++ "/");
+  var lPath = (
+    if (domGetAttributeFromRef(lParent, "type") == "folder")
+    {
+      var lPars = getPathFromNode(parentNode(lParent));
+      (pid = lPars.pid, path = (lPars.path ++ (domGetAttributeFromRef(lParent, "cname")) ++ "/")) 
+    }
+    else
+      (pid = stringToInt(domGetAttributeFromRef(lParent, "pid")), 
+       path = (domGetAttributeFromRef(lParent, "cname") ++  "/"))
+    );
 
-  (pid = stringToInt(domGetAttributeFromRef(lParent, "pid")), path = lPath)
+  lPath
 }
 
 # Get the body tag containing code
@@ -431,35 +535,15 @@ fun insertCode(code) client
   highlightCode();
 }
 
-# Recursive string handling. Fast enough for small strings.
-sig split : (Char, String) -> [String]
-fun split(xiChr, xiString)
-{
-  debug("Split at " ++ [xiChr] ++ " : " ++ xiString);
-  switch (xiString)
-  {
-    case [] -> []
-    case xs -> 
-    {
-      var lHead = takeWhile(fun (x) {x <> xiChr}, xiString);
-      var lTail = dropWhile(fun (x) {x <> xiChr}, xiString);
-        
-      # Recurse, dropping the split-char.
-      if (lTail <> [])
-        [lHead] ++ split(xiChr, tl(lTail))
-      else
-        [lHead]
-    }
-  }
-}
-
 # Create a list containing the range of numbers given
 sig range : (Int, Int) -> [Int]
 fun range(xiStart, xiFinish) 
 {
   if (xiStart == xiFinish)
     [xiFinish]
-  else
+  else if (xiStart > xiFinish)
+    []
+  else  
     [xiStart] ++ range((xiStart + 1), xiFinish)
 }
 
@@ -517,7 +601,7 @@ fun dropUntilBreak(data)
 sig convertData : (String) -> Xml
 fun convertData(data) client
 {
-  var dataList = splitEscapedLinesJS(data) : [String]; 
+  var dataList = split("\\n", data); #EscapedLinesJS(data) : [String]; 
   getXmlList(dataList)
 }
 
@@ -701,6 +785,7 @@ fun nodeAttributesMatch(xiNode, xiAttrs) client
   and(for (var attribute <- xiAttrs)
        [domGetAttributeFromRef(xiNode, attribute.attr) == attribute.val])
 }
+
 # Look through the project files given recursively and return XML for each.
 sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String)|LoadFile: (String, Event)|])) -> Xml
 fun getLProjectList(currItem, currLevel, opHandler) client
@@ -766,7 +851,7 @@ fun getLProjectList(currItem, currLevel, opHandler) client
           <img src="images/blank.png" style="width: {width}; height: 1px;" />
           <img src="images/blank.png" class="proj-blank" />
           <span class="proj-text"  l:onclick="{opHandler ! LoadFile(name, event)}">
-          {stringToXml(name)}
+          {stringToXml(reverse(takeWhile(fun (x) { x <> '/' }, reverse(name))))}
           </span>
         </div>
       </li>
@@ -929,6 +1014,59 @@ fun runFile(xiHandler) client
   toggleWaiting("");
 }
 
+# Run the current file, copying all relevant files from the database
+sig runFileDb : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun runFileDb(xiHandler) client
+{
+  # Toggle waiting.
+  toggleWaiting("Running file..");
+
+  var lDropFun = fun (x) { x <> '/' };
+
+  # Get the current location, but drop the filename.
+  var lLoc = reverse(dropWhile(fun (x) { x <> '/' }, reverse(getLocation())));
+  
+  # Check if the file is saved, and request that the user saves it first
+  if (docHasChanged())
+  {
+    () #toggleActionSave()
+  }
+  else {};
+
+  # Get frame data
+  var lFrameData = getFrameData();
+
+  # Write project
+  var lBaseDir = fileLoc ++ testDir ++ getCookie(cookieName) ++ "/";
+  var lOk = 
+    writeProjectFromDatabase(
+      lFrameData.pid, 
+      "", 
+      lBaseDir
+    );
+  #reverse(dropWhile(fun (x) { x <> '/' }, reverse(lFrameData.fname))),
+  # Write file to temp location
+  var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ lFrameData.fname;
+  #writeFromDatabase(getFrameName());
+  
+  # Open a new window pointing to the correct location
+  newWindow(lLoc ++ lFileLoc);
+
+  # Toggle waiting.
+  toggleWaiting("");
+
+  if (lOk)
+  {
+    debug("Run ok");
+    ()
+  }
+  else
+  {
+    debug("Run failed");
+    ()
+  }
+}
+
 sig deploy : () -> ()
 fun deploy() server
 {
@@ -963,24 +1101,117 @@ fun deploy() server
     debug("Deployment failed!")
 }
 
+sig deployDb : (Int) -> ()
+fun deployDb(xiPid) server
+{
+  # Check that project is dirty
+  var lDirty = hd(for (var lProj <-- projectTable)
+                 where (lProj.id == xiPid)
+                   [lProj.dirty]);
+
+  if (lDirty == 0)
+    ()
+  else
+  {
+    # Get the user name
+    var lUser = hd(for (var lCurrUser <-- users)
+                  where (lCurrUser.id == userId)
+                    [lCurrUser.email]);
+
+    var lBaseDir = fileLoc ++ deplDir;
+  
+    debug("Dst: " ++ lBaseDir ++ "/" ++ lUser);
+
+    # Move the files one by one to the user's real dir
+    var lOk = writeProjectFromDatabase(xiPid, lUser, lBaseDir);
+
+    if (lOk)
+    {
+      # Update the project to be non-dirty
+      update (var lProj <-- projectTable)
+        where (lProj.id == xiPid)
+        set (id = xiPid, uid = lProj.uid, name = lProj.name, dirty = 0);
+
+      debug("Deployed successfully!")
+    }
+    else
+      debug("Deployment failed!")
+  }
+}
+
+# Write out the contents of a whole project to disk.
+sig writeProjectFromDatabase : (Int, String, String) -> Bool
+fun writeProjectFromDatabase(xiPid, xiName, xiBaseDir) server
+{
+  # Find the project's name
+  var lProjName = hd(for (var lProj <-- projectTable)
+                    where (lProj.id == xiPid)
+                      [lProj.name]);
+
+  # Get the directory
+  var lProjDir = xiBaseDir ++ xiName ++ "/" ++ lProjName ++ "/";
+
+  # Create directory for project
+  switch(mkdir(lProjDir))
+  {
+    case Ok() -> ()
+    case Error(err) -> debug("mkdir " ++ lProjDir ++ ": " ++ err)
+  };      
+    
+  # Find all the folders for this project
+  var lFolders = for (var lFolder <-- files)
+                   where ((lFolder.pid == xiPid) && (lFolder.isfolder == 1))
+                   orderby (lFolder.name)
+                     [lFolder.name];
+
+  # Create directories for folders
+  var lResFolders = 
+    for (var lFolder <- lFolders)
+    {
+      var lRes = mkdir(lProjDir ++ lFolder);
+      [switch(lRes)
+      {
+        case Ok() -> true
+        case Error(err) -> debug("mkdir " ++ lProjDir ++ lFolder ++ ": " ++ err); false
+      }]
+    };
+
+  # Find all files for this project
+  var lFileList = for (var lFile <-- files)
+                    where ((lFile.pid == xiPid) && (lFile.isfolder == 0))
+                      [lFile.name];
+  
+  # Write out each file
+  var lRes = for (var lFile <- lFileList)
+               [writeFromDatabase(xiPid, lFile, lProjDir)];
+
+  # Return the results
+  and(lRes ++ lResFolders)
+}
+
 # Write data from the database to file on disk.
 # Returns file location
-sig writeFromDatabase : (Int, String) -> String
-fun writeFromDatabase(xiPid, xiName) server
+sig writeFromDatabase : (Int, String, String) -> Bool
+fun writeFromDatabase(xiPid, xiName, xiDir) server
 { 
-  # Get session ID
-  var lFileLoc = testDir ++ getCookie(cookieName) ++ "/" ++ xiName;
+  # Get file lo
+  #var lFileLoc = testDir ++ getCookie(cookieName) ++ "/" ++ xiName;
 
   # Get the data
   var lFileData = getFile(xiPid, xiName);
 
-  # Clean it up (calls client!)
-  var lCleanData = join("\n", splitEscapedLinesJS(lFileData));
+  # Clean it up (calls client!) @TODO
+  var lCleanData = lFileData; #join("\n", splitEscapedLinesJS(lFileData));
 
   # Write to disk
-  writeToFile(fileLoc ++ lFileLoc, lCleanData);
+  var lRes = writeToFile(xiDir ++ xiName, lCleanData);
 
-  lFileLoc
+  # Check the result, debug and return false on error
+  switch (lRes)
+  {
+    case Error(err) -> debug("WriteToFile: " ++ err); false
+    case Ok() -> true
+  }
 }
 
 # Get the menubar. Currently a drop-down style thing, perhaps a button set
@@ -998,10 +1229,10 @@ fun getMenu(opHandler) client
             <li l:onclick="{toggleMenu("menu-file"); maybeSaveFile(opHandler);}" unselectable="on"><span>Save</span></li>
             <li l:onclick="{toggleMenu("menu-file"); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
-            <li l:onclick="{toggleMenu("menu-file"); runFile(opHandler);}" unselectable="on"><span>Run</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); runFileDb(opHandler);}" unselectable="on"><span>Run</span></li>
 
             <li style="height: 1px;"><hr style="height: 2px;" /> </li> 
-            <li l:onclick="{toggleMenu("menu-file"); deploy();}" unselectable="on"><span>Deploy</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); toggleWaiting("Deploying projects.."); deployDb((getFrameData()).pid); toggleWaiting("");}" unselectable="on"><span>Deploy</span></li>
 
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
             <li l:onclick="{logout();}" unselectable="on"><span>Logout</span></li>

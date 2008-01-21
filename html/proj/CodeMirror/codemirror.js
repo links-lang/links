@@ -168,7 +168,7 @@ var CodeMirror = function(){
     // always add it, redundant as it sounds.
     this.frame = createDOM("IFRAME", {style: "display: block; border: 0;" +
       " width: " + options.width + 
-				      "; " + "height: " + options.height + ";", name: "", id: ""});
+				      "; " + "height: " + options.height + ";", name: "", pid: ""});
     if (place.appendChild)
       place.appendChild(this.frame);
     else
@@ -452,7 +452,8 @@ var CodeMirror = function(){
     }
     // Create a part corresponding to a given token.
     function tokenPart(token){
-      var part = withDocument(document, partial(SPAN, {"class": "part " + token.style}, token.value));
+        var tName = (token.style.indexOf("variable") > -1) ? "variable" : token.style;
+	var part = withDocument(document, partial(SPAN, {"class": "part " + token.style, "name" : tName}, token.value));
       part.currentText = token.value;
       return part;
     }

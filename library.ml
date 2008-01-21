@@ -1071,9 +1071,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                      let data = charlist_as_string data in
                        output_string file data; 
                        close_out file;
-                       `Record[]
-                   with (Sys_error x) -> failwith x)), 
-   datatype "(String, String) -> ()",
+                       `Variant("Ok", `Record[])
+                   with (Sys_error x) -> `Variant("Error", (box_string x)))), 
+   datatype "(String, String) -> [| Ok:() | Error : String |]",
    IMPURE);
 
   (* Create a directory with the given path. Returns a variant *)
@@ -1231,17 +1231,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "replace",
-  (`Server (p3 (fun pattern repl string ->
+  (p3 (fun pattern repl string ->
                   let string = charlist_as_string string in
                   let repl = charlist_as_string repl in
                   let pattern = charlist_as_string pattern in
                     (box_string(
                       (Str.global_replace (
                         Str.regexp_string pattern) repl) 
-                        string)))),
+                        string))),
   datatype "(String, String, String) -> String",
   IMPURE);
-                  
+  
+  (* Split a string using a regex. *)
+  "split",
+  (p2 (fun pattern string ->
+                  let string = unbox_string string in
+                  let pattern = unbox_string pattern in
+                  try 
+                    let regx = Str.regexp pattern in
+                      box_list (List.map box_string (Str.split regx string))
+                  with _ -> `List []),
+  datatype "(String, String) -> [String]",
+  PURE);
+
   (* end of Tom's fns *)
 
   (* HACK *)
@@ -1265,23 +1277,27 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "dumpTypes",
   (`Server (p1 (fun code ->
-                  let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+                  try
+                    let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
 
-                  let line ({Lexing.pos_lnum=l}, _, _) = l in
-                  let start ({Lexing.pos_bol=s}, _, _) = s in
-                  let finish (_, {Lexing.pos_bol=e}, _) = e in
+                    let line ({Lexing.pos_lnum=l}, _, _) = l in
+                    let start ({Lexing.pos_bol=s}, _, _) = s in
+                    let finish (_, {Lexing.pos_bol=e}, _) = e in
                     
-                  let box_int = num_of_int ->- box_int in
+                    let box_int = num_of_int ->- box_int in
 
-                  let resolve (name, t, pos) =                    
-                    `Record [("name", box_string name);
-                             ("t", box_string (Types.string_of_datatype t));
-                             ("pos", `Record [("line", box_int (line pos));
-                                              ("start", box_int (start pos));
-                                              ("finish", box_int (finish pos))])]
-                  in
-                    box_list (List.map resolve ts)
-               )),
+                    let resolve (name, t, pos) =                    
+                      `Record [("name", box_string name);
+                               ("t", box_string (Types.string_of_datatype t));
+                               ("pos", `Record [("line", box_int (line pos));
+                                                ("start", box_int (start pos));
+                                               ("finish", box_int (finish pos))])]
+                    in
+                      box_list (List.map resolve ts)
+                  with 
+                      Errors.UndefinedVariable(x) -> `List []
+                    | _ -> `List []
+                 )),
             datatype "(String) -> [(name:String, t:String, pos:(line:Int, start:Int, finish:Int))]",
             IMPURE)
 ]

@@ -1,8 +1,0 @@
-fun main() { 
-  var p = "hello"; 
-  <div>{stringToXml(p)}</div> 
-} 
-page 
-  <#>{main()}</#> 
-  
- 

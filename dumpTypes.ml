@@ -42,8 +42,8 @@ let program : Types.typing_environment -> string -> (string * Types.datatype * S
           | e -> super#phrase e
     end in
     let program =
-      Errors.display_fatal_l
-        (lazy
+      (*Errors.display_fatal_l*)
+        Lazy.force (lazy
            (let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
             let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
               program))

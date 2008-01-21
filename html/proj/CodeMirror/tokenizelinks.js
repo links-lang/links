@@ -220,6 +220,7 @@ var tokenizeLinks = function(){
           nextWhile(isLinksTag);
           token = result("tag", "html");
           isNextTagName = false;
+          inTag = true;
         }
         else if ((ch == "/") && (isNextTagName || peek == ">"))
         {
@@ -231,6 +232,7 @@ var tokenizeLinks = function(){
           nextWhile(isOperatorChar);
           token = result("endtag", "html")
           isNextTagName = false;
+          inTag = false;
         }
         else if (ch == "<")
         {
@@ -264,6 +266,13 @@ var tokenizeLinks = function(){
             nextWhile(isWordChar);      
             token = result("text", "text");
           }
+        }
+        else if (inTag && (ch == "l" && peek == ":"))
+        { 
+          // This is an event, so grab the : and the word
+          source.next();          
+          nextWhile(isWordChar);
+          token = result("text", "event-variable");
         }
         else if (ch == ">")
           token = result("html", "html");

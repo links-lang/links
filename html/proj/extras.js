@@ -19,7 +19,7 @@ function _highlightCode()
   }
 }
 
-var highlightCode = LINKS.kify(_highlightCode, 0);
+var highlightCode = LINKS.kify(_highlightCode);
 
 // Split lines using javascript.
 function _splitLines(text)
@@ -36,7 +36,7 @@ function _splitLines(text)
   return text;
 }
 
-var splitEscapedLinesJS = LINKS.kify(_splitLines, 1);
+var splitEscapedLinesJS = LINKS.kify(_splitLines);
 
 // Get a node's value.
 function _getValueFromRef(ref)
@@ -44,21 +44,7 @@ function _getValueFromRef(ref)
   return LINKS.stringToCharlist(ref.value);
 }
 
-var getValueFromRef = LINKS.kify(_getValueFromRef, 1);
-
-// HTML escaping.
-function _escape(text)
-{
-  return $chr(escape($str(text)));
-}
-
-function _unescape(text)
-{
-  return $chr(unescape($str(text)));
-}
-
-var escapeHtml = LINKS.kify(_escape, 1);
-var unescapeHtml = LINKS.kify(_unescape, 1);
+var getValueFromRef = LINKS.kify(_getValueFromRef);
 
 // Convert weird spaces to normal ones.
 function _convertSpaces(text)
@@ -66,7 +52,7 @@ function _convertSpaces(text)
   return $chr($str(text).replace(/\u00a0/g, ' '));
 }
 
-var convertSpaces = LINKS.kify(_convertSpaces, 1);
+var convertSpaces = LINKS.kify(_convertSpaces);
 
 // Create the editor.
 function _loadEditor()
@@ -78,24 +64,14 @@ function _loadEditor()
   return node;
 }
 
-var loadEditor = LINKS.kify(_loadEditor, 0);
+var loadEditor = LINKS.kify(_loadEditor);
 
 function _getIframeBody(node)
 {
   return node; //.childNodes[0].getContentDocument.getElementByName("body");
 }
 
-var getIframeBody = LINKS.kify(_getIframeBody(), 1);
-
-function _stringToString(string)
-{
-  _debug("In: " + $str(string));
-  var out = $chl($str(string));
-  _debug("out: " + out);
-  return out;
-}
-
-//var stringToString = LINKS.kify(_stringToString, 1);
+var getIframeBody = LINKS.kify(_getIframeBody());
 
 // Get a list of sibling nodes.
 // TODO: broken (probably)
@@ -118,7 +94,7 @@ function _getSiblings(node)
   return sibList;
 }
 
-var getSiblings = LINKS.kify(_getSiblings, 1);
+var getSiblings = LINKS.kify(_getSiblings);
 
 // Get the URL of the page.
 function _getLocation()
@@ -126,7 +102,7 @@ function _getLocation()
   return $chr(window.location.href);
 }
 
-var getLocation = LINKS.kify(_getLocation, 0);
+var getLocation = LINKS.kify(_getLocation);
 
 // Open a new window.
 function _newWindow(loc)
@@ -134,26 +110,58 @@ function _newWindow(loc)
   window.open($str(loc));
 }
 
-var newWindow = LINKS.kify(_newWindow, 1);
-
-function testFn(xiEvent, xiNode)
-{
-  _debug("Event!");
-  xiEvent.cancelBubble = true;
-  if (xiEvent.stopPropagation) xiEvent.stopPropagation();
-  xiEvent.preventDefault();
-}
+var newWindow = LINKS.kify(_newWindow);
 
 function _unescape(xiString)
 {
-  return unescape(xiString);
+  return $chr(unescape($str(xiString)));
 }
 
-var jsUnescape = LINKS.kify(_unescape, 1);
+var jsUnescape = LINKS.kify(_unescape);
 
 function _escape(xiString)
 {
-  return escape(xiString);
+  return $chr(escape($str(xiString)));
+}
+var DEBUGGING = true;
+var jsEscape = LINKS.kify(_escape);
+var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
+function _debug(msg) {
+   if (DEBUGGING) {
+     _dwindow.document.write('<b>' + _current_pid + '</b> : ' + msg + '<br/>');
+   }
+}
+// Convert from collection to array
+function _collectionToArray(coll) {
+  var arr = new Array();
+
+  for (i = 0; i < coll.length; i++)
+  {
+    arr[i] = coll[i];
+  }
+  return arr;
 }
 
-var jsEscape = LINKS.kify(_escape, 1);
+function _getElsFromDoc(doc, name) 
+{
+  return _collectionToArray(doc.getElementsByName($str(name)));
+}
+
+var getElementsByNameFromDocument = LINKS.kify(_getElsFromDoc);
+
+function _getTextValue(node)
+{
+  return $chl(node.nodeValue);
+}
+
+var getTextValue = LINKS.kify(_getTextValue);
+
+function _jsElem(list, item)
+{
+  var lItem = $str(item);
+  list.map($str);
+  return (list.indexOf(item) > -1);
+}
+
+var jsElem = LINKS.kify(_jsElem);
+  

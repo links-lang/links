@@ -92,7 +92,7 @@ span.type {
 
 span.html { 
   color: black;
-  font-style: italic;
+  font-style: none;
 }
 
 pre.code, .editbox {
