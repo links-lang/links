@@ -217,7 +217,7 @@ fun distinct(xs) {
               # because JavaScript is so slow that sending the
               # message back and forth has the desired effect
               # but this is what the code should look like
-              var u = getCurrentTime();        
+              var u = serverTime();        
               if(u-t < w) { sleep(w-(u-t)) } else {()};
 
               handler!GetCurrentState;
@@ -236,7 +236,7 @@ fun distinct(xs) {
               error("Didn't ask for a suggestion!");
           }
         }
-        var t = getCurrentTime();
+        var t = serverTime();
         suggester("", "", t)
       }
     }

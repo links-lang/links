@@ -246,9 +246,9 @@ ignore(getCookie("username"));
 
 sleep(1);
 
-# getCurrentTime   : () -> Int
+# serverTime   : () -> Int
 
-ignore(getCurrentTime());
+ignore(serverTime());
 
 # asList           : (TableHandle(c,b)) -> [c]
 # insertrows       : (TableHandle(c,b), [b]) -> ()

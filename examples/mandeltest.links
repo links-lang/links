@@ -3,7 +3,6 @@
 typename Context = Int;
 
 alien javascript jsmandelbrot : (Float, Float) -> Int;
-alien javascript getCurrentTime : () -> Int;
 
 alien javascript getCanvasById : (String) -> Context;
 alien javascript canvasSetFillStyle : (Context, String) -> ();
@@ -163,7 +162,7 @@ fun drawings() {[("empty", nowt), ("line", line), ("block", block),
 fun dodrawing(drawingName, traversalName) client {
   var id = getfreshid("drawing");
   var c = canvas (80, 80, "red", id);
-  var startTime = getCurrentTime();
+  var startTime = clientTime();
 
 
   var drawing = lookupName(drawings(), drawingName);
@@ -172,7 +171,7 @@ fun dodrawing(drawingName, traversalName) client {
 
   traversal(drawing, c);
 
-  var endTime = getCurrentTime();
+  var endTime = clientTime();
   var totalTime = (endTime-startTime);
 
   insertBefore(stringToXml(intToString(totalTime)++"ms"), getNodeById(id));

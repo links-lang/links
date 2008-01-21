@@ -1622,6 +1622,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                   let mt = Types.fresh_type_variable () in
                   let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
                   let ft = make_ft pats (typ body) in
+                  (* WARNING: this looks surprising, but it is what we want *)
                   let ft' =
                     match Env.lookup body_env name with
                       | `ForAll (_, t) | t -> t in

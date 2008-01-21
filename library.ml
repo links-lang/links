@@ -771,20 +771,63 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      type system. *)
 
   "sleep",
-  (* FIXME: This isn't right : it freezes all threads *)
-  (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
-         `Record []),
+  (p1 (fun duration ->
+         (* FIXME: This isn't right : it freezes all threads *)
+         (*Unix.sleep (int_of_num (unbox_int duration));
+         `Record []*)
+         failwith "The sleep function is not implemented on the server yet"
+      ),
    datatype "(Int) -> ()",
   IMPURE);
 
+  "clientTime",
+  (`Client,
+   datatype "() -> Int",
+   IMPURE);
+  
+  "serverTime",
+  (`Server
+     (`PFun (fun _ ->
+               box_int(num_of_int(int_of_float(Unix.time()))))),
+   datatype "() -> Int",
+   IMPURE);
 
-  (* [TODO]
-       Implement server version of the timer
-       (note: the OCaml unix time functionality is not portable
-       so we shouldn't use that)
-  *)
-  "getCurrentTime",
-  (`Client, datatype "() -> Int",
+  "dateToInt",
+  (p1 (fun r ->
+         match r with
+           | `Record r ->
+               let lookup s =
+                 int_of_num (unbox_int (List.assoc s r)) in
+               let tm = {
+                 Unix.tm_sec = lookup "seconds";
+   	         Unix.tm_min = lookup "minutes";
+   	         Unix.tm_hour = lookup "hours";
+   	         Unix.tm_mday = lookup "day";
+   	         Unix.tm_mon = lookup "month";
+   	         Unix.tm_year = (lookup "year" - 1900);
+   	         Unix.tm_wday = 0; (* ignored *)
+   	         Unix.tm_yday =  0; (* ignored *)
+   	         Unix.tm_isdst = false} in
+                 
+               let t, _ = Unix.mktime tm in
+                 box_int (num_of_int (int_of_float t))
+           | _ -> assert false),
+   datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) -> Int",
+   IMPURE);
+
+  "intToDate",
+  (p1 (fun t ->
+         let tm = Unix.localtime(float_of_int (int_of_num (unbox_int t))) in
+         let box_int = box_int -<- num_of_int in
+           `Record [
+             "year", box_int (tm.Unix.tm_year + 1900);
+             "month", box_int tm.Unix.tm_mon;
+             "day", box_int tm.Unix.tm_mday;
+             "hours", box_int tm.Unix.tm_hour;
+             "minutes", box_int tm.Unix.tm_min;
+             "seconds", box_int tm.Unix.tm_sec;
+           ]),
+  datatype "(Int) -> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
   IMPURE);
 
   (** Database functions **)
