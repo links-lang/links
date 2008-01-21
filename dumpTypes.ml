@@ -16,7 +16,7 @@ let program : Types.typing_environment -> string -> (string * Types.datatype * S
       val env = Env.String.empty
       val vars = []
         
-      method get_vars () = vars
+      method get_vars () = List.rev vars
 
       method bind (x, t, pos) =
         {< env = Env.String.bind env (x, t); vars = (x, t, pos)::vars >}
@@ -42,10 +42,8 @@ let program : Types.typing_environment -> string -> (string * Types.datatype * S
           | e -> super#phrase e
     end in
     let program =
-      Errors.display_fatal_l
-        (lazy
-           (let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
-            let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
-              program))
+      let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
+      let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+        program
     in
       (dumper#program program)#get_vars()    

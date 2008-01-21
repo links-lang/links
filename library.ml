@@ -1079,24 +1079,27 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "dumpTypes",
   (`Server (p1 (fun code ->
-                  let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+                  try
+                    let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+                      
+                    let line ({Lexing.pos_lnum=l}, _, _) = l in
+                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in
+                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c}, _) = c-b in
+                      
+                    let box_int = num_of_int ->- box_int in
 
-                  let line ({Lexing.pos_lnum=l}, _, _) = l in
-                  let start ({Lexing.pos_bol=s}, _, _) = s in
-                  let finish (_, {Lexing.pos_bol=e}, _) = e in
-                    
-                  let box_int = num_of_int ->- box_int in
-
-                  let resolve (name, t, pos) =                    
-                    `Record [("name", box_string name);
-                             ("t", box_string (Types.string_of_datatype t));
-                             ("pos", `Record [("line", box_int (line pos));
-                                              ("start", box_int (start pos));
-                                              ("finish", box_int (finish pos))])]
-                  in
-                    box_list (List.map resolve ts)
+                    let resolve (name, t, pos) =
+                      `Record [("name", box_string name);
+                               ("t", box_string (Types.string_of_datatype t));
+                               ("pos", `Record [("line", box_int (line pos));
+                                                ("start", box_int (start pos));
+                                                ("finish", box_int (finish pos))])]
+                    in
+                      `Variant ("Success", box_list (List.map resolve ts))
+                  with e ->
+                    `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
                )),
-            datatype "(String) -> [(name:String, t:String, pos:(line:Int, start:Int, finish:Int))]",
+            datatype "(String) -> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
             IMPURE)
 ]
 
