@@ -90,28 +90,31 @@ type var_env =
 
 let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) =
   fun vars ->
-    List.fold_right
-      (fun v (vars, (tenv, renv)) ->
-         let var = Types.fresh_raw_variable () in
-           match v with
-             | `TypeVar name ->
-                 (`TypeVar var::vars,
-                  (StringMap.add name
-                     (Unionfind.fresh (`Flexible var)) tenv, renv))
-             | `RigidTypeVar name ->
-                 (`RigidTypeVar var::vars,
-                  (StringMap.add name
-                     (Unionfind.fresh (`Rigid var)) tenv, renv))
-             | `RowVar name ->
-                 (`RowVar var::vars,
-                  (tenv, StringMap.add name
-                     (Unionfind.fresh (`Flexible var)) renv))
-             | `RigidRowVar name ->
-                 (`RigidRowVar var::vars,
-                  (tenv, StringMap.add name
-                     (Unionfind.fresh (`Rigid var)) renv)))
-      vars
-      ([], (StringMap.empty, StringMap.empty))
+    let qs, env =
+      List.fold_left
+        (fun (vars, (tenv, renv)) v ->
+           let var = Types.fresh_raw_variable () in
+             match v with
+               | `TypeVar name ->
+                   (`TypeVar var::vars,
+                    (StringMap.add name
+                       (Unionfind.fresh (`Flexible var)) tenv, renv))
+               | `RigidTypeVar name ->
+                   (`RigidTypeVar var::vars,
+                    (StringMap.add name
+                       (Unionfind.fresh (`Rigid var)) tenv, renv))
+               | `RowVar name ->
+                   (`RowVar var::vars,
+                    (tenv, StringMap.add name
+                       (Unionfind.fresh (`Flexible var)) renv))
+               | `RigidRowVar name ->
+                   (`RigidRowVar var::vars,
+                    (tenv, StringMap.add name
+                       (Unionfind.fresh (`Rigid var)) renv)))
+        ([], (StringMap.empty, StringMap.empty))
+        vars
+    in
+      List.rev qs, env
 
 let desugar_assumption ((vars, k)  : assumption) : Types.datatype = 
   let vars, var_env = generate_var_mapping vars in
