@@ -839,10 +839,18 @@ exception NotFound = Notfound.NotFound
 
 (* HACK:
 
-   This functionality should be provided by the Num module and it
-   certainly shouldn't have to be implemented like this!
+   This functionality should really be provided by the Num module and
+   it certainly shouldn't have to be implemented like this!
+   
+   Note that this function:
+     - fails if the input is not a number
+     - drops the fractional part of the input
 *)
 let num_of_float f =
   let s = string_of_float f in
-  let s = String.sub s 0 ((String.length s)-1) in
-    Num.num_of_string s
+    match s with
+      | "nan" | "inf" | "-inf" -> failwith "Not a number"
+      | _ ->
+          let i = String.index s '.' in
+          let s = String.sub s 0 i in
+            Num.num_of_string s
