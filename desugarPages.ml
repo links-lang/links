@@ -44,7 +44,7 @@ object
   inherit SugarTraversals.map as super
 
   method phrase = function
-    | `Page e, _  -> desugar_page e
+    | `Page e, _  -> desugar_page (super#phrase e)
     | e -> super#phrase e
 end
 
