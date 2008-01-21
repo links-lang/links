@@ -309,7 +309,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                 | t' ->
                     unify' rec_env (Instantiate.alias t' ts, t)
               end
-          | `ForAll (_,t), t' | t, `ForAll (_,t') -> unify' rec_env (t,t')
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2))));
        Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);

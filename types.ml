@@ -57,7 +57,15 @@ and meta_row_var   = (row meta_row_var_basis) point
 
 let for_all : quantifier list * datatype -> datatype = function
   | [], t -> t
-  | vs, t -> `ForAll (vs, t)
+  | qs, t ->
+      let qs = List.map
+        (function
+           | `TypeVar x | `RigidTypeVar x -> `RigidTypeVar x
+           | `RowVar x | `RigidRowVar x -> `RigidRowVar x) qs
+      in
+        match t with
+          | `ForAll (qs', t) -> `ForAll (qs @ qs', t)
+          | _ -> `ForAll (qs, t)
 
 let type_var_number = function
   | `TypeVar x

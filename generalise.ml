@@ -87,3 +87,7 @@ let generalise : environment -> datatype -> datatype =
     let quantified = Types.for_all (quantifiers, t) in 
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
       quantified 
+
+let get_quantifiers : environment -> datatype -> quantifier list =
+  fun env t ->
+    get_quantifiers (env_type_vars env) t

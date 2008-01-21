@@ -84,43 +84,41 @@ let desugar_datatype', desugar_row =
     in fold_right Types.row_with fields seed
   in desugar, desugar_row
 
-
-type assumption = quantifier list * datatype
 type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t 
 
-
 let generate_var_mapping : quantifier list -> (Types.quantifier list * var_env) =
   fun vars ->
-    List.fold_right
-      (fun v (vars, (tenv, renv)) ->
-         let var = Types.fresh_raw_variable () in
-           match v with
-             | `TypeVar name ->
-                 (`TypeVar var::vars,
-                  (StringMap.add name
-                     (Unionfind.fresh (`Flexible var)) tenv, renv))
-             | `RigidTypeVar name ->
-                 (`RigidTypeVar var::vars,
-                  (StringMap.add name
-                     (Unionfind.fresh (`Rigid var)) tenv, renv))
-             | `RowVar name ->
-                 (`RowVar var::vars,
-                  (tenv, StringMap.add name
-                     (Unionfind.fresh (`Flexible var)) renv))
-             | `RigidRowVar name ->
-                 (`RigidRowVar var::vars,
-                  (tenv, StringMap.add name
-                     (Unionfind.fresh (`Rigid var)) renv)))
-      vars
-      ([], (StringMap.empty, StringMap.empty))
+    let qs, env =
+      List.fold_left
+        (fun (vars, (tenv, renv)) v ->
+           let var = Types.fresh_raw_variable () in
+             match v with
+               | `TypeVar name ->
+                   (`TypeVar var::vars,
+                    (StringMap.add name
+                       (Unionfind.fresh (`Flexible var)) tenv, renv))
+               | `RigidTypeVar name ->
+                   (`RigidTypeVar var::vars,
+                    (StringMap.add name
+                       (Unionfind.fresh (`Rigid var)) tenv, renv))
+               | `RowVar name ->
+                   (`RowVar var::vars,
+                    (tenv, StringMap.add name
+                       (Unionfind.fresh (`Flexible var)) renv))
+               | `RigidRowVar name ->
+                   (`RigidRowVar var::vars,
+                    (tenv, StringMap.add name
+                       (Unionfind.fresh (`Rigid var)) renv)))
+        ([], (StringMap.empty, StringMap.empty))
+        vars
+    in
+      List.rev qs, env
 
 let desugar_assumption ((vars, k)  : assumption) : Types.datatype = 
   let vars, var_env = generate_var_mapping vars in
     Types.for_all (vars, desugar_datatype' var_env k)
-
-
 
 let desugar_datatype = generalize ->- desugar_assumption
 
