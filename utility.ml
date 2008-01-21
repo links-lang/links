@@ -836,3 +836,13 @@ module Unix = Notfound.Unix
 module UnixLabels = Notfound.UnixLabels
 
 exception NotFound = Notfound.NotFound
+
+(* HACK:
+
+   This functionality should be provided by the Num module and it
+   certainly shouldn't have to be implemented like this!
+*)
+let num_of_float f =
+  let s = string_of_float f in
+  let s = String.sub s 0 ((String.length s)-1) in
+    Num.num_of_string s

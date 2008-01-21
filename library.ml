@@ -788,7 +788,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "serverTime",
   (`Server
      (`PFun (fun _ ->
-               box_int(num_of_int(int_of_float(Unix.time()))))),
+               box_int(num_of_float(Unix.time())))),
    datatype "() -> Int",
    IMPURE);
 
@@ -809,15 +809,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    	         Unix.tm_yday =  0; (* ignored *)
    	         Unix.tm_isdst = false} in
                  
-               let t, _ = Unix.mktime tm in
-                 box_int (num_of_int (int_of_float t))
+               let t, _ = Unix.mktime tm in              
+                 box_int (num_of_float t)
            | _ -> assert false),
    datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) -> Int",
    IMPURE);
 
   "intToDate",
   (p1 (fun t ->
-         let tm = Unix.localtime(float_of_int (int_of_num (unbox_int t))) in
+         let tm = Unix.localtime(float_of_num (unbox_int t)) in
          let box_int = box_int -<- num_of_int in
            `Record [
              "year", box_int (tm.Unix.tm_year + 1900);
