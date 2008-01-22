@@ -587,10 +587,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   (* Section: Accessors for DomNodes *)
-  "domGetNodeValueFromRef",
-  (`Client, datatype "(DomNode) -> String",
-  IMPURE);
-
   "domGetTagNameFromRef",
   (`Client, datatype "(DomNode) -> String",
   IMPURE);
@@ -1039,9 +1035,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   datatype "(String) -> String",
   PURE);
 
-     "getModifiers",
+  "getModifiers",
   (`Client, datatype "(Event) -> [Char]",
   PURE);
+  
+  "domGetNodeValueFromRef",
+  (`Client, datatype "(DomNode) -> String",
+  IMPURE);
+
+  "domSetNodeValueFromRef",
+  (`Client, datatype "(DomNode, String) -> ()",
+  IMPURE);
 
   "getElementsByTagName",
   (`Client, datatype "(String) -> [DomNode]",

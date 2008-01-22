@@ -214,6 +214,7 @@ bottombar {
   padding: 0px;
   margin: 0px;
   height: 100px;
+  text-align: top;
 }
 
 .padded {
@@ -223,7 +224,6 @@ bottombar {
   margin-right: 0px;
   margin-left: 4px;
   position: relative;
-  top: 25%;
 } 
 
 .input-box {
@@ -343,4 +343,14 @@ bottombar {
  
 .link {
   cursor: pointer;
+}
+
+.popup-text { 
+  overflow: auto;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+  font-size-adjust: none;
+  vertical-align: top;
+  display: block;
+  width: 200;
 }

@@ -29,7 +29,7 @@
 
 # - Typing information. Needs:
 #    * Types retrieved on save/load (done)
-#    * Find appropriate nodes, attach info (done - tho types not returned in order?)
+#    * Find appropriate nodes, attach info (done - tho some types not returned in order?)
 
 ######
 # JavaScript functions
@@ -160,7 +160,7 @@ fun getUid() server
   var uids = for (var sid <-- sessionsTable)
              where (sid.id == getCookie("linkside"))
               [sid.uid];
-  if (numElems(uids) == 0)
+  if (length(uids) == 0)
     1
   else
     hd(uids)
@@ -176,7 +176,7 @@ fun isLoggedIn() server
   var sessId = getCookie(cookieName);
   debug("cookie: " ++ sessId);
   # Check that the sessid exists in the database
-  var p = numElems(for (var lSess <-- validSessions)
+  var p = length(for (var lSess <-- validSessions)
     where (lSess.id == sessId)
       [lSess.id]) == 1;
   (if (p)
@@ -238,7 +238,7 @@ fun fileOp() client
 
        debug("Insert code");
        insertCode(rval);
-       #updateSession();
+
        debug("Attach types");
        attachTypes(lTypes);
        setFrameData(lProjId, lFullName);
@@ -248,12 +248,44 @@ fun fileOp() client
   }
 }
 
+fun sessionCheck() client
+{
+  receive
+  {
+    case Exit() -> ()
+    case Check(xiHandler) ->
+    {
+      # Sleep for 1min
+      sleep(60);
+
+      # Check that the session is active
+      if(isLoggedIn())
+      {
+        debug("User is logged in");
+        
+        # Loop
+        xiHandler ! Check(xiHandler) 
+      }
+      else
+      {  # Display message if it isn't
+        debug("User's session has expired");
+        toggleVisible("overlay");
+        toggleVisible("session-expired")        
+      };
+
+      sessionCheck()
+    }
+  }
+}
+
+# Get the types from a particular piece of code.
 sig getTypes : (String) -> [(name:String,pos:(finish:Int,line:Int,start:Int),t:String)]
 fun getTypes(xiCode) server
 {
   dumpTypes(xiCode)
 }
 
+# Attach the types to the nodes in the actual document.
 sig attachTypes : ([(name:String, pos:(finish:Int, line:Int, start: Int), t:String)]) -> ()
 fun attachTypes(xiList) client
 {
@@ -382,6 +414,61 @@ fun updateSession() server
     set (id = sid.id, uid = sid.uid, creation_time = 0, update_time = 0)
 }
 
+# Check whether the password given was correct, and resume session if so.
+sig resumeSession : () -> ()
+fun resumeSession() client
+{
+  var lNode = getNodeById("resume");
+  var lPass = getValueFromRef(lNode);
+
+  if (length(lPass) == 0)
+  {
+    debug("Password node empty");
+    alertDialog("Password field empty. Please enter password or press \"exit\" to quit.");
+  }
+  else
+  {
+    # Check password is correct
+    # TODO: md5 should be applied here (need client-version)
+    if(checkPass(userId, lPass))
+    {
+      # Session has been updated, so spawn new session thread
+      var lSessionHandler = spawn { sessionCheck() };
+      lSessionHandler ! Check(lSessionHandler);
+      
+      # Clean form and hide overlay
+      var lVoid1 = domSetNodeValueFromRef(lNode, "");
+      
+      toggleVisible("overlay");
+      toggleVisible("session-expired");
+      ()
+    }
+    else
+    {
+      debug("Password incorrect");
+      alertDialog("Password incorrect. Please re-enter your password or press \"exit\" to quit.");
+      ()
+    }
+  }
+}
+
+sig checkPass : (Int, String) -> Bool
+fun checkPass(xiUid, xiPass) server
+{
+  var lRes = for (var lUser <-- users)
+               where ((lUser.id == xiUid) && (lUser.password == md5(xiPass)))
+                 [lUser.id];
+
+  if (length(lRes) == 1)
+  {
+    # Update the session
+    updateSession();
+    true
+  }
+  else
+  { false }
+}
+
 # Store the code in the database
 sig storeFile : (String, Int, String, String) -> ()
 fun storeFile(name, pid, escp, code) server 
@@ -444,6 +531,8 @@ fun saveFile(handler, xiName, xiNew) client
   
   # Get the text
   var lCode = convertSpaces(getCode(firstChild(lBody)));
+  
+  # Escape \ with \\ (first \ double escaped)
   var lEscapedCode = replace("\\\\", lCode, "\\\\"); #jsEscape(lCode);
 
   # This is potentially the name of the node containing the filename
@@ -473,7 +562,7 @@ fun getFile(xiProjId, xiName) server
   # Update the session while we're here
   updateSession();
 
-  if (numElems(res) == 0)
+  if (length(res) == 0)
     "No such file '" ++ xiName ++ "'."
   else
    hd(res)
@@ -487,7 +576,7 @@ fun fileExists(xiPid, xiName) server
     where ((lFile.pid == xiPid) && (lFile.name == xiName))
     [lFile.pid];
 
-  numElems(lCount) >= 1
+  length(lCount) >= 1
 }
 
 # Get the full path of a file selected in the project browser
@@ -1259,7 +1348,7 @@ fun getMenu(opHandler) client
             <li l:onclick="{toggleMenu("menu-file"); toggleWaiting("Deploying projects.."); deployDb((getFrameData()).pid); toggleWaiting("");}" unselectable="on"><span>Deploy</span></li>
 
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
-            <li l:onclick="{logout();}" unselectable="on"><span>Logout</span></li>
+            <li l:onclick="{logout()}" unselectable="on"><span>Logout</span></li>
           </ul>
         </dd>
       </dl>
@@ -1515,6 +1604,25 @@ fun getHiddenObjects(opHandler) client
         <span></span>
       </div>
     </div>
+    <div id="session-expired" class="invisible">
+      <div class="centered box">
+        <div class="topbar">
+          <span class="caption-text" unselectable="on">Session expired</span>
+        </div>
+        <div id="session-expired-input" class="container-box">
+          <span class="popup-text padded">
+            Your session has expired. <br />Please re-enter your password
+             to resume session, or press exit to quit.<br /><br />
+              Password:<br />
+            <input type="password" class="input-box proj-items" id="resume" />
+          </span>
+        </div>
+        <div class="bottombar">
+          <input type="button" name="save" l:onclick="{resumeSession();}" value="Resume" />
+          <input type="button" name="cancel" l:onclick="{logout()}" value="Exit" />
+        </div>
+      </div>
+    </div>
   </#>
 }
 
@@ -1555,6 +1663,8 @@ fun renderObject() client
 {
   # Spawn file handling object.
   var opHandler = spawn { fileOp() };
+  var sessionHandler = spawn { sessionCheck() };
+  sessionHandler ! Check(sessionHandler);
   <#>
     {
       getHiddenObjects(opHandler)

@@ -39,14 +39,14 @@ var loginForm =
       </div>
     </#>
   yields
-    (name=email,password=pass);
+    (name=email,password=md5(pass));
 
 # Login function
 fun login (data) server
 {
   var foundIds =
   for (var user <-- users)
-   where ((user.email == data.name) && (user.password == (md5(data.password))))
+   where ((user.email == data.name) && (user.password == (data.password)))
     [user.id];
 
   if (numElems (foundIds) == 1)
