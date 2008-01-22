@@ -397,7 +397,7 @@ tab () ^ code (show_type rt))
     let spawn_wait_process ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Processes" t l
 
-    let spawn_wait_return ~pos ~t1:_ ~t2:_ ~aliases:_ ~error:_ =
+    let spawn_wait_return ~pos:_ ~t1:_ ~t2:_ ~aliases:_ ~error:_ =
       (* this should never happen as the first argument is a fresh
          type variable *)
       assert false
@@ -610,7 +610,7 @@ tab() ^ code lexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
 "whereas the pattern" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
+tab() ^ code rexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type rt))
 
@@ -1488,7 +1488,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let rtype = typ r 
             and fields_type =
               `Record (List.fold_right
-                         (fun (lab, rhs) row ->
+                         (fun (lab, _) row ->
                             Types.row_with (lab, `Present (Types.fresh_type_variable ())) row)
                          fields (Types.make_empty_open_row ())) in
               unify ~handle:Errors.record_with (pos_and_typ r, no_pos fields_type);
@@ -1724,7 +1724,6 @@ struct
 
   let sentence tyenv =
     if Settings.get_value type_sugar then
-      let erase (e, _) = e in
         function
           | `Definitions bindings -> 
               let te, bindings = type_bindings tyenv bindings in
