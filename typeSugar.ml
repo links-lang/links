@@ -1535,7 +1535,7 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
             (fun (_,t) ->
                opt_iter
                  (fun t ->
-                    unify ~handle:Errors.bind_val_annotation (no_pos bt, no_pos t))) datatype in
+                    unify ~handle:Errors.bind_val_annotation (no_pos bt, no_pos t)) t) datatype in
           let bt, penv =
             if Utils.is_generalisable (erase body) then
               (Utils.generalise env bt, Env.map (Utils.generalise env) penv)
@@ -1548,103 +1548,102 @@ and type_binding : context -> binding -> binding * Types.typing_environment =
                   Errors.value_restriction (lookup_pos pos) bt
                 else
                   bt, penv
-    in
-      `Val (erase_pat pat, erase body, location, datatype), (Env.extend env penv, alias_env)
-  | `Fun ((name, _, pos), (pats, body), location, t) ->
-      let pats = List.map (List.map tpc) pats in
-      let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-      let body_env, alias_env = List.fold_left fold_in_envs context.tenv pats in
-      let mt = Types.fresh_type_variable () in
-      let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
-      let ft = make_ft pats (typ body) in
-      let () = opt_iter (fun (_,t) ->
-                           opt_iter
-                             (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
-        (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
-         (Env.bind env (name, Utils.generalise env ft), alias_env))
-  | `Funs defs ->
-      (*
-        Compute initial types for the functions using
-          - the patterns
-          - an optional type annotation
+          in
+            `Val (erase_pat pat, erase body, location, datatype), (Env.extend env penv, alias_env)
+      | `Fun ((name, _, pos), (pats, body), location, t) ->
+          let pats = List.map (List.map tpc) pats in
+          let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+          let body_env, alias_env = List.fold_left fold_in_envs context.tenv pats in
+          let mt = Types.fresh_type_variable () in
+          let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
+          let ft = make_ft pats (typ body) in
+          let () = opt_iter (fun (_,t) ->
+                               opt_iter
+                                 (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
+            (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
+             (Env.bind env (name, Utils.generalise env ft), alias_env))
+      | `Funs defs ->
+          (*
+            Compute initial types for the functions using
+            - the patterns
+            - an optional type annotation
+            
+            Note that the only way of getting polymorphism here is to
+            provide a type annotation (generalisation would otherwise
+            be unsound as the function types cannot be fully known
+            until the definition bodies have been inspected).
 
-        Note that the only way of getting polymorphism here is to provide
-        a type annotation (generalisation would otherwise be unsound as
-        the function types cannot be fully known until the definition
-        bodies have been inspected).
-
-        As well as the function types, the typed patterns are also returned
-        here as a simple optimisation.
-      *)
-      let fbs, patss =
-        List.split 
-          (List.map
-             (fun ((name,_,_), (pats, body), _, t) ->
-                let pats = List.map (List.map tpc) pats in
-                let ft = make_ft pats (Types.fresh_type_variable ()) in
-                let fb =
-                  match t with
-                    | None -> ft
-                    | Some (_, Some t) ->
-                        let fb = Utils.generalise env t in
-                          (* make sure the annotation has the right shape *)
-                        let fbi = Instantiate.typ fb in
-                        let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
-                          fb
-                in
-                  (name, fb), pats)
-             defs) in
-      let defs =
-        let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) env fbs in
-        let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-          List.rev
-            (List.fold_left2
-               (fun defs ((name, _, pos), (_, body), location, t) pats ->
-                  let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
-                  let mt = Types.fresh_type_variable () in
-                  let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
-                  let ft = make_ft pats (typ body) in
-                  (* WARNING: this looks surprising, but it is what we want *)
-                  let ft' =
-                    match Env.lookup body_env name with
-                      | `ForAll (_, t) | t -> t in
-                  let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
-                    ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
-      let env =
-        List.fold_left (fun env (name, fb) ->
-                          Env.bind env (name, Utils.generalise env fb)) env fbs in
-      let typing_env = env, alias_env in
-        (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) -> 
-                            binder, 
-                            (List.map (List.map erase_pat) ppats, erase body),
-                            location, dtopt) defs), typing_env)
-  | `Foreign (language, name, (_,Some datatype as dt)) ->
-      (`Foreign (language, name, dt),
-       (Env.bind env (name, datatype), alias_env))
-  | `Type (typename, args, (_,Some dtype as datatype)) as t ->
-      let args = List.map (snd ->- val_of) args
-(*        List.fold_right
-          (fun name args ->
-             if StringMap.mem name context.tvars then
-               match Unionfind.find (StringMap.find name context.tvars) with
-                 | `Flexible var | `Rigid var -> var :: args
-                 | _ -> args
-             else if StringMap.mem name context.rvars then
-               match Unionfind.find (StringMap.find name context.rvars) with
-                 | `Flexible var | `Rigid var -> var :: args
-                 | _ -> args
-             else
-               assert false) 
-          args []*) in
-        t, (env, Utils.register_alias (typename, args, dtype) alias_env)
-  | `Infix -> `Infix, context.tenv
-  | `Exp e ->
-      let e = tc e in
-      let () = unify ~handle:Errors.bind_exp
-        (pos_and_typ e, no_pos Types.unit_type)
-      in
-        `Exp (erase e), (Env.empty, Env.empty)
-in (typed, pos), env
+            As well as the function types, the typed patterns are also
+            returned here as a simple optimisation.  *)
+          let fbs, patss =
+            List.split 
+              (List.map
+                 (fun ((name,_,_), (pats, body), _, t) ->
+                    let pats = List.map (List.map tpc) pats in
+                    let ft = make_ft pats (Types.fresh_type_variable ()) in
+                    let fb =
+                      match t with
+                        | None -> ft
+                        | Some (_, Some t) ->
+                            let fb = Utils.generalise env t in
+                              (* make sure the annotation has the right shape *)
+                            let fbi = Instantiate.typ fb in
+                            let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
+                              fb
+                    in
+                      (name, fb), pats)
+                 defs) in
+          let defs =
+            let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) env fbs in
+            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+              List.rev
+                (List.fold_left2
+                   (fun defs ((name, _, pos), (_, body), location, t) pats ->
+                      let body_env, alias_env = List.fold_left fold_in_envs (body_env, alias_env) pats in
+                      let mt = Types.fresh_type_variable () in
+                      let body = type_check {context with tenv = (Env.bind body_env (mailbox, mt), alias_env)} body in
+                      let ft = make_ft pats (typ body) in
+                        (* WARNING: this looks surprising, but it is what we want *)
+                      let ft' =
+                        match Env.lookup body_env name with
+                          | `ForAll (_, t) | t -> t in
+                      let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
+                        ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
+          let env =
+            List.fold_left (fun env (name, fb) ->
+                              Env.bind env (name, Utils.generalise env fb)) env fbs in
+          let typing_env = env, alias_env in
+            (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) -> 
+                                binder, 
+                                (List.map (List.map erase_pat) ppats, erase body),
+                                location, dtopt) defs), typing_env)
+      | `Foreign (language, name, (_,Some datatype as dt)) ->
+          (`Foreign (language, name, dt),
+           (Env.bind env (name, datatype), alias_env))
+      | `Type (typename, args, (_,Some dtype as datatype)) as t ->
+          let args = List.map (snd ->- val_of) args
+            (*        List.fold_right
+                      (fun name args ->
+                      if StringMap.mem name context.tvars then
+                      match Unionfind.find (StringMap.find name context.tvars) with
+                      | `Flexible var | `Rigid var -> var :: args
+                      | _ -> args
+                      else if StringMap.mem name context.rvars then
+                      match Unionfind.find (StringMap.find name context.rvars) with
+                      | `Flexible var | `Rigid var -> var :: args
+                      | _ -> args
+                      else
+                      assert false) 
+                      args []*) in
+            t, (env, Utils.register_alias (typename, args, dtype) alias_env)
+      | `Infix -> `Infix, context.tenv
+      | `Exp e ->
+          let e = tc e in
+          let () = unify ~handle:Errors.bind_exp
+            (pos_and_typ e, no_pos Types.unit_type)
+          in
+            `Exp (erase e), (Env.empty, Env.empty)
+    in (typed, pos), env
 and type_regex typing_env : regex -> regex =
   fun m -> 
     let erase (e, _) = e in
@@ -1702,14 +1701,14 @@ struct
 
   let sentence tyenv =
     if Settings.get_value type_sugar then
-        function
-          | `Definitions bindings -> 
-              let te, bindings = type_bindings tyenv bindings in
-                `Definitions bindings, Types.unit_type, te
-          | `Expression (_, pos as body) -> 
-              let body, t = (type_check {tenv = tyenv} body) in
-                `Expression body, t, tyenv
-          | `Directive d -> `Directive d, Types.unit_type, tyenv
+      function
+        | `Definitions bindings -> 
+            let te, bindings = type_bindings tyenv bindings in
+              `Definitions bindings, Types.unit_type, te
+        | `Expression (_, pos as body) -> 
+            let body, t = (type_check {tenv = tyenv} body) in
+              `Expression body, t, tyenv
+        | `Directive d -> `Directive d, Types.unit_type, tyenv
     else
       fun sentence -> sentence, Types.unit_type, tyenv
 end

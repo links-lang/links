@@ -105,13 +105,8 @@ let generate_var_mapping (vars : quantifier list) : (Types.quantifier list * var
       vars
       ([], empty_env)
 
-let datatype' ?(generalize=false) map (dt, _ : datatype') = 
-  if generalize then
-    let dt' = desugar map dt in
-    let fv = List.map (fun t -> `TypeVar t)  (TypeVarSet.elements (free_type_vars dt')) in
-      (dt, Some (Types.for_all (fv, dt')))
-  else
-    (dt, Some (desugar map dt))
+let datatype' map (dt, _ : datatype') = 
+  (dt, Some (desugar map dt))
 
 (* Desugar a typename declaration.  Free variables are not allowed
    here (except for the parameters, of course). *)
@@ -199,14 +194,14 @@ object (self)
 
   method bindingnode = function
     | `Val (pat, p, loc, dt) -> 
-        `Val (self#pattern pat, self#phrase p, self#location loc, opt_map (datatype' ~generalize:true map) dt)
+        `Val (self#pattern pat, self#phrase p, self#location loc, opt_map (datatype' map) dt)
     | `Fun (bind, fl, loc, dt) ->
-        `Fun (self#binder bind, self#funlit fl, self#location loc, opt_map (datatype' ~generalize:true map) dt)
+        `Fun (self#binder bind, self#funlit fl, self#location loc, opt_map (datatype' map) dt)
     | `Funs defs ->
         let defs = (ListLabels.map defs
                       ~f:(fun (bind, fl, loc, dt) -> 
                             (self#binder bind, self#funlit fl, self#location loc,
-                             opt_map (datatype' ~generalize:true map) dt))) in
+                             opt_map (datatype' map) dt))) in
           `Funs defs
     | `Foreign (x, lang, dt) ->
         let dt' = foreign dt in
@@ -249,3 +244,5 @@ object (self)
     | `TableLit (_, (_, None), _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
 end
+
+
