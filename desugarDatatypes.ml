@@ -23,14 +23,18 @@ object (self)
 
   method bind tv = {< bound = tv :: bound >}
 
-  (* TODO: exclude type vars found in type alias and foreign definitions *)
+  method bindingnode = function
+    (* type declarations bind variables; exclude those from the
+       analysis. *)
+    | `Type _    -> self
+    | b          -> super#bindingnode b
 
   method datatype = function
     | TypeVar t         -> self#add (`TypeVar t)
     | RigidTypeVar s    -> self#add (`RigidTypeVar s)
     | MuType (v, k)     -> let o = self#bind (`RigidTypeVar v) in o#datatype k
     | dt                -> super#datatype dt
-    
+        
   method row_var = function
     | `Closed           -> self
     | `OpenRigid s      -> self#add (`RigidRowVar s)
@@ -128,7 +132,6 @@ let typename name args rhs =
          | dt -> super#datatype dt
      end)#datatype' dt) # tyvars in
   try
-    (* TODO: mailbox args *)
     let args, tmap = 
       ListLabels.fold_right ~init:([], StringMap.empty) args
         ~f:(fun (x, _) (args, map) -> 
