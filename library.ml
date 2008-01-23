@@ -296,6 +296,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() -{a}-> Mailbox (a)",
   IMPURE);
 
+  "haveMail",
+  (`PFun (fun _ -> 
+            failwith "The haveMail function is not implemented on the server yet"),
+   datatype "() -> Bool",
+   IMPURE);
+
   "recv",
   (* this function is not used, as its application is a special case
      in the interpreter. But we need it here, for now, because of its

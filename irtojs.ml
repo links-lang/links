@@ -528,6 +528,8 @@ let rec generate_value env : value -> code =
 
       | `ApplyPure (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
           Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)
+      | `ApplyPure (`Variable op, [v]) when Env'.lookup env op = "negate" || Env'.lookup env op = "negatef" ->
+          Unop("-", gv v)
       | `ApplyPure (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
           && not (mem (Env'.lookup env f) cps_prims)
           && Library.primitive_location (Env'.lookup env f) <> `Server 
