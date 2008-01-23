@@ -204,7 +204,7 @@ fun fileOp() client
         }};
 
       storeFile(name, lFileData.pid, escp, code); 
-      #updateSession();
+
       attachTypes(lTypes);
       setFrameData(lFileData.pid, name);
       toggleWaiting("");
@@ -242,6 +242,10 @@ fun fileOp() client
        debug("Attach types");
        attachTypes(lTypes);
        setFrameData(lProjId, lFullName);
+     
+       # Set the editor overlay to be invisble
+       setInvisible("ed-disabled");
+       
        toggleWaiting("");
        fileOp()
     }
@@ -516,10 +520,6 @@ fun storeFile(name, pid, escp, code) server
       []
     };
 
-  # @TODO: Do we want to save the file here? No real need if test/depl,
-  # but useful for knowing which files are to be changed. The other 
-  # option is to mark modified files in the db.
-  #writeToFile(lBaseDir ++ name, code);
   updateSession();
 }
 
@@ -629,6 +629,23 @@ fun setFrameData(xiPid, xiName) client
   var lNull1 = domSetAttributeFromRef(lIfr, "name", xiName);
   var lNull2 = domSetAttributeFromRef(lIfr, "pid", (intToString(xiPid)));
   ()
+}
+
+# Toggle iframe's 'new' flag (1 on, 0 off).
+sig setFrameNew: (Int) -> ()
+fun setFrameNew(xiNew) client
+{
+  var lIfr = hd(getElementsByTagName("iframe"));
+  var lNull = domSetAttributeFromRef(lIfr, "new", intToString(xiNew));
+  ()
+}
+
+# Check whether frame is new.
+sig isFrameNew: () -> Bool
+fun isFrameNew() client
+{
+  var lIfr = hd(getElementsByTagName("iframe"));
+  domGetAttributeFromRef(lIfr, "new") == "1"
 }
 
 # Get the name of the IFrame
@@ -900,7 +917,7 @@ fun nodeAttributesMatch(xiNode, xiAttrs) client
 }
 
 # Look through the project files given recursively and return XML for each.
-sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String)|LoadFile: (String, Event)|])) -> Xml
+sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String)|LoadFile:(String, Event)|a|])) -> Xml
 fun getLProjectList(currItem, currLevel, opHandler) client
 {
   var width = intToString(currLevel * 16);
@@ -914,7 +931,7 @@ fun getLProjectList(currItem, currLevel, opHandler) client
       # belong to the project.
       # 
       <li class="proj-list-item">
-        <div name="closed" type="proj" cname="{name}" pid="{intToString(id)}" l:onclick="{navClick(event)}">
+        <div name="closed" type="proj" cname="{name}" pid="{intToString(id)}" id="proj-{name}" l:onclick="{navClick(event)}">
           <img name="box" src="images/add-blue-box.png"/>
           <img src="images/proj-close.png" />  
           <span>
@@ -1081,19 +1098,55 @@ fun getFileList(projId) server
 sig newFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
 fun newFile(xiHandler) client
 {
+  # Set the editor overlay to be invisble
+  setInvisible("ed-disabled");
+
   # Check if doc has changed
   if (docHasChanged())
   {
     # Show box asking if user wants to save
-    #toggleActionSave();
+    toggleActionSave();
   }
-  else {};
+  else 
+  {
+    toggleVisible("new-file");
+  }
+}
 
+# Delete the contents of the document, set up new one.
+# TODO: sort out which project to add to.
+sig clearDoc: () -> ()
+fun clearDoc() client 
+{
+  var lName = domGetNodeValueFromRef(getNodeById("newfile-name"));
   # Replace the contents of the document with nothing
   replaceChildren(<#></#>, getDocumentBody());
   
-  # Set the name to be nothing
-  setFrameData(1, "");
+  # Set the name to be the new file.
+  setFrameData(1, ("new/" ++ lName ++ "*"));
+  
+  # Mark the iframe as new.
+  setFrameNew(1);
+ 
+  # Insert the new file in the project list
+  var lProjNode = getNodeById("proj-test");
+
+  var lNewNode = 
+      <li class="proj-list-item" style="cursor: normal;">
+        <div class="proj-node"> 
+          <img src="images/blank.png" style="width: 16; height: 1px;" />
+          <img src="images/blank.png" class="proj-blank" />
+          <span class="proj-text" id="newnode" l:onclick="{}" style="cursor: normal;">
+          {stringToXml(lName ++ "*")}
+          </span>
+        </div>
+      </li>;
+
+  var lListNode = findFirstMatchingSibling(firstChild(lProjNode), "UL", []);
+
+  var lVoid = appendChildren(lNewNode, lListNode);
+    
+  ()
 }
 
 # Run the current file.
@@ -1352,6 +1405,17 @@ fun getMenu(opHandler) client
           </ul>
         </dd>
       </dl>
+      <dl>
+        <dt id="menu-proj-cap" l:onclick="{toggleMenu("menu-proj");}" class="menuhead"><span>Project</span></dt>
+        <dd id="menu-proj">
+          <ul id="menulist" class="menulist">
+            <li l:onclick="{toggleMenu("menu-proj"); runFileDb(opHandler);}" unselectable="on"><span>Run</span></li>
+
+            <li style="height: 1px;"><hr style="height: 2px;" /> </li> 
+            <li l:onclick="{toggleMenu("menu-proj"); toggleWaiting("Deploying project.."); deployDb((getFrameData()).pid); toggleWaiting("");}" unselectable="on"><span>Deploy</span></li>
+          </ul>
+        </dd>
+      </dl>
     </div>
   </#>
 }
@@ -1365,21 +1429,37 @@ fun maybeSaveFile(xiHandler) client
   {
     case "*" -> toggleVisible("overlay"); toggleVisible("save-file")
     case ""  -> debug("No name!")
-    case _   ->
-    {
-      var lMatchFun = fun (x) { x <> '*' };
-
-      # Check if a save is needed
-      if (length(dropWhile(lMatchFun, lFrameData.fname)) == 1)
-      {
-        var lRealName = takeWhile(lMatchFun, lFrameData.fname);
-        saveFile(xiHandler, lRealName, true);
-        setFrameData(lFrameData.pid, lRealName);
-      }
-      else {};
-      ()
-    }
+    case _   -> saveCurrent(lFrameData, xiHandler)
   }
+}
+
+# Save the current file.
+sig saveCurrent : ((pid: Int, fname: String), 
+                    Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+fun saveCurrent(xiData, xiHandler) client
+{
+  var lMatchFun = fun (x) { x <> '*' };
+
+  # Check if a save is needed
+  if (length(dropWhile(lMatchFun, xiData.fname)) == 1)
+  {
+    var lRealName = takeWhile(lMatchFun, xiData.fname);
+    saveFile(xiHandler, lRealName, true);
+    setFrameData(xiData.pid, lRealName);
+
+    # Check if frame is new, replace with linked version
+    if (isFrameNew())
+    {
+      var lDispName = drop(1, dropWhile(fun (x) { x <> '/' }, lRealName));
+      var lNewNode =
+          <span class="proj-text">
+            {stringToXml(lDispName)}
+          </span>;
+
+      replaceNode(lNewNode, getNodeById("newnode"));
+      setFrameNew(0);
+    } else {}
+  } else {};
 }
 
 # Check if the document has been altered.
@@ -1409,12 +1489,12 @@ fun toggleActionSave() client
     case _       ->
     {
       # Check if this is a new file
-      if(length(takeWhile(fun (x) { x <> '*' }, (getFrameData()).fname)) == 0)
-      {
-        # Set the filename-box to visible
-        var lVoid1 = domSetStyleAttrFromRef(lInputNode, "display", "block");
-        ()
-      } else {};
+      #if(length(takeWhile(fun (x) { x <> '*' }, (getFrameData()).fname)) == 0)
+      #{
+      #  # Set the filename-box to visible
+      #  var lVoid1 = domSetStyleAttrFromRef(lInputNode, "display", "block");
+      #  ()
+      #} else {};
       
       # Display the node
       var lVoid2 = domSetStyleAttrFromRef(lNode, "display", "block");
@@ -1565,6 +1645,23 @@ fun getHiddenObjects(opHandler) client
 {
   <#>
     <div class="overlay" id="overlay"></div>
+    <div id="new-file" class="invisible">
+      <div class="centered box">
+        <div class="topbar">
+          <span class="caption-text" unselectable="on">New file</span>
+        </div>
+        <div class="container-box">
+          <span class="popup-text padded">
+            Name:<br />
+            <input type="text" class="input-box proj-items" id="newfile-name" />
+          </span>
+        </div>
+        <div class="bottombar">
+          <input type="button" name="save" l:onclick="{clearDoc(); cleanForm("new-file")}" value="Create new" />
+          <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
+        </div>
+      </div>
+    </div>
     <div id="save-file" class="invisible">
       <div class="centered box">
         <div class="topbar">
@@ -1594,8 +1691,8 @@ fun getHiddenObjects(opHandler) client
           </span>
         </div>
         <div class="bottombar">
-          <input type="button" name="save" l:onclick="{saveFile(opHandler, "save-filename", false); cleanForm("save-file")}" value="Save" />
-          <input type="button" name="cancel" l:onclick="{cleanForm("maybe-save")}" value="Don't Save" />
+          <input type="button" name="save" l:onclick="{saveCurrent(getFrameData(), opHandler); toggleVisible("maybe-save"); toggleVisible("new-file"); }" value="Save" />
+          <input type="button" name="cancel" l:onclick="{toggleVisible("maybe-save"); setInvisible("overlay");}" value="Don't Save" />
         </div>
       </div>
     </div>
@@ -1627,7 +1724,7 @@ fun getHiddenObjects(opHandler) client
 }
 
 # Returns the HTML needed for the project browser.
-sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|LoadFile:(String, Event)|])) -> Xml
+sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|LoadFile:(String, Event)|a|])) -> Xml
 fun getProjBrowser(opHandler) client
 {
     <div id="proj-browser" class="proj-browser">
@@ -1678,6 +1775,7 @@ fun renderObject() client
       getProjBrowser(opHandler)
     }
     <div id="space" class="space"></div>
+    <div id="ed-disabled" class="overlay-ed"></div>
     {
       getEditor()
     }

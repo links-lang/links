@@ -30,12 +30,23 @@ var fileDir = "test/";
 var loginForm =
   formlet
     <#>
-      <div id="loginform">
-        <label>e-mail address</label>
-         { input -> email }
-        <label>pass</label>
-         { inputPassword -> pass}
-      {submitButton("log in") -> change}
+      <div class="box">
+          <div class="topbar">
+            <span class="caption-text" unselectable="on">Login</span>
+          </div>
+          <div class="container-box">
+            <span class="proj-items padded">
+              <p>Username:<br />
+                { input -> email }
+              </p>
+              <p>Password: <br />
+                { inputPassword -> pass }
+              </p>
+          </span>
+        </div>
+        <div class="bottombar">
+          {submitButton("Log in") -> change}
+        </div>
       </div>
     </#>
   yields
@@ -101,16 +112,13 @@ fun main(flag) {
     </head>
     <link rel="stylesheet" type="text/css" href="proj.css" />
     <body>
-      <div id="main">
-      {
-        #if (isJust(flag))
-        #{
-        # debug("Log-in failed");
-        #} else {};
-        
-        #displayForm()
-        loginForm => login
-      }
+      <div id="main" style="margin-left: auto; margin-right: auto; width: 375px;">	
+        <img src="images/lode-logo.png" style="display: block;"/>
+        <div style="margin-left: auto; margin-right: auto; width: 230px;">
+        {
+          loginForm => login
+        }
+        </div>
       </div>
     </body>
   </html>

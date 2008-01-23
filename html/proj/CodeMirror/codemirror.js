@@ -168,7 +168,7 @@ var CodeMirror = function(){
     // always add it, redundant as it sounds.
     this.frame = createDOM("IFRAME", {style: "display: block; border: 0;" +
       " width: " + options.width + 
-				      "; " + "height: " + options.height + ";", name: "", pid: ""});
+				      "; " + "height: " + options.height + ";", name: "", pid: "", new: ""});
     if (place.appendChild)
       place.appendChild(this.frame);
     else

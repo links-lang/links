@@ -7,7 +7,7 @@ html, body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fiel
 input {
   border: 1px solid;
   font-family: tahoma, verdana, helvetica;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .editor { 
@@ -172,8 +172,8 @@ div.menu {
 
 .centered {
   position: absolute;
-  left: 33%;
-  top: 33%;
+  margin-top: 20%;
+  margin-left: 38%;
 }
 
 .box {
@@ -279,6 +279,19 @@ bottombar {
   -moz-opacity: 0.5;
 }
 
+.overlay-ed {
+  position: absolute;
+  top: 26px;
+  left: 161px;
+  width: 480px;
+  height: 400px;
+  background: #ffffff;
+  z-index: 100;
+  opacity:.50;
+  filter: alpha(opacity = 50); 
+  -moz-opacity: 0.5;
+}
+
 #menubar dt {
   cursor: pointer;
   text-align: center;
@@ -291,7 +304,7 @@ bottombar {
 
 #menubar dl {
   float: left;
-  height: 20px;
+  height: 25px;
 }
 
 #menubar dd {
