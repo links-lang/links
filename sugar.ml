@@ -1023,8 +1023,10 @@ module Desugarer =
                  desugar (
                    `Block ((([`Val ((`Variable (t,None,pos'), pos'), table, `Unknown, None), pos'])),
                            (`FnAppl ((`Var "deleterows", pos'), [tv; rows]), pos')), pos')
-           | `DBInsert (table, rows) -> 
+           | `DBInsert (table, rows, None) -> 
                desugar (`FnAppl ((`Var "insertrows", pos'), [table; rows]), pos')
+           | `DBInsert (table, rows, Some field) -> 
+               desugar (`FnAppl ((`Var "InsertReturning", pos'), [table; rows; field]), pos')
            | `DBUpdate (pattern, table, condition, row) ->
                let t = unique_name () in
                let r = unique_name () in

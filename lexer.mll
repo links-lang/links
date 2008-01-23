@@ -181,6 +181,7 @@ let keywords = [
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
+ "identity" , IDENTITY; 
  "insert"   , INSERT; 
  "mu"       , MU; 
  "native"   , NATIVE;
@@ -189,6 +190,7 @@ let keywords = [
  "page"     , PAGE;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
+ "returning", RETURNING; 
  "server"   , SERVER; 
  "set"      , SET;
  "sig"      , SIG;

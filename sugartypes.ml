@@ -93,7 +93,7 @@ type quantifier =
     |`RowVar of name | `RigidRowVar of name]
       deriving (Show)
 
-type fieldconstraint = [ `Readonly ]
+type fieldconstraint = [ `Readonly | `Identity ]
     deriving (Show)
 
 type constant = [
@@ -175,7 +175,7 @@ and phrasenode = [
 | `DatabaseLit      of phrase * (phrase option * phrase option)
 | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
 | `DBDelete         of pattern * phrase * phrase option
-| `DBInsert         of phrase * phrase
+| `DBInsert         of phrase * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
 | `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
 | `TextNode         of string
@@ -283,7 +283,8 @@ struct
     | `ConstructorLit (_, popt) -> option_map phrase popt
     | `DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | `DBInsert (p1, p2)
+    | `DBInsert (p1, p2, popt) ->
+        union_all [phrase p1; phrase p2; option_map phrase popt]
     | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
     | `Xml (_, attrs, attrexp, children) -> 
         union_all

@@ -22,12 +22,38 @@ let value_of_db_string (value:string) = function
 
 let execute_command  (query:string) (db: database) : result =
   let result = (db#exec query) in
-    (match result#status with
-       | QueryOk -> `Record []
-       | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+    begin
+      match result#status with
+        | QueryOk -> `Record []
+        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
+    end
 
 let execute_insert (table_name, field_names, vss) db =
   execute_command (db#make_insert_query (table_name, field_names, vss)) db
+
+let execute_insert_returning (table_name, field_names, vss, returning) db =
+  let qs = db#make_insert_returning_query (table_name, field_names, vss, returning) in
+  let rec run =
+    function
+      | [] -> assert false
+      | [q] ->
+          let result = db#exec q in
+            begin
+              match result#status with
+               | QueryOk ->
+                   let rows = result#get_all_lst in
+                     begin
+                       match rows with
+                         | [[id]] -> box_int (num_of_string id)
+                         | _ -> raise (Runtime_error ("Returned the wrong number of results executing " ^ q))
+                     end
+               | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
+            end
+      | q :: qs ->
+          execute_command q db;
+          run qs
+  in
+    run qs
 
 let execute_select (field_types:(string * Types.datatype) list) (query:string) (db: database)
     : result =

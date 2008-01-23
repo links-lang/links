@@ -116,6 +116,10 @@ class pg_database host port dbname user password = object(self)
     "insert into " ^ table_name ^
       "("^String.concat "," field_names ^") "^
       String.concat " union all " (List.map (fun vs -> "select " ^ String.concat "," vs) vss)
+  (* 
+     TODO:
+     implement make_insert_returning for versions of postgres prior to 8.2
+  *)
 end
 
 let driver_name = "postgresql"

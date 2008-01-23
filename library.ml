@@ -857,6 +857,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(TableHandle(r, w), [w]) -> ()",
   IMPURE);
 
+  "InsertReturning",
+  (`Server 
+     (p3 (fun table rows returning -> 
+            match table, rows, returning with
+              | `Table _, `List [], _ -> `Record []
+              | `Table ((db, params), table_name, _), _, _ ->
+                  let field_names = row_columns rows
+                  and vss = row_values db rows
+                  and returning = unbox_string returning
+                  in
+                    prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                                    String.concat "\n"
+                                    (db#make_insert_returning_query(table_name, field_names, vss, returning)));
+                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+              | _ -> failwith "Internal error: insert row into non-database")),
+   datatype "(TableHandle(r, w), [w], String) -> Int",
+  IMPURE);
+
   "updaterows", 
   (`Server
      (p2 (fun table rows ->

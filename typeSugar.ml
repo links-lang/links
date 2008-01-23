@@ -150,6 +150,7 @@ sig
   val delete_where : griper
   val insert_table : griper
   val insert_values : griper
+  val insert_id : griper
   val update_table : griper
   val update_pattern : griper
   val update_where : griper
@@ -372,6 +373,9 @@ tab () ^ code lexpr ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the write row has type" ^ nl () ^
 tab () ^ code (show_type rt))
+
+    let insert_id ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
+      fixed_type pos "Identity variables" t l
 
     let update_table ~pos ~t1:l ~t2:(_,t) ~aliases:_ ~error:_ =
       fixed_type pos "Tables" t l
@@ -1213,15 +1217,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun e -> unify ~handle:Errors.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type
-        | `DBInsert (into, values) ->
+        | `DBInsert (into, values, id) ->
             let into   = tc into
             and values = tc values
+            and id = opt_map tc id
             and read  = `Record (Types.make_empty_open_row ())
             and write = `Record (Types.make_empty_open_row ()) in
             let () = unify ~handle:Errors.insert_table
               (pos_and_typ into, no_pos (`Table (read, write))) in
             let () = unify ~handle:Errors.insert_values (pos_and_typ values, no_pos (Types.make_list_type write)) in
-              `DBInsert (erase into, erase values), Types.unit_type
+            let () =
+              opt_iter
+                (fun id ->
+                   unify ~handle:Errors.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
+              `DBInsert (erase into, erase values, opt_map erase id), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat
             and from = tc from

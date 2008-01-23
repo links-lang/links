@@ -158,7 +158,7 @@ let tableLit constraints dt =
               (StringMap.fold
                  (fun label t row ->
                     match lookup label constraints with 
-                      | Some cs when List.exists (function `Readonly -> true) cs -> row
+                      | Some cs when List.exists (function `Readonly | `Identity -> true) cs -> row
                       | _  -> Types.row_with (label, t) row)
                  fields
                  (Types.make_empty_closed_row ()))

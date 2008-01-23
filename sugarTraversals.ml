@@ -259,9 +259,10 @@ class map =
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2
           in `DBDelete ((_x, _x_i1, _x_i2))
-      | `DBInsert ((_x, _x_i1)) ->
+      | `DBInsert ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#phrase _x_i1 in `DBInsert ((_x, _x_i1))
+          let _x_i1 = o#phrase _x_i1 in
+          let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in `DBInsert ((_x, _x_i1, _x_i2))
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -378,7 +379,7 @@ class map =
       | `Absent -> `Absent
       
     method fieldconstraint : fieldconstraint -> fieldconstraint =
-      function | `Readonly -> `Readonly
+      function | `Readonly -> `Readonly | `Identity -> `Identity
       
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -710,8 +711,8 @@ class fold =
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in o
-      | `DBInsert ((_x, _x_i1)) ->
-          let o = o#phrase _x in let o = o#phrase _x_i1 in o
+      | `DBInsert ((_x, _x_i1, _x_i2)) ->
+          let o = o#phrase _x in let o = o#phrase _x_i1 in let o = o#option (fun o -> o#phrase) _x_i2 in o
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
@@ -809,7 +810,7 @@ class fold =
       function | `Present _x -> let o = o#datatype _x in o | `Absent -> o
       
     method fieldconstraint : fieldconstraint -> 'self_type =
-      function | `Readonly -> o
+      function | `Readonly -> o | `Identity -> o
       
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->

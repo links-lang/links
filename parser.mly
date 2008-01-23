@@ -60,8 +60,8 @@ let datatype d = d, None
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
-%token UPDATE DELETE INSERT VALUES SET
-%token READONLY
+%token UPDATE DELETE INSERT VALUES SET RETURNING
+%token READONLY IDENTITY
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -433,7 +433,8 @@ typed_expression:
 
 db_expression:
 | typed_expression                                             { $1 }
-| INSERT exp VALUES exp                                        { `DBInsert ($2, $4), pos() }
+| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
+| INSERT exp VALUES exp RETURNING VARIABLE                     { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
 | DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in `DBDelete (pat, phrase, $5), pos() }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
@@ -578,6 +579,7 @@ field_constraints:
 
 field_constraint:
 | READONLY                                                     { `Readonly }
+| IDENTITY                                                     { `Identity }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }
