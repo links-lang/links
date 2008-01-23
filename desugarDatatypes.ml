@@ -98,16 +98,19 @@ and desugar_row ({tenv=tenv; renv=renv} as var_env) (fields, rv) =
 let generate_var_mapping (vars : quantifier list) : (Types.quantifier list * var_env) =
   let addt x tvar envs = {envs with tenv = StringMap.add x (Unionfind.fresh tvar) envs.tenv}
   and addr x rvar envs = {envs with renv = StringMap.add x (Unionfind.fresh rvar) envs.renv} in
-    List.fold_right
-      (fun v (vars, envs) ->
+  let vars, var_env =
+    List.fold_left
+      (fun (vars, envs) v ->
          let var = Types.fresh_raw_variable () in
            match v with
              | `TypeVar      x -> `TypeVar var::vars     , addt x (`Flexible var) envs
              | `RigidTypeVar x -> `RigidTypeVar var::vars, addt x (`Rigid var)    envs
              | `RowVar       x -> `RowVar var::vars      , addr x (`Flexible var) envs
              | `RigidRowVar  x -> `RigidRowVar var::vars , addr x (`Rigid var)    envs)
-      vars
       ([], empty_env)
+      vars
+  in
+    List.rev vars, var_env
 
 let datatype' map (dt, _ : datatype') = 
   (dt, Some (desugar map dt))
