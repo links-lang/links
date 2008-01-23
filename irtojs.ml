@@ -379,7 +379,7 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
       let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f")) in
       (* correct the type of stringifyB64 *)
       let stringifyB64 = set_node_datatype (Variable ("stringifyB64", data),
-                                            DesugarDatatype.read_datatype "(a) -> String") in
+                                            DesugarDatatypes.read "(a) -> String") in
       (* BUG: some of the other expressions still have the wrong type *)
       let json_args = Apply (stringifyB64,
                              [Record_intro (StringSet.fold 
@@ -976,7 +976,7 @@ let preprocess_program global_names program =
     Symbols.rename program
 
 let make_initial_env (tenv, aenv) =
-  let dt = DesugarDatatype.read_datatype in
+  let dt = DesugarDatatypes.read in
     Compileir.make_initial_env
       (Env.String.bind
          (Env.String.bind tenv

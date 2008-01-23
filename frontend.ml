@@ -28,6 +28,7 @@ struct
 (*      ->- show "before refining bindings"*)
       ->- RefineBindings.refine_bindings#program
 (*      ->- show "after refining bindings" *)
+      ->- DesugarDatatypes.program
       ->- TypeSugar.Check.program tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#program
       ->- after_typing DesugarFormlets.desugar_formlets#program
@@ -39,6 +40,7 @@ struct
       ((ResolvePositions.resolve_positions pos_context)#sentence
       ->- DesugarLAttributes.desugar_lattributes#sentence
       ->- RefineBindings.refine_bindings#sentence
+      ->- DesugarDatatypes.sentence
       ->- TypeSugar.Check.sentence tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#sentence
       ->- after_typing DesugarFormlets.desugar_formlets#sentence
