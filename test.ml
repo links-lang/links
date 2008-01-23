@@ -87,7 +87,7 @@ let has_type (t : Types.datatype) (Syntax.Program (_, body) as program) =
                  (Types.Show_datatype.show body_type)
 )
 
-let datatype = DesugarDatatype.read_datatype
+let datatype = DesugarDatatypes.read
 
 let functionp : Result.result -> Result.result m = function
   | `RecFunction _ as f -> Right f

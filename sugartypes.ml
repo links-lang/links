@@ -62,10 +62,10 @@ type binder = name * Types.datatype option * position
 type location = Syntax.location
     deriving (Show)
 type datatype = 
-  | TypeVar         of string
-  | RigidTypeVar    of string
+  | TypeVar         of name
+  | RigidTypeVar    of name
   | FunctionType    of datatype list * datatype * datatype
-  | MuType          of string * datatype
+  | MuType          of name * datatype
   | UnitType
   | TupleType       of (datatype list)
   | RecordType      of row
@@ -78,44 +78,45 @@ type datatype =
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
-    | `Open of string
-    | `OpenRigid of string
-    | `Recursive of string * row ]
+    | `Open of name
+    | `OpenRigid of name
+    | `Recursive of name * row ]
 and fieldspec = [`Present of datatype | `Absent]
     deriving (Show)
 
-type quantifier =
-    [`TypeVar of string | `RigidTypeVar of string
-    |`RowVar of string | `RigidRowVar of string]
-      deriving (Show)
-
-type assumption = quantifier list * datatype
+(* Store the denotation along with the notation once it's computed *)
+type datatype' = datatype * Types.datatype option
     deriving (Show)
+
+type quantifier =
+    [`TypeVar of name | `RigidTypeVar of name
+    |`RowVar of name | `RigidRowVar of name]
+      deriving (Show)
 
 type fieldconstraint = [ `Readonly ]
     deriving (Show)
 
 type constant = [
-| `Float of float
-| `Int of num
+| `Float  of float
+| `Int    of num
 | `String of string
-| `Bool of bool
-| `Char of char ]
+| `Bool   of bool
+| `Char   of char ]
     deriving (Show)
-    
+
 type patternnode = [
 | `Any
 | `Nil
 | `Cons     of pattern * pattern
 | `List     of pattern list
-| `Variant  of string * pattern option
-| `Negative of string list
-| `Record   of (string * pattern) list * pattern option
+| `Variant  of name * pattern option
+| `Negative of name list
+| `Record   of (name * pattern) list * pattern option
 | `Tuple    of pattern list
 | `Constant of constant
 | `Variable of binder
 | `As       of binder * pattern
-| `HasType  of pattern * datatype
+| `HasType  of pattern * datatype'
 ]
 and pattern = patternnode * position
     deriving (Show)
@@ -152,7 +153,7 @@ and phrasenode = [
 | `SpawnWait        of phrase
 | `ListLit          of phrase list
 | `Iteration        of iterpatt list * phrase
-                    * (*where:*)   phrase option 
+    * (*where:*)   phrase option 
                     * (*orderby:*) phrase option
 | `Escape           of binder * phrase
 | `Section          of sec
@@ -166,17 +167,17 @@ and phrasenode = [
 | `RecordLit        of (name * phrase) list * phrase option
 | `Projection       of phrase * name
 | `With             of phrase * (name * phrase) list
-| `TypeAnnotation   of phrase * datatype
-| `Upcast           of phrase * datatype * datatype
+| `TypeAnnotation   of phrase * datatype'
+| `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * datatype * (string * fieldconstraint list) list * phrase
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * phrase
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
-| `Xml              of name * (string * (phrase list)) list * phrase option * phrase list
+| `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
 | `TextNode         of string
 | `Formlet          of phrase * phrase
 | `Page             of phrase
@@ -186,12 +187,12 @@ and phrasenode = [
 ]
 and phrase = phrasenode * position
 and bindingnode = [
-| `Val     of pattern * phrase * location * datatype option
-| `Fun     of binder * funlit * location * datatype option
-| `Funs    of (binder * funlit * location * datatype option) list
-| `Foreign of name * name * datatype
+| `Val     of pattern * phrase * location * datatype' option
+| `Fun     of binder * funlit * location * datatype' option
+| `Funs    of (binder * funlit * location * datatype' option) list
+| `Foreign of name * name * datatype'
 | `Include of string
-| `Type    of name * name list * datatype
+| `Type    of name * (name * int option) list * datatype'
 | `Infix
 | `Exp     of phrase
 ]

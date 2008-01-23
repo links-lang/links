@@ -95,7 +95,7 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
-let datatype = DesugarDatatype.read_datatype
+let datatype = DesugarDatatypes.read
 
 let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),

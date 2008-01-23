@@ -847,8 +847,8 @@ module Desugarer =
      | `Bool v   -> Constant(Boolean v, pos)
      | `Char v   -> Constant(Char v,  pos)
 
-   let rec simple_pattern_of_pattern var_env ((pat,pos') : pattern) : simple_pattern = 
-       let desugar = simple_pattern_of_pattern var_env
+   let rec simple_pattern_of_pattern ((pat,pos') : pattern) : simple_pattern = 
+       let desugar = simple_pattern_of_pattern
        and pos = `U (lookup_pos pos') in
        let rec aux : patternnode -> _ = function
          | `Variable (v,_,_) -> `Variable v, pos
@@ -863,7 +863,7 @@ module Desugarer =
                ps
                (`Nil, pos)
          | `As ((name,_,_), p) -> `As (name, desugar p), pos
-         | `HasType (p, datatype) -> `HasType (desugar p, DesugarDatatype.desugar_datatype' var_env datatype), pos
+         | `HasType (p, (_,Some datatype)) -> `HasType (desugar p, datatype), pos
          | `Variant (l, Some v) ->
              `Variant (l, desugar v), pos
          | `Negative ls -> `Negative ls, pos
@@ -937,16 +937,15 @@ module Desugarer =
            p
          end
      
-   let desugar_expression' env (e : phrase) : untyped_expression =
-     let _, var_env = env in
+   let desugar_expression (e : phrase) : untyped_expression =
      let rec desugar' ((s, pos') : phrase) : untyped_expression =
        let pos = `U (lookup_pos pos')
-       and patternize = simple_pattern_of_pattern var_env in
+       and patternize = simple_pattern_of_pattern in
        let appPrim = appPrim pos in
        let desugar = desugar' in
          match (s : phrasenode) with
-           | `TypeAnnotation(e, k) -> HasType(desugar e, DesugarDatatype.desugar_datatype' var_env k, pos)
-           | `Upcast(e, t1, t2) ->
+           | `TypeAnnotation (e, (_, Some k)) -> HasType (desugar e, k, pos)
+           | `Upcast (e, t1, t2) ->
                (* HACK:
 
                   use unsafe_cast here to avoid having to add extra syntax to the old IR
@@ -997,7 +996,7 @@ module Desugarer =
                                        Some (record_selection (label, gensym(), rvar, record,
                                                                Variable (rvar,pos), pos)),
                                        pos))
-           | `TableLit (name, datatype, constraints, db) -> 
+           | `TableLit (name, (_, Some (readtype, writetype)), constraints, db) -> 
                (* HACK:
 
                   This isn't as flexible as it should be - it's just a
@@ -1006,18 +1005,7 @@ module Desugarer =
                   actual table types during type inference.
                   
                *)
-               let row = match datatype with
-                 | RecordType row ->
-                     row
-                 | UnitType ->
-                     raise (ASTSyntaxError(data_position pos, "Tables must have at least one field"))
-                 | _ ->
-                     raise (ASTSyntaxError(data_position pos, "Tables must take a non-empty record type")) in
-               let write_row = DesugarDatatype.make_write_row row constraints in
-
-               let readtype = `Record (DesugarDatatype.desugar_row var_env row) in
-               let writetype = `Record (DesugarDatatype.desugar_row var_env write_row) in
-                 TableHandle (desugar db, desugar name, (readtype, writetype), pos)
+               TableHandle (desugar db, desugar name, (readtype, writetype), pos)
            | `UnaryAppl (`Minus, e)      -> appPrim "negate" [desugar e]
            | `UnaryAppl (`FloatMinus, e) -> appPrim "negatef" [desugar e]
            | `UnaryAppl (`Name n, e) -> appPrim n [desugar e]
@@ -1084,7 +1072,7 @@ module Desugarer =
            | `FnAppl (fn, ps)  -> Apply (desugar fn, List.map desugar ps, pos)
 
            | `FunLit (patterns_lists, body) -> 
-               let patternized = (List.map (List.map patternize) patterns_lists) in
+               let patternized = List.map (List.map patternize) patterns_lists in
                ignore (List.fold_left
                          (List.fold_left check_for_duplicate_names')
                          StringSet.empty
@@ -1259,39 +1247,26 @@ module Desugarer =
        (Debug.if_set show_desugared (fun()-> string_of_expression result);
         result)
 
-   let desugar_expression (_,pos as e) =
-     desugar_expression' (DesugarDatatype.var_mapping_from_binding ((`Exp e), pos)) e
-
    let desugar_definition ((s, pos') : binding) : untyped_definition list =
-     let _, ((tenv, _) as var_env) = DesugarDatatype.var_mapping_from_binding (s, pos') in
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression in
      let ds : bindingnode -> _ Syntax.definition' list = function
        | `Val ((`Variable (name,_,_), _), p, location, None) ->
            [Define (name, desugar_expression p, location, pos)]
-       | `Val ((`Variable (name,_,_), _), p, location, Some t) ->
-           [Define (name, HasType (desugar_expression p, DesugarDatatype.desugar_datatype' var_env t, pos), location, pos)]
+       | `Val ((`Variable (name,_,_), _), p, location, Some (_, Some t)) ->
+           [Define (name, HasType (desugar_expression p, t, pos), location, pos)]
        | `Val _ -> assert false (* TODO: handle other patterns *)
-       | `Fun ((name,_,_), funlit, location, dtype) ->
+       | `Fun ((name,_,_), funlit, location, dt) ->
            [Define (name, Rec ([name, desugar_expression (`FunLit funlit, pos'), 
-                                opt_map (DesugarDatatype.desugar_datatype' var_env) dtype],
+                                opt_map (fun (_, Some t) -> t) dt],
                                Variable (name, pos),
                                pos),
                     location, pos)]
-       | `Type (name, args, rhs) ->
-           let get_var arg =
-             match (Unionfind.find (StringMap.find arg tenv)) with
-               | `Flexible var | `Rigid var -> var
-               | _ -> assert false
-           in
-             if alias_is_closed (StringSet.from_list args) rhs then
-               [Alias (name,
-                       List.map get_var args,
-                       DesugarDatatype.desugar_datatype' var_env rhs, pos)]
-             else
-               failwith ("Free variable(s) in alias")
-       | `Foreign (language, name, datatype) -> 
-           [Alien (language, name, DesugarDatatype.desugar_datatype datatype, pos) ]
+       | `Type (name, args, (_, Some rhs)) ->
+           let args = List.map (snd ->- val_of) args in
+             [Alias (name, args, rhs, pos)]
+       | `Foreign (language, name, (_, Some datatype)) -> 
+           [Alien (language, name, datatype, pos) ]
        | `Include path ->
            failwith "Includes not supported"
        | `Funs defs ->
@@ -1299,7 +1274,7 @@ module Desugarer =
              (fun ((n,_,_), funlit, location, ft) ->
                 Define (n, Rec ([n,
                                  desugar_expression (`FunLit funlit, pos'),
-                                 opt_map (DesugarDatatype.desugar_datatype' var_env) ft],
+                                 opt_map (snd ->- val_of) ft],
                                 Variable (n, pos), pos), location, pos))
              defs
        | `Exp _ -> assert false

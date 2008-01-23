@@ -189,7 +189,7 @@ let is_multipart () =
 
 let wrap_with_render_page (Syntax.Program (defs, body)) = 
   let data s =
-    `T (Syntax.position body, DesugarDatatype.read_datatype s, None)
+    `T (Syntax.position body, DesugarDatatypes.read s, None)
   in
     (Syntax.Program
        (defs,

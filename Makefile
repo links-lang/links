@@ -77,14 +77,14 @@ SOURCES = $(OPC)                		\
           lexer.mli lexer.mll         		\
           errors.mli errors.ml                  \
           parse.mli parse.ml    		\
-          desugarDatatype.mli desugarDatatype.ml\
           instantiate.mli instantiate.ml        \
 	  typeUtils.mli typeUtils.ml            \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
           callgraph.ml					\
-          sugarTraversals.mli sugarTraversals.ml	\
+          sugarTraversals.mli  sugarTraversals.ml	\
+          desugarDatatypes.mli desugarDatatypes.ml      \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
           desugarLAttributes.mli desugarLAttributes.ml	\

@@ -48,11 +48,11 @@ class map :
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
+    method datatype'       : datatype' -> datatype'
     method constant        : constant -> constant
     method binop           : binop -> binop
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
-    method assumption      : assumption -> assumption
     method program         : program -> program
     method unknown         : 'a. 'a -> 'a
   end
@@ -107,11 +107,11 @@ class fold :
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
     method datatype        : datatype -> 'self
+    method datatype'       : datatype' -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
-    method assumption      : assumption -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end

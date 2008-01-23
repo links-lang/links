@@ -92,7 +92,7 @@ let rec directives
     ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let t = DesugarDatatype.read_datatype (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then

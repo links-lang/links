@@ -43,6 +43,9 @@ let parseRegexFlags f =
     else
       asList f (i+1) ((String.get f i)::l) in
     List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
+
+let datatype d = d, None
+
 %}
 
 %token END
@@ -163,7 +166,7 @@ preamble_declaration:
 | INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
-| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
+| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }
@@ -201,19 +204,19 @@ tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
 
 signature: 
-| SIG var COLON datatype                                       { $2, $4 }
-| SIG op COLON datatype                                        { $2, $4 }
+| SIG var COLON datatype                                       { $2, datatype $4 }
+| SIG op COLON datatype                                        { $2, datatype $4 }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `Type ($2, $3, $5), pos()  }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `Type ($2, $3, datatype $5), pos()  }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
 varlist:
-| VARIABLE                                                     { [$1] }
-| VARIABLE COMMA varlist                                       { $1 :: $3 }
+| VARIABLE                                                     { [$1, None] }
+| VARIABLE COMMA varlist                                       { ($1, None) :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -425,8 +428,8 @@ logical_expression:
 
 typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression COLON datatype                            { `TypeAnnotation ($1, $3), pos() }
-| logical_expression COLON datatype LARROW datatype            { `Upcast ($1, $3, $5), pos() }
+| logical_expression COLON datatype                            { `TypeAnnotation ($1, datatype $3), pos() }
+| logical_expression COLON datatype LARROW datatype            { `Upcast ($1, datatype $3, datatype $5), pos() }
 
 db_expression:
 | typed_expression                                             { $1 }
@@ -559,7 +562,7 @@ formlet_expression:
 
 table_expression:
 | formlet_expression                                           { $1 }
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, $4, $5, $7), pos()} 
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()} 
 
 perhaps_table_constraints:
 | WHERE table_constraints                                      { $2 }
@@ -754,7 +757,7 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { `HasType ($1, $3), pos() }
+| typed_pattern COLON primary_datatype                      { `HasType ($1, datatype $3), pos() }
 
 typed_pattern:
 | cons_pattern                                              { $1 }
