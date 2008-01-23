@@ -129,7 +129,7 @@ let program_defs :'a program' -> 'a definition' list =
 let unit_expression data = Record_intro (StringMap.empty, None, data)
 
 let is_unit_expr = function
-    Record_intro (fields, None, data) when fields = StringMap.empty -> true
+    Record_intro (fields, None, _) when fields = StringMap.empty -> true
   | _ -> false
 
 let defname = function (Define(name, _, _, _)) -> name
@@ -181,8 +181,8 @@ type data = [untyped_data | typed_data] deriving (Typeable, Show)
 let rec visit_def (unit : 'a) (visitor : _ expression' -> 'a)
     (combiner : 'a list -> 'a) def : 'a =
   match def with
-    | Define(name, expr, loc_annotation, d) -> visitor expr
-    | Module(path, Some defs, d) ->
+    | Define(_, expr, _, _) -> visitor expr
+    | Module(_, Some defs, _) ->
         combiner (map (visit_def unit visitor combiner) defs)
     | Module(_, None, _) 
     | Alias _
@@ -271,7 +271,7 @@ let rec show_definition t : 'a definition' -> string = function
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
-  | Alias (typename, quantifiers, datatype, data) ->
+  | Alias (typename, _, datatype, data) ->
       "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_datatype k) ^ t data
   | Module (Some path, None, data) -> "include \"" ^ path ^ "\";" ^ t data
@@ -361,9 +361,9 @@ let reduce_expression (visitor : ('a expression' -> 'b) -> 'a expression' -> 'b)
 let rec reduce_definition visitor combine combine_def def =
   combine_def(def,
               match def with
-                | Define(name, expr, loc_annotation, d) ->
+                | Define(_, expr, _, _) ->
                     [reduce_expression visitor combine expr]
-                | Module(path, Some defs, d) ->
+                | Module(_, Some defs, _) ->
                     map (reduce_definition visitor combine
                            combine_def) defs
                 | Alias _
@@ -429,7 +429,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
                     d)
     | TableQuery (q, d), nodes ->
         TableQuery (q, d)
-    | e -> raise (Invalid_argument "set_subnodes")
+    | _ -> raise (Invalid_argument "set_subnodes")
         
 let rec stringlit_value = function
   | HasType (e, _, _) -> stringlit_value e
@@ -515,7 +515,6 @@ let free_bound_type_vars_def def =
 
 let free_bound_type_vars_program (Program (defs, body))=
   let module S = Types.TypeVarSet in
-  let fbtv = Types.free_bound_type_vars in
     S.union
       (S.union_all (List.map free_bound_type_vars_def defs))
       (free_bound_type_vars body)
@@ -706,7 +705,7 @@ let subst_free u r expr =
 *)
 
 let rename_free u v e =
-  map_free_occ u (fun (Variable(x, d)) -> Variable(v, d)) e
+  map_free_occ u (fun (Variable(_, d)) -> Variable(v, d)) e
 
 let subst_fast_replacer name replacement : RewriteSyntax.rewriter =
   function
@@ -754,8 +753,10 @@ let label_for_expr expr =
 
 let fully_labelized_expr (expr : expression) = 
   reduce_expression 
-    (fun revisit expr -> match expression_data expr with
-         `T(_, _, Some label) -> revisit expr | _ -> false)
+    (fun revisit expr -> 
+       match expression_data expr with
+         | `T(_, _, Some _) -> revisit expr
+         | _ -> false)
     (fun(_, blist) -> for_all identity blist)
     expr
 

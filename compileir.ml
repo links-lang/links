@@ -20,7 +20,7 @@ let fresh_var : var_info -> binder * var =
       (var, info), var
 
 let fresh_raw_var : unit -> var =
-  fun info ->
+  fun () ->
     incr variable_counter;
     !variable_counter
 
@@ -449,7 +449,7 @@ struct
          VEnv.bind env (x, v))
       env xs vs
 
-  let rec add_globals_to_env : multi_env -> binding list -> multi_env = fun ((venv, tenv, aenv) as env) ->
+  let rec add_globals_to_env : multi_env -> binding list -> multi_env = fun env ->
     List.fold_left
       (fun ((venv, tenv, aenv) as env) ->
          function
@@ -468,7 +468,7 @@ struct
                extend venv [f_name] [f], Env.Int.bind tenv (f, ft), aenv
            | `Alias (name, quantifiers, t) ->
                venv, tenv, Types.register_alias (name, quantifiers, t) aenv
-           | `Module (name, defs) ->
+           | `Module (_, defs) ->
                opt_app (fun defs -> add_globals_to_env env defs) env defs
            | _ -> env)
       env

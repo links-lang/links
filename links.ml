@@ -128,10 +128,7 @@ let print_result rtype result =
                  else "")
 
 (** type, optimise and evaluate a program *)
-let process_program ?(printer=print_result) (valenv, typingenv) 
-    ((program : Syntax.untyped_program),
-     (sugar : (Sugartypes.binding list * Sugartypes.phrase option))) = 
-
+let process_program ?(printer=print_result) (valenv, typingenv) (program,_) = 
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
   let program = lazy (Optimiser.optimise_program (typingenv, program))
@@ -161,7 +158,7 @@ let interact envs =
            (match measure "parse" parse input with 
               | (`Definitions [] : Sugartypes.sentence'), _ -> envs
               | `Definitions defs, (`Definitions sugar : Sugartypes.sentence) -> 
-                  let (valenv, _ as envs), _, (Syntax.Program (defs', body) as program) =
+                  let (valenv, _ as envs), _, (Syntax.Program (defs', _)) =
                     process_program
                       ~printer:(fun _ _ -> ())
                       envs

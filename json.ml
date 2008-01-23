@@ -67,7 +67,6 @@ let jsonize_primitive : Result.primitive_value -> string = function
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `Page _ -> failwith "Can't yet jsonize Page"
   | `NativeString _ -> failwith "Can't yet jsonize NativeString"
 
 let rec jsonize_result : Result.result -> string = function

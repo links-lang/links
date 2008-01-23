@@ -81,7 +81,7 @@ let untuple r =
     | `Record args -> un 1 [] args
     | _ -> assert false
 
-let stubify_client_funcs globals (Syntax.Program(defs,body) as program) : Result.environment = 
+let stubify_client_funcs globals (Syntax.Program (defs, _) as program) : Result.environment = 
   Interpreter.program_source := program;
   let is_server_fun = function
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
@@ -240,7 +240,7 @@ let perform_request
 
 let serve_request prelude (valenv, tyenv) filename = 
   try 
-    let _, (Syntax.Program (defs, main) as program) =
+    let _, (Syntax.Program (_, main) as program) =
       read_and_optimise_program prelude tyenv filename in
     let defs = stubify_client_funcs valenv program in
     let cgi_args =

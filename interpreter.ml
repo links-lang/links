@@ -102,8 +102,8 @@ let rec normalise_query (globals:environment) (env:environment) (db:database)
                (match lookup globals env var with
                     `Table(_, tableName, _) -> `TableName(tableName, alias)
                   | _ -> failwith "Internal Error: table source was not a table!")
-           | `TableName(name, alias) -> `TableName(name, alias)
-           | `SubQuery(query, alias) ->
+           | `TableName (name, alias) -> `TableName(name, alias)
+           | `SubQuery _ ->
                failwith "Not implemented subqueries yet"
         ) 
   in {qry with
@@ -250,7 +250,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                         ((Recv::cont, value), !Library.current_pid);
                       switch_context globals
                     end
-            | FuncEvalCont(locals, []) -> 
+            | FuncEvalCont(_, []) -> 
                 apply_cont globals (ApplyCont([], [])::cont) value
             | FuncEvalCont(locals, param::params) ->
 	        (* Just evaluate the first parameter; "value" is a
@@ -261,11 +261,12 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                 let args = List.rev args_rev in
                   begin match value with
                     | `RecFunction (defs, fnlocals, name) ->
-                        let Syntax.Abstr(vars, body, _data) = 
+                        let Syntax.Abstr (vars, body, _data) = 
                           List.assoc name defs in
                         let recPeers = (* recursively-defined peers *)
-                          map(fun (name, Syntax.Abstr(args, body, _)) -> 
-                                (name, `RecFunction(defs, fnlocals, name))) defs
+                          map (fun (name, Syntax.Abstr _) -> 
+                                 (name, `RecFunction (defs, fnlocals, name))) 
+                            defs
                         in let locals = recPeers @ fnlocals @ locals in
                         let locals = fold_left2 Result.bind locals vars args in
                         let locals = trim_env locals in
@@ -404,7 +405,7 @@ and apply_cont (globals : environment) : continuation -> result -> result =
 	                      (* bind 'var' to the first element, save the others for later *)
 		              interpret globals (Result.bind locals variable first_elem) expr
 		                (CollExtn(locals, variable, expr, [], other_elems) :: cont))
-	           | x -> assert false)
+	           | _ -> assert false)
 	          
             | CollExtn (locals, var, expr, rslts, inputs) ->
                 (let new_results = match value with
@@ -475,7 +476,7 @@ and interpret_definition :
       | Syntax.Define (name, expr, (`Server|`Unknown), _) -> 
           interpret globals [] expr (Definition (globals, name) :: cont)
 
-      | Syntax.Define (name, expr, (`Client), _) -> 
+      | Syntax.Define (name, _, (`Client), _) -> 
           apply_cont globals (Definition (globals, name) :: cont)
             (`ClientFunction name)
 
@@ -539,20 +540,12 @@ fun globals locals expr cont ->
       eval child (XMLCont (locals, tag, None, [], [], children) :: cont)
 
   | Syntax.Record_intro (fields, None, _) ->
-      let fvss = (StringMap.fold (fun _label value fvs ->
-                                    freevars value :: fvs) 
-                    fields []) in
-      let fvs = StringSet.union_all fvss in
       apply_cont
         globals
         (StringMap.fold (fun label value cont ->
                            BinopRight(locals, `RecExt label, value) :: cont) fields cont)
         (`Record [])
   | Syntax.Record_intro (fields, Some record, _) ->
-      let fvss = (StringMap.fold (fun _label value fvs ->
-                                    freevars value :: fvs) 
-                    fields []) in
-      let fvs = StringSet.union_all fvss in
       eval record (StringMap.fold (fun label value cont ->
                                      BinopRight(locals, `RecExt label, value) :: cont) fields cont)
   | Syntax.Project (expr, label, _) ->
@@ -589,7 +582,7 @@ fun globals locals expr cont ->
               failwith ("table rows must have record type")
       end
 
-  | Syntax.TableQuery (query, d) ->
+  | Syntax.TableQuery (query, _) ->
       apply_cont globals cont (do_query globals locals query)
 
   | Syntax.Call_cc(arg, _) ->
@@ -606,9 +599,10 @@ fun globals locals expr cont ->
 let run_program (globals : environment) locals (Program (defs, body))
     : (environment * result) = 
   try (
-    apply_cont globals 
-      (map (fun def -> EvalDef([], def)) defs @ [Ignore(locals, body)])
-      (`Record []);
+    ignore 
+      (apply_cont globals 
+         (map (fun def -> EvalDef([], def)) defs @ [Ignore(locals, body)])
+         (`Record []));
     failwith "boom"
   ) with
     | TopLevel s -> s
@@ -616,7 +610,7 @@ let run_program (globals : environment) locals (Program (defs, body))
 
 let run_expr (globals: environment) locals expr cont : (environment * result) =
   try (
-    interpret globals locals expr cont;
+    ignore (interpret globals locals expr cont);
     failwith "boom"
   ) with
     | TopLevel s -> s

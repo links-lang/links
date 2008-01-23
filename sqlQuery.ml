@@ -93,7 +93,7 @@ and freevars_sqlQuery q =
                        map freevars_sqlexpr q.cond @
                        map freevars_sqlexpr (map fst q.cols))
 
-let rec subst_likeExpr e = assert false
+let subst_likeExpr _ = assert false
 
 let rec subst_sqlExpr name expr : sqlexpr -> sqlexpr = function
   | `V var when var = name -> expr

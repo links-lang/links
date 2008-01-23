@@ -174,7 +174,7 @@ struct
                             recd_ty)
 
   let rec is_asList_expr = function
-      Let (var, src, body, _) -> is_asList_expr body
+      Let (_, _, body, _) -> is_asList_expr body
     | Apply(Variable("asList", _), [_], _) -> true
     | _ -> false
 
@@ -227,8 +227,8 @@ struct
       argument can only be a variable; this would go away if we had
       ANF in the IR *)
   let asList_anf : RewriteSyntax.rewriter = function 
-    | (Apply(Variable("asList", d1), [Variable _], d2) as expr) -> None
-    | (Apply(Variable("asList", d1), [th], d2) as expr) -> 
+    | Apply (Variable("asList", _), [Variable _], _) -> None
+    | Apply (Variable("asList", d1), [th], d2) -> 
         let th_data = expression_data th in
         let th_var = gensym ~prefix:"_t" () in
           Some (Let (th_var, th,
@@ -457,7 +457,7 @@ struct
             | _ -> uncompilable e
         end
 
-    | (Apply(Variable("asList", _), [th], (`T (pos,_,_) as data)) as expr)
+    | Apply (Variable("asList", _), [th], `T _) as expr
       ->
         Debug.if_set_l debug(lazy("     attempting to compile asList application"));
         let fields = match Types.concrete_type (node_datatype th) with

@@ -206,7 +206,7 @@ let add_attribute : result * result -> result -> result =
         and value = unbox_string value in
         let rec filter = function
           | [] -> []
-          | (Attr (s, _) as node) :: nodes when s=name -> filter nodes
+          | Attr (s, _) :: nodes when s=name -> filter nodes
           | node :: nodes -> node :: filter nodes
         in
           `XML (Node (tag, Attr (name, value) :: filter children)) 
@@ -777,7 +777,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      type system. *)
 
   "sleep",
-  (p1 (fun duration ->
+  (p1 (fun _ ->
          (* FIXME: This isn't right : it freezes all threads *)
          (*Unix.sleep (int_of_num (unbox_int duration));
          `Record []*)
@@ -937,7 +937,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "sqrt",    float_fn sqrt PURE;
 
   ("environment",
-   (`PFun (fun [] -> 
+   (`PFun (fun _ -> 
              let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
                `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
@@ -1006,7 +1006,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
@@ -1130,7 +1130,7 @@ let rec function_arity =
   function
     | `Function(`Record (l, _), _, _) ->
         (Some (StringMap.size l))
-    | `ForAll(qs, t) -> function_arity t
+    | `ForAll (_, t) -> function_arity t
     | _ -> None
 
 let primitive_arity (name : string) = 
