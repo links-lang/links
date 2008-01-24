@@ -263,7 +263,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 "while the " ^ rthing ^ nl() ^
 tab() ^ code rexpr ^ nl() ^
 "has type" ^ nl() ^
-tab() ^ (show_type rt) ^ "."
+tab() ^ code (show_type rt) ^ "."
 
     let but2 l r = but2things ("expression", l) ("expression", r)
 
