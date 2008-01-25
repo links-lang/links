@@ -34,15 +34,18 @@ class virtual dbresult = object
   method virtual error : string
 end
 
-class virtual database = object
+class virtual database = object(self)
   method virtual driver_name : unit -> string
   method virtual escape_string : string -> string
   method virtual exec : string -> dbresult
-  method make_insert_query : (string * string list * string list list) -> string=
+  method make_insert_query : (string * string list * string list list) -> string =
     fun (table_name, field_names, vss) ->
       "insert into " ^ table_name ^
         "("^String.concat "," field_names ^") values "^
         String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
+  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun _ ->
+      failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
 end
 
 module Eq_database = Eq.Eq_mutable(struct type a = database end)

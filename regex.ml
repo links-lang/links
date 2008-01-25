@@ -40,9 +40,7 @@ let compile_ocaml : regex -> Str.regexp =
     | Group s -> group (compile s)
     | Repeat (s, r) ->  (compile r ^ compile_repeat s)
   in fun s -> 
-    let re = (compile s)  in
-(*      Printf.fprintf stderr "REGEX compiled to : <%s>\n" re; *)
-      Str.regexp (compile s) 
+    Str.regexp (compile s) 
 	
 let tests : (string * regex * string * bool) list = 
   [

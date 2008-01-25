@@ -49,5 +49,5 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
         env, program
   
 let dump_cached filename =
-   let env, program = read_file_cache filename in
+   let _env, program = read_file_cache filename in
      print_string (Syntax.labelled_string_of_program program)

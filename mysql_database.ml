@@ -235,7 +235,7 @@ class mysql_result (result: result) db = object
     Utility.val_of (errmsg db)
 end
 
-class mysql_database spec = object
+class mysql_database spec = object(self)
   inherit database
   val connection = connect spec
   method driver_name () = "mysql"
@@ -246,6 +246,10 @@ class mysql_database spec = object
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
   method escape_string = Mysql.escape
+  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun (table_name, field_names, vss, returning) ->
+      [self#make_insert_query(table_name, field_names, vss);
+       "select last_insert_id()"]
 end
 
 let parse_args (args : string) : db =

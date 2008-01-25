@@ -24,6 +24,7 @@ class virtual database :
     method virtual escape_string : string -> string
     method virtual exec : string -> dbresult
     method make_insert_query : (string * string list * string list list) -> string
+    method make_insert_returning_query : (string * string list * string list list * string) -> string list
   end
 
 type db_constructor = string -> database * string

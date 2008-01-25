@@ -175,10 +175,10 @@ var CodeMirror = function(){
       place(this.frame);
     this.win = this.frame.contentWindow;
     this.doc = this.win.document;
-    this.doc.designMode = "on";
+    this.doc.designMode = "off";
     this.doc.open();
     this.doc.write("<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"" + this.options.stylesheet + "\"/></head>" +
-                   "<body style=\"border-width: 0;\" class=\"editbox\" spellcheck=\"false\"></body></html>");
+                   "<body style=\"border-width: 0;\" class=\"editbox\" spellcheck=\"false\"><p style=\"font-size: small; font-family: tahoma, verdana, helvetica;\">Create new or load file to begin working.</p></body></html>");
     this.doc.close();
 
     // An array of known dirty nodes, nodes that have been modified

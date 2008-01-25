@@ -501,7 +501,7 @@ let rec free_alias_check alias_env = fun rec_vars ->
   let fac = free_alias_check alias_env in
     function
       | `Not_typed -> ()
-      | `Primitive p -> ()
+      | `Primitive _ -> ()
       | `Function (f, m, t) -> fac rec_vars f; fac rec_vars m; fac rec_vars t
       | `Record row -> free_alias_check_row alias_env rec_vars row
       | `Variant row -> free_alias_check_row alias_env rec_vars row
@@ -515,8 +515,8 @@ let rec free_alias_check alias_env = fun rec_vars ->
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `Flexible var
-              | `Rigid var -> ()
+              | `Flexible _
+              | `Rigid _ -> ()
               | `Recursive (var, t) ->
                   if TypeVarSet.mem var rec_vars then
                     ()
@@ -555,7 +555,7 @@ let rec is_mailbox_free alias_env = fun rec_vars t ->
   let imbr = is_mailbox_free_row alias_env rec_vars in
     match t with
       | `Not_typed -> true
-      | `Primitive p -> true
+      | `Primitive _ -> true
       | `Function (f, m, t) -> imb f && imb m && imb t
       | `Record row
       | `Variant row -> imbr row
@@ -566,7 +566,7 @@ let rec is_mailbox_free alias_env = fun rec_vars t ->
             List.for_all imb ts
           else
             raise (UndefinedAlias ("Unbound alias: "^s))
-      | `ForAll (_, body) -> assert false
+      | `ForAll (_, _) -> assert false
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
@@ -837,7 +837,7 @@ let rec freshen_mailboxes : TypeVarSet.t -> datatype -> datatype = fun rec_vars 
                 | `MetaTypeVar point ->
                     begin
                       match Unionfind.find point with
-                        | `Flexible var ->
+                        | `Flexible _ ->
                             fresh_type_variable ()
                         | _ -> fmb m
                     end
@@ -940,8 +940,8 @@ let rec type_aliases : TypeVarSet.t -> datatype -> StringSet.t = fun rec_vars t 
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `Flexible var
-              | `Rigid var -> StringSet.empty
+              | `Flexible _
+              | `Rigid _ -> StringSet.empty
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var rec_vars then
                     StringSet.empty
@@ -1058,7 +1058,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `Variant row             -> makeEnvR recvars row
       | `Table (l,r)             -> union [makeEnv recvars l; makeEnv recvars r]
       | `Application (_, ds)     -> union (List.map (makeEnv recvars) ds)
-      | `ForAll (tvars, body)    -> assert false
+      | `ForAll _                -> assert false
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with

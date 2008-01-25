@@ -114,7 +114,7 @@ let inline (Program (defs, body) as program) =
 let reduce_recursion : RewriteSyntax.rewriter = function
   | Rec (bindings, cont, data) ->
       let untyped_bindings = List.map (fun (name, expr, _) -> name, expr) bindings in
-      let find_definition v = List.find (fun (name, expr, annotation) -> name = v) bindings in
+      let find_definition v = List.find (fun (name, _, _) -> name = v) bindings in
       let recursive_p (name, expr, annot) =  StringSet.mem name (freevars expr) in
       let cliques = Callgraph.group_and_order_bindings_by_callgraph untyped_bindings in
         begin match map (map find_definition) cliques with
@@ -300,21 +300,14 @@ let remove_trivial_extensions : RewriteSyntax.rewriter = function
      
 (* Evaluate expressions involving only constants and pure functions at
  * compile time. *)
-let fold_constant : RewriteSyntax.rewriter = 
-  (* TODO: Also arithmetic, etc. *)
-  let constantp = function
-    | Constant _ | Nil _ -> true
-    | Record_intro (fields, None, _) when StringMap.is_empty fields -> true
-    | _ -> false 
-  in function 
-	(* Is this safe without unboxing? *)
-(*    | Comparison (l, op, r, data) when constantp l && constantp r -> Some (Boolean ((assoc op ops) l r, data)) *)
-    | Condition (Constant (Boolean true, _), t, _, _)  -> Some t
-    | Condition (Constant (Boolean false, _), _, e, _) -> Some e
-    | Concat (Nil _, c, _) 
-    | Concat (c, Nil _, _) -> Some c
-    | Concat (Constant(String l, _), Constant(String r, _), data) -> Some (Constant(String (l ^ r), data))
-    | _ -> None 
+let fold_constant : RewriteSyntax.rewriter = function 
+    (* TODO: Also arithmetic, etc. *)
+  | Condition (Constant (Boolean true, _), t, _, _)  -> Some t
+  | Condition (Constant (Boolean false, _), _, e, _) -> Some e
+  | Concat (Nil _, c, _) 
+  | Concat (c, Nil _, _) -> Some c
+  | Concat (Constant(String l, _), Constant(String r, _), data) -> Some (Constant(String (l ^ r), data))
+  | _ -> None 
 
 (** Useful for printing the program at specific points of the
     optimisation pipeline.*)
@@ -327,9 +320,9 @@ let print_expression msg expr =
     optimisation pipeline.*)
 let print_definition of_name ?msg:msg def = 
  (match def with
-    | Define (name, value, locn, _) when name = of_name 
-        -> Debug.if_set show_optimisation
-        (fun () -> from_option "" msg ^ string_of_definition def)
+    | Define (name, _, _, _) when name = of_name ->
+        Debug.if_set show_optimisation
+          (fun () -> from_option "" msg ^ string_of_definition def)
     | _ -> ());
   None
 

@@ -10,35 +10,59 @@ input {
   font-size: 12px;
 }
 
-.editor { 
-  width: 480px;
-  height: 400px;
-  border: 1px solid #85B1FF;
+div.main {
+  width: 80%;
+  z-index: 1;
   position: absolute;
-  left: 160px;
-  top: 25px;
+  left: 0px;
+  top: -1px;
+}
+
+.editor { 
+  width: 100%;
+  height: 90%;
+  border: 1px solid #85B1FF;
+  position: relative;
+  left: 0px;
+  top: -1px;
+  float: left;
 }
 
 .space { 
   width: 10px;
-  height: 400px;
-  position: absolute;
-  left: 152px;
-  top: 25px;
+  height: 90%;
+  position: relative;
+  left: 0px;
+  top: -1px;
   background-image: url('images/bg-grad-vert.jpg');
   border-top: 1px solid #85B1FF;
   border-bottom: 1px solid #85B1FF;
+  float: left;
+}
+
+.contain-right {
+  width: 75%;
+  float: left;
+  position: relative;
+}
+
+.contain-left {
+  float: left;
+  width: 162px;
+  position: relative;
 }
 
 .proj-browser { 
   border: 1px solid #85B1FF;
   width: 150px;
-  height: 400px;
-  position: absolute;
+  height: 90%;
+  position: relative;
   left: 0px;
-  top: 25px;
+  top: -1px;
   margin-top: 0px;
   margin-left: 0px;
+  float: left;
+  -moz-user-focus: ignore; -moz-user-input: disabled; -moz-user-select: none;
 }
 
 .proj-items { 
@@ -52,7 +76,7 @@ input {
   line-height: normal;
   white-space: nowrap;
   vertical-align: top;
-  height: 375px;
+  height: 99%;
 }
 
 .proj-text { 
@@ -72,7 +96,7 @@ ul.proj-list {
   list-style-position: outside;
   list-style-type: none;
   vertical-align: top;
-  height: 300px:
+  height: 98%:
 }
 
 li.proj-list-item { 
@@ -81,7 +105,6 @@ li.proj-list-item {
   margin: 0px;
   padding: 0px;
   border: 0px;
-  cursor: pointer;
 }
 
 .proj-list-item span {
@@ -103,7 +126,6 @@ li.proj-list-item {
   background-image: url('images/bg-grad.jpg');
   width: 150px;
   height: 25px;
-  //vertical-align: bottom;
   border-bottom: 1px solid #85B1FF;
 }
 
@@ -129,12 +151,6 @@ div.index {
   margin-right: auto;
 }
 
-object.main { 
-  width: 600px;
-  height: 400px;
-  border: 1px solid;
-}
-
 span.menu {
   text-decoration: underline;
   -moz-user-select: none;
@@ -151,14 +167,15 @@ span.menu {
 
 div.menu {
   background-image: url('images/bg-grad.jpg');
-  width: 640px;
+  width: 100%;
   height: 25px;
   border-right: 1px solid #85B1FF;
   border-left: 1px solid #85B1FF;
   border-bottom: 1px solid #85B1FF; 
-  position: absolute;
+  position: relative;
   left: 0px;
   top: -1px;
+  float: left;
 }
 
 .centre {
@@ -270,8 +287,8 @@ bottombar {
   position: absolute;
   top: 0px;
   left: 0px;
-  width: 642;
-  height: 481;
+  width: 100%;
+  height: 100%;
   background: #ffffff;
   z-index: 101;
   opacity:.50;
@@ -279,17 +296,22 @@ bottombar {
   -moz-opacity: 0.5;
 }
 
-.overlay-ed {
-  position: absolute;
-  top: 26px;
-  left: 161px;
-  width: 480px;
-  height: 400px;
+.ed-overlay {
   background: #ffffff;
+  border: 0px;
   z-index: 100;
   opacity:.50;
   filter: alpha(opacity = 50); 
   -moz-opacity: 0.5;
+  position: absolute;
+  left: 0px;
+  top: 26px;
+  height: 90%;
+}
+
+.disabled {
+  color: grey;
+  cursor: default;
 }
 
 #menubar dt {
@@ -321,6 +343,7 @@ bottombar {
   margin-left: 0px;
   margin-top: 0px;
   height: 20px;
+  cursor: pointer;
 }
 
 #menubar ul {
@@ -329,13 +352,12 @@ bottombar {
 }
 
 .menulist span {
-  margin-top: 1em;
-  margin-left: 1em;
+  margin-left: 16px;
   position: relative;
   top: 4px;
 }
 
-.menulist hr {
+#menubar hr {
   position: relative;
   top: -2px;
   cursor: default;
@@ -350,10 +372,6 @@ bottombar {
   height: 4px;
 }
 
-#menulist {
-  cursor: pointer;
-}
- 
 .link {
   cursor: pointer;
 }

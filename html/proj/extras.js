@@ -165,3 +165,17 @@ function _jsElem(list, item)
 
 var jsElem = LINKS.kify(_jsElem);
   
+
+function _redirectClient(loc)
+{
+  window.location.href = $str(loc);
+}
+
+var redirectClient = LINKS.kify(_redirectClient);
+
+function _enableEditable(node)
+{
+  node.contentDocument.designMode = "on";
+}
+
+var enableEditable = LINKS.kify(_enableEditable);

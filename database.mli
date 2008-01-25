@@ -15,3 +15,5 @@ val execute_select : ((string * Types.datatype) list -> string -> Result.databas
                         Result.result)
 
 val execute_insert : (string * string list * string list list) ->  Result.database -> Result.result
+
+val execute_insert_returning : (string * string list * string list list * string) ->  Result.database -> Result.result 

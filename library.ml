@@ -95,7 +95,7 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
-let datatype = DesugarDatatype.read_datatype
+let datatype = DesugarDatatypes.read
 
 let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
@@ -206,7 +206,7 @@ let add_attribute : result * result -> result -> result =
         and value = unbox_string value in
         let rec filter = function
           | [] -> []
-          | (Attr (s, _) as node) :: nodes when s=name -> filter nodes
+          | Attr (s, _) :: nodes when s=name -> filter nodes
           | node :: nodes -> node :: filter nodes
         in
           `XML (Node (tag, Attr (name, value) :: filter children)) 
@@ -295,6 +295,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
    datatype "() -{a}-> Mailbox (a)",
   IMPURE);
+
+  "haveMail",
+  (`PFun (fun _ -> 
+            failwith "The haveMail function is not implemented on the server yet"),
+   datatype "() -> Bool",
+   IMPURE);
 
   "recv",
   (* this function is not used, as its application is a special case
@@ -781,20 +787,63 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      type system. *)
 
   "sleep",
-  (* FIXME: This isn't right : it freezes all threads *)
-  (p1 (fun duration -> Unix.sleep (int_of_num (unbox_int duration));
-         `Record []),
+  (p1 (fun _ ->
+         (* FIXME: This isn't right : it freezes all threads *)
+         (*Unix.sleep (int_of_num (unbox_int duration));
+         `Record []*)
+         failwith "The sleep function is not implemented on the server yet"
+      ),
    datatype "(Int) -> ()",
   IMPURE);
 
+  "clientTime",
+  (`Client,
+   datatype "() -> Int",
+   IMPURE);
+  
+  "serverTime",
+  (`Server
+     (`PFun (fun _ ->
+               box_int(num_of_float(Unix.time())))),
+   datatype "() -> Int",
+   IMPURE);
 
-  (* [TODO]
-       Implement server version of the timer
-       (note: the OCaml unix time functionality is not portable
-       so we shouldn't use that)
-  *)
-  "getCurrentTime",
-  (`Client, datatype "() -> Int",
+  "dateToInt",
+  (p1 (fun r ->
+         match r with
+           | `Record r ->
+               let lookup s =
+                 int_of_num (unbox_int (List.assoc s r)) in
+               let tm = {
+                 Unix.tm_sec = lookup "seconds";
+   	         Unix.tm_min = lookup "minutes";
+   	         Unix.tm_hour = lookup "hours";
+   	         Unix.tm_mday = lookup "day";
+   	         Unix.tm_mon = lookup "month";
+   	         Unix.tm_year = (lookup "year" - 1900);
+   	         Unix.tm_wday = 0; (* ignored *)
+   	         Unix.tm_yday =  0; (* ignored *)
+   	         Unix.tm_isdst = false} in
+                 
+               let t, _ = Unix.mktime tm in              
+                 box_int (num_of_float t)
+           | _ -> assert false),
+   datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) -> Int",
+   IMPURE);
+
+  "intToDate",
+  (p1 (fun t ->
+         let tm = Unix.localtime(float_of_num (unbox_int t)) in
+         let box_int = box_int -<- num_of_int in
+           `Record [
+             "year", box_int (tm.Unix.tm_year + 1900);
+             "month", box_int tm.Unix.tm_mon;
+             "day", box_int tm.Unix.tm_mday;
+             "hours", box_int tm.Unix.tm_hour;
+             "minutes", box_int tm.Unix.tm_min;
+             "seconds", box_int tm.Unix.tm_sec;
+           ]),
+  datatype "(Int) -> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
   IMPURE);
 
   (** Database functions **)
@@ -816,6 +865,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w]) -> ()",
+  IMPURE);
+
+  "InsertReturning",
+  (`Server 
+     (p3 (fun table rows returning -> 
+            match table, rows, returning with
+              | `Table _, `List [], _ -> `Record []
+              | `Table ((db, params), table_name, _), _, _ ->
+                  let field_names = row_columns rows
+                  and vss = row_values db rows
+                  and returning = unbox_string returning
+                  in
+                    prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                                    String.concat "\n"
+                                    (db#make_insert_returning_query(table_name, field_names, vss, returning)));
+                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+              | _ -> failwith "Internal error: insert row into non-database")),
+   datatype "(TableHandle(r, w), [w], String) -> Int",
   IMPURE);
 
   "updaterows", 
@@ -898,7 +965,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "sqrt",    float_fn sqrt PURE;
 
   ("environment",
-   (`PFun (fun [] -> 
+   (`PFun (fun _ -> 
              let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
                `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
@@ -967,7 +1034,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
@@ -1283,26 +1350,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Server (p1 (fun code ->
                   try
                     let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
-
+                      
                     let line ({Lexing.pos_lnum=l}, _, _) = l in
-                    let start ({Lexing.pos_bol=s}, _, _) = s in
-                    let finish (_, {Lexing.pos_bol=e}, _) = e in
-                    
+                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in
+                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c}, _) = c-b in
+                      
                     let box_int = num_of_int ->- box_int in
-
-                    let resolve (name, t, pos) =                    
+                    let resolve (name, t, pos) =
                       `Record [("name", box_string name);
                                ("t", box_string (Types.string_of_datatype t));
                                ("pos", `Record [("line", box_int (line pos));
                                                 ("start", box_int (start pos));
-                                               ("finish", box_int (finish pos))])]
+                                                ("finish", box_int (finish pos))])]
                     in
-                      box_list (List.map resolve ts)
-                  with 
-                      Errors.UndefinedVariable(x) -> `List []
-                    | _ -> `List []
-                 )),
-            datatype "(String) -> [(name:String, t:String, pos:(line:Int, start:Int, finish:Int))]",
+                      `Variant ("Success", box_list (List.map resolve ts))
+                  with e ->
+                    `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
+               )),
+            datatype "(String) -> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
             IMPURE)
 ]
 let impl : located_primitive -> primitive option = function
@@ -1326,7 +1391,7 @@ let rec function_arity =
   function
     | `Function(`Record (l, _), _, _) ->
         (Some (StringMap.size l))
-    | `ForAll(qs, t) -> function_arity t
+    | `ForAll (_, t) -> function_arity t
     | _ -> None
 
 let primitive_arity (name : string) = 
