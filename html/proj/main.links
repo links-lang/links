@@ -78,6 +78,9 @@ alien javascript redirectClient: (String) -> ();
 # Given an iframe, enable contentEditable for that doc.
 alien javascript enableEditable: (DomNode) -> ();
 
+# TODO: Check why normal isNUll doesn't work.
+alien javascript tmpIsNull: (DomNode) -> Bool;
+
 ######
 # Attribute type
 typename Attribute = (attr: String, val: String);
@@ -219,13 +222,6 @@ fun fileOp() client
     case SaveFile(name, escp, code) -> 
     {
       var lFileData = getFrameData();
-      #var lTypes = getTypes(code);
-      #var lVoid = if (lTypes == []) [] else {
-      #  for (var lCurr <- lTypes)
-      #  {
-      #    debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
-      #    []
-      #  }};
       
       # Get types and attach if ok.
       var lTypes = storeFile(name, lFileData.pid, escp, code); 
@@ -260,35 +256,16 @@ fun fileOp() client
        var lData = lFileData.data;
        var lTypes = lFileData.types;
 
-       #debug("Getting types");
-       #var lTypes = getTypes(lData);
-
-       debug("Convert data");
        var rval = convertData(lData) : Xml;
 
-       debug("Insert code");
        insertCode(rval);
 
        switch (lTypes)
        {
          case Failure(err) -> debug("Type error: " ++ err)
          case Success(typ) -> debug("Success!"); attachTypes(typ)
-#         {
-#           debug("Success!");
-#           var lVoid = if (typ == []) [] else {
-#           for (var lCurr <- typ)
-#           {
-#             debug("Name: " ++ lCurr.name ++ "; type: " ++ lCurr.t);
-#             []
-#           }};
-#           debug("Attach types"); 
-#           attachTypes(typ);
-#           debug("Types attached!");
-#         }
        };
        
-       #attachTypes(lTypes);
-
        # Set current file and frame name
        setCurrFile(lFullName);
        setFrameData(lProjId, lFullName);
@@ -310,17 +287,16 @@ fun sessionCheck(xiFileHandler) client
 {
   receive
   {
-    case Exit() -> ()
-    case Check(xiHandler) ->
+    case Check() ->
     {
       debug("Session check..");
+
       # Sleep for 1min
-      sleep(60);
- 
+      sleep(60000);
+  
       # Auto save document if it's been changed.
-      # TODO: Currently brings up 'Saving..' thing. Disable.
-      # Also, need to remove * from filename.
-      if ((docHasChanged()) && (not(isFrameNew())))
+      if ((optionEnabled("autosave")) && (docHasChanged()) && 
+            (not(isFrameNew())))
       {
         debug("Auto-saving..");
         var lData = getFrameData();
@@ -330,32 +306,33 @@ fun sessionCheck(xiFileHandler) client
       } else {};
         
       # Check if session timeouts are turned on.
-      if ((domGetAttributeFromRef(
-             getNodeById("session-check"), "enabled")
-           ) == "yes")
+      if (optionEnabled("session"))
       {
         # Check that the session is active
-        if(isLoggedIn())
+        fun () 
         {
-          debug("User is logged in");
+          if(isLoggedIn())
+          {
+            debug("User is logged in");
         
-          # Loop
-          xiHandler ! Check(xiHandler) 
-        }
-        else
-        {  
-          # Display message if it isn't
-          debug("User's session has expired");
-          toggleVisible("overlay");
-          toggleVisible("session-expired")        
-        };
+            # Loop
+            (self()) ! Check() 
+          }
+          else
+          {  
+            # Display message if it isn't
+            debug("User's session has expired");
+            toggleVisible("overlay");
+            toggleVisible("session-expired")        
+          }
+        }();
       } 
       else
       {
         debug("Session handling disabled");
 
         # Loop
-        xiHandler ! Check(xiHandler) 
+        (self()) ! Check() 
       };
 
       sessionCheck(xiFileHandler)
@@ -371,13 +348,12 @@ fun getTypes(xiCode) server
 }
 
 # Attach the types to the nodes in the actual document.
+# TODO: Need to sort by (line number, start pos)
 sig attachTypes : ([(name:String, pos:(finish:Int, line:Int, start: Int), t:String)]) -> ()
 fun attachTypes(xiList) client
 {
   # Find iFrame
   var lIframe = getDocumentBody();
-
-  #var lList = reverse(xiList);
 
   var lTypeNames = map(fun (x) { (x.name, x.t) }, xiList);
 
@@ -441,6 +417,7 @@ fun matchTypes(xiTypes, xiList) client
   }
 }
 
+# Elem-function for matching against the head of a tuple.
 fun lelem(x, l) {
   not(l==[]) && (x == first(hd(l)) || x `lelem` tl(l))
 }
@@ -519,7 +496,7 @@ fun resumeSession(xiHandler) client
     {
       # Session has been updated, so spawn new session thread
       var lSessionHandler = spawn { sessionCheck(xiHandler) };
-      lSessionHandler ! Check(lSessionHandler);
+      lSessionHandler ! Check();
       
       # Clean form and hide overlay
       var lVoid1 = domSetNodeValueFromRef(lNode, "");
@@ -603,6 +580,8 @@ fun storeFile(name, pid, escp, code) server
     };
 
   updateSession();
+
+  # Get the types here, in order to avoid extra server-calls.
   getTypes(code)
 }
 
@@ -663,7 +642,7 @@ fun getFile(xiProjId, xiName) server
           []});
       ()
     }
-    case _ -> debug("Failure?")
+    case Failure(x) -> debug("Failure: " ++ x)
   };
   
   (data = lData, types = lTypes)
@@ -928,6 +907,7 @@ fun navClick(xiEvent) client
   var sndIm = nextElementSibling(nextSibling(im));
   var firstList = findFirstMatchingSibling(nextElementSibling(sndIm), "UL", []);  
   
+  debug("Nav click!");
   # Decide what to do based on the current state.
   switch (domGetAttributeFromRef(getTarget(xiEvent), "src"))
   { 
@@ -1010,7 +990,7 @@ fun findFirstMatchingSibling(xiNode, xiType, xiConstraints) client
   else
   {
     var child = nextSibling(xiNode);
-    if (isNull(child))
+    if (tmpIsNull(child))
     {
       # Child is null - return it.
       child  
@@ -1019,6 +999,26 @@ fun findFirstMatchingSibling(xiNode, xiType, xiConstraints) client
     {
       findFirstMatchingSibling(child, xiType, xiConstraints)
     }
+  }
+}
+
+# Find all siblings of the given type matching the constraints
+sig findAllMatchingSiblings : (DomNode, String, [Attribute]) -> [DomNode]
+fun findAllMatchingSiblings(xiNode, xiType, xiConstraints) client
+{
+  # Return if null, else recurse
+  if (tmpIsNull(xiNode))
+    []
+  else
+  {
+    var lFirst = findFirstMatchingSibling(xiNode, xiType, xiConstraints);
+    
+    if (tmpIsNull(lFirst))
+      []
+    else
+      [lFirst] ++ findAllMatchingSiblings(nextSibling(lFirst), 
+                                          xiType, 
+                                          xiConstraints)
   }
 }
 
@@ -1043,7 +1043,6 @@ fun getLProjectList(currItem, currLevel, opHandler) client
     {
       # This is a top-level node. Start a new list and find all files that
       # belong to the project.
-      # 
       <li class="proj-list-item">
         <div name="closed" type="proj" cname="{name}" pid="{intToString(id)}" id="proj-{name}"  unselectable="on">
           <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}"/>
@@ -1140,6 +1139,7 @@ fun getProjectListing(currItem) server
 }
 
 # Print a debug message on the server
+sig serverDbg : (String) -> ()
 fun serverDbg(text) server
 {
   debug(text);
@@ -1185,7 +1185,7 @@ fun findFiles(container) server
 }
 
 # Get the list of projects
-sig getProjs : () -> ProjectListing
+sig getProjs : () -> [ProjectListing]
 fun getProjs() server
 {
   var lProjs = 
@@ -1194,8 +1194,8 @@ fun getProjs() server
       orderby (projs.name)
         [Project(projs.id, projs.name)];
 
-  hd(for (var lProject <- lProjs)
-    [getProjectListing(lProject)])
+  for (var lProject <- lProjs)
+    [getProjectListing(lProject)]
 }
 
 # Get the list of files
@@ -1280,24 +1280,104 @@ fun clearDoc(xiProj) client
   toggleMenuItem("run", false);
 
   # Insert the new file in the project list
-  var lProjNode = getNodeById("proj-test");
+  var lProjNode = getNodeById("proj-" ++ xiProj);
 
   var lNewNode = 
       <li class="proj-list-item" style="cursor: normal;" name="new-item">
         <div class="proj-node"> 
           <img src="images/blank.png" style="width: 16; height: 1px;" />
           <img src="images/blank.png" class="proj-blank" />
-          <span class="proj-text" id="newnode" l:onclick="{}" style="cursor: normal;">
+          <span class="proj-text" id="newnode" l:onclick="{}" style="cursor: default;">
           {stringToXml(lName ++ "*")}
           </span>
         </div>
       </li>;
 
+  # Find list node in tree.
   var lListNode = findFirstMatchingSibling(firstChild(lProjNode), "UL", []);
 
   var lVoid = appendChildren(lNewNode, lListNode);
     
   ()
+}
+
+# Create new project unless one already exists.
+# TODO: Currently, event is not being attached.
+sig newProject : (String) -> ()
+fun newProject(xiName) client
+{
+  var lProjBrowser = getNodeById("proj-list");
+
+  # Check whether a project with that name already exists
+  var lProjNodes = findAllMatchingSiblings(firstChild(lProjBrowser),
+                                           "LI",
+                                           []);
+
+  var lExists = 
+    for (var lProj <- lProjNodes)
+    {
+      var lChild = nextElementSibling(firstChild(lProj));
+      debug("CurrNode: " ++ domGetAttributeFromRef(lChild, "cname"));
+      if (domGetAttributeFromRef(lChild, "cname") == xiName)
+        [true]
+      else
+        []
+    };
+
+  if (length(lExists) == 0)
+  {
+    # No such project exists, so create one
+    
+    # Hide the other popup
+    setInvisible("overlay"); 
+    setInvisible("save-file");
+
+    toggleWaiting("Creating project \"" ++ xiName ++ "\" ..");
+    var lPid = createProject(xiName, userId);
+    toggleWaiting("");
+ 
+    # Create new list items for project browser and new file list.
+    var lNewProjListItem = 
+      <li class="proj-list-item">
+        <div name="closed" type="proj" cname="{xiName}" pid="{intToString(lPid)}" id="proj-{xiName}"  unselectable="on">
+          <img name="box" src="images/add-blue-box.png" l:onclick="{debug("EVENT!!"); navClick(event)}"/>
+          <img src="images/proj-close.png" />  
+          <span unselectable="on">
+            {stringToXml(xiName)}
+          </span> 
+          <ul class="proj-list" style="display: none;">
+          </ul>
+        </div>
+      </li>;
+
+    var lNewFileListItem =
+      <option value="{xiName}" pid="lPid">{stringToXml(xiName)}</option>;
+
+     # Append list items
+    appendChildren(lNewProjListItem, lProjBrowser);
+    appendChildren(lNewFileListItem, getNodeById("new-file-file-proj"));
+
+    cleanForm("new-file");    
+  }
+  else
+  {
+    # Project exists: user must choose new name.
+    alertDialog("A project with that name already exists. Please choose another name.");
+  }
+}
+
+# Create a new project for user with uid xiUid.
+# The id is passed in rather than fetched server-side to avoid an extra db call.
+sig createProject : (String, Int) -> Int
+fun createProject(xiName, xiUid) server
+{
+  # Create the project
+  insert projectTable values [(id=0, uid=xiUid, name=xiName, dirty = 0)];
+
+  # Select it to get the pid
+  hd(for (var lProj <-- projectTable)
+       where ((lProj.uid == xiUid) && (lProj.name == xiName))
+         [lProj.id])
 }
 
 # Run the current file.
@@ -1310,19 +1390,11 @@ fun runFile(xiHandler) client
   # Get the current location, but drop the filename.
   var lLoc = reverse(dropWhile(fun (x) { x <> '/' }, reverse(getLocation())));
   
-  # Check if the file is saved, and request that the user saves it first
-  if (docHasChanged())
-  {
-    () #toggleActionSave()
-  }
-  else {};
-
   # Get frame data
   var lFrameData = getFrameData();
 
   # Write file to temp location
   var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ lFrameData.fname;
-  #writeFromDatabase(getFrameName());
   
   # Open a new window pointing to the correct location
   newWindow(lLoc ++ lFileLoc);
@@ -1343,13 +1415,6 @@ fun runFileDb(xiHandler) client
   # Get the current location, but drop the filename.
   var lLoc = reverse(dropWhile(fun (x) { x <> '/' }, reverse(getLocation())));
   
-  # Check if the file is saved, and request that the user saves it first
-  if (docHasChanged())
-  {
-    () #toggleActionSave()
-  }
-  else {};
-
   # Get frame data
   var lFrameData = getFrameData();
 
@@ -1361,10 +1426,9 @@ fun runFileDb(xiHandler) client
       "", 
       lBaseDir
     );
-  #reverse(dropWhile(fun (x) { x <> '/' }, reverse(lFrameData.fname))),
+
   # Write file to temp location
   var lFileLoc =  testDir ++ getCookie(cookieName) ++ "/" ++ lFrameData.fname;
-  #writeFromDatabase(getFrameName());
   
   # Open a new window pointing to the correct location
   newWindow(lLoc ++ lFileLoc);
@@ -1384,6 +1448,8 @@ fun runFileDb(xiHandler) client
   }
 }
 
+# Deploy the current project if dirty, writing out all files from temp to 
+# the user's home dir.
 sig deploy : () -> ()
 fun deploy() server
 {
@@ -1418,6 +1484,7 @@ fun deploy() server
     debug("Deployment failed!")
 }
 
+# As deploy, but from database rather than temp dir.
 sig deployDb : (Int) -> ()
 fun deployDb(xiPid) server
 {
@@ -1511,14 +1578,11 @@ fun writeProjectFromDatabase(xiPid, xiName, xiBaseDir) server
 sig writeFromDatabase : (Int, String, String) -> Bool
 fun writeFromDatabase(xiPid, xiName, xiDir) server
 { 
-  # Get file lo
-  #var lFileLoc = testDir ++ getCookie(cookieName) ++ "/" ++ xiName;
-
   # Get the data
   var lFileData = getFile(xiPid, xiName);
 
-  # Clean it up (calls client!) @TODO
-  var lCleanData = lFileData.data; #join("\n", splitEscapedLinesJS(lFileData));
+  # Clean it up.
+  var lCleanData = lFileData.data;
 
   # Write to disk
   var lRes = writeToFile(xiDir ++ xiName, lCleanData);
@@ -1531,8 +1595,48 @@ fun writeFromDatabase(xiPid, xiName, xiDir) server
   }
 }
 
-# Get the menubar. Currently a drop-down style thing, perhaps a button set
-# would be better as there's not a lot of options to change?
+sig getProjectList : () -> ()
+fun getProjectList() client
+{
+  # Check if the project list has already been fetched for this session
+  var lProjectList = getNodeById("new-file-file-proj");
+
+  if (domGetAttributeFromRef(lProjectList, "fetched") == "no")
+  {
+    # Find project list
+    var lProjBrowser = getNodeById("proj-list");
+
+    # Find all UL siblings
+    var lList = findAllMatchingSiblings(firstChild(lProjBrowser), "LI", []);
+  
+    var lProjects = 
+      if (length(lList) > 0)
+      {
+        <#>
+          {
+            for (var lItem <- lList)
+            {
+              var lNode = nextElementSibling(firstChild(lItem));
+              var lName = domGetAttributeFromRef(lNode, "cname");
+              var lId   = domGetAttributeFromRef(lNode, "pid");
+              <option value="{lName}" pid="lId">{stringToXml(lName)}</option>
+            }
+          }
+        </#>
+      }
+      else
+      {
+        <option value="void" pid="-1">-- No Projects Found --</option>
+      };
+
+    var lVoid = domSetAttributeFromRef(lProjectList, "fetched", "yes");
+    replaceChildren(lProjects, lProjectList);
+    
+  }
+  else {}
+}
+
+# Get the menubar. 
 sig getMenu : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
 fun getMenu(opHandler) client
 {
@@ -1542,11 +1646,12 @@ fun getMenu(opHandler) client
         <dt id="menu-file-cap" l:onclick="{toggleMenu("menu-file");}" class="menuhead"><span>File</span></dt>
         <dd id="menu-file" style="width: 120px;">
           <ul id="menulist" class="menulist">
-            <li l:onclick="{toggleMenu("menu-file"); newFile(opHandler);}" unselectable="on"><span>New file</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); getProjectList(); newFile(opHandler);}" unselectable="on"><span>New..</span></li>
             <li l:onclick="{toggleMenu("menu-file"); maybeSaveFile(opHandler);}" unselectable="on"><span>Save</span></li>
             <li l:onclick="{toggleMenu("menu-file"); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
-            <li l:onclick="{toggleMenu("menu-file"); toggleSession(event)}"><img src="images/check.png" style="position: relative; top: 2px;" id="session-check" enabled="yes"/><span style="margin-left: 0px; top: -1px;">Session timeouts</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); toggleChecked("session", updateSession)}"><img src="images/check.png" style="position: relative; top: 2px;" id="session-check" enabled="yes"/><span style="margin-left: 0px; top: -1px;">Session timeouts</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); toggleChecked("autosave", fun () {})}"><img src="images/check.png" style="position: relative; top: 2px;" id="autosave-check" enabled="yes"/><span style="margin-left: 0px; top: -1px;">Auto-save Files</span></li>
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
             <li l:onclick="{toggleMenu("menu-file"); toggleWaiting("Logging out.."); logoutClient()}" unselectable="on"><span>Logout</span></li>
           </ul>
@@ -1569,6 +1674,7 @@ fun getMenu(opHandler) client
   </#>
 }
 
+# When save is clicked, determine whether 'Save' or 'Save as..' is appropriate.
 sig maybeSaveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
 fun maybeSaveFile(xiHandler) client
 {
@@ -1598,6 +1704,7 @@ fun saveCurrent(xiData, xiHandler) client
     setFrameData(xiData.pid, lRealName);
 
     # Check if frame is new, replace with linked version
+    # TODO: File needs to be linked.
     if (isFrameNew())
     {
       var lDispName = drop(1, dropWhile(fun (x) { x <> '/' }, lRealName));
@@ -1625,7 +1732,7 @@ fun docHasChanged() client
   length(dropWhile(fun (x) { x <> '*' }, lFrameName)) == 1
 }
 
-# TODO: This is broken.
+# TODO: The needs to be attached to the IFrame's onclick event. How?
 sig docChanged : () -> ()
 fun docChanged() client
 {
@@ -1635,23 +1742,32 @@ fun docChanged() client
     setCurrFile(getCurrFile() ++ "*")
 }
 
-# TODO: Check how to access checkbox status
-sig toggleSession : (Event) -> ()
-fun toggleSession(xiEvent) client
+# Check whether an option is enabled.
+sig optionEnabled : (String) -> Bool
+fun optionEnabled(xiName) client
+{
+  var lNode = getNodeById(xiName ++ "-check");
+  (domGetAttributeFromRef(lNode, "enabled")) == "yes"
+}
+
+# Turn the options on/off, and sort out the tick in the menu.
+# The function passed in is to be executed when the option is enabled.
+sig toggleChecked : (String, (() -> ())) -> ()
+fun toggleChecked(xiName, xiFn) client
 {
   # If change from off -> on, update session
-  var lListImage = getNodeById("session-check");
+  var lListImage = getNodeById(xiName ++ "-check");
 
   var lNewImage = 
     switch (domGetAttributeFromRef(lListImage, "enabled"))
     {
-      case "yes" -> <img src="images/blank.png" style="height: 16px; width: 16px;" id="session-check" enabled="no" />
+      case "yes" -> <img src="images/blank.png" style="height: 16px; width: 16px;" id="{xiName ++ "-check"}" enabled="no" />
       case _   ->
       {
-        # Update session to ensure user's not logged out straight away.
-        updateSession();
+        # Perform pre-enabling function
+        xiFn();
 
-        <img src="images/check.png" style="position: relative; top: 2px;" id="session-check" enabled="yes" />
+        <img src="images/check.png" style="position: relative; top: 2px;" id="{xiName ++ "-check"}" enabled="yes" />
       }
     };
 
@@ -1718,7 +1834,7 @@ fun toggleActionSave(xiFn, xiHandler) client
   toggleVisible("overlay");
 }
 
-# Hide all menu items
+# Show/hide all menu items
 sig toggleMenu : (String) -> ()
 fun toggleMenu(xiName) client
 {
@@ -1768,7 +1884,8 @@ fun toggleBgColour(xiName, xiColour)
   ()
 }
 
-# Toggle the "waiting" box
+# Toggle the 'waiting' box. Text is the heading to use.
+# TODO: Make the text prettier, maybe add icon?
 sig toggleWaiting : (String) -> ()
 fun toggleWaiting(xiText) client
 {
@@ -1776,7 +1893,13 @@ fun toggleWaiting(xiText) client
   var lTextNode = nextElementSibling(firstChild(getNodeById("waiting-text")));
 
   # Node to use.
-  var lText = <span class="proj-list-item">{stringToXml(xiText)}</span>;
+  var lText = 
+    <#>
+      <img src="images/waiting.gif" style="float: left; padding-right: 6px; padding-top: 2px;" />
+      <span style="padding: 2px 3px 3px; font-size: 12px; height: 14px; font-weight: bold;" class="caption-text">
+        {stringToXml(xiText)}
+      </span>
+    </#>;
 
   switch (domGetStyleAttrFromRef(lNode, "display"))
   {
@@ -1825,10 +1948,9 @@ fun cleanForm(xiName) client
   var lVoid = for (var lNode <- getSiblings(lFirst))
   {
     var lXmlNode = getValue(lNode);
-    var lVoid = (if ((getTagName(lXmlNode) == "INPUT") && (getAttribute(lXmlNode, "type") == "text"))
-        domSetAttributeFromRef(lNode, "value", "")
-      else
-        "");
+    if ((getTagName(lXmlNode) == "INPUT") && (getAttribute(lXmlNode, "type") == "text"))
+        domSetNodeValueFromRef(lNode, "")
+      else {};
     []
   };
   
@@ -1860,17 +1982,40 @@ fun getHiddenObjects(opHandler) client
     <div id="new-file" class="invisible">
       <div class="centered box">
         <div class="topbar">
-          <span class="caption-text" unselectable="on">New file</span>
+          <span class="caption-text" unselectable="on">Create New</span>
         </div>
-        <div class="container-box">
-          <span class="popup-text padded">
-            Name:<br />
-            <input type="text" class="input-box proj-items" id="newfile-name" />
-          </span>
+        <div id="new-file-file">
+          <div class="container-box">
+            <span class="popup-text padded">
+Project:<br />
+              <select name="project" id="new-file-file-proj" class="input-box" fetched="no">
+              </select><br /><br />
+              Name:<br />
+              <input type="text" class="input-box proj-items" id="newfile-name" />
+            </span>
+            <div>
+              <span l:onclick="{setInvisible("new-file-file"); toggleVisible("new-file-proj");}" class="popup-swap padded">Create project.. </span>
+            </div>
+          </div>
+          <div class="bottombar">
+            <input type="button" name="save" l:onclick="{clearDoc(domGetNodeValueFromRef(getNodeById("new-file-file-proj"))); cleanForm("new-file")}" value="Create new" />
+            <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
+          </div>
         </div>
-        <div class="bottombar">
-          <input type="button" name="save" l:onclick="{clearDoc("test"); cleanForm("new-file")}" value="Create new" />
-          <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
+        <div id="new-file-proj" class="invisible">
+          <div class="container-box">
+            <span class="popup-text padded">
+              Name:<br />
+              <input type="text" class="input-box proj-items" id="newproj-name" />
+            </span>
+            <div>
+              <span l:onclick="{setInvisible("new-file-proj"); toggleVisible("new-file-file");}" class="popup-swap padded">Create file.. </span>
+            </div>
+          </div>
+          <div class="bottombar">
+            <input type="button" name="save" l:onclick="{newProject(domGetNodeValueFromRef(getNodeById("newproj-name")));}" value="Create new" />
+            <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
+          </div>
         </div>
       </div>
     </div>
@@ -1944,10 +2089,11 @@ fun getProjBrowser(opHandler) client
         <span id="proj-caption" class="caption-text" unselectable="on">Project Browser</span>
       </div>
       <div id="proj-items" class="proj-items">
-        <ul class="proj-list">
+        <ul class="proj-list" id="proj-list">
          {
-           var lProjs = getProjs();
-           getLProjectList(lProjs, 0, opHandler)
+           #var lProjs = getProjs();
+           for (var lProjs <- getProjs())
+             getLProjectList(lProjs, 0, opHandler)
          }  
         </ul>
       </div>
@@ -1972,8 +2118,13 @@ fun renderObject() client
 {
   # Spawn file handling object.
   var opHandler = spawn { fileOp() };
+
+  # Spawn the session handler, passing the file-handler in as an argument.
   var sessionHandler = spawn { sessionCheck(opHandler) };
-  sessionHandler ! Check(sessionHandler);
+
+  # Start it off.
+  sessionHandler ! Check();
+  
   <#>
     {
       getHiddenObjects(opHandler)
@@ -1990,7 +2141,7 @@ fun renderObject() client
       <div id="space" class="space"></div>
     </div>
     <div id="contain-right" class="contain-right">
-      <div id="topbar" class="menu menu-file-cap" style="border-left: 0px none; padding-top: 6px; height: 19px; width: 100%; text-align: right;">
+      <div id="topbar" class="menu menu-file-cap" style="border-left: 0px none; padding-top: 6px; height: 19px; width: 90%; text-align: right;">
         <span id="currfile" style="font-family: tahoma,verdana; font-size: 11px; margin-right: 10px;"></span>
       </div>
       {
@@ -2000,22 +2151,13 @@ fun renderObject() client
   </#>
 }
 
-# Redirect to login. 
-# TODO: Broken.
-sig redir : () -> Xml
-fun redir() server 
-{
-  redirect("login.links");
-  <div>not redirected</div>
-}
-
 # Main function. 
 sig main : () -> Xml
 fun main() client 
 {
+  # Redirect to login if not logged in.
   if (not(isLoggedIn()))
   {
-    #<div><a href="login.links">Not logged in</a></div>
     logoutClient();
     <#></#>
   }

@@ -10,6 +10,13 @@ input {
   font-size: 12px;
 }
 
+select {
+  border: 1px solid;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 12px;
+  width: 130px;
+}
+
 div.main {
   width: 80%;
   z-index: 1;
@@ -230,7 +237,7 @@ bottombar {
   background: #FFFFFF;
   padding: 0px;
   margin: 0px;
-  height: 100px;
+  height: 105px;
   text-align: top;
 }
 
@@ -384,4 +391,18 @@ bottombar {
   vertical-align: top;
   display: block;
   width: 200;
+}
+
+.popup-swap { 
+  overflow: auto;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 11px;
+  font-size-adjust: none;
+  vertical-align: bottom;
+  align: right;
+  display: block;
+  width: 200;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: right;
 }

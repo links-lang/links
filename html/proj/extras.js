@@ -179,3 +179,19 @@ function _enableEditable(node)
 }
 
 var enableEditable = LINKS.kify(_enableEditable);
+
+function _tmpIsNull(node)
+{
+  try
+  {
+    var lTmp = node.nodeType;
+  } 
+  catch (e)
+  {
+    return true;
+  }
+  
+  return false;
+}
+
+var tmpIsNull = LINKS.kify(_tmpIsNull);
