@@ -1113,11 +1113,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     let box_int = num_of_int ->- box_int in
 
                     let resolve (name, t, pos) =
-                      `Record [("name", box_string name);
-                               ("t", box_string (Types.string_of_datatype t));
-                               ("pos", `Record [("line", box_int (line pos));
-                                                ("start", box_int (start pos));
-                                                ("finish", box_int (finish pos))])]
+                      (* HACK: we need to be more principled about foralls  *)
+                      let t =
+                        match Types.concrete_type t with
+                          | `ForAll (_, t) -> t
+                          | _ -> t
+                      in
+                        `Record [("name", box_string name);
+                                 ("t", box_string (Types.string_of_datatype t));
+                                 ("pos", `Record [("line", box_int (line pos));
+                                                  ("start", box_int (start pos));
+                                                  ("finish", box_int (finish pos))])]
                     in
                       `Variant ("Success", box_list (List.map resolve ts))
                   with e ->
