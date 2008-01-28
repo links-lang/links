@@ -34,7 +34,7 @@
 # - Is it possible to capture key presses from the iframe without creating node in Links? Probably not - means that 'edited file' can't be captured. Kind of sorted: run/deploy disabled on no file, run disabled on new file.
 
 # - New files in browser need:
-#    * To get LoadFile attached when saved. (no)
+#    * To get LoadFile attached when saved. (Broken - events don't seem to work when attached after initial render?)
 #    * To be deleted from browser if load happens without save. (done)
 
 ######
@@ -80,6 +80,10 @@ alien javascript enableEditable: (DomNode) -> ();
 
 # TODO: Check why normal isNUll doesn't work.
 alien javascript tmpIsNull: (DomNode) -> Bool;
+
+# TODO: Client-side regexes are broken?
+# Acnhored like links regexes.
+alien javascript jsMatches: (String, String) -> Bool;
 
 ######
 # Attribute type
@@ -134,16 +138,6 @@ var validSessions = table "valid_sessions" with (
     uid : Int
 ) from (database "ide");
 
-# Count the number of elements in a list
-fun numElems(lst) server
-{
-  switch(lst)
-  {
-    case [] -> 0
-    case x::xs -> 1 + numElems(xs)
-  }
-}
-
 # Logout from the IDE (doesn't redirect)
 sig logout : () -> ()
 fun logout() server
@@ -173,6 +167,68 @@ fun logoutClient() client
 
   # Redirect
   redirectClient(lLoc ++ "login.links");
+}
+
+##
+# Sorting functions for types. (Inspired by LiterateProgram's Haskell Qsort)
+##
+
+typename Pos = (finish: Int, line: Int, start: Int);
+typename Type = (name: String, pos: Pos, t: String);
+typename Sort = (Type, [Type], ([Type], [Type]));
+
+# Partition a list of types around a pivot.
+sig part : (Sort) -> ([Type], [Type])
+fun part(xiSort) 
+{
+  switch (xiSort)
+  {
+    case (_,[],res) -> res
+    case (pivot, (l::list),(less, grt) ) ->
+    {
+      if ((pivot.pos).line < (l.pos).line)
+        part((pivot, list, (less, l::grt)))
+      else if ((pivot.pos).line > (l.pos).line)
+        part((pivot, list, (l::less, grt)))
+      else
+        # Types are on the same line - let the position decide.
+        part((pivot, list, posPart(pivot, l, (less, grt))))
+    }
+  }
+}
+
+# Partition the given Type based on its position in a line.
+sig posPart : (Type, Type, ([Type], [Type]))  -> ([Type], [Type])
+fun posPart(xiPivot, xiCurr, xiParts)
+{
+  switch (xiParts)
+  {
+    case (less, grt) ->
+    {
+      if ((xiPivot.pos).start > (xiCurr.pos).start)
+        (xiCurr::less, grt)
+      else
+        (less, xiCurr::grt)
+    }
+  }
+}
+
+# Perform quicksort on a list of types, sorting them according to position.
+sig qsort : ([Type]) -> [Type]
+fun qsort(xiList)
+{
+  switch (xiList)
+  {
+    case [] -> []
+    case (l::list) ->
+    {
+      var lSort = (l, list, ([], []));
+      switch (part(lSort))
+      {
+        case (less, grt) -> qsort(less) ++ [l] ++ qsort(grt)
+      }
+    }
+  }
 }
   
 ##
@@ -219,38 +275,49 @@ fun fileOp() client
 {
   receive 
   {
-    case SaveFile(name, escp, code) -> 
+    case SaveFile(name, escp, code, toggle) -> 
     {
-      var lFileData = getFrameData();
-      
-      # Get types and attach if ok.
-      var lTypes = storeFile(name, lFileData.pid, escp, code); 
-
-      switch (lTypes)
+      var saveFn = fun () 
       {
-        case Failure(err) -> debug("Type error: " ++ err)
-        case Success(typ) -> attachTypes(typ);
+        var lFileData = getFrameData();
+      
+        # Get types and attach if ok.
+        var lTypes = storeFile(name, lFileData.pid, escp, code); 
+
+        switch (lTypes)
+        {
+          case Failure(err) -> debug("Type error: " ++ err)
+          case Success(typ) -> attachTypes(typ);
+        };
+
+        setFrameData(lFileData.pid, name);
+   
+        # Enable the run/deploy menu items
+        toggleMenuItem("run", true);
+        toggleMenuItem("deploy", true);
       };
 
-      setFrameData(lFileData.pid, name);
-   
-      # Enable the run/deploy menu items
-      toggleMenuItem("run", true);
-      toggleMenuItem("deploy", true);
-
+      if (toggle)
+      {
+        toggleWaiting("Saving file..");
+        saveFn();
+        toggleWaiting("")
+      }
+      else
+        saveFn();
       fileOp()
     }
     case LoadFile(name, lEvent) -> 
     {
        toggleWaiting("Loading file..");
-       var lFileData = getFileData(lEvent);
-       var lProjId = lFileData.pid;
+       var lFileInfo = getFileData(lEvent);
+       var lProjId = lFileInfo.pid;
 
        # This could be done when getting the path, so
        # slightly unnecessary, but just to be sure we can 
        # choose how we want to be organised..
        var lFullName = 
-         takeWhile(fun (x) { x <> '/' }, lFileData.path) ++ "/" ++ name;
+         takeWhile(fun (x) { x <> '/' }, lFileInfo.path) ++ "/" ++ name;
 
        var lFileData = getFile(lProjId, name);
        var lData = lFileData.data;
@@ -289,8 +356,6 @@ fun sessionCheck(xiFileHandler) client
   {
     case Check() ->
     {
-      debug("Session check..");
-
       # Sleep for 1min
       sleep(60000);
   
@@ -301,7 +366,7 @@ fun sessionCheck(xiFileHandler) client
         debug("Auto-saving..");
         var lData = getFrameData();
         var lRealName = takeWhile(fun (x) { x <> '*' }, lData.fname);
-        saveFile(xiFileHandler, lRealName, true);
+        saveFile(xiFileHandler, lRealName, true, false);
         setFrameData(lData.pid, lRealName);
       } else {};
         
@@ -352,10 +417,13 @@ fun getTypes(xiCode) server
 sig attachTypes : ([(name:String, pos:(finish:Int, line:Int, start: Int), t:String)]) -> ()
 fun attachTypes(xiList) client
 {
+  # Sort
+  var lTypeList = qsort(xiList);
+
   # Find iFrame
   var lIframe = getDocumentBody();
 
-  var lTypeNames = map(fun (x) { (x.name, x.t) }, xiList);
+  var lTypeNames = map(fun (x) { (x.name, x.t) }, lTypeList);
 
   # Find references to functions/vars
   debug("Match types");
@@ -368,14 +436,14 @@ fun attachTypes(xiList) client
 
   var getFromList = fun (count, list) { hd(drop(count, list)) };
 
-  if (length(xiList) == length(lNodes))
+  if (length(lTypeList) == length(lNodes))
   {
     var bla = 
-      for (var lCount <- range(0, (length(xiList) - 1)))
+      for (var lCount <- range(0, (length(lTypeList) - 1)))
       {
         var lVoid = domSetAttributeFromRef(hd(drop(lCount, lNodes)), 
                                            "title", 
-                                           (hd(drop(lCount, xiList))).t); 
+                                           (hd(drop(lCount, lTypeList))).t); 
         []
        };
     ()
@@ -384,7 +452,7 @@ fun attachTypes(xiList) client
   { 
     debug("Lists of different length.");
     debug("Num var nodes: " ++ intToString(length(lNodes)));
-    debug("Num types: " ++ intToString(length(xiList)));
+    debug("Num types: " ++ intToString(length(lTypeList)));
   };
   # Attach 
 }
@@ -477,7 +545,7 @@ fun updateSession() server
 }
 
 # Check whether the password given was correct, and resume session if so.
-sig resumeSession : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+sig resumeSession : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> ()
 fun resumeSession(xiHandler) client
 {
   var lNode = getNodeById("resume");
@@ -586,8 +654,8 @@ fun storeFile(name, pid, escp, code) server
 }
 
 # Save the contents of the current buffer to database
-sig saveFile : (Mailbox ([|SaveFile:(String, String, String)|a|]), String, Bool) -> ()
-fun saveFile(handler, xiName, xiNew) client
+sig saveFile : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|]), String, Bool, Bool) -> ()
+fun saveFile(handler, xiName, xiNew, xiToggle) client
 {
   var lBody = getDocumentBody();
   
@@ -608,7 +676,7 @@ fun saveFile(handler, xiName, xiNew) client
       getValueFromRef(getNodeById(lNodeName))
     );
 
-  handler ! SaveFile(lFileName, lEscapedCode, lCode);
+  handler ! SaveFile(lFileName, lEscapedCode, lCode, xiToggle);
 }
 
 # Load a file from the database
@@ -637,8 +705,8 @@ fun getFile(xiProjId, xiName) server
     case Success(types) ->
     {
       var lVoid = 
-        (for (var lType <- types)
-         { debug("Name: " ++ lType.name ++ ", type: " ++ lType.t);
+        (for (var lType <- qsort(types))
+         { debug("Name: " ++ lType.name ++ ", type: " ++ lType.t ++ ", POS: " ++ intToString((lType.pos).start) ++ ", " ++ intToString((lType.pos).finish) ++ " - " ++ intToString((lType.pos).line));
           []});
       ()
     }
@@ -770,74 +838,12 @@ fun range(xiStart, xiFinish)
     [xiStart] ++ range((xiStart + 1), xiFinish)
 }
 
-# Recursive version of splitlines. Works, but is slow.
-sig splitLines : (String) -> [String]
-fun splitLines(datalist)
-{ 
-  switch (datalist)
-  { 
-    case [] -> []
-    case xs -> 
-    {
-      var listHead = takeUntilBreak(xs) : String;
-      var listTail = dropUntilBreak(xs) : String;
-      [listHead] ++ splitLines(listTail)
-    }
-  }
-}
-
-# Recursive function, taking all chars until a line break is found. Slow.
-sig takeUntilBreak : (String) -> String
-fun takeUntilBreak(data)
-{
-  switch (data)
-  {
-    case [] -> []
-    case (x::y::zs) ->
-    {
-      if ((x == '\\') && (y == 'n'))
-        []
-      else
-        x :: takeUntilBreak(y::zs)
-    }
-  }
-}
-
-# Recursive function, dropping all chars until a line break is found. Slow.
-sig dropUntilBreak : (String) -> String
-fun dropUntilBreak(data)
-{
-  switch (data)
-  {
-    case [] -> []
-    case (x::y::zs) ->
-    {
-      if ((x == '\\') && (y == 'n'))
-        zs
-      else
-        dropUntilBreak(y::zs)
-    }
-  }
-}
-
 # Convert escaped string to Xml forest
 sig convertData : (String) -> Xml
 fun convertData(data) client
 {
   var dataList = split("\\n", data); #EscapedLinesJS(data) : [String]; 
   getXmlList(dataList)
-}
-
-# Print each member of a list to debug.
-sig printEach : ([String]) -> ()
-fun printEach(datalist) client
-{
-  var lList = datalist : [String];
-  var p = for (var item <- lList)
-    {debug("item: " ++ item);
-    []};
-
-  ()
 }
 
 # Turn a list of strings into XML.
@@ -1031,7 +1037,7 @@ fun nodeAttributesMatch(xiNode, xiAttrs) client
 }
 
 # Look through the project files given recursively and return XML for each.
-sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String)|LoadFile:(String, Event)|a|])) -> Xml
+sig getLProjectList : (ProjectListing, Int, Mailbox ([| SaveFile: (String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> Xml
 fun getLProjectList(currItem, currLevel, opHandler) client
 {
   var width = intToString(currLevel * 16);
@@ -1208,7 +1214,7 @@ fun getFileList(projId) server
 }
 
 # Add a new file.
-sig newFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+sig newFile : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> ()
 fun newFile(xiHandler) client
 {
   # Check if doc has changed
@@ -1224,7 +1230,7 @@ fun newFile(xiHandler) client
 }
 
 # Load a file.
-sig loadFile : (Mailbox ([|SaveFile:(String, String, String)|LoadFile:(String, Event)|a|]), String, Event) -> ()
+sig loadFile : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|]), String, Event) -> ()
 fun loadFile(xiHandler, xiName, xiEvent) client
 {
   if (docHasChanged())
@@ -1252,43 +1258,30 @@ fun discardNewFiles() client
   ()
 }
 
-# Delete the contents of the document, set up new one.
-# TODO: sort out which project to add to.
-sig clearDoc: (String) -> ()
-fun clearDoc(xiProj) client 
+# TODO: Attach filehandler.
+sig saveAs: (String, Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> ()
+fun saveAs(xiProj, xiHandler) client
 {
-  var lBody = getDocumentBody();
-  
-  # Enable editing
-  enableEditable(hd(getElementsByTagName("iframe")));
+  # Get the new name
+  var lName = domGetNodeValueFromRef(getNodeById("filename"));
+  var lRealName = xiProj ++ "/" ++ lName;
 
-  var lName = domGetNodeValueFromRef(getNodeById("newfile-name"));
-
-  # Replace the contents of the document with nothing
-  replaceChildren(<#></#>, lBody);
-  
   # Set the name to be the new file.
-  setFrameData(1, (xiProj ++ "/" ++ lName ++ "*"));
+  setFrameData(1, lRealName);
   
   # Set the current file name
-  setCurrFile(xiProj ++ "/" ++ lName);
-
-  # Mark the iframe as new.
-  setFrameNew(1);
- 
-  # Disable the run button until the file has been saved
-  toggleMenuItem("run", false);
+  setCurrFile(lRealName);
 
   # Insert the new file in the project list
   var lProjNode = getNodeById("proj-" ++ xiProj);
 
   var lNewNode = 
-      <li class="proj-list-item" style="cursor: normal;" name="new-item">
+      <li class="proj-list-item">
         <div class="proj-node"> 
           <img src="images/blank.png" style="width: 16; height: 1px;" />
           <img src="images/blank.png" class="proj-blank" />
-          <span class="proj-text" id="newnode" l:onclick="{}" style="cursor: default;">
-          {stringToXml(lName ++ "*")}
+          <span class="proj-text" l:onclick="{loadFile(xiHandler, lRealName, event)}">
+          {stringToXml(lName)}
           </span>
         </div>
       </li>;
@@ -1298,7 +1291,86 @@ fun clearDoc(xiProj) client
 
   var lVoid = appendChildren(lNewNode, lListNode);
     
+  # Save the file
+  # TODO: This gives _very_ strange errors.
+  #saveFile(xiHandler, lRealName, false, true);
   ()
+}
+
+# Delete the contents of the document, set up new one.
+sig clearDoc: (String) -> ()
+fun clearDoc(xiProj) client 
+{
+  # Get the filename
+  debug("Getting filename");
+  var lFileName = domGetNodeValueFromRef(getNodeById("newfile-name"));
+
+  if (xiProj == "void")
+    alertDialog("No projects exist - please create one before creating new files.")
+  else if (not(jsMatches(lFileName, "[A-Za-z0-9_-]+(\\.links)?")))
+  {
+    alertDialog("Illegal filename: only alphanumerics and the characters '-' and '_' are allowed"); 
+  }
+  else
+  {
+    # Ensure the filename ends in '.links'.
+    var lName =
+      if (not(drop((length(lFileName) - 6), lFileName) == ".links"))
+        lFileName ++ ".links"
+      else
+        lFileName;
+      
+    debug("In Cleardoc");
+    debug("Getting doc body");
+    var lBody = getDocumentBody();
+
+    # Project names are of the form <name>-<pid>
+    debug("Getting proj info");
+    var lProjInfo = split("-", xiProj);
+    debug("Getting proj name");
+    var lProjName = hd(lProjInfo);
+    debug("Proj name is: " ++ lProjName);
+
+    # Enable editing
+    debug("Enabling editing");
+    enableEditable(hd(getElementsByTagName("iframe")));
+
+    # Replace the contents of the document with nothing
+    replaceChildren(<#></#>, lBody);
+  
+    # Set the name to be the new file.
+    setFrameData(stringToInt(hd(tl(lProjInfo))), (lProjName ++ "/" ++ lName ++ "*"));
+  
+    # Set the current file name
+    setCurrFile(lProjName ++ "/" ++ lName);
+
+    # Mark the iframe as new.
+    setFrameNew(1);
+ 
+    # Disable the run button until the file has been saved
+    toggleMenuItem("run", false);
+
+    # Insert the new file in the project list
+    var lProjNode = getNodeById("proj-" ++ lProjName);
+
+    var lNewNode = 
+        <li class="proj-list-item" style="cursor: normal;" id="new-item">
+          <div class="proj-node"> 
+            <img src="images/blank.png" style="width: 16; height: 1px;" />
+            <img src="images/blank.png" class="proj-blank" />
+            <span class="proj-text" id="newnode" l:onclick="{}" style="cursor: default;">
+            {stringToXml(lName ++ "*")}
+            </span>
+          </div>
+        </li>;
+
+    # Find list node in tree.
+    var lListNode = findFirstMatchingSibling(firstChild(lProjNode), "UL", []);
+
+    var lVoid = appendChildren(lNewNode, lListNode);
+    
+    cleanForm("new-file");
+  }
 }
 
 # Create new project unless one already exists.
@@ -1324,14 +1396,27 @@ fun newProject(xiName) client
         []
     };
 
-  if (length(lExists) == 0)
+  if (length(lExists) > 0)
+  {
+    # Project exists: user must choose new name.
+    alertDialog("A project with that name already exists. Please choose another name.");
+    # Show the other popups
+    toggleVisible("overlay"); 
+    toggleVisible("new-file");
+
+  }
+  else if (not(jsMatches(xiName, "[A-Za-z0-9_-]+")))
+  {
+    # Project name not legal
+    alertDialog("Illegal project name: only alphanumerics and the characters '-' and '_' are allowed.");
+  
+    # Hide the other popup
+    toggleVisible("overlay"); 
+    toggleVisible("new-file");
+  }
+  else
   {
     # No such project exists, so create one
-    
-    # Hide the other popup
-    setInvisible("overlay"); 
-    setInvisible("save-file");
-
     toggleWaiting("Creating project \"" ++ xiName ++ "\" ..");
     var lPid = createProject(xiName, userId);
     toggleWaiting("");
@@ -1351,19 +1436,15 @@ fun newProject(xiName) client
       </li>;
 
     var lNewFileListItem =
-      <option value="{xiName}" pid="lPid">{stringToXml(xiName)}</option>;
+      <option value="{xiName ++ "-" ++ intToString(lPid)}">{stringToXml(xiName)}</option>;
 
      # Append list items
     appendChildren(lNewProjListItem, lProjBrowser);
     appendChildren(lNewFileListItem, getNodeById("new-file-file-proj"));
+    appendChildren(lNewFileListItem, getNodeById("save-as-proj"));
 
     cleanForm("new-file");    
-  }
-  else
-  {
-    # Project exists: user must choose new name.
-    alertDialog("A project with that name already exists. Please choose another name.");
-  }
+  }  
 }
 
 # Create a new project for user with uid xiUid.
@@ -1381,7 +1462,7 @@ fun createProject(xiName, xiUid) server
 }
 
 # Run the current file.
-sig runFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+sig runFile : (Mailbox ([|SaveFile:(String, String, String, Bool)|a|])) -> ()
 fun runFile(xiHandler) client
 {
   # Toggle waiting.
@@ -1404,12 +1485,9 @@ fun runFile(xiHandler) client
 }
 
 # Run the current file, copying all relevant files from the database
-sig runFileDb : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+sig runFileDb : (Mailbox ([|SaveFile:(String, String, String, Bool)|a|])) -> ()
 fun runFileDb(xiHandler) client
 {
-  # Toggle waiting.
-  toggleWaiting("Running file..");
-
   var lDropFun = fun (x) { x <> '/' };
 
   # Get the current location, but drop the filename.
@@ -1432,9 +1510,6 @@ fun runFileDb(xiHandler) client
   
   # Open a new window pointing to the correct location
   newWindow(lLoc ++ lFileLoc);
-
-  # Toggle waiting.
-  toggleWaiting("");
 
   if (lOk)
   {
@@ -1599,9 +1674,10 @@ sig getProjectList : () -> ()
 fun getProjectList() client
 {
   # Check if the project list has already been fetched for this session
-  var lProjectList = getNodeById("new-file-file-proj");
+  var lProjectListNew  = getNodeById("new-file-file-proj");
+  var lProjectListSave = getNodeById("save-as-proj");
 
-  if (domGetAttributeFromRef(lProjectList, "fetched") == "no")
+  if (domGetAttributeFromRef(lProjectListNew, "fetched") == "no")
   {
     # Find project list
     var lProjBrowser = getNodeById("proj-list");
@@ -1612,6 +1688,9 @@ fun getProjectList() client
     var lProjects = 
       if (length(lList) > 0)
       {
+         # Set the lists as fetched so we don't have to this again
+        var lVoid = domSetAttributeFromRef(lProjectListNew, "fetched", "yes");
+
         <#>
           {
             for (var lItem <- lList)
@@ -1619,25 +1698,26 @@ fun getProjectList() client
               var lNode = nextElementSibling(firstChild(lItem));
               var lName = domGetAttributeFromRef(lNode, "cname");
               var lId   = domGetAttributeFromRef(lNode, "pid");
-              <option value="{lName}" pid="lId">{stringToXml(lName)}</option>
+              <option value="{lName ++ "-" ++ lId}">{stringToXml(lName)}</option>
             }
           }
         </#>
       }
       else
       {
-        <option value="void" pid="-1">-- No Projects Found --</option>
+        <option value="void" pid="-1">-- No Projects --</option>
       };
 
-    var lVoid = domSetAttributeFromRef(lProjectList, "fetched", "yes");
-    replaceChildren(lProjects, lProjectList);
+    # Insert the list items into the lists.
+    replaceChildren(lProjects, lProjectListNew);
+    replaceChildren(lProjects, lProjectListSave)
     
   }
   else {}
 }
 
 # Get the menubar. 
-sig getMenu : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
+sig getMenu : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> Xml
 fun getMenu(opHandler) client
 {
   <#>
@@ -1647,8 +1727,8 @@ fun getMenu(opHandler) client
         <dd id="menu-file" style="width: 120px;">
           <ul id="menulist" class="menulist">
             <li l:onclick="{toggleMenu("menu-file"); getProjectList(); newFile(opHandler);}" unselectable="on"><span>New..</span></li>
-            <li l:onclick="{toggleMenu("menu-file"); maybeSaveFile(opHandler);}" unselectable="on"><span>Save</span></li>
-            <li l:onclick="{toggleMenu("menu-file"); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
+            <li l:onclick="{toggleMenu("menu-file"); saveCurrent(getFrameData(), opHandler);}" unselectable="on"><span>Save</span></li>
+            <li l:onclick="{toggleMenu("menu-file"); getProjectList(); toggleVisible("overlay"); toggleVisible("save-file");}" unselectable="on"><span>Save as.. </span></li>
             <li style="height: 1px;"><hr style="height: 2px;" /> </li>
             <li l:onclick="{toggleMenu("menu-file"); toggleChecked("session", updateSession)}"><img src="images/check.png" style="position: relative; top: 2px;" id="session-check" enabled="yes"/><span style="margin-left: 0px; top: -1px;">Session timeouts</span></li>
             <li l:onclick="{toggleMenu("menu-file"); toggleChecked("autosave", fun () {})}"><img src="images/check.png" style="position: relative; top: 2px;" id="autosave-check" enabled="yes"/><span style="margin-left: 0px; top: -1px;">Auto-save Files</span></li>
@@ -1674,52 +1754,46 @@ fun getMenu(opHandler) client
   </#>
 }
 
-# When save is clicked, determine whether 'Save' or 'Save as..' is appropriate.
-sig maybeSaveFile : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
-fun maybeSaveFile(xiHandler) client
-{
-  # Check if the iFrame is named - 'save as' if it isn't
-  var lFrameData = getFrameData();
-  switch (lFrameData.fname)
-  {
-    case "*" -> toggleVisible("overlay"); toggleVisible("save-file")
-    case ""  -> debug("No name!")
-    case _   -> saveCurrent(lFrameData, xiHandler)
-  }
-}
-
 # Save the current file.
 sig saveCurrent : ((pid: Int, fname: String), 
-                    Mailbox ([|SaveFile:(String, String, String)|a|])) -> ()
+                    Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> ()
 fun saveCurrent(xiData, xiHandler) client
 {
   var lMatchFun = fun (x) { x <> '*' };
 
   # Check if a save is needed
-  if (length(dropWhile(lMatchFun, xiData.fname)) == 1)
+  if (hd(reverse(xiData.fname)) == '*')
   {
-    toggleWaiting("Saving file..");
     var lRealName = takeWhile(lMatchFun, xiData.fname);
-    saveFile(xiHandler, lRealName, true);
+
+    debug("RealName: " ++ lRealName);
+    
+    debug("Calling saveFile");
+    saveFile(xiHandler, lRealName, true, true);
+   
+    debug("Setting frame data");
     setFrameData(xiData.pid, lRealName);
 
     # Check if frame is new, replace with linked version
     # TODO: File needs to be linked.
-    if (isFrameNew())
+    var lDispName = drop(1, dropWhile(fun (x) { x <> '/' }, lRealName));
+    var replaceNewItems = fun (xiName)
     {
-      var lDispName = drop(1, dropWhile(fun (x) { x <> '/' }, lRealName));
-      var lNewNode =
-          <span class="proj-text">
-            {stringToXml(lDispName)}
-          </span>;
-      # Set the list item to be non-new
-      var lVoid = domSetAttributeFromRef(getNodeById("new-item"), "name", "");
+      if (isFrameNew())
+      {
+        var lNewNode =
+            <span class="proj-text" l:onclick="{loadFile(xiHandler, lRealName, event)}">
+              {stringToXml(xiName)}
+            </span>;
+        # Set the list item to be non-new
+        var lVoid = domSetAttributeFromRef(getNodeById("new-item"), "is", "");
 
-      replaceNode(lNewNode, getNodeById("newnode"));
-      setFrameNew(0);
-    } else {};
-  
-    toggleWaiting("");
+        replaceNode(lNewNode, getNodeById("newnode"));
+        setFrameNew(0);
+      } else {}
+    };
+
+    replaceNewItems(lDispName);
   } else {};
 }
 
@@ -1732,16 +1806,6 @@ fun docHasChanged() client
   length(dropWhile(fun (x) { x <> '*' }, lFrameName)) == 1
 }
 
-# TODO: The needs to be attached to the IFrame's onclick event. How?
-sig docChanged : () -> ()
-fun docChanged() client
-{
-  if (hd(reverse(getCurrFile())) == '*')
-    ()
-  else
-    setCurrFile(getCurrFile() ++ "*")
-}
-
 # Check whether an option is enabled.
 sig optionEnabled : (String) -> Bool
 fun optionEnabled(xiName) client
@@ -1752,7 +1816,7 @@ fun optionEnabled(xiName) client
 
 # Turn the options on/off, and sort out the tick in the menu.
 # The function passed in is to be executed when the option is enabled.
-sig toggleChecked : (String, (() -> ())) -> ()
+sig toggleChecked : (String, (() -> ()	   )) -> ()
 fun toggleChecked(xiName, xiFn) client
 {
   # If change from off -> on, update session
@@ -1798,13 +1862,14 @@ fun toggleMenuItem(xiName, xiOn) client
 }
 
 # Toggle save-before-[action] display. Takes the action to perform as arg.
-sig toggleActionSave : ((() -> ()),Mailbox ([|SaveFile:(String, String, String)|a|]))  -> ()
+sig toggleActionSave : ((() -> ()),Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|]))  -> ()
 fun toggleActionSave(xiFn, xiHandler) client
 {
   var lSave =
    <#>
      <input type="button" name="save" l:onclick="{saveCurrent(getFrameData(), xiHandler); toggleVisible("maybe-save"); xiFn() }" value="Save" />
-     <input type="button" name="cancel" l:onclick="{toggleVisible("maybe-save"); setInvisible("overlay"); discardNewFiles(); xiFn()}" value="Don't Save" />
+     <input type="button" name="discard" l:onclick="{toggleVisible("maybe-save"); setInvisible("overlay"); discardNewFiles(); xiFn()}" value="Don't Save" />
+     <input type="button" name="cancel" l:onclick="{toggleVisible("maybe-save"); setInvisible("overlay");}" value="Cancel" />
    </#>;
 
   var lNode       = getNodeById("maybe-save");
@@ -1885,21 +1950,17 @@ fun toggleBgColour(xiName, xiColour)
 }
 
 # Toggle the 'waiting' box. Text is the heading to use.
-# TODO: Make the text prettier, maybe add icon?
 sig toggleWaiting : (String) -> ()
 fun toggleWaiting(xiText) client
 {
   var lNode = getNodeById("waiting");
-  var lTextNode = nextElementSibling(firstChild(getNodeById("waiting-text")));
+  var lTextNode = getNodeById("waiting-text");
 
   # Node to use.
   var lText = 
-    <#>
-      <img src="images/waiting.gif" style="float: left; padding-right: 6px; padding-top: 2px;" />
-      <span style="padding: 2px 3px 3px; font-size: 12px; height: 14px; font-weight: bold;" class="caption-text">
+      <span style="padding: 2px 3px 3px; font-size: 12px; height: 14px; font-weight: bold;" class="caption-text" id="waiting-text">
         {stringToXml(xiText)}
-      </span>
-    </#>;
+      </span>;
 
   switch (domGetStyleAttrFromRef(lNode, "display"))
   {
@@ -1974,7 +2035,7 @@ fun showLoading(xiToggle) client
 }
 
 # Returns the HTML needed for the 'hidden' objects, i.e. the various dialogs.
-sig getHiddenObjects : (Mailbox ([|SaveFile:(String, String, String)|a|])) -> Xml
+sig getHiddenObjects : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> Xml
 fun getHiddenObjects(opHandler) client
 {
   <#>
@@ -1998,7 +2059,7 @@ Project:<br />
             </div>
           </div>
           <div class="bottombar">
-            <input type="button" name="save" l:onclick="{clearDoc(domGetNodeValueFromRef(getNodeById("new-file-file-proj"))); cleanForm("new-file")}" value="Create new" />
+            <input type="button" name="save" l:onclick="{clearDoc(domGetNodeValueFromRef(getNodeById("new-file-file-proj")));}" value="Create new" />
             <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
           </div>
         </div>
@@ -2013,7 +2074,7 @@ Project:<br />
             </div>
           </div>
           <div class="bottombar">
-            <input type="button" name="save" l:onclick="{newProject(domGetNodeValueFromRef(getNodeById("newproj-name")));}" value="Create new" />
+            <input type="button" name="save" l:onclick="{setInvisible("overlay");  toggleVisible("new-file"); newProject(domGetNodeValueFromRef(getNodeById("newproj-name")));}" value="Create new" />
             <input type="button" name="cancel" l:onclick="{cleanForm("new-file")}" value="Cancel" />
           </div>
         </div>
@@ -2025,13 +2086,16 @@ Project:<br />
           <span class="caption-text" unselectable="on">Save file</span>
         </div>
         <div class="container-box">
-          <span class="proj-items padded">
+          <span class="popup-text padded">
+            Project:<br />
+            <select name="project" id="save-as-proj" class="input-box">
+              </select><br /><br />
             Name:<br />
             <input type="text" class="input-box proj-items" id="filename" />
           </span>
         </div>
         <div class="bottombar">
-          <input type="button" name="save" l:onclick="{saveFile(opHandler, "filename", false); setInvisible("overlay"); setInvisible("save-file")}" value="Save" />
+          <input type="button" name="save" l:onclick="{saveAs(domGetNodeValueFromRef(getNodeById("save-as-proj")), opHandler); setInvisible("overlay"); setInvisible("save-file")}" value="Save" />
           <input type="button" name="cancel" l:onclick="{cleanForm("save-file")}" value="Cancel" />
         </div>
       </div>
@@ -2054,8 +2118,9 @@ Project:<br />
       </div>
     </div>
     <div id="waiting" class="invisible">
-      <div class="centered box" id="waiting-text">
-        <span></span>
+      <div class="centered box">
+        <img src="images/waiting.gif" style="float: left; padding-right: 6px; padding-top: 2px;" />
+        <span id="waiting-text"></span>
       </div>
     </div>
     <div id="session-expired" class="invisible">
@@ -2081,7 +2146,7 @@ Project:<br />
 }
 
 # Returns the HTML needed for the project browser.
-sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String)|LoadFile:(String, Event)|a|])) -> Xml
+sig getProjBrowser : (Mailbox ([|SaveFile:(String, String, String, Bool)|LoadFile:(String, Event)|a|])) -> Xml
 fun getProjBrowser(opHandler) client
 {
     <div id="proj-browser" class="proj-browser">

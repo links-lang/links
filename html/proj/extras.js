@@ -195,3 +195,15 @@ function _tmpIsNull(node)
 }
 
 var tmpIsNull = LINKS.kify(_tmpIsNull);
+
+// JavaScript version of Links' client-side regex
+function _jsMatches(string, pattern)
+{
+  var lPattern = new RegExp("^" + $str(pattern) + "$");
+  var lString = $str(string); 
+
+  return lPattern.test(lString)
+}
+
+var jsMatches = LINKS.kify(_jsMatches);
+  
