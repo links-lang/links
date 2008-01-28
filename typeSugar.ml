@@ -314,7 +314,7 @@ tab() ^ code lexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
 "while the subsequent expressions have type" ^ nl() ^
-tab() ^ (show_type rt))
+tab() ^ code (show_type rt))
 
     (* [BUG] This griper is a bit rubbish because it doesn't distinguish
     between two different errors. *)
@@ -542,12 +542,10 @@ code (show_type t1) ^ nl() ^
 code (show_type t2) ^ ".")
         
     let value_restriction pos t =
-      die pos ("\
-Because of the value restriction there can be no \
-free rigid type variables \
-at an ungeneralisable binding site, \
-but the type " ^ code (show_type t) ^ nl() ^
-"has free rigid type variables.")
+      die pos (
+"Because of the value restriction there can be" ^ nl() ^
+"free rigid type variables at an ungeneralisable binding site," ^ nl() ^
+"but the type " ^ code (show_type t) ^ " has free rigid type variables.")
 
     let type_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~aliases:_ ~error:_ =
       die pos ("\
@@ -603,7 +601,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 "while the pattern" ^ nl() ^
 tab() ^ code rexpr ^ nl() ^
 "has type" ^ nl() ^
-tab() ^ (show_type rt))
+tab() ^ code (show_type rt))
 
     let cons_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~aliases:_ ~error:_ =
       die pos ("\

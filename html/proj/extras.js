@@ -123,6 +123,7 @@ function _escape(xiString)
 {
   return $chr(escape($str(xiString)));
 }
+
 var DEBUGGING = true;
 var jsEscape = LINKS.kify(_escape);
 var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
@@ -131,6 +132,15 @@ function _debug(msg) {
      _dwindow.document.write('<b>' + _current_pid + '</b> : ' + msg + '<br/>');
    }
 }
+
+// Escape slashes.
+function _escapeSlashes(xiString)
+{
+  return $chl(($str(xiString)).replace("\\", "\\\\"));
+}
+
+var jsEscapeSlashes = LINKS.kify(_escapeSlashes);
+
 // Convert from collection to array
 function _collectionToArray(coll) {
   var arr = new Array();

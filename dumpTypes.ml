@@ -9,11 +9,11 @@
   particular that there are no free variables. 
 *)
 let program : Types.typing_environment -> string -> (string * Types.datatype * Sugartypes.position) list =
-  fun tyenv filename ->
+  fun ((env, _) as tyenv) filename ->
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 
-      val env = Env.String.empty
+      val env = env
       val vars = []
         
       method get_vars () = List.rev vars

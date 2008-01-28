@@ -272,7 +272,7 @@ var tokenizeLinks = function(){
           // This is an event, so grab the : and the word
           source.next();          
           nextWhile(isWordChar);
-          token = result("text", "event-variable");
+          token = result("text", "event-var");
         }
         else if (ch == ">")
           token = result("html", "html");

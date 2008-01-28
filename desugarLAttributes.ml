@@ -80,13 +80,13 @@ let desugar_lonevent : phrasenode -> phrasenode =
           `Xml (tag, idattr::others, attrexp, children)
     | e -> e
         
-let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t = 
+let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) StringMap.t = 
   let lnames = ref StringMap.empty in
-  let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
+  let add lname (id,name,pos) = lnames := StringMap.add lname (id,name,pos) !lnames in
   let attr : string * phrase list -> (string * phrase list) list = function
     | "l:name", [`Constant (`String v), pos] -> 
         let id, name = fresh_names () in
-          add v (id,name);
+          add v (id,name,pos);
           [("name", [`Constant (`String name), pos]); ("id", [`Constant (`String id), pos])]
     | "l:name", _ -> failwith ("Invalid l:name binding")
     | a -> [a] in
@@ -103,15 +103,15 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
 let let_in pos name rhs body : phrase = 
   `Block ([`Val ((`Variable (name,None,pos), pos), rhs, `Unknown, None), pos], body), pos
     
-let bind_lname_vars pos lnames = function
+let bind_lname_vars lnames = function
   | "l:action" as attr, es -> 
       attr, (List.map (StringMap.fold 
-                         (fun var (_,name) -> let_in pos var (server_use name pos))
+                         (fun var (_,name,pos) -> let_in pos var (server_use name dummy_pos))
                          lnames) 
                es)
   | attr, es when start_of attr ~is:"l:on" -> 
     attr, (List.map (StringMap.fold
-                       (fun var (id,_) -> let_in pos var (client_use id pos))
+                       (fun var (id,_,pos) -> let_in pos var (client_use id dummy_pos))
                        lnames)
              es)
   | attr -> attr
@@ -124,7 +124,7 @@ let desugar_form : phrasenode -> phrasenode = function
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames 
         with StringMap.Not_disjoint (item, _) ->
           raise (ConcreteSyntaxError ("Duplicate l:name binding: " ^ item, dummy_pos)) in
-      let attrs = List.map (bind_lname_vars dummy_pos lnames) attrs in
+      let attrs = List.map (bind_lname_vars lnames) attrs in
         `Xml (form, attrs, attrexp, List.combine children children_positions)
   | e -> e
 

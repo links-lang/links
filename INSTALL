@@ -95,10 +95,11 @@ for your Links interpreter, just run
 
 in the links directory. This will ask a number of questions about
 where to install the examples. It installs:
- - the examples in your cgi directory
- - the javascript library in the specified directory
- - the sources and an HTML file in the specified directory
- - a configuration file in the cgi directory 
+
+ - the examples in your CGI directory,
+ - the javascript library in the specified directory,
+ - the sources and an HTML file in the specified directory, and
+ - a configuration file in the CGI directory.
 
 Now point your web browser at one of these examples. The URL for the
 program will depend on your web server configuration and the place
@@ -126,7 +127,14 @@ is significant.
 
 DATABASE SUPPORT
 
-To use a database with Links, follow these steps:
+To use a database with Links, you'll need to have one of the following
+database systems, and the associated OCaml bindings for that database:
+
+  * MySQL
+  * PostgreSQL
+  * SQLite
+
+To build Links with database support, follow these steps:
 
   1. Copy Makefile.sample.config to Makefile.config, and fill in the
      path to the appropriate OCaml database library (this refers to
@@ -169,29 +177,29 @@ To use a database with Links, follow these steps:
 
         ./links --config=<config-file> <source-file>
 
-Installing OCaml-mysql for Cygwin
+INSTALLING OCAML-MYSQL FOR CYGWIN
 
-Download ocaml-mysql from
+Download the ocaml-mysql package from:
 
   http://raevnos.pennmush.org/code/ocaml-mysql/
 
-Run the configure script
+Run the configure script:
 
   ./configure
 
 The generated Makefile doesn't do the right thing. Replace the
-following lines
+following lines:
 
   CLIBS=$(foreach lib, -lz , $(subst -l,,${lib}))
   export OCAMLMKLIB_FLAGS=-L/usr/local/lib/mysql
 
-with
+with:
 
   CLIBS=mysqlclient z
   INCDIRS=/usr/lib /usr/local/lib/mysql
   LIBDIRS=/usr/lib /usr/local/lib/mysql
 
-To build it
+To build it:
 
   make
   make opt
@@ -200,18 +208,22 @@ To install it. If you have ocamlfind, then
 
   make install
 
-If you don't have ocamlfind, then
+If you don't have ocamlfind, then try:
 
   mkdir /usr/local/lib/ocaml/mysql
   cp mysql.mli mysql.cmi mysql.cma mysql.cmx mysql.cmxa libmysql_stubs.a mysql.a /usr/local/lib/ocaml/mysql/
 
-Building links with MySQL support
-  Add the following line to Makefile.config
-    MYSQL_LIBDIR=/usr/local/lib/ocaml/mysql
+Finally, to build links with MySQL support, add the following line to
+Makefile.config:
+
+  MYSQL_LIBDIR=/usr/local/lib/ocaml/mysql
+
 
 QUESTIONS
 
-If you have trouble installing Links, feel free to join the
-links-users mailing list:
+To learn more about Links, get help with installing or using Links, or
+connect with other Links programmers, join the links-users mailing
+list. Just send a message containing the word "subscribe" to this
+address:
 
   links-users@inf.ed.ac.uk

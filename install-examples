@@ -116,9 +116,11 @@ cp lib/js/json.js $libdir/
 cp lib/js/regex.js $libdir/
 
 
-echo "Creating configuration file..."
-echo " $configfile"
+echo Creating configuration file...
+echo "  $configfile"
 echo -e "jsliburl=$liburl\nprelude=$PWD/prelude.links\n" > $configfile
-
-echo "To run the database examples you will need to specify"
-echo "database_driver and database_args in the configuration file."
+echo
+echo To run the database examples you will need to specify values for
+echo database_driver and database_args in the configuration file $config_file
+echo "and create tables for each example (look for files ending in .sql and)."
+echo run these through your database system.
