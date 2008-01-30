@@ -12,30 +12,17 @@ var sessionsTable = table "sessions" with (
     update_time : Int
 ) from (database "ide");
 
-# Count the number of elements in a list
-fun numElems(lst) server
-{
-  switch(lst)
-  {
-    case [] -> 0
-    case x::xs -> 1 + numElems(xs)
-  }
-}
-
 var cookieName = "linkside";
 var fileLoc = "/home/tom/links/html/proj/";
 var fileDir = "test/";
 
 # Login formlet
-var loginForm =
+var loginForm server =
   formlet
     <#>
-      <div class="box">
-          <div class="topbar">
-            <span class="caption-text" unselectable="on">Login</span>
-          </div>
-          <div class="container-box">
-            <span class="proj-items padded">
+      <div>
+        <div class="container-box" style="margin-top: 2px; height: 80px;">
+          <span class="popup-items padded">
               <p>Username:<br />
                 { input -> email }
               </p>
@@ -60,7 +47,7 @@ fun login (data) server
    where ((user.email == data.name) && (user.password == (data.password)))
     [user.id];
 
-  if (numElems (foundIds) == 1)
+  if (length(foundIds) == 1)
   {
     var uid = hd(foundIds);
 
@@ -94,11 +81,6 @@ fun login (data) server
   }
 }
 
-#fun displayForm() server
-#{
-#  render(loginForm, login)
-#}
-
 fun main(flag) {
   page
   #var loggedIn =
@@ -108,17 +90,21 @@ fun main(flag) {
   #        };   
   <html>
     <head>
-      <title>ug4proj: Links</title>
+      <title>LODE - An online development environment for Links in Links</title>
     </head>
     <link rel="stylesheet" type="text/css" href="proj.css" />
     <body>
-      <div id="main" style="margin-left: auto; margin-right: auto; width: 375px;">	
-        <img src="images/lode-logo.png" style="display: block;"/>
-        <div style="margin-left: auto; margin-right: auto; width: 230px;">
-        {
-          loginForm => login
-        }
-        </div>
+      <div id="main" style="margin-left: auto; margin-right: auto; width: 375px; font-family: Tahoma, Verdana; font-size: 12px;">	
+        <img src="images/lode-logo.png" style="display: block; margin-bottom: 6px;"/>
+        <span style="margin-left: 2px">
+        Welcome to LODE, an online development environment for testing and deploying projects in the <a href="http://groups.inf.ed.ac.uk/links">Links</a> programming language. LODE was developed in Links using a modified version of the JavaScript syntax highlighter <a href="http://marijn.haverbeke.nl/codemirror/index.html">CodeMirror</a>.<br /><br />
+       In order to access the editor, you need to log in:
+          <div style="width: 230px;">
+          {
+            loginForm => login
+          }
+          </div>
+        </span>
       </div>
     </body>
   </html>

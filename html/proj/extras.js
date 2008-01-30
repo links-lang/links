@@ -1,6 +1,5 @@
 /*
  * Extra functionality needed for the editor.
- * TODO: Cleanup, lots of unused stuff.
  */
 
 var $str = LINKS.charlistToString;
@@ -154,6 +153,7 @@ function _collectionToArray(coll) {
 
 function _getElsFromDoc(doc, name) 
 {
+    _debug(doc.getElementsByName($str(name)).length);
   return _collectionToArray(doc.getElementsByName($str(name)));
 }
 
@@ -216,4 +216,41 @@ function _jsMatches(string, pattern)
 }
 
 var jsMatches = LINKS.kify(_jsMatches);
-  
+ 
+function _getEditor()
+{
+  var textarea = document.getElementById("editor");
+  var editor = new CodeMirror(textarea, {
+    height: "100%",
+    width: "100%",
+    parserfile: ["tokenizelinks.js", "parselinks.js"],
+    stylesheet: "highlight.css",
+    path: "editor/"
+  });
+  window.document.editor = editor;
+}
+
+var getEditor = LINKS.kify(_getEditor);
+
+// Set code in editor
+function _setCode(code)
+{
+  window.editor.setCode($str(code));
+}
+
+// Get code from editor.
+function _getCode()
+{
+  return $chr(window.editor.getCode());
+}
+
+var setCode = LINKS.kify(_setCode);
+var getCode = LINKS.kify(_getCode);
+
+// Set the page's title
+function _setPageTitle(title)
+{
+  document.title = $str(title);
+}
+
+var setPageTitle = LINKS.kify(_setPageTitle);

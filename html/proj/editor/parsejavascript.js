@@ -1,36 +1,13 @@
-/* JavaScript parser
+/* Parse function for JavaScript. Makes use of the tokenizer from
+ * tokenizejavascript.js. Note that your parsers do not have to be
+ * this complicated -- if you don't want to recognize local variables,
+ * in many languages it is enough to just look for braces, semicolons,
+ * parentheses, etc, and know when you are inside a string or comment.
  *
- * A parser that can be plugged into the CodeMirror system has to
- * implement the following interface: It is a function that, when
- * called with a string stream (stringstream.js) as an argument,
- * returns a MochiKit-style iterator (object with a 'next' method).
- * This iterator, when called, consumes some input from the string
- * stream, and returns a token object. Token objects must have a
- * 'value' property (the text they represent), a 'style' property (the
- * CSS style that should be used to colour them). Tokens for newline
- * characters must also have a 'lexicalContext' property, which has an
- * 'indentation' method that can be used to determine the proper
- * indentation level for the next line. This method optionally takes
- * the first character of the next line as an argument, which it can
- * use to adjust the indentation level.
- *
- * So far this should be easy. The hard part is that the iterator
- * produced by the parse function must also have a 'copy' method. This
- * method, called without arguments, returns a function representing
- * the current state of the parser. When this function is later called
- * with a string stream as its argument, it returns a parser iterator
- * object that resumes parsing using the old state and the new input
- * stream. It may assume that only one parser is active at a time, and
- * clobber the state of the old parser (the implementation below
- * certianly does).
+ * See manual.html for more info about the parser interface.
  */
 
-// Parse function for JavaScript. Makes use of the tokenizer from
-// tokenizejavascript.js. Note that your parsers do not have to be
-// this complicated -- if you don't want to recognize local variables,
-// in many languages it is enough to just look for braces, semicolons,
-// parentheses, etc, and know when you are inside a string or comment.
-var parseJavaScript = function() {
+Editor.Parser = (function() {
   // Token types that can be considered to be atoms.
   var atomicTypes = {"atom": true, "number": true, "variable": true, "string": true, "regexp": true};
   // Constructor for the lexical context objects.
@@ -39,7 +16,7 @@ var parseJavaScript = function() {
     this.indented = indented;
     // column at which this scope was opened
     this.column = column;
-    // type of scope ('vardef', 'stat' (statement), '[', '{', or '(')
+    // type of scope ('vardef', 'stat' (statement), 'form' (special form), '[', '{', or '(')
     this.type = type;
     // '[', '{', or '(' blocks that have any text after their opening
     // character are said to be 'aligned' -- any lines below are
@@ -50,20 +27,25 @@ var parseJavaScript = function() {
     this.prev = prev;
   }
   // My favourite JavaScript indentation rules.
-  JSLexical.prototype.indentation = function(firstChar) {
-    var closing = firstChar == this.type;
-    if (this.type == "vardef")
-      return this.indented + 4;
-    if (this.type == "stat")
-      return this.indented + 2;
-    else if (this.align)
-      return this.column - (closing ? 1 : 0);
-    else
-      return this.indented + (closing ? 0 : 2);
+  function indentJS(lexical) {
+    return function(firstChars) {
+      var firstChar = firstChars && firstChars.charAt(0);
+      var closing = firstChar == lexical.type;
+      if (lexical.type == "vardef")
+        return lexical.indented + 4;
+      else if (lexical.type == "form" && firstChar == "{")
+        return lexical.indented;
+      else if (lexical.type == "stat" || lexical.type == "form")
+        return lexical.indented + 2;
+      else if (lexical.align)
+        return lexical.column - (closing ? 1 : 0);
+      else
+        return lexical.indented + (closing ? 0 : 2);
+    };
   }
 
   // The parser-iterator-producing function itself.
-  return function(input){
+  function parseJS(input) {
     // Wrap the input in a token stream
     var tokens = tokenizeJavaScript(input);
     // The parser state. cc is a stack of actions that have to be
@@ -105,13 +87,13 @@ var parseJavaScript = function() {
       column += token.value.length;
       if (token.type == "newline"){
         indented = column = 0;
-	// If the lexical scope's align property is still undefined at
-	// the end of the line, it is an un-aligned scope.
+        // If the lexical scope's align property is still undefined at
+        // the end of the line, it is an un-aligned scope.
         if (!("align" in lexical))
           lexical.align = false;
-	// Newline tokens get a lexical context associated with them,
-	// which is used for indentation.
-        token.lexicalContext = lexical;
+        // Newline tokens get a lexical context associated with them,
+        // which is used for indentation.
+        token.indentation = indentJS(lexical);
       }
       // No more processing for meaningless tokens.
       if (token.type == "whitespace" || token.type == "newline" || token.type == "comment")
@@ -125,13 +107,13 @@ var parseJavaScript = function() {
       // return it. Marked is used to 
       while(true){
         consume = marked = false;
-	// Take and execute the topmost action.
+        // Take and execute the topmost action.
         cc.pop()(token.type, token.name);
         if (consume){
-	  // Marked is used to change the style of the current token.
+          // Marked is used to change the style of the current token.
           if (marked)
             token.style = marked;
-	  // Here we differentiate between local and global variables.
+          // Here we differentiate between local and global variables.
           else if (token.type == "variable" && inScope(token.name))
             token.style = "localvariable";
           return token;
@@ -244,14 +226,14 @@ var parseJavaScript = function() {
     // current token.
     function statement(type){
       if (type == "var") cont(pushlex("vardef"), vardef1, expect(";"), poplex);
-      else if (type == "keyword a") cont(pushlex("stat"), expression, statement, poplex);
-      else if (type == "keyword b") cont(pushlex("stat"), statement, poplex);
+      else if (type == "keyword a") cont(pushlex("form"), expression, statement, poplex);
+      else if (type == "keyword b") cont(pushlex("form"), statement, poplex);
       else if (type == "{") cont(pushlex("}"), block, poplex);
       else if (type == "function") cont(functiondef);
-      else if (type == "for") cont(pushlex("stat"), expect("("), pushlex(")"), forspec1, expect(")"), poplex, statement, poplex);
-      else if (type == "case") cont(expression, expect(":"));
+      else if (type == "for") cont(pushlex("form"), expect("("), pushlex(")"), forspec1, expect(")"), poplex, statement, poplex);
       else if (type == "variable") cont(pushlex("stat"), maybelabel);
-      else if (type == "catch") cont(pushlex("stat"), pushcontext, expect("("), funarg, expect(")"), statement, poplex, popcontext);
+      else if (type == "case") cont(expression, expect(":"));
+      else if (type == "catch") cont(pushlex("form"), pushcontext, expect("("), funarg, expect(")"), statement, poplex, popcontext);
       else pass(pushlex("stat"), expression, expect(";"), poplex);
     }
     // Dispatch expression types.
@@ -336,4 +318,6 @@ var parseJavaScript = function() {
   
     return parser;
   }
-}();
+
+  return {make: parseJS, electricChars: "{}"};
+})();

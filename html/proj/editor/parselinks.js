@@ -32,7 +32,7 @@
 // this complicated -- if you don't want to recognize local variables,
 // in many languages it is enough to just look for braces, semicolons,
 // parentheses, etc, and know when you are inside a string or comment.
-var parseLinks = function() {
+Editor.Parser = (function() {
   // Token types that can be considered to be atoms.
   var atomicTypes = {"atom": true, "number": true, "variable": true, "string": true, "regexp": true, "char": true};
   
@@ -53,22 +53,24 @@ var parseLinks = function() {
     this.prev = prev;
   }
   // Indentation rules.
-  LLexical.prototype.indentation = function(firstChar) {
-    var closing = firstChar == this.type;
-    if (this.type == "vardef")
-      return this.indented + 4;
-    if ((this.type == "stat") || (this.type == "block"))
-      return this.indented;
-    else if (this.type == "tag")
-      return this.indented + 2;
-    else if (this.align)
-      return this.column - (closing ? 1 : 0);
-    else
-      return this.indented + (closing ? 0 : 2);
+  function indentLinks(lexical) {
+    return function(firstChar) {
+      var closing = firstChar == lexical.type;
+      if (lexical.type == "vardef")
+        return lexical.indented + 4;
+      if ((lexical.type == "stat") || (lexical.type == "block"))
+        return lexical.indented;
+      else if (lexical.type == "tag")
+        return lexical.indented + 2;
+      else if (lexical.align)
+        return lexical.column - (closing ? 1 : 0);
+      else
+        return lexical.indented + (closing ? 0 : 2);
+    }
   }
 
   // The parser-iterator-producing function itself.
-  return function(input){
+  function parseLinks(input){
 
     // Wrap the input in a token stream using the tokenizer
     var tokens = tokenizeLinks(input);
@@ -120,30 +122,14 @@ var parseLinks = function() {
         indented = token.value.length;
       column += token.value.length;
       if (token.type == "newline"){
-        // Depending on how the user chooses to end her line, we might
-        // not have completed all our actions. Clear out all the unused ones.
-        if (lexical.type == "stat")
-        {
-          while ((cc.length > 1) && (!(cc[cc.length - 1].lex)))
-          {
-            cc.pop();
-          }
-   
-          if (cc[cc.length - 1].lex)
-          {
-            // Change to the correct lexical state
-            cc.pop()();
-          }
-        }
-
-        indented = column = 0;
-	// If the lexical scope's align property is still undefined at
-	// the end of the line, it is an un-aligned scope.
+	indented = column = 0;
+        // If the lexical scope's align property is still undefined at
+        // the end of the line, it is an un-aligned scope.
         if (!("align" in lexical))
           lexical.align = false;
-	// Newline tokens get a lexical context associated with them,
-	// which is used for indentation.
-        token.lexicalContext = lexical;
+        // Newline tokens get a lexical context associated with them,
+        // which is used for indentation.
+        token.indentation = indentLinks(lexical);
       }
       // No more processing for meaningless tokens.
       if (token.type == "whitespace" || token.type == "newline" || token.type == "comment")
@@ -495,4 +481,6 @@ var parseLinks = function() {
 
     return parser;
   }
-}();
+
+  return {make: parseLinks, electriChars: "{}"};
+})();

@@ -1,40 +1,31 @@
-.editor { 
-  margin-top:13px;
+.editbox { 
   _margin-top:14px;
-  background:white;
-  font-family:monospace;
-  font-size:11px;
-  white-space:pre;
-  line-height:15px;
-  background-position: 0 0px;
-  background-image: url('CodePress/line-numbers.png');
+  background: white;
+  font-family: monospace;
+  font-size: 10px;
+  white-space: pre;
+  line-height: 15px;
+  margin-top: 14px;
+  _margin-top: 14px;
+  background: white;
+  font-family: monospace;
+  font-size: 13px; 
   margin-left: 32px;
+  white-space: pre;
+  background-image: url("line-numbers.png");
   background-repeat: repeat-y;
+  background-position: 0 3px;
+  line-height: 16px;
 }
 
-iframe { 
-  margin-top: 0px;
-  /*_margin-top: 0px;
-   margin-top:13px;
-  _margin-top:14px;*/
-  background:white;
-  font-family:monospace;
-  font-size:11px;
-  white-space:pre;
-  line-height:15px;
-  background-position: 0 0px;
-  background-image: url('CodePress/line-numbers.png');
-  margin-left: 32px;
-  background-repeat: repeat-y;
-}
-
-.editbox {
+/*.editbox {
   margin: .4em;
   padding: 0;
   font-family: monospace;
   font-size: 10pt;
   color: black;
-}
+  line-height: 16px;
+}*/
 
 .editbox p {
   margin: 0;
@@ -92,7 +83,6 @@ span.type {
 
 span.html { 
   color: black;
-  font-style: none;
 }
 
 pre.code, .editbox {

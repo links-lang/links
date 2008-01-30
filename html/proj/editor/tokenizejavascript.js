@@ -37,10 +37,9 @@ var tokenizeJavaScript = function(){
   var isHexDigit = matcher(/[0-9A-Fa-f]/);
   var isWordChar = matcher(/[\w\$_]/);
   function isWhiteSpace(ch){
-    // Unfortunately, IE's regexp matcher thinks non-breaking spaces
-    // aren't whitespace. Also, in our scheme newlines are no
-    // whitespace (they are another special case).
-    return ch != "\n" && (ch == nbsp || /\s/.test(ch));
+    // In our scheme newlines are no whitespace (they are another
+    // special case).
+    return ch != "\n" && realWhiteSpace.test(ch);
   }
 
   // This function produces a MochiKit-style iterator that tokenizes
@@ -57,27 +56,19 @@ var tokenizeJavaScript = function(){
     // the caller has already extracted the text from the stream
     // himself.
     function result(type, style, base){
-      nextWhile(isWhiteSpace);
+      source.nextWhile(isWhiteSpace);
       var value = {type: type, style: style, value: (base ? base + source.get() : source.get())};
       if (base) value.name = base;
       return value;
     }
 
-    // Advance the text stream over characters for which test returns
-    // true. (The characters that are 'consumed' like this can later
-    // be retrieved by calling source.get()).
-    function nextWhile(test){
-      var next;
-      while((next = source.peek()) && test(next))
-        source.next();
-    }
     // Advance the stream until the given character (not preceded by a
     // backslash) is encountered (or a newline is found).
     function nextUntilUnescaped(end){
       var escaped = false;
       var next;
-      while((next = source.peek()) && next != "\n"){
-        source.next();
+      while(source.notEquals("\n")){
+        var next = source.next();
         if (next == end && !escaped)
           break;
         escaped = next == "\\";
@@ -86,34 +77,34 @@ var tokenizeJavaScript = function(){
   
     function readHexNumber(){
       source.next(); // skip the 'x'
-      nextWhile(isHexDigit);
+      source.nextWhile(isHexDigit);
       return result("number", "atom");
     }
     function readNumber(){
-      nextWhile(isDigit);
-      if (source.peek() == "."){
+      source.nextWhile(isDigit);
+      if (source.equals(".")){
         source.next();
-        nextWhile(isDigit);
+        source.nextWhile(isDigit);
       }
-      if (source.peek() == "e" || source.peek() == "E"){
+      if (source.equals("e") || source.equals("E")){
         source.next();
-        if (source.peek() == "-")
+        if (source.equals("-"))
           source.next();
-        nextWhile(isDigit);
+        source.nextWhile(isDigit);
       }
       return result("number", "atom");
     }
     // Read a word, look it up in keywords. If not found, it is a
     // variable, otherwise it is a keyword of the type found.
     function readWord(){
-      nextWhile(isWordChar);
+      source.nextWhile(isWordChar);
       var word = source.get();
       var known = keywords.hasOwnProperty(word) && keywords.propertyIsEnumerable(word) && keywords[word];
       return known ? result(known.type, known.style, word) : result("variable", "variable", word);
     }
     function readRegexp(){
       nextUntilUnescaped("/");
-      nextWhile(matcher(/[gi]/));
+      source.nextWhile(matcher(/[gi]/));
       return result("regexp", "string");
     }
     // Mutli-line comments are tricky. We want to return the newlines
@@ -125,10 +116,9 @@ var tokenizeJavaScript = function(){
       this.inComment = true;
       var maybeEnd = (start == "*");
       while(true){
-        var next = source.peek();
-        if (next == "\n")
+        if (source.equals("\n"))
           break;
-        source.next();
+        var next = source.next();
         if (next == "/" && maybeEnd){
           this.inComment = false;
           break;
@@ -150,29 +140,28 @@ var tokenizeJavaScript = function(){
       else if (this.inComment)
         token = readMultilineComment.call(this, ch);
       else if (isWhiteSpace(ch))
-        token = nextWhile(isWhiteSpace) || result("whitespace", "whitespace");
+        token = source.nextWhile(isWhiteSpace) || result("whitespace", "whitespace");
       else if (ch == "\"" || ch == "'")
         token = nextUntilUnescaped(ch) || result("string", "string");
       // with punctuation, the type of the token is the symbol itself
       else if (/[\[\]{}\(\),;\:\.]/.test(ch))
         token = result(ch, "punctuation");
-      else if (ch == "0" && (source.peek() == "x" || source.peek() == "X"))
+      else if (ch == "0" && (source.equals("x") || source.equals("X")))
         token = readHexNumber();
       else if (isDigit(ch))
         token = readNumber();
       else if (ch == "/"){
-        next = source.peek();
-        if (next == "*")
+        if (source.equals("*"))
           token = readMultilineComment.call(this, ch);
-        else if (next == "/")
+        else if (source.equals("/"))
           token = nextUntilUnescaped(null) || result("comment", "comment");
         else if (this.regexp)
           token = readRegexp();
         else
-          token = nextWhile(isOperatorChar) || result("operator", "operator");
+          token = source.nextWhile(isOperatorChar) || result("operator", "operator");
       }
       else if (isOperatorChar(ch))
-        token = nextWhile(isOperatorChar) || result("operator", "operator");
+        token = source.nextWhile(isOperatorChar) || result("operator", "operator");
       else
         token = readWord();
 

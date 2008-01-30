@@ -17,6 +17,12 @@ select {
   width: 130px;
 }
 
+button {
+  border: 1px solid;
+  font-family: tahoma, verdana, helvetica;
+  font-size: 12px;
+}
+
 div.main {
   width: 80%;
   z-index: 1;
