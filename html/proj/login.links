@@ -65,7 +65,7 @@ fun login (data) server
     # Create user dir
     switch (mkdir(fileLoc ++ fileDir ++ id))
     {
-      case Error(err) -> debug("Error: " ++ err)
+      case Error(err) -> debug("mkdir (" ++ fileLoc ++ fileDir ++ id ++ "): " ++ err)
       case Ok() -> ()
     };
 

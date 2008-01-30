@@ -94,11 +94,7 @@ div.main {
 
 .proj-text { 
   padding:1px 3px 1px 2px;
-  display: compact;
   text-decoration: none;
-  float: middle;
-  position: top;
-  offset: 0px 0px 0px 38px;
   top: -6px;
   cursor: pointer;
 }
@@ -109,7 +105,7 @@ ul.proj-list {
   list-style-position: outside;
   list-style-type: none;
   vertical-align: top;
-  height: 98%:
+  height: 98%;
 }
 
 li.proj-list-item { 
@@ -213,9 +209,6 @@ div.menu {
   padding: 3px;
   width: 210px;
   z-index: 102;
-  opacity: 1.0;
-  filter: alpha(opacity = 100); 
-  -moz-opacity: 1.0;
 }
 
 .invisible {
@@ -228,7 +221,6 @@ bottombar {
   top: 75px;
   background-image: url('images/bg-grad.jpg');
   height: 25px;
-  align: left;
 }  
 
 .topbar {
@@ -244,7 +236,6 @@ bottombar {
   padding: 0px;
   margin: 0px;
   height: 105px;
-  text-align: top;
 }
 
 .padded {
@@ -360,7 +351,6 @@ bottombar {
 }
 
 #menubar ul {
-  spacing: 0px;
   padding: 0px;
 }
 
@@ -405,7 +395,6 @@ bottombar {
   font-size: 11px;
   font-size-adjust: none;
   vertical-align: bottom;
-  align: right;
   display: block;
   width: 200;
   text-decoration: underline;

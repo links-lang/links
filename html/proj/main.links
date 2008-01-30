@@ -392,7 +392,7 @@ fun sessionCheck(xiFileHandler) client
         xiFileHandler ! SaveFile(lRealName, false);
         setFrameData(lData.pid, lRealName);
       } else {};
-        
+				
       # Check if session timeouts are turned on.
       if (optionEnabled("session"))
       {
@@ -1366,6 +1366,8 @@ fun clearDoc(xiProj) client
     var lProjName = hd(lProjInfo);
     debug("Proj name is: " ++ lProjName);
 
+    var lFullName = lProjName ++ "/" ++ lName;
+
     # Enable editing
     debug("Enabling editing");
     enableEditable(getNodeById("iframe"));
@@ -1374,10 +1376,13 @@ fun clearDoc(xiProj) client
     replaceChildren(<#></#>, lBody);
   
     # Set the name to be the new file.
-    setFrameData(stringToInt(hd(tl(lProjInfo))), (lProjName ++ "/" ++ lName ++ "*"));
+    setFrameData(stringToInt(hd(tl(lProjInfo))), lFullName ++ "*");
   
     # Set the current file name
-    setCurrFile(lProjName ++ "/" ++ lName);
+    setCurrFile(lFullName);
+
+    # Set the title
+    setPageTitle("LODE - " ++ lFullName);
 
     # Mark the iframe as new.
     setFrameNew(1);
@@ -1393,7 +1398,7 @@ fun clearDoc(xiProj) client
     var lProjNode = getNodeById("proj-" ++ lProjName);
 
     var lNewNode = 
-        <li class="proj-list-item" style="cursor: normal;" id="new-item-{lName}">
+        <li class="proj-list-item" name="new-item" style="cursor: default;" id="new-item-{lName}">
           <div class="proj-node"> 
             <img src="images/blank.png" style="width: 16; height: 1px;" />
             <img src="images/blank.png" class="proj-blank" />
@@ -2205,7 +2210,7 @@ fun getEditor() client
           height: "100%",
           width: "100%",
           parserfile: ["tokenizelinks.js", "parselinks.js"],
-          stylesheet: "highlight.css",
+          stylesheet: "editor/highlight.css",
           path: "editor/"
         }});
         
