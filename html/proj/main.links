@@ -1,5 +1,4 @@
-# TODO:
-#
+# Previous TODOs:
 # - Sort out right-click menu for project list.
 #    * Figure out how to distinguish between left/right mouse clicks (done)
 #    * Recreate stopPropagation (is it gone?) (done, but won't work)
@@ -1069,7 +1068,7 @@ fun getLProjectList(currItem, currLevel, opHandler) client
         <div name="closed" type="proj" cname="{name}" pid="{intToString(id)}" id="proj-{name}"  unselectable="on">
           <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}"/>
           <img src="images/proj-close.png" />  
-          <span unselectable="on">
+          <span unselectable="on" style="cursor: default;">
             {stringToXml(name)}
           </span> 
           <ul class="proj-list" style="display: none;">
@@ -1274,7 +1273,7 @@ fun discardNewFiles() client
   ()
 }
 
-# TODO: Attach filehandler.
+# Save a file under a new name.
 sig saveAs: (String, Mailbox ([|SaveFile:(String, Bool)|LoadFile:(String, Event)|a|])) -> ()
 fun saveAs(xiProj, xiHandler) client
 {
@@ -1314,7 +1313,7 @@ fun saveAs(xiProj, xiHandler) client
           <div class="proj-node"> 
             <img src="images/blank.png" style="width: 16; height: 1px;" />
             <img src="images/blank.png" class="proj-blank" />
-            <span class="proj-text" l:onclick="{loadFile(xiHandler, lRealName, event)}">
+            <span class="proj-text" l:onclick="{loadFile(xiHandler, lName, event)}">
             {stringToXml(lName)}
             </span>
           </div>
@@ -1418,7 +1417,6 @@ fun clearDoc(xiProj) client
 }
 
 # Create new project unless one already exists.
-# TODO: Currently, event is not being attached.
 sig newProject : (String) -> ()
 fun newProject(xiName) client
 {
@@ -1469,7 +1467,7 @@ fun newProject(xiName) client
     var lNewProjListItem = 
       <li class="proj-list-item">
         <div name="closed" type="proj" cname="{xiName}" pid="{intToString(lPid)}" id="proj-{xiName}"  unselectable="on">
-          <img name="box" src="images/add-blue-box.png" l:onclick="{debug("EVENT!!"); navClick(event)}"/>
+          <img name="box" src="images/add-blue-box.png" l:onclick="{navClick(event)}"/>
           <img src="images/proj-close.png" />  
           <span unselectable="on">
             {stringToXml(xiName)}
@@ -1821,7 +1819,6 @@ fun saveCurrent(xiData, xiHandler) client
     setFrameData(xiData.pid, lRealName);
 
     # Check if frame is new, replace with linked version
-    # TODO: File needs to be linked.
     var lDispName = drop(1, dropWhile(fun (x) { x <> '/' }, lRealName));
     var replaceNewItems = fun (xiName)
     {
@@ -1829,7 +1826,7 @@ fun saveCurrent(xiData, xiHandler) client
       {
         var lOldNode = getNodeById("newnode-" ++ xiName);
         var lNewNode =
-            <span class="proj-text" l:onclick="{loadFile(xiHandler, lRealName, event)}">
+            <span class="proj-text" l:onclick="{loadFile(xiHandler, xiName, event)}">
               {stringToXml(xiName)}
             </span>;
         # Set the list item to be non-new
@@ -2266,7 +2263,7 @@ fun main() client
   if (not(isLoggedIn()))
   {
     logoutClient();
-    <#></#>
+    <html></html>
   }
   else
   {
