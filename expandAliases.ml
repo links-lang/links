@@ -1,13 +1,13 @@
 open Utility
 
-module Env = Env.String
+module SEnv = Env.String
 
 let instantiate name ts env = 
   (* This is just type application.
   
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
-  match Env.find env name with
+  match SEnv.find env name with
     | Some (vars, _) when List.length vars <> List.length ts ->
         failwith (Printf.sprintf
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
@@ -19,8 +19,10 @@ let instantiate name ts env =
         failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
 
 (* This should really be done with a generic traversal function. *)
-let rec expand_aliases (rec_vars : Types.TypeVarSet.t) env t = 
-  let rec expand rec_vars = expand_aliases rec_vars env
+let rec expand_aliases
+    (rec_tys, rec_rows as rec_envs : Types.meta_type_var Env.Int.t * Types.meta_row_var Env.Int.t) 
+    env t =
+  let rec expand rec_envs = expand_aliases rec_envs env
   and expand_row rec_vars (fsm, rv) = 
     let f = function
       | `Present t -> `Present (expand rec_vars t)
@@ -28,36 +30,43 @@ let rec expand_aliases (rec_vars : Types.TypeVarSet.t) env t =
       (StringMap.map f fsm, rv)
   in
     match t with
-      |(`Not_typed : Types.datatype)
+      | `Not_typed
       | `Primitive _ as t -> t
-      | `Function (f, m, t) -> `Function (expand rec_vars f, expand rec_vars m, expand rec_vars t)
-      | `Record r -> `Record (expand_row rec_vars r)
-      | `Variant r -> `Variant (expand_row rec_vars r)
-      | `Table (t1, t2) -> `Table (expand rec_vars t1, expand rec_vars t2)
+      | `Function (f, m, t) -> `Function (expand rec_envs f, expand rec_envs m, expand rec_envs t)
+      | `Record r -> `Record (expand_row rec_envs r)
+      | `Variant r -> `Variant (expand_row rec_envs r)
+      | `Table (t1, t2) -> `Table (expand rec_envs t1, expand rec_envs t2)
       | `Alias _ -> assert false (* There shouldn't be an alias here yet *)
-      | `Application (s, ds) when Env.has env s -> 
-          let ds = List.map (expand rec_vars) ds in
+      | `Application (s, ds) when SEnv.has env s -> 
+          let ds = List.map (expand rec_envs) ds in
           `Alias ((s, ds), instantiate s ds env)
+(*            instantiate s ds env*)
       | `Application (s, ds) -> 
-          `Application (s, List.map (expand rec_vars) ds)
-      | `ForAll (qs, dt) -> `ForAll (qs, expand rec_vars dt)
+          `Application (s, List.map (expand rec_envs) ds)
+      | `ForAll (qs, dt) -> `ForAll (qs, expand rec_envs dt)
       | `MetaTypeVar point -> 
           match Unionfind.find point with
             | `Flexible _ 
             | `Rigid _ -> t
             | `Recursive (var, body) ->
-                if Types.TypeVarSet.mem var rec_vars then t
-                else `MetaTypeVar 
-                  (Unionfind.fresh 
-                     (`Recursive (var, expand (Types.TypeVarSet.add var rec_vars) body)))
-            | `Body t -> expand rec_vars t
+                begin match Env.Int.find rec_tys var with
+                  | Some t -> `MetaTypeVar t
+                  | None ->
+                      let point = Unionfind.fresh (`Recursive (var, `Not_typed))   in
+                      let envs  = (Env.Int.bind rec_tys (var, point), rec_rows)    in
+                      let body' = expand envs body                                 in
+                      let ()    = Unionfind.change point (`Recursive (var, body')) in
+                        `MetaTypeVar point
+                end
+            | `Body t -> expand rec_envs t
 
 let expand_aliases env t = 
-(*  prerr_endline ("=> expand_aliases : " ^ Types.Show_datatype.show t);
-  flush stderr;*)
-  let r = expand_aliases Types.TypeVarSet.empty env t in
-(*    prerr_endline ("<= expand_aliases : " ^ Types.Show_datatype.show r);
-    flush stderr;*)
+  prerr_endline ("=> expand_aliases : " ^ Types.Show_datatype.show t);
+  flush stderr;
+  let r = expand_aliases (Env.Int.empty, Env.Int.empty) env t in
+    prerr_endline ("<= expand_aliases : " ^ Types.Show_datatype.show r);
+    flush stderr;
+    
     r
 
 
@@ -112,7 +121,7 @@ object (self)
         let dt = expand_aliases aliases dt in 
           (* NB: type aliases are scoped; we allow shadowing.
              We also allow type aliases to shadow abstract types. *)
-          {< aliases = Env.bind aliases (name, (List.map (snd ->- val_of) vars, dt)) >},
+          {< aliases = SEnv.bind aliases (name, (List.map (snd ->- val_of) vars, dt)) >},
           `Type (name, vars, (t, Some dt))
     | bn -> super#bindingnode bn
 
@@ -128,3 +137,66 @@ end
 let expand aliases dt =
   let _, (_, Some dt) = (expand_aliases aliases)#datatype' (Sugartypes.UnitType, Some dt) in
     dt
+
+(*
+let all_aliases_expanded aliases = 
+object (self)
+  inherit SugarTraversals.predicate as super
+
+  val no_aliases = true
+  val rec_vars = Types.TypeVarSet.empty
+  method satisfied = no_aliases
+
+  method rowe (fsm, rv) =
+    let self =
+      Utility.StringMap.fold
+        (fun _ t self -> match t with
+           | `Present t -> self#datatype t
+           | `Absent    -> self) fsm self
+    in 
+    let self = 
+      match Unionfind.find rv with
+        | `Closed     -> self
+        | `Flexible _ -> self
+        | `Rigid _    -> self
+        | `Recursive (t, _) when Types.TypeVarSet.mem t rec_vars -> self
+        | `Recursive (t, body) ->
+            let self = {< rec_vars = Types.TypeVarSet.add t rec_vars >} in
+              self#rowe body in
+      self
+
+  method datatype = function
+    | `Not_typed -> self
+    | `Primitive _ -> self
+    | `Function (f,m,t) ->
+        let self = self#datatype f in
+        let self = self#datatype m in
+        let self = self#datatype t in
+          self
+    | `Record r ->
+        self#rowe r
+    | `Variant r ->
+        self#rowe r
+    | `Table (t1, t2) ->
+        let self = self#datatype t1 in
+        let self = self#datatype t2 in
+          self
+    | `Alias (_, t) -> self#datatype t
+    | `Application (t, _) when SEnv.has aliases t -> {< no_aliases = false >}
+    | `Application (_, ts) ->
+        let self = self#list (fun o -> o#ts) ts in
+          self
+    | `MetaTypeVar mtv ->
+        match Unionfind.find mtv with
+          | `Rigid _ -> self
+          | `Flexible _ -> self
+          | `Recursive (t, _) when TypeVarSet.mem t rec_vars ->
+              self
+          | `Recursive (t, body) ->
+              let self = {< rec_vars = TypeVarSet.add t rec_vars >} in
+                self#datatype body
+          | `Body t -> self#datatype t
+    | `ForAll (_, t) -> self#datatype t
+end
+
+*)

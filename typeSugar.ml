@@ -1615,7 +1615,7 @@ and type_binding : context -> binding -> binding * context =
                             let fb = Utils.generalise env t in
                               (* make sure the annotation has the right shape *)
                             let fbi = Instantiate.typ fb in
-                              prerr_endline "unifying annotation"; flush stderr;
+                              prerr_endline ("unifying annotation " ^Types.string_of_datatype fbi^" with " ^ Types.string_of_datatype ft); flush stderr;
                             let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
                               prerr_endline "/unifying annotation"; flush stderr;
                               fb

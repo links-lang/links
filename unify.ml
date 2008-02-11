@@ -44,6 +44,8 @@ inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
     match (t1, t2) with
+      | `Alias (_, l), r -> eq_types (l, r)
+      | l, `Alias (_, r) -> eq_types (l, r)
       | `Not_typed, `Not_typed -> true
       | `Primitive x, `Primitive y -> x = y
       | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
@@ -157,9 +159,15 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
-          | `Alias (_, t1), `Alias (_, t2)
-          | `Alias (_, t1), t2
-          | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
+          | `Alias (_, t1), `Alias (_, t2) -> 
+              prerr_endline "[1]"; flush stderr;
+              unify' rec_env (t1, t2)
+          | `Alias (_, t1), t2 -> 
+              prerr_endline "[2]"; flush stderr;
+              unify' rec_env (t1, t2)
+          | t1, `Alias (_, t2) -> 
+              prerr_endline "[3]"; flush stderr;
+              unify' rec_env (t1, t2)
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
           | `Primitive x, `Primitive y when x = y -> ()
           | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
@@ -195,7 +203,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                        raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                    | `Recursive (lvar, t), `Recursive (rvar, t') ->
-                       assert(lvar <> rvar);
+                       assert (lvar <> rvar);
                        Debug.if_set (show_recursion)
                          (fun () -> "rec pair (" ^ (string_of_int lvar) ^ "," ^ (string_of_int rvar) ^")");
                        begin

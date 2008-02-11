@@ -8,8 +8,8 @@
   anyway as the type checker ensures the program is well-typed and in
   particular that there are no free variables. 
 *)
-let program : Types.typing_environment -> Types.alias_environment -> string -> (string * Types.datatype * Sugartypes.position) list =
-  fun tyenv aliases filename ->
+let program =
+  fun tyenv aliases filename env ->
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 

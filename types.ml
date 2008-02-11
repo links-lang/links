@@ -557,7 +557,7 @@ let extract_tuple (field_env, _) =
 let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
 
 (* pretty-print type vars as raw numbers rather than letters *)
-let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
+let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", true, `User)
 
 (* Type printers *)
 

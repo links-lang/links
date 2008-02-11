@@ -1118,7 +1118,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "dumpTypes",
   (`Server (p1 (fun code ->
-                  try
+                  assert false
+(*                  try
                     let ts = DumpTypes.program (val_of (!prelude_env)) alias_env (unbox_string code) in
                       
                     let line ({Lexing.pos_lnum=l}, _, _) = l in
@@ -1143,6 +1144,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                       `Variant ("Success", box_list (List.map resolve ts))
                   with e ->
                     `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
+*)
                )),
             datatype "(String) -> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
             IMPURE)
