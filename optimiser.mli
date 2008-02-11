@@ -1,7 +1,7 @@
 val optimising : bool Settings.setting
 val inline : Syntax.program -> Syntax.program
 val uniquify_names : Syntax.RewriteSyntax.rewriter
-val optimise_program : (Types.environment * Types.alias_environment)
+val optimise_program : Types.typing_environment
                        * Syntax.program -> Syntax.program
 
 val lift_lets : Syntax.RewriteSyntax.rewriter

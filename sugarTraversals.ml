@@ -916,3 +916,529 @@ object
   inherit fold
   method virtual satisfied : bool
 end
+
+class fold_map =
+  object ((o : 'self_type))
+    method string : string -> ('self_type * string) = o#unknown
+      
+    method option :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+          'a option -> ('self_type * ('a option)) =
+      fun _f_a ->
+        function
+        | None -> (o, None)
+        | Some _x -> let (o, _x) = _f_a o _x in (o, (Some _x))
+      
+    method list :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+          'a list -> ('self_type * ('a list)) =
+      fun _f_a ->
+        function
+        | [] -> (o, [])
+        | _x :: _x_i1 ->
+            let (o, _x) = _f_a o _x in
+            let (o, _x_i1) = o#list _f_a _x_i1 in (o, (_x :: _x_i1))
+      
+    method int : int -> ('self_type * int) = o#unknown
+      
+    method float : float -> ('self_type * float) = o#unknown
+      
+    method char : char -> ('self_type * char) = o#unknown
+      
+    method bool : bool -> ('self_type * bool) =
+      function | false -> (o, false) | true -> (o, true)
+      
+    method unary_op : unary_op -> ('self_type * unary_op) =
+      function
+      | `Minus -> (o, `Minus)
+      | `FloatMinus -> (o, `FloatMinus)
+      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+      | `Abs -> (o, `Abs)
+      
+    method sentence' : sentence' -> ('self_type * sentence') =
+      function
+      | `Definitions _x ->
+          let (o, _x) = o#list (fun o -> o#unknown) _x
+          in (o, (`Definitions _x))
+      | `Expression _x -> let (o, _x) = o#unknown _x in (o, (`Expression _x))
+      | `Directive _x -> let (o, _x) = o#directive _x in (o, (`Directive _x))
+      
+    method sentence : sentence -> ('self_type * sentence) =
+      function
+      | `Definitions _x ->
+          let (o, _x) = o#list (fun o -> o#binding) _x
+          in (o, (`Definitions _x))
+      | `Expression _x -> let (o, _x) = o#phrase _x in (o, (`Expression _x))
+      | `Directive _x -> let (o, _x) = o#directive _x in (o, (`Directive _x))
+      
+    method sec : sec -> ('self_type * sec) =
+      function
+      | `Minus -> (o, `Minus)
+      | `FloatMinus -> (o, `FloatMinus)
+      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
+      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+      
+    method row_var : row_var -> ('self_type * row_var) =
+      function
+      | `Closed -> (o, `Closed)
+      | `Open _x -> let (o, _x) = o#name _x in (o, (`Open _x))
+      | `OpenRigid _x -> let (o, _x) = o#name _x in (o, (`OpenRigid _x))
+      | `Recursive ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
+      
+    method row : row -> ('self_type * row) =
+      fun (_x, _x_i1) ->
+        let (o, _x) =
+          o#list
+            (fun o (_x, _x_i1) ->
+               let (o, _x) = o#string _x in
+               let (o, _x_i1) = o#fieldspec _x_i1 in (o, (_x, _x_i1)))
+            _x in
+        let (o, _x_i1) = o#row_var _x_i1 in (o, (_x, _x_i1))
+      
+    method replace_rhs : replace_rhs -> ('self_type * replace_rhs) =
+      function
+      | `Literal _x -> let (o, _x) = o#string _x in (o, (`Literal _x))
+      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
+      
+    method regexflag : regexflag -> ('self_type * regexflag) =
+      function
+      | `RegexList -> (o, `RegexList)
+      | `RegexNative -> (o, `RegexNative)
+      | `RegexGlobal -> (o, `RegexGlobal)
+      | `RegexReplace -> (o, `RegexReplace)
+      
+    method regex : regex -> ('self_type * regex) =
+      function
+      | `Range ((_x, _x_i1)) ->
+          let (o, _x) = o#char _x in
+          let (o, _x_i1) = o#char _x_i1 in (o, (`Range ((_x, _x_i1))))
+      | `Simply _x -> let (o, _x) = o#string _x in (o, (`Simply _x))
+      | `Quote _x -> let (o, _x) = o#regex _x in (o, (`Quote _x))
+      | `Any -> (o, `Any)
+      | `StartAnchor -> (o, `StartAnchor)
+      | `EndAnchor -> (o, `EndAnchor)
+      | `Seq _x ->
+          let (o, _x) = o#list (fun o -> o#regex) _x in (o, (`Seq _x))
+      | `Alternate ((_x, _x_i1)) ->
+          let (o, _x) = o#regex _x in
+          let (o, _x_i1) = o#regex _x_i1 in (o, (`Alternate ((_x, _x_i1))))
+      | `Group _x -> let (o, _x) = o#regex _x in (o, (`Group _x))
+      | `Repeat ((_x, _x_i1)) ->
+          let (o, _x) = o#unknown _x in
+          let (o, _x_i1) = o#regex _x_i1 in (o, (`Repeat ((_x, _x_i1))))
+      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
+      | `Replace ((_x, _x_i1)) ->
+          let (o, _x) = o#regex _x in
+          let (o, _x_i1) = o#replace_rhs _x_i1
+          in (o, (`Replace ((_x, _x_i1))))
+      
+    method quantifier : quantifier -> ('self_type * quantifier) =
+      function
+      | `TypeVar _x -> let (o, _x) = o#name _x in (o, (`TypeVar _x))
+      | `RigidTypeVar _x ->
+          let (o, _x) = o#name _x in (o, (`RigidTypeVar _x))
+      | `RowVar _x -> let (o, _x) = o#name _x in (o, (`RowVar _x))
+      | `RigidRowVar _x -> let (o, _x) = o#name _x in (o, (`RigidRowVar _x))
+      
+    method program : program -> ('self_type * program) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#binding) _x in
+        let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
+        in (o, (_x, _x_i1))
+      
+    method position : position -> ('self_type * position) =
+      fun (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#unknown _x in
+        let (o, _x_i1) = o#unknown _x_i1 in
+        let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
+        in (o, (_x, _x_i1, _x_i2))
+      
+    method phrasenode : phrasenode -> ('self_type * phrasenode) =
+      function
+      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
+      | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
+      | `FunLit _x -> let (o, _x) = o#funlit _x in (o, (`FunLit _x))
+      | `Spawn _x -> let (o, _x) = o#phrase _x in (o, (`Spawn _x))
+      | `SpawnWait _x -> let (o, _x) = o#phrase _x in (o, (`SpawnWait _x))
+      | `ListLit _x ->
+          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`ListLit _x))
+      | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#list (fun o -> o#iterpatt) _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
+          let (o, _x_i3) = o#option (fun o -> o#phrase) _x_i3
+          in (o, (`Iteration ((_x, _x_i1, _x_i2, _x_i3))))
+      | `Escape ((_x, _x_i1)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Escape ((_x, _x_i1))))
+      | `Section _x -> let (o, _x) = o#sec _x in (o, (`Section _x))
+      | `Conditional ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#phrase _x_i2
+          in (o, (`Conditional ((_x, _x_i1, _x_i2))))
+      | `Block ((_x, _x_i1)) ->
+          let (o, _x) = o#list (fun o -> o#binding) _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Block ((_x, _x_i1))))
+      | `InfixAppl ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#binop _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#phrase _x_i2
+          in (o, (`InfixAppl ((_x, _x_i1, _x_i2))))
+      | `Regex _x -> let (o, _x) = o#regex _x in (o, (`Regex _x))
+      | `UnaryAppl ((_x, _x_i1)) ->
+          let (o, _x) = o#unary_op _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`UnaryAppl ((_x, _x_i1))))
+      | `FnAppl ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
+          in (o, (`FnAppl ((_x, _x_i1))))
+      | `TupleLit _x ->
+          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`TupleLit _x))
+      | `RecordLit ((_x, _x_i1)) ->
+          let (o, _x) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x in
+          let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
+          in (o, (`RecordLit ((_x, _x_i1))))
+      | `Projection ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#name _x_i1 in (o, (`Projection ((_x, _x_i1))))
+      | `With ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x_i1
+          in (o, (`With ((_x, _x_i1))))
+      | `TypeAnnotation ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#datatype' _x_i1
+          in (o, (`TypeAnnotation ((_x, _x_i1))))
+      | `Upcast ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#datatype' _x_i1 in
+          let (o, _x_i2) = o#datatype' _x_i2
+          in (o, (`Upcast ((_x, _x_i1, _x_i2))))
+      | `ConstructorLit ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
+          in (o, (`ConstructorLit ((_x, _x_i1))))
+      | `Switch ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#pattern _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
+          in (o, (`Switch ((_x, _x_i1, _x_i2))))
+      | `Receive ((_x, _x_i1)) ->
+          let (o, _x) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#pattern _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x in
+          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+          in (o, (`Receive ((_x, _x_i1))))
+      | `DatabaseLit ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) =
+            (fun (_x, _x_i1) ->
+               let (o, _x) = o#option (fun o -> o#phrase) _x in
+               let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
+               in (o, (_x, _x_i1)))
+              _x_i1
+          in (o, (`DatabaseLit ((_x, _x_i1))))
+      | `TableLit ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) =
+            (fun (_x, _x_i1) ->
+               let (o, _x) = o#datatype _x in
+               let (o, _x_i1) =
+                 o#option
+                   (fun o (_x, _x_i1) ->
+                      let (o, _x) = o#unknown _x in
+                      let (o, _x_i1) = o#unknown _x_i1 in (o, (_x, _x_i1)))
+                   _x_i1
+               in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#list (fun o -> o#fieldconstraint) _x_i1
+                 in (o, (_x, _x_i1)))
+              _x_i2 in
+          let (o, _x_i3) = o#phrase _x_i3
+          in (o, (`TableLit ((_x, _x_i1, _x_i2, _x_i3))))
+      | `DBDelete ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
+          in (o, (`DBDelete ((_x, _x_i1, _x_i2))))
+      | `DBInsert ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
+          in (o, (`DBInsert ((_x, _x_i1, _x_i2))))
+      | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
+          let (o, _x_i3) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x_i3
+          in (o, (`DBUpdate ((_x, _x_i1, _x_i2, _x_i3))))
+      | `Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
+                 in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
+          let (o, _x_i3) = o#list (fun o -> o#phrase) _x_i3
+          in (o, (`Xml ((_x, _x_i1, _x_i2, _x_i3))))
+      | `TextNode _x -> let (o, _x) = o#string _x in (o, (`TextNode _x))
+      | `Formlet ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Formlet ((_x, _x_i1))))
+      | `Page _x -> let (o, _x) = o#phrase _x in (o, (`Page _x))
+      | `FormletPlacement ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#phrase _x_i2
+          in (o, (`FormletPlacement ((_x, _x_i1, _x_i2))))
+      | `PagePlacement _x ->
+          let (o, _x) = o#phrase _x in (o, (`PagePlacement _x))
+      | `FormBinding ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#pattern _x_i1
+          in (o, (`FormBinding ((_x, _x_i1))))
+      
+    method phrase : phrase -> ('self_type * phrase) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#phrasenode _x in
+        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      
+    method patternnode : patternnode -> ('self_type * patternnode) =
+      function
+      | `Any -> (o, `Any)
+      | `Nil -> (o, `Nil)
+      | `Cons ((_x, _x_i1)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (`Cons ((_x, _x_i1))))
+      | `List _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`List _x))
+      | `Variant ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
+          in (o, (`Variant ((_x, _x_i1))))
+      | `Negative _x ->
+          let (o, _x) = o#list (fun o -> o#name) _x in (o, (`Negative _x))
+      | `Record ((_x, _x_i1)) ->
+          let (o, _x) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#pattern _x_i1 in (o, (_x, _x_i1)))
+              _x in
+          let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
+          in (o, (`Record ((_x, _x_i1))))
+      | `Tuple _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`Tuple _x))
+      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
+      | `Variable _x -> let (o, _x) = o#binder _x in (o, (`Variable _x))
+      | `As ((_x, _x_i1)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (`As ((_x, _x_i1))))
+      | `HasType ((_x, _x_i1)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#datatype' _x_i1 in (o, (`HasType ((_x, _x_i1))))
+      
+    method pattern : pattern -> ('self_type * pattern) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#patternnode _x in
+        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      
+    method operator : operator -> ('self_type * operator) =
+      function
+      | (#unary_op as x) -> (o#unary_op x :> 'self_type * operator)
+      | (#binop as x) -> (o#binop x :> 'self_type * operator)
+      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
+      
+    method num : num -> ('self_type * num) = o#unknown
+      
+    method name : name -> ('self_type * name) = o#string
+      
+    method logical_binop : logical_binop -> ('self_type * logical_binop) =
+      function | `And -> (o, `And) | `Or -> (o, `Or)
+      
+    method location : location -> ('self_type * location) = o#unknown
+      
+    method iterpatt : iterpatt -> ('self_type * iterpatt) =
+      function
+      | `List ((_x, _x_i1)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`List ((_x, _x_i1))))
+      | `Table ((_x, _x_i1)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Table ((_x, _x_i1))))
+      
+    method funlit : funlit -> ('self_type * funlit) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+        let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
+      
+    method fieldspec : fieldspec -> ('self_type * fieldspec) =
+      function
+      | `Present _x -> let (o, _x) = o#datatype _x in (o, (`Present _x))
+      | `Absent -> (o, `Absent)
+      
+    method fieldconstraint :
+      fieldconstraint -> ('self_type * fieldconstraint) =
+      function | `Readonly -> (o, `Readonly) | `Identity -> (o, `Identity)
+      
+    method directive : directive -> ('self_type * directive) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#string _x in
+        let (o, _x_i1) = o#list (fun o -> o#string) _x_i1 in (o, (_x, _x_i1))
+      
+    method datatype' : datatype' -> ('self_type * datatype') =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#datatype _x in
+        let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+        in (o, (_x, _x_i1))
+      
+    method datatype : datatype -> ('self_type * datatype) =
+      function
+      | TypeVar _x -> let (o, _x) = o#name _x in (o, (TypeVar _x))
+      | RigidTypeVar _x -> let (o, _x) = o#name _x in (o, (RigidTypeVar _x))
+      | FunctionType (_x, _x_i1, _x_i2) ->
+          let (o, _x) = o#list (fun o -> o#datatype) _x in
+          let (o, _x_i1) = o#datatype _x_i1 in
+          let (o, _x_i2) = o#datatype _x_i2
+          in (o, (FunctionType (_x, _x_i1, _x_i2)))
+      | MuType (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (MuType (_x, _x_i1)))
+      | UnitType -> (o, UnitType)
+      | TupleType _x ->
+          let (o, _x) = o#list (fun o -> o#datatype) _x
+          in (o, (TupleType _x))
+      | RecordType _x -> let (o, _x) = o#row _x in (o, (RecordType _x))
+      | VariantType _x -> let (o, _x) = o#row _x in (o, (VariantType _x))
+      | TableType (_x, _x_i1) ->
+          let (o, _x) = o#datatype _x in
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (TableType (_x, _x_i1)))
+      | ListType _x -> let (o, _x) = o#datatype _x in (o, (ListType _x))
+      | TypeApplication _x ->
+          let (o, _x) =
+            (fun (_x, _x_i1) ->
+               let (o, _x) = o#string _x in
+               let (o, _x_i1) = o#list (fun o -> o#datatype) _x_i1
+               in (o, (_x, _x_i1)))
+              _x
+          in (o, (TypeApplication _x))
+      | PrimitiveType _x ->
+          let (o, _x) = o#unknown _x in (o, (PrimitiveType _x))
+      | DBType -> (o, DBType)
+      
+    method constant : constant -> ('self_type * constant) =
+      function
+      | `Float _x -> let (o, _x) = o#float _x in (o, (`Float _x))
+      | `Int _x -> let (o, _x) = o#num _x in (o, (`Int _x))
+      | `String _x -> let (o, _x) = o#string _x in (o, (`String _x))
+      | `Bool _x -> let (o, _x) = o#bool _x in (o, (`Bool _x))
+      | `Char _x -> let (o, _x) = o#char _x in (o, (`Char _x))
+      
+    method binop : binop -> ('self_type * binop) =
+      function
+      | `Minus -> (o, `Minus)
+      | `FloatMinus -> (o, `FloatMinus)
+      | `RegexMatch _x ->
+          let (o, _x) = o#list (fun o -> o#regexflag) _x
+          in (o, (`RegexMatch _x))
+      | (#logical_binop as x) -> (o#logical_binop x :> 'self_type * binop)
+      | `Cons -> (o, `Cons)
+      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+      | `App -> (o, `App)
+      
+    method bindingnode : bindingnode -> ('self_type * bindingnode) =
+      function
+      | `Val ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#pattern _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#location _x_i2 in
+          let (o, _x_i3) = o#option (fun o -> o#datatype') _x_i3
+          in (o, (`Val ((_x, _x_i1, _x_i2, _x_i3))))
+      | `Fun ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let (o, _x) = o#binder _x in
+          let (o, _x_i1) = o#funlit _x_i1 in
+          let (o, _x_i2) = o#location _x_i2 in
+          let (o, _x_i3) = o#option (fun o -> o#datatype') _x_i3
+          in (o, (`Fun ((_x, _x_i1, _x_i2, _x_i3))))
+      | `Funs _x ->
+          let (o, _x) =
+            o#list
+              (fun o (_x, _x_i1, _x_i2, _x_i3) ->
+                 let (o, _x) = o#binder _x in
+                 let (o, _x_i1) = o#funlit _x_i1 in
+                 let (o, _x_i2) = o#location _x_i2 in
+                 let (o, _x_i3) = o#option (fun o -> o#datatype') _x_i3
+                 in (o, (_x, _x_i1, _x_i2, _x_i3)))
+              _x
+          in (o, (`Funs _x))
+      | `Foreign ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#name _x_i1 in
+          let (o, _x_i2) = o#datatype' _x_i2
+          in (o, (`Foreign ((_x, _x_i1, _x_i2))))
+      | `Include _x -> let (o, _x) = o#string _x in (o, (`Include _x))
+      | `Type ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#name _x in
+                 let (o, _x_i1) = o#option (fun o -> o#int) _x_i1
+                 in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) = o#datatype' _x_i2
+          in (o, (`Type ((_x, _x_i1, _x_i2))))
+      | `Infix -> (o, `Infix)
+      | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
+      
+    method binding : binding -> ('self_type * binding) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#bindingnode _x in
+        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      
+    method binder : binder -> ('self_type * binder) =
+      fun (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
+        let (o, _x_i2) = o#position _x_i2 in (o, (_x, _x_i1, _x_i2))
+      
+    method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
+      
+  end
+ 
+ 

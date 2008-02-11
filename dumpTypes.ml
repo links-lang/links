@@ -8,8 +8,8 @@
   anyway as the type checker ensures the program is well-typed and in
   particular that there are no free variables. 
 *)
-let program : Types.typing_environment -> string -> (string * Types.datatype * Sugartypes.position) list =
-  fun ((env, _) as tyenv) filename ->
+let program : Types.typing_environment -> Types.alias_environment -> string -> (string * Types.datatype * Sugartypes.position) list =
+  fun tyenv aliases filename ->
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 
@@ -43,7 +43,7 @@ let program : Types.typing_environment -> string -> (string * Types.datatype * S
     end in
     let program =
       let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
-      let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+      let program, _, _ = Frontend.Pipeline.program tyenv aliases pos_context sugar in
         program
     in
       (dumper#program program)#get_vars()    

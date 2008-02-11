@@ -20,26 +20,14 @@ val mistyped_application : Syntax.position ->
   Types.datatype option ->
   'a
                
-val mistyped_union : Syntax.position ->
-  Syntax.expression ->
-  Types.datatype ->
-  Syntax.expression ->
-  Types.datatype ->
-  'a
-
 val mistype : Syntax.position ->
   Syntax.expression * Types.datatype ->
   Types.datatype ->
   'a              
 
-val nested_def : Syntax.position -> string -> 'a
-  
-  
 val letrec_nonfunction : Syntax.position -> 
   (Syntax.expression * Types.datatype) ->
   'a
-
-val invalid_name : Syntax.position -> string -> string -> 'a
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string

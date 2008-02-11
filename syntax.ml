@@ -98,7 +98,6 @@ type 'data expression' =
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
-  | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.datatype * 'a)
   | Module of ((* pathname: *)string option * 
       (* definitions in the module: *) 'a definition' list option * 
@@ -185,7 +184,6 @@ let rec visit_def (unit : 'a) (visitor : _ expression' -> 'a)
     | Module(_, Some defs, _) ->
         combiner (map (visit_def unit visitor combiner) defs)
     | Module(_, None, _) 
-    | Alias _
     | Alien _ -> unit
 
 let is_symbolic_ident name = 
@@ -271,8 +269,6 @@ let rec show_definition t : 'a definition' -> string = function
       (if is_symbolic_ident variable then "(" ^ variable ^ ")" else variable) 
       ^ "=" ^ show t value
       ^ "[" ^ Show_location.show location ^ "]; " ^ t data
-  | Alias (typename, _, datatype, data) ->
-      "typename "^typename^"(TODO:update pretty-printer to display quantifiers) = "^ Types.string_of_datatype datatype ^ t data
   | Alien (s1, s2, k, data) -> Printf.sprintf "alien %s %s : %s;" s1 s2 (Types.string_of_datatype k) ^ t data
   | Module (Some path, None, data) -> "include \"" ^ path ^ "\";" ^ t data
   | Module (Some path, Some defs, data) -> "module { " ^ mapstrcat ";\n" (show_definition t) defs ^ "} from \"" ^ path ^ "\";" ^ t data
@@ -366,7 +362,6 @@ let rec reduce_definition visitor combine combine_def def =
                 | Module(_, Some defs, _) ->
                     map (reduce_definition visitor combine
                            combine_def) defs
-                | Alias _
                 | Alien _ -> [])
 
 let reduce_program visitor combine combine_def combine_program (Program (defs, body)) =
@@ -510,7 +505,6 @@ let free_bound_type_vars_def def =
   let fbtv = Types.free_bound_type_vars in
     match def with
       | Define (_, e, _, _) -> free_bound_type_vars e
-      | Alias (_, vars, t, _) -> S.union (S.from_list vars) (fbtv t)
       | Alien (_, _, t, _) -> fbtv t
 
 let free_bound_type_vars_program (Program (defs, body))=
@@ -550,7 +544,6 @@ let expression_data : ('a expression' -> 'a) = function
   | Wrong data -> data
 let definition_data : ('a definition' -> 'a) = function 
   | Define (_, _, _, data) -> data
-  | Alias (_, _, _, data) -> data
   | Alien (_,_,_,data) -> data
 let program_data : ('a program' -> 'a) =
   fun (Program (_, body)) -> expression_data body
@@ -591,7 +584,6 @@ let set_data : ('b -> 'a expression' -> 'b expression') =
 let set_definition_data : ('b -> 'a definition' -> 'b definition') =
   fun data -> function
     | Define (a, b, c, _) ->  Define (a, b, c, data)
-    | Alias (a, b, c, _) -> Alias (a, b, c, data)
     | Alien (a, b, c,_) -> Alien (a, b, c,data)
 let set_program_data : ('b -> 'a program' -> 'b program') =
   fun data (Program (ds, body)) -> Program (ds, set_data data body)
@@ -653,7 +645,7 @@ let rec transform_def transformer def =
         Define (name, transformer expr, loc_annotation, d)
     | Module(path, defs, d) -> 
         Module (path, opt_map(map (transform_def transformer)) defs, d)
-    | Alias _ | Alien _ -> def
+    | Alien _ -> def
 
 let transform_program transformer (Program (defs, body)) =
   Program (List.map (transform_def transformer) defs,
@@ -764,7 +756,7 @@ let rec fully_labelized_def = function
   | Define(_, expr, _, _) -> fully_labelized_expr expr
   | Module(_, Some defs, _) -> for_all fully_labelized_def defs
   | Module(_, None, _) -> assert false
-  | Alien _ | Alias _ -> true (* ? *)
+  | Alien _ -> true (* ? *)
     
 let fully_labelized (Program(defs, expr)) =
   for_all identity (fully_labelized_expr expr :: map fully_labelized_def defs)
@@ -845,8 +837,6 @@ let definition_skeleton = function
   | Module(path, defs_option, d) ->
       Module(path, defs_option, d)
   | Alien(language, name, assumption, d) -> Alien(language, name, assumption, d)
-  | Alias(typename, quantifiers, datatype, d) -> 
-      Alias(typename, quantifiers, datatype, d)
 
 let program_skeleton =
   fun (ds, body) ->

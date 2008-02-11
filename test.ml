@@ -28,7 +28,7 @@ let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
 
 let parse_thingy s = 
   let sugar, pos_context = (Parse.parse_string Parse.program) s in
-  let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+  let program, _, _ = Frontend.Pipeline.program Library.typing_env Library.alias_env pos_context sugar in
     Sugar.desugar_program program
 
 let parse = attempt parse_thingy
@@ -53,7 +53,7 @@ let type_matches ~inferred ~expected =
          make_fresh_envs nonsense.
       *)
       let c = nfreevars inferred in
-        Inference.unify Library.alias_env (expected, inferred);
+        Inference.unify (expected, inferred);
         c = (nfreevars inferred)
     with _ -> false
 
@@ -69,7 +69,7 @@ let type_matches ~inferred ~expected =
      Instantiate.datatype (Types.make_rigid_envs r) r 
     in try
         let c = Types.free_type_vars r in
-        Inference.unify Library.alias_env (l, r);
+        Inference.unify (l, r);
           Types.TypeVarSet.equal c (Types.free_type_vars r);
     with _ -> false
   in check_rhs_unchanged inferred expected

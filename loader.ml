@@ -33,7 +33,7 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
          raise (Sys_error "Precompiled source file out of date."))
     with (Sys_error _| Unix.Unix_error _) ->
       let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-      let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+      let program, _, _ = Frontend.Pipeline.program Library.typing_env Library.alias_env pos_context sugar in
       let program = Sugar.desugar_program program in
       let env, program = measure "type" (Inference.type_program Library.typing_env) program in
       let program = measure "optimise" Optimiser.optimise_program (env, program) in

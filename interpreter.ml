@@ -483,8 +483,6 @@ and interpret_definition :
       | Syntax.Alien _ ->
           apply_cont globals cont (`Record [])
 
-      | Syntax.Alias _ -> apply_cont globals cont (`Record [])
-
 and interpret : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
   let eval = interpret globals locals in

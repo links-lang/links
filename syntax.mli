@@ -57,7 +57,6 @@ type 'a expression' =
 
 type 'a definition' =
   | Define of (string * 'a expression' * location * 'a)
-  | Alias of (string * int list * Types.datatype * 'a)
   | Alien of (string * string * Types.datatype * 'a)
   | Module of (string option * 'a definition' list option * 'a)
 

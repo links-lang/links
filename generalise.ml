@@ -37,6 +37,7 @@ let rec get_quantifiers : TypeVarSet.t -> datatype -> quantifier list =
       | `Record row
       | `Variant row -> get_row_quantifiers bound_vars row 
       | `Table (r, w) -> unduplicate (=) (get_quantifiers bound_vars r @ get_quantifiers bound_vars w)
+      | `Alias (_, t) -> get_quantifiers bound_vars t
       | `ForAll (qs, t) -> 
           get_quantifiers (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
       | `Application (_, args) ->

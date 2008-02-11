@@ -43,7 +43,7 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude tyenv filename = 
   let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-  let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+  let program, _, _ = Frontend.Pipeline.program tyenv Library.alias_env pos_context sugar in
   let program = Sugar.desugar_program program in
   let tenv, program = measure "type" (Inference.type_program tyenv) program in
   let tenv, program = 
@@ -87,7 +87,6 @@ let stubify_client_funcs globals (Syntax.Program (defs, _) as program) : Result.
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
-    | Syntax.Alias _ -> true
   in 
   let server_defs, client_defs = List.partition is_server_fun defs in
   let client_env =
@@ -210,7 +209,7 @@ let perform_request
         assert(Syntax.expr_closed_wrt expr 
                  (StringSet.union
                     (StringSet.from_list (dom globals @ dom env))
-                    (Env.String.domain (fst Library.typing_env))));
+                    (Env.String.domain (Library.typing_env.Types.environment))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env

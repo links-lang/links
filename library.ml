@@ -6,6 +6,23 @@ open Result
 open Types
 open Utility
 
+(* Alias environment *)
+module Env = Env.String
+
+let alias_env : Types.alias_environment =
+  List.fold_right
+    (fun (name, args, datatype) env ->
+       Env.bind env (name, (args, datatype)))
+    [
+      "String"  , [], `Application ("List", [`Primitive `Char]);
+      "Xml"     , [], `Application ("List", [`Primitive `XmlItem]);
+      "Regex"   , [], DesugarDatatypes.read Linksregex.Regex.datatype;
+    ]
+    Env.empty
+
+let datatype = DesugarDatatypes.read ->- ExpandAliases.expand alias_env
+
+
 (* Data structures/utilities for proc mgmt *)
 
 type pid = int
@@ -94,8 +111,6 @@ type primitive =  [
 type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
-
-let datatype = DesugarDatatypes.read
 
 let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
@@ -1104,7 +1119,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "dumpTypes",
   (`Server (p1 (fun code ->
                   try
-                    let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+                    let ts = DumpTypes.program (val_of (!prelude_env)) alias_env (unbox_string code) in
                       
                     let line ({Lexing.pos_lnum=l}, _, _) = l in
                     let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in
@@ -1174,26 +1189,10 @@ let apply_pfun name args =
     | Some (`PFun p) -> p args
     | None -> assert false
 
-module Env = Env.String
-        
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
-and alias_env : Types.alias_environment =
-  List.fold_right
-    (fun (name, datatype) env ->
-       Env.bind env (name, datatype))
-    [
-      "DomNode" , `Primitive `Abstract;
-      "Event"   , `Primitive `Abstract;
-      "List"    , `ForAll ([`RigidTypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
-      "String"  , `Application ("List", [`Primitive `Char]);
-      "Xml"     , `Application ("List", [`Primitive `XmlItem]);
-      "Mailbox" , `ForAll ([`RigidTypeVar (Types.fresh_raw_variable ())], `Primitive `Abstract);
-      "Regex"   , datatype Linksregex.Regex.datatype;
-    ]
-    Env.empty
 
-let typing_env = (type_env, alias_env)
+let typing_env = {Types.environment = type_env}
 
 let primitive_names = StringSet.elements (Env.domain type_env)
 
