@@ -6,10 +6,6 @@ open Types
 open Syntax
 open Utility
 
-(** Set this to [true] to print the body and environment of a
-    function. When [false], functions are simply printed as "fun" *)
-let printing_functions = Settings.add_bool ("printing_functions", false, `User)
-
 exception Runtime_error of string
 
 class type otherfield = 
@@ -340,7 +336,7 @@ and string_of_result : result -> string = function
   | `Abs result -> "abs " ^ string_of_result result
     (* Choose from fancy or simple printing of functions: *)
   | `RecFunction(defs, env, name) -> 
-      if Settings.get_value(printing_functions) then
+      if Settings.get_value(Basicsettings.printing_functions) then
         "{ " ^ (mapstrcat " "
                   (fun (name, Syntax.Abstr(formals, body, _)) ->
                      "fun (" ^ String.concat "," formals ^ ") {" ^

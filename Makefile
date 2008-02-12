@@ -95,7 +95,6 @@ SOURCES = $(OPC)                		\
           sugar.mli sugar.ml    		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
-          value.mli value.ml                    \
           $(DB_CODE)            		\
           database.mli database.ml 		\
           inference.mli inference.ml 		\
@@ -106,6 +105,7 @@ SOURCES = $(OPC)                		\
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
           ir.mli ir.ml                          \
+          value.mli value.ml                    \
           compileir.ml                          \
           loader.ml                             \
           irtojs.mli irtojs.ml                  \

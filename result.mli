@@ -27,6 +27,10 @@ class virtual database :
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
   end
 
+module Eq_database : Eq.Eq with type a = database
+module Typeable_database : Typeable.Typeable with type a = database
+module Show_database : Show.Show with type a = database
+
 type db_constructor = string -> database * string
 
 val register_driver : string * db_constructor -> unit
@@ -56,6 +60,8 @@ type xmlitem =
     | Attr of (string * string) 
     | Node of (string * xml)
 and xml = xmlitem list
+  deriving (Show)
+
 type table = (database * string) * string * Types.row
 type primitive_value =
     [ `Bool of bool

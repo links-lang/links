@@ -100,6 +100,15 @@ let rec is_atom =
 
 type program = computation
 
+let string_of_var = string_of_int
+
+let string_of_value _ = "[VALUE]"
+let string_of_tail_computation _ = "[TAIL_COMPUTATION]"
+let string_of_binding _ = "[BINDING]"
+let string_of_special _ = "[SPECIAL]"
+let string_of_computation _ = "[COMPUTATION]"
+let string_of_program _ = "[PROGRAM]"
+
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t

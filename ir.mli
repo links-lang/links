@@ -5,6 +5,8 @@ type scope = [ `Local | `Global ]
   deriving (Show)
 (* term variables *)
 type var = int
+  deriving (Show)
+
 type var_info = Types.datatype * string * scope
 type binder = var * var_info
 
@@ -75,6 +77,15 @@ and computation = binding list * tail_computation
 type program = computation
 
 val is_atom : value -> bool
+
+val string_of_var : var -> string
+
+val string_of_value : value -> string
+val string_of_tail_computation : tail_computation -> string
+val string_of_binding : binding -> string
+val string_of_special : special -> string
+val string_of_computation : computation -> string
+val string_of_program : program -> string
 
 module type TRANSFORM =
 sig
