@@ -43,7 +43,7 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude tyenv filename = 
   let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-  let program, _, _ = Frontend.Pipeline.program tyenv Library.alias_env pos_context sugar in
+  let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
   let program = Sugar.desugar_program program in
   let tenv, program = measure "type" (Inference.type_program tyenv) program in
   let tenv, program = 
@@ -206,10 +206,10 @@ let perform_request
 
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
-        assert(Syntax.expr_closed_wrt expr 
-                 (StringSet.union
-                    (StringSet.from_list (dom globals @ dom env))
-                    (Env.String.domain (Library.typing_env.Types.environment))));
+        assert (Syntax.expr_closed_wrt expr 
+                  (StringSet.union
+                     (StringSet.from_list (dom globals @ dom env))
+                     (Env.String.domain (Library.typing_env.Types.var_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env

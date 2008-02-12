@@ -24,10 +24,28 @@ let rec expand_aliases
     env t =
   let rec expand rec_envs = expand_aliases rec_envs env
   and expand_row rec_vars (fsm, rv) = 
+    let fsm', rv = 
+      match Unionfind.find rv with
+        | `Closed
+        | `Flexible _
+        | `Rigid _    -> fsm, rv
+        | `Recursive (var, body) ->
+            begin match Env.Int.find rec_rows var with
+              | Some t -> fsm, t
+              | None   -> 
+                  let point = Unionfind.fresh (`Recursive (var, (StringMap.empty,
+                                                                 Unionfind.fresh (`Flexible var)))) in
+                  let envs  = (rec_tys, Env.Int.bind rec_rows (var, point)) in
+                  let body' = expand_row envs body in
+                  let ()    = Unionfind.change point (`Recursive (var, body')) in
+                    fsm, point
+            end
+        | `Body t -> expand_row rec_envs t
+    in
     let f = function
       | `Present t -> `Present (expand rec_vars t)
       | `Absent    -> `Absent in
-      (StringMap.map f fsm, rv)
+      (StringMap.map f fsm', rv)
   in
     match t with
       | `Not_typed
@@ -40,7 +58,6 @@ let rec expand_aliases
       | `Application (s, ds) when SEnv.has env s -> 
           let ds = List.map (expand rec_envs) ds in
           `Alias ((s, ds), instantiate s ds env)
-(*            instantiate s ds env*)
       | `Application (s, ds) -> 
           `Application (s, List.map (expand rec_envs) ds)
       | `ForAll (qs, dt) -> `ForAll (qs, expand rec_envs dt)
@@ -61,15 +78,7 @@ let rec expand_aliases
             | `Body t -> expand rec_envs t
 
 let expand_aliases env t = 
-  prerr_endline ("=> expand_aliases : " ^ Types.Show_datatype.show t);
-  flush stderr;
-  let r = expand_aliases (Env.Int.empty, Env.Int.empty) env t in
-    prerr_endline ("<= expand_aliases : " ^ Types.Show_datatype.show r);
-    flush stderr;
-    
-    r
-
-
+  expand_aliases (Env.Int.empty, Env.Int.empty) env t
 
 class type alias_expander =
 object

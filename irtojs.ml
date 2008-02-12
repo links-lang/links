@@ -979,11 +979,12 @@ let preprocess_program global_names program =
 let make_initial_env tenv =
   let dt = DesugarDatatypes.read in
     Compileir.make_initial_env
-      {Types.environment = 
+      {Types.var_env = 
           (Env.String.bind
              (Env.String.bind tenv
                 ("map", dt "((a) -> b, [a]) -> [b]"))
-             ("stringifyB64", dt "(a) -> String"))}
+             ("stringifyB64", dt "(a) -> String"));
+      Types.tycon_env = Env.String.empty}
 
 let compile_ir ?(elim=false) tyenv global_names program =
   let program = preprocess_program global_names program in
@@ -1002,7 +1003,7 @@ let compile_ir ?(elim=false) tyenv global_names program =
     e, env'
 
 let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) as program) = 
-  let e, env = compile_ir ~elim:true tyenv.Types.environment global_names program in
+  let e, env = compile_ir ~elim:true tyenv.Types.var_env global_names program in
   let _, code = generate_program env e in
   let code = optimise(wrap_with_server_stubs code) in
     (make_boiler_page
@@ -1016,4 +1017,4 @@ let generate_program_defs tyenv global_names defs root_names =
     [show (code Nothing)]
 
 let generate_program_defs global_names defs root_names =
-  generate_program_defs Library.typing_env.Types.environment global_names defs root_names
+  generate_program_defs Library.typing_env.Types.var_env global_names defs root_names

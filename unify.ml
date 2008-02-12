@@ -3,7 +3,7 @@ open Types
 open Typevarcheck
 
 (* debug flags *)
-let show_unification = Settings.add_bool("show_unification", true, `User)
+let show_unification = Settings.add_bool("show_unification", false, `User)
 let show_row_unification = Settings.add_bool("show_row_unification", false, `User)
 let show_recursion = Instantiate.show_recursion
 
@@ -159,15 +159,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
-          | `Alias (_, t1), `Alias (_, t2) -> 
-              prerr_endline "[1]"; flush stderr;
-              unify' rec_env (t1, t2)
-          | `Alias (_, t1), t2 -> 
-              prerr_endline "[2]"; flush stderr;
-              unify' rec_env (t1, t2)
-          | t1, `Alias (_, t2) -> 
-              prerr_endline "[3]"; flush stderr;
-              unify' rec_env (t1, t2)
+          | `Alias (_, t1), t2 
+          | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
           | `Primitive x, `Primitive y when x = y -> ()
           | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->

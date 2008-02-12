@@ -66,7 +66,8 @@ and meta_row_var = (row meta_row_var_basis) point
 
 type environment        = datatype Env.String.t
  and alias_environment  = (int list * datatype) Env.String.t
- and typing_environment = { environment : environment }
+ and typing_environment = { var_env   : environment ;
+                            tycon_env : alias_environment }
     deriving (Show)
 
 val concrete_type : datatype -> datatype

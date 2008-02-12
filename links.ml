@@ -52,7 +52,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, {Types.environment = typeenv}) as envs) _ ->
+    ((fun ((_, {Types.var_env = typeenv}) as envs) _ ->
         StringSet.iter (fun k ->
                 Printf.fprintf stderr " %-16s : %s\n"
                   k (Types.string_of_datatype (Env.String.lookup typeenv k)))
@@ -77,7 +77,7 @@ let rec directives
                 (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
-              let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env Library.alias_env pos_context sugar in
+              let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
               let defs = Sugar.desugar_definitions bindings in
               let expr = opt_map Sugar.desugar_expression expr in
               let program = Syntax.Program (defs, from_option (Syntax.unit_expression (`U Syntax.dummy_position)) expr) in
@@ -89,7 +89,7 @@ let rec directives
      "load in a Links source file, replacing the current environment");
 
     "withtype",
-    ((fun (_, {Types.environment = tenv} as envs) args ->
+    ((fun (_, {Types.var_env = tenv} as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read (String.concat " " args) in
@@ -185,7 +185,7 @@ let interact envs =
 
       let parse_and_desugar input = 
         let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
-        let sentence, _, _, _ = Frontend.Pipeline.interactive tyenv Library.alias_env pos_context sugar in
+        let sentence, _, _ = Frontend.Pipeline.interactive tyenv pos_context sugar in
         let sentence' = match sentence with
           | `Definitions defs -> `Definitions (Sugar.desugar_definitions defs)
           | `Expression e     -> `Expression (Sugar.desugar_expression e) 
@@ -202,7 +202,7 @@ let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar tyenv filename = 
     let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
-    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv Library.alias_env pos_context sugar in
+    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
     let program = Sugar.desugar_program program in
       program, (bindings, expr)
   in
@@ -214,7 +214,7 @@ let run_file prelude envs filename =
 let evaluate_string_in envs v =
   let parse_and_desugar tyenv s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
-    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv Library.alias_env pos_context sugar in
+    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
     let program = Sugar.desugar_program program in
       program, (bindings, expr)
   in
@@ -277,7 +277,7 @@ let main () =
       else max m (Types.TypeVarSet.max_elt set) in
     let max_prelude_tvar =
       List.fold_right max_or 
-        (Env.String.range (Env.String.map Types.free_bound_type_vars (prelude_types.Types.environment)))
+        (Env.String.range (Env.String.map Types.free_bound_type_vars (prelude_types.Types.var_env)))
         (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
       Types.bump_variable_counter max_prelude_tvar
   in

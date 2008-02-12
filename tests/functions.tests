@@ -53,15 +53,15 @@ exit : 1
 
 Typename [1]
 typename Foo = Int; fun f(x:Foo) {x} f(1)
-stdout : 1 : Foo
+stdout : 1 : Int
 
 Typename [2]
 typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
-stdout : (false, 1, "two") : Bar (Bool,Int,String)
+stdout : (false, 1, "two") : (Bool, Int, [Char])
 
 Typename [3]
 typename F(a) = (a) -> a; sig f : F(Int) fun f(x) {recv() + x} sig g : F(Int) fun g(x) {stringToInt(recv()) + x} g
-stdout : fun : (Int) -{String}-> Int
+stdout : fun : (Int) -{[Char]}-> Int
 
 Abs
 (abs fun (x) { x }) ('2',3,true)

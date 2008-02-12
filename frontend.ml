@@ -4,16 +4,14 @@ module Pipeline :
 sig
   val program :
     Types.typing_environment ->
-    Types.alias_environment ->
     SourceCode.source_code ->
     Sugartypes.program ->
     (Sugartypes.program * Types.datatype * Types.typing_environment)
   val interactive :
     Types.typing_environment ->
-    Types.alias_environment ->
     SourceCode.source_code ->
     Sugartypes.sentence ->
-    Sugartypes.sentence * Types.datatype * Types.typing_environment * Types.alias_environment
+    Sugartypes.sentence * Types.datatype * Types.typing_environment
 end
 =
 struct
@@ -26,32 +24,32 @@ struct
   let after_alias_expansion f (a, b) = (f a, b)
 
   let program =
-    fun tyenv aliases pos_context program ->
+    fun tyenv pos_context program ->
       ((ResolvePositions.resolve_positions pos_context)#program
       ->- DesugarLAttributes.desugar_lattributes#program
       ->- RefineBindings.refine_bindings#program
       ->- DesugarDatatypes.program
-      ->- (ExpandAliases.expand_aliases aliases)#program ->- snd
-      ->- TypeSugar.Check.program tyenv aliases
+      ->- (ExpandAliases.expand_aliases tyenv.Types.tycon_env)#program ->- snd
+      ->- TypeSugar.Check.program tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#program
       ->- after_typing DesugarFormlets.desugar_formlets#program
       ->- after_typing DesugarPages.desugar_pages#program)
       program
 
-  let expand_aliases env sentence =
-    let s, sentence = (ExpandAliases.expand_aliases env)#sentence sentence in
-      sentence, s#aliases
+  let expand_aliases (env : Types.typing_environment) sentence=
+    let s, sentence = (ExpandAliases.expand_aliases env.Types.tycon_env)#sentence sentence in
+       {env with Types.tycon_env = s#aliases}, sentence
 
   let interactive =
-    fun tyenv aliases pos_context ->
+    fun tyenv pos_context ->
       ((ResolvePositions.resolve_positions pos_context)#sentence
       ->- DesugarLAttributes.desugar_lattributes#sentence
       ->- RefineBindings.refine_bindings#sentence
       ->- DesugarDatatypes.sentence
-      ->- expand_aliases aliases
-      ->- after_alias_expansion (TypeSugar.Check.sentence tyenv aliases)
-      ->- after_alias_expansion (after_typing DesugarRegexes.desugar_regexes#sentence)
-      ->- after_alias_expansion (after_typing DesugarFormlets.desugar_formlets#sentence)
-      ->- after_alias_expansion (after_typing DesugarPages.desugar_pages#sentence)
-      ->- fun ((s, d, t), a) -> s, d, t, a)
+      ->- expand_aliases tyenv
+      ->- uncurry TypeSugar.Check.sentence
+      ->- after_typing DesugarRegexes.desugar_regexes#sentence
+      ->- after_typing DesugarFormlets.desugar_formlets#sentence
+      ->- after_typing DesugarPages.desugar_pages#sentence)
+
 end

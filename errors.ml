@@ -122,8 +122,7 @@ let rec format_exception = function
   | NoMainExpr -> "Syntax Error: No \"main\" expression at end of file"
   | ManyMainExprs _ -> "Syntax Error: More than one \"main\" expression at end of file"
   | Sys.Break -> "Caught interrupt"
-(*  | exn -> "*** Error: " ^ Printexc.to_string exn*)
-  | exn -> raise exn
+  | exn -> "*** Error: " ^ Printexc.to_string exn
 
 let rec format_exception_html = function
   | RichSyntaxError s ->

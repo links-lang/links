@@ -633,6 +633,24 @@ tab() ^ code (show_type lt) ^ nl() ^
 tab() ^ code (show_type rt))
 
 end
+
+type context = Types.typing_environment = {
+  (* mapping from variables to type schemes *)
+  var_env   : Types.environment ;
+
+  (* mapping from type alias names to the types they name.  We don't
+     use this to resolve aliases in the code, which is done before
+     type inference.  Instead, we use it to resolve references
+     introduced here to aliases defined in the prelude such as "Page"
+     and "Formlet".  (Perhaps we should just expand aliases here as
+     well.) *)
+  tycon_env : Types.alias_environment ;
+}
+
+let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
+let bind_tycon ctxt (v, t) = {ctxt with tycon_env = Env.bind ctxt.tycon_env (v,t)}
+
+
 let mailbox = "_MAILBOX_"
 let mailbox_type env = Utils.instantiate env mailbox
 
@@ -654,11 +672,11 @@ let type_section env (`Section s as s') = s', match s with
 
 let datatype aliases = Instantiate.typ -<- ExpandAliases.expand aliases -<- DesugarDatatypes.read
 
-let type_unary_op env aliases = 
-  let datatype = datatype aliases in function
+let type_unary_op env = 
+  let datatype = datatype env.tycon_env in function
   | `Minus      -> datatype "(Int) -> Int"
   | `FloatMinus -> datatype "(Float) -> Float"
-  | `Name n     -> Utils.instantiate env n
+  | `Name n     -> Utils.instantiate env.var_env n
   | `Abs        -> 
       let mb = Types.fresh_type_variable ()
       and mb2 = Types.fresh_type_variable ()
@@ -669,8 +687,8 @@ let type_unary_op env aliases =
                    ], mb2,
                    `Function (arg, mb, rv))
 
-let type_binary_op env aliases = 
-  let datatype = datatype aliases in function
+let type_binary_op ctxt = 
+  let datatype = datatype ctxt.tycon_env in function
   | `Minus        -> datatype "(Int,Int) -> Int"
   | `FloatMinus   -> datatype "(Float,Float) -> Float"
   | `RegexMatch flags -> 
@@ -686,8 +704,8 @@ let type_binary_op env aliases =
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool")
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
-  | `Cons         -> Utils.instantiate env "Cons"
-  | `Name "++"    -> Utils.instantiate env "Concat"
+  | `Cons         -> Utils.instantiate ctxt.var_env "Cons"
+  | `Name "++"    -> Utils.instantiate ctxt.var_env "Concat"
   | `Name ">"
   | `Name ">="
   | `Name "=="
@@ -697,8 +715,8 @@ let type_binary_op env aliases =
       let a = Types.fresh_type_variable ()
       and mb = Types.fresh_type_variable () in
         `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool);
-  | `Name "!"     -> Utils.instantiate env "send"
-  | `Name n       -> Utils.instantiate env n
+  | `Name "!"     -> Utils.instantiate ctxt.var_env "send"
+  | `Name n       -> Utils.instantiate ctxt.var_env n
   | `App          -> 
       let tup = `Record (Types.make_empty_open_row ())
       and mb = Types.fresh_type_variable ()
@@ -851,19 +869,6 @@ let unify ~pos ~(handle:Errors.griper) ((_,ltype as t1), (_,rtype as t2)) =
   try
     Utils.unify (ltype, rtype)
   with Unify.Failure error -> handle ~pos ~t1 ~t2 ~error
-
-type context = {
-  (* mapping from variables to type schemes and from typenames to types *)
-  tenv    : Types.typing_environment;
-
-  (* mapping from type alias names to the types they name.  We don't
-     use this to resolve aliases in the code, which is done before
-     type inference.  Instead, we use it to resolve references
-     introduced here to aliases defined in the prelude such as "Page"
-     and "Formlet".  (Perhaps we should just expand aliases here as
-     well.) *)
-  aliases : Types.alias_environment;
-}
 
 let lookup_pos =
   function
@@ -1054,13 +1059,11 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
   | _ -> Env.empty
           
 let rec type_check : context -> phrase -> phrase * Types.datatype = 
-  fun ({tenv = {Types.environment = env}} as context) (expr, pos) ->
-    prerr_endline ("type checking " ^ Show_phrasenode.show expr);
-    flush stderr;
+  fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
     let unify (l, r) = unify ~pos:(lookup_pos pos) (l, r)
-    and (++) {Types.environment = env} env' = {Types.environment = Env.extend env env'} in
+    and (++) env env' = {env with var_env = Env.extend env.var_env env'} in
     let typ (_,t) : Types.datatype = t 
     and erase (p, _) = p
     and erase_pat (p, _, _) = p
@@ -1098,7 +1101,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
       let binders = 
         List.fold_right
           (fun (pat, body) binders ->
-             let body = type_check {context with tenv = context.tenv ++ pattern_env pat} body in
+             let body = type_check (context ++ pattern_env pat) body in
              let () = unify ~handle:Errors.switch_branches
                (pos_and_typ body, no_pos bt)
              in
@@ -1109,8 +1112,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
     let e, t =
       match (expr : phrasenode) with
-        | `Var v            -> `Var v, Utils.instantiate env v
-        | `Section _ as s   -> type_section env s
+        | `Var v            -> `Var v, Utils.instantiate context.var_env v
+        | `Section _ as s   -> type_section context.var_env s
 
         (* literals *)
         | `Constant c as c' -> c', constant_type c
@@ -1172,10 +1175,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `FunLit (pats, body) ->
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
-            let {Types.environment = env'} = List.fold_left fold_in_envs context.tenv pats in
-            let body = type_check ({context with tenv = 
-                                       {Types.environment = 
-                                           Env.bind env' (mailbox, Types.fresh_type_variable ())}}) body in
+            let {var_env = env'} = List.fold_left fold_in_envs context pats in
+            let body = type_check ({context with
+                                      var_env = Env.bind env' (mailbox, Types.fresh_type_variable ())}) body in
             let ftype = 
               List.fold_right
                 (fun pat rtype ->
@@ -1217,7 +1219,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Errors.delete_table
               (pos_and_typ from, no_pos (`Table (read, write))) in
             let () = unify ~handle:Errors.delete_pattern (ppos_and_typ pat, no_pos read) in
-            let where = opt_map (type_check {context with tenv = (context.tenv ++ pattern_env pat)}) where in
+            let where = opt_map (type_check (context ++ pattern_env pat)) where in
             let () =
               opt_iter
                 (fun e -> unify ~handle:Errors.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
@@ -1245,7 +1247,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Errors.update_table
               (pos_and_typ from, no_pos (`Table (read, write))) in
             let () = unify ~handle:Errors.update_pattern (ppos_and_typ pat, no_pos read) in
-            let context' = {context with tenv = context.tenv ++ pattern_env pat} in
+            let context' = context ++ pattern_env pat in
             let where = opt_map (type_check context') where in
             let () =
               opt_iter
@@ -1273,8 +1275,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_process
               ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
-            let context' = {context with tenv = {Types.environment = Env.bind env (mailbox, pid_type)}} in
-            let p = type_check context' p in
+            let p = type_check (bind_var context (mailbox, pid_type)) p in
               `Spawn (erase p), pid_type
         | `SpawnWait p ->
             (* (() -{b}-> d) -> d *)
@@ -1282,13 +1283,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_wait_process
               ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
-            let context' = {context with tenv = {Types.environment = Env.bind env (mailbox, pid_type)}} in
-            let p = type_check context' p in
+            let p = type_check (bind_var context  (mailbox, pid_type)) p in
               unify ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p), return_type
         | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
-            let boxed_mbtype = mailbox_type env in
+            let boxed_mbtype = mailbox_type context.var_env in
             let () = unify ~handle:Errors.receive_mailbox
               (no_pos boxed_mbtype, no_pos (`Application ("Mailbox", [mbtype]))) in
             let binders, pattern_type, body_type = type_cases binders in
@@ -1299,20 +1299,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
         (* applications of various sorts *)
         | `UnaryAppl (op, p) -> 
-            let op = op, type_unary_op env context.aliases op
+            let op = op, type_unary_op context op
             and p = tc p
             and rettyp = Types.fresh_type_variable () in
               unify ~handle:Errors.unary_apply
-                ((Sugartypes.string_of_unary_op (fst op), typ op), no_pos (`Function (Types.make_tuple_type [typ p], mailbox_type env, rettyp)));
+                ((Sugartypes.string_of_unary_op (fst op), typ op), 
+                 no_pos (`Function (Types.make_tuple_type [typ p], mailbox_type context.var_env, rettyp)));
               `UnaryAppl (fst op, erase p), rettyp
         | `InfixAppl (op, l, r) ->
-            let opt = type_binary_op env context.aliases op in
+            let opt = type_binary_op context op in
             let l = tc l
             and r = tc r 
             and rettyp = Types.fresh_type_variable () in
               unify ~handle:Errors.infix_apply
-                ((Sugartypes.string_of_binop op, opt), no_pos (`Function (Types.make_tuple_type [typ l; typ r], 
-                                                                          mailbox_type env, rettyp)));
+                ((Sugartypes.string_of_binop op, opt), 
+                 no_pos (`Function (Types.make_tuple_type [typ l; typ r], 
+                                    mailbox_type context.var_env, rettyp)));
               `InfixAppl (op, erase l, erase r), rettyp
         | `FnAppl (f, ps) ->
             let f = tc f
@@ -1320,7 +1322,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and rettyp = Types.fresh_type_variable () in
               unify ~handle:Errors.fun_apply
                 (pos_and_typ f, no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
-                                                   mailbox_type env, rettyp)));
+                                                   mailbox_type context.var_env, rettyp)));
               `FnAppl (erase f, List.map erase ps), rettyp
         (* xml *)
         | `Xml (tag, attrs, attrexp, children) ->
@@ -1336,7 +1338,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun e ->
                    unify ~handle:Errors.xml_attributes
                      (pos_and_typ e, no_pos (
-                        (ExpandAliases.instantiate "Attributes" [] context.aliases)))) attrexp
+                        (ExpandAliases.instantiate "Attributes" [] context.tycon_env)))) attrexp
             and () =
               List.iter (fun child ->
                            unify ~handle:Errors.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
@@ -1347,32 +1349,28 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `TextNode _ as t -> t, Types.xml_type
         | `Formlet (body, yields) ->
             let body = tc body in
-            let context' = {context with tenv = context.tenv ++ extract_formlet_bindings (erase body)} in
+            let context' = (context ++ extract_formlet_bindings (erase body)) in
             let yields = type_check context' yields in
               unify ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
-            prerr_endline "-formlet"; flush stderr;
-
               `Formlet (erase body, erase yields), 
-            (ExpandAliases.instantiate "Formlet" [typ yields] context.aliases)
+            (ExpandAliases.instantiate "Formlet" [typ yields] context.tycon_env)
         | `Page e ->
             let e = tc e in
               unify ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
-              `Page (erase e), assert false (* TODO *) (*Types.page_type*)
+              `Page (erase e), ExpandAliases.instantiate "Page" [] context.tycon_env
         | `FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable () in
 
             let f = tc f
             and h = tc h
             and attributes = tc attributes in
-
-              prerr_endline "-formletplacement"; flush stderr;
             let () = unify ~handle:Errors.render_formlet
-              (pos_and_typ f, no_pos (ExpandAliases.instantiate "Formlet" [t] context.aliases)) in
+              (pos_and_typ f, no_pos (ExpandAliases.instantiate "Formlet" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_handler
               (pos_and_typ h, (exp_pos f, 
-                               ExpandAliases.instantiate "Handler" [t] context.aliases)) in
+                               ExpandAliases.instantiate "Handler" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_attributes
-              (pos_and_typ attributes, no_pos (ExpandAliases.instantiate "Attributes" [] context.aliases))
+              (pos_and_typ attributes, no_pos (ExpandAliases.instantiate "Attributes" [] context.tycon_env))
             in
               `FormletPlacement (erase f, erase h, erase attributes), Types.xml_type
         | `PagePlacement e ->
@@ -1384,9 +1382,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
-              prerr_endline "-formbinding"; flush stderr;
-
-            let ft = ExpandAliases.instantiate "Formlet" [a] context.aliases in
+            let ft = ExpandAliases.instantiate "Formlet" [a] context.tycon_env in
               unify ~handle:Errors.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Errors.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               `FormBinding (erase e, erase_pat pattern), Types.xml_type
@@ -1406,7 +1402,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                          let () = unify ~handle:Errors.iteration_list_pattern (ppos_and_typ pattern, (exp_pos e, a))
                          in
                            (`List (erase_pat pattern, erase e) :: generators,
-                            {context with tenv = context.tenv ++ pattern_env pattern})
+                            context ++ pattern_env pattern)
                      | `Table (pattern, e) ->
                          let a = Types.fresh_type_variable () in
                          let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
@@ -1415,7 +1411,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                          let () = unify ~handle:Errors.iteration_table_body (pos_and_typ e, no_pos tt) in
                          let () = unify ~handle:Errors.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
                            (`Table (erase_pat pattern, erase e) :: generators,
-                            {context with tenv = context.tenv ++ pattern_env pattern}))
+                            context ++ pattern_env pattern))
                 ([], context) generators in
             let generators = List.rev generators in              
             let tc = type_check context in
@@ -1455,7 +1451,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and t = Types.fresh_type_variable ()
             and m = Types.fresh_type_variable () in
             let cont_type = `Function (Types.make_tuple_type [f], m, t) in
-            let context' = {context with tenv = {Types.environment = Env.bind env (name, cont_type)}} in
+            let context' = {context 
+                            with var_env = Env.bind context.var_env (name, cont_type)} in
             let e = type_check context' e in
             let () = unify ~handle:Errors.escape (pos_and_typ e, no_pos f) in
               `Escape ((name, Some cont_type, pos), erase e), typ e
@@ -1471,18 +1468,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `Block (bindings, e) ->
             let rec type_bindings context =
               function
-                | [] -> [], context.tenv
+                | [] -> [], context.var_env
                 | b :: bs ->
                     let b, ctxt' = type_binding context b in
-                    let bs, typing_env'' = type_bindings ({context with tenv =
-                                                              Types.extend_typing_environment context.tenv ctxt'.tenv}) bs in
+                    let bs, typing_env'' = type_bindings (Types.extend_typing_environment context ctxt') bs in
                       b :: bs, typing_env'' in
             let bindings, typing_env = type_bindings context bindings in
-            let e = type_check {context with tenv = typing_env} e in
+            let e = type_check {context with var_env = typing_env} e in
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
-            ExpandAliases.instantiate "Regex" [] context.aliases
+            ExpandAliases.instantiate "Regex" [] context.tycon_env
         | `Projection (r,l) ->
             let r = tc r in
             let fieldtype = Types.fresh_type_variable () in
@@ -1521,9 +1517,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Switch (erase e, erase_cases binders, Some pattern_type), body_type
     in (e, pos), t
 and type_binding : context -> binding -> binding * context =
-  fun ({tenv = {Types.environment = env}} as context) (def, pos) ->
-    prerr_endline ("type checking def " ^ Show_bindingnode.show def);
-    flush stderr;
+  fun context (def, pos) ->
     let type_check = type_check in
     let unify (l, r) = unify ~pos:(lookup_pos pos) (l, r)
     and typ (_,t) = t
@@ -1533,7 +1527,7 @@ and type_binding : context -> binding -> binding * context =
     and tc = type_check context
     and tpc = type_pattern `Closed
     and pattern_env (_, e, _) = e
-    and (++) {Types.environment = env} env' = {Types.environment = Env.extend env env'} in
+    and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
     let pattern_pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p in
@@ -1564,9 +1558,9 @@ and type_binding : context -> binding -> binding * context =
                     unify ~handle:Errors.bind_val_annotation (no_pos bt, no_pos t)) t) datatype in
           let bt, penv =
             if Utils.is_generalisable (erase body) then
-              (Utils.generalise env bt, Env.map (Utils.generalise env) penv)
+              (Utils.generalise context.var_env bt, Env.map (Utils.generalise context.var_env) penv)
             else
-              let quantifiers = Generalise.get_quantifiers env bt in
+              let quantifiers = Generalise.get_quantifiers context.var_env bt in
                 if List.exists (function
                                   | `RigidTypeVar _ | `RigidRowVar _ -> true
                                   | `TypeVar _ | `RowVar _ -> false) quantifiers                    
@@ -1576,19 +1570,19 @@ and type_binding : context -> binding -> binding * context =
                   bt, penv
           in
             `Val (erase_pat pat, erase body, location, datatype), 
-          {context with tenv = {Types.environment = Env.extend env penv}}
+            context ++ penv
       | `Fun ((name, _, pos), (pats, body), location, t) ->
           let pats = List.map (List.map tpc) pats in
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
-          let {Types.environment = body_env} = List.fold_left fold_in_envs context.tenv pats in
+          let {var_env = body_env} = List.fold_left fold_in_envs context pats in
           let mt = Types.fresh_type_variable () in
-          let body = type_check {context with tenv = {Types.environment =Env.bind body_env (mailbox, mt)}} body in
+          let body = type_check (bind_var context (mailbox, mt)) body in
           let ft = make_ft pats (typ body) in
           let () = opt_iter (fun (_,t) ->
                                opt_iter
                                  (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
             (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
-             {context with tenv = {Types.environment = (Env.bind env (name, Utils.generalise env ft))}})
+             bind_var context (name, Utils.generalise context.var_env ft))
       | `Funs defs ->
           (*
             Compute initial types for the functions using
@@ -1603,7 +1597,7 @@ and type_binding : context -> binding -> binding * context =
             As well as the function types, the typed patterns are also
             returned here as a simple optimisation.  *)
           let fbs, patss =
-            List.split 
+            List.split
               (List.map
                  (fun ((name,_,_), (pats, body), _, t) ->
                     let pats = List.map (List.map tpc) pats in
@@ -1612,65 +1606,56 @@ and type_binding : context -> binding -> binding * context =
                       match t with
                         | None -> ft
                         | Some (_, Some t) ->
-                            let fb = Utils.generalise env t in
+                            let fb = Utils.generalise context.var_env t in
                               (* make sure the annotation has the right shape *)
                             let fbi = Instantiate.typ fb in
-                              prerr_endline ("unifying annotation " ^Types.string_of_datatype fbi^" with " ^ Types.string_of_datatype ft); flush stderr;
                             let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
-                              prerr_endline "/unifying annotation"; flush stderr;
                               fb
                     in
                       (name, fb), pats)
                  defs) in
-            prerr_endline "created initial bits"; flush stderr;
           let defs =
-            let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) env fbs in
+            let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) context.var_env fbs in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-              prerr_endline "typing defs..."; flush stderr;
               List.rev
                 (List.fold_left2
                    (fun defs ((name, _, pos), (_, body), location, t) pats ->
-                      prerr_endline "in"; flush stderr;
-                      let {Types.environment = body_env} = List.fold_left fold_in_envs {Types.environment = body_env} pats in
+                      let context' = (List.fold_left
+                                        fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
-                      let body = type_check {context with tenv = {Types.environment = Env.bind body_env (mailbox, mt)}} body in
+                      let body = type_check (bind_var context' (mailbox, mt)) body in
                       let ft = make_ft pats (typ body) in
                         (* WARNING: this looks surprising, but it is what we want *)
                       let ft' =
-                        match Env.lookup body_env name with
+                        match Env.lookup context'.var_env name with
                           | `ForAll (_, t) | t -> t in
-                      prerr_endline "?unifying"; flush stderr;
                       let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
-                        prerr_endline "out"; flush stderr;
                         ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
-              prerr_endline "typed defs..."; flush stderr ;
           let env =
             List.fold_left (fun env (name, fb) ->
-                              Env.bind env (name, Utils.generalise env fb)) env fbs in
-          let typing_env = {Types.environment = env} in
-            prerr_endline "done typing defs"; flush stderr;
-            (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) -> 
-                                binder, 
+                              Env.bind env (name, Utils.generalise env fb)) 
+              context.var_env
+              fbs in
+            (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) ->
+                                binder,
                                 (List.map (List.map erase_pat) ppats, erase body),
-                                location, dtopt) defs),
-             {context with tenv = typing_env})
+                                location, dtopt) 
+                      defs),
+             {context with var_env = env})
       | `Foreign (language, name, (_,Some datatype as dt)) ->
           (`Foreign (language, name, dt),
-           {context with tenv = {Types.environment = Env.bind env (name, datatype)}})
+           (bind_var context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
-          prerr_endline ("binding alias " ^ name ^ " to " ^ Types.string_of_datatype dt );
           flush stderr;
-          t, {context with aliases = 
-              Env.bind context.aliases (name, (List.map (snd ->- val_of) vars, dt))}
+          t, bind_tycon context (name, (List.map (snd ->- val_of) vars, dt))
       | `Infix -> `Infix, context
       | `Exp e ->
           let e = tc e in
           let () = unify ~handle:Errors.bind_exp
             (pos_and_typ e, no_pos Types.unit_type)
           in
-            `Exp (erase e), {context with tenv = {Types.environment = Env.empty}}
+            `Exp (erase e), {context with var_env = Env.empty}
     in 
-      prerr_endline ("type checked def " ^ Show_bindingnode.show def); flush stderr;
       (typed, pos), ctxt
 and type_regex typing_env : regex -> regex =
   fun m -> 
@@ -1687,14 +1672,13 @@ and type_regex typing_env : regex -> regex =
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
             
-let type_bindings typing_env aliases bindings =
+let type_bindings typing_env bindings =
   let tyenv, bindings =
     List.fold_left
       (fun (ctxt, bindings) (binding : binding) ->
          let binding, ctxt' = type_binding ctxt binding in
-           {ctxt with tenv = Types.extend_typing_environment ctxt.tenv ctxt'.tenv;
-                   aliases = ctxt'.aliases}, binding::bindings)
-      ({tenv = typing_env; aliases = aliases}, []) bindings
+           Types.extend_typing_environment ctxt ctxt', binding::bindings)
+      (typing_env, []) bindings
   in
     tyenv, List.rev bindings
       
@@ -1703,20 +1687,20 @@ let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `U
 
 module Check =
 struct
-  let program tyenv aliases (bindings, body) =
+  let program tyenv (bindings, body) =
     if Settings.get_value type_sugar then
       try
         Debug.if_set show_pre_sugar_typing
           (fun () ->
              "before type checking: "^Show_program.show (bindings, body));
 
-        let ctxt', bindings = type_bindings tyenv aliases bindings in 
+        let ctxt', bindings = type_bindings tyenv bindings in 
         let program, t, env =
           match body with
-            | None -> (bindings, None), Types.unit_type, ctxt'.tenv
+            | None -> (bindings, None), Types.unit_type, ctxt'
             | Some (_,pos as body) ->
                 let body, typ = type_check ctxt' body in
-                  (bindings, Some body), typ, ctxt'.tenv
+                  (bindings, Some body), typ, ctxt'
         in
           program, t, env
       with
@@ -1724,14 +1708,14 @@ struct
     else
       (bindings, body), Types.unit_type, tyenv
 
-  let sentence tyenv aliases =
+  let sentence tyenv =
     if Settings.get_value type_sugar then
       function
         | `Definitions bindings -> 
-            let te, bindings = type_bindings tyenv aliases bindings in
-              `Definitions bindings, Types.unit_type, te.tenv
+            let te, bindings = type_bindings tyenv bindings in
+              `Definitions bindings, Types.unit_type, te
         | `Expression (_, pos as body) -> 
-            let body, t = (type_check {tenv = tyenv; aliases = aliases} body) in
+            let body, t = (type_check tyenv body) in
               `Expression body, t, tyenv
         | `Directive d -> `Directive d, Types.unit_type, tyenv
     else

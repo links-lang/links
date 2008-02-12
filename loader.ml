@@ -25,15 +25,12 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
           (fun cachefile ->
              (Marshal.from_channel cachefile 
                 : (Types.typing_environment * Syntax.program)))
-          (* (OCaml manual recommends putting a type signature on unmarshal 
-             calls; not clear whether this actually helps. It seems we get 
-             a segfault if the marhsaled data is not the right type.) *)
       else
         (Debug.print("No precompiled " ^ filename);
          raise (Sys_error "Precompiled source file out of date."))
     with (Sys_error _| Unix.Unix_error _) ->
       let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-      let program, _, _ = Frontend.Pipeline.program Library.typing_env Library.alias_env pos_context sugar in
+      let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
       let program = Sugar.desugar_program program in
       let env, program = measure "type" (Inference.type_program Library.typing_env) program in
       let program = measure "optimise" Optimiser.optimise_program (env, program) in

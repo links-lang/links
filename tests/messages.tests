@@ -31,7 +31,7 @@ stdout : @"The end" : .*
 
 Mailboxes are not polymorphic [1]
 var p = spawn { recv() ! "The end" } ! self(); recv()
-stdout : "The end" : String
+stdout : "The end" : [Char]
 
 Mailboxes are not polymorphic [2]
 var pid = spawn { recv() ++ [] }; { pid ! "one"; pid ! [2] }
@@ -40,4 +40,4 @@ exit : 1
 
 Built-in functions are polymorphic in their mailbox types
 fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)
-stdout : (fun, fun) : (() -{Int}-> String, (Int) -{()}-> String)
+stdout : (fun, fun) : (() -{Int}-> [Char], (Int) -{()}-> [Char])

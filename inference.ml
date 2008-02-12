@@ -59,7 +59,7 @@ let constant_type = function
   | String _ -> string_type
 
 let rec type_check : typing_environment -> untyped_expression -> expression =
-  fun ({Types.environment =env} as typing_env) expression ->
+  fun ({Types.var_env = env} as typing_env) expression ->
   try
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match (expression : Syntax.untyped_expression) with
@@ -128,7 +128,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
           (fun (_,v, vtype) env -> Env.bind env (v, vtype))
           mapping
           (Env.bind env ("_MAILBOX_", mb_type)) in          
-      let body = type_check {Types.environment=body_env} body in
+      let body = type_check {typing_env with Types.var_env=body_env} body in
       let tuple = make_tuple_type (List.map thd3 mapping) in
       let type' = `Function (tuple, mb_type, type_of_expression body) in
 	Abstr (variables, body, `T (pos, type', None))
@@ -136,7 +136,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let value = type_check typing_env value in
       let vtype = if is_value value then generalise env (type_of_expression value)
                   else type_of_expression value in
-      let body = type_check {Types.environment = Env.bind env (variable, vtype)} body in        
+      let body = type_check {typing_env with Types.var_env = Env.bind env (variable, vtype)} body in        
 	Let (variable, value, body, `T (pos, type_of_expression body, None))
   | Rec (defs, body, `U pos) ->
       let best_typing_env, defs =
@@ -222,7 +222,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let variant_type = `Variant (row_with (case_label, `Present case_var_type) body_row) in
 	unify (variant_type, value_type);
 
-	let case_body = type_check {Types.environment = Env.bind env (case_variable, case_var_type)} case_body in
+	let case_body = type_check {typing_env with Types.var_env = Env.bind env (case_variable, case_var_type)} case_body in
 
 	(*
            We take advantage of absence information to give a more refined type when
@@ -247,7 +247,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
            which clearly doesn't!
         *)
 	let body_var_type = `Variant (row_with (case_label, `Absent) body_row) in
-	let body = type_check {Types.environment = Env.bind env (variable, body_var_type)} body in
+	let body = type_check {typing_env with Types.var_env = Env.bind env (variable, body_var_type)} body in
 
 	let case_type = type_of_expression case_body in
 	let body_type = type_of_expression body in
@@ -278,7 +278,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       let value = type_check typing_env value in
 	unify (type_of_expression value, `Application ("List", [value_tvar]));
 	let expr_env = Env.bind env (var, value_tvar) in
-	let expr = type_check {Types.environment = expr_env} expr in
+	let expr = type_check {typing_env with Types.var_env = expr_env} expr in
 	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, `T (pos, type', None))
@@ -365,7 +365,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
       - do the functions have to be recursive?
 *)
 and
-    type_check_mutually {Types.environment = env} (defs : (string * string * untyped_expression * Types.datatype option) list) =
+    type_check_mutually ({Types.var_env = env} as typing_env) (defs : (string * string * untyped_expression * Types.datatype option) list) =
       let var_env =
         fold_right
           (fun (outer_name, inner_name, _, t) env' ->
@@ -378,7 +378,7 @@ and
           Env.empty in
       let inner_env = Env.extend env var_env in
       let type_check result (outer_name, inner_name, expr, t) =
-        let expr = type_check {Types.environment = inner_env} expr in
+        let expr = type_check {typing_env with Types.var_env = inner_env} expr in
         let t' = type_of_expression expr in
           match t' with
             | `Function _ as f  ->
@@ -407,7 +407,7 @@ and
         (List.fold_right (fun (outer_name, value, _) env' -> 
 		            Env.bind env' (outer_name, (generalise env (type_of_expression value)))) defs Env.empty)	
       in
-        {Types.environment = env}, defs     
+        {typing_env with Types.var_env = env}, defs     
 
 let mutually_type_defs
     (te : Types.typing_environment)
@@ -429,19 +429,19 @@ let group_defs defs =
 
 let rec type_definition : Types.typing_environment -> untyped_definition -> 
                           Types.typing_environment * definition =
-  fun ({Types.environment = env} as typing_env) def ->
-    let {Types.environment = env'}, def' =
+  fun ({Types.var_env = env} as typing_env) def ->
+    let {Types.var_env = env'}, def' =
       match def with
 	| Define (variable, value, loc, `U pos) ->
-	    let value = type_check {Types.environment = env} value in
+	    let value = type_check {typing_env with Types.var_env = env} value in
 	    let value_type = if is_value value then 
               generalise env (type_of_expression value)
             else type_of_expression value in
-              ({Types.environment = Env.bind env (variable, value_type)},
+              ({typing_env with Types.var_env = Env.bind env (variable, value_type)},
     	       Define (variable, value, loc, 
                        `T (pos, type_of_expression value, None)))
         | Alien (language, name, t, `U pos) ->
-            ({Types.environment = Env.bind env (name, t)}),
+            ({typing_env with Types.var_env = Env.bind env (name, t)}),
             Alien (language, name, t, `T (pos, t, None))
         | Module (path, Some defs, `U pos) ->
             let typing_env, defs = type_definitions typing_env defs in
@@ -452,7 +452,7 @@ let rec type_definition : Types.typing_environment -> untyped_definition ->
             failwith("Internal error: included file '"^path^"' never loaded.")
         | Module (None, None, `U pos) -> assert false
     in
-      {Types.environment = env'}, def'
+      {typing_env with Types.var_env = env'}, def'
 
 and type_definitions : Types.typing_environment -> untyped_definition list ->
                        (Types.typing_environment * definition list) =
@@ -502,7 +502,7 @@ let type_program : Types.typing_environment -> untyped_program ->
    only if we implement the correct semantics!
 *)
 let check_for_duplicate_defs 
-    {Types.environment = type_env}
+    {Types.var_env = type_env}
     (defs :  untyped_definition list) =
   let check (env, defined) = function
     | Define (name, _, _, `U position) when StringMap.mem name defined ->

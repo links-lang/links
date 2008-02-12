@@ -77,12 +77,15 @@ module Env = Env.String
 
 type environment        = datatype Env.t
  and alias_environment  = (int list * datatype) Env.t
- and typing_environment = { environment : environment }
+ and typing_environment = { var_env   : environment ;
+                            tycon_env : alias_environment }
     deriving (Show)
 
 (* Functions on environments *)
-let extend_typing_environment {environment = l} {environment = r} : typing_environment = 
-  {environment = Env.extend l r}
+let extend_typing_environment 
+    {var_env = l ; tycon_env = al }
+    {var_env = r ; tycon_env = ar} : typing_environment = 
+  {var_env = Env.extend l r ; tycon_env = Env.extend al ar }
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -557,7 +560,7 @@ let extract_tuple (field_env, _) =
 let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
 
 (* pretty-print type vars as raw numbers rather than letters *)
-let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", true, `User)
+let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
 
 (* Type printers *)
 
@@ -663,8 +666,9 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
               | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
             *)
 
-        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t
-(*        | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"*)
+(*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
+        | `Alias ((s,[]), t) ->  s
+        | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
         | `Alias ((s,_), t) ->  "{"^s^"}" ^ sd t
         | `Application ("List", [elems])              ->  "["^ sd elems ^"]"
         | `Application (s, []) -> s
@@ -882,7 +886,7 @@ let string_of_environment env =
                                               end)) in
     M.show env
 
-let string_of_typing_environment {environment=env} = string_of_environment env
+let string_of_typing_environment {var_env=env} = string_of_environment env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
   let module M = IntMap in

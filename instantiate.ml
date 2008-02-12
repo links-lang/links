@@ -132,11 +132,7 @@ let instantiate_typ : datatype -> datatype = fun t ->
 let instantiate : environment -> string -> datatype =
   fun env var ->
     try
-      prerr_endline "instantiate"; flush stderr;
-      let r = instantiate_typ (Env.String.lookup env var) in
-      prerr_endline "/instantiate"; flush stderr;
-        r
-
+      instantiate_typ (Env.String.lookup env var)
     with NotFound _ ->
       raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
         

@@ -742,7 +742,7 @@ struct
            IntMap.add var name env)
       env IntMap.empty
 
-  let make_initial_env : Types.typing_environment -> multi_env = fun {Types.environment = tenv} ->
+  let make_initial_env : Types.typing_environment -> multi_env = fun {Types.var_env = tenv} ->
     let venv, tenv = 
       Env.String.fold
         (fun name t (venv, tenv) ->

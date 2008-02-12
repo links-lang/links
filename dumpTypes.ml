@@ -43,7 +43,7 @@ let program =
     end in
     let program =
       let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
-      let program, _, _ = Frontend.Pipeline.program tyenv aliases pos_context sugar in
+      let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
         program
     in
       (dumper#program program)#get_vars()    
