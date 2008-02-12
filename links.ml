@@ -153,11 +153,12 @@ let interact envs =
         flush stdout in
   let rec interact envs =
     let evaluate_replitem parse envs input = 
+      let set_context (e, _) tyenv = (e, tyenv) in
       Errors.display ~default:(fun _ -> envs)
         (lazy
            (match measure "parse" parse input with 
-              | (`Definitions [] : Sugartypes.sentence'), _ -> envs
-              | `Definitions defs, (`Definitions sugar : Sugartypes.sentence) -> 
+              | `Definitions [], _, tyenv -> set_context envs tyenv
+              | `Definitions defs, (`Definitions sugar : Sugartypes.sentence), tyenv -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', _)) =
                     process_program
                       ~printer:(fun _ _ -> ())
@@ -174,10 +175,11 @@ let interact envs =
                                                 ^" : "^ 
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
-                    envs
-              | `Expression expr, `Expression sexpr -> 
-                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in envs 
-              | `Directive directive, _ -> execute_directive directive envs))
+                    set_context envs tyenv
+              | `Expression expr, `Expression sexpr, tyenv -> 
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in 
+                    set_context envs tyenv
+              | `Directive directive, _, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
 
@@ -185,12 +187,12 @@ let interact envs =
 
       let parse_and_desugar input = 
         let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
-        let sentence, _, _ = Frontend.Pipeline.interactive tyenv pos_context sugar in
+        let sentence, _, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
         let sentence' = match sentence with
           | `Definitions defs -> `Definitions (Sugar.desugar_definitions defs)
           | `Expression e     -> `Expression (Sugar.desugar_expression e) 
           | `Directive d      -> `Directive d in
-          sentence', sentence
+          sentence', sentence, tyenv'
       in
 
       interact (evaluate_replitem parse_and_desugar envs (stdin, "<stdin>"))
