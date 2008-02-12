@@ -89,8 +89,8 @@ val native_string_type : datatype
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
-val free_bound_type_vars : datatype -> TypeVarSet.t
-val free_bound_row_type_vars : row -> TypeVarSet.t
+val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t
+val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
 
 (** used to freshen mailboxes in typename aliases *)
 val freshen_mailboxes : datatype -> datatype

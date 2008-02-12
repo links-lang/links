@@ -806,8 +806,8 @@ let row_freshen_mailboxes = row_freshen_mailboxes TypeVarSet.empty
 let row_var_freshen_mailboxes = row_var_freshen_mailboxes TypeVarSet.empty
 
 (* find all free and bound type variables in a  *)
-let rec free_bound_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t = fun rec_vars t ->
-  let fbtv = free_bound_type_vars rec_vars in
+let rec free_bound_type_vars : include_aliases:bool -> TypeVarSet.t -> datatype -> TypeVarSet.t = fun ~include_aliases rec_vars t ->
+  let fbtv = free_bound_type_vars ~include_aliases rec_vars in
     match t with
       | `Not_typed               -> TypeVarSet.empty
       | `Primitive _             -> TypeVarSet.empty
@@ -820,7 +820,7 @@ let rec free_bound_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t = fun re
                   if TypeVarSet.mem var rec_vars then
                     TypeVarSet.empty
                   else
-                    TypeVarSet.add var (free_bound_type_vars (TypeVarSet.add var rec_vars) body)
+                    TypeVarSet.add var (free_bound_type_vars ~include_aliases (TypeVarSet.add var rec_vars) body)
               | `Body t -> fbtv t
           end
       | `Function (f, m, t)      ->
@@ -828,22 +828,23 @@ let rec free_bound_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t = fun re
             (TypeVarSet.union (fbtv f) (fbtv t))
             (fbtv m)
       | `Record row
-      | `Variant row -> free_bound_row_type_vars rec_vars row
+      | `Variant row -> free_bound_row_type_vars ~include_aliases rec_vars row
       | `Table (r, w) -> TypeVarSet.union (fbtv r) (fbtv w)
       | `ForAll (tvars, body) -> List.fold_right (TypeVarSet.add -<- type_var_number) tvars (fbtv body)
+      | `Alias ((_,ts), d) when include_aliases -> TypeVarSet.union_all (fbtv d :: List.map fbtv ts)
       | `Alias (_, d) -> fbtv d
       | `Application (_, datatypes) -> List.fold_right TypeVarSet.union (List.map fbtv datatypes) TypeVarSet.empty
-and free_bound_row_type_vars rec_vars (field_env, row_var) =
+and free_bound_row_type_vars ~include_aliases rec_vars (field_env, row_var) =
   let field_type_vars =
     FieldEnv.fold (fun _ t tvs ->
                      match t with
                        | `Present t ->
-                           TypeVarSet.union tvs (free_bound_type_vars rec_vars t)
+                           TypeVarSet.union tvs (free_bound_type_vars ~include_aliases rec_vars t)
                        | `Absent ->
                            tvs) field_env TypeVarSet.empty in
-  let row_var = free_bound_row_var_vars rec_vars row_var in
+  let row_var = free_bound_row_var_vars ~include_aliases rec_vars row_var in
     TypeVarSet.union field_type_vars row_var  
-and free_bound_row_var_vars rec_vars row_var = 
+and free_bound_row_var_vars ~include_aliases rec_vars row_var = 
   match Unionfind.find row_var with
     | `Closed -> TypeVarSet.empty
     | `Flexible var
@@ -854,27 +855,27 @@ and free_bound_row_var_vars rec_vars row_var =
           TypeVarSet.empty
         else
           TypeVarSet.add var
-            (free_bound_row_type_vars (TypeVarSet.add var rec_vars) row)
-    | `Body row -> free_bound_row_type_vars rec_vars row
+            (free_bound_row_type_vars ~include_aliases (TypeVarSet.add var rec_vars) row)
+    | `Body row -> free_bound_row_type_vars ~include_aliases rec_vars row
 
-let free_bound_type_vars = free_bound_type_vars TypeVarSet.empty
-let free_bound_row_type_vars = free_bound_row_type_vars TypeVarSet.empty
-let free_bound_row_var_vars = free_bound_row_var_vars TypeVarSet.empty
+let free_bound_type_vars ?(include_aliases=false) = free_bound_type_vars ~include_aliases TypeVarSet.empty
+let free_bound_row_type_vars ?(include_aliases=false) = free_bound_row_type_vars ~include_aliases TypeVarSet.empty
+let free_bound_row_var_vars ?(include_aliases=false) = free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
-  string_of_datatype' TypeVarSet.empty (make_names (free_bound_type_vars datatype)) datatype
+    string_of_datatype' TypeVarSet.empty (make_names (free_bound_type_vars ~include_aliases:true datatype)) datatype
 
 let string_of_datatype_raw datatype = 
   string_of_datatype' TypeVarSet.empty (TypeVarSet.fold
 		     (fun var name_map -> IntMap.add var (string_of_int var) name_map)
-		     (free_bound_type_vars datatype) IntMap.empty) datatype
+		     (free_bound_type_vars ~include_aliases:true datatype) IntMap.empty) datatype
 
 let string_of_row row = 
-  string_of_row' "," TypeVarSet.empty (make_names (free_bound_row_type_vars row)) row
+  string_of_row' "," TypeVarSet.empty (make_names (free_bound_row_type_vars ~include_aliases:true row)) row
 
 let string_of_row_var row_var =
-  match string_of_row_var' "," TypeVarSet.empty (make_names (free_bound_row_var_vars row_var)) row_var with
+  match string_of_row_var' "," TypeVarSet.empty (make_names (free_bound_row_var_vars ~include_aliases:true row_var)) row_var with
     | None -> ""
     | Some s -> s
 
