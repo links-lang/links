@@ -64,7 +64,9 @@ let rec eq_types : (datatype * datatype) -> bool =
           end
       | `Function (lfrom, lm, lto) ->
           begin match unalias t2 with
-              `Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom) && eq_types (lto, rto) && eq_types (lm, rm)
+              `Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom)
+                                         && eq_types (lto,   rto)
+                                         && eq_types (lm,    rm)
             | _                          -> false
           end
       | `Record l ->

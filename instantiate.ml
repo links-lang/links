@@ -1,7 +1,7 @@
 open Utility
 open Types
 
-let show_recursion = Settings.add_bool("show_recursion", true, `User)
+let show_recursion = Settings.add_bool("show_recursion", false, `User)
 let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
 
 (*
