@@ -8,15 +8,16 @@ let instantiate name ts env =
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
   match SEnv.find env name with
+    | None -> 
+        failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
     | Some (vars, _) when List.length vars <> List.length ts ->
         failwith (Printf.sprintf
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length ts) (List.length vars))
     | Some (vars, alias) ->
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
-          Instantiate.datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
-    | None -> 
-        failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
+          `Alias ((name, ts),
+                  Instantiate.datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias))
 
 (* This should really be done with a generic traversal function. *)
 let rec expand_aliases
@@ -57,7 +58,7 @@ let rec expand_aliases
       | `Alias _ -> assert false (* There shouldn't be an alias here yet *)
       | `Application (s, ds) when SEnv.has env s -> 
           let ds = List.map (expand rec_envs) ds in
-          `Alias ((s, ds), instantiate s ds env)
+            instantiate s ds env
       | `Application (s, ds) -> 
           `Application (s, List.map (expand rec_envs) ds)
       | `ForAll (qs, dt) -> `ForAll (qs, expand rec_envs dt)
