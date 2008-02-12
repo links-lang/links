@@ -43,19 +43,48 @@ let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars dataty
 inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
-    match (t1, t2) with
-      | `Alias (_, l), r -> eq_types (l, r)
-      | l, `Alias (_, r) -> eq_types (l, r)
-      | `Not_typed, `Not_typed -> true
-      | `Primitive x, `Primitive y -> x = y
-      | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
-          Unionfind.equivalent lpoint rpoint
-      | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
-          eq_types (lfrom, rfrom) && eq_types (lto, rto) && eq_types (lm, rm)
-      | `Record l, `Record r -> eq_rows (l, r)
-      | `Variant l, `Variant r -> eq_rows (l, r)
-      | `Application (s, ts), `Application (s', ts') when s = s' -> List.for_all2 (Utility.curry eq_types) ts ts'
-      | _, _ -> false
+    let rec unalias = function
+      | `Alias (_, x) -> unalias x
+      | x             -> x in
+    match unalias t1 with 
+      | `Not_typed -> 
+          begin match unalias t2 with
+              `Not_typed -> true
+            | _          -> false
+          end
+      | `Primitive x ->
+          begin match unalias t2 with
+              `Primitive y -> x = y
+            | _            -> false
+          end
+      | `MetaTypeVar lpoint ->
+          begin match unalias t2 with
+              `MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
+            | _                   -> false
+          end
+      | `Function (lfrom, lm, lto) ->
+          begin match unalias t2 with
+              `Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom) && eq_types (lto, rto) && eq_types (lm, rm)
+            | _                          -> false
+          end
+      | `Record l ->
+          begin match unalias t2 with
+              `Record r -> eq_rows (l, r)
+            | _         -> false
+          end
+      | `Variant l ->
+          begin match unalias t2 with
+              `Variant r -> eq_rows (l, r)
+            | _          -> false
+          end
+      | `Application (s, ts) ->
+          begin match unalias t2 with
+              `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_types) ts ts'
+            | _ -> false
+          end
+      | `Alias  _ -> assert false
+      | `ForAll _ -> assert false
+      | `Table _  -> assert false
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)

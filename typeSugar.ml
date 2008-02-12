@@ -1693,16 +1693,12 @@ struct
         Debug.if_set show_pre_sugar_typing
           (fun () ->
              "before type checking: "^Show_program.show (bindings, body));
-
         let ctxt', bindings = type_bindings tyenv bindings in 
-        let program, t, env =
           match body with
             | None -> (bindings, None), Types.unit_type, ctxt'
             | Some (_,pos as body) ->
                 let body, typ = type_check ctxt' body in
                   (bindings, Some body), typ, ctxt'
-        in
-          program, t, env
       with
           Unify.Failure (`Msg msg) -> failwith msg
     else
