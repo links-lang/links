@@ -1375,9 +1375,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `FormletPlacement (erase f, erase h, erase attributes), Types.xml_type
         | `PagePlacement e ->
             let e = tc e in
-(*              unify ~handle:Errors.page_placement (pos_and_typ e, no_pos Types.page_type);
-              `PagePlacement (erase e), Types.xml_type*)
-              assert false (* TODO *)
+            let pt = ExpandAliases.instantiate "Page" [] context.tycon_env in
+              unify ~handle:Errors.page_placement (pos_and_typ e, no_pos pt);
+              `PagePlacement (erase e), Types.xml_type
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
