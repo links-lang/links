@@ -247,7 +247,7 @@ struct
                 | None -> make_record_type field_types
                 | Some t ->
                     begin
-                      match unAlias t with
+                      match TypeUtils.concrete_type t with
                         | `Record row ->
                             `Record (extend_row field_types row)
                         | _ -> assert false

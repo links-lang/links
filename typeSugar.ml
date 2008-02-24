@@ -1002,7 +1002,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let p = tp p in
             let () = unify ~handle:Errors.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t))
             in
-              `HasType (erase p, t'), env p, (ot p, it p) in
+              `HasType (erase p, t'), env p, (ot p, t) in
       (p, pos'), env, (outer_type, inner_type)
   in
     fun pattern ->
@@ -1352,8 +1352,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let context' = (context ++ extract_formlet_bindings (erase body)) in
             let yields = type_check context' yields in
               unify ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
-              `Formlet (erase body, erase yields), 
-            (ExpandAliases.instantiate "Formlet" [typ yields] context.tycon_env)
+              (`Formlet (erase body, erase yields),
+               ExpandAliases.instantiate "Formlet" [typ yields] context.tycon_env)
         | `Page e ->
             let e = tc e in
               unify ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
@@ -1549,13 +1549,13 @@ and type_binding : context -> binding -> binding * context =
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
-          let bt = typ body in
-          let () = unify ~handle:Errors.bind_val (ppos_and_typ pat, pos_and_typ body) in
-          let () = opt_iter
-            (fun (_,t) ->
-               opt_iter
-                 (fun t ->
-                    unify ~handle:Errors.bind_val_annotation (no_pos bt, no_pos t)) t) datatype in
+          let bt =
+            match datatype with
+              | Some (_, Some t) ->
+                  unify ~handle:Errors.bind_val_annotation (no_pos (typ body), no_pos t);
+                  t
+              | _ -> typ body in
+          let () = unify ~handle:Errors.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
           let bt, penv =
             if Utils.is_generalisable (erase body) then
               (Utils.generalise context.var_env bt, Env.map (Utils.generalise context.var_env) penv)
@@ -1569,6 +1569,12 @@ and type_binding : context -> binding -> binding * context =
                 else
                   bt, penv
           in
+(*
+            if Env.has penv "input" then
+              Debug.print ("input: " ^ Types.string_of_datatype (Env.lookup penv "input"))
+            else
+              ();
+*)
             `Val (erase_pat pat, erase body, location, datatype), 
             context ++ penv
       | `Fun ((name, _, pos), (pats, body), location, t) ->
@@ -1606,9 +1612,12 @@ and type_binding : context -> binding -> binding * context =
                       match t with
                         | None -> ft
                         | Some (_, Some t) ->
+(*                            Debug.print ("annotation: " ^ Types.string_of_datatype t);*)
                             let fb = Utils.generalise context.var_env t in
+(*                            Debug.print ("generalised annotation: " ^ Types.string_of_datatype fb);*)
                               (* make sure the annotation has the right shape *)
                             let fbi = Instantiate.typ fb in
+(*                            Debug.print ("instantiated annotation: " ^ Types.string_of_datatype fbi);*)
                             let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
                               fb
                     in
@@ -1698,6 +1707,7 @@ struct
             | None -> (bindings, None), Types.unit_type, ctxt'
             | Some (_,pos as body) ->
                 let body, typ = type_check ctxt' body in
+(*                  Debug.print ("checked type: " ^ Types.string_of_datatype typ);                 *)
                   (bindings, Some body), typ, ctxt'
       with
           Unify.Failure (`Msg msg) -> failwith msg

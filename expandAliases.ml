@@ -14,10 +14,10 @@ let instantiate name ts env =
         failwith (Printf.sprintf
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length ts) (List.length vars))
-    | Some (vars, alias) ->
+    | Some (vars, body) ->
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
           `Alias ((name, ts),
-                  Instantiate.datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias))
+                  Instantiate.datatype (tenv, IntMap.empty) (Types.freshen_mailboxes body))
 
 (* This should really be done with a generic traversal function. *)
 let rec expand_aliases

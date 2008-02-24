@@ -190,8 +190,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
        (match (t1, t2) with
-          | `Alias (_, t1), t2 
-          | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
           | `Primitive x, `Primitive y when x = y -> ()
           | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
@@ -302,6 +300,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                           Unionfind.change point t;
                        *)
                  | `Body t' -> unify' rec_env (t, t'))
+          | `Alias (_, t1), t2 
+          | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
           | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
               (unify' rec_env (lm, rm);
                unify' rec_env (lfrom, rfrom);

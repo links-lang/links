@@ -1,7 +1,7 @@
 (** type destructors *)
 exception TypeDestructionError of string
 
-val unAlias : Types.datatype -> Types.datatype
+val concrete_type : Types.datatype -> Types.datatype
 
 val project_type : string -> Types.datatype -> Types.datatype
 val erase_type   : string -> Types.datatype -> Types.datatype

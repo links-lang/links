@@ -204,7 +204,8 @@ let free_type_vars, free_row_type_vars =
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
       | `Table (r, w)            -> S.union (free_type_vars' rec_vars r) (free_type_vars' rec_vars w)
-      | `Alias (_, datatype)     -> free_type_vars' rec_vars datatype
+      | `Alias ((_, ts), datatype) ->
+          S.union (S.union_all (List.map (free_type_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, datatypes) -> S.union_all (List.map (free_type_vars' rec_vars) datatypes)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body) 
                                            (List.fold_right (S.add -<- type_var_number) tvars S.empty)
@@ -485,7 +486,7 @@ let rec is_mailbox_free rec_vars t =
       | `Record row
       | `Variant row -> imbr row
       | `Table (r, w) -> imb r && imb w
-      | `Alias (_, dt) -> imb dt
+      | `Alias ((_, ts), dt) -> List.for_all imb ts && imb dt
       | `Application ("Mailbox", _) -> false
       | `Application (_, ts) -> List.for_all imb ts
       | `ForAll (_, _) -> assert false
@@ -775,7 +776,7 @@ let rec freshen_mailboxes : TypeVarSet.t -> datatype -> datatype = fun rec_vars 
       | `ForAll (tvars, body) -> `ForAll (tvars, fmb body)
       | `Variant row -> `Variant (row_freshen_mailboxes rec_vars row)
       | `Table (r, w) -> `Table (fmb r, fmb w)
-      | `Alias (alias, d) -> `Alias (alias, fmb d)
+      | `Alias ((name, ts), d) -> `Alias ((name, List.map fmb ts), fmb d)
       | `Application (name, datatypes) -> `Application (name, List.map fmb datatypes)
 and row_freshen_mailboxes rec_vars (field_env, row_var) =
   (FieldEnv.map (fun t ->
@@ -806,6 +807,9 @@ let row_freshen_mailboxes = row_freshen_mailboxes TypeVarSet.empty
 let row_var_freshen_mailboxes = row_var_freshen_mailboxes TypeVarSet.empty
 
 (* find all free and bound type variables in a  *)
+(*
+  BUG: include_aliases probably shouldn't be an option here - it should always be true
+*)
 let rec free_bound_type_vars : include_aliases:bool -> TypeVarSet.t -> datatype -> TypeVarSet.t = fun ~include_aliases rec_vars t ->
   let fbtv = free_bound_type_vars ~include_aliases rec_vars in
     match t with
@@ -858,9 +862,9 @@ and free_bound_row_var_vars ~include_aliases rec_vars row_var =
             (free_bound_row_type_vars ~include_aliases (TypeVarSet.add var rec_vars) row)
     | `Body row -> free_bound_row_type_vars ~include_aliases rec_vars row
 
-let free_bound_type_vars ?(include_aliases=false) = free_bound_type_vars ~include_aliases TypeVarSet.empty
-let free_bound_row_type_vars ?(include_aliases=false) = free_bound_row_type_vars ~include_aliases TypeVarSet.empty
-let free_bound_row_var_vars ?(include_aliases=false) = free_bound_row_var_vars ~include_aliases TypeVarSet.empty
+let free_bound_type_vars ?(include_aliases=true) = free_bound_type_vars ~include_aliases TypeVarSet.empty
+let free_bound_row_type_vars ?(include_aliases=true) = free_bound_row_type_vars ~include_aliases TypeVarSet.empty
+let free_bound_row_var_vars ?(include_aliases=true) = free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
 (* string conversions *)
 let string_of_datatype (datatype : datatype) = 
@@ -902,7 +906,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `Record row              
       | `Variant row             -> makeEnvR recvars row
       | `Table (l,r)             -> union [makeEnv recvars l; makeEnv recvars r]
-      | `Alias (_, d)            -> makeEnv recvars d
+      | `Alias ((name, ts), d)   -> union (List.map (makeEnv recvars) ts @ [makeEnv recvars d])
       | `Application (_, ds)     -> union (List.map (makeEnv recvars) ds)
       | `ForAll _                -> assert false
       | `MetaTypeVar point       ->

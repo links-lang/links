@@ -14,7 +14,7 @@ exit : 1
 
 Conditionals in polymorphic functions
 (fun (a, b, c) { if (a) [b] else [c] })(true, "three", "four")
-stdout : ["three"] : [[Char]]
+stdout : ["three"] : [String]
 
 Logical operators
 true && (false || true)

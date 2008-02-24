@@ -12,11 +12,11 @@ stdout : (x=4,y="three") : (x:Int,y:String)
 
 Let pattern matching
 {var (x=a,y=(z=b)) = (y=(z=3),x="four"); a}
-stdout : "four" : [Char]
+stdout : "four" : String
 
 Lambda pattern matching
 (fun((x=a,y=(z=b))) { a }) ((y=(z=3),x="four"))
-stdout : "four" : [Char]
+stdout : "four" : String
 
 Projection of absent field
 (x="1").y;;
@@ -29,11 +29,11 @@ stdout : 3 : Int
 
 Projection sections
 (.x)((y=(z=3),x="four"))
-stdout : "four" : [Char]
+stdout : "four" : String
 
 Passing two different closed rows to an open-row function arg
 fun foo(x) { x.a } (foo((a="a", b=2)), foo((a=1, c=3)))
-stdout : ("a", 1) : ([Char], Int)
+stdout : ("a", 1) : (String, Int)
 
 Passing two different list types to a polymorphic function
 fun foo(x) { hd(x) } (foo([1,2]), foo("abc"))
