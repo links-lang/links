@@ -567,12 +567,12 @@ struct
                 | `Variant row ->
                     fst (TypeUtils.split_row cname row)
                 | _ -> assert false in
-
+(*
               Debug.print ("cname: "^cname^", cvar: "^cvar^
                              ", t: "^Types.string_of_datatype t^
                              ", ctt: "^Types.string_of_datatype ctt^
                              ", ct: "^Types.string_of_datatype ct);
-
+*)
             let default =
               match dbody with
                 | Variant_selection_empty _ -> None
