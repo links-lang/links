@@ -98,14 +98,14 @@ object (self)
         (* aliases bound in `bs'
            should not escape the scope of the block *)
         let o = {<>} in
-        let o, x = o#list (fun o -> o#binding) bs in
-        let o, p = o#phrase p in 
+        let o, bs = o#list (fun o -> o#binding) bs in
+        let o, p  = o#phrase p in 
           self, `Block (bs, p)
     | `TableLit (p1, (t, Some (t1, t2)), fcs, p2) ->
         let o, p1 = self#phrase p1 in
         let o, t  = o#datatype t in
         let t1    = expand_aliases aliases t1
-        and t2    = expand_aliases aliases t1 in
+        and t2    = expand_aliases aliases t2 in
         let o, p2 = o#phrase p2 in
           o, `TableLit (p1, (t, Some (t1, t2)), fcs, p2)
 
