@@ -9,7 +9,7 @@
   particular that there are no free variables. 
 *)
 let program =
-  fun tyenv aliases filename env ->
+  fun ({Types.var_env=env; Types.tycon_env=_} as tyenv) code ->
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 
@@ -42,7 +42,7 @@ let program =
           | e -> super#phrase e
     end in
     let program =
-      let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program filename in
+      let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value Basicsettings.pp) Parse.program code in
       let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
         program
     in
