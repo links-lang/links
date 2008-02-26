@@ -6,19 +6,19 @@ module Eval = struct
   exception Wrong
   exception TopLevel of Value.t
 
-
   let eval_error fmt = 
     let error msg = raise (EvaluationError msg) in
       Printf.kprintf error fmt
 
-
-  let box_string : string -> Value.t
-    = fun _ -> assert false
-  and unbox_string : Value.t -> string
-    = fun _ -> assert false
-
-  let db_connect : Value.t -> Result.database * string
-    = fun _ -> assert false
+  let db_connect : Value.t -> Result.database * string = fun db ->
+    let driver = Value.unbox_string (Value.project "driver" db)
+    and name = Value.unbox_string (Value.project "name" db)
+    and args = Value.unbox_string (Value.project "args" db) in
+    let params =
+      (if args = "" then name
+       else name ^ ":" ^ args)
+    in
+      Result.db_connect driver params
 
   let client_call : string -> Value.continuation -> Value.t list -> 'a =
     fun _ _ _ -> assert false
@@ -26,11 +26,118 @@ module Eval = struct
   let apply_prim : string -> Value.t list -> Value.t =
     fun _ _ -> assert false
 
-  let untuple : Value.t -> Value.t list =
-    fun _ -> assert false
 
-  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t 
-    = fun _ _ -> assert false
+  
+  module Q =
+  struct
+    (** Substitutes values for the variables in a query, and performs
+        interpolation in LIKE expressions. *)
+    let rec normalise_query (env:Value.env) (db:Result.database) 
+        (qry:SqlQuery.sqlQuery) : SqlQuery.sqlQuery =
+
+      let normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
+        let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+        let rec nle =
+          function
+            | `Var x -> `Str (quote (Value.unbox_string (IntMap.find (int_of_string x) env)))
+            | (`Percent | `Str _) as l -> l
+            | `Seq ls -> `Seq (List.map nle ls)
+        in
+          nle l
+      in
+      let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
+        | `V name -> begin
+            try
+              match IntMap.find (int_of_string name) env with
+                | `Bool true -> `True
+                | `Bool false -> `False
+                | `Int value -> `N value
+                | `List (`Char _::_) as c  
+                  -> `Str (db # escape_string (Value.unbox_string c))
+                | `List ([]) -> `Str ""
+                | `Char c -> `Str (String.make 1 c)
+                | v -> failwith("Internal error: variable " ^ name ^ 
+                                  " in query "^ SqlQuery.string_of_query qry ^ 
+                                  " had unexpected type at runtime: " ^ 
+                                  Value.string_of_value v)
+            with NotFound _ -> failwith ("Internal error: undefined query variable '"^
+                                           name^"'")
+          end
+        | `Op (symbol, left, right) ->
+            `Op(symbol, normalise_expression left, normalise_expression right)
+        | `Not expr ->
+            `Not(normalise_expression expr)
+        | `Like(lhs, regex) -> 
+            `Like(normalise_expression lhs,
+                  normalise_like_expression regex)
+        | expr -> expr
+      in
+      let normalise_tables =
+        List.map (function 
+               | `TableVar(var, alias) ->
+                   (match IntMap.find (int_of_string var) env with
+                        `Table(_, tableName, _) -> `TableName(tableName, alias)
+                      | _ -> failwith "Internal Error: table source was not a table!")
+               | `TableName (name, alias) -> `TableName(name, alias)
+               | `SubQuery _ ->
+                   failwith "Not implemented subqueries yet"
+            ) 
+      in {qry with
+            SqlQuery.tabs = normalise_tables qry.SqlQuery.tabs;
+            SqlQuery.cond = List.map normalise_expression qry.SqlQuery.cond;
+            (* TBD: allow variables as the from/most values, normalise them here. *)
+        SqlQuery.from = qry.SqlQuery.from;
+        SqlQuery.most = qry.SqlQuery.most}
+
+    exception NoSuchField of string
+
+    let query_result_types (query : SqlQuery.sqlQuery)
+        : (string * Types.datatype) list =
+      try 
+        concat_map
+          (function
+               (`F field, alias) -> 
+                 [alias, field.SqlQuery.ty]
+             | (expr, _alias) -> failwith("Internal error: no type info for sql expression " 
+                                          ^ SqlQuery.string_of_expression expr))
+          query.SqlQuery.cols
+      with NoSuchField field ->
+        failwith ("Field " ^ field ^ " from " ^ 
+                    SqlQuery.string_of_query query)
+
+    let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t = fun env query ->
+      let get_database : SqlQuery.sqlQuery -> Result.database = fun query ->
+        let vars = concat_map (function
+                                 | `TableVar (var, _) -> [int_of_string var]
+                                 | _ -> []) query.SqlQuery.tabs in
+        let dbs = 
+          List.map (fun var -> 
+                 match IntMap.find var env with
+                   | `Table((db, _params), _table_name, _row) -> db
+                   | _ -> assert false) vars in
+          
+          assert (dbs <> []);
+          
+          if(not (all_equiv (=) dbs)) then
+            failwith ("Cannot join across different databases");
+          
+          List.hd(dbs) in
+
+      let db = get_database query in
+        (* TBD: factor this stuff out into a module that processes
+           queries *)
+      let result_types = query_result_types query in
+      let query_string = SqlQuery.string_of_query (normalise_query env db query) in
+        
+        prerr_endline("RUNNING QUERY:\n" ^ query_string);
+        let t = Unix.gettimeofday() in
+        let result = Database.execute_select result_types query_string db in
+          Debug.print("Query took : " ^ 
+                        string_of_float((Unix.gettimeofday() -. t)) ^ "s");
+          (*result*) assert false
+  end
+
+  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t = Q.do_query
 
   let switch_context _ = 
     assert false
@@ -39,7 +146,7 @@ module Eval = struct
     | `Constant Syntax.Boolean b -> `Bool b
     | `Constant Syntax.Integer n -> `Int n
     | `Constant Syntax.Char c -> `Char c
-    | `Constant Syntax.String s -> box_string s
+    | `Constant Syntax.String s -> Value.box_string s
     | `Constant Syntax.Float f -> `Float f
     | `Variable v ->
         (match Value.lookup v env with
@@ -79,9 +186,9 @@ module Eval = struct
             children [] in
         let children = (StringMap.fold 
                           (fun name v attrs ->
-                             Result.Attr (name, unbox_string (value env v)) :: attrs)
+                             Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
                           attrs children) in
-          `XML (Result.Node (tag, children))
+          `XML (Value.Node (tag, children))
     | `ApplyPure (_, args) ->
         (assert false) (*Library.apply_pfun*) (assert false) (List.map (value env) args)
     | `Coerce (v, _) -> value env v
@@ -172,11 +279,11 @@ module Eval = struct
     | `Database v                 -> `Database (db_connect (value env v))
     | `Query q                    -> do_query env q
     | `App (f, p)                 -> apply cont env (value env f,
-                                                     untuple (value env p))
+                                                     Value.untuple (value env p))
     | `Table (db, name, (readtype, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->
-               `Table ((db, params), unbox_string name, row)
+               `Table ((db, params), Value.unbox_string name, row)
            | _ -> eval_error "Error evaluating table handle")
     | `CallCC f                   -> 
         apply cont env (value env f, [`Continuation cont])

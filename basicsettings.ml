@@ -40,3 +40,8 @@ end
 
 (* Installed preprocessor *)
 let pp = Settings.add_string("preprocessor", "", `System)
+
+(** Set this to [true] to print the body and environment of a
+    function. When [false], functions are simply printed as "fun" *)
+let printing_functions = Settings.add_bool ("printing_functions", false, `User)
+
