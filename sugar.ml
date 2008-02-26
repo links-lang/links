@@ -1092,6 +1092,17 @@ module Desugarer =
                  patternized
                  (desugar body)
            | `Block (es, exp) ->
+               (* remove things that don't get compiled to the IR *)
+               let es = List.filter
+                 (fst ->- function
+                    | `Val     _ -> true
+                    | `Fun     _ -> true
+                    | `Funs    _ -> true
+                    | `Foreign _ -> assert false (* no nested "foreign" at present *)
+                    | `Include _ -> assert false (* "include" not supported at present *)
+                    | `Type    _ -> false        (* alias definitions are desugared prior to this *) 
+                    | `Infix     -> false        (* infix definitions have no representation in the IR *)
+                    | `Exp     _ -> true) es in
                let es = 
                  concat_map (fst ->- (function (* pattern * untyped_expression * position * recursivep *)
                              | `Val (p, e, _, _) (* TODO: use datatype, if any *) -> 
@@ -1113,7 +1124,7 @@ module Desugarer =
                                        desugar (`FunLit funlit, pos'),
                                        pos, 
                                        true)) defs
-                             | `Type _ -> assert false
+                             | `Type _    -> assert false
                              | `Include _ -> assert false
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
@@ -1264,9 +1275,8 @@ module Desugarer =
                                Variable (name, pos),
                                pos),
                     location, pos)]
-       | `Type (name, args, (_, Some rhs)) ->
-           let args = List.map (snd ->- val_of) args in
-             [Alias (name, args, rhs, pos)]
+       | `Type _ ->
+           assert false
        | `Foreign (language, name, (_, Some datatype)) -> 
            [Alien (language, name, datatype, pos) ]
        | `Include path ->
@@ -1291,6 +1301,7 @@ module Desugarer =
      let rec desugar : binding list -> _ = function
        | [] -> []
        | (`Infix, _) :: phrases -> desugar phrases
+       | (`Type _, _) :: phrases -> desugar phrases
        | phrase :: phrases ->
            desugar_definition phrase @ desugar phrases
      in

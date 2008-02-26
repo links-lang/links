@@ -44,9 +44,11 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 		   | `Body t -> inst rec_env t)
 	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
 	  | `Record row -> `Record (inst_row rec_env row)
-	  | `Variant row ->  `Variant (inst_row rec_env row)
+	  | `Variant row -> `Variant (inst_row rec_env row)
 	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
           | `ForAll (_,t) -> inst rec_env t
+          | `Alias ((name, ts), d) -> 
+              `Alias ((name, List.map (inst rec_env) ts), inst rec_env d)
 	  | `Application (n, elem_type) ->
 	      `Application (n, List.map (inst rec_env) elem_type)
     and inst_row : inst_env -> row -> row = fun rec_env row ->
@@ -97,24 +99,6 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
     in
       inst (IntMap.empty, IntMap.empty)
 
-(*
-  This is just type application.
-  
-  (forall x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
-*)
-let instantiate_alias lhs ts =
-  match lhs with
-    | `ForAll (vars, alias) ->
-        let _, tenv =
-          List.fold_left (fun (ts, tenv) tv ->
-                            match ts, tv with
-                              | (t::ts), `RigidTypeVar var ->
-                                  ts, IntMap.add var t tenv
-                              | _ -> assert false) (ts, IntMap.empty) vars
-        in
-          instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes alias)
-    | t -> t
-
 (** instantiate_typ t
     remove any quantifiers and rename bound type vars accordingly
 *)
@@ -155,4 +139,3 @@ let instantiate : environment -> string -> datatype =
 let var      = instantiate
 and typ      = instantiate_typ
 and datatype = instantiate_datatype
-and alias    = instantiate_alias

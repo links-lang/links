@@ -52,7 +52,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, (typeenv, _)) as envs) _ ->
+    ((fun ((_, {Types.var_env = typeenv}) as envs) _ ->
         StringSet.iter (fun k ->
                 Printf.fprintf stderr " %-16s : %s\n"
                   k (Types.string_of_datatype (Env.String.lookup typeenv k)))
@@ -89,7 +89,7 @@ let rec directives
      "load in a Links source file, replacing the current environment");
 
     "withtype",
-    ((fun (_, ((tenv, alias_env):Types.typing_environment) as envs) args ->
+    ((fun (_, {Types.var_env = tenv} as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read (String.concat " " args) in
@@ -101,7 +101,7 @@ let rec directives
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
                            let t' = Instantiate.datatype fresh_envs t' in 
-                             Inference.unify alias_env (t,t');
+                             Inference.unify (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))
                 (Env.String.domain tenv)
@@ -153,11 +153,12 @@ let interact envs =
         flush stdout in
   let rec interact envs =
     let evaluate_replitem parse envs input = 
+      let set_context (e, _) tyenv = (e, tyenv) in
       Errors.display ~default:(fun _ -> envs)
         (lazy
            (match measure "parse" parse input with 
-              | (`Definitions [] : Sugartypes.sentence'), _ -> envs
-              | `Definitions defs, (`Definitions sugar : Sugartypes.sentence) -> 
+              | `Definitions [], _, tyenv -> set_context envs tyenv
+              | `Definitions defs, (`Definitions sugar : Sugartypes.sentence), tyenv -> 
                   let (valenv, _ as envs), _, (Syntax.Program (defs', _)) =
                     process_program
                       ~printer:(fun _ _ -> ())
@@ -174,10 +175,11 @@ let interact envs =
                                                 ^" : "^ 
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
-                    envs
-              | `Expression expr, `Expression sexpr -> 
-                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in envs 
-              | `Directive directive, _ -> execute_directive directive envs))
+                    set_context envs tyenv
+              | `Expression expr, `Expression sexpr, tyenv -> 
+                  let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in 
+                    set_context envs tyenv
+              | `Directive directive, _, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout; 
 
@@ -185,12 +187,13 @@ let interact envs =
 
       let parse_and_desugar input = 
         let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
-        let sentence, _, _ = Frontend.Pipeline.interactive tyenv pos_context sugar in
+        let sentence, _, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
         let sentence' = match sentence with
           | `Definitions defs -> `Definitions (Sugar.desugar_definitions defs)
-          | `Expression e -> `Expression (Sugar.desugar_expression e) 
-          | `Directive d -> `Directive d in
-          sentence', sentence in
+          | `Expression e     -> `Expression (Sugar.desugar_expression e) 
+          | `Directive d      -> `Directive d in
+          sentence', sentence, tyenv'
+      in
 
       interact (evaluate_replitem parse_and_desugar envs (stdin, "<stdin>"))
   in 
@@ -276,7 +279,7 @@ let main () =
       else max m (Types.TypeVarSet.max_elt set) in
     let max_prelude_tvar =
       List.fold_right max_or 
-        (Env.String.range (Env.String.map Types.free_bound_type_vars (fst prelude_types)))
+        (Env.String.range (Env.String.map Types.free_bound_type_vars (prelude_types.Types.var_env)))
         (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
       Types.bump_variable_counter max_prelude_tvar
   in
@@ -285,7 +288,7 @@ let main () =
     (let (stdvalenv, stdtypeenv) = !stdenvs in
        stdenvs := 
          (stdvalenv @ prelude_compiled,
-          Types.concat_typing_environment stdtypeenv prelude_types));
+          Types.extend_typing_environment stdtypeenv prelude_types));
     Utility.for_each !cmd_line_actions
       (function `Evaluate str -> evaluate_string_in !stdenvs str);
   (* TBD: accumulate type/value environment so that "interact" has access *)

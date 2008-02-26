@@ -25,15 +25,12 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
           (fun cachefile ->
              (Marshal.from_channel cachefile 
                 : (Types.typing_environment * Syntax.program)))
-          (* (OCaml manual recommends putting a type signature on unmarshal 
-             calls; not clear whether this actually helps. It seems we get 
-             a segfault if the marhsaled data is not the right type.) *)
       else
         (Debug.print("No precompiled " ^ filename);
          raise (Sys_error "Precompiled source file out of date."))
     with (Sys_error _| Unix.Unix_error _) ->
       let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-      let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+      let program, _, tenv = Frontend.Pipeline.program Library.typing_env pos_context sugar in
       let program = Sugar.desugar_program program in
       let env, program = measure "type" (Inference.type_program Library.typing_env) program in
       let program = measure "optimise" Optimiser.optimise_program (env, program) in
@@ -43,10 +40,15 @@ let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fu
            call_with_open_outfile cachename ~binary:true
              (fun cachefile ->
                 Marshal.to_channel cachefile 
-                  (env, expunge_all_source_pos program)
-                  [Marshal.Closures])
+                  (* Serialise the typing environment returned from
+                     sugar typing (which includes alias bindings), not
+                     the typing environment returned from
+                     Inference.type_program (which doesn't) *)
+                  (tenv, expunge_all_source_pos program
+                     : Types.typing_environment * Syntax.program)
+                  [])
 	 with _ -> ()) (* Ignore errors writing the cache file *);
-        env, program
+        tenv, program
   
 let dump_cached filename =
    let _env, program = read_file_cache filename in

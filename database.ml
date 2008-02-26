@@ -13,7 +13,8 @@ end
 let value_of_db_string (value:string) = function
   | `Primitive `Bool -> Result.bool (value = "true")
   | `Primitive `Char -> Result.char (String.get value 0)
-  | `Application ("String", [])
+  | `Alias (("String", _), _) -> Result.string_as_charlist value
+        (* BUG: we should be more principled about detecting strings *)
   | `Application ("List", [`Primitive `Char]) -> Result.string_as_charlist value
   | `Primitive `Int  -> Result.int (num_of_string value)
   | `Primitive `Float -> (if value = "" then Result.float 0.00      (* HACK HACK *)

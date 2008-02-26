@@ -26,8 +26,8 @@ let sqlable_primtype ty =
           | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
                                              Types.string_of_datatype ty));
               false)
-    | `Application ("String", []) -> true
     | `Application ("List", [`Primitive `Char]) -> true
+    | `Alias (("String", _), _) -> true
     | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
                         Types.string_of_datatype ty));
         false

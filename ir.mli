@@ -62,7 +62,6 @@ and binding =
   | `Fun of binder * binder list * computation * location
   | `Rec of (binder * binder list * computation * location) list
   | `Alien of binder * language
-  | `Alias of tyname * tyvar list * Types.datatype
   | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
@@ -90,14 +89,12 @@ val string_of_program : program -> string
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
-  type alias_environment = Types.alias_environment
-  type typing_environment = environment * alias_environment
+  type typing_environment = environment
 
   class visitor : typing_environment ->
   object ('self_type)
     val tyenv : typing_environment
     val tenv : environment
-    val alias_env : alias_environment
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
@@ -130,10 +127,10 @@ module Transform : TRANSFORM
 
 module Inline :
 sig
-  val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program
+  val program : Types.datatype Env.Int.t -> program -> program
 end
 
 module ElimDeadDefs :
 sig
-  val program : (Types.datatype Env.Int.t * Types.alias_environment) -> program -> program
+  val program : Types.datatype Env.Int.t -> program -> program
 end

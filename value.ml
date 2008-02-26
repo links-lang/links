@@ -72,25 +72,8 @@ let bind = IntMap.add
 let lookup = IntMap.lookup
 let shadow outers ~by = IntMap.fold IntMap.add by outers
 
-let type_of_primitive : primitive_value -> Types.datatype = function
-  | `Bool _ -> `Primitive `Bool
-  | `Int _ -> `Primitive `Int
-  | `Float _ -> `Primitive `Float
-  | `Char _ -> `Primitive `Char
-  | `XML _ -> `Primitive `XmlItem
-  | `Database _ -> `Primitive `DB
-  | `Table _ -> `Primitive `Abstract
-  | `NativeString _ ->`Primitive `NativeString
-
-let string_of_primitive_type = type_of_primitive ->- Types.string_of_datatype
-
 let string_as_charlist s : t =
   `List (List.map (fun x -> (`Char x)) (explode s))
-
-let rec string_of_value_type = function
-  | #primitive_value as p -> string_of_primitive_type p
-  | `List items -> "["^ string_of_value_type (List.hd items) ^"]"
-  | _ -> "type unknown" (* FIXME *)
 
 exception Match of string
 
@@ -194,7 +177,7 @@ and unbox_bool : t -> bool   = function
 and box_int i = `Int i      
 and unbox_int  : t -> num    = function
   | `Int i   -> i
-  | other -> failwith("Type error unboxing int (got "^ string_of_value other ^" : " ^ string_of_value_type other ^ ")")
+  | other -> failwith("Type error unboxing int")
 and box_float f = `Float f  
 and unbox_float : t -> float = function
   | `Float f -> f | _ -> failwith "Type error unboxing float"

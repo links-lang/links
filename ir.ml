@@ -74,7 +74,6 @@ and binding =
   | `Fun of (binder * binder list * computation * location)
   | `Rec of (binder * binder list * computation * location) list
   | `Alien of (binder * language)
-  | `Alias of (tyname * tyvar list * Types.datatype)
   | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
@@ -112,14 +111,12 @@ let string_of_program _ = "[PROGRAM]"
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
-  type alias_environment = Types.alias_environment
-  type typing_environment = environment * alias_environment
+  type typing_environment = environment
 
   class visitor : typing_environment ->
   object ('self_type)
     val tyenv : typing_environment
     val tenv : environment
-    val alias_env : alias_environment
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
@@ -160,8 +157,7 @@ struct
   open TypeUtils
 
   type environment = datatype Env.Int.t
-  type alias_environment = Types.alias_environment
-  type typing_environment = environment * alias_environment
+  type typing_environment = environment
 
   let info_type (t, _, _) = t
 
@@ -188,11 +184,10 @@ struct
 
   module Env = Env.Int
 
-  class visitor ((tenv, alias_env) as tyenv : typing_environment) =
+  class visitor (tenv as tyenv : typing_environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
     val tenv = tenv
-    val alias_env = alias_env
 
     method lookup_type : var -> datatype = fun var ->
       Env.lookup tenv var
@@ -261,7 +256,7 @@ struct
                 | None -> make_record_type field_types
                 | Some t ->
                     begin
-                      match TypeUtils.expand_aliases ~aenv:alias_env t with
+                      match TypeUtils.concrete_type t with
                         | `Record row ->
                             `Record (extend_row field_types row)
                         | _ -> assert false
@@ -272,11 +267,11 @@ struct
             (*             Debug.print ("project_e: " ^ Show_value.show (`Project (name, v))); *)
             let (v, vt, o) = o#value v in
 (*               Debug.print ("project_vt: " ^ Types.string_of_datatype vt); *)
-              `Project (name, v), deconstruct (project_type ~aenv:alias_env name) vt, o
+              `Project (name, v), deconstruct (project_type name) vt, o
         | `Erase (name, v) ->
 (*             Debug.print ("erase_e: " ^ Show_value.show (`Erase (name, v))); *)
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type ~aenv:alias_env name) vt in
+            let t = deconstruct (erase_type name) vt in
 (*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
 (*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
               `Erase (name, v), t, o
@@ -296,7 +291,7 @@ struct
             let (f, ft, o) = o#value f in
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct (return_type ~aenv:alias_env) ft, o
+              `ApplyPure (f, args), deconstruct return_type ft, o
         | `Comparison (v, op, w) ->
             let v, _, o = o#value v in
             let w, _, o = o#value w in
@@ -322,7 +317,7 @@ struct
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
 (*               Debug.print ("apply: " ^ Show_tail_computation.show (`Apply (f, args))); *)
-              `Apply (f, args), deconstruct (return_type ~aenv:alias_env) ft, o
+              `Apply (f, args), deconstruct return_type ft, o
         | `Special special ->
             let special, t, o = o#special special in
               `Special special, t, o
@@ -380,7 +375,7 @@ struct
               `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
         | `CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct (return_type ~aenv:alias_env) t, o
+              `CallCC v, deconstruct return_type t, o
       
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -451,11 +446,6 @@ struct
         | `Alien (x, language) ->
             let x, o = o#binder x in
               `Alien (x, language), o
-        | `Alias (name, quantifiers, t) ->
-(*             Debug.print ("registering alias: "^name);*)
-            let alias_env = register_alias (name, quantifiers, t) alias_env in
-(*              Debug.print ("updated alias env: "^Types.Show_alias_environment.show alias_env);*)
-              `Alias (name, quantifiers, t), {< alias_env=alias_env;  tyenv=(tenv, alias_env) >}
         | `Module (name, defs) ->
             let defs, o =
               match defs with
@@ -471,7 +461,7 @@ struct
       fun (var, info) ->
 (*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
         let tenv = Env.bind tenv (var, info_type info) in
-          (var, info), {< tenv=tenv; tyenv=(tenv, alias_env) >}
+          (var, info), {< tenv=tenv; tyenv=tenv >}
   end
 end
 

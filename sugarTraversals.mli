@@ -125,3 +125,49 @@ object
   inherit fold
   method virtual satisfied : bool
 end
+
+(* A combination of fold and map *)
+class fold_map :
+object ('self)
+  method binder          : binder -> 'self * binder
+  method binding         : binding -> 'self * binding
+  method bindingnode     : bindingnode -> 'self * bindingnode
+  method binop           : binop -> 'self * binop
+  method bool            : bool -> 'self * bool
+  method char            : char -> 'self * char
+  method constant        : constant -> 'self * constant
+  method datatype        : datatype -> 'self * datatype
+  method datatype'       : datatype' -> 'self * datatype'
+  method directive       : directive -> 'self * directive
+  method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
+  method fieldspec       : fieldspec -> 'self * fieldspec
+  method float           : float -> 'self * float
+  method funlit          : funlit -> 'self * funlit
+  method int             : int -> 'self * int
+  method iterpatt        : iterpatt -> 'self * iterpatt
+  method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
+  method location        : location -> 'self * location
+  method logical_binop   : logical_binop -> 'self * logical_binop
+  method name            : name -> 'self * name
+  method num             : num -> 'self * num
+  method operator        : operator -> 'self * operator
+  method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
+  method pattern         : pattern -> 'self * pattern
+  method patternnode     : patternnode -> 'self * patternnode
+  method phrase          : phrase -> 'self * phrase
+  method phrasenode      : phrasenode -> 'self * phrasenode
+  method position        : position -> 'self * position
+  method program         : program -> 'self * program
+  method quantifier      : quantifier -> 'self * quantifier
+  method regex           : regex -> 'self * regex
+  method regexflag       : regexflag -> 'self * regexflag
+  method replace_rhs     : replace_rhs -> 'self * replace_rhs
+  method row             : row -> 'self * row
+  method row_var         : row_var -> 'self * row_var
+  method sec             : sec -> 'self * sec
+  method sentence        : sentence -> 'self * sentence
+  method sentence'       : sentence' -> 'self * sentence'
+  method string          : name -> 'self * name
+  method unary_op        : unary_op -> 'self * unary_op
+  method unknown         : 'a . 'a -> 'self * 'a
+end

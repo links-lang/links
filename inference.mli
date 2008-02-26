@@ -6,4 +6,4 @@ val type_program    : Types.typing_environment -> Syntax.untyped_program ->
 val type_expression : Types.typing_environment -> Syntax.untyped_expression ->
   Types.typing_environment * Syntax.expression
 
-val unify : Types.alias_environment -> Types.datatype * Types.datatype -> unit
+val unify : Types.datatype * Types.datatype -> unit

@@ -184,18 +184,6 @@ type primitive_value = [
 | `NativeString of string
 ]  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
-let type_of_primitive : primitive_value -> datatype = function
-  | `Bool _ -> `Primitive `Bool
-  | `Int _ -> `Primitive `Int
-  | `Float _ -> `Primitive `Float
-  | `Char _ -> `Primitive `Char
-  | `XML _ -> `Primitive `XmlItem
-  | `Database _ -> `Primitive `DB
-  | `Table _ -> `Primitive `Abstract
-  | `NativeString _ ->`Primitive `NativeString
-
-let string_of_primitive_type = type_of_primitive ->- string_of_datatype
-
 type result = [
   | `PrimitiveFunction of string
   | `ClientFunction of (string)
@@ -252,13 +240,6 @@ and environment = (binding list)
 let string_as_charlist s : result =
   `List (map (fun x -> (`Char x)) (explode s))
 
-
-let rec string_of_value_type = function
-  | #primitive_value as p -> string_of_primitive_type p
-  | `List items -> "["^ string_of_value_type (hd items) ^"]"
-(*   | `Application(ctor, args) -> ctor ^ "(" ^  *)
-(*       mapstrcat ", " string_of_value_type args ^ ")" *)
-  | _ -> "type unknown" (* FIXME *)
 
 let expr_of_prim_val : result -> expression option = function
     `Bool b -> Some(Constant(Boolean b, Syntax.no_expr_data))
@@ -588,7 +569,7 @@ and unbox_bool : result -> bool   = function
 and box_int i = `Int i      
 and unbox_int  : result -> num    = function
   | `Int i   -> i
-  | other -> failwith("Type error unboxing int (got "^ string_of_result other ^" : " ^ string_of_value_type other ^ ")")
+  | other -> failwith("Type error unboxing int")
 and box_float f = `Float f  
 and unbox_float : result -> float = function
   | `Float f -> f | _ -> failwith "Type error unboxing float"

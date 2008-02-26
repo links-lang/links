@@ -36,7 +36,6 @@ val is_primitive : string -> bool
 val is_pure_primitive : string -> bool
 val value_env : primitive option Utility.StringMap.t ref
 val type_env : Types.environment
-val alias_env : Types.alias_environment
 val typing_env : Types.typing_environment
 val prelude_env : Types.typing_environment option ref
 val apply_pfun : string -> result list -> result

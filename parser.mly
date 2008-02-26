@@ -597,6 +597,7 @@ binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| typedecl SEMICOLON                                           { $1 }
 
 bindings:
 | binding                                                      { [$1] }
@@ -667,7 +668,6 @@ primary_datatype:
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
 								   | "NativeString" -> PrimitiveType `NativeString
-                                                                (*   | "Xml"     -> ListType (PrimitiveType `XmlItem) *)
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])
                                                                }

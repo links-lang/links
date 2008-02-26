@@ -48,31 +48,17 @@ let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
               raise(WrongArgumentTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
           | _ -> raise(NonfuncAppliedTypeError(pos, fexpr, fntype, pexprs, paramtypes, mb))
               
-let mistyped_union pos l ltype r rtype (* not quite right, e.g. [1] :: [1.] *)
-    = raise (Type_error (pos, "Type error in union of "^ string_of_expression l ^" ("^ string_of_datatype ltype 
-                           ^") and "^ string_of_expression r ^" ("^ string_of_datatype rtype ^")"))
-
 let mistype pos (condition, condtype) expected_type
     = raise (Type_error (pos, "`"^ string_of_expression condition
                            ^"' has type "^ string_of_datatype condtype
                            ^", but is used in a context where a "^ string_of_datatype expected_type
                            ^" is expected"))
                
-
-let nested_def pos var
-    = raise (ASTSyntaxError (pos, "Syntax error"
-                              ^":\nDefinitions are only allowed at top level, but the definition of `"
-                              ^ var ^"' is not at top level."))
-  
-  
 let letrec_nonfunction pos (form, _)
     = raise(ASTSyntaxError
               (pos, "Invalid form:\n  The values bound by letrec must be function forms,"
                  ^"\n  but `" ^ string_of_expression form 
                  ^"' is not a function form"))
-
-let invalid_name pos name message = 
-  raise (ASTSyntaxError (pos, "`"^ name ^"' is an invalid name: " ^ message))
 
 let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s

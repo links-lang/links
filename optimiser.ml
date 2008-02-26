@@ -343,7 +343,7 @@ let rewriters env = [
 ]
 
 let run_optimisers
-    : (Types.environment * Types.alias_environment) -> RewriteSyntax.rewriter
+    : Types.typing_environment -> RewriteSyntax.rewriter
   = RewriteSyntax.all -<- rewriters
 
 let optimise' env expr =

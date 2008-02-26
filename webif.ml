@@ -87,7 +87,6 @@ let stubify_client_funcs globals (Syntax.Program (defs, _) as program) : Result.
     | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
     | Syntax.Define (_, _, (`Client|`Native), _) -> false
     | Syntax.Alien ("javascript", _, _, _) -> false
-    | Syntax.Alias _ -> true
   in 
   let server_defs, client_defs = List.partition is_server_fun defs in
   let client_env =
@@ -207,10 +206,10 @@ let perform_request
 
         (* This assertion failing indicates that not everything needed
            was serialized into the link: *)
-        assert(Syntax.expr_closed_wrt expr 
-                 (StringSet.union
-                    (StringSet.from_list (dom globals @ dom env))
-                    (Env.String.domain (fst Library.typing_env))));
+        assert (Syntax.expr_closed_wrt expr 
+                  (StringSet.union
+                     (StringSet.from_list (dom globals @ dom env))
+                     (Env.String.domain (Library.typing_env.Types.var_env))));
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env

@@ -21,8 +21,7 @@ type 'a point = 'a Unionfind.point
 module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
 module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB
-                 | `Abstract | `NativeString]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
     deriving (Typeable, Show, Pickle)
 
 type 't meta_type_var_basis =
@@ -53,7 +52,8 @@ type datatype =
     | `Record of row
     | `Variant of row
     | `Table of datatype * datatype
-    | `Application of (string * (datatype) list)
+    | `Alias of ((string * datatype list) * datatype)
+    | `Application of (string * datatype list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
 and field_spec = [ `Present of datatype | `Absent ]
@@ -65,11 +65,10 @@ and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type environment        = datatype Env.String.t
- and alias_environment  = datatype Env.String.t
- and typing_environment = environment * alias_environment
+ and alias_environment  = (int list * datatype) Env.String.t
+ and typing_environment = { var_env   : environment ;
+                            tycon_env : alias_environment }
     deriving (Show)
-
-val extend_env : typing_environment -> typing_environment -> typing_environment
 
 val concrete_type : datatype -> datatype
 
@@ -84,15 +83,14 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
-val page_type : datatype
 val native_string_type : datatype
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
-val free_bound_type_vars : datatype -> TypeVarSet.t
-val free_bound_row_type_vars : row -> TypeVarSet.t
+val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t
+val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
 
 (** used to freshen mailboxes in typename aliases *)
 val freshen_mailboxes : datatype -> datatype
@@ -179,7 +177,6 @@ val unwrap_row : row -> (row * row_var option)
 val extract_tuple : row -> datatype list
 
 (** type constructors *)
-val make_formlet_type : datatype -> datatype
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
 val make_mailbox_type : datatype -> datatype
@@ -191,32 +188,15 @@ val make_table_type : datatype * datatype -> datatype
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
 
-(** type aliases *)
-exception UndefinedAlias of string
-
-type type_alias_set = Utility.StringSet.t
-
-val register_alias : string * int list * datatype -> alias_environment -> alias_environment
-
-val free_alias_check : alias_environment -> datatype -> unit
-val free_alias_check_row : alias_environment -> row -> unit
-
-val is_mailbox_free : alias_environment -> datatype -> bool
-val is_mailbox_free_row : alias_environment -> row -> bool
-
-val type_aliases : datatype -> type_alias_set
-val row_type_aliases : row -> type_alias_set
-
-(** alias lookup *)
-exception AliasMismatch of string
-val lookup_alias : string * datatype list -> alias_environment -> datatype
+val is_mailbox_free     : datatype -> bool
+val is_mailbox_free_row : row -> bool
 
 (** environments *)
 type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
        (row Unionfind.point) Utility.IntMap.t ref)
 
-val concat_typing_environment : typing_environment -> typing_environment -> typing_environment
+val extend_typing_environment : typing_environment -> typing_environment -> typing_environment
 
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t

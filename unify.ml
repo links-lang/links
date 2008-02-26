@@ -23,18 +23,18 @@ type error = [
 
 exception Failure of error
 
-let occurs_check alias_env var t =
+let occurs_check var t =
   match Settings.get_value infer_recursive_types with
     | "all" -> true
-    | "guarded" -> is_guarded alias_env var t
-    | "positive" -> not (is_negative alias_env var t)
+    | "guarded" -> is_guarded var t
+    | "positive" -> not (is_negative var t)
     | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
 
-let occurs_check_row alias_env var row =
+let occurs_check_row var row =
   match Settings.get_value infer_recursive_types with
     | "all" -> true
-    | "guarded" -> is_guarded_row alias_env var row
-    | "positive" -> not (is_negative_row alias_env var row)
+    | "guarded" -> is_guarded_row var row
+    | "positive" -> not (is_negative_row var row)
     | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
 
 let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars datatype)
@@ -43,17 +43,50 @@ let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars dataty
 inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
-    match (t1, t2) with
-      | `Not_typed, `Not_typed -> true
-      | `Primitive x, `Primitive y -> x = y
-      | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
-          Unionfind.equivalent lpoint rpoint
-      | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
-          eq_types (lfrom, rfrom) && eq_types (lto, rto) && eq_types (lm, rm)
-      | `Record l, `Record r -> eq_rows (l, r)
-      | `Variant l, `Variant r -> eq_rows (l, r)
-      | `Application (s, ts), `Application (s', ts') when s = s' -> List.for_all2 (Utility.curry eq_types) ts ts'
-      | _, _ -> false
+    let rec unalias = function
+      | `Alias (_, x) -> unalias x
+      | x             -> x in
+    match unalias t1 with 
+      | `Not_typed -> 
+          begin match unalias t2 with
+              `Not_typed -> true
+            | _          -> false
+          end
+      | `Primitive x ->
+          begin match unalias t2 with
+              `Primitive y -> x = y
+            | _            -> false
+          end
+      | `MetaTypeVar lpoint ->
+          begin match unalias t2 with
+              `MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
+            | _                   -> false
+          end
+      | `Function (lfrom, lm, lto) ->
+          begin match unalias t2 with
+              `Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom)
+                                         && eq_types (lto,   rto)
+                                         && eq_types (lm,    rm)
+            | _                          -> false
+          end
+      | `Record l ->
+          begin match unalias t2 with
+              `Record r -> eq_rows (l, r)
+            | _         -> false
+          end
+      | `Variant l ->
+          begin match unalias t2 with
+              `Variant r -> eq_rows (l, r)
+            | _          -> false
+          end
+      | `Application (s, ts) ->
+          begin match unalias t2 with
+              `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_types) ts ts'
+            | _ -> false
+          end
+      | `Alias  _ -> assert false
+      | `ForAll _ -> assert false
+      | `Table _  -> assert false
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
@@ -79,14 +112,13 @@ and eq_row_vars (lpoint, rpoint) =
 (*
   unification environment:
     for stopping cycles during unification
-    and for type aliases
 *)
 type unify_type_env = (datatype list) IntMap.t
 type unify_row_env = (row list) IntMap.t
-type unify_env = unify_type_env * unify_row_env * alias_environment
+type unify_env = unify_type_env * unify_row_env
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
-  let rec_types, rec_rows, alias_env = rec_env in
+  let rec_types, rec_rows = rec_env in
 
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t = 
@@ -114,7 +146,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
       if List.exists (fun t' -> eq_types (t, t')) ts then
         ()
       else
-        unify' (IntMap.add var (t::ts) rec_types, rec_rows, alias_env) (body, t) in
+        unify' (IntMap.add var (t::ts) rec_types, rec_rows) (body, t) in
 
   let unify_rec2 ((lvar, lbody), (rvar, rbody)) =
     let lts =
@@ -131,10 +163,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
     in
       (* break cycles *)
       if (List.exists (fun t -> eq_types (t, rbody)) lts
-          || List.exists (fun t -> eq_types (t, lbody)) rts) then
+       || List.exists (fun t -> eq_types (t, lbody)) rts) then
         ()
       else
-        unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows, alias_env) (lbody, rbody) in
+        unify' ((IntMap.add lvar (rbody::lts) ->- IntMap.add rvar (lbody::rts)) rec_types, rec_rows) (lbody, rbody) in
 
   (* introduce a recursive type
      give an error if it is non-well-founded and
@@ -145,20 +177,15 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
      - var is free in t
   *)
   let rec_intro point (var, t) =
-    if occurs_check alias_env var t then
+    if occurs_check var t then
       Unionfind.change point (`Recursive (var, t))
     else
       raise (Failure (`Msg ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
-                            " because "^
-                            match Settings.get_value infer_recursive_types with
-                              | "guarded" -> "the type variable occurs unguarded inside the datatype"
-                              | "positive" -> "the type variable occurs in a negative position inside the datatype"
-                              | _ -> assert false))) in
-    
-  let lookup_alias (s, ts) alias_env =
-    try lookup_alias (s, ts) alias_env
-    with
-        AliasMismatch msg -> raise (Failure (`Msg msg)) in
+                              " because "^
+                              match Settings.get_value infer_recursive_types with
+                                | "guarded" -> "the type variable occurs unguarded inside the datatype"
+                                | "positive" -> "the type variable occurs in a negative position inside the datatype"
+                                | _ -> assert false))) in
 
     fun (t1, t2) ->
       (Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2);
@@ -198,7 +225,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                        raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                    | `Recursive (lvar, t), `Recursive (rvar, t') ->
-                       assert(lvar <> rvar);
+                       assert (lvar <> rvar);
                        Debug.if_set (show_recursion)
                          (fun () -> "rec pair (" ^ (string_of_int lvar) ^ "," ^ (string_of_int rvar) ^")");
                        begin
@@ -273,6 +300,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                           Unionfind.change point t;
                        *)
                  | `Body t' -> unify' rec_env (t, t'))
+          | `Alias (_, t1), t2 
+          | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
           | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
               (unify' rec_env (lm, rm);
                unify' rec_env (lfrom, rfrom);
@@ -282,40 +311,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
           | `Table (lr, lw), `Table (rr, rw) ->
               (unify' rec_env (lr, rr);
                unify' rec_env (lw, rw))
+          | `Application (l, _), `Application (r, _) when l <> r ->
+              raise (Failure
+                       (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
+                                "' with abstract type '"^string_of_datatype t2^"'")))
           | `Application (l, ls), `Application (r, rs) ->
-              begin match l, r, lookup_alias (l, ls) alias_env, lookup_alias (r, rs) alias_env with
-                | l, r, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract),
-                        (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract) ->
-                    if l <> r then
-                      raise (Failure
-                               (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
-                                        "' with abstract type '"^string_of_datatype t2^"'")))
-                    else
-                      List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) ls rs
-                | _, _, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract), rtype ->
-                    unify' rec_env (t1, Instantiate.alias rtype rs)
-                | _, _, ltype, (`ForAll (_, `Primitive `Abstract) | `Primitive `Abstract) ->
-                    unify' rec_env (Instantiate.alias ltype ls, t2)
-                | _, _, ltype, rtype ->
-                    unify' rec_env (Instantiate.alias ltype ls, Instantiate.alias rtype rs)
-              end
-          | `Application (s, ts), t | t, `Application (s, ts) ->
-              begin match lookup_alias (s, ts) alias_env with
-                | `ForAll (_, `Primitive `Abstract)
-                | `Primitive `Abstract ->
-                    raise (Failure
-                             (`Msg ("Cannot unify abstract type '"^
-                                      string_of_datatype (`Application (s, ts)) ^"' with type '"^string_of_datatype t^"'")))
-                | t' ->
-                    unify' rec_env (Instantiate.alias t' ts, t)
-              end
+              List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) ls rs
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2))));
        Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
       )
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
-  fun ((_, _, alias_env) as rec_env) (lrow, rrow) ->
+  fun ((_, _) as rec_env) (lrow, rrow) ->
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
     (* 
@@ -388,7 +396,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
        non-well-founded type inference is switched off
     *)
     let rec_row_intro point (var, row) =
-      if occurs_check_row alias_env var row then
+      if occurs_check_row var row then
         Unionfind.change point (`Recursive (var, row))
       else
         raise (Failure (`Msg ("Cannot unify row variable "^string_of_int var^" with row "^string_of_row row^
@@ -493,7 +501,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       Some rec_env, otherwise, where rec_env is the updated environment
     *)
     let register_rec_row (wrapped_field_env, unwrapped_field_env, rec_row, unwrapped_row') : unify_env -> unify_env option =
-      fun ((rec_types, rec_rows, alias_env) as rec_env) ->
+      fun ((rec_types, rec_rows) as rec_env) ->
         match rec_row with
           | Some row_var ->
               begin
@@ -510,7 +518,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                           eq_rows (r, restricted_row)) rs then
                           None
                         else
-                          Some (rec_types, IntMap.add var (restricted_row::rs) rec_rows, alias_env)
+                          Some (rec_types, IntMap.add var (restricted_row::rs) rec_rows)
                   | _ -> assert false
               end
           | None ->
@@ -587,10 +595,10 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                  | `Present _ ->
                      raise (Failure
                               (`Msg 
-                               ("Rows\n "^ string_of_row rigid_row
-                               ^"\nand\n "^ string_of_row open_row
-                               ^"\n could not be unified because the former is rigid"
-                               ^" and the latter contains fields not present in the former")))
+                                 ("Rows\n "^ string_of_row rigid_row
+                                  ^"\nand\n "^ string_of_row open_row
+                                  ^"\n could not be unified because the former is rigid"
+                                  ^" and the latter contains fields not present in the former")))
                  | `Absent -> ()
           ) open_field_env';
         
@@ -622,8 +630,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           | None -> ()
           | Some rec_env ->
               if (get_row_var lrow = get_row_var rrow) then     
-                 unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
-                                                        (rfield_env', Unionfind.fresh `Closed))
+                unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
+                                                       (rfield_env', Unionfind.fresh `Closed))
               else
                 begin
                   let fresh_row_var = fresh_row_variable() in         
@@ -649,11 +657,11 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         if not (is_unguarded_recursive rrow) then
           raise (Failure
                    (`Msg ("Could not unify unguarded recursive row"^ string_of_row lrow
-                    ^"\nwith row "^ string_of_row rrow)))
+                          ^"\nwith row "^ string_of_row rrow)))
         else if is_unguarded_recursive rrow then
           raise (Failure
                    (`Msg ("Could not unify unguarded recursive row"^ string_of_row rrow
-                    ^"\nwith row "^ string_of_row lrow))) in
+                          ^"\nwith row "^ string_of_row lrow))) in
       
     let _ =
       check_unguarded_recursion lrow rrow;
@@ -671,11 +679,11 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       Debug.if_set (show_row_unification)
         (fun () -> "Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
 
-let unify alias_env (t1, t2) =
-  unify' (IntMap.empty, IntMap.empty, alias_env) (t1, t2)
+let unify (t1, t2) =
+  unify' (IntMap.empty, IntMap.empty) (t1, t2)
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
-and unify_rows alias_env (row1, row2) =
-  unify_rows' (IntMap.empty, IntMap.empty, alias_env) (row1, row2)
+and unify_rows (row1, row2) =
+  unify_rows' (IntMap.empty, IntMap.empty) (row1, row2)
 
 (* external interface *)
 let datatypes = unify
