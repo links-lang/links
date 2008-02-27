@@ -428,8 +428,8 @@ logical_expression:
 
 typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression COLON datatype                            { `TypeAnnotation ($1, datatype $3), pos() }
-| logical_expression COLON datatype LARROW datatype            { `Upcast ($1, datatype $3, datatype $5), pos() }
+| typed_expression COLON datatype                              { `TypeAnnotation ($1, datatype $3), pos() }
+| typed_expression COLON datatype LARROW datatype              { `Upcast ($1, datatype $3, datatype $5), pos() }
 
 db_expression:
 | typed_expression                                             { $1 }
