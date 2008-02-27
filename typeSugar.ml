@@ -530,7 +530,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 
     let upcast_subtype pos t1 t2 =
       die pos ("\
-An upcast must cast must be of the form" ^ code ("e : t2 <- t1") ^
+An upcast must be of the form" ^ code ("e : t2 <- t1") ^
 "where " ^ code "t1" ^ " is a subtype of" ^ code "t2" ^ nl() ^
 "but" ^ nl() ^
 code (show_type t1) ^ nl() ^
@@ -539,7 +539,7 @@ code (show_type t2) ^ ".")
         
     let value_restriction pos t =
       die pos (
-"Because of the value restriction there can be" ^ nl() ^
+"Because of the value restriction there can be no" ^ nl() ^
 "free rigid type variables at an ungeneralisable binding site," ^ nl() ^
 "but the type " ^ code (show_type t) ^ " has free rigid type variables.")
 
