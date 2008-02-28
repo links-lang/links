@@ -1274,7 +1274,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
  
   (* 
     Move a file from src to dst. Requires absolute paths, and if the 
-    file being moved is a directory, it is require to be empty. 
+    file being moved is a directory, it is required to be empty. 
    *)
   "moveFile",
   (`Server (p2 (fun src dst ->

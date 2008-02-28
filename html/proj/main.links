@@ -1,43 +1,21 @@
-# Previous TODOs:
-# - Sort out right-click menu for project list.
-#    * Figure out how to distinguish between left/right mouse clicks (done)
-#    * Recreate stopPropagation (is it gone?) (done, but won't work)
-#      -- Sam has been notified, appears to be Links issue.
-
-# - Clean up SQL calls - there's about 5 for loading the project list..
-#    * Clean up client/server calls in general. Somewhere, a server function is making a client call... (done - project list getting was silly, and opHandler requires server -> client calls if used on server).
-
-# - 'New' menu option changes
-#    * new files added to project list on creation in right project 
-#      -- Project needs to be embedded in iFrame (done)
-#    * add capabilities for adding new projects/folders
-#    * new project creates new directory on disk
-#    * new project gets added
-
-# - Figure out why logging out doesn't work.
-#    * Possibly due to calling server function direct? (done - using js now)
-
-# - Test/Deploy configuration. Needs:
-#    * Create-dir function (done)
-#    * Delete-dir function (done)
-#    * Account creation creates user dir
-#    * Logging in needs to create new dir based on sessionId (done)
-#    * Logging out needs to delete dir (done, but error?)
-#    * Deploy copies from test to deploy (done)
-#    * What happens when users want to test files linking to files not being tested? Maybe it's better to mark files as 'unclean' in database, then dump them out during testing, and copy them from database during deploy? (done, but need to make sure directories are created properly (done))
-
-# - Typing information. Needs:
-#    * Types retrieved on save/load (done)
-#    * Find appropriate nodes, attach info (done - tho some types not returned in order?)
-
-# - Is it possible to capture key presses from the iframe without creating node in Links? Probably not - means that 'edited file' can't be captured. Kind of sorted: run/deploy disabled on no file, run disabled on new file.
-
-# - New files in browser need:
-#    * To get LoadFile attached when saved. (Broken - events don't seem to work when attached after initial render?)
-#    * To be deleted from browser if load happens without save. (done)
+#*****************************************************************************#
+#* LODE's main editor file.                                                  *#
+#*                                                                           *#
+#* Original version written by Tom Andersson (tom.andersson@gmail.com) in    *#
+#* 07/08.                                                                    *#
+#*                                                                           *#
+#* To get run/deploy to work, edit the section marked @@ CHANGEME @@.        *#
+#*                                                                           *#
+#* Note: Some functions are not used anywhere, and are kept only for reasons *#
+#*       of posterity. Hopefully, comments and variable/functions names      *#
+#*       make the code 'easy' to understand.. despite its size.              *#
+#*                                                                           *#
+#* TODO: Once Links has proper import functionality, clean up the structure  *#
+#*       of this file, and move auxiliary functions elsewhere.               *#
+#*****************************************************************************#
 
 ######
-# JavaScript functions
+# JavaScript functions (in extras.js)
 ##
 # Split lines
 alien javascript splitEscapedLinesJS : (String) -> [String];
@@ -95,6 +73,7 @@ alien javascript setPageTitle: (String) -> ();
 typename Attribute = (attr: String, val: String);
 
 # Things that should be in their own file
+# @@ CHANGEME @@  
 var cookieName = "linkside";
 var fileLoc = "/home/tom/links/html/proj/";
 var testDir = "test/";
@@ -161,6 +140,7 @@ fun logout() server
   setCookie("linkside","");
 }
 
+# Logout and redirect to login page.
 sig logoutClient : () -> ()
 fun logoutClient() client
 {
@@ -288,15 +268,12 @@ fun fileOp() client
       var lBody = getDocumentBody();
   
       # Get the text
-      var lCode = convertSpaces(getCode()); #firstChild(lBody)));
+      var lCode = convertSpaces(getCode());
   
-      # Escape \ with \\ (first \ double escaped)
-      var lEscapedCode = lCode; #jsEscapeSlashes(lCode); #replace("\\\\", lCode, "\\\\"); #jsEscape(lCode);
-
       var lFileData = getFrameData();
       
       # Get types and attach if ok.
-      var lTypes = storeFile(name, lFileData.pid, lEscapedCode, lCode); 
+      var lTypes = storeFile(name, lFileData.pid, lCode, lCode); 
 
       switch (lTypes)
       {
@@ -307,7 +284,7 @@ fun fileOp() client
       setFrameData(lFileData.pid, name);
 
       # Set the page's title
-     setPageTitle("LODE - " ++ name);
+      setPageTitle("LODE - " ++ name);
    
       # Enable the run/deploy menu items
       toggleMenuItem("run", true);
@@ -338,9 +315,7 @@ fun fileOp() client
        var lData = lFileData.data;
        var lTypes = lFileData.types;
 
-       #var rval = convertData(lData) : Xml;
-
-       #insertCode(rval);
+       # Insert the code.
        setCode(lData);
        
        # Set current file and frame name
@@ -372,6 +347,7 @@ fun fileOp() client
   }
 }
 
+# Session/auto-save thread.
 fun sessionCheck(xiFileHandler) client
 {
   receive
@@ -396,6 +372,8 @@ fun sessionCheck(xiFileHandler) client
       if (optionEnabled("session"))
       {
         # Check that the session is active
+        # This is done using an anonymous function due to a bug
+        # in Links - see Trac ticket 89.
         fun () 
         {
           if(isLoggedIn())
@@ -431,6 +409,7 @@ fun sessionCheck(xiFileHandler) client
 sig getTypes : (String) -> [|Failure:String|Success:[(name:String,pos:(finish:Int,line:Int,start:Int),t:String)]|]
 fun getTypes(xiCode) server
 {
+  # Add a space to ensure that there's _something_ to type check.
   dumpTypes(xiCode ++ " ")
 }
 
@@ -438,19 +417,22 @@ fun getTypes(xiCode) server
 sig attachTypes : ([(name:String, pos:(finish:Int, line:Int, start: Int), t:String)]) -> ()
 fun attachTypes(xiList) client
 {
-  # Filter here breaks?
-  #filter(fun (x) { ((x.pos).finish) <> -1 }, xiList);
+  debug("Filtering list");
+
+  # Remove any unwanted types (bodyP and l:-bindings)
   var lList = 
     for (var lItem <- xiList)
       if (((lItem.pos).start >= 0) && (lItem.name <> "bodyP"))
       {
-        #debug("Name: " ++ lItem.name ++ " - " ++ lItem.t);
         [lItem]
       }
       else
         [];
 
+  debug("List length: " ++ intToString(length(lList)));
+  debug("Sorting..");
   # Sort
+  # For a large file, this call could be a performance hole.
   var lTypeList = qsort(lList);
 
   # Find references to functions/vars
@@ -459,16 +441,16 @@ fun attachTypes(xiList) client
                  getContentDocument(getNodeById("iframe")), 
                  "variable"
                );
-  
-  dropEventTypes(lTypeList, lNodes);
+  debug("Number of nodes: " ++ intToString(length(lNodes)));
+  matchListTypes(lTypeList, lNodes);
 }
 
-# Assume that the lists type and node lists are ordered, and drop any types 
-# that do not appear in the node list. Attach the 'correct' types.
-sig dropEventTypes : ([(name:String,pos:(finish:Int,line:Int,start:Int),t:String)], [DomNode]) -> ()
-fun dropEventTypes(xiTypes, xiList) client
+# Assume that the lists type and node lists are ordered, and attach the 
+# 'correct' types.
+sig matchListTypes : ([(name:String,pos:(finish:Int,line:Int,start:Int),t:String)], [DomNode]) -> ()
+fun matchListTypes(xiTypes, xiList) client
 {
-  if (xiList == [])
+  if ((xiList == []) || (xiTypes == []))
     ()
   else
   {
@@ -478,14 +460,14 @@ fun dropEventTypes(xiTypes, xiList) client
     # If the name of this type matches the name contained in the node
     if (lType.name == remSpace(getTextValue(firstChild(lHead))))
     {
-     # Set the type, and drop both the type and the node from the lists.
+      # Set the type, and drop both the type and the node from the lists.
       var lVoid = domSetAttributeFromRef(lHead, "title", lType.t);
-      dropEventTypes(tl(xiTypes), tl(xiList))
+      matchListTypes(tl(xiTypes), tl(xiList))
     }
     else
     {
       # Otherwise, just recurse.
-      dropEventTypes(tl(xiTypes), xiList)
+      matchListTypes(tl(xiTypes), xiList)
     };
   }
 }
@@ -493,6 +475,7 @@ fun dropEventTypes(xiTypes, xiList) client
 # Match a list of types (given as (name, type)) to a list of Nodes, removing
 # those nodes that don't have a type. Possibility of this failing if a 
 # top-level function is overwritten by a local function of the same name?
+# Disbanded.
 sig matchTypes : ([(String, String)], [DomNode]) -> [DomNode]
 fun matchTypes(xiTypes, xiList) client
 {
@@ -545,7 +528,9 @@ sig projMenu : (Event) -> ()
 fun projMenu(xiEvent) client
 {
   debug(intToString(getMouseButton(xiEvent)));
+
   # Stop the event from propagating - we don't want the normal menu
+  # Broken.
   stopPropagation(xiEvent);
   ()  
 }
@@ -597,6 +582,7 @@ fun resumeSession(xiHandler) client
   }
 }
 
+# Re-authenticate a session.
 sig checkPass : (Int, String) -> Bool
 fun checkPass(xiUid, xiPass) server
 {
@@ -668,33 +654,6 @@ fun storeFile(name, pid, escp, code) server
   getTypes(code)
 }
 
-# Save the contents of the current buffer to database
-#sig saveFile : (Mailbox ([|SaveFile:(String, Bool)|LoadFile:(String, Event)|a|]), String, Bool, Bool) -> ()
-#fun saveFile(handler, xiName, xiNew, xiToggle) client
-#{
-#  var lBody = getDocumentBody();
-  
-  # Get the text
-#  var lCode = convertSpaces(getCode()); #firstChild(lBody)));
-  
-  # Escape \ with \\ (first \ double escaped)
-#  var lEscapedCode = replace("\\\\", lCode, "\\\\"); #jsEscape(lCode);
-
-  # This is potentially the name of the node containing the filename
-#  var lNodeName = xiName;
-
-  # Store the code in the database
-#  var lFileName = 
-#    (if (xiNew)
-#      xiName
-#     else
-#      getValueFromRef(getNodeById(lNodeName))
-#    );
-
-  #handler ! SaveFile(lFileName, lEscapedCode, lCode, xiToggle);
-#  ()
-#}
-
 # Load a file from the database
 sig getFile : (Int, String) -> (data: String, types: [|Failure:String|Success:[(name:String,pos:(finish:Int,line:Int,start:Int),t:String)]|])
 fun getFile(xiProjId, xiName) server
@@ -707,7 +666,8 @@ fun getFile(xiProjId, xiName) server
   
   # Update the session while we're here
   updateSession();
-
+ 
+  # Fet file data and types
   var lData = 
     if (length(res) == 0)
       "No such file '" ++ xiName ++ "'."
@@ -716,6 +676,7 @@ fun getFile(xiProjId, xiName) server
 
   var lTypes = getTypes(lData);
 
+  # Dump types to debug.
   switch (lTypes)
   {
     case Success(types) ->
@@ -785,6 +746,7 @@ fun getDocumentBody() client
   hd(getElementsByTagNameFromRef("body", lIfr))
 }
 
+# Set the current-file bit of the menu bar.
 sig setCurrFile : (String) -> ()
 fun setCurrFile(xiName) client
 {
@@ -792,6 +754,7 @@ fun setCurrFile(xiName) client
   ()
 }
 
+# Get the name of the current file (from the menu bar).
 sig getCurrFile : () -> String
 fun getCurrFile() client
 {
@@ -949,6 +912,7 @@ fun navClick(xiEvent) client
   };
 }
 
+# Given a node, find the first div above it in the tree.
 sig findFirstParentDiv : (DomNode) -> DomNode
 fun findFirstParentDiv(xiNode) client
 {
@@ -997,6 +961,8 @@ fun nextElementSibling(xiNode) client
   }
 }
 
+# Given a node, an element type, and a list of attributes, find the
+# first sibling of the node that matches the type and attributes.
 sig findFirstMatchingSibling : (DomNode, String, [Attribute]) -> DomNode
 fun findFirstMatchingSibling(xiNode, xiType, xiConstraints) client
 {
@@ -1712,6 +1678,8 @@ fun writeFromDatabase(xiPid, xiName, xiDir) server
   }
 }
 
+# Get the list of projects owned by a user from the project browser and
+# use it to populate the list in the 'Save As'-pop-up.
 sig getProjectList : () -> ()
 fun getProjectList() client
 {
@@ -2267,16 +2235,6 @@ fun main() client
   }
   else
   {
-#    <script src="editor/Mochi.js" type="text/javascript"></script>
-#    <script src="editor/util.js" type="text/javascript"></script>
-#    <script src="editor/stringstream.js" type="text/javascript"></script>
-#    <script src="editor/select.js" type="text/javascript"></script>
-#    <script src="editor/undo.js" type="text/javascript"></script>
-#    <script src="editor/editor.js" type="text/javascript"></script>
-#    <script src="editor/tokenizelinks.js" type="text/javascript"></script>
-#    <script src="editor/parselinks.js" type="text/javascript"></script>
-    # Could possibly introduce a loading bar - but how to do so without
-    # rendering everything first? CodeMirror needs the editor div.
   <html>
     <head>
       <title>ug4proj: Links</title>
@@ -2286,6 +2244,7 @@ fun main() client
     <body>
       <div id="main" style="z-index: 1;">
       {
+        # Set the page title explicitly.
         setPageTitle("LODE - Links Online Development Environment");
         renderObject()
       }
