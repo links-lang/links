@@ -151,6 +151,7 @@ and phrasenode = [
 | `FunLit           of funlit
 | `Spawn            of phrase
 | `SpawnWait        of phrase
+| `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list
 | `Iteration        of iterpatt list * phrase
     * (*where:*)   phrase option 
@@ -271,6 +272,7 @@ struct
     | `Block b -> block b
     | `InfixAppl (`Name n, p1, p2) -> union (singleton n) (union_map phrase [p1;p2])
     | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
+    | `RangeLit (p1, p2) -> union_map phrase [p1;p2]
     | `Regex r -> regex r
     | `UnaryAppl (_, p) -> phrase p
     | `FnAppl (p, ps) -> union_map phrase (p::ps)

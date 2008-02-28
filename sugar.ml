@@ -1010,6 +1010,8 @@ module Desugarer =
            | `UnaryAppl (`FloatMinus, e) -> appPrim "negatef" [desugar e]
            | `UnaryAppl (`Name n, e) -> appPrim n [desugar e]
            | `UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
+           | `RangeLit (lo, hi) -> Apply(Variable("intRange", pos),
+                                         [desugar lo; desugar hi], pos)
            | `ListLit  [] -> Nil (pos)
            | `ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es), pos'), pos)
            | `DBDelete (pattern, table, condition) ->

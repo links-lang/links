@@ -215,7 +215,7 @@ let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
-let def_float = (def_integer '.' ['0'-'9']* ('e' ('-')? def_integer)?)
+let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
 let char_contents = ([^ '\"' '\\']|"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))
 let string_contents = char_contents*
@@ -271,6 +271,7 @@ rule lex ctxt nl = parse
   | '~'                                 { ctxt#push_lexer (regex' ctxt nl); TILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
+  | ".."                                { DOTDOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
   | opchar + as op                      { ctxt#precedence op }

@@ -30,7 +30,8 @@ exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype 
 					Types.datatype option)
 
 type expression = Syntax.expression
-(*type inference_expression = (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
+(*type inference_expression =
+          (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
 
 let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
   let `T ((_, _, fexpr),_,_) = expression_data fn in

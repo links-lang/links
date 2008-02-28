@@ -31,6 +31,7 @@ struct
 
     | `ListLit ps
     | `TupleLit ps -> List.for_all is_generalisable ps
+    | `RangeLit (e1, e2) -> is_generalisable e1 && is_generalisable e2
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
     | `Upcast (p, _, _)
@@ -152,6 +153,8 @@ sig
   val update_pattern : griper
   val update_where : griper
   val update_write : griper
+
+  val range_bound : griper
 
   val spawn_process : griper
   val spawn_wait_process : griper
@@ -387,6 +390,9 @@ but the fields have type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the write row has type" ^ nl () ^
 tab () ^ code (show_type rt))
+
+    let range_bound ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      die pos "Range bounds must be integers."
 
     let update_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Where clauses" t l
@@ -1316,6 +1322,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r], 
                                     mailbox_type context.var_env, rettyp)));
               `InfixAppl (op, erase l, erase r), rettyp
+        | `RangeLit (l, r) -> 
+            let l, r = tc l, tc r in
+            let () = unify ~handle:Errors.range_bound  (pos_and_typ l,
+                                                        no_pos Types.int_type)
+            and () = unify ~handle:Errors.range_bound  (pos_and_typ r,
+                                                        no_pos Types.int_type)
+            in `RangeLit (erase l, erase r),
+            Types.make_list_type Types.int_type 
         | `FnAppl (f, ps) ->
             let f = tc f
             and ps = List.map (tc) ps

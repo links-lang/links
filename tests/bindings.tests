@@ -47,10 +47,6 @@ fun add(x,y){x+y} fun baz(z, w) {z + w} fun foo(f, x) { fun bar(y) { f(3, y) } b
 stdout : 7 : Int
 exit : 0
 
-handle HTML with VAR -> HANDLER construction
-handle <html>{ignore(handler); <body/>}</html> with r -> r
-stdout : @<html>.*</html> : Xml
-
 No value recursion
 fun f() { g() } var x = f(); fun g() { x }
 stderr : @.

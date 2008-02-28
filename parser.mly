@@ -58,7 +58,7 @@ let datatype d = d, None
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
-%token COMMA VBAR DOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY IDENTITY
@@ -248,6 +248,7 @@ primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET RBRACKET                                            { `ListLit [], pos() } 
 | LBRACKET exps RBRACKET                                       { `ListLit $2, pos() } 
+| LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() } 
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { `FunLit ($2, (`Block $3, pos ())), pos() }
 

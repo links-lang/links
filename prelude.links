@@ -41,6 +41,14 @@ fun elem(x, l) {
 fun odd(i)  { i `mod` 2 == 1 }
 fun even(i) { i `mod` 2 == 0 }
 
+fun intRange(m,n) {
+  fun intRangeAux(m,n,result) {
+    if (m > n) result
+    else intRangeAux(m, n-1, n::result)
+  }
+  intRangeAux(m,n,[])
+}
+
 #fun null(l) { l == [] }
 
 # return element at index i of xs

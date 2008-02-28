@@ -169,6 +169,9 @@ class map =
           let _x = o#binop _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#phrase _x_i2 in `InfixAppl ((_x, _x_i1, _x_i2))
+      | `RangeLit ((_x_i1, _x_i2)) ->
+          let _x_i1 = o#phrase _x_i1 in
+          let _x_i2 = o#phrase _x_i2 in `RangeLit ((_x_i1, _x_i2))
       | `Regex _x -> let _x = o#regex _x in `Regex _x
       | `UnaryAppl ((_x, _x_i1)) ->
           let _x = o#unary_op _x in
@@ -635,6 +638,8 @@ class fold =
       | `InfixAppl ((_x, _x_i1, _x_i2)) ->
           let o = o#binop _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
+      | `RangeLit ((_x_i1, _x_i2)) ->
+          let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
       | `Regex _x -> let o = o#regex _x in o
       | `UnaryAppl ((_x, _x_i1)) ->
           let o = o#unary_op _x in let o = o#phrase _x_i1 in o
@@ -1066,6 +1071,10 @@ class fold_map =
       | `SpawnWait _x -> let (o, _x) = o#phrase _x in (o, (`SpawnWait _x))
       | `ListLit _x ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`ListLit _x))
+      | `RangeLit ((_x_i1, _x_i2)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in
+          let (o, _x_i2) = o#phrase _x_i2
+          in (o, (`RangeLit ((_x_i1, _x_i2))))
       | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#list (fun o -> o#iterpatt) _x in
           let (o, _x_i1) = o#phrase _x_i1 in

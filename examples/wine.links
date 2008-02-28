@@ -70,7 +70,7 @@ fun range(n) {
 
 fun sum_float(l) {
   switch (l) {
-    case [] -> 0.
+    case [] -> 0.0
     case hd::tl -> hd +. sum_float(tl)
   }
 }
@@ -629,7 +629,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
         <br/>
         <span class="price-label">Our price</span>: 
           <span class="bottle-price">${floatToXml(cost)}</span>
-          (${floatToXml(cost *. 12.)} a dozen)
+          (${floatToXml(cost *. 12.0)} a dozen)
         <a l:href="{add_to_cart(cust_id, order_id, id)}">Add to cart</a>
       </li>
   }
