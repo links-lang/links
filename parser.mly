@@ -434,8 +434,6 @@ typed_expression:
 
 db_expression:
 | typed_expression                                             { $1 }
-| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
-| INSERT exp VALUES exp RETURNING VARIABLE                     { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
 | DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in `DBDelete (pat, phrase, $5), pos() }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
@@ -592,6 +590,9 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
+| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
+| INSERT exp VALUES db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
