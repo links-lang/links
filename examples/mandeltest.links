@@ -10,7 +10,7 @@ alien javascript canvasFillRect : (Context, Int, Int, Int, Int) -> ();
 
 alien javascript fullyNativeMandelbrot : () -> ();
 
-var bailout = 16.;
+var bailout = 16.0;
 var max_iterations = 200;
 
 fun makeCanvasDiv(id, height, width) {

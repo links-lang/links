@@ -1,6 +1,6 @@
 # adapted from http://www.timestretch.com/FractalBenchmark.html
 
-var bailout = 16.;
+var bailout = 16.0;
 var max_iterations = 200;
 
 # process associated with a canvas.  Receive Point messages and render
