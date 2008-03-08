@@ -479,7 +479,7 @@ let rec generate_value env : value -> code =
           (* HACK *)
           begin
             match (Env'.lookup env var) with
-              | "map" -> Var ("LINKS.accum")
+              | "map" -> Var ("LINKS.mapk")
               | name ->
                   if name = "/" then
                     Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa")
