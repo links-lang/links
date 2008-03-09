@@ -28,7 +28,7 @@ alien javascript getCode: () -> String;
 # Return node.value.
 alien javascript getValueFromRef : (DomNode) -> String; 
 
-# Convert spaces to 
+# Convert weird spaces to normal ones.
 alien javascript convertSpaces : (String) -> String;
 
 # Load the IDE's editor.
@@ -49,10 +49,10 @@ alien javascript jsEscapeSlashes: (String) -> String;
 # Get nodes from a foreign document
 alien javascript getElementsByNameFromDocument: (DomNode, String) -> [DomNode];
 
-# Get value
+# Get value from a node.
 alien javascript getTextValue: (DomNode) -> String;
 
-# Redirect using JavaScript to avoid having to submit form.
+# Redirect using JavaScript to avoid having to use POST.
 alien javascript redirectClient: (String) -> ();
 
 # Given an iframe, enable contentEditable for that doc.
@@ -1867,8 +1867,8 @@ fun toggleMenuItem(xiName, xiOn) client
   else
   {
     # Disable the node
-    var lVoid1 = domSetStyleAttrFromRef(lNodeOn, "display", "list-item");
-    var lVoid2 = domSetStyleAttrFromRef(lNodeOff, "display", "none");
+    var lVoid1 = domSetStyleAttrFromRef(lNodeOn, "display", "none");
+    var lVoid2 = domSetStyleAttrFromRef(lNodeOff, "display", "block");
     ()
   };
 }
