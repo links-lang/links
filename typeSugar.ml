@@ -676,7 +676,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (Types.make_tuple_type [r], mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let datatype aliases = Instantiate.typ -<- ExpandAliases.expand aliases -<- DesugarDatatypes.read
+let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 
 let type_unary_op env = 
   let datatype = datatype env.tycon_env in function
@@ -1352,7 +1352,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun e ->
                    unify ~handle:Errors.xml_attributes
                      (pos_and_typ e, no_pos (
-                        (ExpandAliases.instantiate "Attributes" [] context.tycon_env)))) attrexp
+                        (Instantiate.alias "Attributes" [] context.tycon_env)))) attrexp
             and () =
               List.iter (fun child ->
                            unify ~handle:Errors.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
@@ -1367,11 +1367,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let yields = type_check context' yields in
               unify ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
               (`Formlet (erase body, erase yields),
-               ExpandAliases.instantiate "Formlet" [typ yields] context.tycon_env)
+               Instantiate.alias "Formlet" [typ yields] context.tycon_env)
         | `Page e ->
             let e = tc e in
               unify ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
-              `Page (erase e), ExpandAliases.instantiate "Page" [] context.tycon_env
+              `Page (erase e), Instantiate.alias "Page" [] context.tycon_env
         | `FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable () in
 
@@ -1379,24 +1379,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Errors.render_formlet
-              (pos_and_typ f, no_pos (ExpandAliases.instantiate "Formlet" [t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_handler
               (pos_and_typ h, (exp_pos f, 
-                               ExpandAliases.instantiate "Handler" [t] context.tycon_env)) in
+                               Instantiate.alias "Handler" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_attributes
-              (pos_and_typ attributes, no_pos (ExpandAliases.instantiate "Attributes" [] context.tycon_env))
+              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
             in
               `FormletPlacement (erase f, erase h, erase attributes), Types.xml_type
         | `PagePlacement e ->
             let e = tc e in
-            let pt = ExpandAliases.instantiate "Page" [] context.tycon_env in
+            let pt = Instantiate.alias "Page" [] context.tycon_env in
               unify ~handle:Errors.page_placement (pos_and_typ e, no_pos pt);
               `PagePlacement (erase e), Types.xml_type
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
-            let ft = ExpandAliases.instantiate "Formlet" [a] context.tycon_env in
+            let ft = Instantiate.alias "Formlet" [a] context.tycon_env in
               unify ~handle:Errors.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Errors.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               `FormBinding (erase e, erase_pat pattern), Types.xml_type
@@ -1492,7 +1492,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
-            ExpandAliases.instantiate "Regex" [] context.tycon_env
+            Instantiate.alias "Regex" [] context.tycon_env
         | `Projection (r,l) ->
             let r = tc r in
             let fieldtype = Types.fresh_type_variable () in

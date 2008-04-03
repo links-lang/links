@@ -23,11 +23,10 @@ let alias_env : Types.alias_environment =
 
 let alias_env : Types.alias_environment =
   Env.bind alias_env
-    ("Regex", ([], (ExpandAliases.expand alias_env 
-                      (DesugarDatatypes.read Linksregex.Regex.datatype))))
+    ("Regex", ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
 
 
-let datatype = DesugarDatatypes.read ->- ExpandAliases.expand alias_env
+let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 
 (* Data structures/utilities for proc mgmt *)

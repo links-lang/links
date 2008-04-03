@@ -44,7 +44,7 @@ PATH := $(PATH):deriving/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w ae
+OCAMLFLAGS=-dtypes -w Ae
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -91,7 +91,6 @@ SOURCES = $(OPC)                		\
           desugarPages.mli desugarPages.ml		\
           desugarFormlets.mli desugarFormlets.ml	\
           desugarRegexes.mli desugarRegexes.ml		\
-          expandAliases.mli expandAliases.ml            \
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           frontend.ml                           \

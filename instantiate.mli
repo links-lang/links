@@ -3,4 +3,4 @@ val show_recursion : bool Settings.setting
 val var : Types.environment -> string -> Types.datatype
 val typ : Types.datatype -> Types.datatype
 val datatype : Types.datatype Utility.IntMap.t * Types.row_var Utility.IntMap.t -> Types.datatype -> Types.datatype
-
+val alias : string -> Types.datatype list -> Types.alias_environment -> Types.datatype
