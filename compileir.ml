@@ -519,14 +519,14 @@ struct
         | Xml_node (name, attributes, children, _) ->
             let eval_attribute name e =
               if start_of name ~is:"l:" then
-                let xt = `Application ("Event", []) in
+                let xt = `Application (Types.event, []) in
                   (* [HACK]
                      
                      x is global in order to ensure that it is assigned the name "event"
                      rather than "event_<number>" during JS generation
                   *)
                 let x_info = make_global_info (xt, "event") in
-                let ft = `Function (`Application ("Event", []), Types.fresh_type_variable(), node_datatype e) in
+                let ft = `Function (`Application (Types.event, []), Types.fresh_type_variable(), node_datatype e) in
                   I.lam (ft, [x_info], (fun [v] -> eval (extend env ["name"] [v]) e), `Unknown)
               else
                 ev e in

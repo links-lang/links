@@ -36,6 +36,44 @@ type type_variable =
 type quantifier = type_variable
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
+module Abstype =
+struct
+  type t = { id    : string ;
+             name  : string ;
+             arity : int }
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+  let make name arity = 
+    let id = Utility.gensym ~prefix:"abstype:" () in
+      { id    = id ;
+        name  = name ;
+        arity = arity }
+  let arity { arity = arity } = arity
+  let name  { name  = name  } = name
+  let compare l r = String.compare l.id r.id
+end
+
+let mailbox  = {
+  Abstype.id = "Mailbox" ;
+  name       = "Mailbox" ;
+  arity      = 1 ;
+}
+let list     = {
+  Abstype.id = "List" ;
+  name       = "List" ;
+  arity      = 1 ;
+}
+
+let event    = {
+  Abstype.id = "Event" ;
+  name       = "Event" ;
+  arity      = 0 ;
+}
+let dom_node = {
+  Abstype.id = "DomNode" ;
+  name       = "DomNode" ;
+  arity      = 0 ;
+}
+
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
@@ -44,7 +82,7 @@ type datatype =
     | `Variant of row
     | `Table of datatype * datatype
     | `Alias of ((string * datatype list) * datatype)
-    | `Application of (string * datatype list)
+    | `Application of (Abstype.t * datatype list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
 and field_spec     = [ `Present of datatype | `Absent ]
@@ -75,10 +113,13 @@ let type_var_number = function
 
 module Env = Env.String
 
+type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
+    deriving (Show)
+
 type environment        = datatype Env.t
- and alias_environment  = (int list * datatype) Env.t
+ and tycon_environment  = tycon_spec Env.t
  and typing_environment = { var_env   : environment ;
-                            tycon_env : alias_environment }
+                            tycon_env : tycon_environment }
     deriving (Show)
 
 (* Functions on environments *)
@@ -409,12 +450,12 @@ let unwrap_row : row -> (row * row_var option) =
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
-let string_type = `Alias (("String", []), (`Application ("List", [`Primitive `Char])))
+let string_type = `Alias (("String", []), (`Application (list, [`Primitive `Char])))
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
 let float_type = `Primitive `Float
-let xml_type = `Alias (("Xml", []), `Application ("List", [`Primitive `XmlItem]))
+let xml_type = `Alias (("Xml", []), `Application (list, [`Primitive `XmlItem]))
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
 
@@ -476,7 +517,7 @@ and row_skeleton = fun rec_vars row ->
   in
     field_env', row_var'
 
-let rec is_mailbox_free rec_vars t =
+let rec is_mailbox_free rec_vars (t : datatype) =
   let imb = is_mailbox_free rec_vars in
   let imbr = is_mailbox_free_row rec_vars in
     match t with
@@ -487,7 +528,7 @@ let rec is_mailbox_free rec_vars t =
       | `Variant row -> imbr row
       | `Table (r, w) -> imb r && imb w
       | `Alias ((_, ts), dt) -> List.for_all imb ts && imb dt
-      | `Application ("Mailbox", _) -> false
+      | `Application (t, _) when t.Abstype.id = mailbox.Abstype.id -> false
       | `Application (_, ts) -> List.for_all imb ts
       | `ForAll (_, _) -> assert false
       | `MetaTypeVar point ->
@@ -623,7 +664,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
         | `Function (args, mailbox_type, t) ->
 	    let arrow =
 	      match concrete_type mailbox_type with
-	        | `Application ("Mailbox", [t]) ->
+	        | `Application (mb, [t]) when mb.Abstype.id = mailbox.Abstype.id->
 		    string_of_mailbox_arrow (t)
 	        | _ -> "->"
 	    in begin match concrete_type args with
@@ -670,10 +711,9 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
 (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
         | `Alias ((s,[]), t) ->  s
         | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
-        | `Alias ((s,_), t) ->  "{"^s^"}" ^ sd t
-        | `Application ("List", [elems])              ->  "["^ sd elems ^"]"
-        | `Application (s, []) -> s
-        | `Application (s, ts) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
+        | `Application (l, [elems]) when Abstype.Eq_t.eq l list ->  "["^ sd elems ^"]"
+        | `Application (s, []) -> Abstype.name s
+        | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map sd ts) ^")"
 
 and string_of_row' sep rec_vars vars (field_env, row_var) =
   let show_absent =
@@ -1006,8 +1046,8 @@ let make_tuple_type (ts : datatype list) : datatype =
           (1, make_empty_closed_row ())
           ts))
 
-let make_list_type t = `Application ("List", [t])
-let make_mailbox_type t = `Application ("Mailbox", [t])
+let make_list_type t = `Application (list, [t])
+let make_mailbox_type t = `Application (mailbox, [t])
 
 let extend_row fields (fields', row_var) =
   (FieldEnv.fold

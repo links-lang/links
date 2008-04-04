@@ -648,9 +648,8 @@ type context = Types.typing_environment = {
      use this to resolve aliases in the code, which is done before
      type inference.  Instead, we use it to resolve references
      introduced here to aliases defined in the prelude such as "Page"
-     and "Formlet".  (Perhaps we should just expand aliases here as
-     well.) *)
-  tycon_env : Types.alias_environment ;
+     and "Formlet". *)
+  tycon_env : Types.tycon_environment ;
 }
 
 let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
@@ -845,7 +844,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
-      | `Application ("List", [t]) ->
+      | `Application (l, [t]) 
+          when Types.Abstype.Eq_t.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
               | `Variable _ | `Any -> [p]
@@ -855,7 +855,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               | `As (_, p) | `HasType (p, _) -> unwrap p
               | `Variant _ | `Negative _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
-            `Application ("List", [cpt pats t])
+            `Application (Types.list, [cpt pats t])
       | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
       | `MetaTypeVar point ->
           begin
@@ -1173,10 +1173,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               end
         | `ListLit es ->
             begin match List.map tc es with
-              | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
+              | [] -> `ListLit [], `Application (Types.list, [Types.fresh_type_variable ()])
               | e :: es -> 
                   List.iter (fun e' -> unify ~handle:Errors.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  `ListLit (List.map erase (e::es)), `Application ("List", [typ e])
+                  `ListLit (List.map erase (e::es)), `Application (Types.list, [typ e])
             end
         | `FunLit (pats, body) ->
             let pats = List.map (List.map tpc) pats in
@@ -1280,7 +1280,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_process
-              ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
+              ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context (mailbox, pid_type)) p in
               `Spawn (erase p), pid_type
         | `SpawnWait p ->
@@ -1288,7 +1288,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_wait_process
-              ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
+              ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context  (mailbox, pid_type)) p in
               unify ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p), return_type
@@ -1296,7 +1296,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type context.var_env in
             let () = unify ~handle:Errors.receive_mailbox
-              (no_pos boxed_mbtype, no_pos (`Application ("Mailbox", [mbtype]))) in
+              (no_pos boxed_mbtype, no_pos (`Application (Types.mailbox, [mbtype]))) in
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Errors.receive_patterns
               (no_pos mbtype, no_pos pattern_type)
@@ -1670,7 +1670,7 @@ and type_binding : context -> binding -> binding * context =
            (bind_var context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           flush stderr;
-          t, bind_tycon context (name, (List.map (snd ->- val_of) vars, dt))
+          t, bind_tycon context (name, `Alias (List.map (snd ->- val_of) vars, dt))
       | `Infix -> `Infix, context
       | `Exp e ->
           let e = tc e in

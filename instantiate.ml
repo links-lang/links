@@ -148,14 +148,16 @@ let alias name ts env =
   
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
-  match SEnv.find env name with
+  match (SEnv.find env name : Types.tycon_spec option) with
     | None -> 
         failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
-    | Some (vars, _) when List.length vars <> List.length ts ->
+    | Some (`Abstract _) ->
+        failwith (Printf.sprintf "The type constructor: %s is abstract, not an alias" name)
+    | Some (`Alias (vars, _)) when List.length vars <> List.length ts ->
         failwith (Printf.sprintf
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length ts) (List.length vars))
-    | Some (vars, body) ->
+    | Some (`Alias (vars, body)) ->
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
           `Alias ((name, ts),
                   datatype (tenv, IntMap.empty) (Types.freshen_mailboxes body))

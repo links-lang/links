@@ -41,7 +41,8 @@ let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
   in match fn, paramtypes with
       (* Sadly, this doesn't trigger--I think because of metatypevars
          and other stuff that gets in the way of the type. --eekc 5/07 *)
-    | Variable("send", _), [`Application("Mailbox", [mbType]); msgType] -> 
+    | Variable("send", _), [`Application(mbt, [mbType]); msgType]
+        when Types.Abstype.Eq_t.eq mbt Types.mailbox ->
         raise(MistypedSendError(pos,fexpr,fntype,pexprs,paramtypes,mb))
     | _ -> 
         match fntype with 
@@ -136,9 +137,9 @@ let rec format_exception_html = function
       Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
         pos.pos_fname pos.pos_lnum s (xml_escape expr)
   | MistypedSendError(pos, fexpr, fntype, pexpr,
-                      ([`Application("Mailbox", [mbType]); msgType] as paramtypes),
+                      ([`Application(mbtc, [mbType]); msgType] as paramtypes),
                       mb)
-    ->
+      when Types.Abstype.Eq_t.eq mbtc Types.mailbox ->
       let msg = "The expressions <code class=\"typeError\">" ^ 
         mapstrcat "\n" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
         "</code> have type <code class=\"typeError\">" ^ 

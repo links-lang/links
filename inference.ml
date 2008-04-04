@@ -259,27 +259,27 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
         unify(new_row_type, type_of_expression value);
         Variant_selection_empty (value, `T (pos, fresh_type_variable (), None))
   | Nil (`U pos) ->
-      Nil (`T (pos, `Application ("List", [fresh_type_variable ()]), None))
+      Nil (`T (pos, `Application (Types.list, [fresh_type_variable ()]), None))
   | List_of (elem, `U pos) ->
       let elem = type_check typing_env elem in
 	List_of (elem,
-		 `T (pos, `Application ("List", [type_of_expression elem]), None))
+		 `T (pos, `Application (Types.list, [type_of_expression elem]), None))
   | Concat (l, r, `U pos) ->
       let tvar = fresh_type_variable () in
       let l = type_check typing_env l in
-	unify (type_of_expression l, `Application ("List", [tvar]));
+	unify (type_of_expression l, `Application (Types.list, [tvar]));
 	let r = type_check typing_env r in
 	  unify (type_of_expression r, type_of_expression l);
-	  let type' = `Application ("List", [tvar]) in
+	  let type' = `Application (Types.list, [tvar]) in
 	    Concat (l, r, `T (pos, type', None))
   | For (expr, var, value, `U pos) ->
       let value_tvar = fresh_type_variable () in
       let expr_tvar = fresh_type_variable () in
       let value = type_check typing_env value in
-	unify (type_of_expression value, `Application ("List", [value_tvar]));
+	unify (type_of_expression value, `Application (Types.list, [value_tvar]));
 	let expr_env = Env.bind env (var, value_tvar) in
 	let expr = type_check {typing_env with Types.var_env = expr_env} expr in
-	  unify (type_of_expression expr, `Application ("List", [expr_tvar]));
+	  unify (type_of_expression expr, `Application (Types.list, [expr_tvar]));
 	  let type' = type_of_expression expr in
 	    For (expr, var, value, `T (pos, type', None))
   | Call_cc(arg, `U pos) -> 
@@ -307,7 +307,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                     StringMap.add alias (`Present field.SqlQuery.ty) env
                 | _ -> assert(false) (* can't handle other kinds of expressions *))
 	   query.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
-      let datatype =  `Application ("List", [`Record row]) in
+      let datatype =  `Application (Types.list, [`Record row]) in
         (* BUG: should really check table types here. This isn't a
            priority though, as this module is going to die soon. *)
         TableQuery (query, `T (pos, datatype, None))

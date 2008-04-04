@@ -45,6 +45,20 @@ type quantifier = type_variable
 
 val type_var_number : type_variable -> int
 
+module Abstype :
+sig
+  type t deriving (Eq, Show, Pickle, Typeable, Shelve)
+  val make  : string -> int -> t
+  val arity : t -> int
+  val name  : t -> string
+  val compare : t -> t -> int
+end
+
+val mailbox  : Abstype.t 
+val list     : Abstype.t 
+val event    : Abstype.t 
+val dom_node : Abstype.t
+
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
@@ -53,7 +67,7 @@ type datatype =
     | `Variant of row
     | `Table of datatype * datatype
     | `Alias of ((string * datatype list) * datatype)
-    | `Application of (string * datatype list)
+    | `Application of (Abstype.t * datatype list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
 and field_spec = [ `Present of datatype | `Absent ]
@@ -64,10 +78,12 @@ and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
+
 type environment        = datatype Env.String.t
- and alias_environment  = (int list * datatype) Env.String.t
+ and tycon_environment  = tycon_spec Env.String.t
  and typing_environment = { var_env   : environment ;
-                            tycon_env : alias_environment }
+                            tycon_env : tycon_environment }
     deriving (Show)
 
 val concrete_type : datatype -> datatype

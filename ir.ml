@@ -367,7 +367,7 @@ struct
                           StringMap.add alias (`Present field.SqlQuery.ty) env
                       | _ -> assert(false) (* can't handle other kinds of expressions *))
 	         q.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
-            let t =  `Application ("List", [`Record row]) in
+            let t =  `Application (Types.list, [`Record row]) in
               `Query q, t, o
         | `Table (db, table_name, (rt, wt)) ->
             let db, _, o = o#value db in

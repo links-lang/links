@@ -11,19 +11,23 @@ module Env = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : Types.alias_environment =
-  List.fold_right
-    (fun (name, args, datatype) env ->
-       Env.bind env (name, (args, datatype)))
-    [
-      "String"  , [], `Application ("List", [`Primitive `Char]);
-      "Xml"     , [], `Application ("List", [`Primitive `XmlItem]);
-    ]
+let alias_env : Types.tycon_environment =
+  List.fold_left 
+    Env.bind
     Env.empty
+    [
+      "String"  , `Alias ([], `Application (Types.list, [`Primitive `Char]));
+      "Xml"     , `Alias ([], `Application (Types.list, [`Primitive `XmlItem]));
+      "Event"   , `Abstract Types.event;
+      "List"    , `Abstract Types.list;
+      "Mailbox" , `Abstract Types.mailbox;
+      "DomNode" , `Abstract Types.dom_node;
+    ]
 
-let alias_env : Types.alias_environment =
+
+let alias_env : Types.tycon_environment =
   Env.bind alias_env
-    ("Regex", ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
+    ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
 
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env

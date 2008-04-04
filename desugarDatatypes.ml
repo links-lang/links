@@ -70,7 +70,7 @@ exception UnexpectedFreeVar of string
 
 module Desugar =
 struct
-  let rec datatype ({tenv=tenv; renv=renv} as var_env) (alias_env : Types.alias_environment) t =
+  let rec datatype ({tenv=tenv; renv=renv} as var_env) (alias_env : Types.tycon_environment) t =
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t tenv in 
       match t with
@@ -97,14 +97,15 @@ struct
       | RecordType r -> `Record (row var_env alias_env r)
       | VariantType r -> `Variant (row var_env alias_env r)
       | TableType (r, w) -> `Table (datatype var_env r, datatype var_env w)
-      | ListType k -> `Application ("List", [datatype var_env k])
-      | TypeApplication (s, ds) when SEnv.has alias_env s -> 
-          (* An alias application *)
-          let ds = List.map (datatype var_env) ds in
-            Instantiate.alias s ds alias_env
-      | TypeApplication (s, ds) ->
-          (* An abstract type application *)
-          `Application (s, List.map (datatype var_env) ds)
+      | ListType k -> `Application (Types.list, [datatype var_env k])
+      | TypeApplication (tycon, ts) ->
+          begin match SEnv.find alias_env tycon with
+            | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
+            | Some (`Alias _) -> let ts = List.map (datatype var_env) ts in
+                                   Instantiate.alias tycon ts alias_env
+            | Some (`Abstract abstype) -> 
+                `Application (abstype, List.map (datatype var_env) ts)
+          end
       | PrimitiveType k -> `Primitive k
       | DBType -> `Primitive `DB
   and row ({tenv=tenv; renv=renv} as var_env) alias_env (fields, rv) =
@@ -250,7 +251,7 @@ object (self)
         let (name, vars, (t, Some dt)) = (t, args, dt') in
           (* NB: type aliases are scoped; we allow shadowing.
              We also allow type aliases to shadow abstract types. *)
-          ({< alias_env = SEnv.bind alias_env (name, (List.map (snd ->- val_of) vars, dt)) >},
+          ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
            `Type (name, vars, (t, Some dt)))
             
     | `Val (pat, p, loc, dt) -> 
