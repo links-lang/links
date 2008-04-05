@@ -648,9 +648,8 @@ type context = Types.typing_environment = {
      use this to resolve aliases in the code, which is done before
      type inference.  Instead, we use it to resolve references
      introduced here to aliases defined in the prelude such as "Page"
-     and "Formlet".  (Perhaps we should just expand aliases here as
-     well.) *)
-  tycon_env : Types.alias_environment ;
+     and "Formlet". *)
+  tycon_env : Types.tycon_environment ;
 }
 
 let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
@@ -676,7 +675,7 @@ let type_section env (`Section s as s') = s', match s with
         `Function (Types.make_tuple_type [r], mailbox_type env, f)
   | `Name var      -> Utils.instantiate env var
 
-let datatype aliases = Instantiate.typ -<- ExpandAliases.expand aliases -<- DesugarDatatypes.read
+let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 
 let type_unary_op env = 
   let datatype = datatype env.tycon_env in function
@@ -845,7 +844,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
-      | `Application ("List", [t]) ->
+      | `Application (l, [t]) 
+          when Types.Abstype.Eq_t.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
               | `Variable _ | `Any -> [p]
@@ -855,7 +855,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               | `As (_, p) | `HasType (p, _) -> unwrap p
               | `Variant _ | `Negative _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
-            `Application ("List", [cpt pats t])
+            `Application (Types.list, [cpt pats t])
       | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
       | `MetaTypeVar point ->
           begin
@@ -1173,10 +1173,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               end
         | `ListLit es ->
             begin match List.map tc es with
-              | [] -> `ListLit [], `Application ("List", [Types.fresh_type_variable ()])
+              | [] -> `ListLit [], `Application (Types.list, [Types.fresh_type_variable ()])
               | e :: es -> 
                   List.iter (fun e' -> unify ~handle:Errors.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  `ListLit (List.map erase (e::es)), `Application ("List", [typ e])
+                  `ListLit (List.map erase (e::es)), `Application (Types.list, [typ e])
             end
         | `FunLit (pats, body) ->
             let pats = List.map (List.map tpc) pats in
@@ -1280,7 +1280,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_process
-              ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
+              ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context (mailbox, pid_type)) p in
               `Spawn (erase p), pid_type
         | `SpawnWait p ->
@@ -1288,7 +1288,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_wait_process
-              ((uexp_pos p, pid_type), no_pos (`Application ("Mailbox", [Types.fresh_type_variable()]))) in
+              ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context  (mailbox, pid_type)) p in
               unify ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p), return_type
@@ -1296,7 +1296,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type context.var_env in
             let () = unify ~handle:Errors.receive_mailbox
-              (no_pos boxed_mbtype, no_pos (`Application ("Mailbox", [mbtype]))) in
+              (no_pos boxed_mbtype, no_pos (`Application (Types.mailbox, [mbtype]))) in
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Errors.receive_patterns
               (no_pos mbtype, no_pos pattern_type)
@@ -1352,7 +1352,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun e ->
                    unify ~handle:Errors.xml_attributes
                      (pos_and_typ e, no_pos (
-                        (ExpandAliases.instantiate "Attributes" [] context.tycon_env)))) attrexp
+                        (Instantiate.alias "Attributes" [] context.tycon_env)))) attrexp
             and () =
               List.iter (fun child ->
                            unify ~handle:Errors.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
@@ -1367,11 +1367,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let yields = type_check context' yields in
               unify ~handle:Errors.formlet_body (pos_and_typ body, no_pos Types.xml_type);
               (`Formlet (erase body, erase yields),
-               ExpandAliases.instantiate "Formlet" [typ yields] context.tycon_env)
+               Instantiate.alias "Formlet" [typ yields] context.tycon_env)
         | `Page e ->
             let e = tc e in
               unify ~handle:Errors.page_body (pos_and_typ e, no_pos Types.xml_type);
-              `Page (erase e), ExpandAliases.instantiate "Page" [] context.tycon_env
+              `Page (erase e), Instantiate.alias "Page" [] context.tycon_env
         | `FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable () in
 
@@ -1379,24 +1379,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Errors.render_formlet
-              (pos_and_typ f, no_pos (ExpandAliases.instantiate "Formlet" [t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_handler
               (pos_and_typ h, (exp_pos f, 
-                               ExpandAliases.instantiate "Handler" [t] context.tycon_env)) in
+                               Instantiate.alias "Handler" [t] context.tycon_env)) in
             let () = unify ~handle:Errors.render_attributes
-              (pos_and_typ attributes, no_pos (ExpandAliases.instantiate "Attributes" [] context.tycon_env))
+              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
             in
               `FormletPlacement (erase f, erase h, erase attributes), Types.xml_type
         | `PagePlacement e ->
             let e = tc e in
-            let pt = ExpandAliases.instantiate "Page" [] context.tycon_env in
+            let pt = Instantiate.alias "Page" [] context.tycon_env in
               unify ~handle:Errors.page_placement (pos_and_typ e, no_pos pt);
               `PagePlacement (erase e), Types.xml_type
         | `FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
-            let ft = ExpandAliases.instantiate "Formlet" [a] context.tycon_env in
+            let ft = Instantiate.alias "Formlet" [a] context.tycon_env in
               unify ~handle:Errors.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Errors.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               `FormBinding (erase e, erase_pat pattern), Types.xml_type
@@ -1492,7 +1492,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
-            ExpandAliases.instantiate "Regex" [] context.tycon_env
+            Instantiate.alias "Regex" [] context.tycon_env
         | `Projection (r,l) ->
             let r = tc r in
             let fieldtype = Types.fresh_type_variable () in
@@ -1670,7 +1670,7 @@ and type_binding : context -> binding -> binding * context =
            (bind_var context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           flush stderr;
-          t, bind_tycon context (name, (List.map (snd ->- val_of) vars, dt))
+          t, bind_tycon context (name, `Alias (List.map (snd ->- val_of) vars, dt))
       | `Infix -> `Infix, context
       | `Exp e ->
           let e = tc e in

@@ -26,7 +26,7 @@ let sqlable_primtype ty =
           | _ -> Debug.if_set_l debug(lazy("non-sqlable primitive: " ^ 
                                              Types.string_of_datatype ty));
               false)
-    | `Application ("List", [`Primitive `Char]) -> true
+    | `Application (list, [`Primitive `Char]) -> Types.Abstype.Eq_t.eq list Types.list
     | `Alias (("String", _), _) -> true
     | _ -> Debug.if_set_l debug(lazy("non-primitive in record was " ^ 
                         Types.string_of_datatype ty));
@@ -152,7 +152,7 @@ struct
 
   let is_list_of_type pred ty = 
     match Types.concrete_type ty with
-      | `Application("List", [ty]) -> pred ty
+      | `Application(l, [ty]) when Types.Abstype.Eq_t.eq l Types.list -> pred ty
       | _ -> false
 
   let rec leaf_inject_as_record field_name ty = function
@@ -207,7 +207,7 @@ struct
           && is_asList_expr src -> 
         let ty = match 
           Types.concrete_type(node_datatype body) with
-              `Application("List", [ty]) -> ty
+              `Application(l, [ty]) when Types.Abstype.Eq_t.eq l Types.list -> ty
             | _ -> assert false in
         let field_name = "a" in
         let body = leaf_inject_as_record field_name ty body in
@@ -415,7 +415,7 @@ struct
     | For (body, var, src, _) as e -> 
         Debug.if_set_l debug(lazy("attempting to compile comprehension!"));
         begin match Types.concrete_type (node_datatype src) with
-          | `Application ("List",[r]) ->
+          | `Application (l, [r]) when Types.Abstype.Eq_t.eq l Types.list ->
               begin match Types.concrete_type r with 
                 | `Record (row,_) ->
                     let fields = present_fields row in

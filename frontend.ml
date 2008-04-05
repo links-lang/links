@@ -28,25 +28,19 @@ struct
       ((ResolvePositions.resolve_positions pos_context)#program
       ->- DesugarLAttributes.desugar_lattributes#program
       ->- RefineBindings.refine_bindings#program
-      ->- DesugarDatatypes.program
-      ->- (ExpandAliases.expand_aliases tyenv.Types.tycon_env)#program ->- snd
+      ->- DesugarDatatypes.program tyenv.Types.tycon_env
       ->- TypeSugar.Check.program tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#program
       ->- after_typing DesugarFormlets.desugar_formlets#program
       ->- after_typing DesugarPages.desugar_pages#program)
       program
 
-  let expand_aliases (env : Types.typing_environment) sentence=
-    let s, sentence = (ExpandAliases.expand_aliases env.Types.tycon_env)#sentence sentence in
-       {env with Types.tycon_env = s#aliases}, sentence
-
   let interactive =
     fun tyenv pos_context ->
       ((ResolvePositions.resolve_positions pos_context)#sentence
       ->- DesugarLAttributes.desugar_lattributes#sentence
       ->- RefineBindings.refine_bindings#sentence
-      ->- DesugarDatatypes.sentence
-      ->- expand_aliases tyenv
+      ->- DesugarDatatypes.sentence tyenv
       ->- uncurry TypeSugar.Check.sentence
       ->- after_typing DesugarRegexes.desugar_regexes#sentence
       ->- after_typing DesugarFormlets.desugar_formlets#sentence
