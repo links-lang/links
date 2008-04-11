@@ -160,3 +160,28 @@ let is_positive = is_positive TypeVarSet.empty
 let is_positive_row = is_positive_row TypeVarSet.empty
 let is_positive_field_env = is_positive_field_env TypeVarSet.empty
 let is_positive_row_var = is_positive_row_var TypeVarSet.empty
+
+let rec all_rigid rec_vars = 
+  let ar t = all_rigid rec_vars t 
+  and arr r = all_rigid_row rec_vars r in 
+    function
+        `Not_typed   -> assert false
+      | `Primitive _ -> true
+      | `Function (t1, t2, t3) -> ar t1 && ar t2 && ar t3
+      | `Record r -> arr r
+      | `Variant r -> arr r
+      | `Table (t1, t2) -> ar t1 && ar t2
+      | `Alias (_, t) -> ar t
+      | `Application (_, ts) -> List.for_all ar ts
+      | `MetaTypeVar mt ->
+          assert false (* TODO *)
+            
+      | `ForAll _ -> 
+          assert false (* TODO *) 
+ and all_rigid_row rec_vars =
+    let ar t = all_rigid rec_vars t 
+    and arr r = all_rigid_row rec_vars r in
+      assert false (* TODO *)
+
+
+let all_rigid = all_rigid TypeVarSet.empty

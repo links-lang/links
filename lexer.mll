@@ -160,6 +160,7 @@ let count_newlines = StringUtils.count '\n'
 
 let keywords = [
  "abs"      , ABS;
+ "abstract" , ABSTRACT;
  "app"      , APP;
  "alien"    , ALIEN;
  "as"       , AS;
@@ -177,7 +178,6 @@ let keywords = [
  "if"       , IF; 
  "in"       , IN; 
  "include"  , INCLUDE; 
- "yields"   , YIELDS; 
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
@@ -206,13 +206,14 @@ let keywords = [
  "var"      , VAR; 
  "where"    , WHERE; 
  "with"     , WITH; 
+ "yields"   , YIELDS; 
 ] 
 exception LexicalError of (string * Lexing.position)
 }
 
-let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
-let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
-let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
+let def_id = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*
+let octal_code = ['0'-'3']['0'-'7']['0'-'7']
+let hex_code   = ['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F']
 let def_qname = ('#' | def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)

@@ -81,7 +81,7 @@ let rec eq_types : (datatype * datatype) -> bool =
           end
       | `Application (s, ts) ->
           begin match unalias t2 with
-              `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_types) ts ts'
+              `Application (s', ts') -> Types.Abstype.compare s s' = 0 && List.for_all2 (Utility.curry eq_types) ts ts'
             | _ -> false
           end
       | `Alias  _ -> assert false
@@ -311,11 +311,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
           | `Table (lr, lw), `Table (rr, rw) ->
               (unify' rec_env (lr, rr);
                unify' rec_env (lw, rw))
-          | `Application (l, _), `Application (r, _) when l <> r ->
+          | `Application (l, _), `Application (r, _) when Types.Abstype.compare l r <> 0 ->
               raise (Failure
                        (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
                                 "' with abstract type '"^string_of_datatype t2^"'")))
-          | `Application (l, ls), `Application (r, rs) ->
+          | `Application (_, ls), `Application (_, rs) ->
               List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) ls rs
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2))));

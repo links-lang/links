@@ -475,9 +475,25 @@ class map =
                                 let r = o#unknown r in
                                   (l,r)) names in
           let _x_i2 = o#datatype' _x_i2 in `Type ((_x, names, _x_i2))
+      | `Abstract (sigs, bindings) -> 
+          let sigs = o#list (fun o -> o#sigitem) sigs in
+          let bindings = o#list (fun o -> o#binding) bindings in
+            `Abstract (sigs, bindings)
       | `Infix -> `Infix
       | `Exp _x -> let _x = o#phrase _x in `Exp _x
-      
+
+    method sigitem : sigitem -> sigitem =
+      function
+      | `Sig (name, datatype') ->
+          let name      = o#name name in
+          let datatype' = o#datatype' datatype' in
+            `Sig (name, datatype')
+      | `Type (name, abstype, names) ->
+          let name    = o#name name in
+          let abstype = o#option (fun o -> o#unknown) abstype in
+          let names   = o#list (fun o -> o#name) names in
+            `Type (name, abstype, names)
+
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
         let _x = o#bindingnode _x in
@@ -898,9 +914,25 @@ class fold =
                             let o = o#unknown r in
                               o) names in
           let o = o#datatype' _x_i2 in o
+      | `Abstract (sigitems, bindings) -> 
+          let o = o#list (fun o -> o#sigitem) sigitems in
+          let o = o#list (fun o -> o#binding) bindings in
+            o
       | `Infix -> o
       | `Exp _x -> let o = o#phrase _x in o
-      
+
+    method sigitem : sigitem -> 'self_type =
+      function
+      | `Sig (name, datatype') ->
+          let o = o#name name in
+          let o = o#datatype' datatype' in
+            o
+      | `Type (name, abstype, names) ->
+          let o = o#name name in
+          let o = o#option (fun o -> o#unknown) abstype in
+          let o = o#list (fun o -> o#name) names in
+            o
+
     method binding : binding -> 'self_type =
       fun (_x, _x_i1) ->
         let o = o#bindingnode _x in let o = o#position _x_i1 in o
@@ -1432,9 +1464,25 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Type ((_x, _x_i1, _x_i2))))
+      | `Abstract (sigitems, bindings) -> 
+          let o, sigitems = o#list (fun o -> o#sigitem) sigitems in
+          let o, bindings = o#list (fun o -> o#binding) bindings in
+            o, `Abstract (sigitems, bindings)
       | `Infix -> (o, `Infix)
       | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
       
+    method sigitem : sigitem -> ('self_type * sigitem) =
+      function
+      | `Sig (name, datatype') ->
+          let o, name      = o#name name in
+          let o, datatype' = o#datatype' datatype' in
+            o, `Sig (name, datatype')
+      | `Type (name, abstype, names) -> 
+          let o, name    = o#name name in
+          let o, abstype = o#option (fun o -> o#unknown) abstype in
+          let o, names   = o#list (fun o -> o#name) names in
+            o, `Type (name, abstype, names)
+
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->
         let (o, _x) = o#bindingnode _x in

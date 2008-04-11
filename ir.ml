@@ -73,8 +73,7 @@ and binding =
   [ `Let of (binder * tail_computation)
   | `Fun of (binder * binder list * computation * location)
   | `Rec of (binder * binder list * computation * location) list
-  | `Alien of (binder * language)
-  | `Module of (string * binding list option) ]
+  | `Alien of (binder * language) ]
 and special =
   [ `App of value * value
   | `Wrong of Types.datatype
@@ -446,16 +445,6 @@ struct
         | `Alien (x, language) ->
             let x, o = o#binder x in
               `Alien (x, language), o
-        | `Module (name, defs) ->
-            let defs, o =
-              match defs with
-                | None -> None, o
-                | Some defs ->
-                    let defs, o = o#bindings defs
-                    in
-                      Some defs, o
-            in
-              `Module (name, defs), o
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->

@@ -23,6 +23,7 @@ class map :
     method bool            : bool -> bool
     method unary_op        : unary_op -> unary_op
     method binder          : binder -> binder
+    method sigitem         : sigitem -> sigitem
     method sentence'       : sentence' -> sentence'
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
@@ -82,6 +83,7 @@ class fold :
     method bool            : bool -> 'self
     method unary_op        : unary_op -> 'self
     method binder          : binder -> 'self
+    method sigitem         : sigitem -> 'self
     method sentence'       : sentence' -> 'self
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
@@ -167,6 +169,7 @@ object ('self)
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
   method sentence'       : sentence' -> 'self * sentence'
+  method sigitem         : sigitem -> 'self * sigitem
   method string          : name -> 'self * name
   method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a

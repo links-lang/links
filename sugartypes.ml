@@ -30,6 +30,9 @@ deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
 deriving (Show)
 
+type abstype = Types.Abstype.t
+module Show_abstype = Types.Abstype.Show_t
+
 let string_of_unary_op =
   function
     | `Minus -> "-"
@@ -188,16 +191,21 @@ and phrasenode = [
 ]
 and phrase = phrasenode * position
 and bindingnode = [
-| `Val     of pattern * phrase * location * datatype' option
-| `Fun     of binder * funlit * location * datatype' option
-| `Funs    of (binder * funlit * location * datatype' option) list
-| `Foreign of name * name * datatype'
-| `Include of string
-| `Type    of name * (name * int option) list * datatype'
+| `Val      of pattern * phrase * location * datatype' option
+| `Fun      of binder * funlit * location * datatype' option
+| `Funs     of (binder * funlit * location * datatype' option) list
+| `Foreign  of name * name * datatype'
+| `Include  of string
+| `Type     of name * (name * int option) list * datatype'
+| `Abstract of sigitem list * binding list
 | `Infix
-| `Exp     of phrase
+| `Exp      of phrase
 ]
 and binding = bindingnode * position
+and sigitem = [
+   `Sig    of name * datatype'
+|  `Type   of name * abstype option * name list
+]
 and directive = string * string list
 and sentence = [ 
 | `Definitions of binding list
@@ -326,9 +334,9 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-  and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
-                                    * StringSet.t (* free vars in the rhs *) =
-    match binding with
+  and binding (bnd, _: binding) : StringSet.t (* vars bound in the pattern *)
+                                * StringSet.t (* free vars in the rhs *) =
+    match bnd with
     | `Val (pat, rhs, _, _) -> pattern pat, phrase rhs
     | `Fun ((name,_,_), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs -> 
@@ -343,6 +351,20 @@ struct
     | `Include _
     | `Type _
     | `Infix -> empty, empty
+    | `Abstract (sigitems, bindings) -> 
+        let bound_names = 
+          List.fold_left
+            (fun bound -> function
+               | `Sig  (name, _) -> add name bound
+               | `Type _         -> bound)
+            empty
+            sigitems
+        and free_names =
+          List.fold_left
+            (fun free bind -> union free (snd (binding bind)))
+            empty
+            bindings in
+        (bound_names, free_names)
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
@@ -388,6 +410,8 @@ let refine_bindings : binding list -> binding list =
                  | `Foreign _
                  | `Include _
                  | `Type _
+                 | `Abstract _ (* For now, abstract blocks define a
+                                  boundary wrt recursion *)
                  | `Val _ ->
                      (* collapse the group we're collecting, then start a
                         new empty group *)
@@ -401,7 +425,7 @@ let refine_bindings : binding list -> binding list =
           bindings ([], []) in
         group::groups
     in 
-    (* build a callgraph *)
+      (* build a callgraph *)
     let callgraph : _ -> (string * (string list)) list
       = fun defs -> 
         let defs = List.map (function

@@ -100,9 +100,6 @@ sig
     (var -> tail_computation sem) ->
     tail_computation sem
   val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
-
-  val modul : string * tail_computation sem *
-    (binding list -> unit -> tail_computation sem) -> tail_computation sem 
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -186,8 +183,6 @@ struct
 
     val alien_binding : var_info * language -> var M.sem
 
-    val module_binding : string * (binding list) option -> unit M.sem
-
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
   struct
@@ -258,9 +253,6 @@ struct
     let alien_binding (x_info, language) =
       let xb, x = fresh_var x_info in
         lift_binding (`Alien (xb, language)) x
-
-    let module_binding (name, bindings) =
-      lift_binding (`Module (name, bindings)) ()
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (`Variable x, t))
@@ -407,10 +399,6 @@ struct
   let alien (x_info, language, rest) =
     M.bind (alien_binding (x_info, language)) rest
 
-  let modul (name, body, rest) =
-    let (bindings, _) = reify body in      
-      M.bind (module_binding (name, Some bindings)) (rest bindings)
-    
   let comp (x_info, s, body) =
     bind s
       (fun e ->
@@ -458,8 +446,6 @@ struct
                  env defs
            | `Alien ((f, (ft, f_name, `Global)), _) ->
                extend venv [f_name] [f], Env.Int.bind tenv (f, ft)
-           | `Module (_, defs) ->
-               opt_app (fun defs -> add_globals_to_env env defs) env defs
            | _ -> env)
       env
 
@@ -687,30 +673,6 @@ struct
             | Alien (language, name, datatype, _) ->
                 let x_info = make_global_info (datatype, name) in
                   I.alien (x_info, language, fun v -> eval_defs (extend env [name] [v]) defss rest)
-            | Module (name, defs, _) ->
-(*                Debug.print (if is_some defs then ("module with defs") else ("module without defs"));*)
-                let () =
-                  match name with
-                    | None -> Debug.print ("anonymous module")
-                    | Some name -> Debug.print ("opening module: " ^ name) in
-
-                let defs = from_option [] defs in
-
-                let v =
-                  eval_program env
-                    (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
-
-                let name =                  
-                  match name with
-                    | None -> ""
-                    | Some name -> name
-                in
-                  I.modul (name,
-                           v,
-                           (fun bindings () ->
-                              let env, _ = add_globals_to_env (env, Env.Int.empty) bindings in
-                                eval_defs env defss rest))
-                  
                   
 
 (*                 let defss = *)

@@ -278,7 +278,25 @@ object (self)
     | `Foreign (x, lang, dt) ->
         let dt' = Desugar.foreign alias_env dt in
           self, `Foreign (x, lang, dt')
+    | `Abstract (sigitems, bindings) ->
+        (* 1. as with blocks, type names bound in `bindings' should not escape outside'
+           2. we should bind any type name definitions in `sigitems' to fresh types.
+           3. type names bound within `sigitems' should not be in scope in `bindings'.
+        *)
+        let  o           = {<>} in
+        let _o, bindings = o#list (fun o -> o#binding) bindings in
+        let o, sigitems  = self#list (fun o -> o#sigitem) sigitems in
+          o, `Abstract (sigitems, bindings)
     | b -> super#bindingnode b
+
+  method sigitem = function
+    | `Type (name, None, args) -> 
+        let abstype = (Types.Abstype.make name (List.length args)) in
+          ({< alias_env = SEnv.bind alias_env (name, `Abstract abstype) >},
+           `Type (name, Some abstype, args))
+    | `Sig (var, dt) ->
+        self, `Sig (var, Desugar.datatype' map alias_env dt)
+    | s -> super#sigitem s
 
   method sentence = 
     (* return any aliases bound to the interactive loop so that they

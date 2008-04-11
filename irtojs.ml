@@ -687,7 +687,6 @@ and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding 
                         body,
                         location) :: defs, code)
                   defs ([], code)))
-    | `Module _
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
@@ -752,7 +751,6 @@ and generate_declaration env
                         body,
                         location) :: defs, code)
                   defs ([], code)))
-    | `Module _
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
@@ -768,7 +766,6 @@ and generate_definition env
                (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
     | `Fun _
     | `Rec _
-    | `Module _
     | `Alien _
     | `Alias _ -> (fun code -> code)
 

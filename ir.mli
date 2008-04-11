@@ -61,8 +61,7 @@ and binding =
   [ `Let of binder * tail_computation
   | `Fun of binder * binder list * computation * location
   | `Rec of (binder * binder list * computation * location) list
-  | `Alien of binder * language
-  | `Module of (string * binding list option) ]
+  | `Alien of binder * language ]
 and special =
   [ `App of value * value
   | `Wrong of Types.datatype

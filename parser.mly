@@ -50,7 +50,7 @@ let datatype d = d, None
 
 %token END
 %token EQ IN 
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP
+%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP ABSTRACT
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -174,6 +174,7 @@ nofun_declaration:
                                                                  in `Val ((`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+| module_declaration                                           { $1 }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -183,6 +184,20 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
                                                                  in `Fun ((d, None, dpos),p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+
+module_declaration:
+| ABSTRACT COLON module_signature LBRACE bindings RBRACE       { `Abstract ($3, $5), pos () }
+
+module_signature:
+|                                                              { []       }
+| module_signature_item module_signature                       { $1 :: $2 } 
+
+module_signature_item:
+| abstract_typedecl SEMICOLON                                  { $1            }
+| signature SEMICOLON                                          { let ((name, _), typ) = $1 in `Sig (name, typ) }
+
+abstract_typedecl:
+| TYPENAME CONSTRUCTOR typeargs_opt                            { `Type ($2, None, List.map fst $3) }
 
 perhaps_uinteger:
 | /* empty */                                                  { None }

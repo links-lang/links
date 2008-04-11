@@ -1103,6 +1103,7 @@ module Desugarer =
                     | `Foreign _ -> assert false (* no nested "foreign" at present *)
                     | `Include _ -> assert false (* "include" not supported at present *)
                     | `Type    _ -> false        (* alias definitions are desugared prior to this *) 
+                    | `Abstract _ -> assert false (* abstract definitions are desugared prior to this *)
                     | `Infix     -> false        (* infix definitions have no representation in the IR *)
                     | `Exp     _ -> true) es in
                let es = 
@@ -1126,6 +1127,7 @@ module Desugarer =
                                        desugar (`FunLit funlit, pos'),
                                        pos, 
                                        true)) defs
+                             | `Abstract _ -> assert false
                              | `Type _    -> assert false
                              | `Include _ -> assert false
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
@@ -1277,6 +1279,7 @@ module Desugarer =
                                Variable (name, pos),
                                pos),
                     location, pos)]
+       | `Abstract _ -> assert false (* Abstract definitions are desugared prior to this *)
        | `Type _ ->
            assert false
        | `Foreign (language, name, (_, Some datatype)) -> 

@@ -80,7 +80,7 @@ let rec arg_types t = match concrete_type t with
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t
   | `Application (l, [t])
-      when Types.Abstype.Eq_t.eq l Types.list -> t
+      when Abstype.Eq_t.eq l Types.list -> t
   | t ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
 
@@ -89,3 +89,73 @@ let inject_type name t =
 
 let abs_type _ = assert false
 let app_type _ _ = assert false
+
+let rec expand_abstract_types context recvars t = 
+  let find_abstype (abstype : Abstype.t) : tycon_spec option =
+    try Some (snd (List.find ((=) 0 -<- Abstype.compare abstype -<- fst) context))
+    with NotFound _ -> None in
+  let expand  t = expand_abstract_types context recvars t 
+  and expandr r = expand_abstract_types_in_row context recvars r in
+    match t with
+      | `Not_typed
+      | `Primitive _ as t -> t
+      | `Function (t1, t2, t3) -> `Function (expand t1, expand t2, expand t3)
+      | `Record r -> `Record (expandr r)
+      | `Variant r -> `Variant (expandr r)
+      | `Table (t1, t2) -> `Table (expand t1, expand t2)
+      | `Alias ((tc, ts), t) -> `Alias ((tc, List.map expand ts), expand t)
+      | `Application (abstype, ts) ->
+          let ts = List.map expand ts in
+          begin match find_abstype abstype with
+            | Some (`Abstract abstype') -> `Application (abstype', ts)
+            | Some (`Alias (vars, body))  -> 
+                let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
+                  `Alias ((Abstype.name abstype, ts),
+                          Instantiate.datatype
+                            (tenv, IntMap.empty) 
+                            (expand (freshen_mailboxes body)))
+            | None -> `Application (abstype, ts)
+          end
+      | `MetaTypeVar mt as m ->
+          begin
+            match Unionfind.find mt with
+              | `Flexible _
+              | `Rigid _ as v -> m
+              | `Recursive (var, body) as r ->
+                  if TypeVarSet.mem var recvars then
+                    m
+                  else
+                    `MetaTypeVar
+                      (Unionfind.fresh
+                         (`Recursive (var, expand_abstract_types
+                                        context
+                                        (TypeVarSet.add var recvars)
+                                        body)))
+              | `Body t -> expand t
+          end
+      | `ForAll (qs, t) -> `ForAll (qs, expand t)
+and expand_abstract_types_in_row context recvars (field_env, row_var) =
+  let expand  t = expand_abstract_types context recvars t in
+  (StringMap.map (fun t ->
+                   match t with
+                     | `Present t -> `Present (expand t)
+                     | `Absent    -> `Absent) field_env,
+   expand_abstract_types_in_rowvar context recvars row_var)
+and expand_abstract_types_in_rowvar context recvars rv = 
+  match Unionfind.find rv with
+    | `Closed
+    | `Flexible _
+    | `Rigid _ -> rv
+    | `Recursive (var, row) ->
+        if TypeVarSet.mem var recvars then
+          rv
+        else
+          Unionfind.fresh
+            (`Recursive (var,
+                         expand_abstract_types_in_row context  (TypeVarSet.add var recvars) row))
+    | `Body row ->
+        Unionfind.fresh
+          (`Body (expand_abstract_types_in_row context recvars row))
+
+  
+let expand_abstract_types context t = expand_abstract_types context TypeVarSet.empty t
