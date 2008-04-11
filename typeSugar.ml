@@ -652,6 +652,9 @@ type context = Types.typing_environment = {
   tycon_env : Types.tycon_environment ;
 }
 
+let empty_context = { var_env   = Env.empty;
+                      tycon_env = Env.empty }
+
 let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
 let bind_tycon ctxt (v, t) = {ctxt with tycon_env = Env.bind ctxt.tycon_env (v,t)}
 
@@ -1064,6 +1067,13 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
         children Env.empty
   | _ -> Env.empty
           
+let show_context : context -> context =
+  fun context ->
+    Printf.fprintf stderr "Types  : %s\n" (Env.Dom.Show_t.show (Env.domain context.tycon_env));
+    Printf.fprintf stderr "Values : %s\n" (Env.Dom.Show_t.show (Env.domain context.var_env));
+    flush stderr;
+    context
+
 let rec type_check : context -> phrase -> phrase * Types.datatype = 
   fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -1530,6 +1540,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Errors.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               `Switch (erase e, erase_cases binders, Some pattern_type), body_type
     in (e, pos), t
+
+(*
+  The input context is the environment in which to type the bindings.
+
+  The output context is the environment resulting from typing the
+  bindings.  It does not include the input context.
+*)
 and type_binding : context -> binding -> binding * context =
   fun context (def, pos) ->
     let type_check = type_check in
@@ -1590,7 +1607,7 @@ and type_binding : context -> binding -> binding * context =
               ();
 *)
             `Val (erase_pat pat, erase body, location, datatype), 
-            context ++ penv
+          {var_env = penv; tycon_env = Env.empty}
       | `Fun ((name, _, pos), (pats, body), location, t) ->
           let pats = List.map (List.map tpc) pats in
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
@@ -1602,7 +1619,7 @@ and type_binding : context -> binding -> binding * context =
                                opt_iter
                                  (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
             (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
-             bind_var context (name, Utils.generalise context.var_env ft))
+             bind_var empty_context  (name, Utils.generalise context.var_env ft))
       | `Funs defs ->
           (*
             Compute initial types for the functions using
@@ -1657,27 +1674,27 @@ and type_binding : context -> binding -> binding * context =
           let env =
             List.fold_left (fun env (name, fb) ->
                               Env.bind env (name, Utils.generalise env fb)) 
-              context.var_env
+              Env.empty
               fbs in
             (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) ->
                                 binder,
                                 (List.map (List.map erase_pat) ppats, erase body),
                                 location, dtopt) 
                       defs),
-             {context with var_env = env})
+             {empty_context with var_env = env})
       | `Foreign (language, name, (_,Some datatype as dt)) ->
           (`Foreign (language, name, dt),
-           (bind_var context (name, datatype)))
+           (bind_var empty_context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           flush stderr;
-          t, bind_tycon context (name, `Alias (List.map (snd ->- val_of) vars, dt))
-      | `Infix -> `Infix, context
+          t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt))
+      | `Infix -> `Infix, empty_context
       | `Exp e ->
           let e = tc e in
           let () = unify ~handle:Errors.bind_exp
             (pos_and_typ e, no_pos Types.unit_type)
           in
-            `Exp (erase e), {context with var_env = Env.empty}
+            `Exp (erase e), empty_context
     in 
       (typed, pos), ctxt
 and type_regex typing_env : regex -> regex =
