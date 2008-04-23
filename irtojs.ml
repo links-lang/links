@@ -366,7 +366,7 @@ let comparison_name = function
   |`Equal  -> "=="
   |`NotEq  -> "!="
 
-let href_rewrite globals : RewriteSyntax.rewriter = function
+let href_rewrite typing_env globals : RewriteSyntax.rewriter = function
   | Apply (Variable ("pickleCont",_), 
            [Abstr ([], e, _) as abs], data) as exp ->
 (* WARNING (SL):
@@ -379,7 +379,7 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
       let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f")) in
       (* correct the type of stringifyB64 *)
       let stringifyB64 = set_node_datatype (Variable ("stringifyB64", data),
-                                            DesugarDatatypes.read "(a) -> String") in
+                                            DesugarDatatypes.read ~aliases:typing_env.Types.tycon_env "(a) -> String") in
       (* BUG: some of the other expressions still have the wrong type *)
       let json_args = Apply (stringifyB64,
                              [Record_intro (StringSet.fold 
@@ -390,10 +390,10 @@ let href_rewrite globals : RewriteSyntax.rewriter = function
                       json_args, data))
   | _ -> None
 
-let fixup_hrefs globals e = from_option e (RewriteSyntax.bottomup (href_rewrite globals) e)
+let fixup_hrefs typing_env globals e = from_option e (RewriteSyntax.bottomup (href_rewrite typing_env globals) e)
 
-let fixup_hrefs_def globals = function
-  | Define (name, b,l,t) -> Define (name, fixup_hrefs globals b, l, t)
+let fixup_hrefs_def typing_env globals = function
+  | Define (name, b,l,t) -> Define (name, fixup_hrefs typing_env globals b, l, t)
   | d -> d
 
 
@@ -949,7 +949,7 @@ let wrap_with_server_stubs code =
       code
 
 
-let preprocess_program global_names program =
+let preprocess_program typing_env global_names program =
   let (Program (defs, body)) =
     if Settings.get_value optimising then
       Optimiser.inline (Optimiser.inline (Optimiser.inline program)) 
@@ -961,7 +961,7 @@ let preprocess_program global_names program =
      How are we supposed to know that the collection of names passed
      to fixup_hrefs_def is correct?
   *)
-  let defs = List.map (fixup_hrefs_def
+  let defs = List.map (fixup_hrefs_def typing_env
                          (StringSet.from_list
                             (Syntax.defined_names defs @ 
                                Library.primitive_names @ global_names))) defs in
@@ -976,20 +976,20 @@ let preprocess_program global_names program =
   in
     Symbols.rename program
 
-let make_initial_env tenv =
-  let dt = DesugarDatatypes.read in
+let make_initial_env typing_env =
+  let dt = DesugarDatatypes.read ~aliases:typing_env.Types.tycon_env in
     Compileir.make_initial_env
       {Types.var_env = 
           (Env.String.bind
-             (Env.String.bind tenv
+             (Env.String.bind typing_env.Types.var_env
                 ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
              ("stringifyB64", dt "(a) -> String"));
       Types.tycon_env = Env.String.empty}
 
-let compile_ir ?(elim=false) tyenv global_names program =
-  let program = preprocess_program global_names program in
+let compile_ir ?(elim=false) typing_env global_names program =
+  let program = preprocess_program typing_env global_names program in
 
-  let env, tenv = make_initial_env tyenv in
+  let env, tenv = make_initial_env typing_env in
 
   let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv) program in 
   let ((bindings, _) as e) =
@@ -1003,7 +1003,7 @@ let compile_ir ?(elim=false) tyenv global_names program =
     e, env'
 
 let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) as program) = 
-  let e, env = compile_ir ~elim:true tyenv.Types.var_env global_names program in
+  let e, env = compile_ir ~elim:true tyenv global_names program in
   let _, code = generate_program env e in
   let code = optimise(wrap_with_server_stubs code) in
     (make_boiler_page
@@ -1011,10 +1011,10 @@ let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) a
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
        [])
 
-let generate_program_defs tyenv global_names defs root_names =
-  let (bindings, _), env = compile_ir tyenv global_names (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
+let generate_program_defs typing_env global_names defs root_names =
+  let (bindings, _), env = compile_ir typing_env global_names (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
   let _, code = generate_defs env bindings in
     [show (code Nothing)]
 
 let generate_program_defs global_names defs root_names =
-  generate_program_defs Library.typing_env.Types.var_env global_names defs root_names
+  generate_program_defs Library.typing_env global_names defs root_names
