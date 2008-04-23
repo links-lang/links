@@ -479,7 +479,7 @@ let rec generate_value env : value -> code =
           (* HACK *)
           begin
             match (Env'.lookup env var) with
-              | "map" -> Var ("LINKS.mapk")
+              | "ConcatMap" -> Var ("LINKS.accum")
               | name ->
                   if name = "/" then
                     Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa")
@@ -982,7 +982,7 @@ let make_initial_env tenv =
       {Types.var_env = 
           (Env.String.bind
              (Env.String.bind tenv
-                ("map", dt "((a) -> b, [a]) -> [b]"))
+                ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
              ("stringifyB64", dt "(a) -> String"));
       Types.tycon_env = Env.String.empty}
 

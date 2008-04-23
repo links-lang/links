@@ -612,7 +612,7 @@ struct
                                       Types.make_list_type t) in
 
             let x_info = make_local_info (xt, x) in
-            let map = I.var (VEnv.lookup env "map", map_type) in
+            let map = I.var (VEnv.lookup env "ConcatMap", map_type) in
 
             let f = I.lam (ft, [x_info], (fun [v] -> eval (extend env [x] [v]) body), `Unknown) in
               I.apply (map, [f; ev e], t)
