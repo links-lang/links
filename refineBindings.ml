@@ -2,7 +2,7 @@ open Utility
 open Sugartypes
 
 
-(** refine_bindings locates mutually-recursive cliques in sequences of
+(** refine_bindings locates mutually-recursive sccs in sequences of
     bindings.  (As a side effect we also dispense with `Infix
     declarations, which are only used during the parsing stage.)
 *)
@@ -58,11 +58,11 @@ let refine_bindings : binding list -> binding list =
                      | _ -> false) 
           funs in
       let graph = callgraph funs in
-      let cliques = Graph.topo_sort_cliques graph in
+      let sccs = Graph.topo_sort_sccs graph in
         List.map
-          (fun clique ->
-             `Funs (List.map (find_fun ->- unFun) clique), pos)
-          cliques
+          (fun scc ->
+             `Funs (List.map (find_fun ->- unFun) scc), pos)
+          sccs
     in 
     (* refine a group of bindings *)
     let group = function
