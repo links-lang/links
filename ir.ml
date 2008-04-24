@@ -36,6 +36,8 @@ type constant =
   | Float of float
 *)
 
+let var_of_binder (x, _) = x
+
 type constant = Syntax.constant
   deriving (Show)
 
@@ -511,9 +513,18 @@ end
 (*
   Eliminate dead functions and value bindings.
 
-  Currently this is very basic. It only does one pass, and it only
-  eliminates variables if they are never used anywhere.
+  Currently this is rather basic. It only does one pass, and it only
+  eliminates variables in the following situations:
 
+    - never used anywhere
+    - only used recursively, but not mutually recursively
+    - only used mutually recursively, and all the other mutually
+    recursive bindings are only used mutually recursively
+
+  If we partition mutually recursive bindings into strongly connected
+  components beforehand then this will help eliminate more recursive
+  bindings.
+  
   A much more effective approach is to use one of Appel and Jim's
   algorithms described in `Shrinking lambda reductions in linear
   time'.
@@ -548,31 +559,71 @@ end
 *)
 module ElimDeadDefs =
 struct
+  let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+
   let counter tyenv =
   object (o)
     inherit Transform.visitor(tyenv) as super
       
     val env = IntMap.empty
+    val rec_env = IntMap.empty
+    val mutrec_env = IntMap.empty
       
     method with_env env =
       {< env = env >}
 
+    method with_envs (env, rec_env, mutrec_env) =
+      {< env = env; rec_env = rec_env; mutrec_env = mutrec_env >}
+
     method init (x, (_, name, _)) =
-      (*      Debug.print ("init "^name^" as: "^string_of_int x);*)
       o#with_env (IntMap.add x 0 env)
 
+    method initrec (x, (_, name, _)) =
+      o#with_envs (IntMap.add x 0 env, IntMap.add x (0, false) rec_env, IntMap.add x (0, true) mutrec_env)
+
+    method set_rec_status f (r,m) =
+      let (count, _) = IntMap.find f rec_env in
+      let rec_env = IntMap.add f (count, r) rec_env in
+      let (count, _) = IntMap.find f mutrec_env in
+      let mutrec_env = IntMap.add f (count, m) mutrec_env in
+        o#with_envs (env, rec_env, mutrec_env)
+
+    method set_rec f =
+      o#set_rec_status f (true, false)
+
+    method set_mutrec f =
+      o#set_rec_status f (false, true)
+
+    method set_nonrec f =
+      o#set_rec_status f (false, false)
+
+    method set_nonrecs fs =
+      IntSet.fold (fun f o -> o#set_nonrec f) fs o
+
     method inc x =
-(*      Debug.print ("use of: "^string_of_int x);*)
-      o#with_env (IntMap.add x ((IntMap.find x env)+1) env)
+      if IntMap.mem x rec_env then
+        let count = IntMap.find x env
+        and rcount, ractive = IntMap.find x rec_env
+        and mcount, mactive = IntMap.find x mutrec_env in
+        let envs =
+          match ractive, mactive with
+            | false, false -> IntMap.add x (count+1) env, rec_env, mutrec_env
+            | true, false -> env, IntMap.add x (rcount+1, ractive) rec_env, mutrec_env
+            | false, true -> env, rec_env, IntMap.add x (mcount+1, mactive) mutrec_env
+            | true, true -> assert false
+        in
+          o#with_envs envs
+      else if IntMap.mem x env then
+        o#with_env (IntMap.add x ((IntMap.find x env)+1) env)
+      else
+        o#with_env (IntMap.add x 1 env)
 
     method var =
-      fun x ->
+      fun x ->         
         if IntMap.mem x env then
           x, o#lookup_type x, o#inc x
         else
           super#var x
-
-    method super_binding = super#binding
 
     method binding b =
       match b with
@@ -583,27 +634,53 @@ struct
             let b, o = super#binding b in
               b, o#init f
         | `Rec defs ->
-            let o =
-              List.fold_left
-                (fun o (f, _, _, _) -> o#init f)
-                o
+            let fs, o =
+              List.fold_right
+                (fun (f, _, _, _) (fs, o) ->
+                   let f, o = o#binder f in
+                     (IntSet.add (var_of_binder f) fs, o#initrec f))
                 defs
-            in
-              o#super_binding b
+                (IntSet.empty, o) in
+
+            let defs, o =
+              List.fold_left
+                (fun (defs, o) (f, xs, body, location) ->
+                   let xs, o =
+                     List.fold_right
+                       (fun x (xs, o) ->
+                          let (x, o) = o#binder x in
+                            (x::xs, o))
+                       xs
+                       ([], o) in
+                   let o = o#set_rec (var_of_binder f) in
+                   let body, _, o = o#computation body in
+                   let o = o#set_mutrec (var_of_binder f) in
+                     (f, xs, body, location)::defs, o)
+                ([], o)
+                defs in
+            let o = o#set_nonrecs fs in
+            let defs = List.rev defs in
+              `Rec defs, o
         | _ ->
             super#binding b
 
-    method get_env () = env
+    method get_envs () = (env, rec_env, mutrec_env)
   end
 
-  let eliminator tyenv env =
+  let eliminator tyenv (env, rec_env, mutrec_env) =
   object (o)
     inherit Transform.visitor(tyenv) as super
       
     val env = env
+    val rec_env = rec_env
+    val mutrec_env = mutrec_env
       
-    method is_dead (x, _) =
+    method is_dead x =
       IntMap.mem x env && (IntMap.find x env = 0)
+
+    method is_dead_rec f =
+      IntMap.mem f env && (IntMap.find f env = 0
+          && (not (IntMap.mem f mutrec_env) || fst (IntMap.find f mutrec_env) = 0))
 
     method bindings =
       function
@@ -611,25 +688,35 @@ struct
             begin
               let b, o = o#binding b in
                 match b with
-                  | `Let ((_, (_, name, _)) as x, _) when o#is_dead x ->
-(*                      Debug.print ("Eliminating let-val: "^name);*)
+                  | `Let ((x, (_, name, _)), _) when o#is_dead x ->
                       o#bindings bs
-                  | `Fun ((_, (_, name, _)) as f, _, _, _) when o#is_dead f ->
-(*                      Debug.print ("Eliminating non-rec fun: "^name);*)
+                  | `Fun ((f, (_, name, _)), _, _, _) when o#is_dead f ->
                       o#bindings bs
                   | `Rec defs ->
-                      let defs =
+                      Debug.if_set show_rec_uses (fun () -> "Rec block:");
+                      let fs, defs =
                         List.fold_left
-                          (fun defs (((_, (_, name, _)) as f, _, _, _) as def) ->
-                             if o#is_dead f then
-                               begin
-(*                                 Debug.print ("Eliminating rec fun: "^name);*)
-                                 defs
-                               end
-                             else def :: defs)
-                          []
+                          (fun (fs, defs) (((f, (_, name, _)), _, _, _) as def) ->
+                             Debug.if_set show_rec_uses
+                               (fun () ->
+                                  "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^
+                                    ", rec uses: "^string_of_int (fst (IntMap.find f rec_env))^
+                                    ", mut-rec uses: "^string_of_int (fst (IntMap.find f mutrec_env)));
+                             if o#is_dead_rec f then fs, defs
+                             else
+                               IntSet.add f fs, def :: defs)
+                          (IntSet.empty, [])
                           defs in
-                      let defs = List.rev defs in
+
+                      (*
+                         If none of the mutually recursive bindings appear elsewhere
+                         then we can delete them all.
+                      *)
+                      let defs =
+                        if IntSet.for_all o#is_dead fs then []
+                        else
+                          List.rev defs
+                      in
                         begin
                           match defs with
                             | [] -> o#bindings bs
@@ -646,12 +733,12 @@ struct
 
   let count tyenv p =
     let _, _, o = (counter tyenv)#computation p in
-      o#get_env()
+      o#get_envs()
 
   let program tyenv p =
-    let env = count tyenv p in
+    let envs = count tyenv p in
 (*      Debug.print ("before elim dead defs: " ^ Show_computation.show p);*)
-    let p, _, _ = (eliminator tyenv env)#computation p in
+    let p, _, _ = (eliminator tyenv envs)#computation p in
 (*      Debug.print ("after elim dead defs: " ^ Show_computation.show p);*)
       p
 end
