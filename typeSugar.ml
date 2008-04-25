@@ -1490,15 +1490,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (pos_and_typ t, pos_and_typ e);
               `Conditional (erase i, erase t, erase e), (typ t)
         | `Block (bindings, e) ->
-            let rec type_bindings context =
-              function
-                | [] -> [], context.var_env
-                | b :: bs ->
-                    let b, ctxt' = type_binding context b in
-                    let bs, typing_env'' = type_bindings (Types.extend_typing_environment context ctxt') bs in
-                      b :: bs, typing_env'' in
-            let bindings, typing_env = type_bindings context bindings in
-            let e = type_check {context with var_env = typing_env} e in
+            let context, bindings = type_bindings context bindings in
+            let e = type_check context e in
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
@@ -1711,8 +1704,7 @@ and type_regex typing_env : regex -> regex =
         | `Splice e -> `Splice (erase (type_check typing_env e))
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
-            
-let type_bindings typing_env bindings =
+and type_bindings typing_env bindings =
   let tyenv, bindings =
     List.fold_left
       (fun (ctxt, bindings) (binding : binding) ->
