@@ -116,8 +116,8 @@ let reduce_recursion : RewriteSyntax.rewriter = function
       let untyped_bindings = List.map (fun (name, expr, _) -> name, expr) bindings in
       let find_definition v = List.find (fun (name, _, _) -> name = v) bindings in
       let recursive_p (name, expr, annot) =  StringSet.mem name (freevars expr) in
-      let cliques = Callgraph.group_and_order_bindings_by_callgraph untyped_bindings in
-        begin match map (map find_definition) cliques with
+      let sccs = Callgraph.group_and_order_bindings_by_callgraph untyped_bindings in
+        begin match map (map find_definition) sccs with
           | [_::_::_] -> None (* one multi-element group.  Everything must be mutually-recursive *)
           | [[x]] when recursive_p x -> None (* One single-element group; element is recursive. *)
           | groups -> (* either a group consisting of a single-element non-recursive element 

@@ -118,7 +118,6 @@ let datatype d = d, None
 %%
 
 interactive:
-| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -127,9 +126,9 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| preamble declarations exp END                                { $1 @ $2, Some $3 }
-| preamble exp END                                             { $1, Some $2 }
-| preamble declarations END                                    { $1 @ $2, None }
+| declarations exp END                                         { $1, Some $2 }
+| exp END                                                      { [], Some $1 }
+| declarations END                                             { $1, None }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -150,10 +149,6 @@ arg:
 var:
 | VARIABLE                                                     { $1, pos() }
 
-preamble:
-| preamble_declaration preamble                                { $1 :: $2 }
-| /* empty */                                                  { [] }
-
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
@@ -162,8 +157,6 @@ declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
 
-preamble_declaration:
-| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, datatype $5), pos() }
@@ -194,7 +187,7 @@ module_signature:
 
 module_signature_item:
 | abstract_typedecl SEMICOLON                                  { $1            }
-| signature SEMICOLON                                          { let ((name, _), typ) = $1 in `Sig (name, typ) }
+| signature SEMICOLON                                          { let ((name, _), typ) = $1 in `Sig ((name, None, pos ()), typ) }
 
 abstract_typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt                            { `Type ($2, None, List.map fst $3) }
@@ -614,6 +607,7 @@ binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| module_declaration                                           { $1 }
 | typedecl SEMICOLON                                           { $1 }
 
 bindings:

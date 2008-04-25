@@ -195,7 +195,6 @@ and bindingnode = [
 | `Fun      of binder * funlit * location * datatype' option
 | `Funs     of (binder * funlit * location * datatype' option) list
 | `Foreign  of name * name * datatype'
-| `Include  of string
 | `Type     of name * (name * int option) list * datatype'
 | `Abstract of sigitem list * binding list
 | `Infix
@@ -203,7 +202,7 @@ and bindingnode = [
 ]
 and binding = bindingnode * position
 and sigitem = [
-   `Sig    of name * datatype'
+   `Sig    of binder * datatype'
 |  `Type   of name * abstype option * name list
 ]
 and directive = string * string list
@@ -316,13 +315,6 @@ struct
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
                      diff (option_map phrase orderby) pat_bound]                     
-            (*     | `Iteration (`List (pat, source), body, where, orderby) *)
-(*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
-(*         let pat_bound = pattern pat in *)
-(*           union_all [phrase source; *)
-(*                      diff (phrase body) pat_bound; *)
-(*                      diff (option_map phrase where) pat_bound; *)
-(*                      diff (option_map phrase orderby) pat_bound] *)
     | `Switch (p, cases, _) -> union (phrase p) (union_map case cases)
     | `Receive (cases, _) -> union_map case cases 
     | `DBDelete (pat, p, where) -> 
@@ -348,14 +340,13 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign (name, _, _) -> singleton name, empty
-    | `Include _
     | `Type _
     | `Infix -> empty, empty
     | `Abstract (sigitems, bindings) -> 
         let bound_names = 
           List.fold_left
             (fun bound -> function
-               | `Sig  (name, _) -> add name bound
+               | `Sig  ((name, _, _), _) -> add name bound
                | `Type _         -> bound)
             empty
             sigitems
@@ -389,73 +380,3 @@ struct
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
 end
-
-(** refine_bindings locates mutually-recursive cliques in sequences of
-    bindings.  (As a side effect we also dispense with `Infix
-    declarations, which are only used during the parsing stage.)
-*)
-let refine_bindings : binding list -> binding list =
-  fun bindings -> 
-    (* Group sequences of functions together *)
-    let initial_groups = 
-      let group, groups = 
-        List.fold_right
-          (fun (binding,_ as bind) (thisgroup, othergroups) -> 
-             let add group groups = match group with
-               | [] -> groups
-               | _  -> group::groups in
-               match binding with
-                 | `Funs _ -> assert false
-                 | `Exp _
-                 | `Foreign _
-                 | `Include _
-                 | `Type _
-                 | `Abstract _ (* For now, abstract blocks define a
-                                  boundary wrt recursion *)
-                 | `Val _ ->
-                     (* collapse the group we're collecting, then start a
-                        new empty group *)
-                     ([], [bind] :: add thisgroup othergroups)
-                 | `Fun _ ->
-                     (* Add binding to group *)
-                     (bind::thisgroup, othergroups)
-                 | `Infix -> 
-                     (* discard binding *)
-                     (thisgroup, othergroups))
-          bindings ([], []) in
-        group::groups
-    in 
-      (* build a callgraph *)
-    let callgraph : _ -> (string * (string list)) list
-      = fun defs -> 
-        let defs = List.map (function
-                               | `Fun ((name,_,_), funlit, _, _), _ -> (name, funlit)
-                               | _ -> assert false) defs in
-        let names = StringSet.from_list (List.map fst defs) in
-          List.map
-            (fun (name, body) -> name, 
-               StringSet.elements 
-                 (StringSet.inter (Freevars.funlit body) names))
-            defs in
-    (* refine a group of function bindings *)
-    let groupFuns pos (funs : binding list) : binding list = 
-      let unFun = function
-        | `Fun f, _ -> f
-        | _ -> assert false in
-      let find_fun name = 
-        List.find (function
-                     | `Fun ((n,_,_), _, _, _), _ when name = n -> true
-                     | _ -> false) 
-          funs in
-      let graph = callgraph funs in
-      let cliques = Graph.topo_sort_cliques graph in
-        List.map
-          (fun clique ->
-             `Funs (List.map (find_fun ->- unFun) clique), pos)
-          cliques
-    in 
-    (* refine a group of bindings *)
-    let group = function
-      | (`Fun _, pos)::_ as funs -> groupFuns pos funs
-      | binds                    -> binds in
-      concat_map group initial_groups

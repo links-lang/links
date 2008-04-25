@@ -24,26 +24,26 @@ struct
   let after_alias_expansion f (a, b) = (f a, b)
 
   let program =
-    fun tyenv pos_context program ->
-      ((ResolvePositions.resolve_positions pos_context)#program
+    fun tyenv pos_context ->
+         (ResolvePositions.resolve_positions pos_context)#program
       ->- DesugarLAttributes.desugar_lattributes#program
       ->- RefineBindings.refine_bindings#program
       ->- DesugarDatatypes.program tyenv.Types.tycon_env
       ->- TypeSugar.Check.program tyenv
       ->- after_typing DesugarRegexes.desugar_regexes#program
       ->- after_typing DesugarFormlets.desugar_formlets#program
-      ->- after_typing DesugarPages.desugar_pages#program)
-      program
+      ->- after_typing DesugarPages.desugar_pages#program
+      ->- after_typing DesugarAbstract.desugar_abstract#program
 
   let interactive =
     fun tyenv pos_context ->
-      ((ResolvePositions.resolve_positions pos_context)#sentence
+      (ResolvePositions.resolve_positions pos_context)#sentence
       ->- DesugarLAttributes.desugar_lattributes#sentence
       ->- RefineBindings.refine_bindings#sentence
       ->- DesugarDatatypes.sentence tyenv
       ->- uncurry TypeSugar.Check.sentence
       ->- after_typing DesugarRegexes.desugar_regexes#sentence
       ->- after_typing DesugarFormlets.desugar_formlets#sentence
-      ->- after_typing DesugarPages.desugar_pages#sentence)
-
+      ->- after_typing DesugarPages.desugar_pages#sentence
+      ->- after_typing DesugarAbstract.desugar_abstract#sentence
 end

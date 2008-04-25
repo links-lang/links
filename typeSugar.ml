@@ -77,7 +77,6 @@ struct
     | `Funs _
     | `Infix
     | `Type _
-    | `Include _
     | `Foreign _ -> true
     | `Exp p -> is_generalisable p
     | `Val (pat, rhs, _, _) ->
@@ -667,7 +666,10 @@ let bind_tycon ctxt (v, t) = {ctxt with tycon_env = Env.bind ctxt.tycon_env (v,t
 
 
 let mailbox = "_MAILBOX_"
-let mailbox_type env = Utils.instantiate env mailbox
+let mailbox_type env = 
+  try
+    Utils.instantiate env mailbox
+  with _ -> failwith "mailbox_type!"
 
 let constant_type = function
   | `Float _  -> `Primitive `Float
@@ -1082,6 +1084,9 @@ let check_interface (pos : position) (bindings : context) (signature : context) 
     
   (* Every type in `signature' must be present in `bindings' with a
      compatible interface *)
+
+    (* This doesn't seem to work *)
+
   let () =
     Env.fold
       (fun tycon details () ->
@@ -1094,6 +1099,7 @@ let check_interface (pos : position) (bindings : context) (signature : context) 
                if List.length largs <> arity rabstype then
                  failwith ("Arity of abstract type "^ tycon ^" does not match implementation")
            | _, `Alias (rargs, r) ->
+               prerr_endline "fail";
                assert false (* Currently only abstract types are supported *)
            | None, _ -> 
                failwith
@@ -1559,8 +1565,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (pos_and_typ t, pos_and_typ e);
               `Conditional (erase i, erase t, erase e), (typ t)
         | `Block (bindings, e) ->
-            let context, bindings = type_bindings context bindings in
-            let e = type_check context e in
+            let context', bindings = type_bindings context bindings in
+            let e = type_check (Types.extend_typing_environment context context') e in
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
@@ -1637,7 +1643,6 @@ and type_binding : context -> binding -> binding * context =
              `Function (args, Types.fresh_type_variable (), rtype)) in
 
     let typed, ctxt = match def with
-      | `Include _ -> assert false
       | `Val (pat, body, location, datatype) -> 
           let body = tc body in
           let pat = tpc pat in
@@ -1670,18 +1675,7 @@ and type_binding : context -> binding -> binding * context =
 *)
             `Val (erase_pat pat, erase body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
-      | `Fun ((name, _, pos), (pats, body), location, t) ->
-          let pats = List.map (List.map tpc) pats in
-          let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
-          let {var_env = body_env} = List.fold_left fold_in_envs context pats in
-          let mt = Types.fresh_type_variable () in
-          let body = type_check (bind_var context (mailbox, mt)) body in
-          let ft = make_ft pats (typ body) in
-          let () = opt_iter (fun (_,t) ->
-                               opt_iter
-                                 (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
-            (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
-             bind_var empty_context  (name, Utils.generalise context.var_env ft))
+      | `Fun ((name, _, pos), (pats, body), location, t) -> assert false
       | `Funs defs ->
           (*
             Compute initial types for the functions using
@@ -1750,22 +1744,23 @@ and type_binding : context -> binding -> binding * context =
       | `Type (name, vars, (_, Some dt)) as t ->
           t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt))
       | `Abstract (sigitems, bindings) -> 
-          let bndctxt, bindings = type_bindings context bindings 
-          and sigctxt = 
+          let bndctxt, bindings = type_bindings context bindings
+          and sigctxt, sigitems = 
             List.fold_left
-              (fun context -> function
-                 | `Sig  (v, (_, Some dt)) -> 
-                     bind_var context (v, dt)
+              (fun (context, sigitems) -> function
+                 | `Sig ((v, None, pos), (d, Some dt)) -> 
+                     (bind_var context (v, dt),
+                      `Sig ((v, Some dt, pos), (d, Some dt)) :: sigitems)
                  | `Sig  _ -> 
                      assert false
-              
-                 | `Type (tc, Some abstype, args) -> 
-                     bind_tycon context (tc, `Abstract abstype))
-              empty_context
+                 | `Type (tc, Some abstype, args) as item -> 
+                     (bind_tycon context (tc, `Abstract abstype)),
+                     item :: sigitems)
+              (empty_context, [])
               sigitems
           in
           let () = check_interface pos bndctxt sigctxt in
-            (`Abstract (sigitems, bindings), sigctxt)
+            (`Abstract (List.rev sigitems, bindings), sigctxt)
       | `Infix -> `Infix, empty_context
       | `Exp e ->
           let e = tc e in
@@ -1789,16 +1784,16 @@ and type_regex typing_env : regex -> regex =
         | `Splice e -> `Splice (erase (type_check typing_env e))
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
-and type_bindings (typing_env : context)  bindings =
+and type_bindings (globals : context)  bindings =
   let tyenv, bindings =
     List.fold_left
       (fun (ctxt, bindings) (binding : binding) ->
-         let binding, ctxt' = type_binding ctxt binding in
+         let binding, ctxt' = type_binding (Types.extend_typing_environment globals ctxt) binding in
            Types.extend_typing_environment ctxt ctxt', binding::bindings)
-      (typing_env, []) bindings
+      (empty_context, []) bindings
   in
-    (tyenv : context), List.rev bindings
-      
+    tyenv, List.rev bindings
+
 let type_sugar = Settings.add_bool("type_sugar", true, `User)
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
@@ -1814,7 +1809,7 @@ struct
           match body with
             | None -> (bindings, None), Types.unit_type, ctxt'
             | Some (_,pos as body) ->
-                let body, typ = type_check ctxt' body in
+                let body, typ = type_check (Types.extend_typing_environment tyenv ctxt') body in
 (*                  Debug.print ("checked type: " ^ Types.string_of_datatype typ);                 *)
                   (bindings, Some body), typ, ctxt'
       with
@@ -1829,7 +1824,7 @@ struct
             let te, bindings = type_bindings tyenv bindings in
               `Definitions bindings, Types.unit_type, te
         | `Expression (_, pos as body) -> 
-            let body, t = (type_check tyenv body) in
+            let body, t = type_check tyenv body in
               `Expression body, t, tyenv
         | `Directive d -> `Directive d, Types.unit_type, tyenv
     else

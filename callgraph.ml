@@ -8,7 +8,7 @@ open Syntax
 
 (** {1 Callgraph ordering}
 
-    Find the cliques in a group of functions.  Whenever there's mutual
+    Find the sccs in a group of functions.  Whenever there's mutual
     recursion we need to type all the functions in the cycle as
     `letrec-bound'; we want to avoid doing this in all other cases to
     make everything as polymorphic as possible (and to make typing
@@ -37,7 +37,7 @@ let group_and_order_bindings_by_callgraph
     (bindings : (string * 'a expression') list) 
     : string list list = 
   let call_graph = make_callgraph bindings in
-    Graph.topo_sort_cliques call_graph
+    Graph.topo_sort_sccs call_graph
 
 (** Find definition of a symbol in a list of definitions.
     (Perhaps this should work in the other direction, bottom-to-top?) *)
@@ -60,8 +60,8 @@ let refine_def_groups (def_lists : 'a definition' list list)
     : 'a definition' list list = 
   let regroup_defs defs = 
     let bindings = deflist_to_alist defs in
-    let cliques = group_and_order_bindings_by_callgraph bindings in
-      map (map (find_defn_in defs)) cliques 
+    let sccs = group_and_order_bindings_by_callgraph bindings in
+      map (map (find_defn_in defs)) sccs 
   in
     (* Each grouping in the input will be broken down into a new list
        of groupings. We only care about the new groupings, so we
@@ -72,7 +72,7 @@ let refine_def_groups (def_lists : 'a definition' list list)
       
 (** Removes defs from [env] that aren't used by [expr]. *)
 module DeadCode = struct
-  type clique = {
+  type scc = {
     free_names : string list;
     exposed_names : string list;
     defs : definition list
@@ -90,7 +90,7 @@ module DeadCode = struct
                                    | _ -> false) defs in
     (* Debug.print("definitions in elim_dead_defs (" ^ string_of_int(length defs) ^ "):\n  " ^ mapstrcat "," defname defs); *)
     let groupings = refine_def_groups [defs] in
-    let clique_info = map (fun defs ->
+    let scc_info = map (fun defs ->
                              {free_names = remove_globals (StringSet.union_all (List.map freevars_def defs));
                               exposed_names = Syntax.defined_names defs;
                               defs = defs})
@@ -103,23 +103,23 @@ module DeadCode = struct
           | [] -> env
           | names ->
               let defines name {exposed_names = names} = List.mem name names in
-              let defining_cliques =  
+              let defining_sccs =  
  		List.map (fun name -> 
                             try
-                              List.find (defines name) clique_info
+                              List.find (defines name) scc_info
                             with NotFound _ ->
                               failwith("Internal error: missing definition in elim_dead_defs: " ^ name)) 
                   names 
               in
                 close (List.fold_right
-                         (fun clique env ->
-                            let exposed_names = env.exposed_names @ clique.exposed_names in
+                         (fun scc env ->
+                            let exposed_names = env.exposed_names @ scc.exposed_names in
                               { free_names = 
-                                  difference (env.free_names @ clique.free_names)
+                                  difference (env.free_names @ scc.free_names)
                                     exposed_names;
                                 exposed_names = exposed_names;
-                                defs = clique.defs @ env.defs})
-                         defining_cliques env)
+                                defs = scc.defs @ env.defs})
+                         defining_sccs env)
     in
     try
       other @ (close expr_info).defs

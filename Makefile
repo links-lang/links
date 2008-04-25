@@ -84,6 +84,7 @@ SOURCES = $(OPC)                		\
           unify.mli unify.ml                    \
           callgraph.ml					\
           sugarTraversals.mli  sugarTraversals.ml	\
+          sugarSubst.mli sugarSubst.ml                  \
           desugarDatatypes.mli desugarDatatypes.ml      \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
@@ -91,6 +92,7 @@ SOURCES = $(OPC)                		\
           desugarPages.mli desugarPages.ml		\
           desugarFormlets.mli desugarFormlets.ml	\
           desugarRegexes.mli desugarRegexes.ml		\
+          desugarAbstract.mli desugarAbstract.ml        \
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           frontend.ml                           \

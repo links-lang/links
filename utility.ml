@@ -433,6 +433,8 @@ struct
   let rassoc i l = rassoc_eq (=) i l
   and rassq i l = rassoc_eq (==) i l
     
+  let mem_rassoc i l = try ignore (rassoc i l); true with NotFound _ -> false
+
   let rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
     fun value -> List.filter (not -<- eq value -<- snd)
           

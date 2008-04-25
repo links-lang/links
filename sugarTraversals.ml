@@ -467,7 +467,6 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
-      | `Include _x -> let _x = o#string _x in `Include _x
       | `Type ((_x, names, _x_i2)) ->
           let _x = o#name _x in
           let names = o#list (fun o (l,r) -> 
@@ -484,10 +483,10 @@ class map =
 
     method sigitem : sigitem -> sigitem =
       function
-      | `Sig (name, datatype') ->
-          let name      = o#name name in
+      | `Sig (binder, datatype') ->
+          let binder    = o#binder binder in
           let datatype' = o#datatype' datatype' in
-            `Sig (name, datatype')
+            `Sig (binder, datatype')
       | `Type (name, abstype, names) ->
           let name    = o#name name in
           let abstype = o#option (fun o -> o#unknown) abstype in
@@ -906,7 +905,6 @@ class fold =
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
-      | `Include _x -> let o = o#string _x in o
       | `Type ((_x, names, _x_i2)) ->
           let o = o#name _x in
           let o = o#list (fun o (l, r) -> 
@@ -923,8 +921,8 @@ class fold =
 
     method sigitem : sigitem -> 'self_type =
       function
-      | `Sig (name, datatype') ->
-          let o = o#name name in
+      | `Sig (binder, datatype') ->
+          let o = o#binder binder in
           let o = o#datatype' datatype' in
             o
       | `Type (name, abstype, names) ->
@@ -1452,7 +1450,6 @@ class fold_map =
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))
-      | `Include _x -> let (o, _x) = o#string _x in (o, (`Include _x))
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
@@ -1473,10 +1470,10 @@ class fold_map =
       
     method sigitem : sigitem -> ('self_type * sigitem) =
       function
-      | `Sig (name, datatype') ->
-          let o, name      = o#name name in
+      | `Sig (binder, datatype') ->
+          let o, binder      = o#binder binder in
           let o, datatype' = o#datatype' datatype' in
-            o, `Sig (name, datatype')
+            o, `Sig (binder, datatype')
       | `Type (name, abstype, names) -> 
           let o, name    = o#name name in
           let o, abstype = o#option (fun o -> o#unknown) abstype in

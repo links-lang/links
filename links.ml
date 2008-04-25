@@ -7,9 +7,6 @@ open Basicsettings
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 
-(* Types of built-in primitives.  TODO: purge. *)
-let stdenvs = ref([], Library.typing_env)
-
 type envs = Result.environment * Types.typing_environment
 
 (** Definition of the various repl directives *)
@@ -221,9 +218,9 @@ let evaluate_string_in envs v =
       program, (bindings, expr)
   in
     (Settings.set_value interacting false;
-     ignore(evaluate parse_and_desugar envs v))
+     ignore (evaluate parse_and_desugar envs v))
 
-let cmd_line_actions = ref []
+let to_evaluate : string list ref = ref []
 
 let run_tests tests () = 
   begin
@@ -241,7 +238,7 @@ let options : opt list =
     ('O',     "optimize",            set Optimiser.optimising true,    None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
-    ('e',     "evaluate",            None,                             Some (fun str -> push_back (`Evaluate str) cmd_line_actions));
+    ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,                             Some Loader.dump_cached);
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
@@ -283,21 +280,15 @@ let main () =
         (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
       Types.bump_variable_counter max_prelude_tvar
   in
-    
   let prelude_compiled = Interpreter.run_defs [] [] prelude in
-    (let (stdvalenv, stdtypeenv) = !stdenvs in
-       stdenvs := 
-         (stdvalenv @ prelude_compiled,
-          Types.extend_typing_environment stdtypeenv prelude_types));
-    Utility.for_each !cmd_line_actions
-      (function `Evaluate str -> evaluate_string_in !stdenvs str);
-  (* TBD: accumulate type/value environment so that "interact" has access *)
-  ListLabels.iter ~f:(run_file prelude (prelude_compiled, prelude_types)) !file_list;
-  if Settings.get_value(interacting) then
-    begin
-      print_endline (Settings.get_value(welcome_note));
-      interact (prelude_compiled, prelude_types)
-    end
+  let stdenvs = 
+    (prelude_compiled, Types.extend_typing_environment Library.typing_env prelude_types) in
+  let () = Utility.for_each !to_evaluate (evaluate_string_in stdenvs) in
+    (* TBD: accumulate type/value environment so that "interact" has access *)
+  let () = Utility.for_each !file_list (run_file prelude stdenvs) in
+    if Settings.get_value(interacting) then
+      let () = print_endline (Settings.get_value welcome_note) in
+        interact stdenvs
 
 let _ = 
   main ()

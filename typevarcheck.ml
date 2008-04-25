@@ -181,7 +181,9 @@ let rec all_rigid rec_vars =
  and all_rigid_row rec_vars =
     let ar t = all_rigid rec_vars t 
     and arr r = all_rigid_row rec_vars r in
-      assert false (* TODO *)
+      fun (field_map, rv) ->
+        
+        assert false (* TODO *)
 
 
 let all_rigid = all_rigid TypeVarSet.empty

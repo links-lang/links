@@ -1101,7 +1101,6 @@ module Desugarer =
                     | `Fun     _ -> true
                     | `Funs    _ -> true
                     | `Foreign _ -> assert false (* no nested "foreign" at present *)
-                    | `Include _ -> assert false (* "include" not supported at present *)
                     | `Type    _ -> false        (* alias definitions are desugared prior to this *) 
                     | `Abstract _ -> assert false (* abstract definitions are desugared prior to this *)
                     | `Infix     -> false        (* infix definitions have no representation in the IR *)
@@ -1129,7 +1128,6 @@ module Desugarer =
                                        true)) defs
                              | `Abstract _ -> assert false
                              | `Type _    -> assert false
-                             | `Include _ -> assert false
                              | `Foreign _ -> assert false (* TODO *)) : binding -> _) es in
                  polylets es (desugar exp)
 
@@ -1284,8 +1282,6 @@ module Desugarer =
            assert false
        | `Foreign (language, name, (_, Some datatype)) -> 
            [Alien (language, name, datatype, pos) ]
-       | `Include path ->
-           failwith "Includes not supported"
        | `Funs defs ->
            List.map 
              (fun ((n,_,_), funlit, location, ft) ->
