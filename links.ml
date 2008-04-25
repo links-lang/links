@@ -172,7 +172,7 @@ let interact envs =
                                                 ^" : "^ 
                                                 Types.string_of_datatype (Syntax.def_datatype d))
                              | _ -> () (* non-value definition (type, fixity, etc.) *));
-                    set_context envs tyenv
+                    set_context envs (Types.extend_typing_environment (snd envs) tyenv)
               | `Expression expr, `Expression sexpr, tyenv -> 
                   let envs, _, _ = process_program envs ((Syntax.Program ([], expr)), ([], Some sexpr)) in 
                     set_context envs tyenv
