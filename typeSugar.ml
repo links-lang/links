@@ -1490,8 +1490,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (pos_and_typ t, pos_and_typ e);
               `Conditional (erase i, erase t, erase e), (typ t)
         | `Block (bindings, e) ->
-            let context, bindings = type_bindings context bindings in
-            let e = type_check context e in
+            let context', bindings = type_bindings context bindings in
+            let e = type_check (Types.extend_typing_environment context context') e in
               `Block (bindings, erase e), typ e
         | `Regex r ->
             `Regex (type_regex context r), 
@@ -1704,16 +1704,16 @@ and type_regex typing_env : regex -> regex =
         | `Splice e -> `Splice (erase (type_check typing_env e))
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
-and type_bindings typing_env bindings =
+and type_bindings (globals : context)  bindings =
   let tyenv, bindings =
     List.fold_left
       (fun (ctxt, bindings) (binding : binding) ->
-         let binding, ctxt' = type_binding ctxt binding in
+         let binding, ctxt' = type_binding (Types.extend_typing_environment globals ctxt) binding in
            Types.extend_typing_environment ctxt ctxt', binding::bindings)
-      (typing_env, []) bindings
+      (empty_context, []) bindings
   in
     tyenv, List.rev bindings
-      
+
 let type_sugar = Settings.add_bool("type_sugar", true, `User)
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
 
@@ -1729,7 +1729,7 @@ struct
           match body with
             | None -> (bindings, None), Types.unit_type, ctxt'
             | Some (_,pos as body) ->
-                let body, typ = type_check ctxt' body in
+                let body, typ = type_check (Types.extend_typing_environment tyenv ctxt') body in
 (*                  Debug.print ("checked type: " ^ Types.string_of_datatype typ);                 *)
                   (bindings, Some body), typ, ctxt'
       with
