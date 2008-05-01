@@ -104,6 +104,7 @@ SOURCES = $(OPC)                		\
           linksregex.ml                         \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
+          var.ml                                \
           ir.mli ir.ml                          \
           value.mli value.ml                    \
           compileir.ml                          \

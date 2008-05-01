@@ -2,27 +2,10 @@ open Utility
 open Syntax
 open Ir
 
-(* type stuff *)
-let info_type (t, _, _) = t
-let info_of_type t = (t, "", `Local)
-
-let make_local_info (t, name) = (t, name, `Local)
-let make_global_info (t, name) = (t, name, `Global)
+let make_local_info = Var.make_local_info
+let make_global_info = Var.make_global_info
 
 type datatype = Types.datatype
-
-(* Generation of fresh variables *)
-let variable_counter = ref 0
-let fresh_var : var_info -> binder * var =
-  fun info ->
-    incr variable_counter;
-    let var = !variable_counter in
-      (var, info), var
-
-let fresh_raw_var : unit -> var =
-  fun () ->
-    incr variable_counter;
-    !variable_counter
 
 module type MONAD =
 sig
@@ -226,17 +209,17 @@ struct
         sm (lift StringMap.empty)
 
     let comp_binding (x_info, e) =
-      let xb, x = fresh_var x_info in
+      let xb, x = Var.fresh_var x_info in
         lift_binding (`Let (xb, e)) x
           
     let fun_binding (f_info, xs_info, body, location) =
-      let fb, f = fresh_var f_info in
-      let xsb, xs = List.split (List.map fresh_var xs_info) in
+      let fb, f = Var.fresh_var f_info in
+      let xsb, xs = List.split (List.map Var.fresh_var xs_info) in
         lift_binding (`Fun (fb, xsb, reify (body xs), location)) f
           
 (*
     let for_binding (x_info, v) =
-      let xb, x = fresh_var x_info in
+      let xb, x = Var.fresh_var x_info in
         lift_binding (`For (xb, v)) x
 *)
         
@@ -244,8 +227,8 @@ struct
       let defs, fs =
         List.fold_right
           (fun (f_info, xs_info, body, location) (defs, fs) ->
-             let fb, f = fresh_var f_info in
-             let xsb, xs = List.split (List.map fresh_var xs_info) in
+             let fb, f = Var.fresh_var f_info in
+             let xsb, xs = List.split (List.map Var.fresh_var xs_info) in
                ((fb, (xsb, xs), body, location) :: defs, f :: fs))
           defs ([], [])
       in
@@ -256,7 +239,7 @@ struct
                    (fb, xsb, reify (body fs xs), location)) defs)) fs
 
     let alien_binding (x_info, language) =
-      let xb, x = fresh_var x_info in
+      let xb, x = Var.fresh_var x_info in
         lift_binding (`Alien (xb, language)) x
 
     let module_binding (name, bindings) =
@@ -273,7 +256,7 @@ struct
          | `Return v -> lift (v, sem_type s)
          | e ->
              let t = sem_type s in
-               value_of_untyped_var (comp_binding (info_of_type t, e), t))
+               value_of_untyped_var (comp_binding (Var.info_of_type t, e), t))
       
   let comp_of_value s =
     bind s (fun v -> lift (`Return v, sem_type s))
@@ -309,7 +292,7 @@ struct
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
   let lam (t, xs_info, body, location) =
-    value_of_untyped_var (fun_binding (info_of_type t, xs_info, body, location), t)
+    value_of_untyped_var (fun_binding (Var.info_of_type t, xs_info, body, location), t)
   let comp (x_info, s, body) =
     bind s
       (fun e ->
@@ -349,12 +332,12 @@ struct
     bind s (fun v -> lift (`Inject (name, v), t))
   let case (s, name, (cinfo, cbody), default) =
     bind s (fun v ->
-              let cb, c = fresh_var cinfo in
+              let cb, c = Var.fresh_var cinfo in
               let cbody' = cbody c in
               let t = sem_type cbody' in
               let default =
                 opt_map (fun (dinfo, dbody) ->
-                           let db, d = fresh_var dinfo in
+                           let db, d = Var.fresh_var dinfo in
                              (db, reify (dbody d))) default
               in
                 lift
@@ -746,7 +729,7 @@ struct
     let venv, tenv = 
       Env.String.fold
         (fun name t (venv, tenv) ->
-           let var = fresh_raw_var () in
+           let var = Var.fresh_raw_var () in
              extend venv [name] [var], Env.Int.bind tenv (var, t))
         tenv (VEnv.empty, Env.Int.empty)
     in

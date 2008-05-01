@@ -14,3 +14,4 @@ val app_type     : Types.datatype -> Types.datatype -> Types.datatype
 
 val split_row : string -> Types.row -> (Types.datatype * Types.row)
 val split_variant_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
+val variant_at : string -> Types.datatype -> Types.datatype

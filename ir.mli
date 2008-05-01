@@ -1,14 +1,12 @@
 (*pp deriving *)
 (** Monadic IR *)
 
-type scope = [ `Local | `Global ]
-  deriving (Show)
+type scope = Var.scope
 (* term variables *)
-type var = int
+type var = Var.var
   deriving (Show)
-
-type var_info = Types.datatype * string * scope
-type binder = var * var_info
+type var_info = Var.var_info
+type binder = Var.binder
 
 (* type variables *)
 type tyvar = int
@@ -76,6 +74,8 @@ and computation = binding list * tail_computation
 type program = computation
 
 val is_atom : value -> bool
+
+val with_bindings : binding list -> computation -> computation
 
 val string_of_var : var -> string
 

@@ -3,14 +3,14 @@
 
 open Utility
 
-type scope = [ `Local | `Global ]
+type scope = Var.scope
   deriving (Show)
 (* term variables *)
-type var = int
+type var = Var.var
   deriving (Show)
-type var_info = Types.datatype * string * scope
+type var_info = Var.var_info
   deriving (Show)
-type binder = var * var_info
+type binder = Var.binder
   deriving (Show)
 
 (* type variables *)
@@ -98,6 +98,8 @@ let rec is_atom =
     | `Coerce (v, _)
     | `Abs v -> is_atom v
     | _ -> false
+
+let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
 

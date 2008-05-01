@@ -41,6 +41,13 @@ let split_row name row =
   in
     t, (StringMap.remove name field_env, row_var)
 
+let rec variant_at name t = match concrete_type t with
+  | `ForAll (_, t) -> variant_at name t
+  | `Variant row ->
+      let t, _ = split_row name row in t
+  | t ->
+      error ("Attempt to deconstruct non-variant type "^string_of_datatype t)
+
 let rec split_variant_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
   | `Variant row ->
