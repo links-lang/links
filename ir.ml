@@ -38,7 +38,7 @@ type constant =
 
 let var_of_binder (x, _) = x
 
-type constant = Syntax.constant
+type constant = Constant.constant
   deriving (Show)
 
 type location = Syntax.location
@@ -89,10 +89,10 @@ and computation = binding list * tail_computation
 
 let rec is_atom =
   function
-    | `Constant (Syntax.Boolean _)
-    | `Constant (Syntax.Integer _)
-    | `Constant (Syntax.Char _)
-    | `Constant (Syntax.Float _)
+    | `Constant (`Bool _)
+    | `Constant (`Int _)
+    | `Constant (`Char _)
+    | `Constant (`Float _)
     | `Variable _ -> true
     | `Erase (_, v)
     | `Coerce (v, _)
@@ -198,11 +198,11 @@ struct
         
     method constant : constant -> (constant * datatype * 'self_type) = fun c ->
       match c with
-        | Syntax.Boolean _ -> c, bool_type, o
-        | Syntax.Integer _ -> c, int_type, o
-        | Syntax.Char _ -> c, char_type, o
-        | Syntax.String _ -> c, string_type, o
-        | Syntax.Float _ -> c, float_type, o
+        | `Bool _ -> c, bool_type, o
+        | `Int _ -> c, int_type, o
+        | `Char _ -> c, char_type, o
+        | `String _ -> c, string_type, o
+        | `Float _ -> c, float_type, o
 
     method option :
       'a.

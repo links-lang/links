@@ -96,12 +96,7 @@ type quantifier =
 type fieldconstraint = [ `Readonly | `Identity ]
     deriving (Show)
 
-type constant = [
-| `Float  of float
-| `Int    of num
-| `String of string
-| `Bool   of bool
-| `Char   of char ]
+type constant = Constant.constant
     deriving (Show)
 
 type patternnode = [

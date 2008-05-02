@@ -279,7 +279,7 @@ let lift_lets : RewriteSyntax.rewriter = function
 
 (* return true if the argument is an atom *)
 let is_atom = function
-  | Variable _ | Constant(Integer _, _) -> true
+  | Variable _ | Constant(`Int _, _) -> true
   | _ -> false
 
 (** if [e] is not an atom then bind it to a variable by extending the
@@ -302,11 +302,11 @@ let remove_trivial_extensions : RewriteSyntax.rewriter = function
  * compile time. *)
 let fold_constant : RewriteSyntax.rewriter = function 
     (* TODO: Also arithmetic, etc. *)
-  | Condition (Constant (Boolean true, _), t, _, _)  -> Some t
-  | Condition (Constant (Boolean false, _), _, e, _) -> Some e
+  | Condition (Constant (`Bool true, _), t, _, _)  -> Some t
+  | Condition (Constant (`Bool false, _), _, e, _) -> Some e
   | Concat (Nil _, c, _) 
   | Concat (c, Nil _, _) -> Some c
-  | Concat (Constant(String l, _), Constant(String r, _), data) -> Some (Constant(String (l ^ r), data))
+  | Concat (Constant(`String l, _), Constant(`String r, _), data) -> Some (Constant(`String (l ^ r), data))
   | _ -> None 
 
 (** Useful for printing the program at specific points of the

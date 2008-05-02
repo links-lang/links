@@ -28,7 +28,7 @@ type constant =
   | Float of float
 *)
 
-type constant = Syntax.constant
+type constant = Constant.constant
   deriving (Show)
 
 type location = Syntax.location

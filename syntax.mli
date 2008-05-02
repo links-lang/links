@@ -4,13 +4,8 @@ type location = [ `Client | `Native | `Server | `Unknown ] deriving (Show)
      deriving (Typeable, Show, Pickle, Eq, Shelve) *)
 type label deriving (Typeable, Show, Pickle)
 
-type constant =
-  | Boolean of bool
-  | Integer of Num.num
-  | Char of char
-  | String of string
-  | Float of float
-deriving (Show)
+type constant = Constant.constant
+    deriving (Show)
 
 (*
   [TODO]

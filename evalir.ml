@@ -143,11 +143,11 @@ module Eval = struct
     assert false
 
   let rec value env : Ir.value -> Value.t = function
-    | `Constant Syntax.Boolean b -> `Bool b
-    | `Constant Syntax.Integer n -> `Int n
-    | `Constant Syntax.Char c -> `Char c
-    | `Constant Syntax.String s -> Value.box_string s
-    | `Constant Syntax.Float f -> `Float f
+    | `Constant `Bool b -> `Bool b
+    | `Constant `Int n -> `Int n
+    | `Constant `Char c -> `Char c
+    | `Constant `String s -> Value.box_string s
+    | `Constant `Float f -> `Float f
     | `Variable v ->
         (match Value.lookup v env with
            | Some v -> v

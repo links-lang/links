@@ -242,21 +242,21 @@ let string_as_charlist s : result =
 
 
 let expr_of_prim_val : result -> expression option = function
-    `Bool b -> Some(Constant(Boolean b, Syntax.no_expr_data))
-  | `Int i -> Some(Constant(Integer i, Syntax.no_expr_data))
-  | `Char ch -> Some(Constant(Char ch, Syntax.no_expr_data))
-  | `Float f -> Some(Constant(Float f, Syntax.no_expr_data))
+    `Bool b -> Some(Constant(`Bool b, Syntax.no_expr_data))
+  | `Int i -> Some(Constant(`Int i, Syntax.no_expr_data))
+  | `Char ch -> Some(Constant(`Char ch, Syntax.no_expr_data))
+  | `Float f -> Some(Constant(`Float f, Syntax.no_expr_data))
   | _ -> None
 
 let prim_val_of_expr : expression -> result option = function
   | Constant(c, _) ->
       begin
         match c with
-          | Boolean b -> Some( `Bool b)
-          | Integer i -> Some(`Int i)
-          | Char ch -> Some(`Char ch)
-          | Float f -> Some(`Float f)
-          | String str -> Some (string_as_charlist str)
+          | `Bool b -> Some( `Bool b)
+          | `Int i -> Some(`Int i)
+          | `Char ch -> Some(`Char ch)
+          | `Float f -> Some(`Float f)
+          | `String str -> Some (string_as_charlist str)
       end
   | _ -> None
 

@@ -7,9 +7,9 @@ open Sqlcompile
 let d = `U dummy_position
 
 let database_expr = 
-  Database(record_expr [("args", Syntax.Constant(Syntax.String "fang", d));
-                        ("driver", Syntax.Constant(Syntax.String "foop", d));
-                        ("name", Syntax.Constant(Syntax.String "it", d))]
+  Database(record_expr [("args", Syntax.Constant(`String "fang", d));
+                        ("driver", Syntax.Constant(`String "foop", d));
+                        ("name", Syntax.Constant(`String "it", d))]
              d, d)
 
 (** A simple test: converting trivial comprehension into trivial query. *)
@@ -18,7 +18,7 @@ let query_expr =
         "x",
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
-                           Syntax.Constant(Syntax.String "foo", d),
+                           Syntax.Constant(`String "foo", d),
                            (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
@@ -30,7 +30,7 @@ let query_nonrecord_expr =
         "x",
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
-                           Syntax.Constant(Syntax.String "foo", d),
+                           Syntax.Constant(`String "foo", d),
                            (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
@@ -39,13 +39,13 @@ let query_nonrecord_expr =
 let query_nonrecord_comparison_expr =
   (For (Condition (Comparison(Project(Variable("x", d), "a", d),
                               `Equal,
-                              Constant(Integer (Num.num_of_int 87), d), d),
+                              Constant(`Int (Num.num_of_int 87), d), d),
                    List_of(Project(Variable("x", d), "a", d), d),
                    Nil d, d),
         "x",
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
-                           Syntax.Constant(Syntax.String "foo", d),
+                           Syntax.Constant(`String "foo", d),
                            (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                             Types.unit_type), d)],
               d),
@@ -57,7 +57,7 @@ let query2_expr =
         "x",
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
-                           Syntax.Constant(Syntax.String "foo", d),
+                           Syntax.Constant(`String "foo", d),
                            (Types.make_record_type (StringMap.singleton "a" Types.int_type), 
                             Types.unit_type), d)],
               d),
@@ -72,7 +72,7 @@ let query3_expr =
         "x",
         Apply(Variable("asList", d), 
               [TableHandle(database_expr, 
-                           Syntax.Constant(Syntax.String "foo", d),
+                           Syntax.Constant(`String "foo", d),
                            (Types.make_record_type (StringMap.add "a" Types.int_type
                                                       (StringMap.singleton "b" Types.int_type)), 
                             Types.unit_type), d)],
@@ -85,7 +85,7 @@ let sorted_query_expr =
        "x",
        SortBy(Apply(Variable("asList", d), 
                     [TableHandle(database_expr, 
-                                 Syntax.Constant(Syntax.String "foo", d),
+                                 Syntax.Constant(`String "foo", d),
                                  (Types.make_record_type (StringMap.singleton "a" Types.int_type),
                                   Types.unit_type), d)],
                     d), 

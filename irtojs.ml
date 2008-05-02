@@ -386,7 +386,7 @@ let href_rewrite typing_env globals : RewriteSyntax.rewriter = function
                                               (fun k r -> StringMap.add k (Variable (k, data)) r)
                                               fv StringMap.empty,
                                             None, data)], data) in
-        Some (Concat (Constant (String (pickled_label^ "&_jsonArgs="), data),
+        Some (Concat (Constant (`String (pickled_label^ "&_jsonArgs="), data),
                       json_args, data))
   | _ -> None
 
@@ -462,8 +462,8 @@ let rec generate_value env : value -> code =
       | `Constant c ->
           begin
             match c with
-              | Integer v  -> Lit (string_of_num v)
-              | Float v    ->
+              | `Int v  -> Lit (string_of_num v)
+              | `Float v    ->
                   let s = string_of_float v in
                   let n = String.length s in
                     (* strip any trailing '.' *)
@@ -471,9 +471,9 @@ let rec generate_value env : value -> code =
                       Lit (String.sub s 0 (n-1))
                     else
                       Lit s
-              | Boolean v  -> Lit (string_of_bool v)
-              | Char v     -> chrlit v
-              | String v   -> chrlistlit v
+              | `Bool v  -> Lit (string_of_bool v)
+              | `Char v     -> chrlit v
+              | `String v   -> chrlistlit v
           end
       | `Variable var ->
           (* HACK *)

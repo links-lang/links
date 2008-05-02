@@ -114,11 +114,11 @@ module PatternCompiler =
 
      let string_of_constant =
        let soc = function    
-         | Syntax.Boolean v -> string_of_bool v
-         | Syntax.Integer v -> string_of_num v
-         | Syntax.Char v -> string_of_char v
-         | Syntax.String v -> v
-         | Syntax.Float v -> string_of_float v
+         | `Bool v -> string_of_bool v
+         | `Int v -> string_of_num v
+         | `Char v -> string_of_char v
+         | `String v -> v
+         | `Float v -> string_of_float v
        in
          function
            | Syntax.Constant (c, _) -> soc c
@@ -841,11 +841,11 @@ module Desugarer =
      | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), [e]), pos)
 
    let desugar_constant pos = function
-     | `Int v    -> Constant(Integer v, pos)
-     | `Float v  -> Constant(Float v, pos)
-     | `String v -> Constant(String v, pos)
-     | `Bool v   -> Constant(Boolean v, pos)
-     | `Char v   -> Constant(Char v,  pos)
+     | `Int v    -> Constant(`Int v, pos)
+     | `Float v  -> Constant(`Float v, pos)
+     | `String v -> Constant(`String v, pos)
+     | `Bool v   -> Constant(`Bool v, pos)
+     | `Char v   -> Constant(`Char v,  pos)
 
    let rec simple_pattern_of_pattern ((pat,pos') : pattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern
@@ -967,8 +967,8 @@ module Desugarer =
            | `InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
            | `InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | `InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
-           | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(Boolean false, pos), pos)
-           | `InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(Boolean true, pos), desugar e2, pos)
+           | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(`Bool false, pos), pos)
+           | `InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(`Bool true, pos), desugar e2, pos)
            | `InfixAppl (`App, e1, e2) -> App (desugar e1, desugar e2, pos)
            | `InfixAppl (`RegexMatch _, _, _) -> failwith "regex found after regex desugaring"
            | `ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
@@ -1191,7 +1191,7 @@ module Desugarer =
                is otherwise ill-formed. It should also be made to properly handle
                CDATA. Where's a good place to do so? 
            *)
-           | `TextNode s -> appPrim "stringToXml" [Constant(String s, pos)]
+           | `TextNode s -> appPrim "stringToXml" [Constant(`String s, pos)]
            | `Xml (tag, attrs, attrexp, subnodes) -> 
                let () =
                  let rec dup_check names =
@@ -1219,7 +1219,7 @@ module Desugarer =
                let concat a b = 
                  Concat (desugar a, b, pos) in
                let desugar_attr = function
-                 | [] -> Constant(String "", pos)
+                 | [] -> Constant(`String "", pos)
                  | [x] -> desugar x
                  | xs  -> (fold_right concat xs (Nil (pos)))
                in

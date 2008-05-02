@@ -135,8 +135,8 @@ let expr_eval_req valenv program params =
   let data = Syntax.no_expr_data in
   let mkStringPair (l, r) =
     Syntax.Record_intro (StringMap.from_alist 
-                           [("1", Syntax.Constant (Syntax.String l, data));
-                            ("2", Syntax.Constant (Syntax.String r, data))], 
+                           [("1", Syntax.Constant (`String l, data));
+                            ("2", Syntax.Constant (`String r, data))], 
                          None, data) in
     match Result.unmarshal_result (rng valenv) program  (List.assoc "_k" params) with
       | `RecFunction ([(_,f)],locals,_) ->

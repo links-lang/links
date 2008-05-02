@@ -487,11 +487,11 @@ and interpret : environment -> environment -> expression -> continuation -> resu
 fun globals locals expr cont ->
   let eval = interpret globals locals in
   let box_constant = function
-    | Boolean b -> bool b
-    | Integer i -> int i
-    | String s -> string_as_charlist s
-    | Float f -> float f
-    | Char ch -> char ch in
+    | `Bool b -> bool b
+    | `Int i -> int i
+    | `String s -> string_as_charlist s
+    | `Float f -> float f
+    | `Char ch -> char ch in
   match expr with
   | Syntax.Constant (c, _) -> apply_cont globals cont (box_constant c)
   | Syntax.Variable(name, _) -> 

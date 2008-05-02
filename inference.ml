@@ -52,11 +52,11 @@ let type_mismatch ~expected ~inferred ~pos ~src msg =
                        msg))
 
 let constant_type = function
-  | Boolean _ -> `Primitive `Bool
-  | Integer _ -> `Primitive `Int
-  | Float _ -> `Primitive `Float
-  | Char _ -> `Primitive `Char
-  | String _ -> string_type
+  | `Bool _ -> `Primitive `Bool
+  | `Int _ -> `Primitive `Int
+  | `Float _ -> `Primitive `Float
+  | `Char _ -> `Primitive `Char
+  | `String _ -> string_type
 
 let rec type_check : typing_environment -> untyped_expression -> expression =
   fun ({Types.var_env = env} as typing_env) expression ->

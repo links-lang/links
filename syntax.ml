@@ -41,13 +41,14 @@ let string_of_comparison = function
   | `Equal  -> "=="
   | `NotEq  -> "<>"
 
-type constant =
-  | Boolean of bool
-  | Integer of num
-  | Char of char
-  | String of string
-  | Float of float
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+type constant = Constant.constant
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
+
+(*   | Boolean of bool *)
+(*   | Integer of num *)
+(*   | Char of char *)
+(*   | String of string *)
+(*   | Float of float *)
 
 type 'data expression' =
   | Constant of (constant * 'data)
@@ -194,11 +195,11 @@ let is_alphanumeric_ident name =
 
 let string_of_constant =
   function
-    | Boolean value -> string_of_bool value
-    | Integer value -> string_of_num value
-    | Char c -> "'"^ Char.escaped c ^"'" 
-    | String s -> "\"" ^ s ^ "\""
-    | Float value   -> string_of_float value
+    | `Bool value -> string_of_bool value
+    | `Int value -> string_of_num value
+    | `Char c -> "'"^ Char.escaped c ^"'" 
+    | `String s -> "\"" ^ s ^ "\""
+    | `Float value   -> string_of_float value
 
 let rec show t : 'a expression' -> string = function 
   | HasType(expr, datatype, data) -> show t expr ^ " : " ^ Types.string_of_datatype datatype ^ t data
@@ -428,7 +429,7 @@ let set_subnodes (exp : 'a expression') (exps : 'a expression' list) : 'a expres
         
 let rec stringlit_value = function
   | HasType (e, _, _) -> stringlit_value e
-  | Constant(String name, _) -> name
+  | Constant(`String name, _) -> name
   | _ -> assert false
 
 let freevars (expression : 'a expression') : StringSet.t =
