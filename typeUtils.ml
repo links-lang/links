@@ -28,6 +28,14 @@ let concrete_type t =
   in
     ct (StringSet.empty) t
 
+let rec extract_row t = match concrete_type t with
+  | `Record row -> row
+  | `Variant row -> row
+  | t ->
+      failwith
+        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: " 
+         ^ string_of_datatype t)
+
 let split_row name row =
   let (field_env, row_var) = fst (unwrap_row row) in
   let t =

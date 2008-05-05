@@ -20,22 +20,6 @@ let type_of_expression : expression -> datatype =
 let pos_of_expression : expression -> position =
   fun exp -> let `T (pos, _, _) = expression_data exp in pos
 
-let rec extract_row : Types.datatype -> Types.row = function
-  | `Record row -> row
-  | `Variant row -> row
-  | `MetaTypeVar point as t ->
-      begin
-        match Unionfind.find point with
-          | `Body t -> extract_row t
-          | _ -> failwith
-              ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
-               ^ Types.string_of_datatype t)
-        end
-  | `Alias (_, t) -> extract_row t
-  | t -> failwith
-      ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
-       ^ Types.string_of_datatype t)
-
 module Env = Env.String
 
 let instantiate = Instantiate.var
@@ -172,7 +156,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
                   
                   unify(rtype, `Record (absent_field_env, fresh_row_variable()));
                   
-                  let (rfield_env, rrow_var), _ = unwrap_row (extract_row rtype) in
+                  let (rfield_env, rrow_var), _ = unwrap_row (TypeUtils.extract_row rtype) in
                     
                   (* attempt to extend field_env with the labels from rfield_env
                      i.e. all the labels belonging to the record r

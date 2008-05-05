@@ -1018,23 +1018,6 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
       let pos, env, (outer_type, _) = type_pattern pattern in
         pos, env, outer_type
 
-
-let rec extract_row : Types.datatype -> Types.row = function
-  | `Record row -> row
-  | `Variant row -> row
-  | `MetaTypeVar point as t ->
-      begin
-        match Unionfind.find point with
-          | `Body t -> extract_row t
-          | _ -> failwith
-              ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
-               ^ Types.string_of_datatype t)
-        end
-  | `Alias (_, t) -> extract_row t
-  | t -> failwith
-      ("Internal error: attempt to extract a row from a datatype that is not a record or variant: " 
-       ^ Types.string_of_datatype t)
-
 let rec pattern_env : pattern -> Types.datatype Env.t = 
   fun (p, _) -> match p with
     | `Any
@@ -1158,7 +1141,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                       (* make sure rtype is a record type that doesn't match any of the existing fields *)
                     let () = unify ~handle:Errors.extend_record
                       (pos_and_typ r, no_pos (`Record (absent_field_env, Types.fresh_row_variable ()))) in
-                    let (rfield_env, rrow_var), _ = Types.unwrap_row (extract_row rtype) in 
+                    let (rfield_env, rrow_var), _ = Types.unwrap_row (TypeUtils.extract_row rtype) in 
                       (* attempt to extend field_env with the labels from rfield_env
                          i.e. all the labels belonging to the record r
                       *)
