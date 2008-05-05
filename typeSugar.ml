@@ -199,6 +199,8 @@ sig
  
   val value_restriction : Syntax.position -> Types.datatype -> 'a
 
+  val duplicate_names_in_pattern : Syntax.position -> 'a
+
   val type_annotation : griper
 
   val bind_val : griper
@@ -549,6 +551,9 @@ code (show_type t2) ^ ".")
 "free rigid type variables at an ungeneralisable binding site," ^ nl() ^
 "but the type " ^ code (show_type t) ^ " has free rigid type variables.")
 
+    let duplicate_names_in_pattern pos =
+      die pos ("Duplicate names are not allowed in patterns.")
+
     let type_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
 The inferred type of the expression" ^ nl() ^
@@ -896,6 +901,43 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
           StringMap.add name `Absent fields) names StringMap.empty,
      Types.fresh_row_variable()) in
 
+  let check_for_duplicate_names : pattern -> unit = fun (p, pos) ->
+    let add name binder binderss =
+      if StringMap.mem name binderss then
+        let (count, binders) = StringMap.find name binderss in
+          StringMap.add name (count+1, binder::binders) binderss
+      else
+        StringMap.add name (1, [binder]) binderss in   
+      
+    let rec gather binderss ((p : patternnode), pos) =
+      match p with
+        | `Any -> binderss
+        | `Nil -> binderss
+        | `Cons (p, q) ->
+            let binderss = gather binderss p in gather binderss q
+        | `List ps ->
+            List.fold_right (fun p binderss -> gather binderss p) ps binderss
+        | `Variant (_, p) ->
+            opt_app (fun p -> gather binderss p) binderss p
+        | `Negative _ -> binderss
+        | `Record (ps, p) ->
+            let binderss = List.fold_right (fun (_, p) binderss -> gather binderss p) ps binderss in
+              opt_app (fun p -> gather binderss p) binderss p
+        | `Tuple ps ->
+            List.fold_right (fun p binderss -> gather binderss p) ps binderss
+        | `Constant _ -> binderss
+        | `Variable ((name, _, _) as binder) ->
+            add name binder binderss
+        | `As ((name, _, _) as binder, p) ->
+            let binderss = gather binderss p in
+              add name binder binderss
+        | `HasType (p, _) -> gather binderss p in
+    let binderss = gather StringMap.empty (p, pos) in
+    let dups = StringMap.filter (fun (i, _) -> i > 1) binderss
+    in
+      if not (StringMap.is_empty dups) then
+        Errors.duplicate_names_in_pattern (lookup_pos pos) in
+
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
      types. The first type is the type of the pattern 'viewed from the
@@ -915,7 +957,6 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
     and it (_,_,(_,t)) = t
     and env (_,e,_) = e
     and pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p
-                                                          (* TODO: check for duplicate bindings *)
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
            patternnode * Types.environment * (Types.datatype * Types.datatype) =
@@ -1015,6 +1056,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
       (p, pos'), env, (outer_type, inner_type)
   in
     fun pattern ->
+      let _ = check_for_duplicate_names pattern in
       let pos, env, (outer_type, _) = type_pattern pattern in
         pos, env, outer_type
 
