@@ -107,6 +107,7 @@ SOURCES = $(OPC)                		\
           optimiser.mli optimiser.ml    	\
           var.ml                                \
           ir.mli ir.ml                          \
+          compilePatterns.ml                    \
           value.mli value.ml                    \
           compileir.ml                          \
           loader.ml                             \
