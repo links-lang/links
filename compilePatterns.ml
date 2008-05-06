@@ -166,7 +166,7 @@ let let_pattern : (env * Types.datatype) -> Types.datatype -> pattern -> value -
             let xb, x = Var.fresh_var_of_type xt in
             let xsb, xs = Var.fresh_var_of_type xst in
               with_bindings
-                [`Let(xb, list_tail env value); `Let (xsb, list_head env value)]
+                [letm (xb, list_tail env value); letm (xsb, list_head env value)]
                 (lp xt head (`Variable x) (lp xst tail (`Variable xs) body))
         | `Variant (name, patt) ->
             let case_type = TypeUtils.variant_at name t in
@@ -202,12 +202,12 @@ let let_pattern : (env * Types.datatype) -> Types.datatype -> pattern -> value -
         | `Any -> body
         | `Variable xb ->
             with_bindings
-              [`Let (xb, `Return value)]
+              [letmv (xb, value)]
               body
         | `As (xb, pattern) ->
             let body = lp t pattern value body in
               with_bindings
-                [`Let (xb, `Return value)]
+                [letmv (xb, value)]
                 body
         | `HasType (pat, t) ->           
             lp t pat (`Coerce (value, t)) body
@@ -357,9 +357,9 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
              | `Binder b ->
                  let var = Var.var_of_binder b in
                  let t = Var.type_of_binder b in
-                   bind_type var t env, `Let (b, `Return v)::bs
+                   bind_type var t env, letmv (b, v)::bs
              | `Type t ->
-                 env, (`Let (dummy t, `Return (`Coerce (v, t))))::bs
+                 env, (letmv (dummy t, `Coerce (v, t)))::bs
              | `Type _ -> assert false)
         annotation
         (env, [])
@@ -408,7 +408,7 @@ and match_var : var list -> clause list -> bound_computation -> var -> bound_com
                            (ps,
                             fun env ->
                               with_bindings
-                                [`Let (b, `Return (`Variable var))]
+                                [letmv (b, `Variable var)]
                                 (body env))
                        | `Any ->
                            (ps, body)
@@ -441,7 +441,7 @@ and match_list
               let xsb, xs = Var.fresh_var_of_type t in
               let env = bind_type x t' (bind_type xs t env) in
                 with_bindings
-                  [`Let (xb, list_head env var_val); `Let (xsb, list_tail env var_val)]
+                  [letm (xb, list_head env var_val); letm (xsb, list_tail env var_val)]
                   (match_cases (x::xs::vars) cons_clauses def env) in
 
       if mem_context var env then
@@ -686,12 +686,12 @@ and match_record
                      | (annotation, `Any) ->
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
-                             [`Let (yb, `Return (`Extend (fields, Some (`Variable x))))]
+                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | (annotation, `Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
-                             [`Let (yb, `Return (`Extend (fields, Some (`Variable x))))]
+                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
@@ -705,7 +705,7 @@ and match_record
         (fun name (bindings, xs, env) ->
            let xt = TypeUtils.project_type name t in
            let xb, x = Var.fresh_var_of_type xt in
-           let binding = `Let (xb, `Return (`Project (name, `Variable var))) in                  
+           let binding = letmv (xb, `Project (name, `Variable var)) in
              binding::bindings, x::xs, bind_type x xt env)
         names
         ([], [], env) in 

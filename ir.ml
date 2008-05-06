@@ -18,7 +18,8 @@ type tyvar = int
   deriving (Show)
 type tyname = string
   deriving (Show)
-(* type tybinder = tyvar * var_info *)
+type tybinder = tyvar list * binder
+  deriving (Show)
 
 type name = string
   deriving (Show)
@@ -27,14 +28,6 @@ type 'a name_map = 'a Utility.stringmap
 
 type language = string
   deriving (Show)
-(*
-type constant =
-  | Boolean of bool
-  | Integer of Num.num
-  | Char of char
-  | String of string
-  | Float of float
-*)
 
 let var_of_binder (x, _) = x
 
@@ -52,10 +45,10 @@ type value =
   | `Erase of (name * value)
   | `Inject of (name * value)
 
+  | `TApp of value * Types.datatype list
+
   | `XmlNode of (name * value name_map * value list)
-
   | `ApplyPure of (value * value list)
-
   (* should really be implemented as constants *)
   | `Comparison of (value * Syntaxutils.comparison * value)
 
@@ -72,10 +65,10 @@ and tail_computation =
   | `If of (value * computation * computation)
   ]
 and binding =
-  [ `Let of (binder * tail_computation)
-  | `Fun of (binder * binder list * computation * location)
-  | `Rec of (binder * binder list * computation * location) list
-  | `Alien of (binder * language)
+  [ `Let of (tybinder * tail_computation)
+  | `Fun of (tybinder * binder list * computation * location)
+  | `Rec of (tybinder * binder list * computation * location) list
+  | `Alien of (tybinder * language)
   | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
@@ -86,6 +79,9 @@ and special =
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show)  
+
+let letm (b, tc) = `Let (([], b), tc)
+let letmv (b, v) = letm (b, `Return v)
 
 let rec is_atom =
   function
@@ -282,6 +278,9 @@ struct
         | `Inject (name, v) ->
             let v, t, o = o#value v in
               `Inject (name, v), inject_type name t, o
+        | `TApp (v, ts) ->
+            let v, t, o = o#value v in
+              `TApp (v, ts), t, o
         | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children, children_types, o) = o#list (fun o -> o#value) children in
@@ -402,13 +401,13 @@ struct
                                                        
     method binding : binding -> (binding * 'self_type) =
       function
-        | `Let (x, tc) ->
+        | `Let ((tyvars, x), tc) ->
             let (xv, (xt, _, _) as x), o = o#binder x in
             let tc, t, o = o#tail_computation tc in
 (*               Debug.print ("bound "^string_of_int(xv)^" of type "^string_of_datatype xt^ *)
 (*                              " to expression of type "^string_of_datatype t); *)
-              `Let (x, tc), o
-        | `Fun (f, xs, body, location) ->
+              `Let ((tyvars, x), tc), o
+        | `Fun ((tyvars, f), xs, body, location) ->
             let xs, body, o =
               let (xs, o) =
                 List.fold_right
@@ -421,11 +420,11 @@ struct
                 xs, body, o in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              `Fun (f, xs, body, location), o
+              `Fun ((tyvars, f), xs, body, location), o
         | `Rec defs ->
-            let fs, o =
+            let _, o =
               List.fold_right
-                (fun (f, _, _, _) (fs, o) ->
+                (fun ((_, f), _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (f::fs, o))
                 defs
@@ -447,9 +446,9 @@ struct
                 defs in
             let defs = List.rev defs in
               `Rec defs, o
-        | `Alien (x, language) ->
+        | `Alien ((tyvars, x), language) ->
             let x, o = o#binder x in
-              `Alien (x, language), o
+              `Alien ((tyvars, x), language), o
         | `Module (name, defs) ->
             let defs, o =
               match defs with
@@ -498,7 +497,7 @@ struct
             let b, o = o#binding b in
               begin
                 match b with
-                  | `Let ((x, (_, _, `Local)), `Return v) when is_inlineable_value v ->
+                  | `Let ((tyvars, (x, (_, _, `Local))), `Return v) when is_inlineable_value v ->
                       (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
                   | _ ->
                       let bs, o = o#bindings bs in
@@ -629,16 +628,16 @@ struct
 
     method binding b =
       match b with
-        | `Let (x, `Return _) ->
+        | `Let ((tyvars, x), `Return _) ->
             let b, o = super#binding b in
               b, o#init x
-        | `Fun (f, _, _, _) ->
+        | `Fun ((tyvars, f), _, _, _) ->
             let b, o = super#binding b in
               b, o#init f
         | `Rec defs ->
             let fs, o =
               List.fold_right
-                (fun (f, _, _, _) (fs, o) ->
+                (fun ((_, f), _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (IntSet.add (var_of_binder f) fs, o#initrec f))
                 defs
@@ -646,7 +645,7 @@ struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, o) (f, xs, body, location) ->
+                (fun (defs, o) ((tyvars, f), xs, body, location) ->
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -657,7 +656,7 @@ struct
                    let o = o#set_rec (var_of_binder f) in
                    let body, _, o = o#computation body in
                    let o = o#set_mutrec (var_of_binder f) in
-                     (f, xs, body, location)::defs, o)
+                     ((tyvars, f), xs, body, location)::defs, o)
                 ([], o)
                 defs in
             let o = o#set_nonrecs fs in
@@ -690,15 +689,15 @@ struct
             begin
               let b, o = o#binding b in
                 match b with
-                  | `Let ((x, (_, name, _)), _) when o#is_dead x ->
+                  | `Let ((_tyvars, (x, (_, name, _))), _) when o#is_dead x ->
                       o#bindings bs
-                  | `Fun ((f, (_, name, _)), _, _, _) when o#is_dead f ->
+                  | `Fun ((_tyvars, (f, (_, name, _))), _, _, _) when o#is_dead f ->
                       o#bindings bs
                   | `Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) (((f, (_, name, _)), _, _, _) as def) ->
+                          (fun (fs, defs) (((_tyvars, (f, (_, name, _))), _, _, _) as def) ->
                              Debug.if_set show_rec_uses
                                (fun () ->
                                   "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^

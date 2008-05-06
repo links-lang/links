@@ -210,12 +210,12 @@ struct
 
     let comp_binding (x_info, e) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (`Let (xb, e)) x
+        lift_binding (letm (xb, e)) x
           
     let fun_binding (f_info, xs_info, body, location) =
       let fb, f = Var.fresh_var f_info in
       let xsb, xs = List.split (List.map Var.fresh_var xs_info) in
-        lift_binding (`Fun (fb, xsb, reify (body xs), location)) f
+        lift_binding (`Fun (([], fb), xsb, reify (body xs), location)) f
           
 (*
     let for_binding (x_info, v) =
@@ -229,7 +229,7 @@ struct
           (fun (f_info, xs_info, body, location) (defs, fs) ->
              let fb, f = Var.fresh_var f_info in
              let xsb, xs = List.split (List.map Var.fresh_var xs_info) in
-               ((fb, (xsb, xs), body, location) :: defs, f :: fs))
+               ((([], fb), (xsb, xs), body, location) :: defs, f :: fs))
           defs ([], [])
       in
         lift_binding
@@ -240,7 +240,7 @@ struct
 
     let alien_binding (x_info, language) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (`Alien (xb, language)) x
+        lift_binding (`Alien (([], xb), language)) x
 
     let module_binding (name, bindings) =
       lift_binding (`Module (name, bindings)) ()
@@ -428,18 +428,18 @@ struct
     List.fold_left
       (fun ((venv, tenv) as env) ->
          function
-           | `Let ((x, (xt, x_name, `Global)), _) ->
+           | `Let ((_tyvars, (x, (xt, x_name, `Global))), _) ->
                extend venv [x_name] [x], Env.Int.bind tenv (x, xt)
-           | `Fun ((f, (ft, f_name, `Global)), _, _, _) ->
+           | `Fun ((_tyvars, (f, (ft, f_name, `Global))), _, _, _) ->
                extend venv [f_name] [f], Env.Int.bind tenv (f, ft)
            | `Rec defs ->
                List.fold_left
-                 (fun((venv, tenv) as env) ((f, (ft, f_name, scope)), _, _, _) ->
+                 (fun((venv, tenv) as env) ((_tyvars, (f, (ft, f_name, scope))), _, _, _) ->
                     match scope with
                       | `Global -> extend venv [f_name] [f], Env.Int.bind tenv (f, ft)
                       | `Local -> env)
                  env defs
-           | `Alien ((f, (ft, f_name, `Global)), _) ->
+           | `Alien ((_tyvars, (f, (ft, f_name, `Global))), _) ->
                extend venv [f_name] [f], Env.Int.bind tenv (f, ft)
            | `Module (_, defs) ->
                opt_app (fun defs -> add_globals_to_env env defs) env defs

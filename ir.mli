@@ -11,22 +11,13 @@ type binder = Var.binder
 (* type variables *)
 type tyvar = int
 type tyname = string
-(* type tybinder = tyvar * var_info *)
+type tybinder = tyvar list * binder
 
 type name = string
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
 type language = string
-
-(*
-type constant =
-  | Boolean of bool
-  | Integer of Num.num
-  | Char of char
-  | String of string
-  | Float of float
-*)
 
 type constant = Constant.constant
   deriving (Show)
@@ -40,6 +31,8 @@ type value =
   | `Project of name * value
   | `Erase of name * value    (* should be implemented using coerce *) 
   | `Inject of name * value
+
+  | `TApp of value * Types.datatype list
 
   | `XmlNode of name * value name_map * value list
   | `ApplyPure of value * value list
@@ -56,10 +49,10 @@ and tail_computation =
   | `If of value * computation * computation
   ]
 and binding =
-  [ `Let of binder * tail_computation
-  | `Fun of binder * binder list * computation * location
-  | `Rec of (binder * binder list * computation * location) list
-  | `Alien of binder * language
+  [ `Let of tybinder * tail_computation
+  | `Fun of tybinder * binder list * computation * location
+  | `Rec of (tybinder * binder list * computation * location) list
+  | `Alien of tybinder * language
   | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
@@ -70,6 +63,9 @@ and special =
   | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show)  
+
+val letm : binder * tail_computation -> binding
+val letmv : binder * value -> binding
 
 type program = computation
 

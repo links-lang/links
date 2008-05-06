@@ -176,6 +176,7 @@ module Eval = struct
                `Record (List.remove_assoc label fields)
            | _ -> eval_error "Error erasing label %s" label)
     | `Inject (label, v) -> `Variant (label, value env v)
+    | `TApp (v, _) -> value env v
     | `XmlNode (tag,attrs,children) -> 
         let children = 
           List.fold_right 
@@ -235,13 +236,13 @@ module Eval = struct
     match binders with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
-          | `Let ((var,_), tc) ->
+          | `Let ((_, (var,_)), tc) ->
               tail_computation env (((var, env, (bs, tailcomp))::cont) : Value.continuation) tc
-          | `Fun ((name,_), args, body, _) -> 
+          | `Fun ((_, (name,_)), args, body, _) -> 
               tail_computation (Value.bind name (`RecFunction ([name, (List.map fst args,body)], 
                                                              env, name)) env) cont tailcomp
           | `Rec fs         -> 
-              let bindings = List.map (fun ((name,_), args, body, _) ->
+              let bindings = List.map (fun ((_, (name,_)), args, body, _) ->
                                          name, (List.map fst args, body)) fs in
               let env = 
                 List.fold_right (fun (name,_) env ->
