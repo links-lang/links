@@ -326,7 +326,7 @@ let sentence typing_env = function
       {typing_env with tycon_env = o#aliases}, `Expression p
   | `Directive   d  -> typing_env, `Directive d
 
-let read ?(aliases=Env.String.empty) s =
+let read ~aliases s =
   let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))

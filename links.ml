@@ -86,10 +86,10 @@ let rec directives
      "load in a Links source file, replacing the current environment");
 
     "withtype",
-    ((fun (_, {Types.var_env = tenv} as envs) args ->
+    ((fun (_, {Types.var_env = tenv; Types.tycon_env = aliases} as envs) args ->
         match args with 
           [] -> prerr_endline "syntax: @withtype type"; envs
-          | _ -> let t = DesugarDatatypes.read (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
                       if id <> "_MAILBOX_" then

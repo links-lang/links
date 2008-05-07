@@ -186,15 +186,16 @@ let is_multipart () =
   ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
-let wrap_with_render_page (Syntax.Program (defs, body)) = 
+let wrap_with_render_page type_env (Syntax.Program (defs, body)) = 
   let data s =
-    `T (Syntax.position body, DesugarDatatypes.read s, None)
+    `T (Syntax.position body, DesugarDatatypes.read ~aliases:type_env s, None)
   in
     (Syntax.Program
        (defs,
         Syntax.Apply (Syntax.Variable ("renderPage", data "(Page) -> Xml"), [body], data "Xml")))
 
 let perform_request 
+    tyenv
     program (* orig. src.: only used for gen'ing js *)
     globals main req =
   match req with
@@ -213,7 +214,7 @@ let perform_request
         Library.print_http_response [("Content-type", "text/html")]
           (Result.string_of_result 
              (snd (Interpreter.run_program globals env
-                     (wrap_with_render_page (Syntax.Program ([], expr))))))
+                     (wrap_with_render_page tyenv (Syntax.Program ([], expr))))))
     | ClientReturn(cont, value) ->
         Interpreter.has_client_context := true;
         let result_json = (Json.jsonize_result 
@@ -234,7 +235,7 @@ let perform_request
           (if is_client_program program then             
              Irtojs.generate_program_page Library.typing_env (List.map fst globals) program
            else
-             let _env, rslt = Interpreter.run_program globals [] (wrap_with_render_page (Syntax.Program([], main))) in
+             let _env, rslt = Interpreter.run_program globals [] (wrap_with_render_page tyenv (Syntax.Program([], main))) in
                Result.string_of_result rslt)
 
 let serve_request prelude (valenv, tyenv) filename = 
@@ -266,13 +267,14 @@ let serve_request prelude (valenv, tyenv) filename =
       else
         CallMain
     in
-      perform_request program (defs @ valenv) main request
+      perform_request tyenv.Types.tycon_env program (defs @ valenv) main request
   with
       (* FIXME: errors need to be handled differently
          btwn. user-facing and remote-call modes. *)
-      Failure msg -> prerr_endline msg;
+      Failure msg as e -> 
+        prerr_endline msg;
         Library.print_http_response [("Content-type", "text/html; charset=utf-8")] 
-        (error_page (Errors.format_exception_html (Failure msg)))
+          (error_page (Errors.format_exception_html e))
     | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           

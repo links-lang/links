@@ -12,7 +12,7 @@ let show_typechecking = Settings.add_bool("show_typechecking", false, `User)
 let show_recursion = Instantiate.show_recursion
 
 let db_descriptor_type : Types.datatype = 
-  DesugarDatatypes.read "(driver:[Char], name:[Char], args:[Char])"
+  DesugarDatatypes.read ~aliases:Env.String.empty "(driver:[Char], name:[Char], args:[Char])"
 
 (* extract data from inference_expressions *)
 let type_of_expression : expression -> datatype =
