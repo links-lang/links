@@ -104,3 +104,7 @@ let inject_type name t =
 
 let abs_type _ = assert false
 let app_type _ _ = assert false
+
+let quantifiers t = match concrete_type t with
+  | `ForAll (qs, _) -> qs
+  | _ -> []

@@ -19,8 +19,8 @@ type pattern = [
 | `Negative of StringSet.t
 | `Record   of (pattern StringMap.t) * pattern option
 | `Constant of constant
-| `Variable of binder
-| `As       of binder * pattern
+| `Variable of tybinder
+| `As       of tybinder * pattern
 | `HasType  of pattern * Types.datatype
 ]
 
@@ -91,13 +91,13 @@ let rec desugar_pattern : var NEnv.t -> Sugartypes.pattern -> pattern * var NEnv
               pp env (`Record (bs, None), pos)
         | `Constant constant ->
             `Constant constant, env
-        | `Variable b ->
+        | `Variable (tyvars, b) ->
             let xb, env = fresh_binder env b in
-              `Variable xb, env
-        | `As (b, p) ->
+              `Variable (tyvars, xb), env
+        | `As ((tyvars, b), p) ->
             let xb, env = fresh_binder env b in
             let p, env = pp env p in
-              `As (xb, p), env
+              `As ((tyvars, xb), p), env
         | `HasType (p, (_, Some t)) ->
             let p, env = pp env p in
               `HasType (p, t), env
@@ -142,7 +142,7 @@ let list_tail env : value -> tail_computation = fun v ->
 
 let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
   
-type annotation = [`Binder of binder | `Type of Types.datatype] list
+type annotation = [`Binder of tybinder | `Type of Types.datatype] list
 type annotated_pattern = annotation * pattern
 
 type raw_clause = pattern list * raw_bound_computation
@@ -172,7 +172,7 @@ let let_pattern : (env * Types.datatype) -> Types.datatype -> pattern -> value -
             let case_type = TypeUtils.variant_at name t in
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
             let comp = lp case_type patt (`Variable case_variable) body in
-            let cases = StringMap.add name (case_binder, comp) StringMap.empty in
+            let cases = StringMap.singleton name (case_binder, comp) in
               [], `Case (value, cases, None)
         | `Negative _ ->
             body
@@ -202,12 +202,12 @@ let let_pattern : (env * Types.datatype) -> Types.datatype -> pattern -> value -
         | `Any -> body
         | `Variable xb ->
             with_bindings
-              [letmv (xb, value)]
+              [letv (xb, value)]
               body
         | `As (xb, pattern) ->
             let body = lp t pattern value body in
               with_bindings
-                [letmv (xb, value)]
+                [letv (xb, value)]
                 body
         | `HasType (pat, t) ->           
             lp t pat (`Coerce (value, t)) body
@@ -355,9 +355,9 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
         (fun a (env, bs) ->
            match a with
              | `Binder b ->
-                 let var = Var.var_of_binder b in
-                 let t = Var.type_of_binder b in
-                   bind_type var t env, letmv (b, v)::bs
+                 let var = Var.var_of_tybinder b in
+                 let t = Var.type_of_tybinder b in
+                   bind_type var t env, letv (b, v)::bs
              | `Type t ->
                  env, (letmv (dummy t, `Coerce (v, t)))::bs
              | `Type _ -> assert false)
@@ -408,7 +408,7 @@ and match_var : var list -> clause list -> bound_computation -> var -> bound_com
                            (ps,
                             fun env ->
                               with_bindings
-                                [letmv (b, `Variable var)]
+                                [letv (b, `Variable var)]
                                 (body env))
                        | `Any ->
                            (ps, body)
@@ -652,7 +652,7 @@ and match_record
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], `Variable xb)::ps, StringMap.add name (`Variable x) fields)
+                        ([], `Variable ([], xb))::ps, StringMap.add name (`Variable x) fields)
                names
                ([], StringMap.empty) in
            let rps, body =
@@ -688,14 +688,14 @@ and match_record
                            with_bindings
                              [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
-                     | (annotation, `Variable yb) ->
+                     | (annotation, `Variable (_, yb)) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
                              [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], `Variable xb)::rps, body in
+                 ([], `Variable ([], xb))::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in

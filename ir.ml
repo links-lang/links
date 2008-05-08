@@ -14,9 +14,9 @@ type binder = Var.binder
   deriving (Show)
 
 (* type variables *)
-type tyvar = int
+type tyvar = Types.quantifier
   deriving (Show)
-type tyname = string
+type tyarg = Types.type_arg
   deriving (Show)
 type tybinder = tyvar list * binder
   deriving (Show)
@@ -45,7 +45,7 @@ type value =
   | `Erase of (name * value)
   | `Inject of (name * value)
 
-  | `TApp of value * Types.datatype list
+  | `TApp of value * tyarg list
 
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
@@ -82,6 +82,7 @@ and computation = binding list * tail_computation
 
 let letm (b, tc) = `Let (([], b), tc)
 let letmv (b, v) = letm (b, `Return v)
+let letv (b, v) = `Let (b, `Return v)
 
 let rec is_atom =
   function

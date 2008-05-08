@@ -59,6 +59,14 @@ end)
 type binder = name * Types.datatype option * position
     deriving (Show)
 
+(* type variables *)
+type tyvar = Types.quantifier
+  deriving (Show)
+type tyarg = Types.type_arg
+  deriving (Show)
+type tybinder = tyvar list * binder
+  deriving (Show)
+
 type location = Syntax.location
     deriving (Show)
 type datatype = 
@@ -89,8 +97,8 @@ type datatype' = datatype * Types.datatype option
     deriving (Show)
 
 type quantifier =
-    [`TypeVar of name | `RigidTypeVar of name
-    |`RowVar of name | `RigidRowVar of name]
+    [ `TypeVar of name | `RigidTypeVar of name
+    | `RowVar of name | `RigidRowVar of name ]
       deriving (Show)
 
 type fieldconstraint = [ `Readonly | `Identity ]
@@ -109,8 +117,8 @@ type patternnode = [
 | `Record   of (name * pattern) list * pattern option
 | `Tuple    of pattern list
 | `Constant of constant
-| `Variable of binder
-| `As       of binder * pattern
+| `Variable of tybinder
+| `As       of tybinder * pattern
 | `HasType  of pattern * datatype'
 ]
 and pattern = patternnode * position
@@ -159,6 +167,7 @@ and phrasenode = [
 | `Regex            of regex
 | `UnaryAppl        of unary_op * phrase
 | `FnAppl           of phrase * phrase list
+| `TAppl            of phrase * tyarg list
 | `TupleLit         of phrase list
 | `RecordLit        of (name * phrase) list * phrase option
 | `Projection       of phrase * name
@@ -183,10 +192,10 @@ and phrasenode = [
 ]
 and phrase = phrasenode * position
 and bindingnode = [
-| `Val     of pattern * phrase * location * datatype' option
-| `Fun     of binder * funlit * location * datatype' option
-| `Funs    of (binder * funlit * location * datatype' option) list
-| `Foreign of name * name * datatype'
+| `Val     of tyvar list * pattern * phrase * location * datatype' option
+| `Fun     of tybinder * funlit * location * datatype' option
+| `Funs    of (tybinder * funlit * location * datatype' option) list
+| `Foreign of tybinder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'
 | `Infix
@@ -231,8 +240,8 @@ struct
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)
-    | `Variable (v,_,_)      -> singleton v
-    | `As ((v,_,_), pat)     -> add v (pattern pat)
+    | `Variable (_, (v,_,_)) -> singleton v
+    | `As ((_, (v,_,_)), pat)     -> add v (pattern pat)
     | `HasType (pat, _)      -> pattern pat
 
 
@@ -251,6 +260,7 @@ struct
 
     | `Spawn p
     | `SpawnWait p
+    | `TAppl (p, _)
     | `FormBinding (p, _)
     | `Projection (p, _)
     | `Page p
@@ -324,17 +334,17 @@ struct
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
-    | `Val (pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Fun ((name,_,_), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Fun ((_, (name,_,_)), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs -> 
         let names, rhss = 
           List.fold_right
-            (fun ((n,_,_), rhs, _, _) (names, rhss) ->
+            (fun ((_, (n,_,_)), rhs, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign (name, _, _) -> singleton name, empty
+    | `Foreign ((_, (name, _, _)), _, _) -> singleton name, empty
     | `Include _
     | `Type _
     | `Infix -> empty, empty

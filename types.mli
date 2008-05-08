@@ -78,6 +78,10 @@ and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type type_arg = 
+    [ `Type of datatype | `Row of row ]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
 
 type environment        = datatype Env.String.t

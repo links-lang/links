@@ -12,7 +12,7 @@ module Env = Env.String
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string -> Types.datatype
-  val generalise : Types.environment -> Types.datatype -> Types.datatype
+  val generalise : Types.environment -> Types.datatype -> (Types.quantifier list * Types.datatype)
 
   val is_generalisable : phrase -> bool
 end =
@@ -32,6 +32,7 @@ struct
     | `ListLit ps
     | `TupleLit ps -> List.for_all is_generalisable ps
     | `RangeLit (e1, e2) -> is_generalisable e1 && is_generalisable e2
+    | `TAppl (p, _)
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
     | `Upcast (p, _, _)
@@ -80,7 +81,7 @@ struct
     | `Include _
     | `Foreign _ -> true
     | `Exp p -> is_generalisable p
-    | `Val (pat, rhs, _, _) ->
+    | `Val (_, pat, rhs, _, _) ->
         is_safe_pattern pat && is_generalisable rhs
   and is_safe_pattern (pat, _) = match pat with
       (* safe patterns cannot fail *)
@@ -926,9 +927,9 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         | `Tuple ps ->
             List.fold_right (fun p binderss -> gather binderss p) ps binderss
         | `Constant _ -> binderss
-        | `Variable ((name, _, _) as binder) ->
+        | `Variable (_, ((name, _, _) as binder)) ->
             add name binder binderss
-        | `As ((name, _, _) as binder, p) ->
+        | `As ((_, ((name, _, _) as binder)), p) ->
             let binderss = gather binderss p in
               add name binder binderss
         | `HasType (p, _) -> gather binderss p in
@@ -970,9 +971,9 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         | `Constant c as c' ->
             let t = constant_type c in
               c', Env.empty, (t, t)
-        | `Variable (x,_,pos) -> 
+        | `Variable (_, (x,_,pos)) -> 
             let xtype = Types.fresh_type_variable () in
-              (`Variable (x, Some xtype, pos),
+              (`Variable ([], (x, Some xtype, pos)),
                Env.bind Env.empty (x, xtype),
                (xtype, xtype))
         | `Cons (p1, p2) -> 
@@ -1044,10 +1045,10 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let make_tuple typ = Types.make_tuple_type (List.map typ ps') in
               `Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
-        | `As ((x, _, pos), p) ->
+        | `As ((tyvars, (x, _, pos)), p) ->
             let p = tp p in
             let env' = Env.bind (env p) (x, it p) in
-              `As ((x, Some (it p), pos), erase p), env', (ot p, it p)
+              `As ((tyvars, (x, Some (it p), pos)), erase p), env', (ot p, it p)
         | `HasType (p, (_,Some t as t')) ->
             let p = tp p in
             let () = unify ~handle:Errors.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t))
@@ -1077,10 +1078,10 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | `List ps
     | `Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | `Variable (v, Some t, _) -> Env.bind Env.empty (v, t)
-    | `Variable (_, None, _) -> assert false
-    | `As       ((v, Some t, _), p) -> Env.bind (pattern_env p) (v, t)
-    | `As       ((_, None, _), _) -> assert false
+    | `Variable (_, (v, Some t, _)) -> Env.bind Env.empty (v, t)
+    | `Variable (_, (_, None, _)) -> assert false
+    | `As       ((_, (v, Some t, _)), p) -> Env.bind (pattern_env p) (v, t)
+    | `As       ((_, (_, None, _)), _) -> assert false
 
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
@@ -1373,6 +1374,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (pos_and_typ f, no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
                                                    mailbox_type context.var_env, rettyp)));
               `FnAppl (erase f, List.map erase ps), rettyp
+        | `TAppl (e, qs) ->
+            assert false
         (* xml *)
         | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
@@ -1594,7 +1597,7 @@ and type_binding : context -> binding -> binding * context =
 
     let typed, ctxt = match def with
       | `Include _ -> assert false
-      | `Val (pat, body, location, datatype) -> 
+      | `Val (_, pat, body, location, datatype) -> 
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -1605,9 +1608,9 @@ and type_binding : context -> binding -> binding * context =
                   t
               | _ -> typ body in
           let () = unify ~handle:Errors.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
-          let bt, penv =
+          let (tyvars, bt), penv =
             if Utils.is_generalisable (erase body) then
-              (Utils.generalise context.var_env bt, Env.map (Utils.generalise context.var_env) penv)
+              (Utils.generalise context.var_env bt, Env.map (snd -<- Utils.generalise context.var_env) penv)
             else
               let quantifiers = Generalise.get_quantifiers context.var_env bt in
                 if List.exists (function
@@ -1616,7 +1619,7 @@ and type_binding : context -> binding -> binding * context =
                 then
                   Errors.value_restriction (lookup_pos pos) bt
                 else
-                  bt, penv
+                  ([], bt), penv
           in
 (*
             if Env.has penv "input" then
@@ -1624,9 +1627,9 @@ and type_binding : context -> binding -> binding * context =
             else
               ();
 *)
-            `Val (erase_pat pat, erase body, location, datatype), 
+            `Val (tyvars, erase_pat pat, erase body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
-      | `Fun ((name, _, pos), (pats, body), location, t) ->
+      | `Fun ((_, (name, _, pos)), (pats, body), location, t) ->
           let pats = List.map (List.map tpc) pats in
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
           let {var_env = body_env} = List.fold_left fold_in_envs context pats in
@@ -1635,9 +1638,10 @@ and type_binding : context -> binding -> binding * context =
           let ft = make_ft pats (typ body) in
           let () = opt_iter (fun (_,t) ->
                                opt_iter
-                                 (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in
-            (`Fun ((name, Some ft, pos), (List.map (List.map erase_pat) pats, erase body), location, t),
-             bind_var empty_context  (name, Utils.generalise context.var_env ft))
+                                 (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in            
+          let (tyvars, ft) = Utils.generalise context.var_env ft in
+            (`Fun ((tyvars, (name, Some ft, pos)), (List.map (List.map erase_pat) pats, erase body), location, t),
+             bind_var empty_context  (name, ft))
       | `Funs defs ->
           (*
             Compute initial types for the functions using
@@ -1654,7 +1658,7 @@ and type_binding : context -> binding -> binding * context =
           let fbs, patss =
             List.split
               (List.map
-                 (fun ((name,_,_), (pats, body), _, t) ->
+                 (fun ((_, (name,_,_)), (pats, body), _, t) ->
                     let pats = List.map (List.map tpc) pats in
                     let ft = make_ft pats (Types.fresh_type_variable ()) in
                     let fb =
@@ -1662,7 +1666,7 @@ and type_binding : context -> binding -> binding * context =
                         | None -> ft
                         | Some (_, Some t) ->
 (*                            Debug.print ("annotation: " ^ Types.string_of_datatype t);*)
-                            let fb = Utils.generalise context.var_env t in
+                            let (_quantifiers, fb) = Utils.generalise context.var_env t in
 (*                            Debug.print ("generalised annotation: " ^ Types.string_of_datatype fb);*)
                               (* make sure the annotation has the right shape *)
                             let fbi = Instantiate.typ fb in
@@ -1677,7 +1681,7 @@ and type_binding : context -> binding -> binding * context =
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
               List.rev
                 (List.fold_left2
-                   (fun defs ((name, _, pos), (_, body), location, t) pats ->
+                   (fun defs ((_, (name, _, pos)), (_, body), location, t) pats ->
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
@@ -1688,10 +1692,10 @@ and type_binding : context -> binding -> binding * context =
                         match Env.lookup context'.var_env name with
                           | `ForAll (_, t) | t -> t in
                       let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
-                        ((name, Some ft, pos), (pats, body), location, t) :: defs) [] defs patss) in
+                        (([], (name, Some ft, pos)), (pats, body), location, t) :: defs) [] defs patss) in
           let env =
             List.fold_left (fun env (name, fb) ->
-                              Env.bind env (name, Utils.generalise env fb)) 
+                              Env.bind env (name, snd (Utils.generalise env fb)))
               Env.empty
               fbs in
             (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) ->
@@ -1700,9 +1704,10 @@ and type_binding : context -> binding -> binding * context =
                                 location, dtopt) 
                       defs),
              {empty_context with var_env = env})
-      | `Foreign (language, name, (_,Some datatype as dt)) ->
-          (`Foreign (language, name, dt),
-           (bind_var empty_context (name, datatype)))
+      | `Foreign ((_, (name, _, pos)), language, (_, Some datatype as dt)) ->
+          let tyvars = TypeUtils.quantifiers datatype in
+            (`Foreign ((tyvars, (name, Some datatype, pos)), language, dt),
+             (bind_var empty_context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           flush stderr;
           t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt))

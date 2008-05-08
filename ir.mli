@@ -9,8 +9,8 @@ type var_info = Var.var_info
 type binder = Var.binder
 
 (* type variables *)
-type tyvar = int
-type tyname = string
+type tyvar = Types.quantifier
+type tyarg = Types.type_arg
 type tybinder = tyvar list * binder
 
 type name = string
@@ -32,7 +32,7 @@ type value =
   | `Erase of name * value    (* should be implemented using coerce *) 
   | `Inject of name * value
 
-  | `TApp of value * Types.datatype list
+  | `TApp of value * tyarg list
 
   | `XmlNode of name * value name_map * value list
   | `ApplyPure of value * value list
@@ -66,6 +66,7 @@ and computation = binding list * tail_computation
 
 val letm : binder * tail_computation -> binding
 val letmv : binder * value -> binding
+val letv : tybinder * value -> binding
 
 type program = computation
 

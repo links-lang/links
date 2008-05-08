@@ -254,13 +254,13 @@ object (self)
           ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
            `Type (name, vars, (t, Some dt)))
             
-    | `Val (pat, p, loc, dt) -> 
+    | `Val (tyvars, pat, p, loc, dt) -> 
         let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
-          o, `Val (pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, `Val (tyvars, pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)
     | `Fun (bind, fl, loc, dt) ->
-        let o, bind = self#binder bind in
+        let o, bind = self#tybinder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
           o, `Fun (bind, fl, loc, opt_map (Desugar.datatype' map alias_env) dt)
@@ -268,16 +268,17 @@ object (self)
         let o, binds =
           super#list
             (fun o (bind, fl, loc, dt) ->
-               let o, bind = o#binder bind in
+               let o, bind = o#tybinder bind in
                let o, fl   = o#funlit fl in
                let o, loc  = o#location loc in
                let    dt   = opt_map (Desugar.datatype' map alias_env) dt
                in (o, (bind, fl, loc, dt)))
             binds
         in o, `Funs binds
-    | `Foreign (x, lang, dt) ->
+    | `Foreign (bind, lang, dt) ->
+        let o, bind = self#tybinder bind in
         let dt' = Desugar.foreign alias_env dt in
-          self, `Foreign (x, lang, dt')
+          self, `Foreign (bind, lang, dt')
     | b -> super#bindingnode b
 
   method sentence = 

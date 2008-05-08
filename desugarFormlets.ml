@@ -16,7 +16,7 @@ let make_links_list pos elems =
     an XML element having the given tag name and attributes. *)
 let make_xml_context tag (attrs:(string * phrase) list) pos : phrase = 
   let hole = gensym () in
-    `FunLit (([[`Variable (hole, None, pos), pos]]), 
+    `FunLit (([[`Variable ([], (hole, None, pos)), pos]]), 
              (`Xml (tag, 
                     List.map (fun (s,a) -> s, [a]) attrs,
                     None,
@@ -57,8 +57,8 @@ let rec forest_to_form_expr trees yieldsClause
         Some formHandler -> 
           formHandler, bindings, ([]:Sugartypes.pattern list list)
       | None ->
-          let fresh_bindings = List.map (List.map (fun (_, ppos) -> `Variable (Utility.gensym (), None, ppos), ppos)) bindings in
-          let variables = List.map (fun (`Variable (x,_,_), ppos) -> `Var x, ppos) (List.flatten fresh_bindings) in
+          let fresh_bindings = List.map (List.map (fun (_, ppos) -> `Variable ([], (Utility.gensym (), None, ppos)), ppos)) bindings in
+          let variables = List.map (fun (`Variable ([], (x,_,_)), ppos) -> `Var x, ppos) (List.flatten fresh_bindings) in
             ((`TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos, None)),
              fresh_bindings,
              [flatten bindings])

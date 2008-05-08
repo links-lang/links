@@ -46,3 +46,9 @@ let type_of_binder (var, (t, _, _)) = t
 let name_of_binder (_, (_, name, _)) = name
 let scope_of_binder (_, (_, _, scope)) = scope
 
+let var_of_tybinder (_, b) = var_of_binder b
+let type_of_tybinder (_, b) = type_of_binder b
+let name_of_tybinder (_, b) = name_of_binder b
+let scope_of_tybinder (_, b) = scope_of_binder b
+
+

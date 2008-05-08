@@ -82,13 +82,13 @@ let env_type_vars (env : Types.environment) =
 (** generalise: 
     Universally quantify any free type variables in the expression.
 *)
-let generalise : environment -> datatype -> datatype = 
+let generalise : environment -> datatype -> (quantifier list * datatype) =
   fun env t ->
     let vars_in_env = env_type_vars env in
     let quantifiers = get_quantifiers vars_in_env t in
     let quantified = Types.for_all (quantifiers, t) in 
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
-      quantified 
+      (quantifiers, quantified)
 
 let get_quantifiers : environment -> datatype -> quantifier list =
   fun env t ->

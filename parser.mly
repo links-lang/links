@@ -31,10 +31,10 @@ let annotate (signame, datatype) : _ -> binding =
     function
       | `Fun ((name, bpos), phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun ((name, None, bpos), phrase, location, Some datatype), dpos
+            `Fun (([], (name, None, bpos)), phrase, location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ((`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+            `Val ([], (`Variable ([], (name, None, bpos)), dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -166,12 +166,13 @@ preamble_declaration:
 | INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
-| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, datatype $5), pos() }
+| ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
+                                                                   `Foreign (([], (name, None, name_pos)), $2, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
-                                                                 in `Val ((`Variable (d, None, dpos), pos),p,l,None), pos }
+                                                                 in `Val ([], (`Variable ([], (d, None, dpos)), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -181,7 +182,7 @@ fun_declarations:
 
 fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
-                                                                 in `Fun ((d, None, dpos),p,l,None), pos }
+                                                                 in `Fun (([], (d, None, dpos)),p,l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 perhaps_uinteger:
@@ -596,9 +597,9 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Val ($2, $4, `Unknown, None), pos () }
+| VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
-| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| FUN var arg_lists block                                      { `Fun (([], (fst $2, None, snd $2)), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 
 bindings:
@@ -765,7 +766,7 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS var                                       { `As ((fst $3, None, snd $3), $1), pos() }
+| cons_pattern AS var                                       { `As (([], (fst $3, None, snd $3)), $1), pos() }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
@@ -793,7 +794,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable ($1, None, pos()), pos() }
+| VARIABLE                                                  { `Variable ([], ($1, None, pos())), pos() }
 | UNDERSCORE                                                { `Any, pos() }
 | constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }

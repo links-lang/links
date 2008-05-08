@@ -29,8 +29,8 @@ type 'r meta_row_var_basis =
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type type_variable =
-    [`TypeVar of int | `RigidTypeVar of int
-    |`RowVar of int | `RigidRowVar of int]
+    [ `TypeVar of int | `RigidTypeVar of int
+    | `RowVar of int | `RigidRowVar of int ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type quantifier = type_variable
@@ -92,6 +92,10 @@ and row            = field_spec_map * row_var
 and meta_type_var  = (datatype meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
     deriving (Eq, Show, Pickle, Typeable, Shelve)
+
+type type_arg = 
+    [ `Type of datatype | `Row of row ]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let for_all : quantifier list * datatype -> datatype = function
   | [], t -> t

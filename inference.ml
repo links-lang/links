@@ -23,7 +23,7 @@ let pos_of_expression : expression -> position =
 module Env = Env.String
 
 let instantiate = Instantiate.var
-let generalise = Generalise.generalise
+let generalise env = snd -<- Generalise.generalise env
 
 let unify = Unify.datatypes
 let unify_rows = Unify.rows
