@@ -63,13 +63,14 @@ class lite3_result (stmt: stmt) = object
     in 
     get_results ([],QueryOk)
   
-  method status : db_status = 
-    snd(result_list_and_status)
-  method nfields : int =  1
-  method fname  n : string = column_name stmt n
-  method get_all_lst : string list list =
-    fst(result_list_and_status)
-  method error : string = "NYI"
+  method status : db_status = snd(result_list_and_status)
+  method nfields : int =  column_count stmt
+  method fname n : string = column_name stmt n
+  method get_all_lst : string list list = fst(result_list_and_status)
+  method error : string = 
+    match snd(result_list_and_status) with
+      QueryError(msg) -> msg
+    | QueryOk -> "OK"
 end
 
 
@@ -85,4 +86,7 @@ class lite3_database file = object(self)
 end
 
 let driver_name = "sqlite3"
-let _ = register_driver (driver_name, fun args -> new lite3_database args, reconstruct_db_string (driver_name, args))
+let _ = register_driver (driver_name, 
+			 fun args -> 
+			   new lite3_database args, 
+			   reconstruct_db_string (driver_name, args))
