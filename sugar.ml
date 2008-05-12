@@ -953,24 +953,24 @@ module Desugarer =
                desugar (`TypeAnnotation ((`FnAppl ((`Var "unsafe_cast", pos'), [`TypeAnnotation(e, t2), pos']), pos'), t1), pos')
            | `Constant p -> desugar_constant pos p
            | `Var v       -> Variable (v, pos)
-           | `InfixAppl (`Name ">", e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
-           | `InfixAppl (`Name ">=", e1, e2)  -> Comparison (desugar e2, `LessEq, desugar e1, pos)
-           | `InfixAppl (`Name "==", e1, e2)  -> Comparison (desugar e1, `Equal, desugar e2, pos)
-           | `InfixAppl (`Name "<", e1, e2)  -> Comparison (desugar e1, `Less, desugar e2, pos)
-           | `InfixAppl (`Name "<=", e1, e2)  -> Comparison (desugar e1, `LessEq, desugar e2, pos)
-           | `InfixAppl (`Name "<>", e1, e2)  -> Comparison (desugar e1, `NotEq, desugar e2, pos)
-           | `InfixAppl (`Name "++", e1, e2)  -> Concat (desugar e1, desugar e2, pos)
-           | `InfixAppl (`Name "!", e1, e2)  -> appPrim "send" [desugar e1; desugar e2]
-           | `InfixAppl (`Name n, e1, e2)  -> 
+           | `InfixAppl ((_, `Name ">"), e1, e2)  -> Comparison (desugar e2, `Less, desugar e1, pos)
+           | `InfixAppl ((_, `Name ">="), e1, e2)  -> Comparison (desugar e2, `LessEq, desugar e1, pos)
+           | `InfixAppl ((_, `Name "=="), e1, e2)  -> Comparison (desugar e1, `Equal, desugar e2, pos)
+           | `InfixAppl ((_, `Name "<"), e1, e2)  -> Comparison (desugar e1, `Less, desugar e2, pos)
+           | `InfixAppl ((_, `Name "<="), e1, e2)  -> Comparison (desugar e1, `LessEq, desugar e2, pos)
+           | `InfixAppl ((_, `Name "<>"), e1, e2)  -> Comparison (desugar e1, `NotEq, desugar e2, pos)
+           | `InfixAppl ((_, `Name "++"), e1, e2)  -> Concat (desugar e1, desugar e2, pos)
+           | `InfixAppl ((_, `Name "!"), e1, e2)  -> appPrim "send" [desugar e1; desugar e2]
+           | `InfixAppl ((_, `Name n), e1, e2)  -> 
                let `U (a,_,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
-           | `InfixAppl (`Cons, e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
-           | `InfixAppl (`FloatMinus, e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
-           | `InfixAppl (`Minus, e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
-           | `InfixAppl (`And, e1, e2) -> Condition (desugar e1, desugar e2, Constant(`Bool false, pos), pos)
-           | `InfixAppl (`Or, e1, e2)  -> Condition (desugar e1, Constant(`Bool true, pos), desugar e2, pos)
-           | `InfixAppl (`App, e1, e2) -> App (desugar e1, desugar e2, pos)
-           | `InfixAppl (`RegexMatch _, _, _) -> failwith "regex found after regex desugaring"
+           | `InfixAppl ((_, `Cons), e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
+           | `InfixAppl ((_, `FloatMinus), e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
+           | `InfixAppl ((_, `Minus), e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
+           | `InfixAppl ((_, `And), e1, e2) -> Condition (desugar e1, desugar e2, Constant(`Bool false, pos), pos)
+           | `InfixAppl ((_, `Or), e1, e2)  -> Condition (desugar e1, Constant(`Bool true, pos), desugar e2, pos)
+           | `InfixAppl ((_, `App), e1, e2) -> App (desugar e1, desugar e2, pos)
+           | `InfixAppl ((_, `RegexMatch _), _, _) -> failwith "regex found after regex desugaring"
            | `ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
            | `ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | `Escape ((name,_,_), e) -> 
@@ -1006,10 +1006,10 @@ module Desugarer =
                   
                *)
                TableHandle (desugar db, desugar name, (readtype, writetype), pos)
-           | `UnaryAppl (`Minus, e)      -> appPrim "negate" [desugar e]
-           | `UnaryAppl (`FloatMinus, e) -> appPrim "negatef" [desugar e]
-           | `UnaryAppl (`Name n, e) -> appPrim n [desugar e]
-           | `UnaryAppl (`Abs, e) -> Abs (desugar e, pos)
+           | `UnaryAppl ((_, `Minus), e)      -> appPrim "negate" [desugar e]
+           | `UnaryAppl ((_, `FloatMinus), e) -> appPrim "negatef" [desugar e]
+           | `UnaryAppl ((_, `Name n), e) -> appPrim n [desugar e]
+           | `UnaryAppl ((_, `Abs), e) -> Abs (desugar e, pos)
            | `RangeLit (lo, hi) -> Apply(Variable("intRange", pos),
                                          [desugar lo; desugar hi], pos)
            | `ListLit  [] -> Nil (pos)
@@ -1074,7 +1074,7 @@ module Desugarer =
                                      fields (fromTo 1 (1 + length fields)), None), pos')
 
            | `FnAppl (fn, ps) -> Apply (desugar fn, List.map desugar ps, pos)
-           | `TAppl (e, qs) -> assert false
+           | `TAppl (e, qs) -> desugar e
            | `FunLit (patterns_lists, body) -> 
                let patternized = List.map (List.map patternize) patterns_lists in
                ignore (List.fold_left
@@ -1266,9 +1266,9 @@ module Desugarer =
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression in
      let ds : bindingnode -> _ Syntax.definition' list = function
-       | `Val (_, (`Variable ([], (name,_,_)), _), p, location, None) ->
+       | `Val (_, (`Variable (_, (name,_,_)), _), p, location, None) ->
            [Define (name, desugar_expression p, location, pos)]
-       | `Val (_, (`Variable ([], (name,_,_)), _), p, location, Some (_, Some t)) ->
+       | `Val (_, (`Variable (_, (name,_,_)), _), p, location, Some (_, Some t)) ->
            [Define (name, HasType (desugar_expression p, t, pos), location, pos)]
        | `Val _ -> assert false (* TODO: handle other patterns *)
        | `Fun ((_, (name,_,_)), funlit, location, dt) ->

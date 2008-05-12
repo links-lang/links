@@ -102,7 +102,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 (** instantiate_typ t
     remove any quantifiers and rename bound type vars accordingly
 *)
-let instantiate_typ : datatype -> datatype = fun t ->
+let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
   let rec collapse qs t =
     match qs, t with
       | qs, `ForAll (qs', t) -> collapse (qs @ qs') t
@@ -115,31 +115,44 @@ let instantiate_typ : datatype -> datatype = fun t ->
 	  let () = Debug.if_set (show_instantiation)
 	    (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
 
-	  let tenv, renv = List.fold_left
-	    (fun (tenv, renv) -> function
-	       | `TypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
-	       | `RigidTypeVar var -> IntMap.add var (fresh_type_variable ()) tenv, renv
-	       | `RowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
-	       | `RigidRowVar var -> tenv, IntMap.add var (fresh_row_variable ()) renv
-	    ) (IntMap.empty, IntMap.empty) quantifiers
-	  in
-	    instantiate_datatype (tenv, renv) t)
-      | t -> t
+          let typ var (tenv, renv, tys) =
+            let t = fresh_type_variable () in
+              IntMap.add var t tenv, renv, `Type t :: tys in
+
+          let row var (tenv, renv, tys) =
+            let r = fresh_row_variable () in
+              tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+
+	  let tenv, renv, tys = List.fold_left
+	    (fun env -> function
+	       | `TypeVar var
+	       | `RigidTypeVar var -> typ var env
+	       | `RowVar var
+	       | `RigidRowVar var -> row var env
+	    ) (IntMap.empty, IntMap.empty, []) quantifiers in
+          let tys = List.rev tys in
+	    tys, instantiate_datatype (tenv, renv) t)
+      | t -> [], t
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
- *)
-let instantiate : environment -> string -> datatype =
-  fun env var ->
-    try
-      instantiate_typ (Env.String.lookup env var)
-    with NotFound _ ->
-      raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
-        
-let var      = instantiate
-and typ      = instantiate_typ
-and datatype = instantiate_datatype
 
+    This returns the original type of var, the type arguments it is instantiated with
+    and the instantiated type.
+ *)
+let instantiate : environment -> string -> type_arg list * datatype =
+  fun env var ->
+    let t =
+      try
+        Env.String.lookup env var
+      with NotFound _ ->
+        raise (Errors.UndefinedVariable ("Variable '"^ var ^"' does not refer to a declaration"))
+    in
+      instantiate_typ t
+        
+let var = instantiate
+let typ = instantiate_typ
+let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
@@ -160,4 +173,4 @@ let alias name ts env =
     | Some (`Alias (vars, body)) ->
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
           `Alias ((name, ts),
-                  datatype (tenv, IntMap.empty) (Types.freshen_mailboxes body))
+                  instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes body))

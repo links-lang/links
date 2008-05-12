@@ -39,6 +39,9 @@ class map =
       | `FloatMinus -> `FloatMinus
       | `Name _x -> let _x = o#name _x in `Name _x
       | `Abs -> `Abs
+
+    method tyunary_op : tyarg list * unary_op -> tyarg list * unary_op =
+      fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
       
     method binder : binder -> binder =
       fun (_x, _x_i1, _x_i2) ->
@@ -170,7 +173,7 @@ class map =
           let _x = o#list (fun o -> o#binding) _x in
           let _x_i1 = o#phrase _x_i1 in `Block ((_x, _x_i1))
       | `InfixAppl ((_x, _x_i1, _x_i2)) ->
-          let _x = o#binop _x in
+          let _x = o#tybinop _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#phrase _x_i2 in `InfixAppl ((_x, _x_i1, _x_i2))
       | `RangeLit ((_x_i1, _x_i2)) ->
@@ -178,7 +181,7 @@ class map =
           let _x_i2 = o#phrase _x_i2 in `RangeLit ((_x_i1, _x_i2))
       | `Regex _x -> let _x = o#regex _x in `Regex _x
       | `UnaryAppl ((_x, _x_i1)) ->
-          let _x = o#unary_op _x in
+          let _x = o#tyunary_op _x in
           let _x_i1 = o#phrase _x_i1 in `UnaryAppl ((_x, _x_i1))
       | `FnAppl ((_x, _x_i1)) ->
           let _x = o#phrase _x in
@@ -444,6 +447,9 @@ class map =
       | `Name _x -> let _x = o#name _x in `Name _x
       | `App -> `App
       
+    method tybinop : tyarg list * binop -> tyarg list * binop =
+      fun (_x, _x_i1) -> (_x, o#binop _x_i1)
+
     method bindingnode : bindingnode -> bindingnode =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
@@ -527,6 +533,9 @@ class fold =
       | `Name _x -> let o = o#name _x in o
       | `Abs -> o
       
+    method tyunary_op : tyarg list * unary_op -> 'self_type =
+      fun (_x, _x_i1) -> o#unary_op _x_i1
+
     method binder : binder -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
         let o = o#name _x in
@@ -646,13 +655,13 @@ class fold =
           let o = o#list (fun o -> o#binding) _x in
           let o = o#phrase _x_i1 in o
       | `InfixAppl ((_x, _x_i1, _x_i2)) ->
-          let o = o#binop _x in
+          let o = o#tybinop _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
       | `RangeLit ((_x_i1, _x_i2)) ->
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
       | `Regex _x -> let o = o#regex _x in o
       | `UnaryAppl ((_x, _x_i1)) ->
-          let o = o#unary_op _x in let o = o#phrase _x_i1 in o
+          let o = o#tyunary_op _x in let o = o#phrase _x_i1 in o
       | `FnAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
@@ -877,6 +886,9 @@ class fold =
       | `Name _x -> let o = o#name _x in o
       | `App -> o
       
+    method tybinop : tyarg list * binop -> 'self_type =
+      fun (_x, _x_i1) -> o#binop _x_i1
+
     method bindingnode : bindingnode -> 'self_type =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
@@ -974,6 +986,10 @@ class fold_map =
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
       | `Abs -> (o, `Abs)
       
+    method tyunary_op : tyarg list * unary_op -> 'self_type * (tyarg list * unary_op) =
+      fun (_x, _x_i1) ->
+        let (o, _x_i1) = o#unary_op _x_i1 in (o, (_x, _x_i1))
+
     method sentence' : sentence' -> ('self_type * sentence') =
       function
       | `Definitions _x ->
@@ -1106,13 +1122,13 @@ class fold_map =
           let (o, _x) = o#list (fun o -> o#binding) _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (`Block ((_x, _x_i1))))
       | `InfixAppl ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#binop _x in
+          let (o, _x) = o#tybinop _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
           in (o, (`InfixAppl ((_x, _x_i1, _x_i2))))
       | `Regex _x -> let (o, _x) = o#regex _x in (o, (`Regex _x))
       | `UnaryAppl ((_x, _x_i1)) ->
-          let (o, _x) = o#unary_op _x in
+          let (o, _x) = o#tyunary_op _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (`UnaryAppl ((_x, _x_i1))))
       | `FnAppl ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
@@ -1404,6 +1420,10 @@ class fold_map =
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
       | `App -> (o, `App)
       
+    method tybinop : tyarg list * binop -> 'self_type * (tyarg list * binop) =
+      fun (_x, _x_i1) ->
+        let (o, _x_i1) = o#binop _x_i1 in (o, (_x, _x_i1))
+
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->

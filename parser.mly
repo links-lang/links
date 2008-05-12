@@ -305,7 +305,7 @@ op:
  
 postfix_expression:
 | primary_expression                                           { $1 }
-| primary_expression POSTFIXOP                                 { `UnaryAppl (`Name $2, $1), pos() }
+| primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
 | SPAWN block                                                  { `Spawn (`Block $2, pos()), pos () }
 | SPAWNWAIT block                                              { `SpawnWait (`Block $2, pos()), pos () }
@@ -321,112 +321,112 @@ exps:
 | exp                                                          { [$1] }
 
 unary_expression:
-| MINUS unary_expression                                       { `UnaryAppl (`Minus,      $2), pos() }
-| MINUSDOT unary_expression                                    { `UnaryAppl (`FloatMinus, $2), pos() }
-| PREFIXOP unary_expression                                    { `UnaryAppl (`Name $1, $2), pos() }
-| ABS unary_expression                                         { `UnaryAppl (`Abs, $2), pos() }
+| MINUS unary_expression                                       { `UnaryAppl (([], `Minus),      $2), pos() }
+| MINUSDOT unary_expression                                    { `UnaryAppl (([], `FloatMinus), $2), pos() }
+| PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
+| ABS unary_expression                                         { `UnaryAppl (([], `Abs), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
 infixr_9:
 | unary_expression                                             { $1 }
-| unary_expression INFIX9 unary_expression                     { `InfixAppl (`Name $2, $1, $3), pos() }
-| unary_expression INFIXR9 infixr_9                            { `InfixAppl (`Name $2, $1, $3), pos() }
+| unary_expression INFIX9 unary_expression                     { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| unary_expression INFIXR9 infixr_9                            { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_9:
 | infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_9 INFIXL9 infixr_9                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_8:
 | infixl_9                                                     { $1 }
-| infixl_9 INFIX8  infixl_9                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_9 INFIXR8 infixr_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_9 COLONCOLON infixr_8                                 { `InfixAppl (`Cons, $1, $3), pos() }
+| infixl_9 INFIX8  infixl_9                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_9 INFIXR8 infixr_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_9 COLONCOLON infixr_8                                 { `InfixAppl (([], `Cons), $1, $3), pos() }
 
 infixl_8:
 | infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_8 INFIXL8 infixr_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_7:
 | infixl_8                                                     { $1 }
-| infixl_8 INFIX7  infixl_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_8 INFIXR7 infixr_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_8 INFIX7  infixl_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_8 INFIXR7 infixr_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_7:
 | infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_7 INFIXL7 infixr_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_6:
 | infixl_7                                                     { $1 }
-| infixl_7 INFIX6  infixl_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_7 INFIXR6 infixr_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_7 INFIX6  infixl_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_7 INFIXR6 infixr_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_6 MINUS infixr_6                                      { `InfixAppl (`Minus, $1, $3), pos() }
-| infixl_6 MINUSDOT infixr_6                                   { `InfixAppl (`FloatMinus, $1, $3), pos() }
+| infixl_6 INFIXL6 infixr_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_6 MINUS infixr_6                                      { `InfixAppl (([], `Minus), $1, $3), pos() }
+| infixl_6 MINUSDOT infixr_6                                   { `InfixAppl (([], `FloatMinus), $1, $3), pos() }
 
 infixr_5:
 | infixl_6                                                     { $1 }
-| infixl_6 INFIX5  infixl_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_6 INFIXR5 infixr_5                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_6 INFIX5  infixl_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_6 INFIXR5 infixr_5                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_5:
 | infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_5 INFIXL5 infixr_5                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_4:
 | infixl_5                                                     { $1 }
-| infixl_5 INFIX4    infixl_5                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (`RegexMatch flags, $1, r), pos() }
+| infixl_5 INFIX4    infixl_5                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
 
 infixl_4:
 | infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_4 INFIXL4 infixr_4                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_3:
 | infixl_4                                                     { $1 }
-| infixl_4 INFIX3  infixl_4                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_4 INFIXR3 infixr_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_4 INFIX3  infixl_4                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_4 INFIXR3 infixr_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_3:
 | infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_3 INFIXL3 infixr_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_2:
 | infixl_3                                                     { $1 }
-| infixl_3 INFIX2  infixl_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_3 INFIXR2 infixr_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_3 INFIX2  infixl_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_3 INFIXR2 infixr_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_2:
 | infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_2 INFIXL2 infixr_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_1:
 | infixl_2                                                     { $1 }
-| infixl_2 INFIX1  infixl_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_2 INFIXR1 infixr_1                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_2 INFIX1  infixl_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_2 INFIXR1 infixr_1                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_1:
 | infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_1 INFIXL1 infixr_1                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 APP       infixl_1                                  { `InfixAppl (`App, $1, $3), pos() }
-| infixl_1 INFIX0    infixl_1                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_1 APP       infixl_1                                  { `InfixAppl (([], `App), $1, $3), pos() }
+| infixl_1 INFIX0    infixl_1                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_0:
 | infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_0 INFIXL0 infixr_0                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { `InfixAppl (`Or, $1, $3), pos() }
-| logical_expression AMPAMP infixl_0                           { `InfixAppl (`And, $1, $3), pos() }
+| logical_expression BARBAR infixl_0                           { `InfixAppl (([], `Or), $1, $3), pos() }
+| logical_expression AMPAMP infixl_0                           { `InfixAppl (([], `And), $1, $3), pos() }
 
 typed_expression:
 | logical_expression                                           { $1 }

@@ -22,7 +22,9 @@ let pos_of_expression : expression -> position =
 
 module Env = Env.String
 
-let instantiate = Instantiate.var
+let instantiate env t =
+  let (_, t) = Instantiate.var env t in
+    t
 let generalise env = snd -<- Generalise.generalise env
 
 let unify = Unify.datatypes
@@ -35,19 +37,12 @@ let type_mismatch ~expected ~inferred ~pos ~src msg =
                      ^ string_of_datatype expected^"\n"^
                        msg))
 
-let constant_type = function
-  | `Bool _ -> `Primitive `Bool
-  | `Int _ -> `Primitive `Int
-  | `Float _ -> `Primitive `Float
-  | `Char _ -> `Primitive `Char
-  | `String _ -> string_type
-
 let rec type_check : typing_environment -> untyped_expression -> expression =
   fun ({Types.var_env = env} as typing_env) expression ->
   try
     Debug.if_set (show_typechecking) (fun () -> "Typechecking expression: " ^ (string_of_expression expression));
     match (expression : Syntax.untyped_expression) with
-  | Constant (value, `U pos) -> Constant (value, `T (pos, constant_type value, None))
+  | Constant (value, `U pos) -> Constant (value, `T (pos, Constant.constant_type value, None))
   | Variable (name, `U pos) ->
       Variable (name, `T (pos, instantiate env name, None))
   | Abs (f, `U pos) ->

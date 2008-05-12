@@ -36,8 +36,8 @@ type 't meta_row_var_basis =
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 type type_variable =
-    [`TypeVar of int | `RigidTypeVar of int
-    |`RowVar of int | `RigidRowVar of int]
+    [ `TypeVar of int | `RigidTypeVar of int
+    | `RowVar of int | `RigidRowVar of int ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type quantifier = type_variable

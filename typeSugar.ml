@@ -11,13 +11,17 @@ module Env = Env.String
 
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
-  val instantiate : Types.environment -> string -> Types.datatype
+  val instantiate : Types.environment -> string -> (Types.type_arg list * Types.datatype)
+(*   val instantiate : Types.environment -> string -> Types.datatype   *)
   val generalise : Types.environment -> Types.datatype -> (Types.quantifier list * Types.datatype)
 
   val is_generalisable : phrase -> bool
 end =
 struct
   let unify = Unify.datatypes
+(*   let instantiate env name = *)
+(*     let (_, _, t) = Instantiate.var env name in *)
+(*       t *)
   let instantiate = Instantiate.var
   let generalise = Generalise.generalise
 
@@ -664,25 +668,22 @@ let empty_context = { var_env   = Env.empty;
 let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
 let bind_tycon ctxt (v, t) = {ctxt with tycon_env = Env.bind ctxt.tycon_env (v,t)}
 
-
 let mailbox = "_MAILBOX_"
-let mailbox_type env = Utils.instantiate env mailbox
+let mailbox_type env = Env.lookup env mailbox
 
-let constant_type = function
-  | `Float _  -> `Primitive `Float
-  | `Int _    -> `Primitive `Int
-  | `Bool _   -> `Primitive `Bool
-  | `Char _   -> `Primitive `Char
-  | `String _ ->  Types.string_type
-
-let type_section env (`Section s as s') = s', match s with
-    `Minus         -> Utils.instantiate env "-"
-  | `FloatMinus    -> Utils.instantiate env "-."
-  | `Project label ->
-      let f = Types.fresh_type_variable () in
-      let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
-        `Function (Types.make_tuple_type [r], mailbox_type env, f)
-  | `Name var      -> Utils.instantiate env var
+let type_section env (`Section s as s') =
+  let (tyargs, t) =
+    match s with
+      | `Minus         -> Utils.instantiate env "-"
+      | `FloatMinus    -> Utils.instantiate env "-."
+      | `Project label ->
+          let f = Types.fresh_type_variable () in
+          let mb = mailbox_type env in
+          let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
+            [`Type mb; `Type f], `Function (Types.make_tuple_type [r], mb, f)
+      | `Name var      -> Utils.instantiate env var
+  in
+    tappl (s', tyargs), t
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 
@@ -696,10 +697,11 @@ let type_unary_op env =
       and mb2 = Types.fresh_type_variable ()
       and rv = Types.fresh_type_variable ()
       and arg = Types.fresh_type_variable () in
-        `Function (Types.make_tuple_type [
-                     `Function (Types.make_tuple_type [arg], mb, rv)
-                   ], mb2,
-                   `Function (arg, mb, rv))
+        ([`Type mb; `Type rv; `Type mb2; `Type arg],
+         `Function (Types.make_tuple_type [
+                      `Function (Types.make_tuple_type [arg], mb, rv)
+                    ], mb2,
+                    `Function (arg, mb, rv)))
 
 let type_binary_op ctxt = 
   let datatype = datatype ctxt.tycon_env in function
@@ -728,7 +730,8 @@ let type_binary_op ctxt =
   | `Name "<>"    ->
       let a = Types.fresh_type_variable ()
       and mb = Types.fresh_type_variable () in
-        `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool);
+        ([`Type a; `Type mb],
+         `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool))
   | `Name "!"     -> Utils.instantiate ctxt.var_env "send"
   | `Name n       -> Utils.instantiate ctxt.var_env n
   | `App          -> 
@@ -736,10 +739,11 @@ let type_binary_op ctxt =
       and mb = Types.fresh_type_variable ()
       and mb2 = Types.fresh_type_variable ()
       and rv = Types.fresh_type_variable () in
-        `Function (Types.make_tuple_type [
-                     `Function (tup, mb, rv);
-                     tup],
-                   mb2, rv)
+        ([`Type tup; `Type mb; `Type rv; `Type mb2],
+         `Function (Types.make_tuple_type [
+                      `Function (tup, mb, rv);
+                      tup],
+                    mb2, rv))
 
 (** close a pattern type relative to a list of patterns
 
@@ -969,7 +973,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let t = Types.make_list_type (Types.fresh_type_variable ()) in
               `Nil, Env.empty, (t, t)
         | `Constant c as c' ->
-            let t = constant_type c in
+            let t = Constant.constant_type c in
               c', Env.empty, (t, t)
         | `Variable (_, (x,_,pos)) -> 
             let xtype = Types.fresh_type_variable () in
@@ -1083,6 +1087,21 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `As       ((_, (v, Some t, _)), p) -> Env.bind (pattern_env p) (v, t)
     | `As       ((_, (_, None, _)), _) -> assert false
 
+let update_pattern_vars env =
+(object (self)
+  inherit SugarTraversals.map as super
+
+  method patternnode : patternnode -> patternnode =
+    fun n ->      
+      let update (_, (x, _, pos)) =
+        let tyvars, t = Env.lookup env x in
+          (tyvars, (x, Some t, pos))
+      in
+        match n with
+          | `Variable b -> `Variable (update b)
+          | `As (b, p) -> `As (update b, self#pattern p)
+          | _ -> super#patternnode n
+ end)#pattern
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
   | `FormBinding (_, pattern), _ -> pattern_env pattern
@@ -1154,11 +1173,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
     let e, t =
       match (expr : phrasenode) with
-        | `Var v            -> `Var v, Utils.instantiate context.var_env v
+        | `Var v            ->
+            let (tyargs, t) = Utils.instantiate context.var_env v in
+              tappl (`Var v, tyargs), t
         | `Section _ as s   -> type_section context.var_env s
 
         (* literals *)
-        | `Constant c as c' -> c', constant_type c
+        | `Constant c as c' -> c', Constant.constant_type c
         | `TupleLit [p] -> 
             let p = tc p in
               `TupleLit [erase p], typ p
@@ -1340,16 +1361,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Receive (erase_cases binders, Some pattern_type), body_type
 
         (* applications of various sorts *)
-        | `UnaryAppl (op, p) -> 
-            let op = op, type_unary_op context op
+        | `UnaryAppl ((_, op), p) ->
+            let tyargs, opt = type_unary_op context op
             and p = tc p
             and rettyp = Types.fresh_type_variable () in
               unify ~handle:Errors.unary_apply
-                ((Sugartypes.string_of_unary_op (fst op), typ op), 
+                ((Sugartypes.string_of_unary_op op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ p], mailbox_type context.var_env, rettyp)));
-              `UnaryAppl (fst op, erase p), rettyp
-        | `InfixAppl (op, l, r) ->
-            let opt = type_binary_op context op in
+              `UnaryAppl ((tyargs, op), erase p), rettyp
+        | `InfixAppl ((_, op), l, r) ->
+            let tyargs, opt = type_binary_op context op in
             let l = tc l
             and r = tc r 
             and rettyp = Types.fresh_type_variable () in
@@ -1357,7 +1378,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 ((Sugartypes.string_of_binop op, opt), 
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r], 
                                     mailbox_type context.var_env, rettyp)));
-              `InfixAppl (op, erase l, erase r), rettyp
+              `InfixAppl ((tyargs, op), erase l, erase r), rettyp
         | `RangeLit (l, r) -> 
             let l, r = tc l, tc r in
             let () = unify ~handle:Errors.range_bound  (pos_and_typ l,
@@ -1608,9 +1629,13 @@ and type_binding : context -> binding -> binding * context =
                   t
               | _ -> typ body in
           let () = unify ~handle:Errors.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
-          let (tyvars, bt), penv =
-            if Utils.is_generalisable (erase body) then
-              (Utils.generalise context.var_env bt, Env.map (snd -<- Utils.generalise context.var_env) penv)
+          let body = erase body in
+          let (tyvars, bt), pat, penv =
+            if Utils.is_generalisable body then
+              let genv = Env.map (Utils.generalise context.var_env) penv in
+              let penv = Env.map snd genv in
+              let pat = update_pattern_vars genv (erase_pat pat) in
+                (Utils.generalise context.var_env bt, pat, penv)
             else
               let quantifiers = Generalise.get_quantifiers context.var_env bt in
                 if List.exists (function
@@ -1619,7 +1644,7 @@ and type_binding : context -> binding -> binding * context =
                 then
                   Errors.value_restriction (lookup_pos pos) bt
                 else
-                  ([], bt), penv
+                  ([], bt), erase_pat pat, penv
           in
 (*
             if Env.has penv "input" then
@@ -1627,7 +1652,7 @@ and type_binding : context -> binding -> binding * context =
             else
               ();
 *)
-            `Val (tyvars, erase_pat pat, erase body, location, datatype), 
+            `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
       | `Fun ((_, (name, _, pos)), (pats, body), location, t) ->
           let pats = List.map (List.map tpc) pats in
@@ -1669,7 +1694,7 @@ and type_binding : context -> binding -> binding * context =
                             let (_quantifiers, fb) = Utils.generalise context.var_env t in
 (*                            Debug.print ("generalised annotation: " ^ Types.string_of_datatype fb);*)
                               (* make sure the annotation has the right shape *)
-                            let fbi = Instantiate.typ fb in
+                            let fbi = (snd -<- Instantiate.typ) fb in
 (*                            Debug.print ("instantiated annotation: " ^ Types.string_of_datatype fbi);*)
                             let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos fbi) in
                               fb
@@ -1693,17 +1718,21 @@ and type_binding : context -> binding -> binding * context =
                           | `ForAll (_, t) | t -> t in
                       let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
                         (([], (name, Some ft, pos)), (pats, body), location, t) :: defs) [] defs patss) in
-          let env =
-            List.fold_left (fun env (name, fb) ->
-                              Env.bind env (name, snd (Utils.generalise env fb)))
+          let genv =
+            List.fold_left (fun genv (name, fb) ->
+                              let tyvars, t = Utils.generalise context.var_env fb in
+                                Env.bind genv (name, (tyvars, t)))
               Env.empty
-              fbs in
-            (`Funs (List.map (fun (binder, (ppats, body), location, dtopt) ->
-                                binder,
-                                (List.map (List.map erase_pat) ppats, erase body),
-                                location, dtopt) 
+              fbs
+          in
+            (`Funs (List.map (fun ((_, (name, _, pos)), (ppats, body), location, dtopt) ->
+                                let tyvars, t = Env.lookup genv name in
+                                  ((tyvars, (name, Some t, pos)),
+                                   (List.map (List.map erase_pat) ppats, erase body),
+                                   location,
+                                   dtopt))
                       defs),
-             {empty_context with var_env = env})
+             {empty_context with var_env = (Env.map snd genv)})
       | `Foreign ((_, (name, _, pos)), language, (_, Some datatype as dt)) ->
           let tyvars = TypeUtils.quantifiers datatype in
             (`Foreign ((tyvars, (name, Some datatype, pos)), language, dt),

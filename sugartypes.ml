@@ -163,9 +163,9 @@ and phrasenode = [
 | `Section          of sec
 | `Conditional      of phrase * phrase * phrase
 | `Block            of binding list * phrase
-| `InfixAppl        of binop * phrase * phrase
+| `InfixAppl        of (tyarg list * binop) * phrase * phrase
 | `Regex            of regex
-| `UnaryAppl        of unary_op * phrase
+| `UnaryAppl        of (tyarg list * unary_op) * phrase
 | `FnAppl           of phrase * phrase list
 | `TAppl            of phrase * tyarg list
 | `TupleLit         of phrase list
@@ -219,6 +219,11 @@ type program = binding list * phrase option
 exception ConcreteSyntaxError of (string * position)
 exception PatternDuplicateNameError of (Syntax.position * string * string)
 exception RedundantPatternMatch of Syntax.position
+
+let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
+  match tys with
+    | [] -> e
+    | _ -> `TAppl ((e, (Lexing.dummy_pos, Lexing.dummy_pos, None)), tys)
 
 module Freevars =
 struct
@@ -275,7 +280,7 @@ struct
     | `FormletPlacement (p1, p2, p3)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | `Block b -> block b
-    | `InfixAppl (`Name n, p1, p2) -> union (singleton n) (union_map phrase [p1;p2])
+    | `InfixAppl ((_, `Name n), p1, p2) -> union (singleton n) (union_map phrase [p1;p2])
     | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
     | `RangeLit (p1, p2) -> union_map phrase [p1;p2]
     | `Regex r -> regex r

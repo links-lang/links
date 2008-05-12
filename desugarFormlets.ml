@@ -9,7 +9,7 @@ let appPrim pos name args =
     will have the source position [pos].
 *)
 let make_links_list pos elems =
-  let concat_expr l r = `InfixAppl (`Name "++", l, r), pos in
+  let concat_expr l r = `InfixAppl (([], `Name "++"), l, r), pos in
     fold_right concat_expr elems (`ListLit [], pos)
 
 (** Returns a function that plugs some given XML in as the contents of
@@ -82,7 +82,7 @@ and desugar_form_expr (formExpr, pos) : Sugartypes.phrase * pattern list list =
       match formExpr with
         | `FormBinding (phrase, ppattern) -> phrase, [[ppattern]]
         | `Xml ("#", [], attrexp, contents) -> forest_to_form_expr contents None pos pos
-        | `Xml ("#", _, _, _) -> 
+        | `Xml ("#", _, _, _) ->
             raise (ConcreteSyntaxError ("XML forest literals cannot have attributes", pos))
         | `Xml(tag, attrs, attrexp, contents) ->
             let form, bindings = forest_to_form_expr contents None pos pos in

@@ -22,6 +22,7 @@ class map :
     method char            : char -> char
     method bool            : bool -> bool
     method unary_op        : unary_op -> unary_op
+    method tyunary_op      : tyarg list * unary_op -> tyarg list * unary_op
     method binder          : binder -> binder
     method tybinder        : tybinder -> tybinder
     method sentence'       : sentence' -> sentence'
@@ -52,6 +53,7 @@ class map :
     method datatype'       : datatype' -> datatype'
     method constant        : constant -> constant
     method binop           : binop -> binop
+    method tybinop         : tyarg list * binop -> tyarg list * binop
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
     method program         : program -> program
@@ -82,6 +84,7 @@ class fold :
     method char            : char -> 'self
     method bool            : bool -> 'self
     method unary_op        : unary_op -> 'self
+    method tyunary_op      : tyarg list * unary_op -> 'self
     method binder          : binder -> 'self
     method tybinder        : tybinder -> 'self
     method sentence'       : sentence' -> 'self
@@ -112,6 +115,7 @@ class fold :
     method datatype'       : datatype' -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
+    method tybinop         : tyarg list * binop -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
     method program         : program -> 'self
@@ -136,6 +140,7 @@ object ('self)
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : binop -> 'self * binop
+  method tybinop         : tyarg list * binop -> 'self * (tyarg list * binop)
   method bool            : bool -> 'self * bool
   method char            : char -> 'self * char
   method constant        : constant -> 'self * constant
@@ -172,5 +177,6 @@ object ('self)
   method sentence'       : sentence' -> 'self * sentence'
   method string          : name -> 'self * name
   method unary_op        : unary_op -> 'self * unary_op
+  method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unknown         : 'a . 'a -> 'self * 'a
 end
