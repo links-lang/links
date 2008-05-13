@@ -33,7 +33,7 @@ struct
     | `TextNode _
     | `Section _ -> true
 
-    | `ListLit ps
+    | `ListLit (ps, _)
     | `TupleLit ps -> List.for_all is_generalisable ps
     | `RangeLit (e1, e2) -> is_generalisable e1 && is_generalisable e2
     | `TAppl (p, _)
@@ -1232,12 +1232,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                                 StringMap.add label t field_env') rfield_env field_env in
                       `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var)
               end
-        | `ListLit es ->
+        | `ListLit (es, _) ->
             begin match List.map tc es with
-              | [] -> `ListLit [], `Application (Types.list, [Types.fresh_type_variable ()])
+              | [] ->
+                  let t = Types.fresh_type_variable () in
+                    `ListLit ([], Some t), `Application (Types.list, [t])
               | e :: es -> 
                   List.iter (fun e' -> unify ~handle:Errors.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  `ListLit (List.map erase (e::es)), `Application (Types.list, [typ e])
+                  `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [typ e])
             end
         | `FunLit (pats, body) ->
             let pats = List.map (List.map tpc) pats in

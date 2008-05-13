@@ -10,7 +10,7 @@ let appPrim pos name args =
 *)
 let make_links_list pos elems =
   let concat_expr l r = `InfixAppl (([], `Name "++"), l, r), pos in
-    fold_right concat_expr elems (`ListLit [], pos)
+    fold_right concat_expr elems (`ListLit ([], None), pos)
 
 (** Returns a function that plugs some given XML in as the contents of
     an XML element having the given tag name and attributes. *)

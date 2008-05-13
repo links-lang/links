@@ -247,8 +247,8 @@ atomic_expression:
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET RBRACKET                                            { `ListLit [], pos() } 
-| LBRACKET exps RBRACKET                                       { `ListLit $2, pos() } 
+| LBRACKET RBRACKET                                            { `ListLit ([], None), pos() } 
+| LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() } 
 | LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() } 
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { `FunLit ($2, (`Block $3, pos ())), pos() }
@@ -491,7 +491,7 @@ formlet_binding:
 
 formlet_placement:
 | LBRACE logical_expression
-         FATRARROW logical_expression RBRACE                   { `FormletPlacement ($2, $4, (`ListLit [], pos())), pos () }
+         FATRARROW logical_expression RBRACE                   { `FormletPlacement ($2, $4, (`ListLit ([], None), pos())), pos () }
 | LBRACE logical_expression
          FATRARROW logical_expression
          WITH logical_expression RBRACE                        { `FormletPlacement ($2, $4, $6), pos () }

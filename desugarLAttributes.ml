@@ -76,7 +76,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
         let idattr =
           ("key", 
            [apply dummy_pos "registerEventHandlers" 
-              [`ListLit (List.map (pair dummy_pos) lons), dummy_pos]]) in
+              [`ListLit (List.map (pair dummy_pos) lons, None), dummy_pos]]) in
           `Xml (tag, idattr::others, attrexp, children)
     | e -> e
         

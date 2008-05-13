@@ -25,7 +25,7 @@ let desugar_regex pos : regex -> phrasenode =
       | `Any                -> `ConstructorLit ("Any", None)
       | `StartAnchor        -> `ConstructorLit ("StartAnchor", None)
       | `EndAnchor          -> `ConstructorLit ("EndAnchor", None)
-      | `Seq rs             -> `ConstructorLit ("Seq", Some (`ListLit (List.map (fun s -> aux s, pos) rs),
+      | `Seq rs             -> `ConstructorLit ("Seq", Some (`ListLit (List.map (fun s -> aux s, pos) rs, None),
                                                              pos))
       | `Alternate (r1, r2) -> `ConstructorLit ("Alternate",  Some (`TupleLit [aux r1, pos; aux r2, pos], pos))
       | `Group s            -> `ConstructorLit ("Group", Some (aux s, pos))

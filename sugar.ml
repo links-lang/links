@@ -1012,8 +1012,8 @@ module Desugarer =
            | `UnaryAppl ((_, `Abs), e) -> Abs (desugar e, pos)
            | `RangeLit (lo, hi) -> Apply(Variable("intRange", pos),
                                          [desugar lo; desugar hi], pos)
-           | `ListLit  [] -> Nil (pos)
-           | `ListLit  (e::es) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es), pos'), pos)
+           | `ListLit  ([], _) -> Nil (pos)
+           | `ListLit  (e::es, t) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es, t), pos'), pos)
            | `DBDelete (pattern, table, condition) ->
                let t = unique_name () in
                let r = unique_name () in
@@ -1021,7 +1021,7 @@ module Desugarer =
                let rv = `Var r, pos' in
                let generator =
                  `Table ((`As (([], (r,None,pos')), pattern), pos'), tv) in
-               let rows = `Iteration ([generator], (`ListLit [rv], pos'), condition, None), pos' in
+               let rows = `Iteration ([generator], (`ListLit ([rv], None), pos'), condition, None), pos' in
                  desugar (
                    `Block ((([`Val ([], (`Variable ([], (t,None,pos')), pos'), table, `Unknown, None), pos'])),
                            (`FnAppl ((`Var "deleterows", pos'), [tv; rows]), pos')), pos')
@@ -1040,9 +1040,9 @@ module Desugarer =
                  `Table ((`As (([], (r,None,pos')), pattern), pos'), tv) in
                let body = 
                  (`ListLit
-                    [(`TupleLit
+                    ([(`TupleLit
                         [rv;
-                         (`RecordLit (row, None), pos')]), pos']), pos' in
+                         (`RecordLit (row, None), pos')]), pos'], None)), pos' in
                let row_pairs = `Iteration ([generator], body, condition, None), pos'
                in      
                  desugar (
@@ -1136,7 +1136,7 @@ module Desugarer =
                  match filter with
                    | None -> body
                    | Some condition ->
-                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+                       `Conditional (condition, body, (`ListLit ([], None), pos')), pos'
                in
                  desugar body
            | `Iteration (generators, body, filter, None) ->
@@ -1144,7 +1144,7 @@ module Desugarer =
                  match filter with
                    | None -> body
                    | Some condition ->
-                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+                       `Conditional (condition, body, (`ListLit ([], None), pos')), pos'
                in
                  List.fold_right
                    (fun generator body ->
@@ -1164,7 +1164,7 @@ module Desugarer =
                  match filter with
                    | None -> body
                    | Some condition ->
-                       `Conditional (condition, body, (`ListLit [], pos')), pos'
+                       `Conditional (condition, body, (`ListLit ([], None), pos')), pos'
                and pattern, from = as_list pos' generator
                in
                  begin

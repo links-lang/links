@@ -155,7 +155,7 @@ and phrasenode = [
 | `Spawn            of phrase
 | `SpawnWait        of phrase
 | `RangeLit         of (phrase * phrase)
-| `ListLit          of phrase list
+| `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
     * (*where:*)   phrase option 
                     * (*orderby:*) phrase option
@@ -273,7 +273,7 @@ struct
     | `Upcast (p, _, _)
     | `TypeAnnotation (p, _) -> phrase p
 
-    | `ListLit ps
+    | `ListLit (ps, _)
     | `TupleLit ps -> union_map phrase ps
 
     | `Escape ((v,_,_), p) -> diff (phrase p) (singleton v)

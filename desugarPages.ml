@@ -15,7 +15,7 @@ let rec desugar_page : phrase -> phrase =
 
     let desugar_pages : phrase list -> phrase = fun children ->
       (`FnAppl ((`Var "joinManyP", pos),
-                [`ListLit (List.map desugar_page children), pos]), pos) in
+                [`ListLit (List.map desugar_page children, None), pos]), pos) in
     let dp : phrasenode -> phrase = function
       | e when is_raw (e, pos) ->
           (`FnAppl ((`Var "bodyP", pos),
