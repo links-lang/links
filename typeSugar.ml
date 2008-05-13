@@ -668,6 +668,10 @@ let empty_context = { var_env   = Env.empty;
 let bind_var ctxt (v, t) = {ctxt with var_env = Env.bind ctxt.var_env (v,t)}
 let bind_tycon ctxt (v, t) = {ctxt with tycon_env = Env.bind ctxt.tycon_env (v,t)}
 
+(*
+  It might be better to incorporate the mailbox type into the context
+  instead of storing it in the variable environment.
+*)
 let mailbox = "_MAILBOX_"
 let mailbox_type env = Env.lookup env mailbox
 
