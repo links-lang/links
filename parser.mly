@@ -34,7 +34,7 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun (([], (name, None, bpos)), phrase, location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ([], (`Variable ([], (name, None, bpos)), dpos), phrase, location, Some datatype), dpos
+            `Val ([], ((`Variable ([], (name, None, bpos)), dpos), None), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -105,7 +105,7 @@ let datatype d = d, None
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.pattern> pattern
+%type <Sugartypes.typattern> typattern
 %type <(Sugartypes.name * Sugartypes.position) * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
@@ -172,7 +172,7 @@ nofun_declaration:
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
-                                                                 in `Val ([], (`Variable ([], (d, None, dpos)), pos),p,l,None), pos }
+                                                                 in `Val ([], ((`Variable ([], (d, None, dpos)), pos), None),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -197,9 +197,9 @@ postfixop:
 
 tlfunbinding:
 | FUN var arg_lists perhaps_location block                     { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
-| OP pattern op pattern perhaps_location block                 { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
-| OP prefixop pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
-| OP pattern postfixop perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
+| OP typattern op typattern perhaps_location block             { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
+| OP prefixop typattern perhaps_location block                 { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
+| OP typattern postfixop perhaps_location block                { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
 
 tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
@@ -487,7 +487,7 @@ xml_contents:
 | CDATA                                                        { `TextNode (Utility.xml_unescape $1), pos() }
 
 formlet_binding:
-| LBRACE logical_expression RARROW pattern RBRACE              { `FormBinding($2, $4), pos()}
+| LBRACE logical_expression RARROW typattern RBRACE            { `FormBinding($2, $4), pos()}
 
 formlet_placement:
 | LBRACE logical_expression
@@ -508,7 +508,7 @@ cases:
 | case cases                                                   { $1 :: $2 }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, (`Block ($4), pos()) }
+| CASE typattern RARROW block_contents                         { $2, (`Block ($4), pos()) }
 
 perhaps_cases:
 | /* empty */                                                  { [] }
@@ -539,10 +539,10 @@ generator:
 | table_generator                                              { `Table $1 }
 
 list_generator:
-| VAR pattern LARROW exp                                       { ($2, $4) }
+| VAR typattern LARROW exp                                     { ($2, $4) }
 
 table_generator:
-| VAR pattern LLARROW exp                                      { ($2, $4) }
+| VAR typattern LLARROW exp                                    { ($2, $4) }
 
 perhaps_where:
 | /* empty */                                                  { None }
@@ -597,7 +597,7 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
+| VAR typattern EQ exp SEMICOLON                               { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun (([], (fst $2, None, snd $2)), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
@@ -760,9 +760,12 @@ regex_pattern_sequence:
 /*
  * Pattern grammar
  */
+typattern:
+| pattern                                                   { $1, None }
+
 pattern:
 | typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { `HasType ($1, datatype $3), pos() }
+| typed_pattern COLON primary_datatype                      { (`HasType ($1, datatype $3), pos()) }
 
 typed_pattern:
 | cons_pattern                                              { $1 }
@@ -802,15 +805,19 @@ primary_pattern:
 | parenthesized_pattern                                     { $1 }
 
 patterns:
-| pattern                                                   { [$1] }
-| pattern COMMA patterns                                    { $1 :: $3 }
+| pattern                                                 { [$1] }
+| pattern COMMA patterns                                { $1 :: $3 }
+
+typatterns:
+| typattern                                                 { [$1] }
+| typattern COMMA typatterns                                { $1 :: $3 }
 
 labeled_patterns:
 | record_label EQ pattern                                   { [($1, $3)] }
 | record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
 
 multi_args:
-| LPAREN patterns RPAREN                                    { $2 }
+| LPAREN typatterns RPAREN                                  { $2 }
 | LPAREN RPAREN                                             { [] }
 
 arg_lists:

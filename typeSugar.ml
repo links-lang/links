@@ -86,7 +86,7 @@ struct
     | `Foreign _ -> true
     | `Exp p -> is_generalisable p
     | `Val (_, pat, rhs, _, _) ->
-        is_safe_pattern pat && is_generalisable rhs
+        is_safe_typattern pat && is_generalisable rhs
   and is_safe_pattern (pat, _) = match pat with
       (* safe patterns cannot fail *)
     | `Nil 
@@ -104,6 +104,7 @@ struct
     | `Tuple ps -> List.for_all is_safe_pattern ps
     | `HasType (p, _)
     | `As (_, p) -> is_safe_pattern p
+  and is_safe_typattern (pat, _) = is_safe_pattern pat
   and is_generalisable_regex = function 
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
@@ -1091,6 +1092,8 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `As       ((_, (v, Some t, _)), p) -> Env.bind (pattern_env p) (v, t)
     | `As       ((_, (_, None, _)), _) -> assert false
 
+let typattern_env : typattern -> Types.datatype Env.t = fun (p, _) -> pattern_env p
+
 let update_pattern_vars env =
 (object (self)
   inherit SugarTraversals.map as super
@@ -1105,10 +1108,10 @@ let update_pattern_vars env =
           | `Variable b -> `Variable (update b)
           | `As (b, p) -> `As (update b, self#pattern p)
           | _ -> super#patternnode n
- end)#pattern
+ end)#typattern
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
-  | `FormBinding (_, pattern), _ -> pattern_env pattern
+  | `FormBinding (_, pattern), _ -> typattern_env pattern
   | `Xml (_, _, _, children), _ ->
       List.fold_right
         (fun child env ->
@@ -1131,7 +1134,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
     and (++) env env' = {env with var_env = Env.extend env.var_env env'} in
     let typ (_,t) : Types.datatype = t 
     and erase (p, _) = p
-    and erase_pat (p, _, _) = p
+    and erase_pat (p, _, t) = (p, Some t)
     and pattern_typ (_, _, t) = t
     and pattern_env (_, e, _) = e in
     let pattern_pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p in
@@ -1139,12 +1142,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
     let uexp_pos (_,p) = let (_,_,p) = lookup_pos p in p in   
     let exp_pos (p,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
-    let tpc = type_pattern `Closed
-    and tpo = type_pattern `Open
+    let tpc (p, _) = type_pattern `Closed p
+    and tpo (p, _) = type_pattern `Open p
     and tc : phrase -> phrase * Types.datatype = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = lookup_pos pos in e 
-    and erase_cases = List.map (fun ((p, _, _), (e, _)) -> p, e) in
+    and erase_cases = List.map (fun ((p, _, t), (e, _)) -> (p, Some t), e) in
     let type_cases binders =
       let pt = Types.fresh_type_variable () in
       let bt = Types.fresh_type_variable () in
@@ -1601,7 +1604,7 @@ and type_binding : context -> binding -> binding * context =
     let unify (l, r) = unify ~pos:(lookup_pos pos) (l, r)
     and typ (_,t) = t
     and erase (e, _) = e
-    and erase_pat (e, _, _) = e
+    and erase_pat (e, _, t) = (e, Some t)
     and pattern_typ (_, _, t) = t
     and tc = type_check context
     and tpc = type_pattern `Closed
@@ -1624,7 +1627,7 @@ and type_binding : context -> binding -> binding * context =
 
     let typed, ctxt = match def with
       | `Include _ -> assert false
-      | `Val (_, pat, body, location, datatype) -> 
+      | `Val (_, (pat, _), body, location, datatype) -> 
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -1661,7 +1664,7 @@ and type_binding : context -> binding -> binding * context =
             `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
       | `Fun ((_, (name, _, pos)), (pats, body), location, t) ->
-          let pats = List.map (List.map tpc) pats in
+          let pats = List.map (List.map (fun (p, _) -> tpc p)) pats in
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
           let {var_env = body_env} = List.fold_left fold_in_envs context pats in
           let mt = Types.fresh_type_variable () in
@@ -1690,7 +1693,7 @@ and type_binding : context -> binding -> binding * context =
             List.split
               (List.map
                  (fun ((_, (name,_,_)), (pats, body), _, t) ->
-                    let pats = List.map (List.map tpc) pats in
+                    let pats = List.map (List.map (fst ->- tpc)) pats in
                     let ft = make_ft pats (Types.fresh_type_variable ()) in
                     let fb =
                       match t with

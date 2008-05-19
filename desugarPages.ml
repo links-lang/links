@@ -30,7 +30,7 @@ let rec desugar_page : phrase -> phrase =
       | `Xml (name, attrs, dynattrs, children) ->
           let x = Utility.gensym ~prefix:"xml" () in
             (`FnAppl ((`Var "plugP", pos),
-                      [(`FunLit([[`Variable ([], (x,None,pos)), pos]],
+                      [(`FunLit([[(`Variable ([], (x,None,pos)), pos), None]],
                                 (`Xml (name, attrs, dynattrs,
                                        [`Block ([], (`Var x, pos)), pos]), pos)), pos);
                        desugar_pages children]), pos)
