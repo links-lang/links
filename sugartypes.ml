@@ -124,9 +124,6 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type typattern = pattern * Types.datatype option
-    deriving (Show)
-
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
@@ -145,16 +142,16 @@ and regex = [
 | `Splice    of phrase
 | `Replace   of regex * replace_rhs 
 ]
-and funlit = typattern list list * phrase
+and funlit = pattern list list * phrase
 and iterpatt = [ 
-| `List of typattern * phrase
-| `Table of typattern * phrase
+| `List of pattern * phrase
+| `Table of pattern * phrase
 ]
 and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of funlit
+| `FunLit           of (Types.datatype list list) option * funlit
 | `Spawn            of phrase
 | `SpawnWait        of phrase
 | `RangeLit         of (phrase * phrase)
@@ -178,24 +175,24 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option
-| `Switch           of phrase * (typattern * phrase) list * Types.datatype option
-| `Receive          of (typattern * phrase) list * Types.datatype option
+| `Switch           of phrase * (pattern * phrase) list * Types.datatype option
+| `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
 | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
-| `DBDelete         of typattern * phrase * phrase option
+| `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * phrase * phrase option
-| `DBUpdate         of typattern * phrase * phrase option * (name * phrase) list
+| `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
 | `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
 | `TextNode         of string
 | `Formlet          of phrase * phrase
 | `Page             of phrase
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
-| `FormBinding      of phrase * typattern
+| `FormBinding      of phrase * pattern
 ]
 and phrase = phrasenode * position
 and bindingnode = [
-| `Val     of tyvar list * typattern * phrase * location * datatype' option
+| `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of tybinder * funlit * location * datatype' option
 | `Funs    of (tybinder * funlit * location * datatype' option) list
 | `Foreign of tybinder * name * datatype'
@@ -253,11 +250,9 @@ struct
     | `HasType (pat, _)      -> pattern pat
 
 
-  let typattern (p, _) = pattern p
-
   let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
     | `Xml (_, _, _, children) -> union_map formlet_bound children
-    | `FormBinding (_, pat) -> typattern pat
+    | `FormBinding (_, pat) -> pattern pat
     | _ -> empty 
 
   let rec phrase (p, _ : phrase) : StringSet.t = match p with
@@ -311,21 +306,21 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit fnlit -> funlit fnlit
+    | `FunLit (_, fnlit) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
                               | `Table (_, source) -> phrase source) generators in
         let pat_bound = union_map (function
                                      | `List (pat, _)
-                                     | `Table (pat, _) -> typattern pat) generators in
+                                     | `Table (pat, _) -> pattern pat) generators in
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
                      diff (option_map phrase orderby) pat_bound]                     
             (*     | `Iteration (`List (pat, source), body, where, orderby) *)
 (*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
-(*         let pat_bound = typattern pat in *)
+(*         let pat_bound = pattern pat in *)
 (*           union_all [phrase source; *)
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
@@ -335,16 +330,16 @@ struct
     | `DBDelete (pat, p, where) -> 
         union (phrase p) 
           (diff (option_map phrase where)
-             (typattern pat))
+             (pattern pat))
     | `DBUpdate (pat, from, where, fields) -> 
-        let pat_bound = typattern pat in
+        let pat_bound = pattern pat in
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-  and binding (binding, _: binding) : StringSet.t (* vars bound in the typattern *)
+  and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
-    | `Val (_, pat, rhs, _, _) -> typattern pat, phrase rhs
+    | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
     | `Fun ((_, (name,_,_)), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs -> 
         let names, rhss = 
@@ -360,13 +355,13 @@ struct
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
-    diff (phrase body) (union_map (union_map typattern) args)
+    diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t = 
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->
             let patbound, exprfree = binding bind in
               union exprfree (diff bodyfree patbound))
-  and case (pat, body) : StringSet.t = diff (phrase body) (typattern pat)
+  and case (pat, body) : StringSet.t = diff (phrase body) (pattern pat)
   and regex = function
     | `Range _
     | `Simply _

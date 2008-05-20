@@ -255,7 +255,7 @@ object (self)
            `Type (name, vars, (t, Some dt)))
             
     | `Val (tyvars, pat, p, loc, dt) -> 
-        let o, pat = self#typattern pat in
+        let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
           o, `Val (tyvars, pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)

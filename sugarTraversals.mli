@@ -39,7 +39,6 @@ class map :
     method phrase          : phrase -> phrase
     method patternnode     : patternnode -> patternnode
     method pattern         : pattern -> pattern
-    method typattern       : typattern -> typattern
     method operator        : operator -> operator
     method num             : num -> num
     method name            : name -> name
@@ -102,7 +101,6 @@ class fold :
     method phrase          : phrase -> 'self
     method patternnode     : patternnode -> 'self
     method pattern         : pattern -> 'self
-    method typattern       : typattern -> 'self
     method operator        : operator -> 'self
     method num             : num -> 'self
     method name            : name -> 'self
@@ -164,7 +162,6 @@ object ('self)
   method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern
-  method typattern       : typattern -> 'self * typattern
   method phrase          : phrase -> 'self * phrase
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : position -> 'self * position

@@ -34,7 +34,7 @@ let desugar_lhref : phrasenode -> phrasenode = function
           | [_,[href]], rest ->
               (("href",
                 [`Constant (`String "?_k="), dummy_pos;
-                 apply dummy_pos "pickleCont" [`FunLit ([[]], href), dummy_pos]]))
+                 apply dummy_pos "pickleCont" [`FunLit (None, ([[]], href)), dummy_pos]]))
               :: rest 
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
       in 
@@ -51,7 +51,7 @@ let desugar_laction : phrasenode -> phrasenode = function
                     ["type",  [`Constant (`String "hidden"), dummy_pos];
                      "name",  [`Constant (`String "_k"), dummy_pos];
                      "value", [apply dummy_pos "pickleCont"
-                                 [`FunLit ([[]], laction), dummy_pos]]],
+                                 [`FunLit (None, ([[]], laction)), dummy_pos]]],
                     None,
                     []), dummy_pos
             and action = ("action", [`Constant (`String "#"), dummy_pos]) 
@@ -67,7 +67,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
     | (name, [rhs]) ->
         let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
           `TupleLit [`Constant (`String event), pos;
-                     `FunLit ([[(`Variable ([], ("event", None, pos)), pos), None]], rhs), pos], pos
+                     `FunLit (None, ([[`Variable ([], ("event", None, pos)), pos]], rhs)), pos], pos
     | _ -> assert false
   in function
     | `Xml (tag, attrs, attrexp, children)
@@ -101,7 +101,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     p', !lnames
       
 let let_in pos name rhs body : phrase = 
-  `Block ([`Val ([], ((`Variable ([], (name,None,pos)), pos), None), rhs, `Unknown, None), pos], body), pos
+  `Block ([`Val ([], (`Variable ([], (name,None,pos)), pos), rhs, `Unknown, None), pos], body), pos
     
 let bind_lname_vars lnames = function
   | "l:action" as attr, es -> 

@@ -940,7 +940,7 @@ module Desugarer =
    let desugar_expression (e : phrase) : untyped_expression =
      let rec desugar' ((s, pos') : phrase) : untyped_expression =
        let pos = `U (lookup_pos pos')
-       and patternize = fst ->- simple_pattern_of_pattern in
+       and patternize = simple_pattern_of_pattern in
        let appPrim = appPrim pos in
        let desugar = desugar' in
          match (s : phrasenode) with
@@ -976,14 +976,14 @@ module Desugarer =
            | `Escape ((name,_,_), e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn e -> desugar 
-               (`FnAppl ((`Var "spawn", pos'), [`FunLit ([[]], e),  pos']), pos')
+               (`FnAppl ((`Var "spawn", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
            | `SpawnWait e -> desugar 
-               (`FnAppl ((`Var "spawnWait", pos'), [`FunLit ([[]], e),  pos']), pos')
+               (`FnAppl ((`Var "spawnWait", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
            | `Section (`Project name) -> (let var = unique_name () in
-                                            desugar (`FunLit ([[(`Variable ([], (var, None, pos')), pos'), None]], 
-                                                              (`Projection ((`Var var, pos'), name), pos')), pos'))
+                                            desugar (`FunLit (None, ([[`Variable ([], (var, None, pos')), pos']], 
+                                                                     (`Projection ((`Var var, pos'), name), pos'))), pos'))
            | `Section (`Name name) -> Variable (name, pos)
            | `Conditional (e1, e2, e3) -> Condition (desugar e1, desugar e2, desugar e3, pos)
            | `Projection (e, name) ->
@@ -1014,22 +1014,22 @@ module Desugarer =
                                          [desugar lo; desugar hi], pos)
            | `ListLit  ([], _) -> Nil (pos)
            | `ListLit  (e::es, t) -> Concat (List_of (desugar e, pos), desugar (`ListLit (es, t), pos'), pos)
-           | `DBDelete ((pattern, _), table, condition) ->
+           | `DBDelete (pattern, table, condition) ->
                let t = unique_name () in
                let r = unique_name () in
                let tv = `Var t, pos' in
                let rv = `Var r, pos' in
                let generator =
-                 `Table (((`As (([], (r,None,pos')), pattern), pos'), None), tv) in
+                 `Table ((`As (([], (r,None,pos')), pattern), pos'), tv) in
                let rows = `Iteration ([generator], (`ListLit ([rv], None), pos'), condition, None), pos' in
                  desugar (
-                   `Block ((([`Val ([], ((`Variable ([], (t,None,pos')), pos'), None), table, `Unknown, None), pos'])),
+                   `Block ((([`Val ([], (`Variable ([], (t,None,pos')), pos'), table, `Unknown, None), pos'])),
                            (`FnAppl ((`Var "deleterows", pos'), [tv; rows]), pos')), pos')
            | `DBInsert (table, rows, None) -> 
                desugar (`FnAppl ((`Var "insertrows", pos'), [table; rows]), pos')
            | `DBInsert (table, rows, Some field) -> 
                desugar (`FnAppl ((`Var "InsertReturning", pos'), [table; rows; field]), pos')
-           | `DBUpdate ((pattern, _), table, condition, row) ->
+           | `DBUpdate (pattern, table, condition, row) ->
                let t = unique_name () in
                let r = unique_name () in
 
@@ -1037,7 +1037,7 @@ module Desugarer =
                let rv = ((`Var r), pos') in
 
                let generator =
-                 `Table (((`As (([], (r,None,pos')), pattern), pos'), None), tv) in
+                 `Table ((`As (([], (r,None,pos')), pattern), pos'), tv) in
                let body = 
                  (`ListLit
                     ([(`TupleLit
@@ -1046,7 +1046,7 @@ module Desugarer =
                let row_pairs = `Iteration ([generator], body, condition, None), pos'
                in      
                  desugar (
-                   `Block ([`Val ([], ((`Variable ([], (t,None,pos')), pos'), None), table, `Unknown, None), pos'],
+                   `Block ([`Val ([], (`Variable ([], (t,None,pos')), pos'), table, `Unknown, None), pos'],
                            (`FnAppl ((`Var "updaterows", pos'), [tv; row_pairs]), pos')), pos')
            | `DatabaseLit (name, (opt_driver, opt_args)) ->
                let e =
@@ -1075,7 +1075,7 @@ module Desugarer =
 
            | `FnAppl (fn, ps) -> Apply (desugar fn, List.map desugar ps, pos)
            | `TAppl (e, qs) -> desugar e
-           | `FunLit (patterns_lists, body) -> 
+           | `FunLit (_, (patterns_lists, body)) -> 
                let patternized = List.map (List.map patternize) patterns_lists in
                ignore (List.fold_left
                          (List.fold_left check_for_duplicate_names')
@@ -1111,7 +1111,7 @@ module Desugarer =
                                  [(patternize p, desugar e, pos, false)]
                              | `Fun ((_, (n,_,_)), funlit, _, _) (* TODO: use datatype, if any *) -> 
                                  [((`Variable n, pos), 
-                                   desugar (`FunLit funlit, pos'),
+                                   desugar (`FunLit (None, funlit), pos'),
                                    pos, 
                                    true)]
                              | `Exp expr -> 
@@ -1123,7 +1123,7 @@ module Desugarer =
                                  List.map 
                                    (fun ((_, (n,_,_)), funlit, _, _) ->
                                       ((`Variable n, pos), 
-                                       desugar (`FunLit funlit, pos'),
+                                       desugar (`FunLit (None, funlit), pos'),
                                        pos, 
                                        true)) defs
                              | `Type _    -> assert false
@@ -1266,13 +1266,13 @@ module Desugarer =
      let pos = `U (lookup_pos pos') in
      let desugar_expression = desugar_expression in
      let ds : bindingnode -> _ Syntax.definition' list = function
-       | `Val (_, ((`Variable (_, (name,_,_)), _), _), p, location, None) ->
+       | `Val (_, (`Variable (_, (name,_,_)), _), p, location, None) ->
            [Define (name, desugar_expression p, location, pos)]
-       | `Val (_, ((`Variable (_, (name,_,_)), _), _), p, location, Some (_, Some t)) ->
+       | `Val (_, (`Variable (_, (name,_,_)), _), p, location, Some (_, Some t)) ->
            [Define (name, HasType (desugar_expression p, t, pos), location, pos)]
        | `Val _ -> assert false (* TODO: handle other patterns *)
        | `Fun ((_, (name,_,_)), funlit, location, dt) ->
-           [Define (name, Rec ([name, desugar_expression (`FunLit funlit, pos'), 
+           [Define (name, Rec ([name, desugar_expression (`FunLit (None, funlit), pos'), 
                                 opt_map (fun (_, Some t) -> t) dt],
                                Variable (name, pos),
                                pos),
@@ -1287,7 +1287,7 @@ module Desugarer =
            List.map 
              (fun ((_, (n,_,_)), funlit, location, ft) ->
                 Define (n, Rec ([n,
-                                 desugar_expression (`FunLit funlit, pos'),
+                                 desugar_expression (`FunLit (None, funlit), pos'),
                                  opt_map (snd ->- val_of) ft],
                                 Variable (n, pos), pos), location, pos))
              defs

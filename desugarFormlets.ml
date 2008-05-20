@@ -16,11 +16,11 @@ let make_links_list pos elems =
     an XML element having the given tag name and attributes. *)
 let make_xml_context tag (attrs:(string * phrase) list) pos : phrase = 
   let hole = gensym () in
-    `FunLit (([[(`Variable ([], (hole, None, pos)), pos), None]]), 
-             (`Xml (tag, 
-                    List.map (fun (s,a) -> s, [a]) attrs,
-                    None,
-                    [`Var hole, pos]), pos)), pos
+    `FunLit (None, ([[`Variable ([], (hole, None, pos)), pos]], 
+                    (`Xml (tag, 
+                           List.map (fun (s,a) -> s, [a]) attrs,
+                           None,
+                           [`Var hole, pos]), pos))), pos
 
 let rec has_form_binding = function
   | `Xml (_, _, _, subnodes),_ -> List.exists has_form_binding subnodes
@@ -30,7 +30,7 @@ let rec has_form_binding = function
 let rec forest_to_form_expr trees yieldsClause 
     (pos:Sugartypes.position) 
     (trees_ppos:Sugartypes.position)
-    : (Sugartypes.phrase * Sugartypes.typattern list list) = 
+    : (Sugartypes.phrase * Sugartypes.pattern list list) = 
   (* We pass over the forest finding the bindings and construct a
      term-context representing all of the form/yields expression
      except the `yields' part (the handler). Here bindings
@@ -55,10 +55,10 @@ let rec forest_to_form_expr trees yieldsClause
   let handlerBody, bindings, returning_bindings = 
     match yieldsClause with
         Some formHandler -> 
-          formHandler, bindings, ([]:Sugartypes.typattern list list)
+          formHandler, bindings, ([]:Sugartypes.pattern list list)
       | None ->
-          let fresh_bindings = List.map (List.map (fun ((_, ppos), _) -> (`Variable ([], (Utility.gensym (), None, ppos)), ppos), None)) bindings in
-          let variables = List.map (fun ((`Variable ([], (x,_,_)), ppos), _) -> `Var x, ppos) (List.flatten fresh_bindings) in
+          let fresh_bindings = List.map (List.map (fun (_, ppos) -> `Variable ([], (Utility.gensym (), None, ppos)), ppos)) bindings in
+          let variables = List.map (fun (`Variable ([], (x,_,_)), ppos) -> `Var x, ppos) (List.flatten fresh_bindings) in
             ((`TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos, None)),
              fresh_bindings,
              [flatten bindings])
@@ -69,13 +69,13 @@ let rec forest_to_form_expr trees yieldsClause
     (* Note: trees_ppos will become the position for each tuple;
        the position of the tuple is what's reported when duplicate
        bindings are present within one form. *)
-  let handlerFunc  =  `FunLit (map (function
-                                     | [b] -> [b]
-                                     | bs -> [(`Tuple (List.map fst bs), trees_ppos), None]) (rev bindings),
-                              handlerBody), trees_ppos in
+  let handlerFunc  =  `FunLit (None, (map (function
+                                             | [b] -> [b]
+                                             | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
+                                      handlerBody)), trees_ppos in
     ctxt (`FnAppl ((`Var "pure", pos), [handlerFunc]), pos), returning_bindings
       
-and desugar_form_expr (formExpr, pos) : Sugartypes.phrase * typattern list list =
+and desugar_form_expr (formExpr, pos) : Sugartypes.phrase * pattern list list =
     if not (has_form_binding (formExpr, pos)) then
       (`FnAppl ((`Var "xml", pos), [formExpr, pos]), pos), [[]]
     else

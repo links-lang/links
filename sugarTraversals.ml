@@ -151,7 +151,7 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
-      | `FunLit _x -> let _x = o#funlit _x in `FunLit _x
+      | `FunLit (_x, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x_i1)
       | `Spawn _x -> let _x = o#phrase _x in `Spawn _x
       | `SpawnWait _x -> let _x = o#phrase _x in `SpawnWait _x
       | `ListLit (_x, _x_i1) ->
@@ -229,7 +229,7 @@ class map =
           let _x_i1 =
             o#list
               (fun o (_x, _x_i1) ->
-                 let _x = o#typattern _x in
+                 let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
@@ -238,7 +238,7 @@ class map =
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
-                 let _x = o#typattern _x in
+                 let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
@@ -268,7 +268,7 @@ class map =
               _x_i2 in
           let _x_i3 = o#phrase _x_i3 in `TableLit ((_x, (y, z), _x_i2, _x_i3))
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
-          let _x = o#typattern _x in
+          let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2
           in `DBDelete ((_x, _x_i1, _x_i2))
@@ -277,7 +277,7 @@ class map =
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in `DBInsert ((_x, _x_i1, _x_i2))
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let _x = o#typattern _x in
+          let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
           let _x_i3 =
@@ -311,7 +311,7 @@ class map =
       | `PagePlacement _x -> let _x = o#phrase _x in `PagePlacement _x
       | `FormBinding ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#typattern _x_i1 in `FormBinding ((_x, _x_i1))
+          let _x_i1 = o#pattern _x_i1 in `FormBinding ((_x, _x_i1))
       
     method phrase : phrase -> phrase =
       fun (_x, _x_i1) ->
@@ -357,10 +357,6 @@ class map =
         let _x = o#patternnode _x in
         let _x_i1 = o#position _x_i1 in (_x, _x_i1)
 
-    method typattern : typattern -> typattern =
-      fun (_x, _x_i1) ->
-        let _x = o#pattern _x in (_x, _x_i1)
-      
     method operator : operator -> operator =
       function
       | (#unary_op as x) -> (o#unary_op x :> operator)
@@ -379,15 +375,15 @@ class map =
     method iterpatt : iterpatt -> iterpatt =
       function
       | `List ((_x, _x_i1)) ->
-          let _x = o#typattern _x in
+          let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in `List ((_x, _x_i1))
       | `Table ((_x, _x_i1)) ->
-          let _x = o#typattern _x in
+          let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in `Table ((_x, _x_i1))
       
     method funlit : funlit -> funlit =
       fun (_x, _x_i1) ->
-        let _x = o#list (fun o -> o#list (fun o -> o#typattern)) _x in
+        let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
       
     method fieldspec : fieldspec -> fieldspec =
@@ -458,7 +454,7 @@ class map =
     method bindingnode : bindingnode -> bindingnode =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let _x_i1 = o#typattern _x_i1 in
+          let _x_i1 = o#pattern _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
@@ -641,7 +637,7 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
-      | `FunLit _x -> let o = o#funlit _x in o
+      | `FunLit (_x, _x_i1) -> let o = o#funlit _x_i1 in o
       | `Spawn _x -> let o = o#phrase _x in o
       | `SpawnWait _x -> let o = o#phrase _x in o
       | `ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
@@ -703,7 +699,7 @@ class fold =
           let o =
             o#list
               (fun o (_x, _x_i1) ->
-                 let o = o#typattern _x in let o = o#phrase _x_i1 in o)
+                 let o = o#pattern _x in let o = o#phrase _x_i1 in o)
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
@@ -711,7 +707,7 @@ class fold =
           let o =
             o#list
               (fun o (_x, _x_i1) ->
-                 let o = o#typattern _x in let o = o#phrase _x_i1 in o)
+                 let o = o#pattern _x in let o = o#phrase _x_i1 in o)
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
@@ -739,13 +735,13 @@ class fold =
               _x_i2 in
           let o = o#phrase _x_i3 in o
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
-          let o = o#typattern _x in
+          let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in o
       | `DBInsert ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in let o = o#phrase _x_i1 in let o = o#option (fun o -> o#phrase) _x_i2 in o
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let o = o#typattern _x in
+          let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in
           let o =
@@ -773,7 +769,7 @@ class fold =
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
       | `PagePlacement _x -> let o = o#phrase _x in o
       | `FormBinding ((_x, _x_i1)) ->
-          let o = o#phrase _x in let o = o#typattern _x_i1 in o
+          let o = o#phrase _x in let o = o#pattern _x_i1 in o
       
     method phrase : phrase -> 'self_type =
       fun (_x, _x_i1) ->
@@ -810,10 +806,6 @@ class fold =
       fun (_x, _x_i1) ->
         let o = o#patternnode _x in let o = o#position _x_i1 in o
 
-    method typattern : typattern -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#pattern _x in o
-      
     method operator : operator -> 'self_type =
       function
       | (#unary_op as x) -> o#unary_op x
@@ -832,13 +824,13 @@ class fold =
     method iterpatt : iterpatt -> 'self_type =
       function
       | `List ((_x, _x_i1)) ->
-          let o = o#typattern _x in let o = o#phrase _x_i1 in o
+          let o = o#pattern _x in let o = o#phrase _x_i1 in o
       | `Table ((_x, _x_i1)) ->
-          let o = o#typattern _x in let o = o#phrase _x_i1 in o
+          let o = o#pattern _x in let o = o#phrase _x_i1 in o
       
     method funlit : funlit -> 'self_type =
       fun (_x, _x_i1) ->
-        let o = o#list (fun o -> o#list (fun o -> o#typattern)) _x in
+        let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let o = o#phrase _x_i1 in o
       
     method fieldspec : fieldspec -> 'self_type =
@@ -901,7 +893,7 @@ class fold =
     method bindingnode : bindingnode -> 'self_type =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let o = o#typattern _x_i1 in
+          let o = o#pattern _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
@@ -1103,7 +1095,7 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `FunLit _x -> let (o, _x) = o#funlit _x in (o, (`FunLit _x))
+      | `FunLit (_x, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x_i1)))
       | `Spawn _x -> let (o, _x) = o#phrase _x in (o, (`Spawn _x))
       | `SpawnWait _x -> let (o, _x) = o#phrase _x in (o, (`SpawnWait _x))
       | `ListLit (_x, _x_i1) ->
@@ -1186,7 +1178,7 @@ class fold_map =
           let (o, _x_i1) =
             o#list
               (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#typattern _x in
+                 let (o, _x) = o#pattern _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
@@ -1195,7 +1187,7 @@ class fold_map =
           let (o, _x) =
             o#list
               (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#typattern _x in
+                 let (o, _x) = o#pattern _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
@@ -1232,7 +1224,7 @@ class fold_map =
           let (o, _x_i3) = o#phrase _x_i3
           in (o, (`TableLit ((_x, _x_i1, _x_i2, _x_i3))))
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#typattern _x in
+          let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
           in (o, (`DBDelete ((_x, _x_i1, _x_i2))))
@@ -1242,7 +1234,7 @@ class fold_map =
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
           in (o, (`DBInsert ((_x, _x_i1, _x_i2))))
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let (o, _x) = o#typattern _x in
+          let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
           let (o, _x_i3) =
@@ -1278,7 +1270,7 @@ class fold_map =
           let (o, _x) = o#phrase _x in (o, (`PagePlacement _x))
       | `FormBinding ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#typattern _x_i1
+          let (o, _x_i1) = o#pattern _x_i1
           in (o, (`FormBinding ((_x, _x_i1))))
       
     method phrase : phrase -> ('self_type * phrase) =
@@ -1326,10 +1318,6 @@ class fold_map =
         let (o, _x) = o#patternnode _x in
         let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
 
-    method typattern : typattern -> ('self_type * typattern) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#pattern _x in (o, (_x, _x_i1))
-
     method operator : operator -> ('self_type * operator) =
       function
       | (#unary_op as x) -> (o#unary_op x :> 'self_type * operator)
@@ -1348,15 +1336,15 @@ class fold_map =
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
       | `List ((_x, _x_i1)) ->
-          let (o, _x) = o#typattern _x in
+          let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (`List ((_x, _x_i1))))
       | `Table ((_x, _x_i1)) ->
-          let (o, _x) = o#typattern _x in
+          let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (`Table ((_x, _x_i1))))
       
     method funlit : funlit -> ('self_type * funlit) =
       fun (_x, _x_i1) ->
-        let (o, _x) = o#list (fun o -> o#list (fun o -> o#typattern)) _x in
+        let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
       
     method fieldspec : fieldspec -> ('self_type * fieldspec) =
@@ -1440,7 +1428,7 @@ class fold_map =
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let (o, _x_i1) = o#typattern _x_i1 in
+          let (o, _x_i1) = o#pattern _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
