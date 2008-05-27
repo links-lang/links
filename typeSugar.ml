@@ -1652,27 +1652,34 @@ and type_binding : context -> binding -> binding * context =
                 else
                   ([], bt), erase_pat pat, penv
           in
-(*
-            if Env.has penv "input" then
-              Debug.print ("input: " ^ Types.string_of_datatype (Env.lookup penv "input"))
-            else
-              ();
-*)
             `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
-      | `Fun ((_, (name, _, pos)), (pats, body), location, t) ->
+      | `Fun (((_, (name,_,pos)), (pats, body), location, t) as def) ->
           let pats = List.map (List.map tpc) pats in
-          let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
-          let {var_env = body_env} = List.fold_left fold_in_envs context pats in
+          let ft = make_ft pats (Types.fresh_type_variable ()) in
+          let fb = match t with
+                   | None -> ft
+                   | Some (_, Some t) ->
+                       let _quantifiers, fb = Utils.generalise context.var_env t in
+                         (* make sure the annotation has the right shape *)
+                       let () = unify ~handle:Errors.bind_rec_annotation (no_pos ft, no_pos (snd (Instantiate.typ fb))) in
+                         fb in
+          let body_env = Env.bind context.var_env (name, fb) in
+          let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+          let context' = List.fold_left fold_in_envs {context with var_env = body_env} pats in
           let mt = Types.fresh_type_variable () in
-          let body = type_check (bind_var context (mailbox, mt)) body in
+          let body = type_check (bind_var context' (mailbox, mt)) body in
           let ft = make_ft pats (typ body) in
-          let () = opt_iter (fun (_,t) ->
-                               opt_iter
-                                 (fun t -> unify ~handle:Errors.bind_fun_annotation (no_pos ft, no_pos t)) t) t in            
-          let (tyvars, ft) = Utils.generalise context.var_env ft in
-            (`Fun ((tyvars, (name, Some ft, pos)), (List.map (List.map erase_pat) pats, erase body), location, t),
-             bind_var empty_context  (name, ft))
+          let ft' =
+              (* WARNING: this looks surprising, but it is what we want *)
+            match Env.lookup context'.var_env name with
+              | `ForAll (_, t) | t -> t in
+          let () = unify ~handle:Errors.bind_rec_rec (no_pos ft, no_pos ft') in
+          let tyvars, t' = Utils.generalise context.var_env fb in
+            (`Fun ((tyvars, (name, Some t', pos)),
+                   (List.map (List.map erase_pat) pats, erase body),
+                   location, t),
+             {empty_context with var_env = Env.bind Env.empty (name, t')})
       | `Funs defs ->
           (*
             Compute initial types for the functions using
