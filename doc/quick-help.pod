@@ -608,7 +608,8 @@ readonly. To assign to the variable C<t> the table "people" with
 fields C<id> of type Int and C<name> of type String where C<id> is
 readonly, write:
 
-  var t = table "people" with (id:Int, name:String) where id readonly from db;
+  var t = table "people" with (id:Int, name:String) 
+                         where id readonly from db;
 
 The variable C<t> has type C<TableHandle((id:Int, name:String),
 (name:String))>, as the C<id> field is C<readonly>.
@@ -789,8 +790,10 @@ with the types of various values. For example:
     links> Blue(7);
     Blue(7) : [|Blue:Int | a|]
 
-    links> [(42, "The answer"), (7, "The number of wonders of the world")];
-    [(42, "The answer"), (7, "The number of wonders of the world")] : [(Int, String)]
+    links> [(42, "The answer"),
+            (7, "The number of wonders of the world")];
+    [(42, "The answer"), (7, "The number of wonders of the world")] 
+      : [(Int, String)]
 
 Note that the type of an integer sum is Int, and the type of a string
 is String. The I<pair> C<(42, "The answer")> has a type that indicates
@@ -1499,6 +1502,11 @@ runs a program. The functions it defines are explained below.
 =head2 List utilities
 
 =over 4
+
+=item *
+length : ([b]) -> Int
+
+Returns the number of elements in the given list.
 
 =item *
 all : (a->Bool, [a]) -> Bool
