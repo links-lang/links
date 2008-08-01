@@ -1027,7 +1027,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                     let row = Types.make_empty_closed_row () in
                       row, row, Env.empty
                 | Some r ->
-                    let make_row typ =
+                    let make_closed_row typ =
                       let row = 
                         List.fold_right
                           (fun (label, _) -> Types.row_with (label, `Absent))
@@ -1037,7 +1037,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                       in
                         row
                     in                      
-                      make_row ot, make_row it, env r in
+                      make_closed_row ot, make_closed_row it, env r in
             let rtype typ initial =
               `Record (List.fold_right
                          (fun (l, f) -> Types.row_with (l, `Present (typ f)))

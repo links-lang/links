@@ -507,7 +507,7 @@ let rec generate_value env : value -> code =
           Call (Var "LINKS.project", [gv v; strlit name])
       | `Erase (name, v) ->
           Call (Var "LINKS.erase", [gv v; strlit name])
-      | `Inject (name, v) ->
+      | `Inject (name, v, _t) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
       | `TApp (v, _) ->

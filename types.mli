@@ -151,7 +151,7 @@ val is_tuple : ?allow_onetuples:bool -> row -> bool
 val get_row_var : row -> int option
 
 (** building rows *)
-val make_row : datatype field_env -> row
+val make_closed_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 

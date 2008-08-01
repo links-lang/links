@@ -175,7 +175,7 @@ module Eval = struct
            | `Record fields when List.mem_assoc label fields ->
                `Record (List.remove_assoc label fields)
            | _ -> eval_error "Error erasing label %s" label)
-    | `Inject (label, v) -> `Variant (label, value env v)
+    | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TApp (v, _) -> value env v
     | `XmlNode (tag,attrs,children) -> 
         let children = 

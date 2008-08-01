@@ -434,6 +434,10 @@ let arrange_record_clauses
 let apply_annotation : value -> annotation * bound_computation -> bound_computation =
   fun v (annotation, body) env ->
     let dummy t = Var.fresh_binder_of_type t in
+    let massage t =
+      function
+        | `Inject (name, v, _) -> `Inject (name, v, t)
+        | v -> v in
     let env, bs =
       List.fold_right
         (fun a (env, bs) ->
@@ -441,9 +445,11 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
              | `Binder b ->
                  let var = Var.var_of_tybinder b in
                  let t = Var.type_of_tybinder b in
+                 let v = massage t v in
                    bind_type var t env, letv (b, v)::bs
              | `Type t ->
-                 env, (letmv (dummy t, `Coerce (v, t)))::bs
+                 let v = massage t v in
+                   env, (letmv (dummy t, `Coerce (v, t)))::bs
              | `Type _ -> assert false)
         annotation
         (env, [])
@@ -538,11 +544,28 @@ and match_list
                   nil_branch (),
                   cons_branch()))
 
+
+(*
+  DODGEYNESS: 
+
+  I'm not sure if injections are being given the correct type
+  argument in match_variant and match_negative.
+
+  RESOLUTION:
+
+  Aha... the types in the injections are never actually used when the
+  injections are used for context optimisations, so it doesn't
+  matter in these cases.
+
+  Hmm... but there remains another case where the injection is used in
+  apply_annotations. We deal with this by massaging the value to have
+  the correct type in apply_annotations.
+*)
+
 and match_variant
     : var list -> (annotated_clause list) StringMap.t -> bound_computation -> var -> bound_computation =
   fun vars bs def var env ->
     let t = lookup_type var env in
-    let inject var name = `Inject (name, `Variable var) in
 
     let context, cexp =
       if mem_context var env then             
@@ -554,10 +577,10 @@ and match_variant
         | `Variant name ->
             if StringMap.mem name bs then
               match cexp with
-                | `Inject (_, `Variable (case_variable)) ->
+                | `Inject (_, (`Variable case_variable), _) ->
                     let annotated_clauses = StringMap.find name bs in
                     let case_type = lookup_type case_variable env in
-                    let inject_type = TypeUtils.inject_type name case_type in
+                      (*                    let inject_type = TypeUtils.inject_type name case_type in *)
                     let clauses = apply_annotations cexp annotated_clauses in                           
                       match_cases (case_variable::vars) clauses def env
                 | _ -> assert false
@@ -571,11 +594,17 @@ and match_variant
                      (cases, cs)
                    else
                      let case_type = TypeUtils.variant_at name t in
-                     let inject_type = TypeUtils.inject_type name case_type in
+(*                     let inject_type = TypeUtils.inject_type name case_type in *)
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
-                     let match_env = bind_context var (`Variant name, inject case_variable name) match_env in
-                     let clauses = apply_annotations (inject case_variable name) annotated_clauses in                           
+                     let match_env =
+                       bind_context var
+                         (`Variant name,
+                          `Inject (name, `Variable case_variable, t)) match_env in
+                     let clauses =
+                       apply_annotations
+                         (`Inject (name, `Variable case_variable, t)) annotated_clauses
+                     in                           
                        (StringMap.add name
                           (case_binder,
                            match_cases (case_variable::vars) clauses def match_env) cases,
@@ -610,7 +639,6 @@ and match_negative
     : var list -> clause -> bound_computation -> var -> bound_computation =
   fun vars clause def var env ->
     let t = lookup_type var env in
-    let inject var name = `Inject (name, `Variable var) in
     let ((annotation, pattern)::ps, body) = clause in
       match pattern with
         | `Negative names ->
@@ -635,11 +663,15 @@ and match_negative
                         StringSet.fold
                           (fun name cases ->
                              let case_type = TypeUtils.variant_at name t in
-                             let inject_type = TypeUtils.inject_type name case_type in
+(*                             let inject_type = TypeUtils.inject_type name case_type in *)
                              let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                              let match_env = bind_type case_variable case_type env in
-                             let match_env = bind_context var (`Variant name, inject case_variable name) match_env in
-                               StringMap.add name (case_binder, def match_env) cases)
+                             let match_env =
+                               bind_context var
+                                 (`Variant name,
+                                  `Inject (name, `Variable case_variable, t)) match_env
+                             in
+                               StringMap.add name (case_binder, def match_env) cases) 
                           diff
                           StringMap.empty in
                       let default_type =
@@ -715,8 +747,8 @@ and match_record
         (fun (bs, _, _) names ->
            StringMap.fold (fun name _ names -> StringSet.add name names) bs names) xs StringSet.empty in
     let all_closed = List.for_all (function
-                                 | (_, None, _) -> true
-                                 | (_, Some _, _) -> false) xs in
+                                     | (_, None, _) -> true
+                                     | (_, Some _, _) -> false) xs in
     let annotated_clauses =
       List.fold_right
         (fun (bs, p, (annotation, (ps, body))) annotated_clauses ->

@@ -43,7 +43,7 @@ type value =
   | `Extend of (value name_map * value option)
   | `Project of (name * value)
   | `Erase of (name * value)
-  | `Inject of (name * value)
+  | `Inject of (name * value * Types.datatype)
 
   | `TApp of value * tyarg list
 
@@ -276,9 +276,9 @@ struct
 (*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
 (*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
               `Erase (name, v), t, o
-        | `Inject (name, v) ->
-            let v, t, o = o#value v in
-              `Inject (name, v), inject_type name t, o
+        | `Inject (name, v, t) ->
+            let v, _vt, o = o#value v in
+              `Inject (name, v, t), t, o
         | `TApp (v, ts) ->
             let v, t, o = o#value v in
               `TApp (v, ts), t, o
@@ -475,7 +475,7 @@ struct
     function
       | v when is_atom v -> true
       | `Project (_, v)
-      | `Inject (_, v) -> is_inlineable_value v
+      | `Inject (_, v, _) -> is_inlineable_value v
       | _ -> false
 
   let inliner tyenv env =

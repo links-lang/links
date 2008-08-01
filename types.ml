@@ -1060,11 +1060,11 @@ let extend_row fields (fields', row_var) =
      fields',
    row_var)
 
-let make_row fields =
+let make_closed_row fields =
   (FieldEnv.map (fun t -> `Present t) fields), closed_row_var
 
-let make_record_type ts = `Record (make_row ts)
-let make_variant_type ts = `Variant (make_row ts)
+let make_record_type ts = `Record (make_closed_row ts)
+let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w) = `Table (r, w)
 

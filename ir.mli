@@ -30,7 +30,7 @@ type value =
   | `Extend of value name_map * value option
   | `Project of name * value
   | `Erase of name * value    (* should be implemented using coerce *) 
-  | `Inject of name * value
+  | `Inject of name * value * Types.datatype
 
   | `TApp of value * tyarg list
 

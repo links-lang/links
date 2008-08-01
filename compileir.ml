@@ -329,7 +329,7 @@ struct
 
 
   let inject (name, s, t) =
-    bind s (fun v -> lift (`Inject (name, v), t))
+    bind s (fun v -> lift (`Inject (name, v, t), t))
   let case (s, name, (cinfo, cbody), default) =
     bind s (fun v ->
               let cb, c = Var.fresh_var cinfo in
