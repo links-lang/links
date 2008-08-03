@@ -152,8 +152,8 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.datatype) list) option * funlit
-| `Spawn            of phrase
-| `SpawnWait        of phrase
+| `Spawn            of phrase * Types.datatype option
+| `SpawnWait        of phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
@@ -263,8 +263,8 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn p
-    | `SpawnWait p
+    | `Spawn (p, _)
+    | `SpawnWait (p, _)
     | `TAppl (p, _)
     | `FormBinding (p, _)
     | `Projection (p, _)

@@ -975,9 +975,9 @@ module Desugarer =
            | `ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
            | `Escape ((name,_,_), e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
-           | `Spawn e -> desugar 
+           | `Spawn (e, _) -> desugar 
                (`FnAppl ((`Var "spawn", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
-           | `SpawnWait e -> desugar 
+           | `SpawnWait (e, _) -> desugar 
                (`FnAppl ((`Var "spawnWait", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)

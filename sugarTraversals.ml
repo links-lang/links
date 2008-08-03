@@ -152,8 +152,8 @@ class map =
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
       | `FunLit (_x, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x_i1)
-      | `Spawn _x -> let _x = o#phrase _x in `Spawn _x
-      | `SpawnWait _x -> let _x = o#phrase _x in `SpawnWait _x
+      | `Spawn (_x, _x_i1) -> let _x = o#phrase _x in `Spawn (_x, _x_i1)
+      | `SpawnWait (_x, _x_i1) -> let _x = o#phrase _x in `SpawnWait (_x, _x_i1)
       | `ListLit (_x, _x_i1) ->
           let _x = o#list (fun o -> o#phrase) _x in `ListLit (_x, _x_i1)
       | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
@@ -638,8 +638,8 @@ class fold =
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
       | `FunLit (_x, _x_i1) -> let o = o#funlit _x_i1 in o
-      | `Spawn _x -> let o = o#phrase _x in o
-      | `SpawnWait _x -> let o = o#phrase _x in o
+      | `Spawn (_x, _x_i1) -> let o = o#phrase _x in o
+      | `SpawnWait (_x, _x_i1) -> let o = o#phrase _x in o
       | `ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
       | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#list (fun o -> o#iterpatt) _x in
@@ -1096,8 +1096,8 @@ class fold_map =
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
       | `FunLit (_x, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x_i1)))
-      | `Spawn _x -> let (o, _x) = o#phrase _x in (o, (`Spawn _x))
-      | `SpawnWait _x -> let (o, _x) = o#phrase _x in (o, (`SpawnWait _x))
+      | `Spawn (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`Spawn (_x, _x_i1)))
+      | `SpawnWait (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`SpawnWait (_x, _x_i1)))
       | `ListLit (_x, _x_i1) ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`ListLit (_x, _x_i1)))
       | `RangeLit ((_x_i1, _x_i2)) ->

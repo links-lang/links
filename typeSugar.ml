@@ -1340,14 +1340,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                          List.map (fun (n,(p,_)) -> n, p) set), Types.unit_type
 
         (* concurrency *)
-        | `Spawn p ->
+        | `Spawn (p, _) ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Errors.spawn_process
               ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context (mailbox, pid_type)) p in
-              `Spawn (erase p), pid_type
-        | `SpawnWait p ->
+              `Spawn (erase p, Some pid_type), pid_type
+        | `SpawnWait (p, _) ->
             (* (() -{b}-> d) -> d *)
             let return_type = Types.fresh_type_variable () in
             let pid_type = Types.fresh_type_variable () in
@@ -1355,7 +1355,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
             let p = type_check (bind_var context  (mailbox, pid_type)) p in
               unify ~handle:Errors.spawn_wait_return (no_pos return_type, no_pos (typ p));
-              `SpawnWait (erase p), return_type
+              `SpawnWait (erase p, Some pid_type), return_type
         | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type context.var_env in

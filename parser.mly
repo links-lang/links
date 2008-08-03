@@ -307,8 +307,8 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN block                                                  { `Spawn (`Block $2, pos()), pos () }
-| SPAWNWAIT block                                              { `SpawnWait (`Block $2, pos()), pos () }
+| SPAWN block                                                  { `Spawn ((`Block $2, pos()), None), pos () }
+| SPAWNWAIT block                                              { `SpawnWait ((`Block $2, pos()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
