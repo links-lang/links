@@ -1250,8 +1250,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let argss, ftype = 
               List.fold_right
                 (fun pat (argss, rtype) ->
-                   let args = List.map pattern_typ pat in
-                     args::argss, `Function (Types.make_tuple_type args, Types.fresh_type_variable (), rtype))
+                   let args = Types.make_tuple_type (List.map pattern_typ pat) in
+                   let mb = Types.fresh_type_variable () in
+                     (args, mb)::argss, `Function (args, mb, rtype))
                 pats ([], typ body) in
               `FunLit (Some argss, (List.map (List.map erase_pat) pats, erase body)), ftype
 

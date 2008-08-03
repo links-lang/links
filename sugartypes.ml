@@ -151,7 +151,7 @@ and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of (Types.datatype list list) option * funlit
+| `FunLit           of ((Types.datatype * Types.datatype) list) option * funlit
 | `Spawn            of phrase
 | `SpawnWait        of phrase
 | `RangeLit         of (phrase * phrase)
