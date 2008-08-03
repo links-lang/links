@@ -108,3 +108,23 @@ let app_type _ _ = assert false
 let quantifiers t = match concrete_type t with
   | `ForAll (qs, _) -> qs
   | _ -> []
+
+let record_without t names =
+  match concrete_type t with
+    | `Record ((fields, row_var) as row) ->
+        if is_closed_row row then
+          `Record
+            (StringSet.fold (fun name fields -> StringMap.remove name fields) names fields,
+             row_var)
+        else
+          `Record
+            (StringMap.mapi
+               (fun name t ->
+                  if StringSet.mem name names then
+                    `Absent
+                  else
+                    t)
+               fields,
+             row_var)
+    | _ -> assert false
+
