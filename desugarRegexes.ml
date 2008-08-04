@@ -1,9 +1,9 @@
 open Sugartypes
 
 let desugar_repeat : Regex.repeat -> phrasenode = function
-  | Regex.Star      -> `ConstructorLit ("Star"     , None)
-  | Regex.Plus      -> `ConstructorLit ("Plus"     , None)
-  | Regex.Question  -> `ConstructorLit ("Question" , None)
+  | Regex.Star      -> `ConstructorLit ("Star"     , None, None)
+  | Regex.Plus      -> `ConstructorLit ("Plus"     , None, None)
+  | Regex.Question  -> `ConstructorLit ("Question" , None, None)
       
 let desugar_regex pos : regex -> phrasenode = 
   (* Desugar a regex, making sure that only variables are embedded
@@ -19,23 +19,23 @@ let desugar_regex pos : regex -> phrasenode =
   let rec aux : regex -> phrasenode = 
     function
       | `Range (f, t)       -> `ConstructorLit ("Range", Some (`TupleLit [`Constant (`Char f), pos;
-                                                                          `Constant (`Char t), pos], pos))
-      | `Simply s           -> `ConstructorLit ("Simply", Some (`Constant (`String s), pos))
-      | `Quote s            -> `ConstructorLit ("Quote", Some (aux s, pos))
-      | `Any                -> `ConstructorLit ("Any", None)
-      | `StartAnchor        -> `ConstructorLit ("StartAnchor", None)
-      | `EndAnchor          -> `ConstructorLit ("EndAnchor", None)
+                                                                          `Constant (`Char t), pos], pos), None)
+      | `Simply s           -> `ConstructorLit ("Simply", Some (`Constant (`String s), pos), None)
+      | `Quote s            -> `ConstructorLit ("Quote", Some (aux s, pos), None)
+      | `Any                -> `ConstructorLit ("Any", None, None)
+      | `StartAnchor        -> `ConstructorLit ("StartAnchor", None, None)
+      | `EndAnchor          -> `ConstructorLit ("EndAnchor", None, None)
       | `Seq rs             -> `ConstructorLit ("Seq", Some (`ListLit (List.map (fun s -> aux s, pos) rs, None),
-                                                             pos))
-      | `Alternate (r1, r2) -> `ConstructorLit ("Alternate",  Some (`TupleLit [aux r1, pos; aux r2, pos], pos))
-      | `Group s            -> `ConstructorLit ("Group", Some (aux s, pos))
+                                                             pos), None)
+      | `Alternate (r1, r2) -> `ConstructorLit ("Alternate",  Some (`TupleLit [aux r1, pos; aux r2, pos], pos), None)
+      | `Group s            -> `ConstructorLit ("Group", Some (aux s, pos), None)
       | `Repeat (rep, r)    -> `ConstructorLit ("Repeat", Some (`TupleLit [desugar_repeat rep, pos; 
-                                                                        aux r, pos], pos))
-      | `Splice e           -> `ConstructorLit ("Quote", Some(`ConstructorLit ("Simply", Some (expr e)), pos))
+                                                                        aux r, pos], pos), None)
+      | `Splice e           -> `ConstructorLit ("Quote", Some(`ConstructorLit ("Simply", Some (expr e), None), pos), None)
       | `Replace (re, (`Literal tmpl)) -> `ConstructorLit("Replace", Some (`TupleLit ([(aux re, pos); 
                                                                                       (`Constant (`String tmpl), pos)]),
-                                                                          pos))
-      | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some (`TupleLit ([(aux re, pos); expr e]), pos))
+                                                                          pos), None)
+      | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some (`TupleLit ([(aux re, pos); expr e]), pos), None)
   in fun e ->
     let e = aux e in
       `Block (List.map (fun (v, e1) -> (`Val ([], (`Variable ([], (v, None, pos)), pos), e1, `Unknown, None), pos)) !exprs,

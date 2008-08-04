@@ -174,7 +174,7 @@ and phrasenode = [
 | `With             of phrase * (name * phrase) list
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
-| `ConstructorLit   of name * phrase option
+| `ConstructorLit   of name * phrase option * Types.datatype option
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -292,7 +292,7 @@ struct
     | `With (p, fields) ->
         union (union_map (snd ->- phrase) fields)
           (phrase p)
-    | `ConstructorLit (_, popt) -> option_map phrase popt
+    | `ConstructorLit (_, popt, _) -> option_map phrase popt
     | `DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, p2, popt) ->

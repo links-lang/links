@@ -971,8 +971,8 @@ module Desugarer =
            | `InfixAppl ((_, `Or), e1, e2)  -> Condition (desugar e1, Constant(`Bool true, pos), desugar e2, pos)
            | `InfixAppl ((_, `App), e1, e2) -> App (desugar e1, desugar e2, pos)
            | `InfixAppl ((_, `RegexMatch _), _, _) -> failwith "regex found after regex desugaring"
-           | `ConstructorLit (name, None) -> Variant_injection (name, unit_expression pos, pos)
-           | `ConstructorLit (name, Some s) -> Variant_injection (name, desugar s, pos)
+           | `ConstructorLit (name, None, _) -> Variant_injection (name, unit_expression pos, pos)
+           | `ConstructorLit (name, Some s, _) -> Variant_injection (name, desugar s, pos)
            | `Escape ((name,_,_), e) -> 
                Syntax.Call_cc(Abstr([name], desugar e, pos), pos)
            | `Spawn (e, _) -> desugar 

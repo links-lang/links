@@ -41,7 +41,7 @@ struct
     | `TypeAnnotation (p, _)
     | `Upcast (p, _, _)
     | `Escape (_, p) -> is_generalisable p
-    | `ConstructorLit (_, p) -> opt_generalisable p
+    | `ConstructorLit (_, p, _) -> opt_generalisable p
     | `RecordLit (fields, p) ->
         List.for_all (snd ->- is_generalisable) fields && opt_generalisable p
     | `With (p, fields) ->
@@ -1256,16 +1256,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 pats ([], typ body) in
               `FunLit (Some argss, (List.map (List.map erase_pat) pats, erase body)), ftype
 
-        | `ConstructorLit (c, None) ->
+        | `ConstructorLit (c, None, _) ->
             let type' = `Variant (Types.make_singleton_open_row 
                                     (c, `Present Types.unit_type)) in
-              `ConstructorLit (c, None), type'
+              `ConstructorLit (c, None, Some type'), type'
 
-        | `ConstructorLit (c, Some v) ->
+        | `ConstructorLit (c, Some v, _) ->
             let v = tc v in
             let type' = `Variant (Types.make_singleton_open_row
                                     (c, `Present (typ v))) in
-              `ConstructorLit (c, Some (erase v)), type'
+              `ConstructorLit (c, Some (erase v), Some type'), type'
 
         (* database *)
         | `DatabaseLit (name, (driver, args)) ->

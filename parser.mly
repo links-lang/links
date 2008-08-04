@@ -254,8 +254,8 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, ($2, (`Block $3, pos ()))), pos() }
 
 constructor_expression:
-| CONSTRUCTOR                                                  { `ConstructorLit($1, None), pos() }
-| CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2), pos() }
+| CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
+| CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { `Section $2, pos() }
