@@ -86,12 +86,10 @@ val string_of_program : program -> string
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
-  type typing_environment = environment
 
-  class visitor : typing_environment ->
+  class visitor : environment ->
   object ('self_type)
-    val tyenv : typing_environment
-    val tenv : environment
+    val tyenv : environment
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)

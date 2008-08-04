@@ -112,12 +112,10 @@ let string_of_program _ = "[PROGRAM]"
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
-  type typing_environment = environment
 
-  class visitor : typing_environment ->
+  class visitor : environment ->
   object ('self_type)
-    val tyenv : typing_environment
-    val tenv : environment
+    val tyenv : environment
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
@@ -158,7 +156,6 @@ struct
   open TypeUtils
 
   type environment = datatype Env.Int.t
-  type typing_environment = environment
 
   let info_type (t, _, _) = t
 
@@ -185,13 +182,12 @@ struct
 
   module Env = Env.Int
 
-  class visitor (tenv as tyenv : typing_environment) =
+  class visitor (tyenv : environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
-    val tenv = tenv
 
     method lookup_type : var -> datatype = fun var ->
-      Env.lookup tenv var
+      Env.lookup tyenv var
         
     method constant : constant -> (constant * datatype * 'self_type) = fun c ->
       match c with
@@ -464,8 +460,8 @@ struct
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
 (*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
-        let tenv = Env.bind tenv (var, info_type info) in
-          (var, info), {< tenv=tenv; tyenv=tenv >}
+        let tyenv = Env.bind tyenv (var, info_type info) in
+          (var, info), {< tyenv=tyenv >}
   end
 end
 
