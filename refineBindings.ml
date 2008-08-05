@@ -39,7 +39,7 @@ let refine_bindings : binding list -> binding list =
     let callgraph : _ -> (string * (string list)) list
       = fun defs -> 
         let defs = List.map (function
-                               | `Fun ((_, (name,_,_)), funlit, _, _), _ -> (name, funlit)
+                               | `Fun ((name,_,_), (_, funlit), _, _), _ -> (name, funlit)
                                | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
@@ -50,11 +50,11 @@ let refine_bindings : binding list -> binding list =
     (* refine a group of function bindings *)
     let groupFuns pos (funs : binding list) : binding list = 
       let unFun = function
-        | `Fun (b, funlit, location, dt), _ -> (b, funlit, location, dt)
+        | `Fun (b, (_, funlit), location, dt), _ -> (b, ([], funlit), location, dt)
         | _ -> assert false in
       let find_fun name = 
         List.find (function
-                     | `Fun ((_, (n,_,_)), _, _, _), _ when name = n -> true
+                     | `Fun ((n,_,_), _, _, _), _ when name = n -> true
                      | _ -> false) 
           funs in
       let graph = callgraph funs in

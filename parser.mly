@@ -31,7 +31,7 @@ let annotate (signame, datatype) : _ -> binding =
     function
       | `Fun ((name, bpos), phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun (([], (name, None, bpos)), phrase, location, Some datatype), dpos
+            `Fun ((name, None, bpos), ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
@@ -182,7 +182,7 @@ fun_declarations:
 
 fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
-                                                                 in `Fun (([], (d, None, dpos)),p,l,None), pos }
+                                                                 in `Fun ((d, None, dpos),([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 perhaps_uinteger:
@@ -599,7 +599,7 @@ database_expression:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
-| FUN var arg_lists block                                      { `Fun (([], (fst $2, None, snd $2)), ($3, (`Block $4, pos ())), `Unknown, None), pos () }
+| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 
 bindings:

@@ -1664,7 +1664,7 @@ and type_binding : context -> binding -> binding * context =
           in
             `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
-      | `Fun (((_, (name,_,pos)), (pats, body), location, t) as def) ->
+      | `Fun (((name,_,pos), (_, (pats, body)), location, t) as def) ->
           let pats = List.map (List.map tpc) pats in
           let ft = make_ft pats (Types.fresh_type_variable ()) in
           let fb = match t with
@@ -1686,8 +1686,8 @@ and type_binding : context -> binding -> binding * context =
               | `ForAll (_, t) | t -> t in
           let () = unify ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
           let tyvars, t' = Utils.generalise context.var_env fb in
-            (`Fun ((tyvars, (name, Some t', pos)),
-                   (List.map (List.map erase_pat) pats, erase body),
+            (`Fun ((name, Some t', pos),
+                   (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
              {empty_context with var_env = Env.bind Env.empty (name, t')})
       | `Funs defs ->
@@ -1706,7 +1706,7 @@ and type_binding : context -> binding -> binding * context =
           let fbs, patss =
             List.split
               (List.map
-                 (fun ((_, (name,_,_)), (pats, body), _, t) ->
+                 (fun ((name,_,_), (_, (pats, body)), _, t) ->
                     let pats = List.map (List.map tpc) pats in
                     let ft = make_ft pats (Types.fresh_type_variable ()) in
                     let fb =
@@ -1729,7 +1729,7 @@ and type_binding : context -> binding -> binding * context =
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
               List.rev
                 (List.fold_left2
-                   (fun defs ((_, (name, _, pos)), (_, body), location, t) pats ->
+                   (fun defs ((name, _, pos), (_, (_, body)), location, t) pats ->
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
@@ -1740,7 +1740,7 @@ and type_binding : context -> binding -> binding * context =
                         match Env.lookup context'.var_env name with
                           | `ForAll (_, t) | t -> t in
                       let () = unify ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-                        (([], (name, Some ft, pos)), (pats, body), location, t) :: defs) [] defs patss) in
+                        ((name, Some ft, pos), ([], (pats, body)), location, t) :: defs) [] defs patss) in
           let genv =
             List.fold_left (fun genv (name, fb) ->
                               let tyvars, t = Utils.generalise context.var_env fb in
@@ -1748,10 +1748,10 @@ and type_binding : context -> binding -> binding * context =
               Env.empty
               fbs
           in
-            (`Funs (List.map (fun ((_, (name, _, pos)), (ppats, body), location, dtopt) ->
+            (`Funs (List.map (fun ((name, _, pos), (_, (ppats, body)), location, dtopt) ->
                                 let tyvars, t = Env.lookup genv name in
-                                  ((tyvars, (name, Some t, pos)),
-                                   (List.map (List.map erase_pat) ppats, erase body),
+                                  ((name, Some t, pos),
+                                   (tyvars, (List.map (List.map erase_pat) ppats, erase body)),
                                    location,
                                    dtopt))
                       defs),

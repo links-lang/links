@@ -65,20 +65,12 @@ type tyvar = Types.quantifier
 type tyarg = Types.type_arg
   deriving (Show)
 
-(* A tybinder is a binder with a big-lambda attached, e.g.:
+(*
+   NOTE: tyvar lists represent big-lambda binders.
 
-    let x:A=/\X.m in n
-        -------
-
-   the underlined part indicates the tybinder.
-
-   Note that in the above, X is bound only in types occurring in the
-   term m, and x is bound only in the term m.
-
-   It isn't clear whether this is a sensible abstraction...
+   Currently they are only supported at HM generalisation points,
+   i.e. in let-bindings.
 *)
-type tybinder = tyvar list * binder
-    deriving (Show)
 
 type location = Syntax.location
     deriving (Show)
@@ -205,9 +197,16 @@ and phrasenode = [
 ]
 and phrase = phrasenode * position
 and bindingnode = [
+(*
+   TODO: (aesthetic change)
+     change `Val constructor to:
+       `Val of pattern * (tyvar list * phrase) * location * datatype' option
+     which corresponds to
+       let p=/\X.e in ...
+*)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
-| `Fun     of tybinder * funlit * location * datatype' option
-| `Funs    of (tybinder * funlit * location * datatype' option) list
+| `Fun     of binder * (tyvar list * funlit) * location * datatype' option
+| `Funs    of (binder * (tyvar list * funlit) * location * datatype' option) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'
@@ -353,11 +352,11 @@ struct
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Fun ((_, (name,_,_)), fn, _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Fun ((name,_,_), (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs -> 
         let names, rhss = 
           List.fold_right
-            (fun ((_, (n,_,_)), rhs, _, _) (names, rhss) ->
+            (fun ((n,_,_), (_, rhs), _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in

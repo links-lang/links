@@ -1109,7 +1109,7 @@ module Desugarer =
                  concat_map (fst ->- (function (* pattern * untyped_expression * position * recursivep *)
                              | `Val (_, p, e, _, _) (* TODO: use datatype, if any *) -> 
                                  [(patternize p, desugar e, pos, false)]
-                             | `Fun ((_, (n,_,_)), funlit, _, _) (* TODO: use datatype, if any *) -> 
+                             | `Fun ((n,_,_), (_, funlit), _, _) (* TODO: use datatype, if any *) -> 
                                  [((`Variable n, pos), 
                                    desugar (`FunLit (None, funlit), pos'),
                                    pos, 
@@ -1121,7 +1121,7 @@ module Desugarer =
                              | `Infix -> assert false
                              | `Funs defs ->
                                  List.map 
-                                   (fun ((_, (n,_,_)), funlit, _, _) ->
+                                   (fun ((n,_,_), (_, funlit), _, _) ->
                                       ((`Variable n, pos), 
                                        desugar (`FunLit (None, funlit), pos'),
                                        pos, 
@@ -1271,7 +1271,7 @@ module Desugarer =
        | `Val (_, (`Variable (name, _, _), _), p, location, Some (_, Some t)) ->
            [Define (name, HasType (desugar_expression p, t, pos), location, pos)]
        | `Val _ -> assert false (* TODO: handle other patterns *)
-       | `Fun ((_, (name,_,_)), funlit, location, dt) ->
+       | `Fun ((name,_,_), (_, funlit), location, dt) ->
            [Define (name, Rec ([name, desugar_expression (`FunLit (None, funlit), pos'), 
                                 opt_map (fun (_, Some t) -> t) dt],
                                Variable (name, pos),
@@ -1285,7 +1285,7 @@ module Desugarer =
            failwith "Includes not supported"
        | `Funs defs ->
            List.map 
-             (fun ((_, (n,_,_)), funlit, location, ft) ->
+             (fun ((n,_,_), (_, funlit), location, ft) ->
                 Define (n, Rec ([n,
                                  desugar_expression (`FunLit (None, funlit), pos'),
                                  opt_map (snd ->- val_of) ft],

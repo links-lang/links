@@ -259,20 +259,20 @@ object (self)
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
           o, `Val (tyvars, pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Fun (bind, fl, loc, dt) ->
-        let o, bind = self#tybinder bind in
+    | `Fun (bind, (tyvars, fl), loc, dt) ->
+        let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
-          o, `Fun (bind, fl, loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, `Fun (bind, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
     | `Funs binds ->
         let o, binds =
           super#list
-            (fun o (bind, fl, loc, dt) ->
-               let o, bind = o#tybinder bind in
+            (fun o (bind, (tyvars, fl), loc, dt) ->
+               let o, bind = o#binder bind in
                let o, fl   = o#funlit fl in
                let o, loc  = o#location loc in
                let    dt   = opt_map (Desugar.datatype' map alias_env) dt
-               in (o, (bind, fl, loc, dt)))
+               in (o, (bind, (tyvars, fl), loc, dt)))
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->
