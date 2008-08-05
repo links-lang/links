@@ -34,7 +34,7 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun (([], (name, None, bpos)), phrase, location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ([], (`Variable ([], (name, None, bpos)), dpos), phrase, location, Some datatype), dpos
+            `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -172,7 +172,7 @@ nofun_declaration:
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
-                                                                 in `Val ([], (`Variable ([], (d, None, dpos)), pos),p,l,None), pos }
+                                                                 in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -766,7 +766,7 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS var                                       { `As (([], (fst $3, None, snd $3)), $1), pos() }
+| cons_pattern AS var                                       { `As ((fst $3, None, snd $3), $1), pos() }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
@@ -794,7 +794,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable ([], ($1, None, pos())), pos() }
+| VARIABLE                                                  { `Variable ($1, None, pos()), pos() }
 | UNDERSCORE                                                { `Any, pos() }
 | constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }

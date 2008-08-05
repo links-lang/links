@@ -130,8 +130,8 @@ type patternnode = [
 | `Record   of (name * pattern) list * pattern option
 | `Tuple    of pattern list
 | `Constant of constant
-| `Variable of tybinder
-| `As       of tybinder * pattern
+| `Variable of binder
+| `As       of binder * pattern
 | `HasType  of pattern * datatype'
 ]
 and pattern = patternnode * position
@@ -258,8 +258,8 @@ struct
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)
-    | `Variable (_, (v,_,_)) -> singleton v
-    | `As ((_, (v,_,_)), pat)     -> add v (pattern pat)
+    | `Variable (v,_,_) -> singleton v
+    | `As ((v,_,_), pat)     -> add v (pattern pat)
     | `HasType (pat, _)      -> pattern pat
 
 

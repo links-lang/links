@@ -2,8 +2,6 @@
 open Utility
 open Sugartypes
 
-open Errors
-
 type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t 
@@ -937,9 +935,9 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         | `Tuple ps ->
             List.fold_right (fun p binderss -> gather binderss p) ps binderss
         | `Constant _ -> binderss
-        | `Variable (_, ((name, _, _) as binder)) ->
+        | `Variable ((name, _, _) as binder) ->
             add name binder binderss
-        | `As ((_, ((name, _, _) as binder)), p) ->
+        | `As (((name, _, _) as binder), p) ->
             let binderss = gather binderss p in
               add name binder binderss
         | `HasType (p, _) -> gather binderss p in
@@ -981,9 +979,9 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         | `Constant c as c' ->
             let t = Constant.constant_type c in
               c', Env.empty, (t, t)
-        | `Variable (_, (x,_,pos)) -> 
+        | `Variable (x,_,pos) -> 
             let xtype = Types.fresh_type_variable () in
-              (`Variable ([], (x, Some xtype, pos)),
+              (`Variable (x, Some xtype, pos),
                Env.bind Env.empty (x, xtype),
                (xtype, xtype))
         | `Cons (p1, p2) -> 
@@ -1055,10 +1053,10 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let env' = List.fold_right (env ->- (++)) ps' Env.empty in
             let make_tuple typ = Types.make_tuple_type (List.map typ ps') in
               `Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
-        | `As ((tyvars, (x, _, pos)), p) ->
+        | `As ((x, _, pos), p) ->
             let p = tp p in
             let env' = Env.bind (env p) (x, it p) in
-              `As ((tyvars, (x, Some (it p), pos)), erase p), env', (ot p, it p)
+              `As ((x, Some (it p), pos), erase p), env', (ot p, it p)
         | `HasType (p, (_,Some t as t')) ->
             let p = tp p in
             let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t))
@@ -1088,11 +1086,12 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | `List ps
     | `Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | `Variable (_, (v, Some t, _)) -> Env.bind Env.empty (v, t)
-    | `Variable (_, (_, None, _)) -> assert false
-    | `As       ((_, (v, Some t, _)), p) -> Env.bind (pattern_env p) (v, t)
-    | `As       ((_, (_, None, _)), _) -> assert false
+    | `Variable (v, Some t, _) -> Env.bind Env.empty (v, t)
+    | `Variable (_, None, _) -> assert false
+    | `As       ((v, Some t, _), p) -> Env.bind (pattern_env p) (v, t)
+    | `As       ((_, None, _), _) -> assert false
 
+(*
 let update_pattern_vars env =
 (object (self)
   inherit SugarTraversals.map as super
@@ -1108,6 +1107,7 @@ let update_pattern_vars env =
           | `As (b, p) -> `As (update b, self#pattern p)
           | _ -> super#patternnode n
  end)#pattern
+*)
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
   | `FormBinding (_, pattern), _ -> pattern_env pattern
@@ -1649,7 +1649,8 @@ and type_binding : context -> binding -> binding * context =
             if Utils.is_generalisable body then
               let genv = Env.map (Utils.generalise context.var_env) penv in
               let penv = Env.map snd genv in
-              let pat = update_pattern_vars genv (erase_pat pat) in
+(*              let pat = update_pattern_vars genv (erase_pat pat) in*)
+              let pat = erase_pat pat in
                 (Utils.generalise context.var_env bt, pat, penv)
             else
               let quantifiers = Generalise.get_quantifiers context.var_env bt in

@@ -344,9 +344,9 @@ class map =
           in `Record ((_x, _x_i1))
       | `Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in `Tuple _x
       | `Constant _x -> let _x = o#constant _x in `Constant _x
-      | `Variable _x -> let _x = o#tybinder _x in `Variable _x
+      | `Variable _x -> let _x = o#binder _x in `Variable _x
       | `As ((_x, _x_i1)) ->
-          let _x = o#tybinder _x in
+          let _x = o#binder _x in
           let _x_i1 = o#pattern _x_i1 in `As ((_x, _x_i1))
       | `HasType ((_x, _x_i1)) ->
           let _x = o#pattern _x in
@@ -796,9 +796,9 @@ class fold =
           let o = o#option (fun o -> o#pattern) _x_i1 in o
       | `Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
       | `Constant _x -> let o = o#constant _x in o
-      | `Variable _x -> let o = o#tybinder _x in o
+      | `Variable _x -> let o = o#binder _x in o
       | `As ((_x, _x_i1)) ->
-          let o = o#tybinder _x in let o = o#pattern _x_i1 in o
+          let o = o#binder _x in let o = o#pattern _x_i1 in o
       | `HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
       
@@ -1305,9 +1305,9 @@ class fold_map =
       | `Tuple _x ->
           let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`Tuple _x))
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
-      | `Variable _x -> let (o, _x) = o#tybinder _x in (o, (`Variable _x))
+      | `Variable _x -> let (o, _x) = o#binder _x in (o, (`Variable _x))
       | `As ((_x, _x_i1)) ->
-          let (o, _x) = o#tybinder _x in
+          let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#pattern _x_i1 in (o, (`As ((_x, _x_i1))))
       | `HasType ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in

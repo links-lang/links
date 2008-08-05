@@ -19,8 +19,8 @@ type pattern = [
 | `Negative of StringSet.t
 | `Record   of (pattern StringMap.t) * pattern option
 | `Constant of constant
-| `Variable of tybinder
-| `As       of tybinder * pattern
+| `Variable of binder
+| `As       of binder * pattern
 | `HasType  of pattern * Types.datatype
 ]
 
@@ -119,13 +119,13 @@ let rec desugar_pattern : raw_env -> Sugartypes.pattern -> pattern * raw_env =
               pp env (`Record (bs, None), pos)
         | `Constant constant ->
             `Constant constant, env
-        | `Variable (tyvars, b) ->
+        | `Variable b ->
             let xb, env = fresh_binder env b in
-              `Variable (tyvars, xb), env
-        | `As ((tyvars, b), p) ->
+              `Variable xb, env
+        | `As (b, p) ->
             let xb, env = fresh_binder env b in
             let p, env = pp env p in
-              `As ((tyvars, xb), p), env
+              `As (xb, p), env
         | `HasType (p, (_, Some t)) ->
             let p, env = pp env p in
               `HasType (p, t), env
@@ -142,7 +142,7 @@ let list_tail env : value -> tail_computation = fun v ->
 
 let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
   
-type annotation = [`Binder of tybinder | `Type of Types.datatype] list
+type annotation = [`Binder of binder | `Type of Types.datatype] list
 type annotated_pattern = annotation * pattern
 
 type raw_clause = pattern list * raw_bound_computation
@@ -209,11 +209,11 @@ let let_pattern : nenv -> pattern -> value * Types.datatype -> computation * Typ
         | `Any -> body
         | `Variable xb ->
             with_bindings
-              [letv (xb, value)]
+              [letmv (xb, value)]
               body
         | `As (xb, pattern) ->
             with_bindings
-              [letv (xb, value)]
+              [letmv (xb, value)]
               (lp t pattern value body)
         | `HasType (pat, t) ->          
             lp t pat (`Coerce (value, t)) body
@@ -443,10 +443,10 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
         (fun a (env, bs) ->
            match a with
              | `Binder b ->
-                 let var = Var.var_of_tybinder b in
-                 let t = Var.type_of_tybinder b in
+                 let var = Var.var_of_binder b in
+                 let t = Var.type_of_binder b in
                  let v = massage t v in
-                   bind_type var t env, letv (b, v)::bs
+                   bind_type var t env, letmv (b, v)::bs
              | `Type t ->
                  let v = massage t v in
                    env, (letmv (dummy t, `Coerce (v, t)))::bs
@@ -498,7 +498,7 @@ and match_var : var list -> clause list -> bound_computation -> var -> bound_com
                            (ps,
                             fun env ->
                               with_bindings
-                                [letv (b, `Variable var)]
+                                [letmv (b, `Variable var)]
                                 (body env))
                        | `Any ->
                            (ps, body)
@@ -768,7 +768,7 @@ and match_record
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], `Variable ([], xb))::ps, StringMap.add name (`Variable x) fields)
+                        ([], `Variable xb)::ps, StringMap.add name (`Variable x) fields)
                names
                ([], StringMap.empty) in
            let rps, body =
@@ -804,14 +804,14 @@ and match_record
                            with_bindings
                              [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
-                     | (annotation, `Variable (_, yb)) ->
+                     | (annotation, `Variable (yb)) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
                              [letmv (yb, `Extend (fields, Some (`Variable x)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], `Variable ([], xb))::rps, body in
+                 ([], `Variable xb)::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
