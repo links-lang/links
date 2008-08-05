@@ -477,7 +477,7 @@ class map =
               _x
           in `Funs _x
       | `Foreign ((_x, _x_i1, _x_i2)) ->
-          let _x = o#tybinder _x in
+          let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
       | `Include _x -> let _x = o#string _x in `Include _x
@@ -913,7 +913,7 @@ class fold =
               _x
           in o
       | `Foreign ((_x, _x_i1, _x_i2)) ->
-          let o = o#tybinder _x in
+          let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
       | `Include _x -> let o = o#string _x in o
       | `Type ((_x, names, _x_i2)) ->
@@ -1451,7 +1451,7 @@ class fold_map =
               _x
           in (o, (`Funs _x))
       | `Foreign ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#tybinder _x in
+          let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))

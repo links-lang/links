@@ -167,7 +167,7 @@ preamble_declaration:
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
-                                                                   `Foreign (([], (name, None, name_pos)), $2, datatype $5), pos() }
+                                                                   `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
                                                                    (`Infix, pos()) }

@@ -1747,9 +1747,8 @@ and type_binding : context -> binding -> binding * context =
                                    dtopt))
                       defs),
              {empty_context with var_env = (Env.map snd genv)})
-      | `Foreign ((_, (name, _, pos)), language, (_, Some datatype as dt)) ->
-          let tyvars = TypeUtils.quantifiers datatype in
-            (`Foreign ((tyvars, (name, Some datatype, pos)), language, dt),
+      | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
+            (`Foreign ((name, Some datatype, pos), language, dt),
              (bind_var empty_context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           flush stderr;

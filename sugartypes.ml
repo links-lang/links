@@ -64,8 +64,21 @@ type tyvar = Types.quantifier
   deriving (Show)
 type tyarg = Types.type_arg
   deriving (Show)
+
+(* A tybinder is a binder with a big-lambda attached, e.g.:
+
+    let x:A=/\X.m in n
+        -------
+
+   the underlined part indicates the tybinder.
+
+   Note that in the above, X is bound only in types occurring in the
+   term m, and x is bound only in the term m.
+
+   It isn't clear whether this is a sensible abstraction...
+*)
 type tybinder = tyvar list * binder
-  deriving (Show)
+    deriving (Show)
 
 type location = Syntax.location
     deriving (Show)
@@ -195,7 +208,7 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of tybinder * funlit * location * datatype' option
 | `Funs    of (tybinder * funlit * location * datatype' option) list
-| `Foreign of tybinder * name * datatype'
+| `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'
 | `Infix
@@ -349,7 +362,7 @@ struct
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign ((_, (name, _, _)), _, _) -> singleton name, empty
+    | `Foreign ((name, _, _), _, _) -> singleton name, empty
     | `Include _
     | `Type _
     | `Infix -> empty, empty

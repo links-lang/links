@@ -1279,7 +1279,7 @@ module Desugarer =
                     location, pos)]
        | `Type _ ->
            assert false
-       | `Foreign ((_, (name, _, _)), language, (_, Some datatype)) -> 
+       | `Foreign ((name, _, _), language, (_, Some datatype)) -> 
            [Alien (language, name, datatype, pos) ]
        | `Include path ->
            failwith "Includes not supported"

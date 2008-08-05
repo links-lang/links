@@ -276,7 +276,7 @@ object (self)
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->
-        let o, bind = self#tybinder bind in
+        let o, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
           self, `Foreign (bind, lang, dt')
     | b -> super#bindingnode b
