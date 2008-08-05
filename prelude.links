@@ -100,6 +100,7 @@ fun unzip(l) {
   }
 }
 
+sig zip : ([a], [b]) -> [(a, b)]
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
@@ -528,6 +529,16 @@ fun makeName(i) { "input_" ++ intToString(i) }
 sig nextName : State (Int,String)
 var nextName = fun (i) { (makeName(i), i+1) };
 
+sig sequence : ([State(a,b)]) -> State(a,[b])
+fun sequence(xs) {
+  switch (xs) {
+    case [] -> return([])
+    case x::xs -> x >>= (fun (x) { 
+                  sequence(xs) >>= (fun (xs) { 
+                    return (x :: xs)})})
+  }
+}
+
 sig formlets : ([Formlet (a)]) -> Formlet ([a])
 fun formlets(fs) { 
   switch (fs) {
@@ -787,18 +798,17 @@ fun inputRadiogroup(before, selected, after, layout) {
 }
 
 sig preludeOption : ((a,String), Bool) -> State(Gen,(Xml, ((String) -> [a]) -> (String) -> [a]))
-fun preludeOption ((a,b), selected) {
+fun preludeOption ((a,text), selected) {
    nextName >>= fun (name) {
         if(selected) {
-           return ((<option value="{name}" selected="SELECTED">{stringToXml(b)}</option>,
+           return ((<option value="{name}" selected="SELECTED">{stringToXml(text)}</option>,
             (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
         }
         else {
-           return ((<option value="{name}">{stringToXml(b)}</option>,
-            (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
-        }
+           return ((<option value="{name}">{stringToXml(text)}</option>,
+           (fun (k) (key) { if (key == name) a::k(key) else k(key) })))
+       }
 }}
-
 
 sig preludeOptions : ([(a,String)], a) -> State(Gen,(Xml, (String) -> [a]))
 fun preludeOptions(items, default) {
@@ -808,6 +818,31 @@ fun preludeOptions(items, default) {
        preludeOption(item, (first(item) == default))
                      >>= fun ((xml, r1)) { preludeOptions(items, default)
                      >>= fun ((morexml, r2)) { return ((xml ++ morexml, r1(r2))) } }
+  }
+}
+
+sig preludeOptionKeyed : ((a,String), String, Bool) -> 
+                         (Xml, ((String) -> [a]) -> (String) -> [a])
+fun preludeOptionKeyed ((a,text), optId, selected) {
+  if (selected) {
+     ((<option value="{optId}" selected="SELECTED">{stringToXml(text)}
+             </option>,
+      (fun (k) (key) { if (key == optId) a::k(key) else k(key) })))
+  } else {
+     ((<option value="{optId}">{stringToXml(text)}</option>,
+      (fun (k) (key) { if (key == optId) a::k(key) else k(key) })))
+  }
+}
+
+sig preludeOptionsKeyed : ([((a,String),String)], a) -> 
+                          (Xml, (String) -> [a])
+fun preludeOptionsKeyed(items, default) {
+  switch (items) {
+     case [] -> ((<#/>, fun (_) { [] }))
+     case (item,itemKey)::items -> {
+       var (xml,r1) =preludeOptionKeyed(item, itemKey, (first(item) == default));
+       var (morexml, r2) = preludeOptionsKeyed(items, default);
+       ((xml++morexml, r1(r2))) }
   }
 }
 
@@ -826,21 +861,26 @@ fun preludeMultiOptions(items) {
 sig choice : ([(a,String)]) -> Formlet (a)
 fun choice (items) {
   var (default, _) = hd(items);
-  nextName >>= fun (name) {
-  preludeOptions(items, default) >>= fun ((xml, retrieve)) {
-  var xml = <select name="{name}">{xml}</select>;
-  return ((xml,
-           fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))}}
+  choiceDefault(items, default)
 }
 
 sig choiceDefault : ([(a,String)], a) -> Formlet (a)
 fun choiceDefault (items, default) {
   nextName >>= fun (name) {
-     preludeOptions(items, default) >>= fun ((xml, retrieve)) {
-        var xml = <select name="{name}">{xml}</select>;
-        return ((xml,
-                 fun (env) { (xml, pureE(hd(retrieve(assoc(name, env))))) }))
-     }
+  sequence (for (var x <- items) [nextName]) >>= fun (optKeys) {
+     var keyedItems = zip(items,optKeys);
+     return ((
+        {var (optsXml,_) = preludeOptionsKeyed(keyedItems, default);
+         <select name="{name}">{optsXml}</select>},
+        fun (env) {
+          # get the String key of the selection
+          var selectedKey = assoc(name,env);
+          # find the a-type key of the selection
+          var (selectedVal, _) = assoc(selectedKey, zip(optKeys, items));
+          var (optsXml, retrieve) = preludeOptionsKeyed(keyedItems, selectedVal);
+          (<select name="{name}">{optsXml}</select>,
+           pureE(hd(retrieve(assoc(name, env))))) }))
+  }
   }
 }
 
