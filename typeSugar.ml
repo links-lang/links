@@ -570,7 +570,7 @@ tab() ^ code (show_type rt))
 
     let bind_val ~pos ~t1:l ~t2:r ~error:_ =
       with_but2things pos
-        ("The binder must match the body of a value binding") ("pattern", l) ("expression", r)
+        ("The binder must match the type of the body in a value binding") ("pattern", l) ("expression", r)
 
     let bind_val_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
