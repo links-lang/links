@@ -108,6 +108,7 @@ SOURCES = $(OPC)                		\
           var.ml                                \
           ir.mli ir.ml                          \
           compilePatterns.ml                    \
+          transformSugar.mli transformSugar.ml  \
           value.mli value.ml                    \
           compileir.ml                          \
           loader.ml                             \

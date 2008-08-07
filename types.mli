@@ -124,6 +124,7 @@ val bump_variable_counter : int -> unit
 val make_type_variable : int -> datatype
 val make_rigid_type_variable : int -> datatype
 val make_row_variable : int -> row_var
+val make_rigid_row_variable : int -> row_var
   
 (** fresh type variable generation *)
 val fresh_type_variable : unit -> datatype

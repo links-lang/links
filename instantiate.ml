@@ -137,7 +137,7 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
 
-    This returns the original type of var, the type arguments it is instantiated with
+    This returns the type arguments var is instantiated with
     and the instantiated type.
  *)
 let instantiate : environment -> string -> type_arg list * datatype =

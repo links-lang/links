@@ -709,8 +709,8 @@ let type_unary_op env =
 
 let type_binary_op ctxt = 
   let datatype = datatype ctxt.tycon_env in function
-  | `Minus        -> datatype "(Int,Int) -> Int"
-  | `FloatMinus   -> datatype "(Float,Float) -> Float"
+  | `Minus        -> Utils.instantiate ctxt.var_env "-"
+  | `FloatMinus   -> Utils.instantiate ctxt.var_env "-."
   | `RegexMatch flags -> 
       let nativep  = List.exists ((=) `RegexNative)  flags
       and listp    = List.exists ((=) `RegexList)    flags 
