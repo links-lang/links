@@ -789,30 +789,14 @@ var checkbox = checkboxDefault(false);
 # The data components are useful for attaching extra data such as labels to
 # the radio buttons.
 
-# inputRadiogroup: deprecated
-sig inputRadiogroup : ([(String, a)], (String, a), [(String,a)],
-                       ([(Xml, a)]) -> Xml) -> 
-                      Formlet (String) 
-fun inputRadiogroup(before, selected, after, layout) {
-  nextName >>= fun (name) {
-    var before = for (var (value, data) <- before)
-                  [(<input type="radio" name="{name}" value="{value}" />, data)];
-    var selected = [(<input type="radio" checked="on" name="{name}" value="{selected.1}" />, selected.2)];
-    var after = for (var (value, data) <- after)
-                  [(<input type="radio" name="{name}" value="{value}" />, data)];
-    var xml = layout(before ++ selected ++ after);
-    return ((xml, fun (env) { (xml, pureE(assoc(name, env)))}))
-  }
-}
-
-# 'inputRadiogroupNew(items, selected, layout)' constructs a list of
+# 'inputRadiogroup(items, selected, layout)' constructs a list of
 # radio buttons in XML form, pairs them with the values from 'items',
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroupNew : ([a], a, ([(Xml, a)]) -> Xml) -> 
-                          Formlet (a) 
-fun inputRadiogroupNew(items, selected, layout) {
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) -> Xml) -> 
+                      Formlet (a) 
+fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
   sequence (for (var x <- items) [nextName]) >>= fun (keys) {
     var keyedItems = zip(keys,items);
