@@ -546,10 +546,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `Funs defs ->
           let (o, defs) =
             o#listu
-              (fun o (f, (tyvars, lam), location, t) ->
+              (fun o (f, (tyvars, lam), location, t, pos) ->
                  let (o, f) = o#binder f in
                  let (o, lam) = o#funlit lam in
-                   (o, (f, (tyvars, lam), location, t)))
+                   (o, (f, (tyvars, lam), location, t, pos)))
               defs
           in
             (o, (`Funs defs))

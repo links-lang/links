@@ -464,12 +464,13 @@ class map =
       | `Funs _x ->
           let _x =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4) ->
+              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let _x = o#binder _x in
                  let _x_i2 = o#funlit _x_i2 in
                  let _x_i3 = o#location _x_i3 in
-                 let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-                 in (_x, (_x_i1, _x_i2), _x_i3, _x_i4))
+                 let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
+                 let _x_i5 = o#position _x_i5
+                 in (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in `Funs _x
       | `Foreign ((_x, _x_i1, _x_i2)) ->
@@ -897,11 +898,12 @@ class fold =
       | `Funs _x ->
           let o =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4) ->
+              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let o = o#binder _x in
                  let o = o#funlit _x_i2 in
                  let o = o#location _x_i3 in
-                 let o = o#option (fun o -> o#datatype') _x_i4 in o)
+                 let o = o#option (fun o -> o#datatype') _x_i4 in
+                 let o = o#position _x_i5 in o)
               _x
           in o
       | `Foreign ((_x, _x_i1, _x_i2)) ->
@@ -1434,12 +1436,13 @@ class fold_map =
       | `Funs _x ->
           let (o, _x) =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4) ->
+              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let (o, _x) = o#binder _x in
                  let (o, _x_i2) = o#funlit _x_i2 in
                  let (o, _x_i3) = o#location _x_i3 in
-                 let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-                 in (o, (_x, (_x_i1, _x_i2), _x_i3, _x_i4)))
+                 let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
+                 let (o, _x_i5) = o#position _x_i5
+                 in (o, (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (`Funs _x))
       | `Foreign ((_x, _x_i1, _x_i2)) ->

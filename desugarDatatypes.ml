@@ -267,12 +267,13 @@ object (self)
     | `Funs binds ->
         let o, binds =
           super#list
-            (fun o (bind, (tyvars, fl), loc, dt) ->
+            (fun o (bind, (tyvars, fl), loc, dt, pos) ->
                let o, bind = o#binder bind in
                let o, fl   = o#funlit fl in
                let o, loc  = o#location loc in
-               let    dt   = opt_map (Desugar.datatype' map alias_env) dt
-               in (o, (bind, (tyvars, fl), loc, dt)))
+               let    dt   = opt_map (Desugar.datatype' map alias_env) dt in
+               let o, pos  = o#position pos
+               in (o, (bind, (tyvars, fl), loc, dt, pos)))
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->

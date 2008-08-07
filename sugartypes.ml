@@ -206,7 +206,7 @@ and bindingnode = [
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * (tyvar list * funlit) * location * datatype' option) list
+| `Funs    of (binder * (tyvar list * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'
@@ -356,7 +356,7 @@ struct
     | `Funs funs -> 
         let names, rhss = 
           List.fold_right
-            (fun ((n,_,_), (_, rhs), _, _) (names, rhss) ->
+            (fun ((n,_,_), (_, rhs), _, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in

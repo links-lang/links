@@ -1121,7 +1121,7 @@ module Desugarer =
                              | `Infix -> assert false
                              | `Funs defs ->
                                  List.map 
-                                   (fun ((n,_,_), (_, funlit), _, _) ->
+                                   (fun ((n,_,_), (_, funlit), _, _, _) ->
                                       ((`Variable n, pos), 
                                        desugar (`FunLit (None, funlit), pos'),
                                        pos, 
@@ -1285,7 +1285,7 @@ module Desugarer =
            failwith "Includes not supported"
        | `Funs defs ->
            List.map 
-             (fun ((n,_,_), (_, funlit), location, ft) ->
+             (fun ((n,_,_), (_, funlit), location, ft, _) ->
                 Define (n, Rec ([n,
                                  desugar_expression (`FunLit (None, funlit), pos'),
                                  opt_map (snd ->- val_of) ft],

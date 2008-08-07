@@ -1607,7 +1607,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 and type_binding : context -> binding -> binding * context =
   fun context (def, pos) ->
     let type_check = type_check in
-    let unify (l, r) = unify ~pos:(lookup_pos pos) (l, r)
+    let unify pos (l, r) = unify ~pos:(lookup_pos pos) (l, r)
     and typ (_,t) = t
     and erase (e, _) = e
     and erase_pat (e, _, t) = e
@@ -1640,10 +1640,10 @@ and type_binding : context -> binding -> binding * context =
           let bt =
             match datatype with
               | Some (_, Some t) ->
-                  unify ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
+                  unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
                   t
               | _ -> typ body in
-          let () = unify ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
+          let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
           let body = erase body in
           let (tyvars, bt), pat, penv =
             if Utils.is_generalisable body then
@@ -1672,7 +1672,7 @@ and type_binding : context -> binding -> binding * context =
                    | Some (_, Some t) ->
                        let _quantifiers, fb = Utils.generalise context.var_env t in
                          (* make sure the annotation has the right shape *)
-                       let () = unify ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos (snd (Instantiate.typ fb))) in
+                       let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos (snd (Instantiate.typ fb))) in
                          fb in
           let body_env = Env.bind context.var_env (name, fb) in
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
@@ -1684,7 +1684,7 @@ and type_binding : context -> binding -> binding * context =
               (* WARNING: this looks surprising, but it is what we want *)
             match Env.lookup context'.var_env name with
               | `ForAll (_, t) | t -> t in
-          let () = unify ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
+          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
           let tyvars, t' = Utils.generalise context.var_env fb in
             (`Fun ((name, Some t', pos),
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
@@ -1706,7 +1706,7 @@ and type_binding : context -> binding -> binding * context =
           let fbs, patss =
             List.split
               (List.map
-                 (fun ((name,_,_), (_, (pats, body)), _, t) ->
+                 (fun ((name,_,_), (_, (pats, body)), _, t, pos) ->
                     let pats = List.map (List.map tpc) pats in
                     let ft = make_ft pats (Types.fresh_type_variable ()) in
                     let fb =
@@ -1719,7 +1719,7 @@ and type_binding : context -> binding -> binding * context =
                               (* make sure the annotation has the right shape *)
                             let fbi = (snd -<- Instantiate.typ) fb in
 (*                            Debug.print ("instantiated annotation: " ^ Types.string_of_datatype fbi);*)
-                            let () = unify ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos fbi) in
+                            let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos fbi) in
                               fb
                     in
                       (name, fb), pats)
@@ -1729,7 +1729,7 @@ and type_binding : context -> binding -> binding * context =
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
               List.rev
                 (List.fold_left2
-                   (fun defs ((name, _, pos), (_, (_, body)), location, t) pats ->
+                   (fun defs ((name, _, name_pos), (_, (_, body)), location, t, pos) pats ->
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
@@ -1739,8 +1739,8 @@ and type_binding : context -> binding -> binding * context =
                       let ft' =
                         match Env.lookup context'.var_env name with
                           | `ForAll (_, t) | t -> t in
-                      let () = unify ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-                        ((name, Some ft, pos), ([], (pats, body)), location, t) :: defs) [] defs patss) in
+                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
+                        ((name, Some ft, name_pos), ([], (pats, body)), location, t, pos) :: defs) [] defs patss) in
           let genv =
             List.fold_left (fun genv (name, fb) ->
                               let tyvars, t = Utils.generalise context.var_env fb in
@@ -1748,12 +1748,13 @@ and type_binding : context -> binding -> binding * context =
               Env.empty
               fbs
           in
-            (`Funs (List.map (fun ((name, _, pos), (_, (ppats, body)), location, dtopt) ->
+            (`Funs (List.map (fun ((name, _, name_pos), (_, (ppats, body)), location, dtopt, pos) ->
                                 let tyvars, t = Env.lookup genv name in
-                                  ((name, Some t, pos),
+                                  ((name, Some t, name_pos),
                                    (tyvars, (List.map (List.map erase_pat) ppats, erase body)),
                                    location,
-                                   dtopt))
+                                   dtopt,
+                                   pos))
                       defs),
              {empty_context with var_env = (Env.map snd genv)})
       | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
@@ -1765,7 +1766,7 @@ and type_binding : context -> binding -> binding * context =
       | `Infix -> `Infix, empty_context
       | `Exp e ->
           let e = tc e in
-          let () = unify ~handle:Gripers.bind_exp
+          let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type)
           in
             `Exp (erase e), empty_context

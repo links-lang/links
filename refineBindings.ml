@@ -35,7 +35,7 @@ let refine_bindings : binding list -> binding list =
           bindings ([], []) in
         group::groups
     in 
-    (* build a callgraph *)
+      (* build a callgraph *)
     let callgraph : _ -> (string * (string list)) list
       = fun defs -> 
         let defs = List.map (function
@@ -47,10 +47,10 @@ let refine_bindings : binding list -> binding list =
                StringSet.elements 
                  (StringSet.inter (Freevars.funlit body) names))
             defs in
-    (* refine a group of function bindings *)
+      (* refine a group of function bindings *)
     let groupFuns pos (funs : binding list) : binding list = 
       let unFun = function
-        | `Fun (b, (_, funlit), location, dt), _ -> (b, ([], funlit), location, dt)
+        | `Fun (b, (_, funlit), location, dt), pos -> (b, ([], funlit), location, dt, pos)
         | _ -> assert false in
       let find_fun name = 
         List.find (function
@@ -64,9 +64,14 @@ let refine_bindings : binding list -> binding list =
              `Funs (List.map (find_fun ->- unFun) scc), pos)
           sccs
     in 
-    (* refine a group of bindings *)
+      (* refine a group of bindings *)
     let group = function
-      | (`Fun _, pos)::_ as funs -> groupFuns pos funs
+        (* TODO:
+           
+           Compute the position corresponding to the whole collection
+           of functions.
+        *)
+      | (`Fun _, _)::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
       | binds                    -> binds in
       concat_map group initial_groups
 
