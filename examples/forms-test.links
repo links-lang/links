@@ -1,10 +1,10 @@
 # An ugly page that exercises the various types of input fields in a form.
 
 fun radioGroupVertical(items) {
-  for(var (key, label) <- items)
+  for(var (xml, label) <- items)
     <#>
     <label>
-      {key} {stringToXml(label)}
+      {xml} {stringToXml(label)}
     </label> <br/>
     </#>
 }
@@ -24,7 +24,8 @@ var theFormlet =
                                      (6, "Glow-in-the-dark handlebar tape")]) -> addons }
      </div>
      <div>
-        { inputRadiogroup([("red", "Red")], ("green", "Green"), [("blue", "Blue")], radioGroupVertical) -> colour }
+        { inputRadiogroup(["Red", "Green", "Blue"], "Blue", radioGroupVertical)
+           -> colour }
      </div>
      <div><label>
        Comments about your order: <br />
