@@ -1824,7 +1824,12 @@ struct
       function
         | `Definitions bindings -> 
             let te, bindings = type_bindings tyenv bindings in
-              `Definitions bindings, Types.unit_type, te
+            let tyenv =
+              {tyenv with
+                 var_env = Env.extend tyenv.var_env te.var_env;
+                 tycon_env = Env.extend tyenv.tycon_env te.tycon_env}
+            in             
+              `Definitions bindings, Types.unit_type, tyenv
         | `Expression (_, pos as body) -> 
             let body, t = (type_check tyenv body) in
               `Expression body, t, tyenv
