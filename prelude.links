@@ -773,7 +773,7 @@ fun checkboxDefault(checked) {
 }
 
 sig checkbox : Formlet (Bool)
-var checkbox = checkboxDefault(false);
+var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 
 # before ++ [selected] ++ after is a list of (value, data) pairs
 # layout is a function for rendering a list of (radio button, data) pairs
