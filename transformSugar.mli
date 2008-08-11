@@ -5,6 +5,10 @@ class transform : (Types.environment * Types.tycon_environment) ->
 object ('self)
   val var_env : Types.environment
   val tycon_env : Types.tycon_environment
+
+  method get_var_env     : unit -> Types.environment
+  method get_tycon_env   : unit -> Types.tycon_environment
+  method get_formlet_env : unit -> Types.environment
     
   method lookup_type     : name -> Types.datatype
   method lookup_mb       : unit -> Types.datatype
@@ -15,7 +19,7 @@ object ('self)
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : binop -> 'self * binop * Types.datatype
   method constant        : constant -> 'self * constant * Types.datatype
-  method funlit          : funlit -> 'self * funlit
+  method funlit          : Types.datatype -> funlit -> 'self * funlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
   method list            : 'a . ('self -> 'a -> 'self * 'a * Types.datatype) ->
@@ -32,8 +36,8 @@ object ('self)
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
   method sec             : sec -> 'self * sec * Types.datatype
-(*
   method sentence        : sentence -> 'self * sentence
+(*
   method sentence'       : sentence' -> 'self * sentence'
   method directive       : directive -> 'self * directive
 *)

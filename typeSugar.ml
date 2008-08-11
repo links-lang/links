@@ -12,16 +12,12 @@ module Env = Env.String
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string -> (Types.type_arg list * Types.datatype)
-(*   val instantiate : Types.environment -> string -> Types.datatype   *)
   val generalise : Types.environment -> Types.datatype -> (Types.quantifier list * Types.datatype)
 
   val is_generalisable : phrase -> bool
 end =
 struct
   let unify = Unify.datatypes
-(*   let instantiate env name = *)
-(*     let (_, _, t) = Instantiate.var env name in *)
-(*       t *)
   let instantiate = Instantiate.var
   let generalise = Generalise.generalise
 
@@ -322,7 +318,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 "while the subsequent expressions have type" ^ nl() ^
 tab() ^ code (show_type rt))
 
-    (* [BUG] This griper is a bit rubbish because it doesn't distinguish
+    (* BUG: This griper is a bit rubbish because it doesn't distinguish
     between two different errors. *)
     let extend_record ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
       die pos ("\
@@ -1091,23 +1087,22 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `As       ((v, Some t, _), p) -> Env.bind (pattern_env p) (v, t)
     | `As       ((_, None, _), _) -> assert false
 
-(*
+
 let update_pattern_vars env =
 (object (self)
   inherit SugarTraversals.map as super
 
   method patternnode : patternnode -> patternnode =
     fun n ->      
-      let update (_, (x, _, pos)) =
-        let tyvars, t = Env.lookup env x in
-          (tyvars, (x, Some t, pos))
+      let update (x, _, pos) =
+        let _, t = Env.lookup env x in
+          (x, Some t, pos)
       in
         match n with
           | `Variable b -> `Variable (update b)
           | `As (b, p) -> `As (update b, self#pattern p)
           | _ -> super#patternnode n
  end)#pattern
-*)
 
 let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
   | `FormBinding (_, pattern), _ -> pattern_env pattern
@@ -1387,7 +1382,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `InfixAppl ((_, op), l, r) ->
             let tyargs, opt = type_binary_op context op in
             let l = tc l
-            and r = tc r 
+            and r = tc r
             and rettyp = Types.fresh_type_variable () in
               unify ~handle:Gripers.infix_apply
                 ((Sugartypes.string_of_binop op, opt), 
@@ -1411,7 +1406,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                                    mailbox_type context.var_env, rettyp)));
               `FnAppl (erase f, List.map erase ps), rettyp
         | `TAppl (e, qs) ->
-            assert false
+            let (e, _), t = tc e in e, t
+(*            assert false*)
         (* xml *)
         | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
@@ -1649,8 +1645,7 @@ and type_binding : context -> binding -> binding * context =
             if Utils.is_generalisable body then
               let genv = Env.map (Utils.generalise context.var_env) penv in
               let penv = Env.map snd genv in
-(*              let pat = update_pattern_vars genv (erase_pat pat) in*)
-              let pat = erase_pat pat in
+              let pat = update_pattern_vars genv (erase_pat pat) in
                 (Utils.generalise context.var_env bt, pat, penv)
             else
               let quantifiers = Generalise.get_quantifiers context.var_env bt in
@@ -1713,19 +1708,22 @@ and type_binding : context -> binding -> binding * context =
                       match t with
                         | None -> ft
                         | Some (_, Some t) ->
-(*                            Debug.print ("annotation: " ^ Types.string_of_datatype t);*)
-                            let (_quantifiers, fb) = Utils.generalise context.var_env t in
-(*                            Debug.print ("generalised annotation: " ^ Types.string_of_datatype fb);*)
+                            let (_tyvars, fb) = Utils.generalise context.var_env t in
                               (* make sure the annotation has the right shape *)
-                            let fbi = (snd -<- Instantiate.typ) fb in
-(*                            Debug.print ("instantiated annotation: " ^ Types.string_of_datatype fbi);*)
+                            let _, fbi = Instantiate.typ fb in
                             let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos fbi) in
                               fb
                     in
                       (name, fb), pats)
                  defs) in
+
+          (* 
+             type check the function bodies using
+             non-generalised bindings (except for type-annotated functions)
+          *)
           let defs =
-            let body_env = List.fold_left (fun env (name, fb) -> Env.bind env (name, fb)) context.var_env fbs in
+            let body_env = List.fold_left (fun env (name, fb) ->
+                                             Env.bind env (name, fb)) context.var_env fbs in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
               List.rev
                 (List.fold_left2
@@ -1734,29 +1732,65 @@ and type_binding : context -> binding -> binding * context =
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
                       let body = type_check (bind_var context' (mailbox, mt)) body in
+                        (* QUESTION: shouldn't we be using this mailbox type in the type of ft? *)
                       let ft = make_ft pats (typ body) in
                         (* WARNING: this looks surprising, but it is what we want *)
                       let ft' =
                         match Env.lookup context'.var_env name with
                           | `ForAll (_, t) | t -> t in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-                        ((name, Some ft, name_pos), ([], (pats, body)), location, t, pos) :: defs) [] defs patss) in
-          let genv =
-            List.fold_left (fun genv (name, fb) ->
-                              let tyvars, t = Utils.generalise context.var_env fb in
-                                Env.bind genv (name, (tyvars, t)))
-              Env.empty
-              fbs
+                        ((name, None, name_pos), ([], (pats, body)), location, t, pos) :: defs) [] defs patss) in
+
+          (* generalise *)
+          let tyvars_env, fun_env =
+            List.fold_left
+              (fun (tyvars_env, fun_env) (name, fb) ->
+                 let tyvars, t =
+                   match fb with
+                     | `ForAll (tyvars, _) -> (tyvars, fb)
+                     | fb -> Utils.generalise context.var_env fb in
+                 (* Instantiation followed by generalisation has the
+                    effect of freshening the type variables. This is
+                    necessary in order to make sure the second time we
+                    type-check the body we don't change any of the
+                    (bound) type variables in the function bindings.
+                 *)
+                 let _, t = Instantiate.typ t in
+                 let _, t = Utils.generalise context.var_env t in                   
+                   Env.bind tyvars_env (name, tyvars), Env.bind fun_env (name, t))
+              (Env.empty, Env.empty)
+              fbs in
+
+          (* typecheck each function body again with the generalised function bindings in scope *)
+          let defs =
+            let body_env = Env.extend context.var_env fun_env in
+            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
+              List.rev
+                (List.fold_left2
+                   (fun defs ((name, _, name_pos), (_, (_, body)), location, t, pos) pats ->
+                      let tyvars = Env.lookup tyvars_env name in
+
+                      (* NOTE: the reason for re-type-checking the
+                         body is to ensure that all instances of
+                         polymorphic functions are polymorphic (the
+                         first pass forces unannotated recursive
+                         instances to be monomorphic).  *)
+                      let body_context =
+                        List.fold_left
+                          fold_in_envs {context with var_env = body_env} pats in
+                      let mt = Types.fresh_type_variable () in
+                      let body = type_check (bind_var body_context (mailbox, mt)) (erase body) in
+
+                      let ft = make_ft pats (typ body) in
+                      let _, ft' = Utils.instantiate fun_env name in
+                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
+                        ((name, Some (Env.lookup fun_env name), name_pos),
+                         (tyvars, (List.map (List.map erase_pat) pats, erase body)),
+                         location,
+                         t,
+                         pos) :: defs) [] defs patss)
           in
-            (`Funs (List.map (fun ((name, _, name_pos), (_, (ppats, body)), location, dtopt, pos) ->
-                                let tyvars, t = Env.lookup genv name in
-                                  ((name, Some t, name_pos),
-                                   (tyvars, (List.map (List.map erase_pat) ppats, erase body)),
-                                   location,
-                                   dtopt,
-                                   pos))
-                      defs),
-             {empty_context with var_env = (Env.map snd genv)})
+            `Funs defs, {empty_context with var_env = fun_env}       
       | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
             (`Foreign ((name, Some datatype, pos), language, dt),
              (bind_var empty_context (name, datatype)))
