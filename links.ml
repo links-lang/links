@@ -258,7 +258,8 @@ let run_tests tests () =
     exit 0
   end
 
-let config_file = (ref None : string option ref)
+let config_file   : string option ref = ref None
+let to_precompile : string list ref   = ref []
 
 let options : opt list = 
   let set setting value = Some (fun () -> Settings.set_value setting value) in
@@ -273,11 +274,7 @@ let options : opt list =
     (noshort, "dump",                None,
      Some(fun filename -> Loader.print_cache filename;  
             Settings.set_value interacting false));
-    (noshort, "precompile",          None,
-     Some (fun filename ->
-             let _, (_, prelude_tyenv) = load_prelude() in
-             Loader.precompile_cache prelude_tyenv filename;
-               Settings.set_value interacting false));
+    (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
@@ -301,6 +298,10 @@ let main () =
 
   let () = Utility.for_each !to_evaluate (evaluate_string_in prelude_envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
+
+  let () = Utility.for_each !to_precompile (Loader.precompile_cache (snd prelude_envs)) in
+  let () = if !to_precompile <> [] then Settings.set_value interacting false in
+
   let () = Utility.for_each !file_list (run_file prelude_syntax prelude_envs) in
     if Settings.get_value interacting then
       let () = print_endline (Settings.get_value welcome_note) in
