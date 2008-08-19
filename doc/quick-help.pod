@@ -1904,24 +1904,35 @@ renderMultipart : (Formlet (a), a -> Xml) -> Xml
 
 =head1 Running links
 
-Links can be run either as a CGI script through a web server such as Apache, or from the command line.
+Links can be run either as a CGI script through a web server such as
+Apache, or from the command line.
 
-When run as a CGI script Links must be passed a filename as an argument.
+When run as a CGI script Links must be passed a filename as an
+argument:
 
   links filename
 
-From the command line Links can be invoked in a number of different ways:
+The source code to evaluate can be specified in several ways:
 
-  links                load the interactive shell
-  links -e exp         evaluate exp
-  links filename       run filename
+  links                # run interactively
+  links -e exp         # evaluate exp, print its result
+  links filename       # run filename
 
-The following options are supported in all modes:
+Command line flags can be used to enable/disable some features:
 
-  -d                   debug mode
   -O                   enable optimisation
   -n                   don't print types
+  -d                   debug mode (for hacking on links itself)
+
+A configuration file can be chosen using this command-line option:
+
   --config=<filename>  set a configuration file
+
+These other options can be fun, too:
+
+  --pp=<command>          run all input through UNIX <command> before parsing
+  --precompile=<filename> precompile and store a cached version of <filename>
+  --dump=<filename>       find and print out the cached version of <filename>
 
 =head2 The interactive shell
 

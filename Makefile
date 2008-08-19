@@ -111,7 +111,7 @@ SOURCES = $(OPC)                		\
           compilePatterns.ml                    \
           value.mli value.ml                    \
           compileir.ml                          \
-          loader.ml                             \
+          loader.mli loader.ml                  \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
           evalir.ml                             \
@@ -161,7 +161,7 @@ quick-help:
 docs-clean:
 	cd doc && make clean
 
-prelude.links.cache: prelude.links
+prelude.links.cache: prelude.links links
 	@echo "Pre-compiling prelude..."
 	@./links -e 'print("Prelude compiled OK.")'
 

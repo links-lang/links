@@ -42,7 +42,7 @@ let with_prelude prelude (Syntax.Program (defs, body)) =
 
 (* Read in and optimise the program *)
 let read_and_optimise_program prelude tyenv filename = 
-  let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
+  let sugar, pos_context = measure "parse" (Parse.parse_file Parse.program) filename in
   let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
   let program = Sugar.desugar_program program in
   let tenv, program = measure "type" (Inference.type_program tyenv) program in
@@ -64,7 +64,7 @@ let read_and_optimise_program prelude env arg
     : Types.typing_environment * Syntax.program
   = 
   if Settings.get_value cache_programs then
-    Loader.read_file_cache arg
+    Loader.load_file env arg
   else
     read_and_optimise_program prelude env arg
 

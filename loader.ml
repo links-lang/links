@@ -3,7 +3,8 @@ open Performance
 
 let `T (pos, dt, _) = Syntax.no_expr_data
 
-let identity x = x
+let use_cache = true
+let make_cache = true
 
 let expunge_source_pos =
   (Syntax.Functor_expression'.map
@@ -12,44 +13,90 @@ let expunge_source_pos =
 let expunge_all_source_pos =
   Syntax.transform_program expunge_source_pos
 
-let newer f1 f2 = 
-   ((Unix.stat f1).Unix.st_mtime > (Unix.stat f2).Unix.st_mtime) 
+let write_program (filename : string)
+    (tenv : Types.typing_environment) (program : Syntax.program) : unit =
+  call_with_open_outfile filename ~binary:true
+    (fun file ->
+       Marshal.to_channel file 
+         (* Serialise the typing environment returned from
+            sugar typing (which includes alias bindings), not
+            the typing environment returned from
+            Inference.type_program (which doesn't) *)
+         (tenv, expunge_all_source_pos program
+            : Types.typing_environment * Syntax.program)
+         [])
   
-let make_cache = true
+let read_file_source (filename:string) tyenv =
+  let sugar, pos_context = 
+      lazy (Parse.parse_file Parse.program filename) <|measure_as|> "parse" in
+  let program, _, tenv = 
+      Frontend.Pipeline.program tyenv pos_context sugar in
+  let program = Sugar.desugar_program program in
+  let env, program = 
+    lazy (Inference.type_program tyenv program) <|measure_as|> "type" in
+  let program = lazy (Optimiser.optimise_program (env, program)) 
+                <|measure_as|> "optimise" in
+  let program = Syntax.labelize program in
+    tenv, env, program
 
-let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fun filename ->
-  let cachename = filename ^ ".cache" in
+let unmarshal_cache_file cachefile = 
+  (Marshal.from_channel cachefile : (Types.typing_environment * Syntax.program))
+
+let read_cache_file cachename = 
+  call_with_open_infile cachename ~binary:true unmarshal_cache_file
+
+let cache_directory_setting = 
+  Settings.add_string ("cache_directory", "", `User)
+
+let cachefile_path filename = 
+  let cachedir = Settings.get_value cache_directory_setting in
+    match cachedir with
+      | "" -> filename  ^ ".cache" (* Use current dir, no fancy filename  *)
+      | cachedir ->                (* Use given dir, put hash in filename *)
+          let path_hash = base64encode(Digest.string (absolute_path filename)) in
+          let cache_filename = (Filename.basename filename) ^ "-" ^ 
+                                 path_hash ^ ".cache" in
+            Filename.concat cachedir cache_filename
+    
+exception No_cache
+
+(** Load a file, considering and maintaining the cache. Includes 
+    parsing, desugaring, typechecking, optimising and labelizing. *)
+let load_file : _ -> string -> (Types.typing_environment * Syntax.program) = 
+  fun env infile ->
+  let cachename = cachefile_path infile in
+  let result = 
     try
-      if make_cache && newer cachename filename then
-        call_with_open_infile cachename ~binary:true
-          (fun cachefile ->
-             (Marshal.from_channel cachefile 
-                : (Types.typing_environment * Syntax.program)))
+      if not use_cache then None else
+      if getuid_owns cachename && newer cachename infile then
+        Some (read_cache_file cachename)
       else
-        (Debug.print("No precompiled " ^ filename);
-         raise (Sys_error "Precompiled source file out of date."))
-    with (Sys_error _| Unix.Unix_error _) ->
-      let sugar, pos_context = measure "parse" (Parse.parse_file ~pp:(Settings.get_value Basicsettings.pp) Parse.program) filename in
-      let program, _, tenv = Frontend.Pipeline.program Library.typing_env pos_context sugar in
-      let program = Sugar.desugar_program program in
-      let env, program = measure "type" (Inference.type_program Library.typing_env) program in
-      let program = measure "optimise" Optimiser.optimise_program (env, program) in
-      let program = Syntax.labelize program
-      in 
-	(try (* try to write to the cache *)
-           call_with_open_outfile cachename ~binary:true
-             (fun cachefile ->
-                Marshal.to_channel cachefile 
-                  (* Serialise the typing environment returned from
-                     sugar typing (which includes alias bindings), not
-                     the typing environment returned from
-                     Inference.type_program (which doesn't) *)
-                  (tenv, expunge_all_source_pos program
-                     : Types.typing_environment * Syntax.program)
-                  [])
-	 with _ -> ()) (* Ignore errors writing the cache file *);
-        tenv, program
-  
-let dump_cached filename =
-   let _env, program = read_file_cache filename in
+        raise No_cache
+    with (No_cache | Sys_error _| Unix.Unix_error _) ->
+      Debug.print("No valid cache for " ^ infile);
+      None
+  in
+    match result with
+        Some (tenv, program) -> tenv, program
+      | None -> 
+          (* Read & process the source *)
+          let tenv, env, program = read_file_source infile env in
+            if make_cache then
+            (try  (* to write to the cache *)
+               write_program cachename tenv program
+             with _ -> ()) (* Ignore errors writing the cache file *);
+            tenv, program
+
+(** Loads a named file and prints it as syntax; may use the cache or
+    the original file, as per the caching policy. *)
+let print_cache filename =
+   let _tenv, program = read_cache_file filename in
      print_string (Syntax.labelled_string_of_program program)
+
+let precompile env infile outfile : unit =
+  let tenv, env, program = read_file_source infile env in
+    write_program outfile tenv program
+
+let precompile_cache env infile : unit =
+  let outfile = infile ^ ".cache" in
+    precompile env infile outfile

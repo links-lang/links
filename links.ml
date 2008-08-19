@@ -71,9 +71,9 @@ let rec directives
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in 
+                (Errors.display_fatal Loader.load_file Library.typing_env (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
-              let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
+              let sugar, pos_context = Parse.parse_file Parse.program filename in
               let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
               let defs = Sugar.desugar_definitions bindings in
               let expr = opt_map Sugar.desugar_expression expr in
@@ -200,7 +200,7 @@ let interact envs =
 let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar tyenv filename = 
-    let sugar, pos_context = Parse.parse_file ~pp:(Settings.get_value pp) Parse.program filename in
+    let sugar, pos_context = Parse.parse_file Parse.program filename in
     let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
     let program = Sugar.desugar_program program in
       program, (bindings, expr)
@@ -222,6 +222,36 @@ let evaluate_string_in envs v =
 
 let to_evaluate : string list ref = ref []
 
+
+let load_prelude() = 
+  let prelude_types, (Syntax.Program (prelude_syntax, _) as prelude_program) =
+    (Errors.display_fatal
+       Loader.load_file Library.typing_env (Settings.get_value prelude_file))
+  in
+
+  let () = Library.prelude_env := Some prelude_types in
+
+  (* Having loaded a file, we now bump the internal type-variable
+     counter to ensure that type variables generated in the future
+     don't collide.
+     (BUG: we should really do something similar for term variables.)
+  *)
+  let _ =
+    let max_or (set : Types.TypeVarSet.t) (m : int) = 
+      if Types.TypeVarSet.is_empty set then
+        m
+      else max m (Types.TypeVarSet.max_elt set) in
+    let max_prelude_tvar =
+      List.fold_right max_or 
+        (Env.String.range (Env.String.map Types.free_bound_type_vars (prelude_types.Types.var_env)))
+        (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
+      Types.bump_variable_counter max_prelude_tvar
+  in
+  let prelude_compiled = Interpreter.run_defs [] [] prelude_syntax in
+  let prelude_envs = 
+    (prelude_compiled, Types.extend_typing_environment Library.typing_env prelude_types) in
+    prelude_syntax, prelude_envs
+
 let run_tests tests () = 
   begin
     Test.run tests;
@@ -240,7 +270,14 @@ let options : opt list =
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
-    (noshort, "dump",                None,                             Some Loader.dump_cached);
+    (noshort, "dump",                None,
+     Some(fun filename -> Loader.print_cache filename;  
+            Settings.set_value interacting false));
+    (noshort, "precompile",          None,
+     Some (fun filename ->
+             let _, (_, prelude_tyenv) = load_prelude() in
+             Loader.precompile_cache prelude_tyenv filename;
+               Settings.set_value interacting false));
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
@@ -255,40 +292,19 @@ let main () =
   end;
   config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
-  Errors.display_fatal_l (lazy (parse_cmdline options (fun i -> push_back i file_list)));
+  Errors.display_fatal_l (lazy 
+     (parse_cmdline options (fun i -> push_back i file_list)));
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
-  (* load prelude: *)
-  let prelude_types, (Syntax.Program (prelude, _) as prelude_program) =
-    (Errors.display_fatal Loader.read_file_cache (Settings.get_value prelude_file)) in
 
-  let () = Library.prelude_env := Some prelude_types in
+  let prelude_syntax, prelude_envs = load_prelude() in
 
-  (* make sure the fresh type variable counter does not clash with any
-     type variables from the prelude
-
-     BUG: we should really do something similar for term variables
-  *)
-  let _ =
-    let max_or (set : Types.TypeVarSet.t) (m : int) = 
-      if Types.TypeVarSet.is_empty set then
-        m
-      else max m (Types.TypeVarSet.max_elt set) in
-    let max_prelude_tvar =
-      List.fold_right max_or 
-        (Env.String.range (Env.String.map Types.free_bound_type_vars (prelude_types.Types.var_env)))
-        (Types.TypeVarSet.max_elt (Syntax.free_bound_type_vars_program prelude_program)) in
-      Types.bump_variable_counter max_prelude_tvar
-  in
-  let prelude_compiled = Interpreter.run_defs [] [] prelude in
-  let stdenvs = 
-    (prelude_compiled, Types.extend_typing_environment Library.typing_env prelude_types) in
-  let () = Utility.for_each !to_evaluate (evaluate_string_in stdenvs) in
+  let () = Utility.for_each !to_evaluate (evaluate_string_in prelude_envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
-  let () = Utility.for_each !file_list (run_file prelude stdenvs) in
-    if Settings.get_value(interacting) then
+  let () = Utility.for_each !file_list (run_file prelude_syntax prelude_envs) in
+    if Settings.get_value interacting then
       let () = print_endline (Settings.get_value welcome_note) in
-        interact stdenvs
+        interact prelude_envs
 
 let _ = 
   main ()

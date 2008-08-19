@@ -135,8 +135,8 @@ let print_settings () =
                            match mode, is_user setting with
                              | `User, true
                              | `System, false ->
-			         (format_universal
-				    (Printf.sprintf " %-25s %-7s") setting)::p
+		                 (format_universal
+		                    (Printf.sprintf " %-25s %-7s") setting)::p
                              | _ -> p) !settings []) in
   let user_settings =
     ("User settings" :: get_settings `User) in

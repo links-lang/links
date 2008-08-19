@@ -35,7 +35,7 @@ let parse = attempt parse_thingy
     
 
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
-let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_value Basicsettings.prelude_file) in
+let run tests = attempt (let _, prelude = Loader.load_file Library.typing_env (Settings.get_value Basicsettings.prelude_file) in
                          let prelude, _ = Interpreter.run_program [] [] prelude in
                            Interpreter.run_program prelude [] ->- snd) tests
 let show = attempt Result.string_of_result

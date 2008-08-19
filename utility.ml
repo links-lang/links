@@ -541,6 +541,8 @@ let groupingsToString : ('a -> string) -> 'a list list -> string =
 
 let numberp s = try ignore (int_of_string s); true with _ -> false
 
+(** {0 File I/O utilities} *)
+
 let lines (channel : in_channel) : string list = 
   let input () = 
     try Some (input_line channel)
@@ -588,17 +590,35 @@ let filter_through : command:string -> string -> string =
       Sys.remove filename;
       filtered
 
+(** Is f1 strictly newer than f2, in terms of modification time? *)
+let newer f1 f2 = 
+   ((Unix.stat f1).Unix.st_mtime > (Unix.stat f2).Unix.st_mtime) 
+
+(** Given a path name, possibly relative to CWD, return an absolute
+    path to the same file. *)
+let absolute_path filename = 
+  if Filename.is_relative filename then
+    Filename.concat (Sys.getcwd()) filename
+  else filename
+
+(** Is the UID of the process is the same as that of the file's owner? *)
+let getuid_owns file = 
+  Unix.getuid() == (Unix.stat file).Unix.st_uid
+
+
+
 (** [lookup_in alist] is a function that looks up its argument in [alist] *)
 let lookup_in alist x = List.assoc x alist
 
 (** lookup is like assoc but uses option types instead of
-   exceptions to signal absence *)
+    exceptions to signal absence *)
 let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
 
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
 
-(*** either type ***)
+
+(** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b
   deriving (Show, Eq, Typeable, Pickle, Shelve)
 
