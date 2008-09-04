@@ -128,3 +128,10 @@ let record_without t names =
              row_var)
     | _ -> assert false
 
+let fresh_type_quantifier () =
+  let var = Types.fresh_raw_variable () in
+    `RigidTypeVar var, Types.make_rigid_type_variable var
+
+let fresh_row_quantifier () =
+  let var = Types.fresh_raw_variable () in
+    `RigidRowVar var, Types.make_rigid_row_variable var

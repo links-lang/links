@@ -1008,11 +1008,16 @@ let is_sub_type, is_sub_row =
           and rrow, _ = unwrap_row row' in
             is_sub_row rec_vars (lrow, rrow)
       | `Table _, `Table _ -> failwith "not implemented subtyping on tables yet"
-      | `Application _, _ -> failwith "not implemented subtyping on applications yet"
-      | _, `Application _ -> failwith "not implemented subtyping on applications yet"
+      | `Application (labs, lts), `Application (rabs, rts) ->
+          (* WARNING: this assumes that abstract type parameters are all covariant *)
+          (* TODO: implement variance annotations *)
+          labs = rabs &&
+              List.for_all2 (fun t t' -> is_sub_type rec_vars (t, t')) lts rts
       | `MetaTypeVar _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
       | `MetaTypeVar _, _ -> failwith "not implemented subtyping on metatypevars yet"
       | _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | (`Alias (_, t)), t'
+      | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | _, _ -> false
   and is_sub_row =
     fun rec_vars ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
