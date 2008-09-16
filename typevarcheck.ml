@@ -28,7 +28,23 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
             isg f && isg m && isg t
         | `ForAll (qs, t) -> 
             is_guarded (bind_quantifiers qs bound_vars) var t
-        | `Record row -> isgr row
+        | `Record row ->
+            begin
+              (* HACK: silly 1-tuple test *)
+              match row with
+                | (fields, row_var)
+                    when
+                      (FieldEnv.mem "1" fields &&
+                         FieldEnv.size fields = 1 &&
+                          Unionfind.find row_var = `Closed) ->
+                    begin
+                      match FieldEnv.find "1" fields with
+                        | `Present t -> isg t
+                        | `Absent -> true
+                    end
+                | _ ->                  
+                    isgr row
+            end
         | `Variant row -> isgr row
         | `Table (r, w) -> isg r && isg w
         | `Alias (_, t) -> is_guarded bound_vars var t
