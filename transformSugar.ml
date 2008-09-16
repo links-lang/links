@@ -3,41 +3,13 @@ open Sugartypes
 
 module TyEnv = Env.String
 
-(* TODO:
-
-   should probably move this to TypeUtils
-*)
-let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t tyargs ->
-  let vars = TypeUtils.quantifiers t in
-  let tenv, renv =
-    assert (List.length vars = List.length tyargs);
-    List.fold_right2
-      (fun var t (tenv, renv) ->
-         match (var, t) with
-           | ((`TypeVar var | `RigidTypeVar var), `Type t) ->
-               (IntMap.add var t tenv, renv)
-           | ((`RowVar var | `RigidRowVar var), `Row row) ->
-               (* 
-                  QUESTION:
-                  
-                  What is the right way to put the row in the row_var environment?
-
-                  We can simply wrap it in a `Body tag, but then we need to be careful
-                  about which bits of the compiler are assuming that
-                  rows are already flattened. Maybe this is OK...
-               *)
-               (tenv, IntMap.add var (Unionfind.fresh (`Body row)) renv))
-      vars tyargs (IntMap.empty, IntMap.empty)
-  in
-    Instantiate.datatype (tenv, renv) t (* (Types.freshen_mailboxes t) *)
-
 let type_section env =
   function
     | `Minus         -> TyEnv.lookup env "-"
     | `FloatMinus    -> TyEnv.lookup env "-."
     | `Project label ->
-        let fb, f = TypeUtils.fresh_type_quantifier () in
-        let mb, m = TypeUtils.fresh_type_quantifier () in
+        let fb, f = Types.fresh_type_quantifier () in
+        let mb, m = Types.fresh_type_quantifier () in
         let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
           `ForAll ([fb; mb],
                    `Function (Types.make_tuple_type [r], m, f))
@@ -50,11 +22,11 @@ let type_unary_op env tycon_env =
     | `Name n     -> TyEnv.lookup env n
     | `Abs        -> 
         (* forall (rho, mb, a, mb2).(((|rho)) -{mb}-> a) -{mb2}-> *(|rho) -{mb}-> a *)
-        let rhob, rho = TypeUtils.fresh_row_quantifier () in
+        let rhob, rho = Types.fresh_row_quantifier () in
         let r = `Record (StringMap.empty, rho) in
-        let mb, m = TypeUtils.fresh_type_quantifier () in
-        let ab, a = TypeUtils.fresh_type_quantifier () in
-        let mb2, m2 = TypeUtils.fresh_type_quantifier () in
+        let mb, m = Types.fresh_type_quantifier () in
+        let ab, a = Types.fresh_type_quantifier () in
+        let mb2, m2 = Types.fresh_type_quantifier () in
           `ForAll
             ([rhob; mb; ab; mb2],
              `Function (Types.make_tuple_type [
@@ -87,19 +59,19 @@ let type_binary_op env tycon_env =
   | `Name "<"
   | `Name "<="
   | `Name "<>" ->
-      let ab, a = TypeUtils.fresh_type_quantifier () in
-      let mb, m = TypeUtils.fresh_type_quantifier () in
+      let ab, a = Types.fresh_type_quantifier () in
+      let mb, m = Types.fresh_type_quantifier () in
         `ForAll ([ab; mb],
                  `Function (Types.make_tuple_type [a; a], m, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "send"
   | `Name n       -> TyEnv.lookup env n
   | `App          -> 
       (* forall (rho, m, a, mb2).((|rho) -{mb}-> a, (|rho)) -{mb2}-> a *)
-      let rhob, rho = TypeUtils.fresh_row_quantifier () in
+      let rhob, rho = Types.fresh_row_quantifier () in
       let r = `Record (StringMap.empty, rho) in
-      let mb, m = TypeUtils.fresh_type_quantifier () in
-      let mb2, m2 = TypeUtils.fresh_type_quantifier () in
-      let ab, a = TypeUtils.fresh_type_quantifier () in
+      let mb, m = Types.fresh_type_quantifier () in
+      let mb2, m2 = Types.fresh_type_quantifier () in
+      let ab, a = Types.fresh_type_quantifier () in
         `ForAll
           ([rhob; mb; ab; mb2],
            `Function (Types.make_tuple_type [
@@ -120,6 +92,47 @@ let fun_mailbox t pss =
   in
     get_mb (t, pss)
 
+let option :
+    'self_type ->
+  ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+  'a option -> ('self_type * ('a option) * (Types.datatype option))
+  =
+  fun o f ->
+    function
+      | None -> (o, None, None)
+      | Some x -> let (o, x, t) = f o x in (o, Some x, Some t)
+
+let optionu :
+    'self_type ->
+    ('self_type -> 'a -> ('self_type * 'a)) ->
+  'a option -> ('self_type * ('a option)) =
+  fun o f ->
+    function
+      | None -> (o, None)
+      | Some x -> let (o, x) = f o x in (o, Some x)
+                                          
+let rec list :
+    'self_type ->
+    ('self_type -> 'a -> 'self_type * 'a * Types.datatype) ->
+  'a list -> 'self_type * 'a list * Types.datatype list =
+  fun o f ->
+        function
+          | [] -> (o, [], [])
+          | x :: xs ->
+              let (o, x, t) = f o x in
+              let (o, xs, ts) = list o f xs in (o, x::xs, t::ts)
+                                                 
+let rec listu :
+    'self_type ->
+    ('self_type -> 'a -> 'self_type * 'a) ->
+  'a list -> 'self_type * 'a list =
+  fun o f ->
+    function
+      | [] -> (o, [])
+      | x :: xs ->
+          let (o, x) = f o x in
+          let (o, xs) = listu o f xs in (o, x::xs)
+
 class transform (env : (Types.environment * Types.tycon_environment)) =
   object (o : 'self_type)
     val var_env = fst env
@@ -139,46 +152,6 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
     method with_mb : Types.datatype -> 'self_type = fun mb ->
       {< var_env = TyEnv.bind var_env ("_MAILBOX_", mb) >}
 
-    method option :
-      'a.
-        ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
-          'a option -> ('self_type * ('a option) * (Types.datatype option)) =
-      fun f ->
-        function
-        | None -> (o, None, None)
-        | Some x -> let (o, x, t) = f o x in (o, Some x, Some t)
-      
-    method optionu :
-      'a.
-        ('self_type -> 'a -> ('self_type * 'a)) ->
-          'a option -> ('self_type * ('a option)) =
-      fun f ->
-        function
-        | None -> (o, None)
-        | Some x -> let (o, x) = f o x in (o, Some x)
-
-    method list :
-      'a.
-        ('self -> 'a -> 'self * 'a * Types.datatype) ->
-          'a list -> 'self * 'a list * Types.datatype list =
-      fun f ->
-        function
-          | [] -> (o, [], [])
-          | x :: xs ->
-              let (o, x, t) = f o x in
-              let (o, xs, ts) = o#list f xs in (o, x::xs, t::ts)
-
-    method listu :
-      'a.
-        ('self -> 'a -> 'self * 'a) ->
-          'a list -> 'self * 'a list =
-      fun f ->
-        function
-          | [] -> (o, [])
-          | x :: xs ->
-              let (o, x) = f o x in
-              let (o, xs) = o#listu f xs in (o, x::xs)
-
     method unary_op : unary_op -> ('self_type * unary_op * Types.datatype) =
       fun op ->
         (o, op, type_unary_op var_env tycon_env op)
@@ -194,7 +167,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
     method sentence : sentence -> ('self_type * sentence) =
       function
       | `Definitions defs ->
-          let (o, defs) = o#listu (fun o -> o#binding) defs
+          let (o, defs) = listu o (fun o -> o#binding) defs
           in (o, `Definitions defs)
       | `Expression e -> let (o, e, _) = o#phrase e in (o, `Expression e)
       | `Directive d -> (o, `Directive d)
@@ -204,7 +177,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
         | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> (o, r)
         | `Quote r -> let (o, r) = o#regex r in (o, `Quote r)
         | `Seq rs ->
-            let (o, rs) = o#listu (fun o -> o#regex) rs in (o, `Seq rs)
+            let (o, rs) = listu o (fun o -> o#regex) rs in (o, `Seq rs)
         | `Alternate (r1, r2) ->
             let (o, r1) = o#regex r1 in
             let (o, r2) = o#regex r2 in
@@ -223,8 +196,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->
-        let (o, bs) = o#listu (fun o -> o#binding) bs in
-        let (o, e, t) = o#option (fun o -> o#phrase) e
+        let (o, bs) = listu o (fun o -> o#binding) bs in
+        let (o, e, t) = option o (fun o -> o#phrase) e
         in (o, (bs, e), t)
 
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
@@ -232,6 +205,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
       | `FunLit (Some argss, lam) ->
+(*          Debug.print ("funlit: "^Sugartypes.Show_phrasenode.show (`FunLit (Some argss, lam)));*)
           let inner_mb = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_mb lam in
           let t =
@@ -259,16 +233,16 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let o = o#with_mb outer_mb in
             (o, `SpawnWait (body, Some inner_mb), body_type)
       | `ListLit (es, Some t) ->
-          let (o, es, _) = o#list (fun o -> o#phrase) es in (o, `ListLit (es, Some t), t)
+          let (o, es, _) = list o (fun o -> o#phrase) es in (o, `ListLit (es, Some t), t)
       | `RangeLit (e1, e2) ->
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in
             (o, `RangeLit (e1, e2), Types.make_list_type Types.int_type)
       | `Iteration (gens, body, cond, orderby) ->
-          let (o, gens) = o#listu (fun o -> o#iterpatt) gens in
+          let (o, gens) = listu o (fun o -> o#iterpatt) gens in
           let (o, body, t) = o#phrase body in
-          let (o, cond, _) = o#option (fun o -> o#phrase) cond in
-          let (o, orderby, _) = o#option (fun o -> o#phrase) orderby in
+          let (o, cond, _) = option o (fun o -> o#phrase) cond in
+          let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
             (o, `Iteration (gens, body, cond, orderby), t)
       | `Escape (b, e) ->
           let (o, b) = o#binder b in
@@ -281,12 +255,16 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e2, _) = o#phrase e2
           in (o, `Conditional (p, e1, e2), t)
       | `Block (bs, e) ->
-          let (o, bs) = o#listu (fun o -> o#binding) bs in
+          let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
-          let t = apply_type t tyargs in
+(*             Debug.print ("infix"); *)
+(*             Debug.print ("t: "^Types.string_of_datatype t); *)
+(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
+(*             Debug.print ("exp: "^Show_phrasenode.show (`InfixAppl ((tyargs, op), e1, e1))); *)
+          let t = Instantiate.apply_type t tyargs in
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in
             (o, `InfixAppl ((tyargs, op), e1, e2), t)
@@ -295,16 +273,25 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `Regex r, Instantiate.alias "Regex" [] tycon_env)
       | `UnaryAppl ((tyargs, op), e) ->
           let (o, op, t) = o#unary_op op in
-          let t = apply_type t tyargs in
+(*             Debug.print ("unary"); *)
+(*             Debug.print ("t: "^Types.string_of_datatype t); *)
+(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
+(*             Debug.print ("exp: "^Show_phrasenode.show (`UnaryAppl ((tyargs, op), e))); *)
+          let t = Instantiate.apply_type t tyargs in
           let (o, e, _) = o#phrase e in
             (o, `UnaryAppl ((tyargs, op), e), t)
       | `FnAppl (f, args) ->
           let (o, f, ft) = o#phrase f in
-          let (o, args, _) = o#list (fun o -> o#phrase) args in
+          let (o, args, _) = list o (fun o -> o#phrase) args in
+(*            Debug.print ("");*)
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
-          let t = apply_type t tyargs in
+(*             Debug.print "tappl"; *)
+(*             Debug.print ("t: "^Types.string_of_datatype t); *)
+(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
+(*             Debug.print ("TAppl: "^Show_phrasenode.show (`TAppl (e, tyargs))); *)
+          let t = Instantiate.apply_type t tyargs in
             (o, `TAppl (e, tyargs), t)
       | `TupleLit [e] ->
           (* QUESTION:
@@ -314,7 +301,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e, t) = o#phrase e in
             (o, `TupleLit [e], t)
       | `TupleLit es ->
-          let (o, es, ts) = o#list (fun o -> o#phrase) es in
+          let (o, es, ts) = list o (fun o -> o#phrase) es in
             (o, `TupleLit es, Types.make_tuple_type ts)
       | `RecordLit (fields, base) ->
           let (o, fields, field_types) =
@@ -329,7 +316,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
                        StringMap.add name t field_types)
             in
               list o fields in
-          let (o, base, base_type) = o#option (fun o -> o#phrase) base in
+          let (o, base, base_type) = option o (fun o -> o#phrase) base in
           let t =
             match base_type with
               | None -> Types.make_record_type field_types
@@ -366,12 +353,12 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e, _) = o#phrase e in
             (o, `Upcast (e, to_type, from_type), t)
       | `ConstructorLit (name, e, Some t) ->
-          let (o, e, _) = o#option (fun o -> o#phrase) e in
+          let (o, e, _) = option o (fun o -> o#phrase) e in
             (o, `ConstructorLit (name, e, Some t), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
-            o#listu
+            listu o
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
@@ -380,7 +367,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `Switch (v, cases, Some t), t)
       | `Receive (cases, Some t) ->
           let (o, cases) =
-            o#listu
+            listu o
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
@@ -389,8 +376,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `Receive (cases, Some t), t)
       | `DatabaseLit (name, (driver, args)) ->
           let (o, name, _) = o#phrase name in
-          let (o, driver, _) = o#option (fun o -> o#phrase) driver in
-          let (o, args, _) = o#option (fun o -> o#phrase) args in
+          let (o, driver, _) = option o (fun o -> o#phrase) driver in
+          let (o, args, _) = option o (fun o -> o#phrase) args in
             (o, `DatabaseLit (name, (driver, args)), `Primitive `DB)
       | `TableLit (name, (dtype, Some (read_row, write_row)), constraints, db) ->
           let (o, name, _) = o#phrase name in
@@ -399,19 +386,19 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
-          let (o, where, _) = o#option (fun o -> o#phrase) where in
+          let (o, where, _) = option o (fun o -> o#phrase) where in
             (o, `DBDelete (p, from, where), Types.unit_type)
       | `DBInsert (into, values, id) ->
           let (o, into, _) = o#phrase into in
           let (o, values, _) = o#phrase values in
-          let (o, id, _) = o#option (fun o -> o#phrase) id in
+          let (o, id, _) = option o (fun o -> o#phrase) id in
             (o, `DBInsert (into, values, id), Types.unit_type)
       | `DBUpdate (p, from, where, set) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
-          let (o, where, _) = o#option (fun o -> o#phrase) where in
+          let (o, where, _) = option o (fun o -> o#phrase) where in
           let (o, set) =
-            o#listu
+            listu o
               (fun o (name, value) ->
                  let (o, value, _) = o#phrase value in (o, (name, value)))
               set
@@ -419,13 +406,13 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `DBUpdate (p, from, where, set), Types.unit_type)
       | `Xml (tag, attrs, attrexp, children) ->
           let (o, attrs) =
-            o#listu
+            listu o
               (fun o (name, value) ->
-                 let (o, value, _) = o#list (fun o -> o#phrase) value in
+                 let (o, value, _) = list o (fun o -> o#phrase) value in
                    (o, (name, value)))
               attrs in
-          let (o, attrexp, _) = o#option (fun o -> o#phrase) attrexp in
-          let (o, children, _) = o#list (fun o -> o#phrase) children in
+          let (o, attrexp, _) = option o (fun o -> o#phrase) attrexp in
+          let (o, children, _) = list o (fun o -> o#phrase) children in
             (o, `Xml (tag, attrs, attrexp, children), Types.xml_type)
       | `TextNode s -> (o, `TextNode s, Types.xml_type)
       | `Formlet (body, yields) ->
@@ -435,7 +422,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let o = {< var_env=TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ());
                      formlet_env=formlet_env >} in
           let (o, yields, t) = o#phrase yields in
-          let o = {< var_env=var_env >} in 
+          let o = {< var_env=var_env >} in
             (o, `Formlet (body, yields), Instantiate.alias "Formlet" [t] tycon_env)
       | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
       | `FormletPlacement (f, h, attributes) ->
@@ -467,21 +454,21 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, p) = o#pattern p in
           let (o, ps) = o#pattern ps in (o, `Cons (p, ps))
       | `List p ->
-          let (o, p) = o#listu (fun o -> o#pattern) p in (o, `List p)
+          let (o, p) = listu o (fun o -> o#pattern) p in (o, `List p)
       | `Variant (name, p) ->
-          let (o, p) = o#optionu (fun o -> o#pattern) p
+          let (o, p) = optionu o (fun o -> o#pattern) p
           in (o, `Variant (name, p))
       | `Negative name -> (o, `Negative name)
       | `Record (fields, rest) ->
           let (o, fields) =
-            o#listu
+            listu o
               (fun o (name, p) ->
                  let (o, p) = o#pattern p in (o, (name, p)))
               fields in
-          let (o, rest) = o#optionu (fun o -> o#pattern) rest
+          let (o, rest) = optionu o (fun o -> o#pattern) rest
           in (o, `Record (fields, rest))
       | `Tuple ps ->
-          let (o, ps) = o#listu (fun o -> o#pattern) ps in (o, `Tuple ps)
+          let (o, ps) = listu o (fun o -> o#pattern) ps in (o, `Tuple ps)
       | `Constant c -> let (o, c, _) = o#constant c in (o, `Constant c)
       | `Variable x -> let (o, x) = o#binder x in (o, `Variable x)
       | `As (x, p) ->
@@ -510,10 +497,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
         (* make sure that the right mailbox type is in scope for the
            body, then restore the outer mailbox type afterwards *)
         let outer_mb = o#lookup_mb () in
-        let (o, pss) = o#listu (fun o -> o#listu (fun o -> o#pattern)) pss in
-        let o = o#with_mb inner_mb in          
+        let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
+        let o = o#with_mb inner_mb in
         let (o, e, t) = o#phrase e in
-        let o = o#with_mb outer_mb in          
+        let o = o#with_mb outer_mb in
           (o, (pss, e), t)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
@@ -536,30 +523,44 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             let (o, f) = o#binder f in
               (o, `Fun (f, (tyvars, lam), location, t))
         | `Funs defs ->
-            (* put the binders in the environment *)
-          let (o, fs) =
-            let rec list o =
-              function
-                | [] -> (o, [])
-                | (f, (tyvars, lam), location, t, pos)::defs ->
-                    let (o, f) = o#binder f in
-                    let (o, fs) = list o defs in
-                      (o, f::fs)
+            let bt (name, _, pos) t = (name, Some t, pos) in
+
+            (* put the inner bindings in the environment *)
+            let o =
+              let rec list o =
+                function
+                  | [] -> o
+                  | (f, ((_tyvars, Some inner), lam), location, t, pos)::defs ->
+                      let (o, _) = o#binder (bt f inner) in
+                        list o defs
+              in
+                list o defs in
+              
+            (* transform the function bodies *)
+            let (o, defs) =
+              let rec list o =
+                function
+                  | [] -> (o, [])
+                  | (f, ((tyvars, Some inner), lam), location, t, pos)::defs ->
+                      let ft = inner in
+                      let inner_mb = fun_mailbox ft (fst lam) in
+                      let (o, lam, _) = o#funlit inner_mb lam in
+                      let (o, defs) = list o defs in
+                        (o, (f, ((tyvars, Some inner), lam), location, t, pos)::defs)
             in
               list o defs in
-
-          (* transform the functions *)
-          let (o, defs) =
-            let rec list o =
-              function
-                | [], [] -> (o, [])
-                | ((_, Some ft, _) as f)::fs, (_, (tyvars, lam), location, t, pos)::defs ->
-                    let inner_mb = fun_mailbox ft (fst lam) in
-                    let (o, lam, _) = o#funlit inner_mb lam in
-                    let (o, defs) = list o (fs, defs) in
-                      (o, (f, (tyvars, lam), location, t, pos)::defs)
-            in
-              list o (fs, defs)
+              
+            (* put the outer bindings in the environment *)
+            let o, defs =
+              let rec list o =
+                function
+                  | [] -> o, []
+                  | (f, body, location, t, pos)::defs ->
+                      let (o, f) = o#binder f in
+                      let (o, defs) = list o defs in
+                        o, (f, body, location, t, pos)::defs
+              in
+                list o defs
           in
             (o, (`Funs defs))
       | `Foreign (f, language, t) ->
@@ -579,6 +580,6 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       
     method binder : binder -> ('self_type * binder) =
       fun (name, Some t, pos) ->
-        let var_env = TyEnv.bind var_env (name, t) in        
+        let var_env = TyEnv.bind var_env (name, t) in
           ({< var_env=var_env >}, (name, Some t, pos))
   end

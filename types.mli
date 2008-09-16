@@ -112,8 +112,7 @@ val free_row_type_vars : row -> TypeVarSet.t
 val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
 
-(** used to freshen mailboxes in typename aliases *)
-val freshen_mailboxes : datatype -> datatype
+val flexible_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t
 
 (** Fresh type variables *)
 val fresh_raw_variable : unit -> int
@@ -132,6 +131,13 @@ val fresh_rigid_type_variable : unit -> datatype
 
 val fresh_row_variable : unit -> row_var
 val fresh_rigid_row_variable : unit -> row_var
+
+(** fresh quantifiers *)
+val fresh_type_quantifier : unit -> quantifier * datatype
+val fresh_flexible_type_quantifier : unit -> quantifier * datatype
+
+val fresh_row_quantifier : unit -> quantifier * row_var
+val fresh_flexible_row_quantifier : unit -> quantifier * row_var
 
 (** {0 rows} *)
 (** empty row constructors *)

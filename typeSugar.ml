@@ -12,7 +12,7 @@ module Env = Env.String
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string -> (Types.type_arg list * Types.datatype)
-  val generalise : Types.environment -> Types.datatype -> (Types.quantifier list * Types.datatype)
+  val generalise : Types.environment -> Types.datatype -> ((Types.quantifier list * Types.type_arg list) * Types.datatype)
 
   val is_generalisable : phrase -> bool
 end =
@@ -926,11 +926,15 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
       | `Closed -> Types.make_singleton_closed_row
       | `Open -> Types.make_singleton_open_row in
 
-  let make_negative_row names =
-    (List.fold_right
+  let make_negative_fields names =
+    List.fold_right
+      (fun name fields ->
+         StringMap.add name `Absent fields) names StringMap.empty in
+
+  let make_positive_fields names =
+    List.fold_right
        (fun name fields ->
-          StringMap.add name `Absent fields) names StringMap.empty,
-     Types.fresh_row_variable()) in
+          StringMap.add name (`Present (Types.fresh_type_variable ())) fields) names StringMap.empty in
 
   let check_for_duplicate_names : pattern -> unit = fun (p, pos) ->
     let add name binder binderss =
@@ -1037,8 +1041,9 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
               `Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
         | `Negative names ->
-            let outer_type = `Variant (Types.make_empty_open_row ()) in
-            let inner_type = `Variant (make_negative_row names) in
+            let row_var = Types.fresh_row_variable () in
+            let outer_type = `Variant (make_positive_fields names, row_var) in
+            let inner_type = `Variant (make_negative_fields names, row_var) in
               `Negative names, Env.empty, (outer_type, inner_type)
         | `Record (ps, default) -> 
             let ps = alistmap tp ps
@@ -1121,7 +1126,7 @@ let update_pattern_vars env =
   method patternnode : patternnode -> patternnode =
     fun n ->      
       let update (x, _, pos) =
-        let _, t = Env.lookup env x in
+        let t = Env.lookup env x in
           (x, Some t, pos)
       in
         match n with
@@ -1138,7 +1143,7 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
            Env.extend env (extract_formlet_bindings child))
         children Env.empty
   | _ -> Env.empty
-          
+      
 let show_context : context -> context =
   fun context ->
     Printf.fprintf stderr "Types  : %s\n" (Env.Dom.Show_t.show (Env.domain context.tycon_env));
@@ -1202,12 +1207,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
       match (expr : phrasenode) with
         | `Var v            ->
             (
-            try
-              let (tyargs, t) = Utils.instantiate context.var_env v in
-                tappl (`Var v, tyargs), t
-            with
-                Errors.UndefinedVariable msg ->
-                  Gripers.die (lookup_pos pos) ("Unknown variable " ^ v ^ ".")
+              try
+                let (tyargs, t) = Utils.instantiate context.var_env v in
+(*                   Debug.print ("var "^v); *)
+(*                   Debug.print ("t: "^Types.string_of_datatype t); *)
+                  tappl (`Var v, tyargs), t
+              with
+                  Errors.UndefinedVariable msg ->
+                    Gripers.die (lookup_pos pos) ("Unknown variable " ^ v ^ ".")
             )
         | `Section _ as s   -> type_section context.var_env s
 
@@ -1309,7 +1316,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
             and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
               `TableLit (erase tname, (dtype, Some (read_row, write_row)), constraints, erase db), 
-              `Table (read_row, write_row)
+            `Table (read_row, write_row)
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat 
             and from = tc from
@@ -1418,23 +1425,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `RangeLit (l, r) -> 
             let l, r = tc l, tc r in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
-                                                        no_pos Types.int_type)
+                                                         no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
-                                                        no_pos Types.int_type)
+                                                         no_pos Types.int_type)
             in `RangeLit (erase l, erase r),
             Types.make_list_type Types.int_type 
         | `FnAppl (f, ps) ->
             let f = tc f
             and ps = List.map (tc) ps
             and rettyp = Types.fresh_type_variable () in
+(*               Debug.print ("f: "^Types.string_of_datatype (typ f)); *)
+(*               Debug.print ("args: "^Types.string_of_datatype (Types.make_tuple_type (List.map typ ps))); *)
               unify ~handle:Gripers.fun_apply
                 (pos_and_typ f, no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
                                                    mailbox_type context.var_env, rettyp)));
+(*               Debug.print ("f(2): "^Types.string_of_datatype (typ f)); *)
               `FnAppl (erase f, List.map erase ps), rettyp
         | `TAppl (e, qs) ->
             let (e, _), t = tc e in e, t
-(*            assert false*)
-        (* xml *)
+                (*            assert false*)
+                (* xml *)
         | `Xml (tag, attrs, attrexp, children) ->
             let attrs = alistmap (List.map (tc)) attrs
             and attrexp = opt_map tc attrexp
@@ -1647,11 +1657,15 @@ and type_binding : context -> binding -> binding * context =
     let pos_and_typ e = (exp_pos e, typ e) in
       (* given a list of argument patterns and a return type
          return the corresponding function type *)
-    let make_ft =
-      List.fold_right
-        (fun pat rtype ->
-           let args = Types.make_tuple_type (List.map pattern_typ pat) in
-             `Function (args, Types.fresh_type_variable (), rtype)) in
+    let make_ft ps mailbox_type return_type =
+      let p::ps = List.rev ps in
+      let args =
+        Types.make_tuple_type -<- List.map pattern_typ
+      in
+        List.fold_right
+          (fun p t -> `Function (args p, Types.fresh_type_variable (), t))
+          ps
+          (`Function (args p, mailbox_type, return_type)) in
 
     let typed, ctxt = match def with
       | `Include _ -> assert false
@@ -1667,11 +1681,10 @@ and type_binding : context -> binding -> binding * context =
               | _ -> typ body in
           let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
           let body = erase body in
-          let (tyvars, bt), pat, penv =
+          let ((tyvars, _), bt), pat, penv =
             if Utils.is_generalisable body then
-              let genv = Env.map (Utils.generalise context.var_env) penv in
-              let penv = Env.map snd genv in
-              let pat = update_pattern_vars genv (erase_pat pat) in
+              let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
+              let pat = update_pattern_vars penv (erase_pat pat) in
                 (Utils.generalise context.var_env bt, pat, penv)
             else
               let quantifiers = Generalise.get_quantifiers context.var_env bt in
@@ -1681,142 +1694,129 @@ and type_binding : context -> binding -> binding * context =
                 then
                   Gripers.value_restriction (lookup_pos pos) bt
                 else
-                  ([], bt), erase_pat pat, penv
+                  (([], []), bt), erase_pat pat, penv
           in
             `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
       | `Fun (((name,_,pos), (_, (pats, body)), location, t) as def) ->
           let pats = List.map (List.map tpc) pats in
-          let ft = make_ft pats (Types.fresh_type_variable ()) in
-          let fb = match t with
-                   | None -> ft
-                   | Some (_, Some t) ->
-                       let _quantifiers, fb = Utils.generalise context.var_env t in
-                         (* make sure the annotation has the right shape *)
-                       let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos (snd (Instantiate.typ fb))) in
-                         fb in
-          let body_env = Env.bind context.var_env (name, fb) in
+
+          (* Check that any annotation matches the shape of the function *)
+          let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
+          let ft =
+            match t with
+              | None -> shape
+              | Some (_, Some ft) ->
+                  (* make sure the annotation has the right shape *)
+                  let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft) in
+                    ft in
+
+          (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-          let context' = List.fold_left fold_in_envs {context with var_env = body_env} pats in
+          let context' = List.fold_left fold_in_envs context pats in
           let mt = Types.fresh_type_variable () in
           let body = type_check (bind_var context' (mailbox, mt)) body in
-          let ft = make_ft pats (typ body) in
-          let ft' =
-              (* WARNING: this looks surprising, but it is what we want *)
-            match Env.lookup context'.var_env name with
-              | `ForAll (_, t) | t -> t in
-          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-          let tyvars, t' = Utils.generalise context.var_env fb in
-            (`Fun ((name, Some t', pos),
+
+          (* check that any annotation still matches *)
+          let shape = make_ft pats mt (typ body) in            
+          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+
+          (* generalise*)
+          let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
+          let ft = Instantiate.freshen_quantifiers ft in            
+            (`Fun ((name, Some ft, pos),
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
-             {empty_context with var_env = Env.bind Env.empty (name, t')})
+             {empty_context with var_env = Env.bind Env.empty (name, ft)})
       | `Funs defs ->
           (*
             Compute initial types for the functions using
             - the patterns
             - an optional type annotation
             
-            Note that the only way of getting polymorphism here is to
-            provide a type annotation (generalisation would otherwise
-            be unsound as the function types cannot be fully known
-            until the definition bodies have been inspected).
+            Note that the only way of getting polymorphic recursion is
+            to provide a type annotation (generalisation would
+            otherwise be unsound as the function types cannot be fully
+            known until the definition bodies have been inspected).
 
             As well as the function types, the typed patterns are also
             returned here as a simple optimisation.  *)
-          let fbs, patss =
-            List.split
-              (List.map
-                 (fun ((name,_,_), (_, (pats, body)), _, t, pos) ->
-                    let pats = List.map (List.map tpc) pats in
-                    let ft = make_ft pats (Types.fresh_type_variable ()) in
-                    let fb =
-                      match t with
-                        | None -> ft
-                        | Some (_, Some t) ->
-                            let (_tyvars, fb) = Utils.generalise context.var_env t in
-                              (* make sure the annotation has the right shape *)
-                            let _, fbi = Instantiate.typ fb in
-                            let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos ft, no_pos fbi) in
-                              fb
-                    in
-                      (name, fb), pats)
-                 defs) in
+          let inner_env, patss =
+            List.fold_left
+              (fun (inner_env, patss) ((name,_,_), (_, (pats, body)), _, t, pos) ->
+(*                  Debug.print ("A("^name^")"); *)
+                 let pats = List.map (List.map tpc) pats in
+                 let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
+                 let inner =
+                   match t with
+                     | None -> shape
+                     | Some (_, Some t) ->
+                         let (_, ft) = Generalise.generalise_rigid context.var_env t in
+(*                            Debug.print ("ft: "^Types.string_of_datatype ft); *)
+                           (* make sure the annotation has the right shape *)
+                         let _, fti = Instantiate.typ ft in
+                         let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in
+                           ft
+                 in
+(*                    Debug.print ("inner: "^Types.string_of_datatype inner); *)
+                   Env.bind inner_env (name, inner), pats::patss)
+              (Env.empty, []) defs in
+          let patss = List.rev patss in
 
           (* 
              type check the function bodies using
-             non-generalised bindings (except for type-annotated functions)
+               - monomorphic bindings for unannotated functions
+               - potentially polymorphic bindings for annotated functions
           *)
           let defs =
-            let body_env = List.fold_left (fun env (name, fb) ->
-                                             Env.bind env (name, fb)) context.var_env fbs in
+            let body_env = Env.extend context.var_env inner_env in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
               List.rev
                 (List.fold_left2
                    (fun defs ((name, _, name_pos), (_, (_, body)), location, t, pos) pats ->
+(*                       Debug.print ("B("^name^")"); *)
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let mt = Types.fresh_type_variable () in
+(*                        Debug.print ("ft(1): "^Types.string_of_datatype (Env.lookup body_env name)); *)
                       let body = type_check (bind_var context' (mailbox, mt)) body in
-                        (* QUESTION: shouldn't we be using this mailbox type in the type of ft? *)
-                      let ft = make_ft pats (typ body) in
-                        (* WARNING: this looks surprising, but it is what we want *)
-                      let ft' =
-                        match Env.lookup context'.var_env name with
-                          | `ForAll (_, t) | t -> t in
-                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-                        ((name, None, name_pos), ([], (pats, body)), location, t, pos) :: defs) [] defs patss) in
+                      let shape = make_ft pats mt (typ body) in
+                      let _, ft = Utils.instantiate context'.var_env name in
+(*                         Debug.print ("ft(2): "^Types.string_of_datatype (Env.lookup body_env name)); *)
+                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+                        ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
 
-          (* generalise *)
-          let tyvars_env, fun_env =
-            List.fold_left
-              (fun (tyvars_env, fun_env) (name, fb) ->
-                 let tyvars, t =
-                   match fb with
-                     | `ForAll (tyvars, _) -> (tyvars, fb)
-                     | fb -> Utils.generalise context.var_env fb in
-                 (* Instantiation followed by generalisation has the
-                    effect of freshening the type variables. This is
-                    necessary in order to make sure the second time we
-                    type-check the body we don't change any of the
-                    (bound) type variables in the function bindings.
-                 *)
-                 let _, t = Instantiate.typ t in
-                 let _, t = Utils.generalise context.var_env t in                   
-                   Env.bind tyvars_env (name, tyvars), Env.bind fun_env (name, t))
-              (Env.empty, Env.empty)
-              fbs in
+          (* Generalise to obtain the outer types *)
+          let defs, outer_env =
+            let defs, outer_env =
+              List.fold_left2
+                (fun (defs, outer_env) ((name, _, name_pos), (_, (pats, body)), location, t, pos) pats ->
+(*                    Debug.print ("C("^name^")"); *)
+                   let inner = Env.lookup inner_env name in
+                   let inner, outer, tyvars =
+                     match inner with
+                       | `ForAll (_inner_tyvars, inner_body) ->
+                           let (tyvars, _tyargs), outer = Utils.generalise context.var_env inner_body in
+                           let outer = Instantiate.freshen_quantifiers outer in
+                           let inner = Instantiate.freshen_quantifiers inner in
+                             inner, outer, tyvars
+                       | _ ->
+                           let (tyvars, _tyargs), outer = Utils.generalise context.var_env inner in
+                           let outer = Instantiate.freshen_quantifiers outer in
+                             inner, outer, tyvars in
 
-          (* typecheck each function body again with the generalised function bindings in scope *)
-          let defs =
-            let body_env = Env.extend context.var_env fun_env in
-            let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-              List.rev
-                (List.fold_left2
-                   (fun defs ((name, _, name_pos), (_, (_, body)), location, t, pos) pats ->
-                      let tyvars = Env.lookup tyvars_env name in
-
-                      (* NOTE: the reason for re-type-checking the
-                         body is to ensure that all instances of
-                         polymorphic functions are polymorphic (the
-                         first pass forces unannotated recursive
-                         instances to be monomorphic).  *)
-                      let body_context =
-                        List.fold_left
-                          fold_in_envs {context with var_env = body_env} pats in
-                      let mt = Types.fresh_type_variable () in
-                      let body = type_check (bind_var body_context (mailbox, mt)) (erase body) in
-
-                      let ft = make_ft pats (typ body) in
-                      let _, ft' = Utils.instantiate fun_env name in
-                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos ft, no_pos ft') in
-                        ((name, Some (Env.lookup fun_env name), name_pos),
-                         (tyvars, (List.map (List.map erase_pat) pats, erase body)),
-                         location,
-                         t,
-                         pos) :: defs) [] defs patss)
+(*                      Debug.print ("inner: "^Types.string_of_datatype inner); *)
+(*                      Debug.print ("outer: "^Types.string_of_datatype outer); *)
+                   let pats = List.map (List.map erase_pat) pats in
+                   let body = erase body in
+                     (((name, Some outer, name_pos), ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
+                      Env.bind outer_env (name, outer)))
+                ([], Env.empty) defs patss
+            in
+              List.rev defs, outer_env
           in
-            `Funs defs, {empty_context with var_env = fun_env}       
+            `Funs defs, {empty_context with var_env = outer_env}       
+           
       | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
             (`Foreign ((name, Some datatype, pos), language, dt),
              (bind_var empty_context (name, datatype)))

@@ -34,6 +34,14 @@ let rec desugar_page o =
                       [e, pos]), pos)
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
+              (* WARNING:
+                 
+                 This technique is rather brittle. A more robust approach
+                 would be to use unification - compute a as the solution of:
+
+                   Formlet(a) `unify` formlet_type
+              *)
+            let formlet_type = Types.concrete_type formlet_type in
             let a =
               match formlet_type with
                 | `Alias ((_, [a]), _) -> a

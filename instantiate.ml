@@ -157,6 +157,64 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
+let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t tyargs ->
+  let vars =
+    match t with
+      | `ForAll (vars, _) -> vars
+      | _ -> [] in
+  let tenv, renv =
+    assert (List.length vars = List.length tyargs);
+    List.fold_right2
+      (fun var t (tenv, renv) ->
+         match (var, t) with
+           | ((`TypeVar var | `RigidTypeVar var), `Type t) ->
+               (IntMap.add var t tenv, renv)
+           | ((`RowVar var | `RigidRowVar var), `Row row) ->
+               (* 
+                  QUESTION:
+                  
+                  What is the right way to put the row in the row_var environment?
+
+                  We can simply wrap it in a `Body tag, but then we need to be careful
+                  about which bits of the compiler are assuming that
+                  rows are already flattened. Maybe this is OK...
+               *)
+               begin
+                 match row with
+                   | fields, row_var when StringMap.is_empty fields ->
+                       (tenv, IntMap.add var row_var renv)
+                   | _ ->
+                       (tenv, IntMap.add var (Unionfind.fresh (`Body row)) renv)
+               end
+           | _ -> assert false)
+      vars tyargs (IntMap.empty, IntMap.empty)
+  in
+    instantiate_datatype (tenv, renv) t
+
+let freshen_quantifiers t =
+  match t with
+    | `ForAll (qs, _) ->
+        let qs, tyargs =
+          List.split
+            (List.map
+               (function
+                  | `TypeVar _ ->
+                      let q, t = Types.fresh_flexible_type_quantifier () in
+                        q, `Type t
+                  | `RigidTypeVar _ ->
+                      let q, t = Types.fresh_type_quantifier () in
+                        q, `Type t
+                  | `RowVar _ ->
+                      let q, row_var = Types.fresh_flexible_row_quantifier () in
+                        q, `Row (StringMap.empty, row_var)
+                  | `RigidRowVar _ ->
+                      let q, row_var = Types.fresh_row_quantifier () in
+                        q, `Row (StringMap.empty, row_var))
+               qs)
+        in
+          `ForAll (qs, apply_type t tyargs)
+    | t -> t
+
 let alias name ts env = 
   (* This is just type application.
   
@@ -172,6 +230,20 @@ let alias name ts env =
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length ts) (List.length vars))
     | Some (`Alias (vars, body)) ->
+        (* BUG:
+             
+           Need to distinguish TypeVars from RowTypeVars
+        *)
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
+
+        (* freshen any free flexible type variables in the type alias *)
+        let bound_vars = List.fold_right TypeVarSet.add vars TypeVarSet.empty in
+        let ftvs = Types.flexible_type_vars bound_vars body in
+        let qs = TypeVarSet.fold (fun var qs -> `TypeVar var::qs) ftvs [] in
+        let body =
+          match freshen_quantifiers (`ForAll (qs, body)) with
+            | `ForAll (_, body) -> body
+            | _ -> assert false
+        in
           `Alias ((name, ts),
-                  instantiate_datatype (tenv, IntMap.empty) (Types.freshen_mailboxes body))
+                  instantiate_datatype (tenv, IntMap.empty) body)

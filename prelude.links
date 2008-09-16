@@ -434,6 +434,14 @@ fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 ####   A library of functions supporting the 'formlet ... yields ...' syntax
 ####   TBD: move to a namespaced module
 
+# This uninhabited type is attached to the mailbox type of the formlet and page functions
+#  to indicate 'pureity' in the sense of functions that
+# cannot read from the mailbox.
+#
+# It significantly reduces the number of quantifiers inferred
+# (e.g. bodyP has 13 quantifiers without the 'O's and 1 with!)
+typename O = [||];
+
 ####   NOTE: top-level vars have been eta-expanded in order to tell
 ####   the JS compiler that they are pure and hence can be safely
 ####   compiled. If we had a purity analysis then all of these could
@@ -441,11 +449,11 @@ fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 typename Env = [(String,String)];
 typename Gen = Int;
-typename State (d,a) = (d) -> (a,d);
-typename Collector (a) = (Env) -> a;
+typename State (d,a) = (d) -{O}-> (a,d);
+typename Collector (a) = (Env) -{O}-> a;
 typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
-typename XmlContext = (Xml) -> Xml;
+typename XmlContext = (Xml) -{O}-> Xml;
 
 typename Attributes = [(String, String)];
 
@@ -489,7 +497,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet ((a)-> b)) -> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a) -{O}-> b)) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
@@ -549,12 +557,11 @@ fun formlets(fs) {
 }
 
 # Page stuff
+typename RecForms = [mu a.(([a]) -{O}-> Xml)];
+typename MultiXmlContext = ([Xml]) -{O}-> Xml;
 
-typename RecForms = [mu a.(([a]) -> Xml)];
-typename MultiXmlContext = ([Xml]) -> Xml;
-
-typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -> Xml;
-typename Page = (Int, MultiXmlContext, (Gen) -> ([CheckedFormBuilder], Gen));
+typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -{O}-> Xml;
+typename Page = (Int, MultiXmlContext, (Gen) -{O}-> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) -> Page;
 
 sig unitP : Page

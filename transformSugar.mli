@@ -1,5 +1,30 @@
 open Sugartypes
 
+(*
+  These functions are contravariant in the object type so if
+  included as methods in the transform class they would prevent
+  upcasting from subclasses of transform to transform.
+*)
+val option :
+    'self_type ->
+  ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+  'a option -> ('self_type * ('a option) * (Types.datatype option))
+
+val optionu :
+    'self_type ->
+    ('self_type -> 'a -> ('self_type * 'a)) ->
+  'a option -> ('self_type * ('a option))
+                                          
+val list :
+    'self_type ->
+    ('self_type -> 'a -> 'self_type * 'a * Types.datatype) ->
+  'a list -> 'self_type * 'a list * Types.datatype list
+                                                 
+val listu :
+    'self_type ->
+    ('self_type -> 'a -> 'self_type * 'a) ->
+  'a list -> 'self_type * 'a list
+
 (* Transform a term and construct its type *)
 class transform : (Types.environment * Types.tycon_environment) ->
 object ('self)
@@ -21,13 +46,6 @@ object ('self)
   method constant        : constant -> 'self * constant * Types.datatype
   method funlit          : Types.datatype -> funlit -> 'self * funlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
-
-  method list            : 'a . ('self -> 'a -> 'self * 'a * Types.datatype) ->
-                                  'a list -> 'self * 'a list * Types.datatype list
-  method listu           : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
-  method option          : 'a . ('self -> 'a -> 'self * 'a * Types.datatype) ->
-                                  'a option -> 'self * 'a option * Types.datatype option
-  method optionu         : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
 
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern

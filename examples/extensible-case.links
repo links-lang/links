@@ -3,19 +3,18 @@
 # ICFP 2006 
 
 
+# sig add_A : (([|A- |a|]) -> String) -> ([|A:()|a|]) -> String
 fun add_A(f) (e) {
   switch (e) {
     case A -> "A"
-    case x -> f(x)
+    case -A as x -> f(x)
   }
 }
-
-
 
 fun add_B(f) (e) {
   switch (e) {
     case B -> "B"
-    case x -> f(x)
+    case -B as x -> f(x)
   }
 }
 
@@ -23,17 +22,61 @@ fun add_B(f) (e) {
 fun add_C(f) (e) {
   switch (e) {
     case C -> "C"
-    case x -> f(x)
+    case -C as x -> f(x)
   }
 }
 
+fun default(f:(([|rho|]) -> String)) {
+  f
+}
+
 fun nocases(e:[||]) {
-  error("wrong")      # unreachable
+  switch (e) { }      # unreachable
 }
 
 
+fun sub_A(f)(e) {
+  f(e : [|A:a|rho|] <- [|A- |rho|])
+}
 
 var f = add_A(add_B(add_C(nocases)));
 
 (f(A), f(B), f(C))
+
+
+#   cases A x => e1
+#   default: e2
+# -->
+#   fun (v) {
+#     switch (v) {
+#       case A x -> e1
+#       case -A -> e2
+#     }
+#   }
+# 
+#   nocases
+# -->
+#   fun nocases(e:[||]) {
+#     switch (e) { }      # unreachable
+#   }
+# 
+#   match 
+# -->
+#   fun (c)(v) {
+#     c(v)
+#   }
+#
+#    c - A
+#  ==
+#   fun (e) {c(e : [|A:a|rho|] <- [|A- |rho|])}
+#
+#    c + {A x -> e}
+#  ==
+#    fun (v) {
+#      switch (v) {
+#        case A x -> e
+#        case -A as x -> c(x)
+#      }
+#    }
+#
 

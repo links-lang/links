@@ -78,8 +78,8 @@ SOURCES = $(OPC)                		\
           lexer.mli lexer.mll         		\
           errors.mli errors.ml                  \
           parse.mli parse.ml    		\
-	  typeUtils.mli typeUtils.ml            \
           instantiate.mli instantiate.ml        \
+	  typeUtils.mli typeUtils.ml            \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
@@ -89,9 +89,9 @@ SOURCES = $(OPC)                		\
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
           desugarLAttributes.mli desugarLAttributes.ml	\
-          transformSugar.mli transformSugar.ml  \
+          transformSugar.mli transformSugar.ml          \
           desugarPages.mli desugarPages.ml		\
-          desugarFormlets.mli desugarFormlets.ml	\
+          desugarFormlets.mli desugarFormlets.ml        \
           desugarRegexes.mli desugarRegexes.ml		\
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\

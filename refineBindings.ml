@@ -50,7 +50,7 @@ let refine_bindings : binding list -> binding list =
       (* refine a group of function bindings *)
     let groupFuns pos (funs : binding list) : binding list = 
       let unFun = function
-        | `Fun (b, (_, funlit), location, dt), pos -> (b, ([], funlit), location, dt, pos)
+        | `Fun (b, (_, funlit), location, dt), pos -> (b, (([], None), funlit), location, dt, pos)
         | _ -> assert false in
       let find_fun name = 
         List.find (function

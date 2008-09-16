@@ -2,107 +2,196 @@ open Utility
 open Sugartypes
 open List
 
-let appPrim pos name args = 
-  (`FnAppl ((`Var name, pos), args), pos : phrase)
 
-(** Construct a Links list out of a list of Links expressions; all
-    will have the source position [pos].
-*)
-let make_links_list pos elems =
-  let concat_expr l r = `InfixAppl (([], `Name "++"), l, r), pos in
-    fold_right concat_expr elems (`ListLit ([], None), pos)
+let rec is_raw (e, pos) =
+  match e with
+    | `TextNode _
+    | `Block _ -> true
+    | `FormBinding _ -> false
+    | `Xml (_, _, _, children) ->
+        List.for_all is_raw children
+    | e ->
+(*        Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
+        raise (ConcreteSyntaxError ("Invalid element in formlet literal", pos))
 
-(** Returns a function that plugs some given XML in as the contents of
-    an XML element having the given tag name and attributes. *)
-let make_xml_context tag (attrs:(string * phrase) list) pos : phrase = 
-  let hole = gensym () in
-    `FunLit (None, ([[`Variable (hole, None, pos), pos]], 
-                    (`Xml (tag, 
-                           List.map (fun (s,a) -> s, [a]) attrs,
-                           None,
-                           [`Var hole, pos]), pos))), pos
+class desugar_formlets {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+object (o : 'self_type)
+  inherit (TransformSugar.transform (var_env, tycon_env)) as super
 
-let rec has_form_binding = function
-  | `Xml (_, _, _, subnodes),_ -> List.exists has_form_binding subnodes
-  | `FormBinding _,_      -> true
-  |  _                    -> false
+  (*
+    extract a list of (pattern, constructor, type) triples
+    from a formlet body
 
-let rec forest_to_form_expr trees yieldsClause 
-    (pos:Sugartypes.position) 
-    (trees_ppos:Sugartypes.position)
-    : (Sugartypes.phrase * Sugartypes.pattern list list) = 
-  (* We pass over the forest finding the bindings and construct a
-     term-context representing all of the form/yields expression
-     except the `yields' part (the handler). Here bindings
-     is a list of lists, each list representing a tuple returned
-     from an inner instance of forest_to_form_expr--or, if it's a
-     singleton, a single value as bound by a binder.  *)
-  let (ctxt : Sugartypes.phrase -> Sugartypes.phrase), bindings =
-    List.fold_right
-      (fun (l : phrase) (ctxt, bs) -> 
-         let l_unsugared, bindings = desugar_form_expr l in
-           (fun r -> appPrim pos "@@@"  [l_unsugared; ctxt r]),
-         bindings @ bs) 
-      trees
-      (Utility.identity, []) in
-    (* Next we construct the handler body from the yieldsClause,
-       if any.  The yieldsClause is the user's handler; if it is
-       None then we construct a default handler that just bundles
-       up all the bound variables and returns them as a tuple.
-       Here we also form a list of the values we're
-       returning. returning_bindings is a list of lists,
-       representing a list of tuples of values.  *)
-  let handlerBody, bindings, returning_bindings = 
-    match yieldsClause with
-        Some formHandler -> 
-          formHandler, bindings, ([]:Sugartypes.pattern list list)
-      | None ->
-          let fresh_bindings = List.map (List.map (fun (_, ppos) -> `Variable (Utility.gensym (), None, ppos), ppos)) bindings in
-          let variables = List.map (fun (`Variable (x,_,_), ppos) -> `Var x, ppos) (List.flatten fresh_bindings) in
-            ((`TupleLit variables, (Lexing.dummy_pos, Lexing.dummy_pos, None)),
-             fresh_bindings,
-             [flatten bindings])
-  in
-    (* The handlerFunc is simply formed by abstracting the
-       handlerBody with all the binding names, appropriately
-       destructing tuples. *)
-    (* Note: trees_ppos will become the position for each tuple;
-       the position of the tuple is what's reported when duplicate
-       bindings are present within one form. *)
-  let handlerFunc  =  `FunLit (None, (map (function
-                                             | [b] -> [b]
-                                             | bs -> [`Tuple bs, trees_ppos]) (rev bindings),
-                                      handlerBody)), trees_ppos in
-    ctxt (`FnAppl ((`Var "pure", pos), [handlerFunc]), pos), returning_bindings
-      
-and desugar_form_expr (formExpr, pos) : Sugartypes.phrase * pattern list list =
-    if not (has_form_binding (formExpr, pos)) then
-      (`FnAppl ((`Var "xml", pos), [formExpr, pos]), pos), [[]]
-    else
-      match formExpr with
-        | `FormBinding (phrase, ppattern) -> phrase, [[ppattern]]
-        | `Xml ("#", [], attrexp, contents) -> forest_to_form_expr contents None pos pos
-        | `Xml ("#", _, _, _) ->
-            raise (ConcreteSyntaxError ("XML forest literals cannot have attributes", pos))
-        | `Xml(tag, attrs, attrexp, contents) ->
-            let form, bindings = forest_to_form_expr contents None pos pos in
-            let attrs' = alistmap (make_links_list pos) attrs in
-              (appPrim pos "plug" [make_xml_context tag attrs' pos; form],
-               bindings)
-                
-        | `TextNode text -> 
-            appPrim pos "xml" [appPrim pos "stringToXml" [`Constant (`String text), pos]], [[]]
-        | _ -> assert false
+    (this roughly corresponds to the dagger transformation)
+  *)
+  method formlet_patterns : Sugartypes.phrase -> (Sugartypes.pattern list * Sugartypes.phrase list * Types.datatype list) =
+    fun (e, pos) ->
+      let dp = Sugartypes.dummy_position in
+      match e with
+        | _ when is_raw (e, pos) ->
+            [(`Tuple []), dp], [(`TupleLit []), dp], [Types.unit_type]
+        | `FormBinding (f, p) ->
+            let (_o, _f, t) = o#phrase f in
+            let var = Utility.gensym ~prefix:"_formlet_" () in
+            let (xb, x) = (var, Some t, dp), ((`Var var), dp) in
+              [(`As (xb, p)), dp], [x], [t]
+        | `Xml (_, _, _, [node]) ->
+            o#formlet_patterns node
+        | `Xml (_, _, _, contents) ->
+            let ps, vs, ts =
+              List.fold_left
+                (fun (ps, vs, ts) e ->
+                   let ps', vs', ts' = o#formlet_patterns e in
+                     match ps', vs', ts' with
+                       | [p], [v], [t] -> p::ps, v::vs, t::ts
+                       | _ ->
+                           ((`Tuple ps'), dp)::ps, ((`TupleLit vs'), dp)::vs, (Types.make_tuple_type ts')::ts)
+                ([], [], []) contents
+            in
+              List.rev ps, List.rev vs, List.rev ts
+        | _ ->
+            assert false
 
-let desugar_formlets =
-object(o)
-  inherit SugarTraversals.map as super
+  (* desugar a formlet body (the ^o transformation) *)
+  method private formlet_body_node : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) =
+    fun e ->
+      let dp = Sugartypes.dummy_position in
+        match e with             
+          | `TextNode s ->
+              let e =
+                `FnAppl
+                  ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp),
+                   [`FnAppl
+                      ((`TAppl ((`Var "stringToXml", dp), [`Type (o#lookup_mb ())]), dp),
+                       [`Constant (`String s), dp]), dp])
+              in
+                (o, e, Types.xml_type)
+          | `Block (bs, e) ->
+              let (o, e, _) =
+                o#phrasenode
+                  (`Block
+                     (bs,
+                      (`FnAppl
+                         ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp),
+                          [e]), dp)))
+              in
+                (o, e, Types.xml_type)
+          | `FormBinding (f, _) ->
+              let (o, (f, _), ft) = o#phrase f in
+                (o, f, ft)
+          | `Xml ("#", [], None, contents) ->
+              (* pure (fun ps -> vs) <*> e1 <*> ... <*> ek *)
+              let pss, vs, ts =
+                let pss, vs, ts =
+                  List.fold_left
+                    (fun (pss, vs, ts) node ->
+                       let ps', vs', ts' = o#formlet_patterns node in
+                         match ps', vs' with
+                           | [p], [v] ->
+                               (* grrr... n-ary arguments are messy!
+                                  this type has to be a 1-tuple!
+                               *)
+                               [p]::pss, v::vs, (Types.make_tuple_type ts')::ts
+                           | _ ->
+                               [`Tuple ps', dp]::pss, (`TupleLit vs', dp)::vs, (Types.make_tuple_type ts')::ts)
+                    ([], [], []) contents
+                in
+                  List.rev pss, List.rev vs, List.rev ts in
+              let empty_type = Instantiate.alias "O" [] tycon_env in
+              let ft =
+                List.fold_right
+                  (fun t ft ->
+                     `Function (Types.make_tuple_type [t], empty_type, ft))
+                  ts (Types.make_tuple_type ts) in
+              let args = List.map (fun t -> (t, empty_type)) ts in
+                begin
+                  match args with
+                    | [] ->
+                        let (o, e, _) =
+                          super#phrasenode (`Xml ("#", [], None, contents))
+                        in
+                          (o,
+                           (`FnAppl
+                              ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp), [e, dp])),
+                           Types.xml_type)
+                    | _ ->
+                        let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
+                        let mb = `Type (o#lookup_mb ()) in
+                        let base : phrase =
+                          (`FnAppl
+                             ((`TAppl ((`Var "pure", dp), [`Type ft; mb]), dp),
+                              [`FunLit (Some (List.rev args), (List.rev pss, (`TupleLit vs, dp))), dp]), dp) in
+                        let (e, _), et =
+                          List.fold_right
+                            (fun arg (base, ft) ->
+                               let [arg_type] = TypeUtils.arg_types ft in
+                               let base : phrase =
+                                 (`FnAppl
+                                    (((`TAppl (((`Var "@@@"), dp), [`Type ft; `Type arg_type; mb]), dp) : phrase),
+                                     [arg; base]), dp) in
+                               let ft = TypeUtils.return_type ft in
+                                 base, ft)
+                            es (base, ft)
+                        in
+                          (o, e, et)
+                end
+          | `Xml(tag, attrs, attrexp, contents) ->
+              (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
+              let (o, attrexp, _) = TransformSugar.option o (fun o -> o#phrase) attrexp in
+              let mb = o#lookup_mb () in
+              let context : phrase =
+                let var = Utility.gensym ~prefix:"_formlet_" () in
+                let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var var), dp) in
+                  (`FunLit (Some [Types.xml_type, mb],
+                            ([[`Variable xb, dp]],
+                             (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp))), dp) in
+              let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
+                (o,
+                 `FnAppl
+                   ((`TAppl ((`Var "plug", dp), [`Type t; `Type mb]), dp),
+                    [context; e]),
+                 t)
+          | _ -> assert false
 
-  method phrase = function
-    | `Formlet (formExpr, formHandler), pos ->
-        fst (forest_to_form_expr [o#phrase formExpr] (Some (o#phrase formHandler)) pos pos)
-    | e -> super#phrase e
+  method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
+    fun (e, pos) ->
+      let (o, e, t) = o#formlet_body_node e in (o, (e, pos), t)
+
+  method phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
+    | `Formlet (body, yields) ->
+        (* pure (fun q^ -> [[e]]* ) <*> q^o *)
+        let e_in = `Formlet (body, yields) in
+        let dp = Sugartypes.dummy_position in
+        let empty_type = Instantiate.alias "O" [] tycon_env in
+        let (ps, _, ts) = o#formlet_patterns body in
+        let (o, body, body_type) = o#formlet_body body in
+        let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
+        let (o, yields, yields_type) = o#phrase yields in
+
+        let pss =
+          match ps with
+            | [p] -> [[p]]
+            | _ -> [[`Tuple ps, dp]] in
+
+        let arg_type = Types.make_tuple_type ts in
+        let mb = `Type (o#lookup_mb ()) in
+
+        let e =
+          `FnAppl
+            ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
+             [body;
+              `FnAppl
+                ((`TAppl ((`Var "pure", dp), [`Type yields_type; mb]), dp),
+                 [`FunLit (Some [arg_type, empty_type], (pss, yields)), dp]), dp])
+        in
+(*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
+(*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
+          (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)             
+    | e -> super#phrasenode e
 end
+
+let desugar_formlets env = ((new desugar_formlets env) : desugar_formlets :> TransformSugar.transform)
+
 
 let has_no_formlets =
 object

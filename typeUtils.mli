@@ -21,6 +21,3 @@ val quantifiers : Types.datatype -> Types.quantifier list
 
 val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 
-val fresh_type_quantifier : unit -> Types.quantifier * Types.datatype
-val fresh_row_quantifier : unit -> Types.quantifier * Types.row_var
-

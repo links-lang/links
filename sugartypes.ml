@@ -50,6 +50,8 @@ let string_of_binop =
 
 type position = Lexing.position * Lexing.position * SourceCode.source_code option (* start * end * code *)
 
+let dummy_position = (Lexing.dummy_pos, Lexing.dummy_pos, None)
+
 module Show_position = Show.ShowDefaults(
 struct
   type a = position
@@ -206,7 +208,7 @@ and bindingnode = [
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * (tyvar list * funlit) * location * datatype' option * position) list
+| `Funs    of (binder * ((tyvar list * Types.datatype option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'
@@ -235,7 +237,7 @@ exception RedundantPatternMatch of Syntax.position
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _ -> `TAppl ((e, (Lexing.dummy_pos, Lexing.dummy_pos, None)), tys)
+    | _ -> `TAppl ((e, dummy_position), tys)
 
 module Freevars =
 struct
