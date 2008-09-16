@@ -623,7 +623,9 @@ sig renderPage : (Page) -> Xml
 fun renderPage((n, k, fs)) {
   var (ms, _) = fs(0);
   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-  k(map (fun (z) {z(zs)}, zs))
+  # a type annotation is needed here currently for the second
+  # round of type inference to work
+  k(map (fun (z) {z(zs : RecForms)}, zs))
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) -> Xml

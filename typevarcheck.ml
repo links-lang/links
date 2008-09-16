@@ -6,7 +6,10 @@ module FieldEnv = Utility.StringMap
 
 let bind_quantifiers  = List.fold_right (Types.type_var_number ->- TypeVarSet.add)
 
-(* return true if all free occurrences of a variable are guarded in a type *)
+(* return true if all free occurrences of a variable are guarded in a type
+   
+   guarded means occur inside the field of a row
+*)
 let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
   fun bound_vars var t ->
     let isg = is_guarded bound_vars var in
@@ -48,7 +51,9 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Variant row -> isgr row
         | `Table (r, w) -> isg r && isg w
         | `Alias (_, t) -> is_guarded bound_vars var t
-        | `Application _ -> true
+        | `Application (_, ts) ->
+            (* don't treat abstract type constructors as guards *)
+            List.for_all (is_guarded bound_vars var) ts
             
 and is_guarded_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var) ->
