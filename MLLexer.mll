@@ -39,7 +39,7 @@ rule lex nl = parse
   | '('                                 { LPAREN }
   | ')'                                 { RPAREN }
   | "<-"                                { LARROW }
-  | "->"                                { RARROW }
+  | "=>"                                { FATRARROW }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
   | '{'                                 { LBRACE }

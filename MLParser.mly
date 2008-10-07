@@ -29,6 +29,7 @@
     TODO (specifically):
     * signatures
     * remaining semantic actions
+    * infix type operators (including ->)
 **)
 open Sugartypes
 
@@ -43,7 +44,7 @@ let datatype d = d, None
 %token EOF
 %token FUN VAR IF THEN ELSE MATCH WITH LET ESCAPE END MU ALIEN IN AND AS TYPE INFIX INFIXL INFIXR EXCEPT FORALL
 %token LPAREN RPAREN RBRACKET LBRACKET LBRACE RBRACE
-%token LARROW RARROW COMMA VBAR DOT COLON SEMICOLON MINUS EQ UNDERSCORE
+%token LARROW FATRARROW COMMA VBAR DOT COLON SEMICOLON MINUS EQ UNDERSCORE
 %token <Num.num> UINTEGER
 %token <float>   UFLOAT 
 %token <string>  STRING
@@ -120,6 +121,7 @@ val_decl_1:
 
 type_decl: /* this should probably allow (mutual) recursion */
 | CONSTRUCTOR typeargs_opt EQ datatype                         { `Type ($1, $2, ($4, None)) }
+| VARIABLE CONSTRUCTOR VARIABLE EQ datatype                    { `Type ($2, [$1, None; $3, None], ($5, None)) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -152,7 +154,7 @@ let_expression:
 
 fun_expression:
 | conditional_expression                                       { $1 }
-| FUN primary_pattern_list RARROW expr                         { `FunLit (None, ((List.map (fun p -> [p]) $2), $4)), pos () }
+| FUN primary_pattern_list FATRARROW expr                      { `FunLit (None, ((List.map (fun p -> [p]) $2), $4)), pos () }
 
 conditional_expression:
 | IF expr THEN expr ELSE expr                                  { `Conditional ($2, $4, $6), pos () }
@@ -188,7 +190,7 @@ cases:
 | case VBAR cases                                              { $1 :: $3 }
 
 case:
-| pattern RARROW primary_expression                            { $1, (fst $3, pos ()) }
+| pattern FATRARROW primary_expression                         { $1, (fst $3, pos ()) }
 
 perhaps_cases:
 | /* empty */                                                  { [] }
@@ -295,11 +297,11 @@ datatype:
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
 | FORALL VARIABLE DOT datatype                                 { failwith "forall type" }
-| function_datatype                                            { $1 }
+| infix_datatype                                               { $1 }
 
-function_datatype:
+infix_datatype:
 | datatype_application                                         { $1 }
-| datatype_application RARROW function_datatype                { FunctionType ([$1], fresh_type_variable (), $3) }
+| infix_datatype SYMBOL datatype_application                   { FunctionType ([$1], fresh_type_variable (), $3) }
 
 datatype_application:
 | primary_datatype                                             { $1 }
