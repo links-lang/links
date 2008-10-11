@@ -636,17 +636,17 @@ and generate_computation env : computation -> code -> (Env'.env * code) = fun (b
 
 and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding ->
   match binding with
-    | `Let ((_, b), `Return v) ->
+    | `Let (b, (_, `Return v)) ->
         let (x, x_name) = name_binder b in
         let env' = Env'.extend env [(x, x_name)] in
           (env',
            fun code ->
              Seq (DeclareVar (x_name, Some (generate_value env v)), code))
-    | `Let ((_, b), tc) ->
+    | `Let (b, (_, tc)) ->
         let (x, x_name) = name_binder b in
         let env' = Env'.extend env [(x, x_name)] in
           env', (fun code -> generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun ((_, fb), xsb, body, location) ->
+    | `Fun (fb, (_, xsb, body), location) ->
         let (f, f_name) = name_binder fb in
         let bs = List.map name_binder xsb in
         let xs, xs_names = List.split bs in
@@ -667,13 +667,13 @@ and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding 
                    location),
                   code))        
     | `Rec defs ->
-        let fs = List.map (fun ((_, fb), _, _, _) -> name_binder fb) defs in
+        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
         let env' = Env'.extend env fs in
           (env',
            fun code ->
              LetRec
                (List.fold_right
-                  (fun ((_, fb), xsb, body, location) (defs, code) ->
+                  (fun (fb, (_, xsb, body), location) (defs, code) ->
                      let (f, f_name) = name_binder fb in
                      let bs = List.map name_binder xsb in
                      let _, xs_names = List.split bs in
@@ -696,13 +696,13 @@ and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding 
 and generate_declaration env
     : binding -> (Env'.env * (code -> code)) = fun binding ->
   match binding with
-    | `Let ((_, b), `Return v) ->
+    | `Let (b, (_, `Return v)) ->
         let (x, x_name) = name_binder b in
         let env' = Env'.extend env [(x, x_name)] in
           (env',
            fun code ->
              Seq (DeclareVar (x_name, Some (generate_value env v)), code))
-    | `Let ((_, b), tc) ->
+    | `Let (b, (_, tc)) ->
         if Settings.get_value (Basicsettings.allow_impure_defs) then
           let (x, x_name) = name_binder b in
           let env' = Env'.extend env [(x, x_name)] in
@@ -711,7 +711,7 @@ and generate_declaration env
                Seq (DeclareVar (x_name, None), code))
         else
           failwith "Top-level definitions must be values"
-    | `Fun ((_, fb), xsb, body, location) ->
+    | `Fun (fb, (_, xsb, body), location) ->
         let (f, f_name) = name_binder fb in
         let bs = List.map name_binder xsb in
         let xs, xs_names = List.split bs in
@@ -732,13 +732,13 @@ and generate_declaration env
                    location),
                   code))        
     | `Rec defs ->
-        let fs = List.map (fun ((_, fb), _, _, _) -> name_binder fb) defs in
+        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
         let env' = Env'.extend env fs in
           (env',
            fun code ->
              LetRec
                (List.fold_right
-                  (fun ((_, fb), xsb, body, location) (defs, code) ->
+                  (fun (fb, (_, xsb, body), location) (defs, code) ->
                      let (f, f_name) = name_binder fb in
                      let bs = List.map name_binder xsb in
                      let _, xs_names = List.split bs in
@@ -762,8 +762,8 @@ and generate_declaration env
 and generate_definition env
     : binding -> code -> code =
   function
-    | `Let (_, `Return _) -> (fun code -> code)
-    | `Let ((_, b), tc) ->
+    | `Let (_, (_, `Return _)) -> (fun code -> code)
+    | `Let (b, (_, tc)) ->
         let (x, x_name) = name_binder b in
           (fun code ->
              generate_tail_computation env tc

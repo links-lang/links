@@ -11,7 +11,6 @@ type binder = Var.binder
 (* type variables *)
 type tyvar = Types.quantifier
 type tyarg = Types.type_arg
-type tybinder = tyvar list * binder
 
 type name = string
 type 'a name_map = 'a Utility.stringmap
@@ -49,10 +48,10 @@ and tail_computation =
   | `If of value * computation * computation
   ]
 and binding =
-  [ `Let of tybinder * tail_computation
-  | `Fun of tybinder * binder list * computation * location
-  | `Rec of (tybinder * binder list * computation * location) list
-  | `Alien of tybinder * language
+  [ `Let of binder * (tyvar list * tail_computation)
+  | `Fun of binder * (tyvar list * binder list * computation) * location
+  | `Rec of (binder * (tyvar list * binder list * computation) * location) list
+  | `Alien of binder * language
   | `Module of (string * binding list option) ]
 and special =
   [ `App of value * value
@@ -66,7 +65,7 @@ and computation = binding list * tail_computation
 
 val letm : binder * tail_computation -> binding
 val letmv : binder * value -> binding
-val letv : tybinder * value -> binding
+(*val letv : tybinder * value -> binding*)
 
 type program = computation
 
