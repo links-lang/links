@@ -109,7 +109,7 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
       | [], t -> t
       | qs, t -> `ForAll (qs, t)
   in
-    match collapse [] t with
+    match t with
       | `ForAll (quantifiers, t) as dtype ->
 	(
 	  let () = Debug.if_set (show_instantiation)

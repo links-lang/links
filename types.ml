@@ -1007,11 +1007,14 @@ let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
 (* subtyping *)
 let is_sub_type, is_sub_row =
   let module S = TypeVarSet in
-  let rec is_sub_type = fun rec_vars ->
-    function
+  let rec is_sub_type = fun rec_vars (t, t') ->
+    match t, t' with
       | `Not_typed, `Not_typed -> true
       | `Primitive p, `Primitive q -> p=q
-      | `Function _, `Function _ -> failwith "not implemented subtyping on functions yet"
+      | `Function (f, m, t), `Function (f', m', t') ->
+          is_sub_type rec_vars (f', f)
+          && is_sub_type rec_vars (m, m')
+          && is_sub_type rec_vars (t, t')
       | `Record row', `Record row
       | `Variant row, `Variant row' ->
           let lrow, _ = unwrap_row row
@@ -1019,18 +1022,49 @@ let is_sub_type, is_sub_row =
             is_sub_row rec_vars (lrow, rrow)
       | `Table _, `Table _ -> failwith "not implemented subtyping on tables yet"
       | `Application (labs, lts), `Application (rabs, rts) ->
-          (* WARNING: this assumes that abstract type parameters are all covariant *)
+          (* WARNING:
+
+             This assumes that abstract type parameters are all covariant -
+             which happens to be true for all the built-in abstract types we
+             currently support.
+          *)
           (* TODO: implement variance annotations *)
           labs = rabs &&
               List.for_all2 (fun t t' -> is_sub_type rec_vars (t, t')) lts rts
-      | `MetaTypeVar _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
-      | `MetaTypeVar _, _ -> failwith "not implemented subtyping on metatypevars yet"
-      | _, `MetaTypeVar _ -> failwith "not implemented subtyping on metatypevars yet"
+      | `MetaTypeVar point, `MetaTypeVar point' ->
+          begin
+            match Unionfind.find point, Unionfind.find point' with
+              | `Rigid var, `Rigid var'
+              | `Flexible var, `Flexible var' -> var=var'
+              | `Body t, _ -> is_sub_type rec_vars (t, t')
+              | _, `Body t -> is_sub_type rec_vars (t, t')
+              | `Recursive (var, t), `Recursive (var', t') ->
+                  failwith "not implemented subtyping on recursive types yet"
+              | _, _ -> false
+          end
+      | `MetaTypeVar point, _ ->
+          begin
+            match Unionfind.find point with
+              | `Rigid _
+              | `Flexible _
+              | `Recursive _ -> false
+              | `Body t -> is_sub_type rec_vars (t, t')
+          end
+      | _, `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Rigid _
+              | `Flexible _
+              | `Recursive _ -> false
+              | `Body t' -> is_sub_type rec_vars (t, t')
+          end
       | (`Alias (_, t)), t'
       | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
+      | `ForAll (qs, t), `ForAll (qs', t') ->
+          failwith "not implemented subtyping on forall types yet"          
       | _, _ -> false
   and is_sub_row =
-    fun rec_vars ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
+    fun rec_vars ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) ->
       let sub_fields =
         FieldEnv.fold (fun name t b ->
                          match t with
@@ -1049,6 +1083,10 @@ let is_sub_type, is_sub_row =
           | `Flexible var, `Flexible var'
           | `Rigid var, `Rigid var' -> var=var'
           | `Closed, _ -> true
+          | `Body lrow, _ -> is_sub_row rec_vars (lrow, rrow)
+          | _, `Body rrow -> is_sub_row rec_vars (lrow, rrow)
+          | `Recursive (lvar, lrow), `Recursive (rvar, rrow) ->
+              failwith "not implemented subtyping on recursive rows yet"              
           | _, _ -> false
       in
         sub_fields && sub_row_vars
