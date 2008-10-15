@@ -121,13 +121,13 @@ end
 module Gripers :
 sig
   type griper = 
-      pos:Syntax.position ->
+      pos:SourceCode.pos ->
   t1:(string * Types.datatype) ->
   t2:(string * Types.datatype) ->
   error:Unify.error ->
   unit
 
-  val die : Syntax.position -> string -> 'a
+  val die : SourceCode.pos -> string -> 'a
 
   val if_condition : griper
   val if_branches  : griper
@@ -196,11 +196,11 @@ sig
   val projection : griper
 
   val upcast_source : griper
-  val upcast_subtype : Syntax.position -> Types.datatype -> Types.datatype -> 'a
+  val upcast_subtype : SourceCode.pos -> Types.datatype -> Types.datatype -> 'a
  
-  val value_restriction : Syntax.position -> Types.datatype -> 'a
+  val value_restriction : SourceCode.pos -> Types.datatype -> 'a
 
-  val duplicate_names_in_pattern : Syntax.position -> 'a
+  val duplicate_names_in_pattern : SourceCode.pos -> 'a
 
   val type_annotation : griper
 
@@ -218,7 +218,7 @@ sig
 end
   = struct
     type griper = 
-        pos:Syntax.position ->
+        pos:SourceCode.pos ->
       t1:(string * Types.datatype) ->
       t2:(string * Types.datatype) ->
       error:Unify.error ->
@@ -624,9 +624,10 @@ tab() ^ code rexpr ^ nl() ^
 "has type" ^ nl() ^
 tab() ^ code (show_type rt))
 
-    let record_pattern ~pos:(_,_,expr as pos) ~t1:(_lexpr,_lt) ~t2:(_rexpr,_rt) ~error =
+    let record_pattern ~pos:pos ~t1:(_lexpr,_lt) ~t2:(_rexpr,_rt) ~error =
       match error with
         | `PresentAbsentClash (label, _, _) ->
+            let (_, _, expr) = SourceCode.resolve_pos pos in
             (* NB: is it certain that this is what's happened? *)
           die pos ("\
 Duplicate labels are not allowed in record patterns.  However, the pattern" ^ nl() ^
@@ -913,12 +914,9 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
 let unify ~pos ~(handle:Gripers.griper) ((_,ltype as t1), (_,rtype as t2)) =
   try
     Utils.unify (ltype, rtype)
-  with Unify.Failure error -> handle ~pos ~t1 ~t2 ~error
-
-let lookup_pos =
-  function
-    | (start, finish, Some source_code) -> source_code#lookup(start, finish)
-    | _ -> Syntax.dummy_position
+  with
+      Unify.Failure error ->
+        handle ~pos ~t1 ~t2 ~error
 
 let type_pattern closed : pattern -> pattern * Types.environment * Types.datatype =
   let make_singleton_row =
@@ -971,7 +969,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
     let dups = StringMap.filter (fun (i, _) -> i > 1) binderss
     in
       if not (StringMap.is_empty dups) then
-        Gripers.duplicate_names_in_pattern (lookup_pos pos) in
+        Gripers.duplicate_names_in_pattern pos in
 
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
@@ -986,12 +984,12 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
   let rec type_pattern (pattern, pos' : pattern) : pattern * Types.environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
-    let unify (l, r) = unify ~pos:(lookup_pos pos') (l, r)
+    let unify (l, r) = unify ~pos:pos' (l, r)
     and erase (p,_, _) = p
     and ot (_,_,(t,_)) = t
     and it (_,_,(_,t)) = t
     and env (_,e,_) = e
-    and pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p
+    and pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
            patternnode * Types.environment * (Types.datatype * Types.datatype) =
@@ -1155,23 +1153,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
   fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
-    let unify (l, r) = unify ~pos:(lookup_pos pos) (l, r)
+    let unify (l, r) = unify ~pos:pos (l, r)
     and (++) env env' = {env with var_env = Env.extend env.var_env env'} in
     let typ (_,t) : Types.datatype = t 
     and erase (p, _) = p
     and erase_pat (p, _, t) = p
     and pattern_typ (_, _, t) = t
     and pattern_env (_, e, _) = e in
-    let pattern_pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p in
+    let pattern_pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
-    let uexp_pos (_,p) = let (_,_,p) = lookup_pos p in p in   
+    let uexp_pos (_,p) = let (_,_,p) = SourceCode.resolve_pos p in p in   
     let exp_pos (p,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
     let tpc p = type_pattern `Closed p
     and tpo p = type_pattern `Open p
     and tc : phrase -> phrase * Types.datatype = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
-      let (_,_,e) = lookup_pos pos in e 
+      let (_,_,e) = SourceCode.resolve_pos pos in e 
     and erase_cases = List.map (fun ((p, _, t), (e, _)) -> p, e) in
     let type_cases binders =
       let pt = Types.fresh_type_variable () in
@@ -1214,7 +1212,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                   tappl (`Var v, tyargs), t
               with
                   Errors.UndefinedVariable msg ->
-                    Gripers.die (lookup_pos pos) ("Unknown variable " ^ v ^ ".")
+                    Gripers.die pos ("Unknown variable " ^ v ^ ".")
             )
         | `Section _ as s   -> type_section context.var_env s
 
@@ -1364,7 +1362,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun (name, exp) (set, field_env) ->
                    let exp = type_check context' exp in
                      if StringMap.mem name field_env then
-                       Gripers.die (lookup_pos pos) "Duplicate fields in update expression."
+                       Gripers.die pos "Duplicate fields in update expression."
                      else
                        (name, exp)::set, StringMap.add name (`Present (typ exp)) field_env)
                 set ([], StringMap.empty) in
@@ -1622,7 +1620,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                   `Upcast (erase e, t1', t2'), t1
                 end
               else
-                Gripers.upcast_subtype (lookup_pos pos) t2 t1
+                Gripers.upcast_subtype pos t2 t1
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
@@ -1639,7 +1637,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 and type_binding : context -> binding -> binding * context =
   fun context (def, pos) ->
     let type_check = type_check in
-    let unify pos (l, r) = unify ~pos:(lookup_pos pos) (l, r)
+    let unify pos (l, r) = unify ~pos:pos (l, r)
     and typ (_,t) = t
     and erase (e, _) = e
     and erase_pat (e, _, t) = e
@@ -1650,9 +1648,9 @@ and type_binding : context -> binding -> binding * context =
     and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
-    let pattern_pos ((_,p),_,_) = let (_,_,p) = lookup_pos p in p in
+    let pattern_pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
-    let uexp_pos (_,p) = let (_,_,p) = lookup_pos p in p in   
+    let uexp_pos (_,p) = let (_,_,p) = SourceCode.resolve_pos p in p in   
     let exp_pos (p,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
       (* given a list of argument patterns and a return type
@@ -1692,7 +1690,7 @@ and type_binding : context -> binding -> binding * context =
                                   | `RigidTypeVar _ | `RigidRowVar _ -> true
                                   | `TypeVar _ | `RowVar _ -> false) quantifiers                    
                 then
-                  Gripers.value_restriction (lookup_pos pos) bt
+                  Gripers.value_restriction pos bt
                 else
                   (([], []), bt), erase_pat pat, penv
           in

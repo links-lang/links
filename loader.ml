@@ -6,25 +6,19 @@ let `T (pos, dt, _) = Syntax.no_expr_data
 let use_cache = true
 let make_cache = true
 
-let expunge_source_pos =
-  (Syntax.Functor_expression'.map
-     (fun (`T (_,_,l)) -> `T (pos, dt, l)))
-
-let expunge_all_source_pos =
-  Syntax.transform_program expunge_source_pos
-
 let write_program (filename : string)
     (tenv : Types.typing_environment) (program : Syntax.program) : unit =
   call_with_open_outfile filename ~binary:true
     (fun file ->
-       Marshal.to_channel file 
+       (* strip out positions and types *)
+       let program = Syntax.Functor_program'.map (fun (`T (_,_,l)) -> l) program in
+         Marshal.to_channel file
          (* Serialise the typing environment returned from
             sugar typing (which includes alias bindings), not
             the typing environment returned from
             Inference.type_program (which doesn't) *)
-         (tenv, expunge_all_source_pos program
-            : Types.typing_environment * Syntax.program)
-         [])
+           ((tenv, program) : Types.typing_environment * (Syntax.label option) Syntax.program')
+           [])
   
 let read_file_source (filename:string) tyenv =
   let sugar, pos_context = 
@@ -39,8 +33,11 @@ let read_file_source (filename:string) tyenv =
   let program = Syntax.labelize program in
     tenv, env, program
 
-let unmarshal_cache_file cachefile = 
-  (Marshal.from_channel cachefile : (Types.typing_environment * Syntax.program))
+let unmarshal_cache_file cachefile : (Types.typing_environment * Syntax.program) = 
+  let tenv, program = Marshal.from_channel cachefile in
+    (* fill in dummy positions and dummy types *)
+  let program = Syntax.Functor_program'.map (fun l -> `T (SourceCode.dummy_pos, `Not_typed, l)) program in
+    tenv, program
 
 let read_cache_file cachename = 
   call_with_open_infile cachename ~binary:true unmarshal_cache_file

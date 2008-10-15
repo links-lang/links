@@ -68,11 +68,11 @@ SOURCES = $(OPC)                		\
           constant.ml                           \
           syntaxutils.ml                        \
           sqlQuery.ml               		\
+          sourceCode.ml                         \
           syntax.mli syntax.ml        		\
           sqlcompile.ml                         \
           regex.ml                              \
           result.mli result.ml         		\
-          sourceCode.ml                         \
           sugartypes.ml                         \
           parser.mly            		\
           lexer.mli lexer.mll         		\

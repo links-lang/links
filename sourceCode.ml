@@ -1,5 +1,5 @@
+(*pp deriving *)
 open Utility
-open Lexing
 
 (* Initial estimates for input size *)
 let default_lines = 100
@@ -19,11 +19,11 @@ object (self)
   val text = Buffer.create default_chars
 
   (* Return the portion of source code that falls between two positions *)
-  method private extract_substring (start : position) (finish : position) =
-    if start == dummy_pos || finish == dummy_pos then
+  method private extract_substring (start : Lexing.position) (finish : Lexing.position) =
+    if start == Lexing.dummy_pos || finish == Lexing.dummy_pos then
       "*** DUMMY POSITION ****"
     else
-      Buffer.sub text start.pos_cnum (finish.pos_cnum - start.pos_cnum)
+      Buffer.sub text start.Lexing.pos_cnum (finish.Lexing.pos_cnum - start.Lexing.pos_cnum)
 
   (* Return some lines of the source code *)
   method extract_line_range (startline : int) (finishline : int) =
@@ -56,16 +56,60 @@ object (self)
         nchars
 
   (* Retrieve the last line of source code read. *)
-  method find_line (pos : position) : (string * int) =
-    (self#extract_line pos.pos_lnum, 
-     pos.pos_cnum - Hashtbl.find lines (pos.pos_lnum -1) - 1)
+  method find_line (pos : Lexing.position) : (string * int) =
+    (self#extract_line pos.Lexing.pos_lnum, 
+     pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
 
   (* Create a `lookup function' that given start and finish positions
-     returns an Syntax.position
+     returns a resolved position
   *)
   method lookup =
     fun (start, finish) ->
       (start, 
-       self#extract_line start.pos_lnum,
+       self#extract_line start.Lexing.pos_lnum,
        self#extract_substring start finish)
 end
+
+type lexpos = Lexing.position 
+module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
+module Eq_lexpos : Eq.Eq with type a = lexpos = 
+struct
+  type a = lexpos
+  let eq = (==)
+end
+module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
+module Show_lexpos = Show.Show_unprintable (LexposType)
+(*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
+
+module Typeable_source_code = Typeable.Primitive_typeable(struct type t = source_code end)
+module Eq_source_code : Eq.Eq with type a = source_code = 
+struct
+  type a = source_code
+  let eq = (==)
+end
+module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end
+module Show_source_code = Show.Show_unprintable (SourceCodePos)
+
+(** unresolved position *)
+(* start * end * code *)
+type pos = lexpos * lexpos * source_code option
+    deriving (Typeable, Show,  Eq)
+let dummy_pos = (Lexing.dummy_pos, Lexing.dummy_pos, None)
+
+
+(** resolved position *)
+(* The start position is only used to generate the filename and the
+   line number. Perhaps we should just store these here instead.
+*)
+(* start * source line * source expression *)
+type position = lexpos * string * string
+    deriving (Typeable, Show,  Eq)
+let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
+
+(* generic syntax error *)
+exception ASTSyntaxError of pos * string
+
+let resolve_pos : pos -> position =
+  function
+    | (start, finish, Some source_code) -> source_code#lookup(start, finish)
+    | (_, _, None) -> dummy_position

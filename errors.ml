@@ -11,33 +11,35 @@ exception UndefinedVariable of string
     
 exception NoMainExpr
 exception ManyMainExprs of Syntax.expression list
-exception Type_error of (Syntax.position * string)
-exception MultiplyDefinedToplevelNames of ((Syntax.position list) stringmap)
+exception Type_error of (SourceCode.pos * string)
+exception MultiplyDefinedToplevelNames of ((SourceCode.pos list) stringmap)
 exception RichSyntaxError of synerrspec
 
-exception WrongArgumentTypeError of (Syntax.position *
+exception WrongArgumentTypeError of (SourceCode.pos *
 				       string * Types.datatype * 
                                        string list * Types.datatype list *
 				       Types.datatype option)
 
-exception MistypedSendError of (Syntax.position *
+exception MistypedSendError of (SourceCode.pos *
 				       string * Types.datatype * 
                                        string list * Types.datatype list *
 				       Types.datatype option)
 
-exception NonfuncAppliedTypeError of (Syntax.position * string * Types.datatype *
+exception NonfuncAppliedTypeError of (SourceCode.pos * string * Types.datatype *
 					string list * Types.datatype list *
 					Types.datatype option)
 
 type expression = Syntax.expression
 (*type inference_expression =
-          (Syntax.position * datatype * Syntax.label option) Syntax.expression'*)
+          (SourceCode.pos * datatype * Syntax.label option) Syntax.expression'*)
 
-let mistyped_application pos (fn, fntype) (params, paramtypes) mb =
-  let `T ((_, _, fexpr),_,_) = expression_data fn in
-  let pexprs = List.map (fun param -> 
-                           let `T ((_, _, pexpr),_,_) = expression_data param in
-                             pexpr) params 
+let mistyped_application pos ((fn : expression), fntype) ((params : expression list), paramtypes) mb =
+  let `T (fn_pos,_,_) = expression_data fn in
+  let (_, _, fexpr) = SourceCode.resolve_pos fn_pos in
+  let pexprs = List.map (fun param ->
+                           let `T (ppos,_,_) = expression_data param in
+                           let (_, _, pexpr) = SourceCode.resolve_pos ppos in
+                             pexpr) params
   in match fn, paramtypes with
       (* Sadly, this doesn't trigger--I think because of metatypevars
          and other stuff that gets in the way of the type. --eekc 5/07 *)
@@ -86,9 +88,10 @@ let rec format_exception = function
        ^ s.message ^ "\n" ^ prefix_lines "   " s.linetext ^ "\n"
        ^ "   " ^ s.marker)
   | Getopt.Error s -> s
-  | Type_error ((pos,_,expr), s) -> 
-      Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
-        pos.pos_fname pos.pos_lnum s expr
+  | Type_error (pos, s) ->
+      let (pos, _, expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
+          pos.pos_fname pos.pos_lnum s expr
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expressions `" ^ 
         String.concat "', `" pexpr ^ "' have types\n    " ^ 
@@ -104,16 +107,21 @@ let rec format_exception = function
         mapstrcat ", " string_of_datatype paramtype ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
   | Result.Runtime_error s -> "*** Runtime error: " ^ s
-  | ASTSyntaxError ((pos,_,expr), s) -> 
-      Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
-        pos.pos_fname pos.pos_lnum s expr
-  | Sugartypes.RedundantPatternMatch (pos,_,expr) -> 
-      Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n" 
-        pos.pos_fname pos.pos_lnum expr
-  | Sugartypes.PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
-      Printf.sprintf
-        "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s" 
-        pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
+  | ASTSyntaxError (pos, s) -> 
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
+          pos.pos_fname pos.pos_lnum s expr
+  | Sugartypes.RedundantPatternMatch pos -> 
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n" 
+          pos.pos_fname pos.pos_lnum expr
+  | Sugartypes.PatternDuplicateNameError(pos, name) ->
+      (* BUG: this can't be right (the pattern and the expression are the same!) *)
+      let _,_,pattern = SourceCode.resolve_pos pos in
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf
+          "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s" 
+          pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedToplevelNames duplicates ->
       "Duplicate top-level bindings\n" ^
@@ -133,9 +141,10 @@ let rec format_exception_html = function
        ^ s.message ^ "</p><pre>" ^ xml_escape s.linetext ^ "\n"
        ^ s.marker ^ "</pre>")
   | Getopt.Error s -> s
-  | Type_error ((pos,_,expr), s) -> 
-      Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
-        pos.pos_fname pos.pos_lnum s (xml_escape expr)
+  | Type_error (pos, s) -> 
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
+          pos.pos_fname pos.pos_lnum s (xml_escape expr)
   | MistypedSendError(pos, fexpr, fntype, pexpr,
                       ([`Application(mbtc, [mbType]); msgType] as paramtypes),
                       mb)
@@ -172,7 +181,7 @@ let rec format_exception_html = function
         format_exception_html(Type_error(pos, msg))
 
   | MultiplyDefinedToplevelNames duplicates -> 
-      let show_pos : Syntax.position -> string = fun ((pos : Lexing.position), _, _) ->
+      let show_pos : SourceCode.pos -> string = fun ((pos : Lexing.position), _, _) ->
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
       in
         "<h1>Links Syntax Error</h1><p>Duplicate top-level bindings:</p><ul>" ^
@@ -185,13 +194,17 @@ let rec format_exception_html = function
              duplicates "") ^ "</ul>"
           
   | Result.Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
-  | ASTSyntaxError ((pos,_,expr), s) -> 
-      Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
-        pos.pos_fname pos.pos_lnum s (xml_escape expr)
-  | Sugartypes.PatternDuplicateNameError((pos,_,expr), name, pattern) -> 
-      Printf.sprintf
-        "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
-        pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
+  | ASTSyntaxError (pos, s) -> 
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
+          pos.pos_fname pos.pos_lnum s (xml_escape expr)
+  | Sugartypes.PatternDuplicateNameError(pos, name) ->
+      (* BUG: this can't be right (the pattern and the expression are the same!) *)
+      let _,_,pattern = SourceCode.resolve_pos pos in
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        Printf.sprintf
+          "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
+          pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | NoMainExpr -> "<h1>Links Syntax Error</h1>\nNo \"main\" expression at end of file"
   | ManyMainExprs es -> "<h1>Links Syntax Error</h1>\nMore than one \"main\" expression at end of file : " ^ 

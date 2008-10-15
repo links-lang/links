@@ -133,4 +133,4 @@ let parse_file ?(pp=default_preprocessor) ?in_context:context grammar filename =
                   ~context)
 
 type position_context = SourceCode.source_code
-let retrieve_code code (start, finish, _) = code#lookup (start, finish)
+

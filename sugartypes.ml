@@ -48,9 +48,8 @@ let string_of_binop =
     | `Name name -> name
     | `App -> "app"
 
-type position = Lexing.position * Lexing.position * SourceCode.source_code option (* start * end * code *)
-
-let dummy_position = (Lexing.dummy_pos, Lexing.dummy_pos, None)
+type position = SourceCode.pos
+let dummy_position = SourceCode.dummy_pos
 
 module Show_position = Show.ShowDefaults(
 struct
@@ -230,9 +229,15 @@ and sentence' = [
 type program = binding list * phrase option 
   deriving (Show)
 
+
+(* Why does ConcreteSyntaxError take an
+   unresolved position and yet
+   PatternDuplicateNameError and
+   RedundantPatternMatch take resolved positions?
+*)
 exception ConcreteSyntaxError of (string * position)
-exception PatternDuplicateNameError of (Syntax.position * string * string)
-exception RedundantPatternMatch of Syntax.position
+exception PatternDuplicateNameError of (SourceCode.pos * string)
+exception RedundantPatternMatch of SourceCode.pos
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with

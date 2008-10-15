@@ -13,7 +13,6 @@ type context
 val fresh_context : unit -> context
 
 type position_context = SourceCode.source_code
-val retrieve_code : position_context -> Sugartypes.position -> Syntax.position
 
 val parse_string  : ?pp:string
                   -> ?in_context:context

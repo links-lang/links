@@ -5,11 +5,6 @@ open List
 open Syntax
 open Sugartypes
 
-let lookup_pos =
-  function
-    | (start, finish, Some source_code) -> source_code#lookup(start, finish)
-    | _ -> Syntax.dummy_position
-
 (* Internal representation for patterns. 
 
    This is slightly easier for the pattern compiler to work with than
@@ -813,11 +808,11 @@ module Desugarer =
      Printf.sprintf "%s:%d:%s" pos.Lexing.pos_fname pos.Lexing.pos_lnum expr
 
    let check_for_duplicate_names' (env:StringSet.t) (pattern,pos) : StringSet.t =
-     let (pos, dpos, expr) = data_position pos in      
+     let pos = data_position pos in      
      let module S = StringSet in
      let add elt set = 
        if S.mem elt set then
-         raise (PatternDuplicateNameError ((pos, dpos, expr), elt, expr))
+         raise (PatternDuplicateNameError (pos, elt))
        else S.add elt set in
      let union = S.fold add in
      let rec names : simple_pattern a_pattern -> StringSet.t = function
@@ -849,7 +844,7 @@ module Desugarer =
 
    let rec simple_pattern_of_pattern ((pat,pos') : pattern) : simple_pattern = 
        let desugar = simple_pattern_of_pattern
-       and pos = `U (lookup_pos pos') in
+       and pos = `U pos' in
        let rec aux : patternnode -> _ = function
          | `Variable (v, _, _) -> `Variable v, pos
          | `Nil            -> `Nil, pos
@@ -939,7 +934,7 @@ module Desugarer =
      
    let desugar_expression (e : phrase) : untyped_expression =
      let rec desugar' ((s, pos') : phrase) : untyped_expression =
-       let pos = `U (lookup_pos pos')
+       let pos = `U pos'
        and patternize = simple_pattern_of_pattern in
        let appPrim = appPrim pos in
        let desugar = desugar' in
@@ -962,8 +957,15 @@ module Desugarer =
            | `InfixAppl ((_, `Name "++"), e1, e2)  -> Concat (desugar e1, desugar e2, pos)
            | `InfixAppl ((_, `Name "!"), e1, e2)  -> appPrim "send" [desugar e1; desugar e2]
            | `InfixAppl ((_, `Name n), e1, e2)  -> 
-               let `U (a,_,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
+               (* BROKEN HACK:
+                  
+                  we can no longer use this hack because we use
+                  unresolved positions everywhere *)
+               (*
+                 let `U (a,_,_) = pos (* somewhat unpleasant attempt to improve error messages *) in 
                  Apply (Variable (n,  `U (a,n,n)), [desugar e1; desugar e2], pos)
+               *)
+               Apply (Variable (n,  pos), [desugar e1; desugar e2], pos)
            | `InfixAppl ((_, `Cons), e1, e2) -> Concat (List_of (desugar e1, pos), desugar e2, pos)
            | `InfixAppl ((_, `FloatMinus), e1, e2)  -> appPrim "-." [desugar e1; desugar e2]
            | `InfixAppl ((_, `Minus), e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
@@ -1252,18 +1254,18 @@ module Desugarer =
            | `Formlet _ -> failwith "formlet found after formlet desugaring"
            | `Page _ -> failwith "page found after page desugaring"
            | `FormletPlacement _ ->
-               raise (ASTSyntaxError (lookup_pos pos', "A formlet can only be rendered in a page expression"))
+               raise (ASTSyntaxError (pos', "A formlet can only be rendered in a page expression"))
            | `PagePlacement _ ->
-               raise (ASTSyntaxError (lookup_pos pos', "An embedded page can only appear in a page expression"))
+               raise (ASTSyntaxError (pos', "An embedded page can only appear in a page expression"))
            | `FormBinding _ ->
-               raise (ASTSyntaxError (lookup_pos pos', "A formlet binding can only appear in a formlet expression"))
+               raise (ASTSyntaxError (pos', "A formlet binding can only appear in a formlet expression"))
            | `Regex _ -> assert false in
      let result = desugar' e in
        (Debug.if_set show_desugared (fun()-> string_of_expression result);
         result)
 
    let desugar_definition ((s, pos') : binding) : untyped_definition list =
-     let pos = `U (lookup_pos pos') in
+     let pos = `U pos' in
      let desugar_expression = desugar_expression in
      let ds : bindingnode -> _ Syntax.definition' list = function
        | `Val (_, (`Variable (name, _, _), _), p, location, None) ->

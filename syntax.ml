@@ -5,28 +5,11 @@ open Utility
 open Show
 open Pickle
 
-type lexpos = Lexing.position 
-module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
-
-module Eq_lexpos : Eq.Eq with type a = lexpos = 
-struct
-  type a = lexpos
-  let eq = (==)
-end
-
-let print_digest_junk = Settings.add_bool("print_digest_junk", false, `User)
-
-module LexposType = struct type a = lexpos let tname = "Syntax.lexpos" end
-module Show_lexpos = Show_unprintable (LexposType)
-(*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
-
-type position = lexpos *  (* source line: *) string 
-                  * (* expression source: *) string
+type position = SourceCode.pos
     deriving (Typeable, Show,  Eq)
-
-let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
+let dummy_position = SourceCode.dummy_pos
     
-exception ASTSyntaxError of position * string
+exception ASTSyntaxError = SourceCode.ASTSyntaxError
 
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
@@ -43,12 +26,6 @@ let string_of_comparison = function
 
 type constant = Constant.constant
     deriving (Eq, Typeable, Show, Pickle, Shelve)
-
-(*   | Boolean of bool *)
-(*   | Integer of num *)
-(*   | Char of char *)
-(*   | String of string *)
-(*   | Float of float *)
 
 type 'data expression' =
   | Constant of (constant * 'data)

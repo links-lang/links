@@ -315,7 +315,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
           with Unify.Failure error -> 
             match error with
               | `Msg msg -> 
-                  let _,_,src = position expr in
+                  let _,_,src = SourceCode.resolve_pos (position expr) in
                     type_mismatch
                       ~expected:inference_datatype
                       ~inferred:expr_type

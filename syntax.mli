@@ -60,7 +60,7 @@ type 'a program' = Program of ('a definition' list * 'a expression')
 val program_body :'a program' -> 'a expression'
 val program_defs :'a program' -> 'a definition' list
 
-type position = Lexing.position * string (* line *) * string (* expression *)
+type position = SourceCode.pos
 
 val show_pos : position -> string
 
@@ -180,6 +180,7 @@ val rewrite_program :
   ('a expression' -> 'a expression' option) -> 'a program' -> 'a program'
 
 module Functor_expression' : Functor.Functor with type 'a f = 'a expression'
+module Functor_program' : Functor.Functor with type 'a f = 'a program'
 
 val record_selection : (string * string * string * 'a expression' * 'a expression' * 'a) -> 'a expression'
 
