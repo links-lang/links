@@ -233,7 +233,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let o = o#with_mb outer_mb in
             (o, `SpawnWait (body, Some inner_mb), body_type)
       | `ListLit (es, Some t) ->
-          let (o, es, _) = list o (fun o -> o#phrase) es in (o, `ListLit (es, Some t), t)
+          let (o, es, _) = list o (fun o -> o#phrase) es in
+            (o, `ListLit (es, Some t), Types.make_list_type t)
       | `RangeLit (e1, e2) ->
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in
@@ -289,7 +290,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e, t) = o#phrase e in
 (*             Debug.print "tappl"; *)
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
-(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
+(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t);*)
 (*             Debug.print ("TAppl: "^Show_phrasenode.show (`TAppl (e, tyargs))); *)
           let t = Instantiate.apply_type t tyargs in
             (o, `TAppl (e, tyargs), t)

@@ -93,6 +93,7 @@ SOURCES = $(OPC)                		\
           desugarPages.mli desugarPages.ml		\
           desugarFormlets.mli desugarFormlets.ml        \
           desugarRegexes.mli desugarRegexes.ml		\
+          desugarFors.mli desugarFors.ml                \
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           frontend.ml                           \
@@ -120,6 +121,8 @@ SOURCES = $(OPC)                		\
           tests.ml                              \
           sqlcompileTest.ml                     \
           links.ml              		\
+
+#          sugartoir.mli sugartoir.ml            \
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

@@ -99,6 +99,18 @@ let rec element_type t = match concrete_type t with
   | t ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
 
+let rec table_read_type t = match concrete_type t with
+  | `ForAll (_, t) -> table_read_type t
+  | `Table (r, _) -> r
+  | t ->
+      error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
+
+let rec table_write_type t = match concrete_type t with
+  | `ForAll (_, t) -> table_write_type t
+  | `Table (_, w) -> w
+  | t ->
+      error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
+
 let inject_type name t =
   `Variant (make_singleton_open_row (name, `Present t))
 

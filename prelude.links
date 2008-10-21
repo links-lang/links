@@ -137,8 +137,13 @@ fun compose(f, g) {
 
 fun id(x) { x }
 
-fun concatMap(f,l) {
-  for (var x <- l) f(x)
+# Don't use a for comprehension to define concatMap, as
+# for comprehensions are desugared into concatMap!
+fun concatMap(f, xs) {
+  switch (xs) {
+    case [] -> []
+    case x::xs -> f(x) ++ concatMap(f, xs)
+  }
 }
 
 fun first(p)   { p.1 }

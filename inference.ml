@@ -79,7 +79,12 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
             unify (`Function(arg_type, mb_type, return_type), f_type);
             Apply (f, ps, `T (pos, return_type, None))
           with Unify.Failure _ ->
-            mistyped_application pos (f, f_type) (ps, List.map type_of_expression ps) (Some mb_type)
+            try
+              mistyped_application pos (f, f_type) (ps, List.map type_of_expression ps) (Some mb_type)
+            with e ->
+              Debug.print (Errors.format_exception e);
+              Debug.print ("expression: "^string_of_expression expression);
+              failwith "oops"
         end
   | Condition (if_, then_, else_, `U pos) ->
       let if_ = type_check typing_env if_ in
@@ -328,6 +333,7 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
  with 
    | UndefinedVariable msg
    | Unify.Failure (`Msg msg) ->
+       Debug.print ("expression: "^string_of_expression expression);
        raise (Type_error(position expression, msg))
    | Unify.Failure (`PresentAbsentClash (label, lrow, rrow)) ->
        raise (Type_error(position expression, 

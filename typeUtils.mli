@@ -9,6 +9,10 @@ val inject_type  : string -> Types.datatype -> Types.datatype
 val return_type  : Types.datatype -> Types.datatype
 val arg_types    : Types.datatype -> Types.datatype list
 val element_type : Types.datatype -> Types.datatype
+
+val table_read_type : Types.datatype -> Types.datatype
+val table_write_type : Types.datatype -> Types.datatype
+
 val abs_type     : Types.datatype -> Types.datatype
 val app_type     : Types.datatype -> Types.datatype -> Types.datatype
 
