@@ -1149,6 +1149,20 @@ let show_context : context -> context =
     flush stderr;
     context
 
+
+(* given a list of argument patterns and a return type
+   return the corresponding function type *)
+let make_ft ps mailbox_type return_type =
+  let pattern_typ (_, _, t) = t in
+  let p::ps = List.rev ps in
+  let args =
+    Types.make_tuple_type -<- List.map pattern_typ
+  in
+    List.fold_right
+      (fun p t -> `Function (args p, Types.fresh_type_variable (), t))
+      ps
+      (`Function (args p, mailbox_type, return_type))
+
 let rec type_check : context -> phrase -> phrase * Types.datatype = 
   fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -1279,15 +1293,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
             let {var_env = env'} = List.fold_left fold_in_envs context pats in
+
+            (* type of the mailbox in the body of the lambda *)
+            let mbt = Types.fresh_type_variable () in
             let body = type_check ({context with
-                                      var_env = Env.bind env' (mailbox, Types.fresh_type_variable ())}) body in
-            let argss, ftype = 
-              List.fold_right
-                (fun pat (argss, rtype) ->
-                   let args = Types.make_tuple_type (List.map pattern_typ pat) in
-                   let mb = Types.fresh_type_variable () in
-                     (args, mb)::argss, `Function (args, mb, rtype))
-                pats ([], typ body) in
+                                      var_env = Env.bind env' (mailbox, mbt)}) body in
+
+            let ftype = make_ft pats mbt (typ body) in
+            let argss =
+              let rec arg_types =
+                function
+                  | (`Function (args, mbt, t)) -> (args, mbt) :: arg_types t
+                  | _ -> []
+              in
+                arg_types ftype
+            in
               `FunLit (Some argss, (List.map (List.map erase_pat) pats, erase body)), ftype
 
         | `ConstructorLit (c, None, _) ->
@@ -1653,17 +1673,6 @@ and type_binding : context -> binding -> binding * context =
     let uexp_pos (_,p) = let (_,_,p) = SourceCode.resolve_pos p in p in   
     let exp_pos (p,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
-      (* given a list of argument patterns and a return type
-         return the corresponding function type *)
-    let make_ft ps mailbox_type return_type =
-      let p::ps = List.rev ps in
-      let args =
-        Types.make_tuple_type -<- List.map pattern_typ
-      in
-        List.fold_right
-          (fun p t -> `Function (args p, Types.fresh_type_variable (), t))
-          ps
-          (`Function (args p, mailbox_type, return_type)) in
 
     let typed, ctxt = match def with
       | `Include _ -> assert false
