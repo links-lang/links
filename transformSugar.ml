@@ -387,6 +387,13 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
+            (* BUG:
+               
+               We should really reset the environment: variables bound
+               by p shouldn't be visible in subsequent expression.
+
+               The same applies to `DBUpdate and `Iteration.
+            *)
           let (o, where, _) = option o (fun o -> o#phrase) where in
             (o, `DBDelete (p, from, where), Types.unit_type)
       | `DBInsert (into, values, id) ->
@@ -418,8 +425,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `TextNode s -> (o, `TextNode s, Types.xml_type)
       | `Formlet (body, yields) ->
           let (o, body, _) = o#phrase body in
-          (* ensure that the formlet bindings are only in scope in the
-             yields clause *)
+            (* ensure that the formlet bindings are only in scope in the
+               yields clause *)
           let o = {< var_env=TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ());
                      formlet_env=formlet_env >} in
           let (o, yields, t) = o#phrase yields in

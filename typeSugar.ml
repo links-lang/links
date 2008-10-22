@@ -684,6 +684,16 @@ let type_section env (`Section s as s') =
             [`Type mb; `Type f], `Function (Types.make_tuple_type [r], mb, f)
       | `Name var      -> Utils.instantiate env var
   in
+    (*
+      TODO:
+      
+      This seems a bit silly.
+      
+      We appear to be looking up the type in the environment, instantiating it
+      and then immediately generalising.
+
+      Compare with TransformSugar.type_section.
+    *)
     tappl (s', tyargs), t
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
