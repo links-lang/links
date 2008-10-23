@@ -7,3 +7,4 @@ val alias : string -> Types.datatype list -> Types.tycon_environment -> Types.da
 
 val apply_type : Types.datatype -> Types.type_arg list -> Types.datatype
 val freshen_quantifiers : Types.datatype -> Types.datatype
+val replace_quantifiers : Types.datatype -> Types.quantifier list -> Types.datatype

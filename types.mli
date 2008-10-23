@@ -35,16 +35,6 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-type type_variable =
-    [ `TypeVar of int | `RigidTypeVar of int
-    | `RowVar of int | `RigidRowVar of int ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
-
-type quantifier = type_variable
-    deriving (Typeable, Show, Pickle)
-
-val type_var_number : type_variable -> int
-
 module Abstype :
 sig
   type t deriving (Eq, Show, Pickle, Typeable, Shelve)
@@ -76,7 +66,12 @@ and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+and quantifier =
+    [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
+    | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
+val type_var_number : quantifier -> int
 
 type type_arg = 
     [ `Type of datatype | `Row of row ]
@@ -112,7 +107,7 @@ val free_row_type_vars : row -> TypeVarSet.t
 val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
 
-val flexible_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t
+val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
 (** Fresh type variables *)
 val fresh_raw_variable : unit -> int

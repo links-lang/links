@@ -126,17 +126,25 @@ struct
     in fold_right Types.row_with fields seed
 
   let generate_var_mapping (vars : quantifier list) : (Types.quantifier list * var_env) =
-    let addt x tvar envs = {envs with tenv = StringMap.add x (Unionfind.fresh tvar) envs.tenv}
-    and addr x rvar envs = {envs with renv = StringMap.add x (Unionfind.fresh rvar) envs.renv} in
+    let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv}
+    and addr x r envs = {envs with renv = StringMap.add x r envs.renv} in
     let vars, var_env =
       List.fold_left
         (fun (vars, envs) v ->
            let var = Types.fresh_raw_variable () in
              match v with
-               | `TypeVar      x -> `TypeVar var::vars     , addt x (`Flexible var) envs
-               | `RigidTypeVar x -> `RigidTypeVar var::vars, addt x (`Rigid var)    envs
-               | `RowVar       x -> `RowVar var::vars      , addr x (`Flexible var) envs
-               | `RigidRowVar  x -> `RigidRowVar var::vars , addr x (`Rigid var)    envs)
+               | `TypeVar x ->
+                   let t = Unionfind.fresh (`Flexible var) in
+                     `TypeVar (var, t)::vars, addt x t envs
+               | `RigidTypeVar x ->
+                   let t = Unionfind.fresh (`Rigid var) in
+                     `RigidTypeVar (var, t)::vars, addt x t envs
+               | `RowVar x ->
+                   let r = Unionfind.fresh (`Flexible var) in
+                     `RowVar (var, r)::vars, addr x r envs
+               | `RigidRowVar x ->
+                   let r = Unionfind.fresh (`Rigid var) in
+                     `RigidRowVar (var, r)::vars , addr x r envs)
         ([], empty_env)
         vars
     in

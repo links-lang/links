@@ -8,6 +8,9 @@ type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
 (* type var sets *)
 module TypeVarSet = Utility.IntSet
 
+(* type var sets *)
+module TypeVarMap = Utility.IntMap
+
 (* points *)
 type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
 
@@ -27,14 +30,6 @@ type 't meta_type_var_basis =
 type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
-
-type type_variable =
-    [ `TypeVar of int | `RigidTypeVar of int
-    | `RowVar of int | `RigidRowVar of int ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
-
-type quantifier = type_variable
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 module Abstype =
 struct
@@ -91,6 +86,9 @@ and row_var        = meta_row_var
 and row            = field_spec_map * row_var
 and meta_type_var  = (datatype meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
+and quantifier =
+    [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
+    | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
 (* useful for debugging: types tend to be too big to read *)
@@ -111,20 +109,21 @@ type type_arg =
 let for_all : quantifier list * datatype -> datatype = function
   | [], t -> t
   | qs, t ->
-      let qs = List.map
-        (function
-           | `TypeVar x | `RigidTypeVar x -> `RigidTypeVar x
-           | `RowVar x | `RigidRowVar x -> `RigidRowVar x) qs
+      let qs =
+        List.map
+          (function
+             | `TypeVar x | `RigidTypeVar x -> `RigidTypeVar x
+             | `RowVar x | `RigidRowVar x -> `RigidRowVar x) qs
       in
         match t with
           | `ForAll (qs', t) -> `ForAll (qs @ qs', t)
           | _ -> `ForAll (qs, t)
 
 let type_var_number = function
-  | `TypeVar x
-  | `RigidTypeVar x
-  | `RowVar x
-  | `RigidRowVar x -> x
+  | `TypeVar (x, _)
+  | `RigidTypeVar (x, _)
+  | `RowVar (x, _)
+  | `RigidRowVar (x, _) -> x
 
 module Env = Env.String
 
@@ -216,19 +215,23 @@ let _ =
 
   let fresh_type_quantifier () =
     let var = fresh_raw_variable () in
-      `RigidTypeVar var, make_rigid_type_variable var
+    let point = Unionfind.fresh (`Rigid var) in
+      `RigidTypeVar (var, point), `MetaTypeVar point
         
   let fresh_row_quantifier () =
     let var = fresh_raw_variable () in
-      `RigidRowVar var, make_rigid_row_variable var
+    let point = make_rigid_row_variable var in
+      `RigidRowVar (var, point), point
         
   let fresh_flexible_type_quantifier () =
     let var = fresh_raw_variable () in
-      `TypeVar var, make_type_variable var
+    let point = Unionfind.fresh (`Flexible var) in
+      `TypeVar (var, point), `MetaTypeVar point
         
   let fresh_flexible_row_quantifier () =
     let var = fresh_raw_variable () in
-      `RowVar var, make_row_variable var      
+    let point = make_row_variable var in
+      `RowVar (var, point), point      
 
   let make_empty_closed_row () = empty_field_env, closed_row_var
   let make_empty_open_row () = empty_field_env, fresh_row_variable ()
@@ -646,10 +649,10 @@ let string_of_primitive : primitive -> string = function
 let string_of_quantifier' : string IntMap.t -> quantifier -> string =
   fun vars ->
     function
-      | `TypeVar var
-      | `RowVar var -> "'" ^ IntMap.find var vars
-      | `RigidTypeVar var
-      | `RigidRowVar var -> IntMap.find var vars
+      | `TypeVar (var, _)
+      | `RowVar (var, _) -> "'" ^ IntMap.find var vars
+      | `RigidTypeVar (var, _)
+      | `RigidRowVar (var, _) -> IntMap.find var vars
 
 let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> string =
   fun rec_vars vars datatype ->
@@ -809,52 +812,52 @@ let make_names vars =
 (*
   find all the flexible type variables in a type
  *)
-let rec flexible_type_vars : TypeVarSet.t -> datatype -> TypeVarSet.t = fun bound_vars t ->
+let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t = fun bound_vars t ->
   let ftv = flexible_type_vars bound_vars in
     match t with
       | `Not_typed  
-      | `Primitive _ -> TypeVarSet.empty
+      | `Primitive _ -> TypeVarMap.empty
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarSet.empty
-              | `Flexible var -> TypeVarSet.singleton var
-              | `Rigid _ -> TypeVarSet.empty
+              | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
+              | `Flexible var -> TypeVarMap.singleton var (`TypeVar (var, point))
+              | `Rigid _ -> TypeVarMap.empty
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var bound_vars then
-                    TypeVarSet.empty
+                    TypeVarMap.empty
                   else
                     flexible_type_vars (TypeVarSet.add var bound_vars) body
               | `Body t -> ftv t
           end
       | `Function (f, m, t) ->
-          TypeVarSet.union_all [ftv f; ftv m; ftv t]
+          TypeVarMap.union_all [ftv f; ftv m; ftv t]
       | `Record row -> row_flexible_type_vars bound_vars row
       | `ForAll (tvars, body) ->
           failwith "Not implemented flexible_type_vars for `ForAll yet"
 (*`ForAll (tvars, ftv body)*)
       | `Variant row -> row_flexible_type_vars bound_vars row
-      | `Table (r, w) -> TypeVarSet.union (ftv r) (ftv w)
-      | `Alias ((name, ts), d) -> TypeVarSet.union_all ((ftv d)::(List.map ftv ts))
-      | `Application (name, datatypes) -> TypeVarSet.union_all (List.map ftv datatypes)
+      | `Table (r, w) -> TypeVarMap.superimpose (ftv r) (ftv w)
+      | `Alias ((name, ts), d) -> TypeVarMap.union_all ((ftv d)::(List.map ftv ts))
+      | `Application (name, datatypes) -> TypeVarMap.union_all (List.map ftv datatypes)
 and row_flexible_type_vars bound_vars (field_env, row_var) =
-  TypeVarSet.union
+  TypeVarMap.superimpose
     (FieldEnv.fold (fun _ t ftvs ->
                       match t with
                         | `Present t ->
-                            TypeVarSet.union (flexible_type_vars bound_vars t) ftvs
+                            TypeVarMap.superimpose (flexible_type_vars bound_vars t) ftvs
                         | `Absent ->
-                            ftvs) field_env TypeVarSet.empty)
+                            ftvs) field_env TypeVarMap.empty)
     (row_var_flexible_type_vars bound_vars row_var)
 and row_var_flexible_type_vars bound_vars row_var = 
   match Unionfind.find row_var with
-    | `Closed -> TypeVarSet.empty
-    | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarSet.empty
-    | `Flexible var -> TypeVarSet.singleton var
-    | `Rigid _ -> TypeVarSet.empty
+    | `Closed -> TypeVarMap.empty
+    | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
+    | `Flexible var -> TypeVarMap.singleton var (`RowVar (var, row_var))
+    | `Rigid _ -> TypeVarMap.empty
     | `Recursive (var, row) ->
         if TypeVarSet.mem var bound_vars then
-          TypeVarSet.empty
+          TypeVarMap.empty
         else
           row_flexible_type_vars (TypeVarSet.add var bound_vars) row
     | `Body row ->

@@ -125,10 +125,10 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
 
 	  let tenv, renv, tys = List.fold_left
 	    (fun env -> function
-	       | `TypeVar var
-	       | `RigidTypeVar var -> typ var env
-	       | `RowVar var
-	       | `RigidRowVar var -> row var env
+	       | `TypeVar (var, _)
+	       | `RigidTypeVar (var, _) -> typ var env
+	       | `RowVar (var, _)
+	       | `RigidRowVar (var, _) -> row var env
 	    ) (IntMap.empty, IntMap.empty, []) quantifiers in
           let tys = List.rev tys in
 	    tys, instantiate_datatype (tenv, renv) t)
@@ -167,9 +167,9 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
     List.fold_right2
       (fun var t (tenv, renv) ->
          match (var, t) with
-           | ((`TypeVar var | `RigidTypeVar var), `Type t) ->
+           | ((`TypeVar (var, _) | `RigidTypeVar (var, _)), `Type t) ->
                (IntMap.add var t tenv, renv)
-           | ((`RowVar var | `RigidRowVar var), `Row row) ->
+           | ((`RowVar (var, _) | `RigidRowVar (var, _)), `Row row) ->
                (* 
                   QUESTION:
                   
@@ -215,6 +215,25 @@ let freshen_quantifiers t =
           `ForAll (qs, apply_type t tyargs)
     | t -> t
 
+let replace_quantifiers t qs' =
+  match t with
+    | `ForAll (qs, _) ->
+        let tyargs =
+          List.map2
+            (fun q q' ->
+               match q, q' with
+                 | `TypeVar _, `TypeVar (_, point)
+                 | `RigidTypeVar _, `RigidTypeVar (_, point) ->
+                     `Type (`MetaTypeVar point)
+                 | `RowVar _, `RowVar (_, row_var)
+                 | `RigidRowVar _, `RigidRowVar (_, row_var) ->
+                     `Row (StringMap.empty, row_var))
+            qs
+            qs'
+        in
+          `ForAll (qs, apply_type t tyargs)
+    | t -> t
+
 let alias name ts env = 
   (* This is just type application.
   
@@ -230,16 +249,12 @@ let alias name ts env =
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length ts) (List.length vars))
     | Some (`Alias (vars, body)) ->
-        (* BUG:
-             
-           Need to distinguish TypeVars from RowTypeVars
-        *)
         let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
 
         (* freshen any free flexible type variables in the type alias *)
         let bound_vars = List.fold_right TypeVarSet.add vars TypeVarSet.empty in
         let ftvs = Types.flexible_type_vars bound_vars body in
-        let qs = TypeVarSet.fold (fun var qs -> `TypeVar var::qs) ftvs [] in
+        let qs = IntMap.fold (fun _ q qs -> q::qs) ftvs [] in
         let body =
           match freshen_quantifiers (`ForAll (qs, body)) with
             | `ForAll (_, body) -> body

@@ -94,8 +94,8 @@ let quantifiers_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Flexible var -> `TypeVar var
-               | `Rigid var -> `RigidTypeVar var
+               | `Flexible var -> `TypeVar (var, point)
+               | `Rigid var -> `RigidTypeVar (var, point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -103,8 +103,8 @@ let quantifiers_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Flexible var -> `RowVar var
-               | `Rigid var -> `RigidRowVar var
+               | `Flexible var -> `RowVar (var, row_var)
+               | `Rigid var -> `RigidRowVar (var, row_var)
                | _ -> assert false
            end)
 
