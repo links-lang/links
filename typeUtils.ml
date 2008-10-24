@@ -92,6 +92,12 @@ let rec arg_types t = match concrete_type t with
   | t ->
       error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
+let rec mailbox_type t = match concrete_type t with
+  | `ForAll (_, t) -> mailbox_type t
+  | `Function (_, mb, _) -> mb
+  | t ->
+      error ("Attempt to take mailbox type of non-function: " ^ string_of_datatype t)
+
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t
   | `Application (l, [t])
