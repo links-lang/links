@@ -21,6 +21,11 @@ open Sugartypes
   -->
     {fun f[qs](xs1)...(xsk) {e};
      f}
+
+
+    (.l)
+  -->
+    fun (r) {r.l}
 *)
 
 
@@ -78,6 +83,25 @@ object (o : 'self_type)
           `Block
             ([`Fun (unwrap_def ((f, Some ft, dp), ([], lam), `Unknown, None)),
               dp],
+             ((`Var f), dp))
+        in
+          (o, e, ft)
+    | `Section (`Project name) ->
+        let ab, a = Types.fresh_type_quantifier () in
+        let rhob, rho = Types.fresh_row_quantifier () in
+        let mb, m = Types.fresh_type_quantifier () in
+
+        let r = `Record (StringMap.add name (`Present a) StringMap.empty, rho) in
+
+        let f = gensym ~prefix:"_fun_" () in
+        let x = gensym ~prefix:"_fun_" () in
+        let ft : Types.datatype = `ForAll ([ab; rhob; mb], `Function (r, m, a)) in
+          
+        let pss = [[`Variable (x, Some r, dp), dp]] in
+        let body = `Projection ((`Var x, dp), name), dp in
+        let e : phrasenode =
+          `Block
+            ([`Fun ((f, Some ft, dp), ([ab; rhob; mb], (pss, body)), `Unknown, None), dp],
              ((`Var f), dp))
         in
           (o, e, ft)

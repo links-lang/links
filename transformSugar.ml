@@ -5,15 +5,17 @@ module TyEnv = Env.String
 
 let type_section env =
   function
-    | `Minus         -> TyEnv.lookup env "-"
-    | `FloatMinus    -> TyEnv.lookup env "-."
+    | `Minus -> TyEnv.lookup env "-"
+    | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
-        let fb, f = Types.fresh_type_quantifier () in
+        let ab, a = Types.fresh_type_quantifier () in
+        let rhob, rho = Types.fresh_row_quantifier () in
         let mb, m = Types.fresh_type_quantifier () in
-        let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
-          `ForAll ([fb; mb],
-                   `Function (Types.make_tuple_type [r], m, f))
-    | `Name var      -> TyEnv.lookup env var
+
+        let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho) in
+          `ForAll ([ab; rhob; mb],
+                   `Function (Types.make_tuple_type [r], m, a))
+    | `Name var -> TyEnv.lookup env var
 
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function

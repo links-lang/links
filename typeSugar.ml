@@ -678,22 +678,13 @@ let type_section env (`Section s as s') =
       | `Minus         -> Utils.instantiate env "-"
       | `FloatMinus    -> Utils.instantiate env "-."
       | `Project label ->
-          let f = Types.fresh_type_variable () in
+          let a = Types.fresh_type_variable () in
+          let rho = Types.fresh_row_variable () in
           let mb = mailbox_type env in
-          let r = `Record (Types.make_singleton_open_row (label, `Present f)) in
-            [`Type mb; `Type f], `Function (Types.make_tuple_type [r], mb, f)
+          let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho) in
+            [`Type a; `Row (StringMap.empty, rho); `Type mb], `Function (Types.make_tuple_type [r], mb, a)
       | `Name var      -> Utils.instantiate env var
   in
-    (*
-      TODO:
-      
-      This seems a bit silly.
-      
-      We appear to be looking up the type in the environment, instantiating it
-      and then immediately generalising.
-
-      Compare with TransformSugar.type_section.
-    *)
     tappl (s', tyargs), t
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
