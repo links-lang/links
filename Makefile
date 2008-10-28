@@ -96,6 +96,7 @@ SOURCES = $(OPC)                		\
           desugarFors.mli desugarFors.ml                \
           desugarDbs.mli desugarDbs.ml                  \
           desugarFuns.mli desugarFuns.ml                \
+          desugarProcesses.mli desugarProcesses.ml      \
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           frontend.ml                           \

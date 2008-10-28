@@ -29,14 +29,14 @@ open Ir
   TODO:
 
   - move `Section, `UnaryAppl, most of `InfixAppl, `RangeLit,
-  `ListLit, `Spawn, `SpawnWait, `Receive to frontend desugaring
-  transformations
+  `ListLit to frontend desugaring transformations
   - translate `Escape to an escape primitive in the IR once we've
   added that
-  - type declarations
-  - alien declarations
   - check that we're doing the right thing with tyvars
   - implement desugar_expression, desugar_definitions and desugar_program
+  - compile record erasure to `Coerce and remove `Erase from the IR 
+  - determine whether we still need scope annotations on binders, and if we
+  do make sure we generate the correct scope annotations
 *)
 
 (* If we implemented comparisons as primitive functions then their
@@ -412,7 +412,7 @@ struct
 
   (*
       (r : (l1:A1, ... li:Ai | R) with (l1=v1, ..., li=vi))
-    ==
+    -->
       (l1=v1, ..., li=vi | r ((-l1, ..., -li | R) <-- (l1:A1, ... li:Ai | R)))
   *)
   let update (s, fields) =
@@ -430,7 +430,7 @@ struct
      Get rid of `Erase and use `Coerce instead once we have got rid of Syntax.
 
      We will need to be a bit careful about compiling coercions though, because
-     the ignoring them breaks non-parametric operations such as the version of
+     ignoring them breaks non-parametric operations such as the version of
      equality currently implemented in Links.
   *)
   let erase (name, s, t) =
@@ -593,56 +593,16 @@ struct
         match e with
           | `Constant c -> cofv (I.constant c)
           | `Var x -> cofv (I.var (lookup_name_and_type x env))
-          | `Spawn (body, Some inner_mbt) -> assert false
-(*
-              let body = eval (with_mailbox_type inner_mbt env) body in
-                I.apply
-                  (instantiate "spawn" [`Type inner_mbt; `Type mbt; `Type (I.sem_type body)],
-                   [I.funlit ([(Types.unit_type, inner_mbt)], [[]], body)])
-*)
-          | `SpawnWait (body, Some inner_mbt) -> assert false
-(*
-              let body = eval (with_mailbox_type inner_mbt env) body in
-                I.apply
-                  (instantiate "spawnWait" [`Type (I.sem_type body); `Type mbt; `Type inner_mbt],
-                   [I.funlit ([(Types.unit_type, inner_mbt)], [[]], body)])
-*)
           | `RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | `ListLit ([], Some t) ->
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Type mbt], [ev e; ev ((`ListLit (es, Some t)), pos)]))
-(*
-          | `Iteration (generators, body, filter, None) ->
-              let as_list =
-                function
-                  | `List (p, e) -> p, e
-                  | `Table (p, e) -> p, (`FnAppl ((`Var ("asList"), pos), [e]), pos) in
-              let generators, env =
-                List.fold_right
-                  (fun generator (generators, env) ->
-                     let p, source = as_list generator in
-                     let source = ev source in
-                     let p, env = CompilePatterns.desugar_pattern env p in
-                       (p, source)::generators, env)
-                  generators
-                  ([], env) in
-              let body =
-                match filter with
-                  | None -> body
-                  | Some condition ->
-                      `Conditional (condition, body, (`ListLit ([], None), pos)), pos
-              in
-                I.iteration (generators, eval env body)
-          | `Iteration (_, _, _, Some _) ->
-              raise (ASTSyntaxError(pos,
-                                    "orderby clause are not yet implemented."))
-*)
           | `Escape _ -> assert false
           | `Section (`Minus) -> cofv (lookup_var "-")
           | `Section (`FloatMinus) -> cofv (lookup_var "-.")
-          | `Section (`Name name) -> cofv (lookup_var name)            
+          | `Section (`Name name) -> cofv (lookup_var name)
           | `Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
           | `InfixAppl ((_tyargs, `Name ">"), e1, e2) -> cofv (I.comparison (ev e2, `Less, ev e1))
@@ -717,17 +677,6 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | `Receive (cases, Some t) ->
-              let cases =
-                List.map
-                  (fun (p, body) ->
-                     let p, env = CompilePatterns.desugar_pattern env p in
-                       (p, fun env -> eval env body))
-                  cases
-              in
-                I.switch env (I.value_of_comp (I.apply (instantiate_mb "recv", [I.record ([], None)])),
-                              cases,
-                              t)
           | `DatabaseLit (name, (None, args)) ->
               I.database (ev (`RecordLit ([("name", name)],
                                           Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
@@ -826,13 +775,20 @@ struct
                           defs
                       in                          
                         I.letrec nenv defs (fun vs -> eval (extend fs (List.combine vs fts) env) (`Block (bs, e), dp))
-                  | `Infix
+                  | `Foreign ((x, Some xt, _), language, t) ->
+                      I.alien ((xt, x, `Local), language, fun v -> eval (extend [x] [(v, xt)] env) (`Block (bs, e), dp))
                   | `Type _
-                  | `Include _
-                  | `Foreign _ -> assert false
+                  | `Infix ->
+                      (* Ignore type alias and infix declarations - they
+                         shouldn't be needed in the IR *)
+                      ec (`Block (bs, e), dp)
+                  | `Include _ -> assert false
                       
               end
                 (* These things should all have been desugared already *)
+          | `Spawn _
+          | `SpawnWait _
+          | `Receive _
           | `Section (`Project _)
           | `FunLit _
           | `Iteration _
