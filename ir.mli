@@ -68,6 +68,7 @@ val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 
 type program = computation
+  deriving (Show)
 
 val is_atom : value -> bool
 

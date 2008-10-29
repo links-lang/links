@@ -640,13 +640,7 @@ struct
           | `TAppl (e, tyargs) ->
               cofv (I.tappl (ev e, tyargs))
           | `TupleLit es ->
-              let _, fields =
-                List.fold_right
-                  (fun e (i, fields) ->
-                     i+1, (string_of_int i, ev e)::fields)
-                  es
-                  (1, [])
-              in
+              let fields = mapIndex (fun e i -> (string_of_int (i+1), ev e)) es in
                 cofv (I.record (fields, None))
           | `RecordLit (fields, rest) ->
               cofv
@@ -729,63 +723,8 @@ struct
                     end
           | `TextNode name ->
               I.apply (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)])
-          | `Block ([], e) -> ec e
-          | `Block ((b,bpos)::bs, e) ->
-              begin
-                match b with
-                  | `Val (_, p, e, _, _) ->
-                      let (p, ((nenv, _) as penv)) = CompilePatterns.desugar_pattern env p in
-                        I.comp nenv (p, ev e, eval penv (`Block (bs, e), pos))
-                  | `Fun ((f, Some ft, _), (tyvars, ([ps], body)), location, pos) ->
-                      let nenv, _ = env in
-                      let ps, body_env =
-                        List.fold_right
-                          (fun p (ps, body_env) ->
-                             let p, body_env = CompilePatterns.desugar_pattern env p in
-                               p::ps, body_env)
-                          ps
-                          ([], env) in
-                      let body = eval body_env body in
-                        I.letfun
-                          nenv
-                          ((ft, f, `Local), (tyvars, (ps, body)), location)
-                          (fun v -> eval (extend [f] [(v, ft)] env) (`Block (bs, e), dp))
-                  | `Exp e' ->
-                      I.seq (ec e', ec (`Block (bs, e), pos))
-                  | `Funs defs ->
-                      let nenv, _ = env in
-                      let fs, fts =
-                        List.split
-                          (List.map
-                             (fun ((f, Some ft, _), _, _, _, _) ->
-                                (f, ft))
-                             defs) in
-                      let defs =
-                        List.map
-                          (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
-                             let ps, body_env =
-                               List.fold_right
-                                 (fun p (ps, body_env) ->
-                                    let p, body_env = CompilePatterns.desugar_pattern env p in
-                                      p::ps, body_env)
-                                 ps
-                                 ([], env) in
-                             let body = fun vs -> eval (extend fs (List.combine vs fts) body_env) body in
-                               ((ft, f, `Local), (tyvars, (ps, body)), location))
-                          defs
-                      in
-                        I.letrec nenv defs (fun vs -> eval (extend fs (List.combine vs fts) env) (`Block (bs, e), dp))
-                  | `Foreign ((x, Some xt, _), language, t) ->
-                      I.alien ((xt, x, `Local), language, fun v -> eval (extend [x] [(v, xt)] env) (`Block (bs, e), dp))
-                  | `Type _
-                  | `Infix ->
-                      (* Ignore type alias and infix declarations - they
-                         shouldn't be needed in the IR *)
-                      ec (`Block (bs, e), dp)
-                  | `Include _ -> assert false
-                      
-              end
-                (* These things should all have been desugared already *)
+          | `Block (bs, e) -> eval_bindings env bs e
+              (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _
           | `Receive _
@@ -803,10 +742,87 @@ struct
           | `PagePlacement _
           | `FormBinding _ -> assert false
 
+  and eval_bindings env bs e =
+    let cofv = I.comp_of_value in
+    let ec = eval env in
+    let ev = evalv env in
+      match bs with
+        | [] -> ec e
+        | (b,bpos)::bs ->
+            begin
+              match b with
+                | `Val (_, p, e, _, _) ->
+                    let (p, ((nenv, _) as penv)) = CompilePatterns.desugar_pattern env p in
+                      I.comp nenv (p, ev e, eval_bindings penv bs e)
+                | `Fun ((f, Some ft, _), (tyvars, ([ps], body)), location, pos) ->
+                    let nenv, _ = env in
+                    let ps, body_env =
+                      List.fold_right
+                        (fun p (ps, body_env) ->
+                           let p, body_env = CompilePatterns.desugar_pattern env p in
+                             p::ps, body_env)
+                        ps
+                        ([], env) in
+                    let body = eval body_env body in
+                      I.letfun
+                        nenv
+                        ((ft, f, `Local), (tyvars, (ps, body)), location)
+                        (fun v -> eval_bindings (extend [f] [(v, ft)] env) bs e)
+                | `Exp e' ->
+                    I.seq (ec e', eval_bindings env bs e)
+                | `Funs defs ->
+                    let nenv, _ = env in
+                    let fs, fts =
+                      List.split
+                        (List.map
+                           (fun ((f, Some ft, _), _, _, _, _) ->
+                              (f, ft))
+                           defs) in
+                    let defs =
+                      List.map
+                        (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
+                           let ps, body_env =
+                             List.fold_right
+                               (fun p (ps, body_env) ->
+                                  let p, body_env = CompilePatterns.desugar_pattern env p in
+                                    p::ps, body_env)
+                               ps
+                               ([], env) in
+                           let body = fun vs -> eval (extend fs (List.combine vs fts) body_env) body in
+                             ((ft, f, `Local), (tyvars, (ps, body)), location))
+                        defs
+                    in
+                      I.letrec nenv defs (fun vs -> eval_bindings (extend fs (List.combine vs fts) env) bs e)
+                | `Foreign ((x, Some xt, _), language, t) ->
+                    I.alien ((xt, x, `Local), language, fun v -> eval_bindings (extend [x] [(v, xt)] env) bs e)
+                | `Type _
+                | `Infix ->
+                    (* Ignore type alias and infix declarations - they
+                       shouldn't be needed in the IR *)
+                    eval_bindings env bs e
+                | `Include _ -> assert false                   
+            end
+
   and evalv env e =
     I.value_of_comp (eval env e)
+
+  let compile env (bindings, body) =
+    Debug.print ("compiling to IR");
+    Debug.print (Sugartypes.Show_program.show (bindings, body));
+    let body =
+      match body with
+        | None -> (`RecordLit ([], None), dp)
+        | Some body -> body in
+      let s = eval_bindings env bindings body in
+        Debug.print ("compiled IR");
+        let r = (I.reify s) in
+          r, I.sem_type s
 end
+
+module C = Eval(Interpretation(BindingListMonad))
+
 
 let desugar_expression : Sugartypes.phrase -> Ir.computation = fun _ -> assert false
 let desugar_definitions : Sugartypes.binding list -> Ir.binding list = fun _ -> assert false
-let desugar_program : Sugartypes.program -> Ir.computation = fun _ -> assert false
+let desugar_program : env -> Sugartypes.program -> Ir.computation =
+  fun env p -> fst (C.compile env p)

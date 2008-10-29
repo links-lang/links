@@ -97,6 +97,7 @@ let rec is_atom =
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
+  deriving (Show)
 
 let string_of_var = string_of_int
 
