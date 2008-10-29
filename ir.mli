@@ -31,6 +31,7 @@ type value =
   | `Erase of name * value    (* should be implemented using coerce *) 
   | `Inject of name * value * Types.datatype
 
+  | `TAbs of tyvar list * value
   | `TApp of value * tyarg list
 
   | `XmlNode of name * value name_map * value list

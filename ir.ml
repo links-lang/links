@@ -43,6 +43,7 @@ type value =
   | `Erase of (name * value)
   | `Inject of (name * value * Types.datatype)
 
+  | `TAbs of tyvar list * value
   | `TApp of value * tyarg list
 
   | `XmlNode of (name * value name_map * value list)
@@ -274,8 +275,13 @@ struct
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
               `Inject (name, v, t), t, o
+        | `TAbs (tyvars, v) ->
+            let v, t, o = o#value v in
+            let t = Types.for_all (tyvars, t) in
+              `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
             let v, t, o = o#value v in
+            let t = Instantiate.apply_type t ts in
               `TApp (v, ts), t, o
         | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
@@ -484,7 +490,7 @@ struct
 
     method value =
       function
-        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
+        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o          
         | v -> super#value v
 
     method bindings =
@@ -494,7 +500,12 @@ struct
               begin
                 match b with
                   | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) when is_inlineable_value v ->
-                      (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
+                      let v =
+                        match tyvars with
+                          | [] -> v
+                          | tyvars -> `TAbs (tyvars, v)
+                      in
+                        (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
                   | _ ->
                       let bs, o = o#bindings bs in
                         b :: bs, o
