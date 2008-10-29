@@ -53,7 +53,7 @@ let type_matches ~inferred ~expected =
          make_fresh_envs nonsense.
       *)
       let c = nfreevars inferred in
-        Inference.unify (expected, inferred);
+        Unify.datatypes (expected, inferred);
         c = (nfreevars inferred)
     with _ -> false
 
@@ -66,10 +66,10 @@ let type_matches ~inferred ~expected =
     let l =  
       Instantiate.datatype (Types.make_wobbly_envs l) l 
     and r =  
-     Instantiate.datatype (Types.make_rigid_envs r) r 
+      Instantiate.datatype (Types.make_rigid_envs r) r 
     in try
         let c = Types.free_type_vars r in
-        Inference.unify (l, r);
+          Unify.datatypes (l, r);
           Types.TypeVarSet.equal c (Types.free_type_vars r);
     with _ -> false
   in check_rhs_unchanged inferred expected

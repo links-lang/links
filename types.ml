@@ -951,21 +951,34 @@ let string_of_environment env =
 let string_of_typing_environment {var_env=env} = string_of_environment env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
+  let module S = IntSet in
   let module M = IntMap in
   let empties = M.empty, M.empty in
   let union2 a b = M.fold M.add a b in
   let union2both (l,r) (ll,rr) = (union2 l ll, union2 r rr) in
   let union = List.fold_left union2both empties in
-  let rec makeEnv recvars = function
+  let rec makeEnv boundvars = function
       | `Not_typed
       | `Primitive _             -> empties
-      | `Function (f, m, t)      -> union [makeEnv recvars f; makeEnv recvars m; makeEnv recvars t]
+      | `Function (f, m, t)      -> union [makeEnv boundvars f; makeEnv boundvars m; makeEnv boundvars t]
       | `Record row              
-      | `Variant row             -> makeEnvR recvars row
-      | `Table (l,r)             -> union [makeEnv recvars l; makeEnv recvars r]
-      | `Alias ((name, ts), d)   -> union (List.map (makeEnv recvars) ts @ [makeEnv recvars d])
-      | `Application (_, ds)     -> union (List.map (makeEnv recvars) ds)
-      | `ForAll _                -> assert false
+      | `Variant row             -> makeEnvR boundvars row
+      | `Table (l,r)             -> union [makeEnv boundvars l; makeEnv boundvars r]
+      | `Alias ((name, ts), d)   -> union (List.map (makeEnv boundvars) ts @ [makeEnv boundvars d])
+      | `Application (_, ds)     -> union (List.map (makeEnv boundvars) ds)
+      | `ForAll (qs, t)          ->
+          makeEnv
+            (List.fold_right
+               (fun q boundvars ->
+                  match q with
+                    | `TypeVar (var, _)
+                    | `RigidTypeVar (var, _)
+                    | `RowVar (var, _)
+                    | `RigidRowVar (var, _) ->
+                        S.add var boundvars)
+               qs
+               boundvars)
+            t                       
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -973,15 +986,15 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
                   (M.add var (fresh_rigid_type_variable ()) l, r)
               | `Flexible var -> let l, r = empties in
                   (M.add var (fresh_type_variable ()) l, r)
-              | `Recursive (l, _) when List.mem l recvars -> empties
-              | `Recursive (l, b) -> makeEnv (l::recvars) b
-              | `Body t -> makeEnv recvars t
+              | `Recursive (l, _) when S.mem l boundvars -> empties
+              | `Recursive (l, b) -> makeEnv (S.add l boundvars) b
+              | `Body t -> makeEnv boundvars t
           end
-  and makeEnvR recvars ((field_env, row_var):row) =
+  and makeEnvR boundvars ((field_env, row_var):row) =
     let field_vars = 
       FieldEnv.fold (fun _ t envs ->
                        match t with 
-                           `Present t -> union [envs; makeEnv recvars t]
+                           `Present t -> union [envs; makeEnv boundvars t]
                          | `Absent -> envs) field_env empties
     and row_vars = 
       match Unionfind.find row_var with
@@ -990,11 +1003,11 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
             (l, M.add var (fresh_row_variable ()) r)
         | `Rigid var -> let l, r = empties in
             (l, M.add var (fresh_rigid_row_variable ()) r)
-        | `Recursive (l, _) when List.mem l recvars -> empties
-        | `Recursive (l, row) -> makeEnvR (l::recvars) row
-        | `Body row -> makeEnvR recvars row
+        | `Recursive (l, _) when S.mem l boundvars -> empties
+        | `Recursive (l, row) -> makeEnvR (S.add l boundvars) row
+        | `Body row -> makeEnvR boundvars row
     in union [field_vars; row_vars]
-  in makeEnv []
+  in makeEnv S.empty
 
 let make_rigid_envs datatype : datatype IntMap.t * row_var IntMap.t =
   let tenv, renv = make_fresh_envs datatype in

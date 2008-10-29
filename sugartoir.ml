@@ -773,7 +773,7 @@ struct
                              let body = fun vs -> eval (extend fs (List.combine vs fts) body_env) body in
                                ((ft, f, `Local), (tyvars, (ps, body)), location))
                           defs
-                      in                          
+                      in
                         I.letrec nenv defs (fun vs -> eval (extend fs (List.combine vs fts) env) (`Block (bs, e), dp))
                   | `Foreign ((x, Some xt, _), language, t) ->
                       I.alien ((xt, x, `Local), language, fun v -> eval (extend [x] [(v, xt)] env) (`Block (bs, e), dp))
