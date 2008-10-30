@@ -552,7 +552,9 @@ struct
            M.bind
              (comp_binding (Var.info_of_type (sem_type v), `Return e))
              (fun var ->
-                let (bs, tc) = CompilePatterns.compile_cases env (t, var, cases) in
+                let nenv, tenv = env in
+                let tenv = TEnv.bind tenv (var, sem_type v) in
+                let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
   let seq (s, s') =
@@ -573,6 +575,8 @@ struct
       (nenv, tenv)
       xs
       vs
+
+  let (++) (nenv, tenv) (nenv', tenv') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv')
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env (e, pos) ->
@@ -666,8 +670,8 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, env = CompilePatterns.desugar_pattern env p in
-                       (p, fun env -> eval env body))
+                     let p, penv = CompilePatterns.desugar_pattern p in
+                       (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
                 I.switch env (ev e, cases, t)
@@ -752,15 +756,16 @@ struct
             begin
               match b with
                 | `Val (_, p, e, _, _) ->
-                    let (p, ((nenv, _) as penv)) = CompilePatterns.desugar_pattern env p in
-                      I.comp nenv (p, ev e, eval_bindings penv bs e)
+                    let p, penv = CompilePatterns.desugar_pattern p in
+                    let nenv, _ as env = env ++ penv in
+                      I.comp nenv (p, ev e, eval_bindings env bs e)
                 | `Fun ((f, Some ft, _), (tyvars, ([ps], body)), location, pos) ->
                     let nenv, _ = env in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, body_env = CompilePatterns.desugar_pattern env p in
-                             p::ps, body_env)
+                           let p, penv = CompilePatterns.desugar_pattern p in
+                             p::ps, body_env ++ penv)
                         ps
                         ([], env) in
                     let body = eval body_env body in
@@ -784,8 +789,8 @@ struct
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, body_env = CompilePatterns.desugar_pattern env p in
-                                    p::ps, body_env)
+                                  let p, penv = CompilePatterns.desugar_pattern p in
+                                    p::ps, body_env ++ penv)
                                ps
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs fts) body_env) body in

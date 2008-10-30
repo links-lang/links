@@ -71,9 +71,11 @@ let lookup_type var (_nenv, tenv, _penv) =
 let lookup_name name (nenv, _tenv, _penv) =
   NEnv.lookup nenv name
 
-let rec desugar_pattern : raw_env -> Sugartypes.pattern -> pattern * raw_env =
-  fun env (p, pos) ->
+let rec desugar_pattern : Sugartypes.pattern -> pattern * raw_env =
+  fun (p, pos) ->
     let pp = desugar_pattern in
+    let empty = (NEnv.empty, TEnv.empty) in
+    let (++) (nenv, tenv) (nenv', tenv') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv') in
     let fresh_binder (nenv, tenv) =
       function
         | (name, Some t, _) ->
@@ -82,52 +84,52 @@ let rec desugar_pattern : raw_env -> Sugartypes.pattern -> pattern * raw_env =
         | _ -> assert false
     in
       match p with
-        | `Any -> `Any, env
-        | `Nil -> `Nil, env
+        | `Any -> `Any, empty
+        | `Nil -> `Nil, empty
         | `Cons (p, ps) ->
-            let p, env = pp env p in
-            let ps, env = pp env ps in
-              `Cons (p, ps), env
-        | `List [] -> pp env (`Nil, pos)
+            let p, env = pp p in
+            let ps, env' = pp ps in
+              `Cons (p, ps), env ++ env'
+        | `List [] -> pp (`Nil, pos)
         | `List (p::ps) ->
-            let p, env = pp env p in
-            let ps, env = pp env (`List ps, pos) in
-              `Cons (p, ps), env
-        | `Variant (name, None) -> `Variant (name, `Any), env
+            let p, env = pp p in
+            let ps, env' = pp (`List ps, pos) in
+              `Cons (p, ps), env ++ env'
+        | `Variant (name, None) -> `Variant (name, `Any), empty
         | `Variant (name, Some p) ->
-            let p, env = pp env p in
+            let p, env = pp p in
               `Variant (name, p), env
-        | `Negative names -> `Negative (StringSet.from_list names), env
+        | `Negative names -> `Negative (StringSet.from_list names), empty
         | `Record (bs, p) ->
             let bs, env =
               List.fold_right
                 (fun (name, p) (bs, env) ->
-                   let p, env = pp env p in
-                     StringMap.add name p bs, env)
+                   let p, env' = pp p in
+                     StringMap.add name p bs, env ++ env')
                 bs
-                (StringMap.empty, env) in
+                (StringMap.empty, empty) in
             let p, env =
               match p with
                 | None -> None, env
                 | Some p ->
-                    let p, env = pp env p in
-                      Some p, env
+                    let p, env' = pp p in
+                      Some p, env ++ env'
             in
               `Record (bs, p), env
         | `Tuple ps ->
             let bs = mapIndex (fun (p, pos) i -> (string_of_int (i+1), (p, pos))) ps in
-              pp env (`Record (bs, None), pos)
+              pp (`Record (bs, None), pos)
         | `Constant constant ->
-            `Constant constant, env
+            `Constant constant, empty
         | `Variable b ->
-            let xb, env = fresh_binder env b in
+            let xb, env = fresh_binder empty b in
               `Variable xb, env
         | `As (b, p) ->
-            let xb, env = fresh_binder env b in
-            let p, env = pp env p in
-              `As (xb, p), env
+            let xb, env = fresh_binder empty b in
+            let p, env' = pp p in
+              `As (xb, p), env ++ env'
         | `HasType (p, (_, Some t)) ->
-            let p, env = pp env p in
+            let p, env = pp p in
               `HasType (p, t), env
         | `HasType (_, (_, None)) -> assert false    
 
