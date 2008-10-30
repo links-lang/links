@@ -1,27 +1,19 @@
-open Result
-
 (* Process management *)
 type pid
-type proc_state = continuation * result
+type proc_state = Value.continuation * Value.t
 val main_process_pid : pid
 val suspended_processes : (proc_state * pid) Queue.t
 val blocked_processes : (pid, proc_state * pid) Hashtbl.t
-val messages : (pid, result Queue.t) Hashtbl.t
+val messages : (pid, Value.t Queue.t) Hashtbl.t
 val current_pid : pid ref
 val debug_process_status : unit -> unit
 
 val http_response_headers : (string * string) list ref
 val http_response_code : int ref
 
-val equal : Result.result -> Result.result -> bool
-val less : Result.result -> Result.result -> bool
-val less_or_equal : Result.result -> Result.result -> bool
-
-(* Primitive functions and values *)
-(*type continuationized_val = [
-  result
-| `PFun of (continuation -> result -> result) * continuation * result list -> continuationized_val
-]*)
+val equal : Value.t -> Value.t -> bool
+val less : Value.t -> Value.t -> bool
+val less_or_equal : Value.t -> Value.t -> bool
 
 type primitive
 
@@ -31,9 +23,10 @@ val is_pure_primitive : string -> bool
 val value_env : primitive option Utility.StringMap.t ref
 val type_env : Types.environment
 val typing_env : Types.typing_environment
+val nenv : Var.var Env.String.t
 val prelude_env : Types.typing_environment option ref
-val apply_pfun : string -> result list -> result
-val primitive_stub : string -> result
+val apply_pfun : string -> Value.t list -> Value.t
+val primitive_stub : string -> Value.t
 
 val primitive_location : string -> Syntax.location
 val primitive_arity : string -> int option

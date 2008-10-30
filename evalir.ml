@@ -10,7 +10,7 @@ module Eval = struct
     let error msg = raise (EvaluationError msg) in
       Printf.kprintf error fmt
 
-  let db_connect : Value.t -> Result.database * string = fun db ->
+  let db_connect : Value.t -> Value.database * string = fun db ->
     let driver = Value.unbox_string (Value.project "driver" db)
     and name = Value.unbox_string (Value.project "name" db)
     and args = Value.unbox_string (Value.project "args" db) in
@@ -18,7 +18,7 @@ module Eval = struct
       (if args = "" then name
        else name ^ ":" ^ args)
     in
-      Result.db_connect driver params
+      Value.db_connect driver params
 
   let client_call : string -> Value.continuation -> Value.t list -> 'a =
     fun _ _ _ -> assert false
@@ -32,7 +32,7 @@ module Eval = struct
   struct
     (** Substitutes values for the variables in a query, and performs
         interpolation in LIKE expressions. *)
-    let rec normalise_query (env:Value.env) (db:Result.database) 
+    let rec normalise_query (env:Value.env) (db:Value.database) 
         (qry:SqlQuery.sqlQuery) : SqlQuery.sqlQuery =
 
       let normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
@@ -106,7 +106,7 @@ module Eval = struct
                     SqlQuery.string_of_query query)
 
     let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t = fun env query ->
-      let get_database : SqlQuery.sqlQuery -> Result.database = fun query ->
+      let get_database : SqlQuery.sqlQuery -> Value.database = fun query ->
         let vars = concat_map (function
                                  | `TableVar (var, _) -> [int_of_string var]
                                  | _ -> []) query.SqlQuery.tabs in
@@ -131,7 +131,8 @@ module Eval = struct
         
         prerr_endline("RUNNING QUERY:\n" ^ query_string);
         let t = Unix.gettimeofday() in
-        let result = Database.execute_select result_types query_string db in
+        let result = assert false in
+(*        let result = Database.execute_select result_types query_string db in*)
           Debug.print("Query took : " ^ 
                         string_of_float((Unix.gettimeofday() -. t)) ^ "s");
           (*result*) assert false

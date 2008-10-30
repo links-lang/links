@@ -897,8 +897,8 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
   let db_config_script = script_tag("    function _getDatabaseConfig() {
-      return {driver:'" ^ Settings.get_value Library.database_driver ^
-    "', args:'" ^ Settings.get_value Library.database_args ^"'}
+      return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
+    "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
     }
     var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n")
   in

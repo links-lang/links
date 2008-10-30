@@ -123,8 +123,10 @@ SOURCES = $(OPC)                		\
           test.ml                               \
           tests.ml                              \
           sqlcompileTest.ml                     \
-          links.ml              		\
           sugartoir.mli sugartoir.ml            \
+          lib.mli lib.ml                        \
+          oldlinks.ml                           \
+          links.ml              		\
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

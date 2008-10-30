@@ -4,7 +4,7 @@
 type scope = Var.scope
 (* term variables *)
 type var = Var.var
-  deriving (Show)
+  deriving (Show, Pickle)
 type var_info = Var.var_info
 type binder = Var.binder
 
@@ -62,14 +62,14 @@ and special =
   | `Table of value * value * (Types.datatype * Types.datatype)
   | `CallCC of value ]
 and computation = binding list * tail_computation
-  deriving (Show)  
+  deriving (Show, Pickle)
 
 val letm : binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 
 type program = computation
-  deriving (Show)
+  deriving (Show, Pickle)
 
 val is_atom : value -> bool
 

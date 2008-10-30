@@ -276,6 +276,27 @@ struct
   let shelve  _ = failwith "shelve stringmap nyi"
 end
 
+type 'a intmap = 'a IntMap.t
+    deriving (Show)
+
+module Typeable_intmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a intmap = 
+Typeable.Typeable_defaults(struct
+  type a = A.a intmap
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
+end)
+module Pickle_intmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a intmap let tname ="intmap"  end)
+module Functor_intmap = IntMap.Functor_t
+module Eq_intmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(IntMap)
+module Shelve_intmap (S : Shelve.Shelve) = 
+struct
+  module Typeable = Typeable_intmap(S.Typeable)
+  module Eq = Eq_intmap(S.Eq)
+  type a = S.a intmap
+  let shelve  _ = failwith "shelve intmap nyi"
+end
+
 (** {1 Lists} *)
 module ListUtils = 
 struct

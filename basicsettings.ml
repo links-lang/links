@@ -41,6 +41,13 @@ end
 (* Installed preprocessor *)
 let pp = Settings.add_string("preprocessor", "", `System)
 
+(* whether to use the new IR in the frontend *)
+let ir = Settings.add_bool("ir", false, `User)
+
+(* default database settings *)
+let database_driver = Settings.add_string("database_driver", "", `User)
+let database_args = Settings.add_string("database_args", "", `User)
+
 (** Set this to [true] to print the body and environment of a
     function. When [false], functions are simply printed as "fun" *)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)

@@ -2,6 +2,94 @@
 open Num
 open Utility
 
+class type otherfield = 
+object 
+  method show : string
+end
+
+module Show_otherfield = Show.ShowDefaults(
+  struct
+    type a = otherfield
+    let format formatter obj = Format.pp_print_string formatter (obj # show)
+  end)
+
+type db_status = QueryOk | QueryError of string
+  deriving (Show)
+
+class virtual dbvalue = object
+  method virtual status : db_status
+  method virtual nfields : int
+  method virtual fname : int -> string
+  method virtual get_all_lst : string list list
+  method virtual error : string
+end
+
+class virtual database = object(self)
+  method virtual driver_name : unit -> string
+  method virtual escape_string : string -> string
+  method virtual exec : string -> dbvalue
+  method make_insert_query : (string * string list * string list list) -> string =
+    fun (table_name, field_names, vss) ->
+      "insert into " ^ table_name ^
+        "("^String.concat "," field_names ^") values "^
+        String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
+  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun _ ->
+      failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
+end
+
+module Eq_database = Eq.Eq_mutable(struct type a = database end)
+module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)
+module Show_database = Show_unprintable (struct type a = database end)
+
+(* Here we could do something better, like pickling enough information
+   about the database to be able to restore the connection on
+   deserialisation *)
+module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Value.database" end)
+module Shelve_database : Shelve.Shelve with type a = database = 
+struct
+  module Typeable = Typeable_database
+  module Eq = Eq_database
+  type a = database
+  let shelve _ = failwith "shelve database nyi"
+end
+
+type db_constructor = string -> (database * string)
+
+(** {1 Database Drivers and Values} *)
+
+(** [database_drivers]: a list of available database drivers.  Each
+    driver registers itself at load time: the contents of the list
+    depends on which drivers are built.. *)
+
+let database_drivers = ref ([] : (string * db_constructor) list)
+
+(** [register_driver (name, driver)] registers a DB [driver] under the
+    name [name]. *[driver] is a function taking the database params (a
+    string with db-specific colon-separated fields) to a pair of
+    database object and params (I guess the params could be modified
+    by the driver?) *)
+let register_driver : (string * db_constructor) -> unit
+  = fun ((name, _) as pair) -> 
+    Debug.print ("registering driver for " ^ name);
+    database_drivers := pair :: !database_drivers
+
+let db_connect driver params =
+  let constructor = 
+    try List.assoc driver !database_drivers 
+    with NotFound _ -> failwith ("No driver for database type `" ^ driver ^ "'")
+  in constructor params
+
+let parse_db_string : string -> (string * string) = 
+  fun params -> 
+    match Str.bounded_split (Str.regexp ":") params 2 with
+      | [hd; tail] -> (hd, tail)
+      | _ -> failwith ("Could not parse db connection string : " ^ params)
+and reconstruct_db_string : (string * string) -> string =
+  fun (x,y) -> x ^ ":" ^ y
+
+
+
 type binop = [ 
 | Syntaxutils.comparison
 | `Union
@@ -40,19 +128,19 @@ and string_of_item : xmlitem -> string =
                      ^ string_of_xml nodes
                      ^ "</" ^ tag ^ ">")
 
-type table = (Result.database * string) * string * Types.row
-  deriving (Show)    
+type table = (database * string) * string * Types.row
+  deriving (Show, Pickle)    
 
 type primitive_value = [
 | `Bool of bool
 | `Char of char
-| `Database of (Result.database * string)
+| `Database of (database * string)
 | `Table of table
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
 | `NativeString of string ]
-  deriving (Show)
+  deriving (Show, Pickle)
         
 type continuation = (Ir.var * env * Ir.computation) list
 and t = [
@@ -65,8 +153,10 @@ and t = [
 | `ClientFunction of string
 | `Abs of t
 | `Continuation of continuation ]
-and env = t IntMap.t
-  deriving (Show)
+and env = t Utility.intmap
+  deriving (Show, Pickle)
+
+let toplevel_cont : continuation = []
 
 let bind = IntMap.add
 let lookup = IntMap.lookup
@@ -200,3 +290,26 @@ let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
 
+let links_fst x = fst (unbox_pair x)
+let links_snd x = snd (unbox_pair x)
+
+let links_project name = function
+  | (`Record fields) -> List.assoc name fields
+  | _ -> failwith ("Match failure in record projection")
+
+let marshal_continuation (c : continuation) : string
+  = 
+  let pickle = Pickle_continuation.pickleS c in
+    Debug.print("marshalled continuation size: " ^
+                  string_of_int(String.length pickle));
+    if (String.length pickle > 4096) then (
+      prerr_endline "Marshalled continuation larger than 4K:";
+      Debug.print("marshaling:"^ string_of_cont c)
+    );
+    let result = base64encode pickle in
+      result
+
+let marshal_value : t -> string
+  = Pickle_t.pickleS ->- base64encode
+
+let minimize _ = assert false

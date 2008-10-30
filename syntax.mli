@@ -1,5 +1,5 @@
 (*pp deriving *)
-type location = [ `Client | `Native | `Server | `Unknown ] deriving (Show)
+type location = [ `Client | `Native | `Server | `Unknown ] deriving (Show, Pickle)
 (* type comparison = [`Less | `LessEq | `Equal | `NotEq]
      deriving (Typeable, Show, Pickle, Eq, Shelve) *)
 type label deriving (Typeable, Show, Pickle)

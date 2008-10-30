@@ -4,36 +4,36 @@
 open Utility
 
 type scope = Var.scope
-  deriving (Show)
+  deriving (Show, Pickle)
 (* term variables *)
 type var = Var.var
-  deriving (Show)
+  deriving (Show, Pickle)
 type var_info = Var.var_info
-  deriving (Show)
+  deriving (Show, Pickle)
 type binder = Var.binder
-  deriving (Show)
+  deriving (Show, Pickle)
 
 (* type variables *)
 type tyvar = Types.quantifier
-  deriving (Show)
+  deriving (Show, Pickle)
 type tyarg = Types.type_arg
-  deriving (Show)
+  deriving (Show, Pickle)
 
 type name = string
-  deriving (Show)
+  deriving (Show, Pickle)
 type 'a name_map = 'a Utility.stringmap
-  deriving (Show)
+  deriving (Show, Pickle)
 
 type language = string
-  deriving (Show)
+  deriving (Show, Pickle)
 
 let var_of_binder (x, _) = x
 
 type constant = Constant.constant
-  deriving (Show)
+  deriving (Show, Pickle)
 
 type location = Syntax.location
-  deriving (Show)
+  deriving (Show, Pickle)
 
 type value =
   [ `Constant of constant
@@ -77,7 +77,7 @@ and special =
   | `Table of (value * value * (Types.datatype * Types.datatype))
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
-  deriving (Show)  
+  deriving (Show, Pickle)  
 
 let letm (b, tc) = `Let (b, ([], tc))
 let letmv (b, v) = letm (b, `Return v)
@@ -98,7 +98,7 @@ let rec is_atom =
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
-  deriving (Show)
+  deriving (Show, Pickle)
 
 let string_of_var = string_of_int
 

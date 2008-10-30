@@ -2,7 +2,7 @@ open Sys
 open Num
 open List
 
-open Result
+open Value
 open Types
 open Utility
 
@@ -29,19 +29,17 @@ let alias_env : Types.tycon_environment =
   Env.bind alias_env
     ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
 
-
 let datatype = DesugarDatatypes.read ~aliases:alias_env
-
 
 (* Data structures/utilities for proc mgmt *)
 
 type pid = int
 
-type proc_state = Result.continuation * Result.result 
+type proc_state = Value.continuation * Value.t 
 
 let suspended_processes = (Queue.create () : (proc_state * pid) Queue.t)
 and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtbl.t)
-and messages = (Hashtbl.create 10000  : (int, Result.result Queue.t) Hashtbl.t)
+and messages = (Hashtbl.create 10000  : (int, Value.t Queue.t) Hashtbl.t)
 and current_pid = (ref 0 :  pid ref)
 and main_process_pid = 0
 
@@ -74,10 +72,13 @@ let fresh_pid =
     the only kind of lists that are allowed to be inserted into databases
     are strings
 *)
-let value_as_string db = function
-  | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
-  | `List ([])  -> "\'\'"
-  | (a) -> string_of_result a
+let value_as_string db = assert false
+(*
+  function
+    | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
+    | `List ([])  -> "\'\'"
+    | (a) -> string_of_value a
+*)
 
 let cond_from_field db (k, v) =
   "("^ k ^" = "^ value_as_string db v ^")"
@@ -85,29 +86,29 @@ let cond_from_field db (k, v) =
 let single_match db = 
   function
     | `Record fields -> "("^ (String.concat " AND " (map (cond_from_field db) fields)) ^")"
-    | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_result r)
+    | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_value r)
 
 let row_columns = function
   | `List ((`Record fields)::_) -> map fst fields
-  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^string_of_result r)
+  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^string_of_value r)
 and row_values db = function
   | `List records ->
         (List.map (function
                      | `Record fields -> map (value_as_string db -<- snd) fields
                      | _ -> failwith "Internal error: forming query from non-row") records)
-  | r -> failwith ("Internal error: forming query from non-row (row_values): "^string_of_result r)
+  | r -> failwith ("Internal error: forming query from non-row (row_values): "^string_of_value r)
 and delete_condition db = function
   | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")"
-  | r -> failwith ("Internal error: forming query from non-row (delete_condition): "^string_of_result r)
-and updates db : Result.result -> string = function
+  | r -> failwith ("Internal error: forming query from non-row (delete_condition): "^string_of_value r)
+and updates db : Value.t -> string = function
   | `Record fields -> 
       let field (k, v) = (k ^" = "^ value_as_string db v) in
         (String.concat ", " (map field fields))
-  | r -> failwith ("Internal error: forming query from non-row: "^string_of_result r) 
+  | r -> failwith ("Internal error: forming query from non-row: "^string_of_value r) 
 
-type primitive =  [
-  Result.result
-| `PFun of result list -> Result.result ]
+type primitive =
+[ Value.t
+| `PFun of Value.t list -> Value.t ]
 
 type pure = PURE | IMPURE
 
@@ -123,19 +124,19 @@ let float_op impl pure : located_primitive * Types.datatype * pure =
   datatype "(Float, Float) -> Float",
   pure
     
-let conversion_op' ~unbox ~conv ~(box :'a->result): result list -> result =
+let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t =
   fun [x] -> (box (conv (unbox x)))
 
 let make_type_variable = Types.make_type_variable
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->result) ~into pure : located_primitive * Types.datatype * pure =
+let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let a = Types.fresh_raw_variable () in
     let t = Unionfind.fresh (`Rigid a) in
       (`ForAll ([`RigidTypeVar (a, t)], `Function (make_tuple_type [from], `MetaTypeVar t, into)) : Types.datatype)),
    pure)
 
-let string_to_xml : result -> result = function 
+let string_to_xml : Value.t -> Value.t = function 
   | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
@@ -173,7 +174,7 @@ let rec equal l r =
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
     | `RecFunction _, `RecFunction _ -> 
-        Pickle_result.pickleS l = Pickle_result.pickleS r
+        Value.Pickle_t.pickleS l = Value.Pickle_t.pickleS r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -185,7 +186,7 @@ let rec equal l r =
     | `List (l), `List (r) -> length l = length r &&
             fold_left2 (fun result x y -> result && equal x y) true l r
     | `NativeString s1, `NativeString s2 -> s1 = s2
-    | l, r ->  failwith ("Comparing "^ string_of_result l ^" with "^ string_of_result r ^" either doesn't make sense or isn't implemented")
+    | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
 
 let rec less l r =
   match l, r with
@@ -194,7 +195,7 @@ let rec less l r =
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
     | `RecFunction _ , `RecFunction _
-        -> Pickle_result.pickleS l < Pickle_result.pickleS r
+        -> Value.Pickle_t.pickleS l < Value.Pickle_t.pickleS r
         (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in
@@ -206,7 +207,7 @@ let rec less l r =
           | _::rest                -> compare_list rest in
           compare_list (combine lv rv)
     | `List (l), `List (r) -> less_lists (l,r)
-    | l, r ->  failwith ("Cannot yet compare "^ string_of_result l ^" with "^ string_of_result r)
+    | l, r ->  failwith ("Cannot yet compare "^ string_of_value l ^" with "^ string_of_value r)
 and less_lists = function
   | _, [] -> false
   | [], (_::_) -> true
@@ -216,7 +217,7 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
-let add_attribute : result * result -> result -> result = 
+let add_attribute : Value.t * Value.t -> Value.t -> Value.t = 
   fun (name,value) -> function
     | `XML (Node (tag, children)) ->
         let name = unbox_string name
@@ -227,9 +228,9 @@ let add_attribute : result * result -> result -> result =
           | node :: nodes -> node :: filter nodes
         in
           `XML (Node (tag, Attr (name, value) :: filter children)) 
-    | r -> failwith ("cannot add attribute to " ^ Result.string_of_result r)
+    | r -> failwith ("cannot add attribute to " ^ string_of_value r)
 
-let add_attributes : (result * result) list -> result -> result =
+let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
 
 let prelude_env = ref None (* :-( *)
@@ -273,7 +274,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
   
   "exit",
-  (`Continuation Result.toplevel_cont,
+  (`Continuation Value.toplevel_cont,
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.: 
      if (test) exit(1) else 42 *)
@@ -336,7 +337,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun f ->
          let new_pid = fresh_pid () in
            Hashtbl.add messages new_pid (Queue.create ());
-           Queue.push ((ApplyCont(empty_env, []) :: toplevel_cont, f), new_pid) suspended_processes;
+           failwith "spawn not yet implemented";
+(*            Queue.push ((ApplyCont(empty_env, []) :: toplevel_cont, f), new_pid) suspended_processes; *)
            (`Int (num_of_int new_pid))),
    (*
      a: spawn's mailbox type (ignored, since spawn doesn't recv)
@@ -782,7 +784,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            `Continuation k -> 
              let k = minimize k in
                (match string_as_charlist(marshal_continuation k) with
-                  `List _ as result -> result
+                  `List _ as value -> value
                 | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
@@ -869,7 +871,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   and vss = row_values db rows
                   in
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                    (Database.execute_insert (table_name, field_names, vss) db)
+                    failwith "not implemented insertrows"
+(*                    (Database.execute_insert (table_name, field_names, vss) db)*)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w]) -> ()",
   IMPURE);
@@ -887,7 +890,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+                    failwith "not implemented insertReturning"
+(*                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)*)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w], String) -> Int",
   IMPURE);
@@ -896,7 +900,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Server
      (p2 (fun table rows ->
             match table, rows with
-              | (_:result), (`List []:result) -> `Record []
+              | (_:Value.t), (`List []:Value.t) -> `Record []
               | `Table ((db, params), table_name, _), `List rows ->
                   List.iter (fun row ->
                                let query_string =
@@ -905,7 +909,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ^ " where " ^ single_match db (links_fst row)
                                in
                                  prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
-                                 ignore (Database.execute_command query_string db))
+                                 failwith "not implemented updaterows";
+(*                                 ignore (Database.execute_command query_string db)*))
                     rows;
                   `Record [])),
    datatype "(TableHandle(r, w), [(r, w)]) -> ()",
@@ -921,7 +926,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   let query_string = "delete from " ^ table_name ^ " where " ^ condition
                   in
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
-                    (Database.execute_command query_string db)
+                    failwith "not implemented deleterows";
+(*                    (Database.execute_command query_string db)*)
               | _ -> failwith "Internal error: delete row from non-database")),
    datatype "(TableHandle(r, w), [r]) -> ()",
   IMPURE);
@@ -982,7 +988,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching *)
   ("tilde",
    (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+          let regex = assert false (*Regex.compile_ocaml (Linksregex.Regex.ofLinks r)*)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     datatype "(String, Regex) -> Bool",
@@ -991,7 +997,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
   ("ntilde",
    (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+          let regex = assert false (*Regex.compile_ocaml (Linksregex.Regex.ofLinks r)*)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
     datatype "(NativeString, Regex) -> Bool",
@@ -1000,13 +1006,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
     (`Server (p2 (fun s r ->
-        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        let (re, ngroups) = assert false (*(Linksregex.Regex.ofLinksNGroups r) *)
         and string = unbox_string s in
-	let regex = Regex.compile_ocaml re in
+	let regex = assert false (*Regex.compile_ocaml re*) in
 	match (Str.string_match regex string 0) with
 	 false -> `List []
 	| _ -> 
-	(let rec accumMatches l : int -> Result.result = function 
+	(let rec accumMatches l : int -> Value.t = function 
            0 -> `List ((box_string (Str.matched_group 0 string))::l)
 	|  i -> 
 	(try
@@ -1020,13 +1026,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("lntilde",	
    (`Server (p2 (fun s r ->
-        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        let (re, ngroups) = assert false (*(Linksregex.Regex.ofLinksNGroups r) *)
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-	let regex = Regex.compile_ocaml re in
+	let regex = assert false (*Regex.compile_ocaml re *)in
 	match (Str.string_match regex string 0) with
 	 false -> `List []
 	| _ -> 
-	(let rec accumMatches l : int -> Result.result = function 
+	(let rec accumMatches l : int -> Value.t = function 
            0 -> `List ((box_string (Str.matched_group 0 string))::l)
 	|  i -> 
 	(try
@@ -1041,8 +1047,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
-	let (regex, tmpl) = Regex.compile_ocaml l, t in
+	let Regex.Replace (l, t) = assert false (*Linksregex.Regex.ofLinks r*) in 
+	let (regex, tmpl) = assert false (*Regex.compile_ocaml l, t*) in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
     datatype "(String, Regex) -> String",
@@ -1050,8 +1056,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("sntilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
-	let (regex, tmpl) = Regex.compile_ocaml l, t in
+	let Regex.Replace(l, t) = assert false (*Linksregex.Regex.ofLinks r *) in 
+	let (regex, tmpl) = assert false (*Regex.compile_ocaml l, t *) in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
     datatype "(NativeString, Regex) -> NativeString",
@@ -1059,7 +1065,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    
   (* NativeString utilities *)
   ("char_at",
-   (`Server (p2 (fun ((`NativeString ss) : result) ((`Int ix):result) -> `Char (ss.[Num.int_of_num ix]))),
+   (`Server (p2 (fun ((`NativeString ss) : Value.t) ((`Int ix):Value.t) -> `Char (ss.[Num.int_of_num ix]))),
     (datatype ("(NativeString, Int) -> Char")),
     IMPURE));
 
@@ -1095,7 +1101,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     IMPURE));     
 
   ("unpickle_value",
-   (`Server (p1 (fun v -> broken_unmarshal_value (unbox_string v))),
+   (`Server (p1 (fun v -> assert false (*broken_unmarshal_value (unbox_string v)*))),
     datatype "(String) -> a",
   IMPURE));
 
@@ -1178,15 +1184,15 @@ let primitive_arity (name : string) =
   let _, t, _ = assoc name env in
     function_arity t
 
-let primitive_stub (name : string): result =
+let primitive_stub (name : string): Value.t =
   match StringMap.find name (!value_env) with
-    | Some (#result as r) -> r
+    | Some (#Value.t as r) -> r
     | Some _ -> `PrimitiveFunction name
     | None  -> `ClientFunction name
 
 let apply_pfun name args = 
   match StringMap.find name (!value_env) with
-    | Some #result -> failwith("Attempt to apply primitive non-function (" ^
+    | Some #Value.t -> failwith("Attempt to apply primitive non-function (" ^
                                  name ^")")
     | Some (`PFun p) -> p args
     | None -> assert false
@@ -1195,6 +1201,12 @@ let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
 
 let typing_env = {Types.var_env = type_env; tycon_env = alias_env}
+
+let nenv =
+  List.fold_left
+    (fun nenv (n, _) -> Env.bind nenv (n, Var.fresh_raw_var ()))
+    Env.empty
+    env
 
 let primitive_names = StringSet.elements (Env.domain type_env)
 

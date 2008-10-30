@@ -21,7 +21,7 @@ let set_value setting v = setting.value <- v
 type universal = [
 | `Bool of bool setting
 | `Int of int setting
-| `String  of string setting
+| `String of string setting
 ]
 
 let parse_bool = function
