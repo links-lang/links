@@ -1,3 +1,4 @@
+(*pp deriving *)
 (*** pattern matching compiler ***)
 (*
   This pattern matching compiler is tree-based (like the one used in
@@ -23,6 +24,7 @@ type pattern = [
 | `As       of binder * pattern
 | `HasType  of pattern * Types.datatype
 ]
+    deriving (Show)
 
 module Const = struct
   type t = Syntax.constant
@@ -71,15 +73,17 @@ let lookup_type var (_nenv, tenv, _penv) =
 let lookup_name name (nenv, _tenv, _penv) =
   NEnv.lookup nenv name
 
-let rec desugar_pattern : Sugartypes.pattern -> pattern * raw_env =
-  fun (p, pos) ->
-    let pp = desugar_pattern in
+let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
+  fun scope (p, pos) ->
+    let pp = desugar_pattern scope in
     let empty = (NEnv.empty, TEnv.empty) in
     let (++) (nenv, tenv) (nenv', tenv') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv') in
     let fresh_binder (nenv, tenv) =
       function
         | (name, Some t, _) ->
-            let xb, x = Var.fresh_var (t, name, `Local) in
+(*             Debug.print ("name: "^ name); *)
+(*             Debug.print ("t: "^ Types.string_of_datatype t); *)
+            let xb, x = Var.fresh_var (t, name, scope) in
               xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t))
         | _ -> assert false
     in
@@ -136,12 +140,42 @@ let rec desugar_pattern : Sugartypes.pattern -> pattern * raw_env =
 type raw_bound_computation = raw_env -> computation
 type bound_computation = env -> computation
 
-let list_head env : value -> tail_computation = fun v ->
-  `Apply(`Variable (lookup_name "hd" env), [v])
+module CompileLists :
+sig
+  val nil : raw_env -> Types.datatype -> value
+  val list_head : raw_env -> Types.datatype -> value -> tail_computation
+  val list_tail : raw_env -> Types.datatype -> value -> tail_computation
+end
+  =
+struct
+  let lookup_type var (_nenv, tenv) =
+    TEnv.lookup tenv var
+      
+  let lookup_name name (nenv, _tenv) =
+    NEnv.lookup nenv name
 
-let list_tail env : value -> tail_computation = fun v ->
-  `Apply(`Variable (lookup_name "tl" env), [v])
-
+  let nil env t : value =
+    `TApp (`Variable (lookup_name "Nil" env),
+           [`Type t])
+      
+  let list_head env t : value -> tail_computation = fun v ->
+    let mbt = lookup_type (lookup_name "_MAILBOX_" env) env in
+      `Apply
+        (`TApp
+           (`Variable (lookup_name "hd" env),
+            [`Type t; `Type mbt]),
+         [v])
+        
+  let list_tail env t : value -> tail_computation = fun v ->
+    let mbt = lookup_type (lookup_name "_MAILBOX_" env) env in
+      `Apply
+        (`TApp
+           (`Variable (lookup_name "tl" env),
+            [`Type t; `Type mbt]),
+         [v])
+end
+open CompileLists
+  
 let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
   
 type annotation = [`Binder of binder | `Type of Types.datatype] list
@@ -153,20 +187,15 @@ type annotated_clause = annotation * clause
 
 type pattern_type = [ `List | `Variant | `Negative | `Record | `Constant | `Variable ]
 
-let let_pattern : nenv -> pattern -> value * Types.datatype -> computation * Types.datatype -> computation =
-  fun nenv pat (value, value_type) (body, body_type) ->
-    (* list stuff *)
-    let lookup_name = NEnv.lookup nenv in
-    let nil : unit -> value = fun () -> `Variable (lookup_name "Nil") in
-    let list_head : value -> tail_computation = fun v ->
-      `Apply(`Variable (lookup_name "hd"), [v]) in      
-    let list_tail : value -> tail_computation = fun v ->
-      `Apply(`Variable (lookup_name "tl"), [v]) in
+let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * Types.datatype -> computation =
+  fun env pat (value, value_type) (body, body_type) ->
+(*     Debug.print ("pat: "^Show_pattern.show pat); *)
+(*     Debug.print ("value_type: "^Types.string_of_datatype value_type); *)
 
     let rec lp t pat value body =
       match pat with
         | `Nil ->
-            [], `If(`Comparison(value, `Equal, nil()),
+            [], `If(`Comparison(value, `Equal, nil env (TypeUtils.element_type t)),
                        body,
                        ([], `Special (`Wrong body_type)))
         | `Cons (head, tail) ->
@@ -175,7 +204,7 @@ let let_pattern : nenv -> pattern -> value * Types.datatype -> computation * Typ
             let xb, x = Var.fresh_var_of_type xt in
             let xsb, xs = Var.fresh_var_of_type xst in             
               with_bindings
-                [letm (xb, list_tail value); letm (xsb, list_head value)]
+                [letm (xb, list_tail env xt value); letm (xsb, list_head env xt value)]
                 (lp xt head (`Variable x) (lp xst tail (`Variable xs) body))
         | `Variant (name, patt) ->
             let case_type = TypeUtils.variant_at name t in
@@ -201,7 +230,8 @@ let let_pattern : nenv -> pattern -> value * Types.datatype -> computation * Typ
             in
               StringMap.fold
                 (fun name p body ->
-                   (lp (TypeUtils.project_type name t) p (`Project (name, value)) body))
+                   let t' = (TypeUtils.project_type name t) in
+                     (lp t' p (`Project (name, value)) body))
                 fields
                 body
         | `Constant c ->
@@ -221,84 +251,6 @@ let let_pattern : nenv -> pattern -> value * Types.datatype -> computation * Typ
             lp t pat (`Coerce (value, t)) body
     in
       lp value_type pat value body
-
-
-
-(* pattern-matching let *)
-(* let let_pattern : raw_env -> typattern -> value -> (raw_env -> computation * Types.datatype) -> (computation * Types.datatype) = *)
-(*   fun ((nenv, _) as env) (pat, pattern_type) value body -> *)
-(*     let lookup_name = NEnv.lookup nenv in *)
-(*     let list_head : value -> tail_computation = fun v -> *)
-(*       `Apply(`Variable (lookup_name "hd"), [v]) in *)
-        
-(*     let list_tail : value -> tail_computation = fun v -> *)
-(*       `Apply(`Variable (lookup_name "tl"), [v]) in *)
-
-(*     let rec lp t pat value body = *)
-(*       match pat with *)
-(*         | `Nil -> *)
-(*             let body, body_type = body env in *)
-(*               ([], `If(`Comparison(value, `Equal, `Variable (lookup_name "Nil")), *)
-(*                        body, *)
-(*                        ([], `Special (`Wrong body_type)))), body_type *)
-(*         | `Cons (head, tail) -> *)
-(*             let xt = TypeUtils.element_type t in *)
-(*             let xst = t in *)
-(*             let xb, x = Var.fresh_var_of_type xt in *)
-(*             let xsb, xs = Var.fresh_var_of_type xst in *)
-(*             let body, body_type =  *)
-(*               lp xt head (`Variable x) (fun _ -> (lp xst tail (`Variable xs) body)) *)
-(*             in *)
-(*               (with_bindings *)
-(*                  [letm (xb, list_tail value); letm (xsb, list_head value)] *)
-(*                  body), body_type *)
-(*         | `Variant (name, patt) -> *)
-(*             let case_type = TypeUtils.variant_at name t in *)
-(*             let case_binder, case_variable = Var.fresh_var_of_type case_type in *)
-(*             let body, body_type = lp case_type patt (`Variable case_variable) body in *)
-(*             let cases = StringMap.singleton name (case_binder, body) in *)
-(*               ([], `Case (value, cases, None)), body_type *)
-(*         | `Negative _ -> *)
-(*             body env *)
-(*         | `Record (fields, rest) -> *)
-(*             let body, body_type = *)
-(*               match rest with *)
-(*                 | None -> body env *)
-(*                 | Some p -> *)
-(*                     let rt = *)
-(*                       StringMap.fold *)
-(*                         (fun name _ t -> *)
-(*                            TypeUtils.erase_type name t) *)
-(*                         fields *)
-(*                         t *)
-(*                     in *)
-(*                       lp rt p (`Coerce (value, rt)) body *)
-(*             in *)
-(*               (StringMap.fold *)
-(*                  (fun name p body -> *)
-(*                     fst (lp (TypeUtils.project_type name t) p (`Project (name, value)) (fun _ -> body, body_type))) *)
-(*                  fields *)
-(*                  body), body_type *)
-(*         | `Constant c -> *)
-(*             let body, body_type = body env in *)
-(*               ([], `If(`Comparison(value, `Equal, `Constant c), *)
-(*                        body, *)
-(*                        ([], `Special (`Wrong body_type)))), body_type *)
-(*         | `Any -> body env *)
-(*         | `Variable xb -> *)
-(*             let body, body_type = body env in *)
-(*               (with_bindings *)
-(*                 [letv (xb, value)] *)
-(*                 body), body_type *)
-(*         | `As (xb, pattern) -> *)
-(*             let body, body_type = lp t pattern value body in *)
-(*               (with_bindings *)
-(*                  [letv (xb, value)] *)
-(*                  body), body_type *)
-(*         | `HasType (pat, t) ->           *)
-(*             lp t pat (`Coerce (value, t)) body *)
-(*     in *)
-(*       lp pattern_type pat value body *)
 
 let rec get_pattern_type : pattern -> pattern_type = 
   function
@@ -512,7 +464,13 @@ and match_list
     let t = lookup_type var env in
     let var_val = `Variable var in
 
-    let nil = `Variable (lookup_name "Nil" env) in
+    let nil, list_head, list_tail =
+      let raw (nenv, tenv, _) = (nenv, tenv) in
+
+      let nil = nil (raw env) (TypeUtils.element_type t) in
+      let list_head env = list_head (raw env) in
+      let list_tail env = list_tail (raw env) in
+        nil, list_head, list_tail in      
 
     let nil_branch () =
       let env = bind_context var (`Nil, nil) env in
@@ -533,7 +491,7 @@ and match_list
               let xsb, xs = Var.fresh_var_of_type t in
               let env = bind_type x t' (bind_type xs t env) in
                 with_bindings
-                  [letm (xb, list_head env var_val); letm (xsb, list_tail env var_val)]
+                  [letm (xb, list_head env t' var_val); letm (xsb, list_tail env t' var_val)]
                   (match_cases (x::xs::vars) cons_clauses def env) in
 
       if mem_context var env then

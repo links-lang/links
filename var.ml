@@ -51,4 +51,12 @@ let type_of_tybinder (_, b) = type_of_binder b
 let name_of_tybinder (_, b) = name_of_binder b
 let scope_of_tybinder (_, b) = scope_of_binder b
 
-
+(* create a copy of a type environment mapping vars (= ints) to datatypes
+   instead of strings to types
+*)
+let varify_env (nenv, tenv) =
+  Env.String.fold
+    (fun name t tenv ->
+       Env.Int.bind tenv (Env.String.lookup nenv name, t))
+    tenv
+    Env.Int.empty

@@ -71,7 +71,7 @@ let rec directives
         match args with
           | [filename] ->
               let library_types, libraries =
-                (Errors.display_fatal Loader.load_file Library.typing_env (Settings.get_value prelude_file)) in 
+                (Errors.display_fatal Oldloader.load_file Library.typing_env (Settings.get_value prelude_file)) in 
               let libraries, _ = Interpreter.run_program [] [] libraries in
               let sugar, pos_context = Parse.parse_file Parse.program filename in
               let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
@@ -125,11 +125,6 @@ let print_result rtype result =
                  else "")
 
 (** type, optimise and evaluate a program *)
-let new_process_program ?(printer=print_result) (valenv, typingenv, nenv) (program,_) = 
-  print_string ((Ir.Show_program.show program)^"\n");
-  print_endline
-
-(** type, optimise and evaluate a program *)
 let process_program ?(printer=print_result) (valenv, typingenv) (program,_) = 
   let typingenv, program = lazy (Inference.type_program typingenv program) 
     <|measure_as|> "type_program" in
@@ -141,10 +136,6 @@ let process_program ?(printer=print_result) (valenv, typingenv) (program,_) =
   in
     printer (Syntax.node_datatype body) result;
     (valenv, typingenv), result, program
-
-(* Read Links source code, then type, optimize and run it. *)
-let new_evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) = 
-  handle_errors (measure "parse" parse (nenv, tyenv) ->- new_process_program envs)
 
 (* Read Links source code, then type, optimize and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv as envs) = 
@@ -219,26 +210,6 @@ let run_file prelude envs filename =
     else
       ignore (evaluate parse_and_desugar envs filename)
 
-let new_evaluate_string_in envs v =
-  let parse_and_desugar (nenv, tyenv) s = 
-    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
-    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
-
-    (* create a copy of the type environment mapping vars (= ints) to datatypes
-       instead of strings to types
-    *)
-    let tenv =
-      Env.String.fold
-        (fun name t tenv ->
-           Env.Int.bind tenv (Env.String.lookup nenv name, t))
-        tyenv.Types.var_env
-        Env.Int.empty in
-    let program = Sugartoir.desugar_program (nenv, tenv) program in
-      program, (bindings, expr)
-  in
-    (Settings.set_value interacting false;
-     ignore (new_evaluate parse_and_desugar envs v))
-
 let evaluate_string_in envs v =
   let parse_and_desugar tyenv s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
@@ -251,11 +222,10 @@ let evaluate_string_in envs v =
 
 let to_evaluate : string list ref = ref []
 
-
 let load_prelude() = 
   let prelude_types, (Syntax.Program (prelude_syntax, _) as prelude_program) =
     (Errors.display_fatal
-       Loader.load_file Library.typing_env (Settings.get_value prelude_file))
+       Oldloader.load_file Library.typing_env (Settings.get_value prelude_file))
   in
 
   let () = Library.prelude_env := Some prelude_types in
@@ -301,7 +271,7 @@ let options : opt list =
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
-     Some(fun filename -> Loader.print_cache filename;  
+     Some(fun filename -> Oldloader.print_cache filename;  
             Settings.set_value interacting false));
     (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
     (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
@@ -318,7 +288,7 @@ let main file_list =
   let () = Utility.for_each !to_evaluate (evaluate_string_in prelude_envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  let () = Utility.for_each !to_precompile (Loader.precompile_cache (snd prelude_envs)) in
+  let () = Utility.for_each !to_precompile (Oldloader.precompile_cache (snd prelude_envs)) in
   let () = if !to_precompile <> [] then Settings.set_value interacting false in
       
   let () = Utility.for_each !file_list (run_file prelude_syntax prelude_envs) in

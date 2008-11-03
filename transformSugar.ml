@@ -85,7 +85,7 @@ let fun_mailbox t pss =
   let rec get_mb =
     function
       | `Function (_, mb, _), [_] -> mb
-      | `Function (_, _, t), _::pss -> get_mb (t, pss)
+      | `Function (_, _, t), _::pss -> get_mb (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
@@ -267,7 +267,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
 (*             Debug.print ("exp: "^Show_phrasenode.show (`InfixAppl ((tyargs, op), e1, e1))); *)
-          let t = Instantiate.apply_type t tyargs in
+          let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in
             (o, `InfixAppl ((tyargs, op), e1, e2), t)
@@ -280,7 +280,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
 (*             Debug.print ("exp: "^Show_phrasenode.show (`UnaryAppl ((tyargs, op), e))); *)
-          let t = Instantiate.apply_type t tyargs in
+          let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
           let (o, e, _) = o#phrase e in
             (o, `UnaryAppl ((tyargs, op), e), t)
       | `FnAppl (f, args) ->

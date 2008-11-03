@@ -69,27 +69,30 @@ let dom_node = {
   arity      = 0 ;
 }
 
-type datatype =
+type typ =
     [ `Not_typed
     | `Primitive of primitive
-    | `Function of (datatype * datatype * datatype)
+    | `Function of (typ * typ * typ)
     | `Record of row
     | `Variant of row
-    | `Table of datatype * datatype
-    | `Alias of ((string * datatype list) * datatype)
-    | `Application of (Abstype.t * datatype list)
+    | `Table of typ * typ
+    | `Alias of ((string * typ list) * typ)
+    | `Application of (Abstype.t * typ list)
     | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list * datatype)]
-and field_spec     = [ `Present of datatype | `Absent ]
+    | `ForAll of (quantifier list * typ)]
+and field_spec     = [ `Present of typ | `Absent ]
 and field_spec_map = field_spec field_env
 and row_var        = meta_row_var
 and row            = field_spec_map * row_var
-and meta_type_var  = (datatype meta_type_var_basis) point
+and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
     deriving (Eq, Show, Pickle, Typeable, Shelve)
+
+type datatype = typ
+  deriving (Eq, Pickle, Typeable, Shelve)
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -101,10 +104,6 @@ module Show_row = Show_unprintable (struct type a = row end)
 module Show_meta_type_var = Show_unprintable (struct type a = meta_type_var end)
 module Show_meta_row_var = Show_unprintable (struct type a = meta_row_var end)
 *)
-
-type type_arg = 
-    [ `Type of datatype | `Row of row ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let for_all : quantifier list * datatype -> datatype = function
   | [], t -> t
@@ -126,21 +125,6 @@ let type_var_number = function
   | `RigidRowVar (x, _) -> x
 
 module Env = Env.String
-
-type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
-    deriving (Show)
-
-type environment        = datatype Env.t
- and tycon_environment  = tycon_spec Env.t
- and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment }
-    deriving (Show)
-
-(* Functions on environments *)
-let extend_typing_environment 
-    {var_env = l ; tycon_env = al }
-    {var_env = r ; tycon_env = ar} : typing_environment = 
-  {var_env = Env.extend l r ; tycon_env = Env.extend al ar }
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -939,6 +923,32 @@ let string_of_row_var row_var =
   match string_of_row_var' "," TypeVarSet.empty (make_names (free_bound_row_var_vars ~include_aliases:true row_var)) row_var with
     | None -> ""
     | Some s -> s
+
+module Show_datatype =
+  Show.ShowDefaults(struct
+                      type a = datatype
+                      let format fmt a = 
+                        Format.pp_print_string fmt (string_of_datatype a)
+                    end)
+
+type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
+    deriving (Show)
+
+type environment        = datatype Env.t
+ and tycon_environment  = tycon_spec Env.t
+ and typing_environment = { var_env   : environment ;
+                            tycon_env : tycon_environment }
+    deriving (Show)
+
+(* Functions on environments *)
+let extend_typing_environment 
+    {var_env = l ; tycon_env = al }
+    {var_env = r ; tycon_env = ar} : typing_environment = 
+  {var_env = Env.extend l r ; tycon_env = Env.extend al ar }
+
+type type_arg = 
+    [ `Type of datatype | `Row of row ]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let string_of_environment env =
   let module M = Env.Show_t(Show.ShowDefaults(struct

@@ -30,13 +30,9 @@ open Ir
 
   - move `Section, `UnaryAppl, most of `InfixAppl, `RangeLit,
   `ListLit to frontend desugaring transformations
-  - translate `Escape to an escape primitive in the IR once we've
-  added that
   - check that we're doing the right thing with tyvars
-  - implement desugar_expression, desugar_definitions and desugar_program
+  - implement desugar_expression
   - compile record erasure to `Coerce and remove `Erase from the IR 
-  - determine whether we still need scope annotations on binders, and if we
-  do make sure we generate the correct scope annotations
 *)
 
 (* If we implemented comparisons as primitive functions then their
@@ -45,6 +41,10 @@ open Ir
    Similarly, it would be nice to use primitive functions to construct
    XML nodes and table handles. Then they could also be moved to a
    frontend transformation.
+
+   We should either use escape in the frontend and IR or call/cc in
+   the frontend and IR. What we do at the moment (escape in the
+   frontend and call/cc in the IR) is silly.
 *)
 
 
@@ -110,17 +110,17 @@ sig
   val abs : value sem -> value sem
   val app : value sem * value sem -> tail_computation sem
 
-  (* escape? *)
+  val escape : (var_info * Types.datatype * (var -> tail_computation sem)) -> tail_computation sem
 
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
   val apply_pure : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
-(* comparison? *)
+    (* comparison? *)
   val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
 
-  val comp : nenv -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
+  val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
   val seq : tail_computation sem * tail_computation sem -> tail_computation sem
 
   val xml : value sem * value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
@@ -149,17 +149,16 @@ sig
   val table_query : SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) -> tail_computation sem
 
-  val callcc : value sem * datatype -> tail_computation sem
   val wrong : datatype -> tail_computation sem
 
   val letfun :
-    nenv ->
+    env ->
     (var_info * (Types.quantifier list * (CompilePatterns.pattern list * tail_computation sem)) * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
-    nenv ->
+    env ->
     (var_info * (Types.quantifier list * (CompilePatterns.pattern list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
@@ -344,6 +343,7 @@ struct
                 lift (`Special (`App (v1, v2)), t)))
         
   let apply (s, ss) =
+(*     Debug.print ("sem_type s: "^Types.string_of_datatype (sem_type s)); *)
     let ss = lift_list ss in
     let t = TypeUtils.return_type (sem_type s) in
       bind s
@@ -473,30 +473,45 @@ struct
          bind table
            (fun table -> lift (`Special (`Table (database, table, (r, w))), `Table (r, w))))
 
-  let callcc (s, t) = bind s (fun v -> lift (`Special (`CallCC v), t))
   let wrong t = lift (`Special (`Wrong t), t)
 
   let alien (x_info, language, rest) =
     M.bind (alien_binding (x_info, language)) rest
    
-  let comp nenv (p, s, body) =
+  let comp env (p, s, body) =
     let vt = sem_type s in
       bind s
         (fun v ->
            let body_type = sem_type body in
-           let (bs, tc) = CompilePatterns.let_pattern nenv p (v, vt) (reify body, body_type) in
+           let (bs, tc) = CompilePatterns.let_pattern env p (v, vt) (reify body, body_type) in
              reflect (bs, (tc, body_type)))
+
+  let escape ((kt, _, _) as k_info, mb, body) =
+    let kb, k = Var.fresh_var k_info in
+    let body = body k in
+    let body_type = sem_type body in
+    let body = reify body in
+    let ft = `Function (kt, mb, body_type) in
+    let f_info = (ft, "", `Local) in      
+    let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)), body_type) in        
+      M.bind (fun_binding (f_info, ([], [kb], body), `Unknown)) rest
        
-  let letfun nenv ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
+  let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be those used in 
          the body of the function. *)
       match Instantiate.replace_quantifiers ft tyvars with
-        | `ForAll (_, (`Function _ as ft'))
-        | (`Function _ as ft') ->
-            let args = TypeUtils.arg_types ft' in
-              List.map (Var.fresh_binder_of_type) args
-        | _ -> assert false in
+        | `ForAll (_, t')
+        | t' ->
+            begin
+              match TypeUtils.concrete_type t' with
+                | `Function _ as ft' ->
+                    let args = TypeUtils.arg_types ft' in
+                      List.map (fun arg ->
+(*                                   Debug.print ("arg: "^Types.string_of_datatype arg); *)
+                                  Var.fresh_binder_of_type arg) args
+                | _ -> assert false
+            end in
       
     let body_type = sem_type body in
     let body =
@@ -504,7 +519,9 @@ struct
         (fun body p (xb : binder) ->
            let x = Var.var_of_binder xb in
            let xt = Var.type_of_binder xb in
-             CompilePatterns.let_pattern nenv p (`Variable x, xt) (body, body_type))
+(*              Debug.print ("ft: "^Types.string_of_datatype ft); *)
+(*              Debug.print ("xt: "^Types.string_of_datatype xt); *)
+             CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
         (reify body)
         ps
         xsb
@@ -512,7 +529,7 @@ struct
       M.bind (fun_binding (f_info, (tyvars, xsb, body), location)) rest
 (*        fun_binding (f_info, (tyvars, (xs_info, ps, body)), location) rest *)
 
-  let letrec nenv defs rest =
+  let letrec env defs rest =
     let defs =
       List.map
         (fun ((ft, _, _) as f_info, (tyvars, (ps, body)), location) ->
@@ -520,11 +537,15 @@ struct
              (* It is important to rename the quantifiers in the type to be those used in 
                 the body of the function. *)
              match Instantiate.replace_quantifiers ft tyvars with
-               | `ForAll (_, (`Function _ as ft'))
-               | (`Function _ as ft') ->
-                   let args = TypeUtils.arg_types ft' in
-                     List.map (Var.fresh_binder_of_type) args
-               | _ -> assert false in
+               | `ForAll (_, t')
+               | t' ->
+                   begin
+                     match TypeUtils.concrete_type t' with
+                       | `Function _ as ft' ->
+                           let args = TypeUtils.arg_types ft' in
+                             List.map (Var.fresh_binder_of_type) args
+                       | _ -> assert false
+                   end in
            let body fs =
              let body = body fs in
              let body_type = sem_type body in
@@ -532,7 +553,7 @@ struct
                  (fun body p xb ->
                     let x = Var.var_of_binder xb in
                     let xt = Var.type_of_binder xb in
-                      CompilePatterns.let_pattern nenv p (`Variable x, xt) (body, body_type))
+                      CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
                  (reify body)
                  ps
                  xsb
@@ -587,7 +608,7 @@ struct
         let x, xt = lookup_name_and_type name env in
           match tyargs with
             | [] -> I.var (x, xt)
-            | _ -> I.tappl (I.var (x, xt), tyargs) in
+            | _ -> (* Debug.print ("name: "^name); *) I.tappl (I.var (x, xt), tyargs) in
       let mbt = lookup_type "_MAILBOX_" env in
       let instantiate_mb name = instantiate name [`Type mbt] in
       let cofv = I.comp_of_value in
@@ -603,7 +624,8 @@ struct
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Type mbt], [ev e; ev ((`ListLit (es, Some t)), pos)]))
-          | `Escape _ -> assert false
+          | `Escape ((k, Some kt, _), body) ->
+              I.escape ((kt, k, `Local), mbt, fun v -> eval (extend [k] [(v, kt)] env) body)
           | `Section (`Minus) -> cofv (lookup_var "-")
           | `Section (`FloatMinus) -> cofv (lookup_var "-.")
           | `Section (`Name name) -> cofv (lookup_var name)
@@ -640,9 +662,18 @@ struct
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | `UnaryAppl ((_tyargs, `Abs), e) -> cofv (I.abs (ev e))
           | `FnAppl (e, es) ->
+(*              Debug.print ("fnappl: "^Sugartypes.Show_phrase.show e);*)
               I.apply (ev e, evs es)
           | `TAppl (e, tyargs) ->
+(*              Debug.print ("tappl: "^Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));*)
               cofv (I.tappl (ev e, tyargs))
+          | `TupleLit [e] ->
+              (* It isn't entirely clear whether there should be any 1-tuples at this stage,
+                 but if there are we should get rid of them.
+
+                 The parser certainly doesn't disallow them.
+              *)
+              ec e
           | `TupleLit es ->
               let fields = mapIndex (fun e i -> (string_of_int (i+1), ev e)) es in
                 cofv (I.record (fields, None))
@@ -652,6 +683,7 @@ struct
                    (List.map (fun (name, e) -> (name, ev e)) fields,
                     opt_map ev rest))
           | `Projection (e, name) ->
+(*              Debug.print ("projection: "^Sugartypes.Show_phrasenode.show (`Projection (e, name)));*)
               cofv (I.project (ev e, name))
           | `With (e, fields) ->
               cofv (I.update
@@ -670,7 +702,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern p in
+                     let p, penv = CompilePatterns.desugar_pattern `Local p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -727,7 +759,7 @@ struct
                     end
           | `TextNode name ->
               I.apply (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)])
-          | `Block (bs, e) -> eval_bindings env bs e
+          | `Block (bs, e) -> eval_bindings `Local env bs e
               (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _
@@ -744,90 +776,126 @@ struct
           | `Page _
           | `FormletPlacement _
           | `PagePlacement _
-          | `FormBinding _ -> assert false
+          | `FormBinding _ ->
+              Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
+              assert false
 
-  and eval_bindings env bs e =
+  and eval_bindings scope env bs' e =
     let cofv = I.comp_of_value in
     let ec = eval env in
     let ev = evalv env in
-      match bs with
+      match bs' with
         | [] -> ec e
         | (b,bpos)::bs ->
             begin
               match b with
-                | `Val (_, p, e, _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern p in
-                    let nenv, _ as env = env ++ penv in
-                      I.comp nenv (p, ev e, eval_bindings env bs e)
+                | `Val (_, p, body, _, _) ->
+                    let p, penv = CompilePatterns.desugar_pattern scope p in
+                    let env' = env ++ penv in
+                    let s = ev body in
+                    let ss = eval_bindings scope env' bs e in
+                      I.comp env (p, s, ss)
                 | `Fun ((f, Some ft, _), (tyvars, ([ps], body)), location, pos) ->
-                    let nenv, _ = env in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern p in
+                           let p, penv = CompilePatterns.desugar_pattern scope p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
                     let body = eval body_env body in
                       I.letfun
-                        nenv
-                        ((ft, f, `Local), (tyvars, (ps, body)), location)
-                        (fun v -> eval_bindings (extend [f] [(v, ft)] env) bs e)
+                        env
+                        ((ft, f, scope), (tyvars, (ps, body)), location)
+                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | `Exp e' ->
-                    I.seq (ec e', eval_bindings env bs e)
+                    I.seq (ec e', eval_bindings scope env bs e)
                 | `Funs defs ->
-                    let nenv, _ = env in
-                    let fs, fts =
-                      List.split
-                        (List.map
-                           (fun ((f, Some ft, _), _, _, _, _) ->
-                              (f, ft))
-                           defs) in
+                    let fs, inner_fts, outer_fts =
+                      List.fold_right
+                        (fun ((f, Some outer, _), ((_tyvars, Some inner), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                              (f::fs, inner::inner_fts, outer::outer_fts))
+                        defs 
+                        ([], [], []) in
                     let defs =
                       List.map
                         (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern p in
+                                  let p, penv = CompilePatterns.desugar_pattern scope p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in
-                           let body = fun vs -> eval (extend fs (List.combine vs fts) body_env) body in
-                             ((ft, f, `Local), (tyvars, (ps, body)), location))
+                           let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
+                             ((ft, f, scope), (tyvars, (ps, body)), location))
                         defs
                     in
-                      I.letrec nenv defs (fun vs -> eval_bindings (extend fs (List.combine vs fts) env) bs e)
+                      I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
                 | `Foreign ((x, Some xt, _), language, t) ->
-                    I.alien ((xt, x, `Local), language, fun v -> eval_bindings (extend [x] [(v, xt)] env) bs e)
+                    I.alien ((xt, x, scope), language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
-                    eval_bindings env bs e
+                    eval_bindings scope env bs e
                 | `Include _ -> assert false                   
             end
 
   and evalv env e =
     I.value_of_comp (eval env e)
 
+  let rec get_global_names : binding list -> nenv =
+    fun defs ->
+      List.fold_left
+        (fun nenv ->
+           function
+             | `Let ((x, (_xt, x_name, `Global)), _) ->
+                 Env.String.bind nenv (x_name, x)
+             | `Fun ((f, (_ft, f_name, `Global)), _, _) ->
+                 Env.String.bind nenv (f_name, f)
+             | `Rec defs ->
+                 List.fold_left
+                   (fun nenv ((f, (_ft, f_name, scope)), _, _) ->
+                      match scope with
+                        | `Global -> Env.String.bind nenv (f_name, f)
+                        | `Local -> nenv)
+                   nenv defs
+             | `Alien ((f, (_ft, f_name, `Global)), _) ->
+                 Env.String.bind nenv (f_name, f)
+             | `Module (_, defs) ->
+                 opt_app get_global_names nenv defs
+             | _ -> nenv)
+        NEnv.empty
+        defs
+
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
-    Debug.print (Sugartypes.Show_program.show (bindings, body));
+(*    Debug.print (Sugartypes.Show_program.show (bindings, body));*)
     let body =
       match body with
         | None -> (`RecordLit ([], None), dp)
         | Some body -> body in
-      let s = eval_bindings env bindings body in
-        Debug.print ("compiled IR");
+      let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
+          Debug.print ("compiled IR");
+(*          Debug.print (Ir.Show_program.show r);*)
           r, I.sem_type s
 end
 
 module C = Eval(Interpretation(BindingListMonad))
 
+let desugar_expression : env -> Sugartypes.phrase -> Ir.computation * nenv =
+  fun env e ->
+    let (bs, body), _ = C.compile env ([], Some e) in
+      (bs, body), NEnv.empty
 
-let desugar_expression : Sugartypes.phrase -> Ir.computation = fun _ -> assert false
-let desugar_definitions : Sugartypes.binding list -> Ir.binding list = fun _ -> assert false
-let desugar_program : env -> Sugartypes.program -> Ir.computation =
-  fun env p -> fst (C.compile env p)
+let desugar_program : env -> Sugartypes.program -> Ir.computation * nenv =
+  fun env p ->
+    let (bs, body), _ = C.compile env p in
+      (bs, body), C.get_global_names bs
+
+let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
+  fun env bs ->
+    let (bs, _), _ = C.compile env (bs, None) in
+      bs, C.get_global_names bs

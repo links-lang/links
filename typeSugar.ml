@@ -1126,6 +1126,7 @@ let update_pattern_vars env =
     fun n ->      
       let update (x, _, pos) =
         let t = Env.lookup env x in
+(*          Debug.print ("x: "^x^", t: "^Types.string_of_datatype t);*)
           (x, Some t, pos)
       in
         match n with

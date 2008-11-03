@@ -215,6 +215,13 @@ let freshen_quantifiers t =
           `ForAll (qs, apply_type t tyargs)
     | t -> t
 
+(*
+TODO:
+
+  Decide on a discipline for quantifiers. Perhaps we should insist that
+  all quantifiers be rigid.
+*)
+
 let replace_quantifiers t qs' =
   match t with
     | `ForAll (qs, _) ->
@@ -222,11 +229,9 @@ let replace_quantifiers t qs' =
           List.map2
             (fun q q' ->
                match q, q' with
-                 | `TypeVar _, `TypeVar (_, point)
-                 | `RigidTypeVar _, `RigidTypeVar (_, point) ->
+                 | (`TypeVar _ | `RigidTypeVar _), (`TypeVar (_, point) |`RigidTypeVar (_, point)) ->
                      `Type (`MetaTypeVar point)
-                 | `RowVar _, `RowVar (_, row_var)
-                 | `RigidRowVar _, `RigidRowVar (_, row_var) ->
+                 | (`RowVar _ | `RigidRowVar _), (`RowVar (_, row_var) | `RigidRowVar (_, row_var)) ->
                      `Row (StringMap.empty, row_var))
             qs
             qs'
@@ -236,7 +241,7 @@ let replace_quantifiers t qs' =
 
 let alias name ts env = 
   (* This is just type application.
-  
+     
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
   match (SEnv.find env name : Types.tycon_spec option) with

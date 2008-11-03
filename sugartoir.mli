@@ -6,6 +6,6 @@ type tenv = Types.datatype Env.Int.t
 
 type env = nenv * tenv
 
-val desugar_expression : Sugartypes.phrase -> Ir.computation
-val desugar_definitions : Sugartypes.binding list -> Ir.binding list
-val desugar_program : env -> Sugartypes.program -> Ir.computation
+val desugar_expression : env -> Sugartypes.phrase -> Ir.computation * nenv
+val desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv
+val desugar_program : env -> Sugartypes.program -> Ir.computation * nenv

@@ -115,6 +115,8 @@ SOURCES = $(OPC)                		\
           compilePatterns.ml                    \
           value.mli value.ml                    \
           compileir.ml                          \
+          sugartoir.mli sugartoir.ml            \
+          oldloader.mli oldloader.ml            \
           loader.mli loader.ml                  \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
@@ -123,7 +125,6 @@ SOURCES = $(OPC)                		\
           test.ml                               \
           tests.ml                              \
           sqlcompileTest.ml                     \
-          sugartoir.mli sugartoir.ml            \
           lib.mli lib.ml                        \
           oldlinks.ml                           \
           links.ml              		\

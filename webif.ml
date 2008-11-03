@@ -64,7 +64,7 @@ let read_and_optimise_program prelude env arg
     : Types.typing_environment * Syntax.program
   = 
   if Settings.get_value cache_programs then
-    Loader.load_file env arg
+    Oldloader.load_file env arg
   else
     read_and_optimise_program prelude env arg
 

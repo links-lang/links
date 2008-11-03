@@ -14,6 +14,11 @@ let rec is_raw (e, pos) =
 (*        Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
         raise (ConcreteSyntaxError ("Invalid element in formlet literal", pos))
 
+let tt =
+  function
+    | [t] -> t
+    | ts -> Types.make_tuple_type ts
+
 class desugar_formlets {Types.var_env=var_env; Types.tycon_env=tycon_env} =
 object (o : 'self_type)
   inherit (TransformSugar.transform (var_env, tycon_env)) as super
@@ -31,7 +36,13 @@ object (o : 'self_type)
         | _ when is_raw (e, pos) ->
             [(`Tuple []), dp], [(`TupleLit []), dp], [Types.unit_type]
         | `FormBinding (f, p) ->
-            let (_o, _f, t) = o#phrase f in
+            let (_o, _f, ft) = o#phrase f in
+(*               Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
+(*               Debug.print ("ft: "^Types.string_of_datatype ft); *)
+            let t = Types.fresh_type_variable () in
+            let () =
+              Unify.datatypes
+                (ft, Instantiate.alias "Formlet" [t] tycon_env) in
             let var = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (var, Some t, dp), ((`Var var), dp) in
               [(`As (xb, p)), dp], [x], [t]
@@ -86,12 +97,12 @@ object (o : 'self_type)
                   List.fold_left
                     (fun (pss, vs, ts) node ->
                        let ps', vs', ts' = o#formlet_patterns node in
-                         match ps', vs' with
-                           | [p], [v] ->
+                         match ps', vs', ts' with
+                           | [p], [v], [t] ->
                                (* grrr... n-ary arguments are messy!
                                   this type has to be a 1-tuple!
                                *)
-                               [p]::pss, v::vs, (Types.make_tuple_type ts')::ts
+                               [p]::pss, v::vs, t::ts
                            | _ ->
                                [`Tuple ps', dp]::pss, (`TupleLit vs', dp)::vs, (Types.make_tuple_type ts')::ts)
                     ([], [], []) contents
@@ -102,8 +113,8 @@ object (o : 'self_type)
                 List.fold_right
                   (fun t ft ->
                      `Function (Types.make_tuple_type [t], empty_type, ft))
-                  ts (Types.make_tuple_type ts) in
-              let args = List.map (fun t -> (t, empty_type)) ts in
+                  ts (tt ts) in
+              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_type)) ts in
                 begin
                   match args with
                     | [] ->
@@ -125,11 +136,12 @@ object (o : 'self_type)
                           List.fold_right
                             (fun arg (base, ft) ->
                                let [arg_type] = TypeUtils.arg_types ft in
+                               let ft = TypeUtils.return_type ft in
                                let base : phrase =
                                  (`FnAppl
-                                    (((`TAppl (((`Var "@@@"), dp), [`Type ft; `Type arg_type; mb]), dp) : phrase),
-                                     [arg; base]), dp) in
-                               let ft = TypeUtils.return_type ft in
+                                    (((`TAppl (((`Var "@@@"), dp), [`Type arg_type; `Type ft; mb]), dp) : phrase),
+                                     [arg; base]), dp)
+                               in
                                  base, ft)
                             es (base, ft)
                         in
@@ -161,6 +173,7 @@ object (o : 'self_type)
     | `Formlet (body, yields) ->
         (* pure (fun q^ -> [[e]]* ) <*> q^o *)
         let e_in = `Formlet (body, yields) in
+(*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
         let dp = Sugartypes.dummy_position in
         let empty_type = Instantiate.alias "O" [] tycon_env in
         let (ps, _, ts) = o#formlet_patterns body in
@@ -181,10 +194,9 @@ object (o : 'self_type)
             ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
              [body;
               `FnAppl
-                ((`TAppl ((`Var "pure", dp), [`Type yields_type; mb]), dp),
-                 [`FunLit (Some [arg_type, empty_type], (pss, yields)), dp]), dp])
+                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_type, yields_type)); mb]), dp),
+                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_type], (pss, yields)), dp]), dp])
         in
-(*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
 (*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
           (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)             
     | e -> super#phrasenode e

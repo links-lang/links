@@ -18,20 +18,31 @@ let evaluate_string_in envs v =
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
     let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
-    (* create a copy of the type environment mapping vars (= ints) to datatypes
-       instead of strings to types
-    *)
-    let tenv =
-      Env.String.fold
-        (fun name t tenv ->
-           Env.Int.bind tenv (Env.String.lookup nenv name, t))
-        tyenv.Types.var_env
-        Env.Int.empty in
-    let program = Sugartoir.desugar_program (nenv, tenv) program in
+    let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+
+    let program, _nenv = Sugartoir.desugar_program (nenv, tenv) program in
       program, (bindings, expr)
   in
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
+
+let load_prelude () = 
+  let (nenv, tyenv), (bs, _) =
+    (Errors.display_fatal
+       Loader.load_file (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)) in
+  let () = Lib.prelude_env := Some tyenv in
+
+    (* TODO:
+
+        - bump the variable counters
+        - run the prelude (need to implement evalir first)
+    *)
+    
+  let envs =
+    (Env.String.extend Lib.nenv nenv,
+     Types.extend_typing_environment Lib.typing_env tyenv)
+  in
+    bs, envs
 
 let to_evaluate = Oldlinks.to_evaluate
 let config_file = Oldlinks.config_file
@@ -51,10 +62,9 @@ let main () =
 
   if Settings.get_value ir then
     begin
-      let valenv = () in
-      let nenv = Lib.nenv in
-      let tyenv = Lib.typing_env in
-        
+      let _bs, (nenv, tyenv) = load_prelude() in
+
+      let valenv = () in       
       let envs = (valenv, tyenv, nenv) in
       
       let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in

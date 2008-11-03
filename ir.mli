@@ -2,17 +2,24 @@
 (** Monadic IR *)
 
 type scope = Var.scope
+  deriving (Show)
+
 (* term variables *)
 type var = Var.var
   deriving (Show, Pickle)
 type var_info = Var.var_info
+  deriving (Show)
 type binder = Var.binder
+  deriving (Show)
 
 (* type variables *)
 type tyvar = Types.quantifier
+  deriving (Show)
 type tyarg = Types.type_arg
+  deriving (Show)
 
 type name = string
+  deriving (Show)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
