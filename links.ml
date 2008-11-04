@@ -5,23 +5,37 @@ open List
 open Basicsettings
 
 (** type, optimise and evaluate a program *)
-let process_program (valenv, typingenv, nenv) (program,_) = 
+let process_program (valenv, typingenv, nenv) program = 
   print_string ((Ir.Show_program.show program)^"\n");
   print_endline
 
-(* Read Links source code, then type, optimize and run it. *)
+(* Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) = 
   handle_errors (measure "parse" parse (nenv, tyenv) ->- process_program envs)
+
+let run_file prelude envs filename =
+  Settings.set_value interacting false;
+  let parse_and_desugar (nenv, tyenv) filename =
+    let (nenv, tyenv), program =
+      Errors.display_fatal Loader.load_file (nenv, tyenv) filename
+    in
+      program
+  in
+    if Settings.get_value web_mode then 
+      failwith "not implemented web mode for the new IR yet"
+      (*Webif.serve_request prelude envs filename*)
+    else
+      ignore (evaluate parse_and_desugar envs filename)
 
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
-    let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
     let program, _nenv = Sugartoir.desugar_program (nenv, tenv) program in
-      program, (bindings, expr)
+      program
   in
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
@@ -62,18 +76,19 @@ let main () =
 
   if Settings.get_value ir then
     begin
-      let _bs, (nenv, tyenv) = load_prelude() in
+      let prelude, (nenv, tyenv) = load_prelude() in
 
       let valenv = () in       
       let envs = (valenv, tyenv, nenv) in
       
       let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
         (* TBD: accumulate type/value environment so that "interact" has access *)
-        ()
+
       (*   let () = Utility.for_each !to_precompile (Loader.precompile_cache (snd prelude_envs)) in *)
       (*   let () = if !to_precompile <> [] then Settings.set_value interacting false in *)
           
-      (*   let () = Utility.for_each !file_list (run_file prelude_syntax prelude_envs) in *)
+      let () = Utility.for_each !file_list (run_file prelude envs) in
+        ()
       (*     if Settings.get_value interacting then *)
       (*       let () = print_endline (Settings.get_value welcome_note) in *)
       (*         interact prelude_envs *)

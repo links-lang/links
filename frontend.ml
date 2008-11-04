@@ -31,8 +31,8 @@ struct
       ->- DesugarDatatypes.program tyenv.Types.tycon_env
       ->- TypeSugar.Check.program tyenv
       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
-      ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
       ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#program ->- snd3)
+      ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
@@ -47,8 +47,8 @@ struct
       ->- DesugarDatatypes.sentence tyenv
       ->- uncurry TypeSugar.Check.sentence
       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
-      ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#sentence ->- snd)
+      ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
