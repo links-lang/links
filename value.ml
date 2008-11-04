@@ -142,7 +142,7 @@ type primitive_value = [
 | `NativeString of string ]
   deriving (Show, Pickle)
         
-type continuation = (Ir.var * env * Ir.computation) list
+type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value
 | `List of t list
@@ -153,14 +153,19 @@ and t = [
 | `ClientFunction of string
 | `Abs of t
 | `Continuation of continuation ]
-and env = t Utility.intmap
+and env = (t * Ir.scope) Utility.intmap
   deriving (Show, Pickle)
 
 let toplevel_cont : continuation = []
 
 let bind = IntMap.add
-let lookup = IntMap.lookup
+let find name env = fst (IntMap.find name env)
+let lookup name env = opt_map fst (IntMap.lookup name env)
 let shadow outers ~by = IntMap.fold IntMap.add by outers
+let globals env = IntMap.fold (fun name ((_, scope) as v) globals ->
+                                 match scope with
+                                   | `Global -> IntMap.add name v globals
+                                   | _ -> globals) env (IntMap.empty)
 
 let string_as_charlist s : t =
   `List (List.map (fun x -> (`Char x)) (explode s))

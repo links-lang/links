@@ -459,7 +459,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                    let attr_match = (function
                                        | Attr (k, _) when k = attr -> true
                                        | _ -> false) in
-                     (try match find attr_match children with
+                     (try match List.find attr_match children with
                         | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)

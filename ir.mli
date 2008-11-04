@@ -2,7 +2,7 @@
 (** Monadic IR *)
 
 type scope = Var.scope
-  deriving (Show)
+  deriving (Show, Pickle)
 
 (* term variables *)
 type var = Var.var

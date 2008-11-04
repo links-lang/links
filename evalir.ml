@@ -1,10 +1,11 @@
+open Utility
+
 module Eval = struct
   open Ir
-  open Utility
 
   exception EvaluationError of string
   exception Wrong
-  exception TopLevel of Value.t
+  exception TopLevel of (Value.env * Value.t)
 
   let eval_error fmt = 
     let error msg = raise (EvaluationError msg) in
@@ -26,8 +27,6 @@ module Eval = struct
   let apply_prim : string -> Value.t list -> Value.t =
     fun _ _ -> assert false
 
-
-  
   module Q =
   struct
     (** Substitutes values for the variables in a query, and performs
@@ -39,7 +38,7 @@ module Eval = struct
         let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
         let rec nle =
           function
-            | `Var x -> `Str (quote (Value.unbox_string (IntMap.find (int_of_string x) env)))
+            | `Var x -> `Str (quote (Value.unbox_string (Value.find (int_of_string x) env)))
             | (`Percent | `Str _) as l -> l
             | `Seq ls -> `Seq (List.map nle ls)
         in
@@ -48,7 +47,7 @@ module Eval = struct
       let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
         | `V name -> begin
             try
-              match IntMap.find (int_of_string name) env with
+              match Value.find (int_of_string name) env with
                 | `Bool true -> `True
                 | `Bool false -> `False
                 | `Int value -> `N value
@@ -75,7 +74,7 @@ module Eval = struct
       let normalise_tables =
         List.map (function 
                | `TableVar(var, alias) ->
-                   (match IntMap.find (int_of_string var) env with
+                   (match Value.find (int_of_string var) env with
                         `Table(_, tableName, _) -> `TableName(tableName, alias)
                       | _ -> failwith "Internal Error: table source was not a table!")
                | `TableName (name, alias) -> `TableName(name, alias)
@@ -112,7 +111,7 @@ module Eval = struct
                                  | _ -> []) query.SqlQuery.tabs in
         let dbs = 
           List.map (fun var -> 
-                 match IntMap.find var env with
+                 match Value.find var env with
                    | `Table((db, _params), _table_name, _row) -> db
                    | _ -> assert false) vars in
           
@@ -207,11 +206,11 @@ module Eval = struct
                let locals = 
                  List.fold_right 
                    (fun (name, _) env ->
-                      Value.bind name (`RecFunction (recs, env, name)) env)
+                      Value.bind name (`RecFunction (recs, env, name), `Local) env)
                    recs fnenv in
                let env = Value.shadow env ~by:locals in
                  (* bind arguments *)
-               let env = List.fold_right2 Value.bind args ps env in
+               let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
                  computation env cont body
            | None -> eval_error "Error looking up recursive function definition")
     | `PrimitiveFunction n, ps -> apply_prim n ps
@@ -229,28 +228,31 @@ module Eval = struct
   and apply_cont cont env v : Value.t =
     match cont with
       | [] when !Library.current_pid == Library.main_process_pid ->
-          raise (TopLevel v)
+          raise (TopLevel (Value.globals env, v))
       | [] -> switch_context env
-      | (var, locals, comp)::cont ->
-          let env = Value.bind var v (Value.shadow env ~by:locals) in
+      | (scope, var, locals, comp)::cont ->
+          let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
             computation env cont comp
   and computation env cont (binders, tailcomp) : Value.t =
     match binders with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
-          | `Let ((var,_), (_, tc)) ->
-              tail_computation env (((var, env, (bs, tailcomp))::cont) : Value.continuation) tc
-          | `Fun ((name,_), (_, args, body), _) -> 
-              tail_computation (Value.bind name (`RecFunction ([name, (List.map fst args,body)], 
-                                                             env, name)) env) cont tailcomp
+          | `Let ((var, _) as b, (_, tc)) ->
+              tail_computation env (((Var.scope_of_binder b, var, env, (bs, tailcomp))::cont) : Value.continuation) tc
+          | `Fun ((name, _) as b, (_, args, body), _) -> 
+              tail_computation (Value.bind
+                                  name
+                                  (`RecFunction ([name, (List.map fst args,body)], env, name),
+                                   Var.scope_of_binder b) env) cont tailcomp
           | `Rec fs         -> 
               let bindings = List.map (fun ((name,_), (_, args, body), _) ->
                                          name, (List.map fst args, body)) fs in
               let env = 
-                List.fold_right (fun (name,_) env ->
+                List.fold_right (fun ((name, _) as b, _, _) env ->
                                    Value.bind name 
-                                     (`RecFunction (bindings, env, name))
-                                     env) bindings env in
+                                     (`RecFunction (bindings, env, name),
+                                      Var.scope_of_binder b)
+                                     env) fs env in
                 tail_computation env cont tailcomp
           | `Alien _ 
           | `Alias _       -> (* just skip it *)
@@ -267,7 +269,7 @@ module Eval = struct
                (match StringMap.lookup label cases, default, v with
                   | Some ((var,_), c), _, `Variant (_, v)
                   | _, Some ((var,_), c), v ->
-                      computation (Value.bind var v env) cont c
+                      computation (Value.bind var (v, `Local) env) cont c
                   | None, _, #Value.t -> eval_error "Pattern matching failed"
                   | _ -> assert false (* v not a variant *))
            | _ -> eval_error "Case of non-variant")
@@ -291,5 +293,15 @@ module Eval = struct
     | `CallCC f                   -> 
         apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 
-    fun env -> computation env (assert false : Value.continuation)
+    fun env -> computation env Value.toplevel_cont (*(assert false : Value.continuation)*)
 end
+
+let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
+  fun env program ->
+    try (
+      ignore 
+        (Eval.eval env program);
+      failwith "boom"
+    ) with
+      | Eval.TopLevel (env, v) -> (env, v)
+      | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")

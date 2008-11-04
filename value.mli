@@ -71,15 +71,17 @@ type t = [
 | `ClientFunction of string
 | `Abs of t
 | `Continuation of continuation ]
-and continuation = (Ir.var * env * Ir.computation) list
-and env = t Utility.IntMap.t
+and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+and env = (t * Ir.scope) Utility.intmap
     deriving (Show, Pickle)
 
 val toplevel_cont : continuation
 
-val bind  : Ir.var -> t -> env -> env
+val bind  : Ir.var -> (t * Ir.scope) -> env -> env
+val find : Ir.var -> env -> t
 val lookup : Ir.var -> env -> t option
 val shadow : env -> by:env -> env
+val globals : env -> env
 
 val project : string -> [> `Record of (string * 'b) list ] -> 'b
 val untuple : t -> t list
