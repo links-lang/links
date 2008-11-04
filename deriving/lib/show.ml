@@ -186,13 +186,16 @@ ShowDefaults(
     let format formatter map = 
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
+      Format.pp_open_box formatter 0;
       M.iter (fun key value -> 
-                Format.pp_open_box formatter 0;
+                Format.pp_open_vbox formatter 0;
                 K.format formatter key;
                 Format.pp_print_string formatter " => ";
                 V.format formatter value;
+                Format.pp_print_string formatter "; ";
                 Format.pp_close_box formatter ();
              ) map;
+      Format.pp_close_box formatter ();
       Format.pp_print_string formatter "}";
       Format.pp_close_box formatter ();
       
