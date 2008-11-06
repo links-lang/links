@@ -146,7 +146,6 @@ sig
 
   val database : value sem -> tail_computation sem
 
-  val table_query : SqlQuery.sqlQuery * datatype -> tail_computation sem
   val table_handle : value sem * value sem * (datatype * datatype) -> tail_computation sem
 
   val wrong : datatype -> tail_computation sem
@@ -464,8 +463,6 @@ struct
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
 
-  let table_query (query, t) =
-    lift (`Special (`Query query), t)
   let table_handle (database, table, (r, w)) =
     bind database
       (fun database ->
@@ -630,12 +627,8 @@ struct
           | `Section (`Name name) -> cofv (lookup_var name)
           | `Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
-          | `InfixAppl ((_tyargs, `Name ">"), e1, e2) -> cofv (I.comparison (ev e2, `Less, ev e1))
-          | `InfixAppl ((_tyargs, `Name ">="), e1, e2) -> cofv (I.comparison (ev e2, `LessEq, ev e1))
-          | `InfixAppl ((_tyargs, `Name "=="), e1, e2) -> cofv (I.comparison (ev e1, `Equal, ev e2))
-          | `InfixAppl ((_tyargs, `Name "<"), e1, e2) -> cofv (I.comparison (ev e1, `Less, ev e2))
-          | `InfixAppl ((_tyargs, `Name "<="), e1, e2) -> cofv (I.comparison (ev e1, `LessEq, ev e2))
-          | `InfixAppl ((_tyargs, `Name "<>"), e1, e2) -> cofv (I.comparison (ev e1, `NotEq, ev e2))
+          | `InfixAppl ((tyargs, `Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
+              cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "!"), e1, e2) ->

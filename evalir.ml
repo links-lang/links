@@ -206,13 +206,15 @@ module Eval = struct
     | `Coerce (v, _) -> value env v
     | `Abs v         -> `Abs (value env v)
     (* TODO: replace comparisons with primitive functions *)
+    | `Comparison _ -> assert false
+(*
     | `Comparison (v1, op, v2)  ->
         begin
           match op with
             | `Equal -> Value.box_bool (Lib.equal (value env v1) (value env v2))
             | _ -> assert false
         end
-
+*)
   and apply cont env : Value.t * Value.t list -> Value.t = function
     | `RecFunction (recs, fnenv, n), ps -> 
         begin

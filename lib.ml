@@ -248,6 +248,38 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "/.", float_op (/.) PURE;
   "^.", float_op ( ** ) PURE;
 
+  (** Comparisons *)
+  "==",
+  (p2 (fun v1 v2 -> box_bool (equal v1 v2)),
+   datatype "(a,a) -> Bool",
+   PURE);
+
+  "<>",
+  (p2 (fun v1 v2 -> box_bool (not (equal v1 v2))),
+   datatype "(a,a) -> Bool",
+   PURE);
+
+  "<",
+  (p2 (fun v1 v2 -> box_bool (less v1 v2)),
+   datatype "(a,a) -> Bool",
+   PURE);
+
+  ">",
+  (p2 (fun v1 v2 -> box_bool (less v2 v1)),
+   datatype "(a,a) -> Bool",
+   PURE);
+
+
+  "<=",
+  (p2 (fun v1 v2 -> box_bool (less_or_equal v1 v2)),
+   datatype "(a,a) -> Bool",
+   PURE);
+
+  ">=",
+  (p2 (fun v1 v2 -> box_bool (less_or_equal v2 v1)),
+   datatype "(a,a) -> Bool",
+   PURE);
+
   (** Conversions (any missing?) **)
   "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type PURE;
   "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
@@ -328,7 +360,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
-    (p1 (fun _ -> assert false),
+    (`PFun (fun ([]) -> assert false),
      datatype "() -{a}-> (a)",
   IMPURE);
 
