@@ -293,7 +293,6 @@ struct
       let fb, f = Var.fresh_var f_info in
         lift_binding (`Fun (fb, (tyvars, xsb, body), location)) f
 
-
     let rec_binding defs =
       let defs, fs =
         List.fold_right
@@ -641,6 +640,8 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "!"), e1, e2) ->
               I.apply (instantiate "send" tyargs, [ev e1; ev e2])
+          | `InfixAppl ((tyargs, `Name n), e1, e2) when Library.is_pure_primitive n -> 
+              cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name n), e1, e2) -> 
               I.apply (instantiate n tyargs, [ev e1; ev e2])
           | `InfixAppl ((tyargs, `Cons), e1, e2) ->
@@ -658,9 +659,15 @@ struct
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | `UnaryAppl ((_tyargs, `FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | `UnaryAppl ((tyargs, `Name n), e) ->
+          | `UnaryAppl ((tyargs, `Name n), e) when Library.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
+          | `UnaryAppl ((tyargs, `Name n), e) ->
+              I.apply (instantiate n tyargs, [ev e])
           | `UnaryAppl ((_tyargs, `Abs), e) -> cofv (I.abs (ev e))
+          | `FnAppl ((`Var f, _), es) when Library.is_pure_primitive f ->
+              cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
+          | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Library.is_pure_primitive f ->
+              cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) ->
 (*              Debug.print ("fnappl: "^Sugartypes.Show_phrase.show e);*)
               I.apply (ev e, evs es)
@@ -799,7 +806,7 @@ struct
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern scope p in
+                           let p, penv = CompilePatterns.desugar_pattern `Local p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
@@ -823,7 +830,7 @@ struct
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern scope p in
+                                  let p, penv = CompilePatterns.desugar_pattern `Local p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in

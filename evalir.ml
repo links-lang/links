@@ -21,11 +21,15 @@ module Eval = struct
     in
       Value.db_connect driver params
 
+  let lookup_var name env =
+    match Value.lookup name env with
+      | Some v -> Some v
+      | None -> Some (Lib.primitive_stub name)
+
   let client_call : string -> Value.continuation -> Value.t list -> 'a =
     fun _ _ _ -> assert false
 
-  let apply_prim : string -> Value.t list -> Value.t =
-    fun _ _ -> assert false
+  let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
   module Q =
   struct
@@ -149,7 +153,7 @@ module Eval = struct
     | `Constant `String s -> Value.box_string s
     | `Constant `Float f -> `Float f
     | `Variable v ->
-        (match Value.lookup v env with
+        (match lookup_var v env with
            | Some v -> v
            | _      -> eval_error "Variable not found: %d" v)
     | `Extend (fields, r) -> 
@@ -191,29 +195,42 @@ module Eval = struct
                              Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
                           attrs children) in
           `XML (Value.Node (tag, children))
-    | `ApplyPure (_, args) ->
-        (assert false) (*Library.apply_pfun*) (assert false) (List.map (value env) args)
+    | `ApplyPure (f, args) ->
+        begin
+          try (
+            ignore (apply [] env (value env f, List.map (value env) args));
+            failwith "boom"
+          ) with
+            | TopLevel (_, v) -> v
+        end           
     | `Coerce (v, _) -> value env v
     | `Abs v         -> `Abs (value env v)
-    (* Unnecessary *)
-    | `Comparison _  -> assert false
+    (* TODO: replace comparisons with primitive functions *)
+    | `Comparison (v1, op, v2)  ->
+        begin
+          match op with
+            | `Equal -> Value.box_bool (Lib.equal (value env v1) (value env v2))
+            | _ -> assert false
+        end
 
-  let rec apply cont env : Value.t * Value.t list -> Value.t = function
+  and apply cont env : Value.t * Value.t list -> Value.t = function
     | `RecFunction (recs, fnenv, n), ps -> 
-        (match lookup n recs with
-           | Some (args, body) -> 
-               (* unfold recursive definitions once *)
-               let locals = 
-                 List.fold_right 
-                   (fun (name, _) env ->
-                      Value.bind name (`RecFunction (recs, env, name), `Local) env)
-                   recs fnenv in
-               let env = Value.shadow env ~by:locals in
-                 (* bind arguments *)
-               let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
-                 computation env cont body
-           | None -> eval_error "Error looking up recursive function definition")
-    | `PrimitiveFunction n, ps -> apply_prim n ps
+        begin
+          match lookup n recs with
+            | Some (args, body) -> 
+                (* unfold recursive definitions once *)
+                let locals = 
+                  List.fold_right 
+                    (fun (name, _) env ->
+                       Value.bind name (`RecFunction (recs, env, name), `Local) env)
+                    recs fnenv in
+                let env = Value.shadow env ~by:locals in
+                  (* bind arguments *)
+                let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
+                  computation env cont body
+            | None -> eval_error "Error looking up recursive function definition"
+        end
+    | `PrimitiveFunction n, ps -> apply_cont cont env (apply_prim n ps)
     | `ClientFunction name, ps -> client_call name cont ps
     | `Continuation c,     [p] -> apply_cont c env p
     | `Continuation _,      _  ->
@@ -240,20 +257,21 @@ module Eval = struct
           | `Let ((var, _) as b, (_, tc)) ->
               tail_computation env (((Var.scope_of_binder b, var, env, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((name, _) as b, (_, args, body), _) -> 
-              tail_computation (Value.bind
-                                  name
-                                  (`RecFunction ([name, (List.map fst args,body)], env, name),
-                                   Var.scope_of_binder b) env) cont tailcomp
-          | `Rec fs         -> 
+              computation (Value.bind
+                             name
+                             (`RecFunction ([name, (List.map fst args,body)], env, name),
+                              Var.scope_of_binder b) env) cont (bs, tailcomp)
+          | `Rec fs -> 
               let bindings = List.map (fun ((name,_), (_, args, body), _) ->
                                          name, (List.map fst args, body)) fs in
               let env = 
                 List.fold_right (fun ((name, _) as b, _, _) env ->
-                                   Value.bind name 
+                                   Value.bind name
                                      (`RecFunction (bindings, env, name),
                                       Var.scope_of_binder b)
-                                     env) fs env in
-                tail_computation env cont tailcomp
+                                     env) fs env
+              in
+                computation env cont (bs, tailcomp)
           | `Alien _ 
           | `Alias _       -> (* just skip it *)
               computation env cont (bs, tailcomp)
@@ -305,3 +323,8 @@ let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+
+let run_defs : Value.env -> Ir.binding list -> Value.env =
+  fun env bs ->
+    let env, _ = run_program env (bs, `Return (`Extend (StringMap.empty, None))) in
+      env

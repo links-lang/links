@@ -4,10 +4,28 @@ open Utility
 open List
 open Basicsettings
 
-(** type, optimise and evaluate a program *)
-let process_program (valenv, typingenv, nenv) program = 
+
+(** Print a value (including its type if `printing_types' is [true]). *)
+let print_value rtype value = 
+  print_string (Value.string_of_value value);
+  print_endline (if Settings.get_value(printing_types) then
+		   " : "^ Types.string_of_datatype rtype
+                 else "")
+
+
+
+(** optimise and evaluate a program *)
+let process_program ?(printer=print_value) (valenv, typingenv, nenv) (program, t) =
+  (* TODO: the optimise part *)
+(*
   print_string ((Ir.Show_program.show program)^"\n");
-  print_endline
+  print_endline;
+*)
+  let valenv, v = lazy (Evalir.run_program valenv program)
+    <|measure_as|> "run_program"
+  in
+    printer t v;
+    (valenv, typingenv, nenv), v
 
 (* Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) = 
@@ -16,10 +34,10 @@ let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs
 let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
-    let (nenv, tyenv), program =
+    let (nenv, tyenv), (program, t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename
     in
-      program
+      (program, t)
   in
     if Settings.get_value web_mode then 
       failwith "not implemented web mode for the new IR yet"
@@ -30,18 +48,18 @@ let run_file prelude envs filename =
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
-    let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let program, t, _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
     let program, _nenv = Sugartoir.desugar_program (nenv, tenv) program in
-      program
+      (program, t)
   in
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () = 
-  let (nenv, tyenv), (bs, _) =
+  let (nenv, tyenv), ((bs, _), _) =
     (Errors.display_fatal
        Loader.load_file (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)) in
   let () = Lib.prelude_env := Some tyenv in
@@ -51,9 +69,11 @@ let load_prelude () =
         - bump the variable counters
         - run the prelude (need to implement evalir first)
     *)
-    
+
+  let valenv = Evalir.run_defs IntMap.empty bs in
   let envs =
-    (Env.String.extend Lib.nenv nenv,
+    (valenv,
+     Env.String.extend Lib.nenv nenv,
      Types.extend_typing_environment Lib.typing_env tyenv)
   in
     bs, envs
@@ -76,9 +96,8 @@ let main () =
 
   if Settings.get_value ir then
     begin
-      let prelude, (nenv, tyenv) = load_prelude() in
+      let prelude, (valenv, nenv, tyenv) = load_prelude() in
 
-      let valenv = () in       
       let envs = (valenv, tyenv, nenv) in
       
       let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in

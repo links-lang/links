@@ -120,12 +120,12 @@ SOURCES = $(OPC)                		\
           loader.mli loader.ml                  \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
+          lib.mli lib.ml                        \
           evalir.ml                             \
           webif.mli webif.ml           	        \
           test.ml                               \
           tests.ml                              \
           sqlcompileTest.ml                     \
-          lib.mli lib.ml                        \
           oldlinks.ml                           \
           links.ml              		\
 

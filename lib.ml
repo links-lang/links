@@ -7,14 +7,14 @@ open Types
 open Utility
 
 (* Alias environment *)
-module Env = Env.String
+module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
 let alias_env : Types.tycon_environment =
   List.fold_left 
-    Env.bind
-    Env.empty
+    AliasEnv.bind
+    AliasEnv.empty
     [
       "String"  , `Alias ([], `Application (Types.list, [`Primitive `Char]));
       "Xml"     , `Alias ([], `Application (Types.list, [`Primitive `XmlItem]));
@@ -26,7 +26,7 @@ let alias_env : Types.tycon_environment =
 
 
 let alias_env : Types.tycon_environment =
-  Env.bind alias_env
+  AliasEnv.bind alias_env
     ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
@@ -1161,11 +1161,33 @@ let impl : located_primitive -> primitive option = function
   | `Server p
   | (#primitive as p) -> Some p
 
+let nenv =
+  List.fold_left
+    (fun nenv (n, _) -> Env.String.bind nenv (n, Var.fresh_raw_var ()))
+    Env.String.empty
+    env
+
+let venv =
+  Env.String.fold
+    (fun name var venv ->
+       Env.Int.bind venv (var, name))
+    nenv
+    Env.Int.empty   
+
 let value_env = 
   ref (List.fold_right
-    (fun (name, (p,_,_)) env -> StringMap.add name (impl p) env)
-    env
-    StringMap.empty)
+         (fun (name, (p, _, _)) env -> Env.Int.bind env (Env.String.lookup nenv name, impl p))
+         env
+         Env.Int.empty)
+
+let type_env : Types.environment =
+  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
+
+let typing_env = {Types.var_env = type_env; tycon_env = alias_env}
+
+let primitive_names = StringSet.elements (Env.String.domain type_env)
+
+let primitive_name = Env.Int.lookup venv
 
 let primitive_location (name:string) = 
   match fst3 (List.assoc name env) with
@@ -1184,31 +1206,18 @@ let primitive_arity (name : string) =
   let _, t, _ = assoc name env in
     function_arity t
 
-let primitive_stub (name : string): Value.t =
-  match StringMap.find name (!value_env) with
+let primitive_stub (var : Var.var): Value.t =
+  match Env.Int.lookup (!value_env) var with
     | Some (#Value.t as r) -> r
-    | Some _ -> `PrimitiveFunction name
-    | None  -> `ClientFunction name
+    | Some _ -> `PrimitiveFunction (primitive_name var)
+    | None  -> `ClientFunction (primitive_name var)
 
 let apply_pfun name args = 
-  match StringMap.find name (!value_env) with
+  match Env.Int.lookup (!value_env) (Env.String.lookup nenv name) with
     | Some #Value.t -> failwith("Attempt to apply primitive non-function (" ^
-                                 name ^")")
+                                 name^")")
     | Some (`PFun p) -> p args
     | None -> assert false
-
-let type_env : Types.environment =
-  List.fold_right (fun (n, (_,t,_)) env -> Env.bind env (n, t)) env Env.empty
-
-let typing_env = {Types.var_env = type_env; tycon_env = alias_env}
-
-let nenv =
-  List.fold_left
-    (fun nenv (n, _) -> Env.bind nenv (n, Var.fresh_raw_var ()))
-    Env.empty
-    env
-
-let primitive_names = StringSet.elements (Env.domain type_env)
 
 let is_primitive name = List.mem_assoc name env
 
