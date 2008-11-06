@@ -2,6 +2,7 @@
 (** Monadic IR *)
 
 open Utility
+open PP
 
 type scope = Var.scope
   deriving (Show, Pickle)
@@ -143,6 +144,145 @@ sig
     method binder : binder -> (binder * 'self_type)
   end  
 end
+
+let doc_concat sep l =
+  match l with 
+      [] -> empty
+    | (h::t) -> h ^^ List.fold_left (fun a d -> sep ^^ d ^^ a) empty t
+
+let doc_join f = (doc_concat break) -<- List.map f
+
+let var_name v n = if n = "" then "__"^(string_of_int v) else n
+
+class stringIR venv = 
+object (o : 'self_type)
+  val venv = venv
+
+  method add_bindings bs =
+    let venv = List.fold_left 
+      (fun m (v, (_, n, _)) -> IntMap.add v (var_name v n) m) venv bs in
+      {< venv=venv >}
+  
+  method constant : constant -> doc = fun c ->
+    let s = match c with
+      | `Bool x -> string_of_bool x
+      | `Int x -> Num.string_of_num x
+      | `Char x -> "'" ^ Char.escaped x ^ "'"
+      | `String x -> "\"" ^ x ^ "\""
+      | `Float x -> string_of_float x
+    in text s
+
+  method comparison : Syntaxutils.comparison -> doc = fun cmp ->
+    match cmp with
+      | `Less -> text "<"
+      | `LessEq -> text "<="
+      | `Equal -> text "=="
+      | `NotEq -> text "!="
+
+  method value : value -> doc = fun v ->
+    match v with 
+      | `Constant c -> o#constant c
+      | `Variable v -> text (IntMap.find v venv)
+
+      | `Extend (r, v) ->
+          (let r_doc = doc_concat (text "," ^^ break)
+             (StringMap.to_list (fun n v -> text n ^| text "=" ^| o#value v) r) in
+             match v with
+                 None -> group (parens (r_doc))
+               | Some v -> 
+                   group (parens (r_doc ^| text "|" ^| 
+                                      group (o#value v))))
+
+      | `Project (n, v) -> group (o#value v ^^ text "." ^^ text n)
+
+      | `Erase (n, v) -> parens (group (o#value v ^^ text "\\" ^^ text n))
+      | `Inject _ -> text "INJECT"
+      | `TAbs _ -> text "TABS"
+      | `TApp _ -> text "TAPP"
+      | `XmlNode _ -> text "XMLNODE"
+      | `ApplyPure (v, vl) ->
+          group (parens (o#value v ^| (doc_join o#value vl)))
+      | `Comparison (v1, cmp, v2) -> 
+          group (o#value v1 ^| o#comparison cmp ^| o#value v2)
+      | `Coerce _ -> text "COERCE"
+      | `Abs _ -> text "ABS"
+          
+  method tail_computation : tail_computation -> doc = fun tc ->
+    match tc with
+        `Return v -> o#value v
+
+      | `Apply (v, vl) -> 
+          group (o#value v ^| (doc_join o#value vl))
+
+      | `Case (v, names, opt) ->
+          let cases = 
+            StringMap.fold 
+              (fun n (b, c) d -> 
+                 let o = o#add_bindings [b] in
+                   group (text n ^| o#binder b ^| text "->") ^| 
+                       o#computation c ^| d)
+              names empty in
+          let comp = 
+            match opt with
+              | None -> empty
+              | Some (b, c) ->
+                  let o = o#add_bindings [b] in
+                    group (text "let" ^| o#binder b ^| text "=" 
+                             ^| o#value v ^| text "in") ^| 
+                        o#computation c in
+            group (
+              nest 2 (group (
+                        group (text "match" ^| o#value v ^| text "with") ^| 
+                            nest 2  (group cases))) ^|
+                  group (comp))
+                
+      | `If (v, t, f) ->          
+          group (
+            nest 2 (
+              group (text "if" ^| o#value v) ^|
+                  nest 2 (group (text "then" ^| o#computation t)) ^| 
+                      nest 2 (group (text "else" ^| o#computation f))))
+                      
+      | `Special v -> text "SPECIAL"
+          
+  method bindings : binding list -> 'self_type * doc = fun bs ->
+    List.fold_left
+      (fun (o, accum_d) b -> let (o, d) = o#binding b in o, accum_d ^| d)
+      (o, empty) bs
+
+  method computation : computation -> doc = fun (bs, tc) ->
+    let (o, d) = o#bindings bs in 
+      d ^| o#tail_computation tc
+
+  method binding : binding -> 'self_type * doc = fun b ->
+    match b with
+        `Let (x, (_, tc)) ->
+          let o = o#add_bindings [x] in
+            o, group (text "let" ^| o#binder x ^|
+                 text "=" ^| group(o#tail_computation tc ^| text "in"))
+                     
+      | `Fun (binder, (_, f_binders, comp), loc) ->
+          let o = o#add_bindings f_binders in
+            o, nest 2 (group (
+              group (text "let" ^| o#binder binder ^| 
+                         doc_join o#binder f_binders ^| text "=") ^| 
+                  group(o#computation comp ^| text "in")))
+              
+      | `Rec funs -> 
+          let o = o#add_bindings (List.map fst3 funs) in
+          let (_, docs) = o#bindings (List.map (fun x -> `Fun x) funs) in
+            o, docs
+            
+      | `Alien _ -> o, text "ALIEN"
+      | `Module _ -> o, text "MODULE"
+
+  method binder : binder -> doc = fun (v, (_, name, _)) ->
+    text (var_name v name)
+
+end
+
+let string_of_ir venv comp =
+  pretty 70 ((new stringIR venv)#computation comp)
 
 (* Traversal with type reconstruction *)
 (*
