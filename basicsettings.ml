@@ -44,6 +44,9 @@ let pp = Settings.add_string("preprocessor", "", `System)
 (* whether to use the new IR in the frontend *)
 let ir = Settings.add_bool("ir", false, `User)
 
+(* Whether to print the IR rather than run it *)
+let pretty_print_ir = Settings.add_bool("pretty_print_ir", false, `User)
+
 (* default database settings *)
 let database_driver = Settings.add_string("database_driver", "", `User)
 let database_args = Settings.add_string("database_args", "", `User)

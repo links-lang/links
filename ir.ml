@@ -198,7 +198,7 @@ object (o : 'self_type)
       | `Erase (n, v) -> parens (group (o#value v ^^ text "\\" ^^ text n))
       | `Inject _ -> text "INJECT"
       | `TAbs _ -> text "TABS"
-      | `TApp _ -> text "TAPP"
+      | `TApp (v, ts) -> o#value v
       | `XmlNode _ -> text "XMLNODE"
       | `ApplyPure (v, vl) ->
           group (parens (o#value v ^| (doc_join o#value vl)))

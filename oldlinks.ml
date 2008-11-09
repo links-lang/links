@@ -220,22 +220,7 @@ let evaluate_string_in envs v =
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
-
-let print_ir (_, tyenv) s =
-  let () = print_endline s in
-  let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
-  let (bindings, expr) as program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
-  let program = Sugar.desugar_program program in
-  let tyenv, program = Inference.type_program tyenv program in
-  let env, tenv = Compileir.make_initial_env tyenv in
-  let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv) program in
-  let env, _ = Compileir.add_globals_to_env (env, tenv) bindings in
-  let env' = Compileir.invert_env env in
-  let () = print_endline (Ir.Show_computation.show e ^ "\n\n") in
-    print_endline (Ir.string_of_ir env' e)
-
 let to_evaluate : string list ref = ref []
-let to_print : string option ref = ref None
 
 let load_prelude() = 
   let prelude_types, (Syntax.Program (prelude_syntax, _) as prelude_program) =
@@ -283,7 +268,7 @@ let options : opt list =
     ('O',     "optimize",            set Optimiser.optimising true,    None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
-    ('p',     "print-ir",            None,                             Some (fun str -> to_print := Some str));
+    ('p',     "print-ir",            set pretty_print_ir true,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
@@ -301,9 +286,6 @@ let options : opt list =
 let main file_list =
   let prelude_syntax, prelude_envs = load_prelude() in
 
-  let () = match !to_print with
-    | Some str -> print_ir prelude_envs str; Settings.set_value interacting false
-    | None -> () in
   let () = Utility.for_each !to_evaluate (evaluate_string_in prelude_envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
 

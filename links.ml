@@ -12,8 +12,6 @@ let print_value rtype value =
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
-
-
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, typingenv, nenv) (program, t) =
   (* TODO: the optimise part *)
@@ -28,8 +26,15 @@ let process_program ?(printer=print_value) (valenv, typingenv, nenv) (program, t
     (valenv, typingenv, nenv), v
 
 (* Read Links source code, then optimise and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) = 
-  handle_errors (measure "parse" parse (nenv, tyenv) ->- process_program envs)
+let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) =
+    handle_errors (measure "parse" parse (nenv, tyenv) ->- process_program envs)
+
+(* Read Links source code and pretty-print the IR *)
+let print_ir ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) =
+  let printer (valenv, typingenv, nenv) (program, t) =
+    print_endline (Ir.Show_program.show program ^ "\n");
+    print_endline (Ir.string_of_ir (Compileir.invert_env nenv) program) in
+  handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
 let run_file prelude envs filename =
   Settings.set_value interacting false;
@@ -43,7 +48,10 @@ let run_file prelude envs filename =
       failwith "not implemented web mode for the new IR yet"
       (*Webif.serve_request prelude envs filename*)
     else
-      ignore (evaluate parse_and_desugar envs filename)
+      if Settings.get_value pretty_print_ir then
+        print_ir parse_and_desugar envs filename
+      else
+        ignore (evaluate parse_and_desugar envs filename)
 
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s = 
@@ -56,7 +64,10 @@ let evaluate_string_in envs v =
       (program, t)
   in
     (Settings.set_value interacting false;
-     ignore (evaluate parse_and_desugar envs v))
+     if Settings.get_value pretty_print_ir then
+       print_ir parse_and_desugar envs v
+     else
+       ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () = 
   let (nenv, tyenv), ((bs, _), _) =
