@@ -21,8 +21,6 @@ type constant = Constant.constant
 type 'a expression' =
   | Constant of (constant * 'a)
   | Variable of (string * 'a)
-  | Abs of ('a expression' * 'a)
-  | App of ('a expression' * 'a expression' * 'a)
   | Apply of ('a expression' * 'a expression' list * 'a)
   | Condition of ('a expression' * 'a expression' * 'a expression' * 'a)
   | Comparison of ('a expression' * Syntaxutils.comparison * 'a expression' * 'a)

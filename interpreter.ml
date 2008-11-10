@@ -497,10 +497,6 @@ fun globals locals expr cont ->
   | Syntax.Variable(name, _) -> 
       let value = (lookup globals locals name) in
 	apply_cont globals cont value
-  | Syntax.Abs (f, _) ->
-      eval f (UnopApply (locals, Result.Abs)::cont)
-  | Syntax.App (f, p, _) ->
-      eval f (BinopRight (locals, `App, p)::cont)
   | Syntax.Abstr (variable, body, _) as f ->
       let value = `RecFunction([("_anon", f)],
                                retain (freevars body) locals,

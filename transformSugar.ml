@@ -22,19 +22,6 @@ let type_unary_op env tycon_env =
     | `Minus      -> datatype "(Int) -> Int"
     | `FloatMinus -> datatype "(Float) -> Float"
     | `Name n     -> TyEnv.lookup env n
-    | `Abs        -> 
-        (* forall (rho, mb, a, mb2).(((|rho)) -{mb}-> a) -{mb2}-> *(|rho) -{mb}-> a *)
-        let rhob, rho = Types.fresh_row_quantifier () in
-        let r = `Record (StringMap.empty, rho) in
-        let mb, m = Types.fresh_type_quantifier () in
-        let ab, a = Types.fresh_type_quantifier () in
-        let mb2, m2 = Types.fresh_type_quantifier () in
-          `ForAll
-            ([rhob; mb; ab; mb2],
-             `Function (Types.make_tuple_type [
-                          `Function (r, m, a)
-                        ], m2,
-                        `Function (r, m, a)))
 
 let type_binary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
@@ -67,19 +54,6 @@ let type_binary_op env tycon_env =
                  `Function (Types.make_tuple_type [a; a], m, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "send"
   | `Name n       -> TyEnv.lookup env n
-  | `App          -> 
-      (* forall (rho, m, a, mb2).((|rho) -{mb}-> a, (|rho)) -{mb2}-> a *)
-      let rhob, rho = Types.fresh_row_quantifier () in
-      let r = `Record (StringMap.empty, rho) in
-      let mb, m = Types.fresh_type_quantifier () in
-      let mb2, m2 = Types.fresh_type_quantifier () in
-      let ab, a = Types.fresh_type_quantifier () in
-        `ForAll
-          ([rhob; mb; ab; mb2],
-           `Function (Types.make_tuple_type [
-                        `Function (r, m, a);
-                        r],
-                      m2, a))
 
 let fun_mailbox t pss =
   let rec get_mb =

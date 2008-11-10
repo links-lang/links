@@ -53,7 +53,6 @@ type value =
   | `Comparison of (value * Syntaxutils.comparison * value)
 
   | `Coerce of (value * Types.datatype)
-  | `Abs of value
   ]
 and tail_computation =
   [ `Return of (value)
@@ -71,8 +70,7 @@ and binding =
   | `Alien of (binder * language)
   | `Module of (string * binding list option) ]
 and special =
-  [ `App of value * value
-  | `Wrong of Types.datatype
+  [ `Wrong of Types.datatype
   | `Database of value
   | `Query of SqlQuery.sqlQuery
   | `Table of (value * value * (Types.datatype * Types.datatype))
@@ -92,8 +90,7 @@ let rec is_atom =
     | `Constant (`Float _)
     | `Variable _ -> true
     | `Erase (_, v)
-    | `Coerce (v, _)
-    | `Abs v -> is_atom v
+    | `Coerce (v, _) -> is_atom v
     | _ -> false
 
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
@@ -205,7 +202,6 @@ object (o : 'self_type)
       | `Comparison (v1, cmp, v2) -> 
           group (o#value v1 ^| o#comparison cmp ^| o#value v2)
       | `Coerce _ -> text "COERCE"
-      | `Abs _ -> text "ABS"
           
   method tail_computation : tail_computation -> doc = fun tc ->
     match tc with
@@ -446,9 +442,6 @@ struct
             let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
               `Coerce (v, t), t, o
-        | `Abs v ->
-            let v, t, o = o#value v in
-              `Abs v, abs_type t, o
 
     method tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) =
@@ -495,10 +488,6 @@ struct
                  
     method special : special -> (special * datatype * 'self_type) =
       function
-        | `App (v, w) ->
-            let v, vt, o = o#value v in
-            let w, wt, o = o#value w in
-              `App (v, w), app_type vt wt, o
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
             let v, _, o = o#value v in

@@ -38,7 +38,6 @@ class map =
       | `Minus -> `Minus
       | `FloatMinus -> `FloatMinus
       | `Name _x -> let _x = o#name _x in `Name _x
-      | `Abs -> `Abs
 
     method tyunary_op : tyarg list * unary_op -> tyarg list * unary_op =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
@@ -442,7 +441,6 @@ class map =
       | (#logical_binop as x) -> (o#logical_binop x :> binop)
       | `Cons -> `Cons
       | `Name _x -> let _x = o#name _x in `Name _x
-      | `App -> `App
       
     method tybinop : tyarg list * binop -> tyarg list * binop =
       fun (_x, _x_i1) -> (_x, o#binop _x_i1)
@@ -529,7 +527,6 @@ class fold =
       | `Minus -> o
       | `FloatMinus -> o
       | `Name _x -> let o = o#name _x in o
-      | `Abs -> o
       
     method tyunary_op : tyarg list * unary_op -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
@@ -878,7 +875,6 @@ class fold =
       | (#logical_binop as x) -> o#logical_binop x
       | `Cons -> o
       | `Name _x -> let o = o#name _x in o
-      | `App -> o
       
     method tybinop : tyarg list * binop -> 'self_type =
       fun (_x, _x_i1) -> o#binop _x_i1
@@ -979,7 +975,6 @@ class fold_map =
       | `Minus -> (o, `Minus)
       | `FloatMinus -> (o, `FloatMinus)
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
-      | `Abs -> (o, `Abs)
       
     method tyunary_op : tyarg list * unary_op -> 'self_type * (tyarg list * unary_op) =
       fun (_x, _x_i1) ->
@@ -1413,7 +1408,6 @@ class fold_map =
       | (#logical_binop as x) -> (o#logical_binop x :> 'self_type * binop)
       | `Cons -> (o, `Cons)
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
-      | `App -> (o, `App)
       
     method tybinop : tyarg list * binop -> 'self_type * (tyarg list * binop) =
       fun (_x, _x_i1) ->

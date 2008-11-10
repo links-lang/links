@@ -45,28 +45,6 @@ let rec type_check : typing_environment -> untyped_expression -> expression =
   | Constant (value, `U pos) -> Constant (value, `T (pos, Constant.constant_type value, None))
   | Variable (name, `U pos) ->
       Variable (name, `T (pos, instantiate env name, None))
-  | Abs (f, `U pos) ->
-      let f = type_check typing_env f
-      and arg_type = `Record (make_empty_open_row ()) 
-      and result_type = fresh_type_variable ()
-      and mb_type = fresh_type_variable () in
-        unify (type_of_expression f, 
-               `Function (make_tuple_type [arg_type], 
-                          mb_type, 
-                          result_type));
-        let etype =  `Function (arg_type, mb_type, result_type) in
-        Abs (f, `T (pos, etype, None))
-  | App (f, p, `U pos) ->
-      let f = type_check typing_env f
-      and p = type_check typing_env p 
-      and result_type = fresh_type_variable ()
-      and mb_type = instantiate env "_MAILBOX_" 
-      in
-        (* not really necessary, but might catch some errors *) 
-        unify (type_of_expression p, `Record (make_empty_open_row ())); 
-        unify (type_of_expression f,
-               `Function (type_of_expression p, mb_type, result_type));
-        App (f, p, `T (pos, result_type, None))
   | Apply (f, ps, `U pos) ->
       let f = type_check typing_env f in
       let ps = List.map (type_check typing_env) ps in

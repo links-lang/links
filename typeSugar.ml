@@ -694,29 +694,6 @@ let type_unary_op env =
   | `Minus      -> datatype "(Int) -> Int"
   | `FloatMinus -> datatype "(Float) -> Float"
   | `Name n     -> Utils.instantiate env.var_env n
-  | `Abs        ->
-      (* forall (rho, mb, a, mb2).(((|rho)) -{mb}-> a) -{mb2}-> *(|rho) -{mb}-> a *)
-      let rho = Types.fresh_row_variable () in
-      let row = (StringMap.empty, rho) in
-      let mb = Types.fresh_type_variable () in
-      let a = Types.fresh_type_variable () in
-      let mb2 = Types.fresh_type_variable () in
-        ([`Row row; `Type mb; `Type a; `Type mb2],
-         `Function (Types.make_tuple_type [
-                      `Function (Types.make_tuple_type [`Record row], mb, a)
-                    ], mb2,
-                    `Function (`Record row, mb, a)))
-(*
-      let mb = Types.fresh_type_variable ()
-      and mb2 = Types.fresh_type_variable ()
-      and rv = Types.fresh_type_variable ()
-      and arg = Types.fresh_type_variable () in
-        ([`Type mb; `Type rv; `Type mb2; `Type arg],
-         `Function (Types.make_tuple_type [
-                      `Function (Types.make_tuple_type [arg], mb, rv)
-                    ], mb2,
-                    `Function (arg, mb, rv)))
-*)
 
 let type_binary_op ctxt = 
   let datatype = datatype ctxt.tycon_env in function
@@ -749,29 +726,6 @@ let type_binary_op ctxt =
          `Function (Types.make_tuple_type [a; a], mb, `Primitive `Bool))
   | `Name "!"     -> Utils.instantiate ctxt.var_env "send"
   | `Name n       -> Utils.instantiate ctxt.var_env n
-  | `App          -> 
-      (* forall (rho, m, a, mb2).((|rho) -{mb}-> a, (|rho)) -{mb2}-> a *)
-      let rho = Types.fresh_row_variable () in
-      let row = (StringMap.empty, rho) in
-      let mb = Types.fresh_type_variable () in
-      let mb2 = Types.fresh_type_variable () in
-      let a = Types.fresh_type_variable () in
-        ([`Row row; `Type mb; `Type a; `Type mb2],
-         `Function (Types.make_tuple_type [
-                      `Function (`Record row, mb, a);
-                      `Record row],
-                    mb2, a))
-(*
-      let tup = `Record (Types.make_empty_open_row ())
-      and mb = Types.fresh_type_variable ()
-      and mb2 = Types.fresh_type_variable ()
-      and rv = Types.fresh_type_variable () in
-        ([`Type tup; `Type mb; `Type rv; `Type mb2],
-         `Function (Types.make_tuple_type [
-                      `Function (tup, mb, rv);
-                      tup],
-                    mb2, rv))
-*)
 
 (** close a pattern type relative to a list of patterns
 

@@ -19,13 +19,12 @@ type unary_op = [
 | `Minus
 | `FloatMinus
 | `Name of name
-| `Abs
 ]
 and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
     deriving (Show)
 type logical_binop = [`And | `Or ]
     deriving (Show)
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name | `App ]
+type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
 deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
 deriving (Show)
@@ -35,7 +34,6 @@ let string_of_unary_op =
     | `Minus -> "-"
     | `FloatMinus -> ".-"
     | `Name name -> name
-    | `Abs -> "abs"
 
 let string_of_binop =
   function

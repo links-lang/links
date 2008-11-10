@@ -107,9 +107,6 @@ sig
   val constant : constant -> value sem
   val var : (var * datatype) -> value sem
 
-  val abs : value sem -> value sem
-  val app : value sem * value sem -> tail_computation sem
-
   val escape : (var_info * Types.datatype * (var -> tail_computation sem)) -> tail_computation sem
 
   val tappl : (value sem * Types.type_arg list) -> value sem
@@ -331,14 +328,6 @@ struct
   (* eval parameters *)
   let constant c = lift (`Constant c, Constant.constant_type c)
   let var (x, t) = lift (`Variable x, t)
-  let abs s = bind s (fun v -> lift (`Abs v, sem_type s))
-  let app (s1, s2) =
-    let t = TypeUtils.return_type (sem_type s1) in
-      bind s1
-        (fun v1 ->
-           bind s2
-             (fun v2 ->
-                lift (`Special (`App (v1, v2)), t)))
         
   let apply (s, ss) =
 (*     Debug.print ("sem_type s: "^Types.string_of_datatype (sem_type s)); *)
@@ -647,7 +636,6 @@ struct
               I.condition (ev e1, ec e2, cofv (I.constant (`Bool false)))
           | `InfixAppl ((_tyargs, `Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2)
-          | `InfixAppl ((_tyargs, `App), e1, e2) -> I.app (ev e1, ev e2)
           | `UnaryAppl ((_tyargs, `Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | `UnaryAppl ((_tyargs, `FloatMinus), e) ->
@@ -656,7 +644,6 @@ struct
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | `UnaryAppl ((tyargs, `Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | `UnaryAppl ((_tyargs, `Abs), e) -> cofv (I.abs (ev e))
           | `FnAppl ((`Var f, _), es) when Library.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Library.is_pure_primitive f ->

@@ -46,7 +46,6 @@ type value =
   | `Comparison of value * Syntaxutils.comparison * value    (* should really be implemented as constants *)
 
   | `Coerce of value * Types.datatype
-  | `Abs of value
   ]
 and tail_computation =
   [ `Return of value
@@ -62,8 +61,7 @@ and binding =
   | `Alien of binder * language
   | `Module of (string * binding list option) ]
 and special =
-  [ `App of value * value
-  | `Wrong of Types.datatype
+  [ `Wrong of Types.datatype
   | `Database of value
   | `Query of SqlQuery.sqlQuery
   | `Table of value * value * (Types.datatype * Types.datatype)

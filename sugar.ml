@@ -971,7 +971,6 @@ module Desugarer =
            | `InfixAppl ((_, `Minus), e1, e2)  -> appPrim "-" [desugar e1; desugar e2]
            | `InfixAppl ((_, `And), e1, e2) -> Condition (desugar e1, desugar e2, Constant(`Bool false, pos), pos)
            | `InfixAppl ((_, `Or), e1, e2)  -> Condition (desugar e1, Constant(`Bool true, pos), desugar e2, pos)
-           | `InfixAppl ((_, `App), e1, e2) -> App (desugar e1, desugar e2, pos)
            | `InfixAppl ((_, `RegexMatch _), _, _) -> failwith "regex found after regex desugaring"
            | `ConstructorLit (name, None, _) -> Variant_injection (name, unit_expression pos, pos)
            | `ConstructorLit (name, Some s, _) -> Variant_injection (name, desugar s, pos)
@@ -1011,7 +1010,6 @@ module Desugarer =
            | `UnaryAppl ((_, `Minus), e)      -> appPrim "negate" [desugar e]
            | `UnaryAppl ((_, `FloatMinus), e) -> appPrim "negatef" [desugar e]
            | `UnaryAppl ((_, `Name n), e) -> appPrim n [desugar e]
-           | `UnaryAppl ((_, `Abs), e) -> Abs (desugar e, pos)
            | `RangeLit (lo, hi) -> Apply(Variable("intRange", pos),
                                          [desugar lo; desugar hi], pos)
            | `ListLit  ([], _) -> Nil (pos)

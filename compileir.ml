@@ -38,8 +38,6 @@ sig
 
   val constant : (constant * datatype) -> value sem
   val var : (var * datatype) -> value sem
-  val abs : value sem -> value sem
-  val app : value sem * value sem * datatype -> tail_computation sem
   val apply : (value sem * (value sem) list * datatype) -> tail_computation sem
   val apply_pure : (value sem * (value sem) list * datatype) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
@@ -264,13 +262,6 @@ struct
   (* eval parameters *)
   let constant (c, t) = lift (`Constant c, t)
   let var (x, t) = lift (`Variable x, t)
-  let abs s = bind s (fun v -> lift (`Abs v, sem_type s))
-  let app (s1, s2, t) =
-    bind s1
-      (fun v1 ->
-         bind s2
-           (fun v2 ->
-              lift (`Special (`App (v1, v2)), t)))
 
   let apply (s, ss, t) =
     let ss = lift_list ss
@@ -458,8 +449,6 @@ struct
       match e with
         | Constant (c, _) -> cofv (I.constant (c, t))
         | Variable (x, _) -> cofv (I.var (VEnv.lookup env x, t))
-        | Abs (e, _) -> cofv (I.abs (ev e))
-        | App (e1, e2, _) -> I.app (ev e1, ev e2, t)
         | Apply (Variable (f, _) as e, es, _)
             when (Library.is_pure_primitive f)
               -> cofv (I.apply_pure(I.var (VEnv.lookup env f, node_datatype e), evs es, t))

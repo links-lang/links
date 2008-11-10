@@ -50,7 +50,7 @@ let datatype d = d, None
 
 %token END
 %token EQ IN 
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP
+%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -324,7 +324,6 @@ unary_expression:
 | MINUS unary_expression                                       { `UnaryAppl (([], `Minus),      $2), pos() }
 | MINUSDOT unary_expression                                    { `UnaryAppl (([], `FloatMinus), $2), pos() }
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
-| ABS unary_expression                                         { `UnaryAppl (([], `Abs), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
@@ -415,7 +414,6 @@ infixl_1:
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 APP       infixl_1                                  { `InfixAppl (([], `App), $1, $3), pos() }
 | infixl_1 INFIX0    infixl_1                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 | infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
