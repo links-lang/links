@@ -198,9 +198,11 @@ object (o : 'self_type)
       | `TApp (v, ts) -> o#value v
       | `XmlNode _ -> text "XMLNODE"
       | `ApplyPure (v, vl) ->
-          group (parens (o#value v ^| (doc_join o#value vl)))
+          group (nest 2 (parens (o#value v ^| (doc_join o#value vl))))
       | `Comparison (v1, cmp, v2) -> 
-          group (o#value v1 ^| o#comparison cmp ^| o#value v2)
+          group (
+            nest 2 (
+              group (o#value v1 ^| o#comparison cmp) ^| o#value v2))
       | `Coerce _ -> text "COERCE"
           
   method tail_computation : tail_computation -> doc = fun tc ->
@@ -208,67 +210,79 @@ object (o : 'self_type)
         `Return v -> o#value v
 
       | `Apply (v, vl) -> 
-          group (o#value v ^| (doc_join o#value vl))
+          group (nest 2 (o#value v ^| (doc_join o#value vl)))
 
       | `Case (v, names, opt) ->
           let cases = 
-            StringMap.fold 
+            StringMap.fold
               (fun n (b, c) d -> 
                  let o = o#add_bindings [b] in
-                   group (text n ^| o#binder b ^| text "->") ^| 
-                       o#computation c ^| d)
+                   group (
+                     nest 2 (
+                       group (text n^^parens (o#binder b) ^| text "->") ^| 
+                           o#computation c)) ^| d)
               names empty in
-          let comp = 
+          let default =
             match opt with
-              | None -> empty
+                None -> empty
               | Some (b, c) ->
-                  let o = o#add_bindings [b] in
-                    group (text "let" ^| o#binder b ^| text "=" 
-                             ^| o#value v ^| text "in") ^| 
-                        o#computation c in
+                  group (
+                    nest 2 (
+                      group (o#binder b) ^| text "->") ^|
+                        o#computation c) in
             group (
-              nest 2 (group (
-                        group (text "match" ^| o#value v ^| text "with") ^| 
-                            nest 2  (group cases))) ^|
-                  group (comp))
+              nest 2 (
+                group (text "case" ^| o#value v ^| text "of") ^|
+                    cases ^| default) ^| text "end")              
                 
       | `If (v, t, f) ->          
           group (
-            nest 2 (
-              group (text "if" ^| o#value v) ^|
-                  nest 2 (group (text "then" ^| o#computation t)) ^| 
-                      nest 2 (group (text "else" ^| o#computation f))))
+              group (
+                nest 2 (text "if" ^| o#value v) ^|
+                    group (nest 2 (text "then" ^| o#computation t)) ^|
+                        group (nest 2 (text "else" ^| o#computation f))))
                       
       | `Special v -> text "SPECIAL"
           
   method bindings : binding list -> 'self_type * doc = fun bs ->
-    List.fold_left
+    let (o, d) = List.fold_left
       (fun (o, accum_d) b -> let (o, d) = o#binding b in o, accum_d ^| d)
-      (o, empty) bs
+      (o, empty) bs in
+      (o, group(d))
 
   method computation : computation -> doc = fun (bs, tc) ->
-    let (o, d) = o#bindings bs in 
-      d ^| o#tail_computation tc
+    match bs with
+        [] -> o#tail_computation tc
+      | _ -> 
+          let (o, d) = o#bindings bs in
+            group ( 
+              nest 2 (text "let" ^| d) ^| 
+                  nest 2 (text "in"  ^| o#tail_computation tc))
 
   method binding : binding -> 'self_type * doc = fun b ->
     match b with
         `Let (x, (_, tc)) ->
           let o = o#add_bindings [x] in
-            o, group (text "let" ^| o#binder x ^|
-                 text "=" ^| group(o#tail_computation tc ^| text "in"))
+            o, group (
+              nest 2 (
+                group(text "val" ^| o#binder x ^| text "=") ^| 
+                    o#tail_computation tc))
                      
       | `Fun (binder, (_, f_binders, comp), loc) ->
-          let o = o#add_bindings f_binders in
-            o, nest 2 (group (
-              group (text "let" ^| o#binder binder ^| 
-                         doc_join o#binder f_binders ^| text "=") ^| 
-                  group(o#computation comp ^| text "in")))
+          let o = o#add_bindings (binder::f_binders) in
+            o, group (
+              nest 2 (
+                group (text "fun" ^| o#binder binder ^| 
+                           doc_join o#binder f_binders ^| text "=") ^| 
+                    o#computation comp))
               
-      | `Rec funs -> 
+      | `Rec funs ->
           let o = o#add_bindings (List.map fst3 funs) in
           let (_, docs) = o#bindings (List.map (fun x -> `Fun x) funs) in
-            o, docs
-            
+            o, group (
+              nest 2 (text "rec" ^| docs) ^| 
+                  text "end")
+
       | `Alien _ -> o, text "ALIEN"
       | `Module _ -> o, text "MODULE"
 
