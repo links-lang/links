@@ -159,8 +159,6 @@ let bump_lines lexbuf n =
 let count_newlines = StringUtils.count '\n'
 
 let keywords = [
- "abs"      , ABS;
- "app"      , APP;
  "alien"    , ALIEN;
  "as"       , AS;
  "case"     , CASE;
