@@ -217,10 +217,10 @@ object (o : 'self_type)
             StringMap.fold
               (fun n (b, c) d -> 
                  let o = o#add_bindings [b] in
-                   group (
+                   d ^| group (
                      nest 2 (
                        group (text n^^parens (o#binder b) ^| text "->") ^| 
-                           o#computation c)) ^| d)
+                           o#computation c)))
               names empty in
           let default =
             match opt with
