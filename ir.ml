@@ -165,7 +165,7 @@ object (o : 'self_type)
       | `Bool x -> string_of_bool x
       | `Int x -> Num.string_of_num x
       | `Char x -> "'" ^ Char.escaped x ^ "'"
-      | `String x -> "\"" ^ x ^ "\""
+      | `String x -> "\"" ^ String.escaped x ^ "\""
       | `Float x -> string_of_float x
     in text s
 
@@ -183,7 +183,8 @@ object (o : 'self_type)
 
       | `Extend (r, v) ->
           (let r_doc = doc_concat (text "," ^^ break)
-             (StringMap.to_list (fun n v -> text n ^| text "=" ^| o#value v) r) in
+             (StringMap.to_list 
+                (fun n v -> group(text n ^| text "=" ^| o#value v)) r) in
              match v with
                  None -> group (parens (r_doc))
                | Some v -> 
@@ -191,9 +192,8 @@ object (o : 'self_type)
                                       group (o#value v))))
 
       | `Project (n, v) -> group (o#value v ^^ text "." ^^ text n)
-
       | `Erase (n, v) -> parens (group (o#value v ^^ text "\\" ^^ text n))
-      | `Inject _ -> text "INJECT"
+      | `Inject (n, v, _) -> group (text n ^^ parens(o#value v))
       | `TAbs _ -> text "TABS"
       | `TApp (v, ts) -> o#value v
       | `XmlNode _ -> text "XMLNODE"
@@ -236,11 +236,10 @@ object (o : 'self_type)
                     cases ^| default) ^| text "end")              
                 
       | `If (v, t, f) ->          
-          group (
               group (
                 nest 2 (text "if" ^| o#value v) ^|
-                    group (nest 2 (text "then" ^| o#computation t)) ^|
-                        group (nest 2 (text "else" ^| o#computation f))))
+                    nest 2 (text "then" ^| o#computation t) ^|
+                        nest 2 (text "else" ^| o#computation f))
                       
       | `Special v -> text "SPECIAL"
           
