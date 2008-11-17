@@ -1,4 +1,4 @@
-let show_json = Settings.add_bool("show_json", false, `User)
+let show_json = Settings.add_bool("show_json_old", false, `User)
 
 (*
   [REMARK][SL]
@@ -9,7 +9,7 @@ let show_json = Settings.add_bool("show_json", false, `User)
 *)
 let json_of_db (db, params) =
   let driver = db#driver_name() in
-  let (name, args) = Value.parse_db_string params in
+  let (name, args) = Result.parse_db_string params in
     "{_db:{driver:\"" ^ driver ^ "\",name:\"" ^ name ^ "\", args:\"" ^ args ^ "\"}}"
 
 (*
@@ -42,21 +42,21 @@ let jscharlist_of_string s =
   ^"]"
 
 let rec json_of_xmlitem = function
-  | Value.Text s ->
+  | Result.Text s ->
       "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
-  | Value.Node (tag, xml) ->
+  | Result.Node (tag, xml) ->
       let attrs, body =
         List.fold_right (fun xmlitem (attrs, body) ->
                            match xmlitem with
-                             | Value.Attr (label, value) ->
+                             | Result.Attr (label, value) ->
                                  ("\"" ^label ^ "\" : " ^ jscharlist_of_string(value)) :: attrs, body
                              | _ -> attrs, (json_of_xmlitem xmlitem) :: body) xml ([], [])
       in
         "[\"ELEMENT\",\"" ^ tag ^ "\",{" ^ String.concat "," attrs
         ^"},[" ^ String.concat "," body ^ "]]"
-  | Value.Attr _ -> assert false
+  | Result.Attr _ -> assert false
 
-let jsonize_primitive : Value.primitive_value -> string = function
+let jsonize_primitive : Result.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
@@ -69,37 +69,37 @@ let jsonize_primitive : Value.primitive_value -> string = function
   | `XML xmlitem -> json_of_xmlitem xmlitem
   | `NativeString _ -> failwith "Can't yet jsonize NativeString"
 
-let rec jsonize_value : Value.t -> string = function
+let rec jsonize_result : Result.result -> string = function
   | `PrimitiveFunction _
   | `ClientFunction _
   | `Continuation _
   | `RecFunction _ as r ->
-      prerr_endline ("Can't yet jsonize " ^ Value.string_of_value r); ""
-  | #Value.primitive_value as p -> jsonize_primitive p
-  | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
-  | `Record fields -> "{" ^ String.concat "," (List.map (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields) ^ "}"
+      prerr_endline ("Can't yet jsonize " ^ Result.string_of_result r); ""
+  | #Result.primitive_value as p -> jsonize_primitive p
+  | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_result value)
+  | `Record fields -> "{" ^ String.concat "," (List.map (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_result v) fields) ^ "}"
   | `List [] -> "[]"
   | `List (elems) ->
-      "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
+      "[" ^ String.concat "," (List.map jsonize_result elems) ^ "]"
 
-let encode_continuation (cont : Value.continuation) : string =
+let encode_continuation (cont : Result.continuation) : string =
   Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
 
-let jsonize_value value = 
+let jsonize_result result = 
   Debug.if_set show_json
-    (fun () -> "jsonize_value => " ^ Value.string_of_value value);
-  let rv = jsonize_value value in
+    (fun () -> "jsonize_result => " ^ Result.string_of_result result);
+  let rv = jsonize_result result in
     Debug.if_set show_json
-      (fun () -> "jsonize_value <= " ^ rv);
+      (fun () -> "jsonize_result <= " ^ rv);
     rv
 
 let rec jsonize_call continuation name args = 
   Printf.sprintf 
     "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
     (encode_continuation continuation) name 
-    (String.concat ", " (List.map jsonize_value args))
+    (String.concat ", " (List.map jsonize_result args))
 
 let parse_json str =
-  Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
+  Oldjsonparse.parse_json Oldjsonlex.jsonlex (Lexing.from_string str)
 
 let parse_json_b64 str = parse_json(Utility.base64decode str)

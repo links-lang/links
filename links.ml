@@ -4,7 +4,6 @@ open Utility
 open List
 open Basicsettings
 
-
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value = 
   print_string (Value.string_of_value value);
@@ -39,14 +38,25 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs
 let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
-    let (nenv, tyenv), (program, t) =
+    let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename
     in
-      (program, t)
+      ((globals @ locals, main), t)
   in
-    if Settings.get_value web_mode then 
-      failwith "not implemented web mode for the new IR yet"
-      (*Webif.serve_request prelude envs filename*)
+    if Settings.get_value web_mode then
+      let (valenv, tyenv, nenv) = envs in
+      let (nenv', tyenv'), (globals, (locals, main), _t) =
+        Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
+      let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) (globals @ locals, main) in
+
+      let valenv = Evalir.run_defs (Value.with_closures valenv closures) globals in
+
+      let envs =
+        (valenv,
+         Env.String.extend nenv nenv',
+         Types.extend_typing_environment tyenv tyenv')
+      in
+        Webif.serve_request envs (prelude @ globals, (locals, main))
     else
       if Settings.get_value pretty_print_ir then
         print_ir parse_and_desugar envs filename
@@ -60,8 +70,8 @@ let evaluate_string_in envs v =
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
-    let program, _nenv = Sugartoir.desugar_program (nenv, tenv) program in
-      (program, t)
+    let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv) program in
+      ((globals @ locals, main), t)
   in
     (Settings.set_value interacting false;
      if Settings.get_value pretty_print_ir then
@@ -70,7 +80,7 @@ let evaluate_string_in envs v =
        ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () = 
-  let (nenv, tyenv), ((bs, _), _) =
+  let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
        Loader.load_file (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)) in
   let () = Lib.prelude_env := Some tyenv in
@@ -81,13 +91,14 @@ let load_prelude () =
         - run the prelude (need to implement evalir first)
     *)
 
-  let valenv = Evalir.run_defs IntMap.empty bs in
+  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) globals in
+  let valenv = Evalir.run_defs (Value.with_closures Value.empty_env closures) globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
      Types.extend_typing_environment Lib.typing_env tyenv)
   in
-    bs, envs
+    globals, envs
 
 let to_evaluate = Oldlinks.to_evaluate
 let config_file = Oldlinks.config_file
@@ -107,7 +118,7 @@ let main () =
 
   if Settings.get_value ir then
     begin
-      let prelude, (valenv, nenv, tyenv) = load_prelude() in
+      let prelude, (valenv, nenv, tyenv) = load_prelude () in
 
       let envs = (valenv, tyenv, nenv) in
       

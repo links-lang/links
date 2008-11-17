@@ -30,6 +30,8 @@ type constant = Constant.constant
 
 type location = Syntax.location
 
+(* INVARIANT: all IR binders should have unique names *)
+
 type value =
   [ `Constant of constant
   | `Variable of var
@@ -123,6 +125,8 @@ sig
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
+
+    method get_type_environment : environment
   end  
 end
 
@@ -136,4 +140,18 @@ end
 module ElimDeadDefs :
 sig
   val program : Types.datatype Env.Int.t -> program -> program
+end
+
+type closures = Utility.intset Utility.intmap
+    deriving (Show, Pickle)
+
+module ClosureTable :
+sig
+  type t = closures
+
+  val value : Types.datatype Env.Int.t -> value -> t
+  val tail_computation : Types.datatype Env.Int.t -> tail_computation -> t
+  val computation : Types.datatype Env.Int.t -> computation -> t
+  val bindings : Types.datatype Env.Int.t -> binding list -> t
+  val program : Types.datatype Env.Int.t -> program -> t
 end

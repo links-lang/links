@@ -175,6 +175,29 @@ struct
          [v])
 end
 open CompileLists
+
+module CompileEq :
+sig
+  val eq : raw_env -> Types.datatype -> value -> value -> value
+end
+  =
+struct
+  let lookup_type var (_nenv, tenv) =
+    TEnv.lookup tenv var
+      
+  let lookup_name name (nenv, _tenv) =
+    NEnv.lookup nenv name
+
+  let eq env t : value -> value -> value = fun v1 v2 ->
+    let mbt = lookup_type (lookup_name "_MAILBOX_" env) env in
+      `ApplyPure
+        (`TApp
+           (`Variable (lookup_name "==" env),
+            [`Type t; `Type mbt]),
+         [v1; v2])
+end
+open CompileEq
+
   
 let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
   
@@ -195,16 +218,16 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
     let rec lp t pat value body =
       match pat with
         | `Nil ->
-            [], `If(`Comparison(value, `Equal, nil env (TypeUtils.element_type t)),
-                       body,
-                       ([], `Special (`Wrong body_type)))
+            [], `If (eq env t value (nil env (TypeUtils.element_type t)),
+                     body,
+                     ([], `Special (`Wrong body_type)))
         | `Cons (head, tail) ->
             let xt = TypeUtils.element_type t in
             let xst = t in
             let xb, x = Var.fresh_var_of_type xt in
             let xsb, xs = Var.fresh_var_of_type xst in             
               with_bindings
-                [letm (xb, list_tail env xt value); letm (xsb, list_head env xt value)]
+                [letm (xb, list_head env xt value); letm (xsb, list_tail env xt value)]
                 (lp xt head (`Variable x) (lp xst tail (`Variable xs) body))
         | `Variant (name, patt) ->
             let case_type = TypeUtils.variant_at name t in
@@ -235,9 +258,9 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
                 fields
                 body
         | `Constant c ->
-            [], `If(`Comparison(value, `Equal, `Constant c),
-                    body,
-                    ([], `Special (`Wrong body_type)))
+            [], `If (eq env t value (`Constant c),
+                     body,
+                     ([], `Special (`Wrong body_type)))
         | `Any -> body
         | `Variable xb ->
             with_bindings
@@ -500,9 +523,10 @@ and match_list
           | `Cons, _ -> cons_branch ()
           | _ -> assert false
       else
-        ([], `If (`Comparison (var_val, `Equal, nil),
-                  nil_branch (),
-                  cons_branch()))
+        let (nenv, tenv, _) = env in
+          ([], `If (eq (nenv, tenv) t var_val nil,
+                    nil_branch (),
+                    cons_branch()))
 
 
 (*
@@ -657,6 +681,7 @@ and match_negative
 and match_constant
     : var list -> (annotated_clause list) ConstMap.t -> bound_computation -> var -> bound_computation =
   fun vars bs def var env ->
+    let t = lookup_type var env in
     let context, cexp =
       if mem_context var env then
         lookup_context var env
@@ -683,11 +708,12 @@ and match_constant
                    let env = bind_context var (`NConstant constants, `Variable var) env in
                    let clauses = apply_annotations (`Variable var) annotated_clauses in
                    let comp =
-                     ([],
-                      `If 
-                        (`Comparison (`Variable var, `Equal, `Constant constant),
-                         match_cases vars clauses def env,
-                         comp))
+                     let (nenv, tenv, _) = env in
+                       ([],
+                        `If 
+                          (eq (nenv, tenv) t (`Variable var) (`Constant constant),
+                           match_cases vars clauses def env,
+                           comp))
                    in
                      (comp, constants))              
                 bs

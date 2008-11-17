@@ -30,14 +30,19 @@ struct
       ->- RefineBindings.refine_bindings#program
       ->- DesugarDatatypes.program tyenv.Types.tycon_env
       ->- TypeSugar.Check.program tyenv
+      ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
       ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#program ->- snd3)
       ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-      ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-      program
+      ->- after_typing
+        (if Settings.get_value Basicsettings.ir then
+           (DesugarFuns.desugar_funs tyenv)#program ->- snd3
+         else
+           fun x -> x))
+        program
 
   let interactive =
     fun tyenv pos_context ->
@@ -46,11 +51,16 @@ struct
       ->- RefineBindings.refine_bindings#sentence
       ->- DesugarDatatypes.sentence tyenv
       ->- uncurry TypeSugar.Check.sentence
+      ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
-      ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd))
+      ->- after_typing
+        (if Settings.get_value Basicsettings.ir then
+           (DesugarFuns.desugar_funs tyenv)#sentence ->- snd
+         else
+           fun x -> x))
 end

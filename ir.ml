@@ -139,7 +139,9 @@ sig
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
-  end  
+
+    method get_type_environment : environment
+  end
 end
 
 let doc_concat sep l =
@@ -308,26 +310,7 @@ struct
 
   let info_type (t, _, _) = t
 
-  (*
-    HACK:
-
-    The ir_ignore_type_errors setting tries to ignore any type errors
-    during type deconstruction. It is only necessary because the
-    optimisations on Syntax.expression don't maintain type correctness.
-
-    In fact, now that it is possible to run type inference after
-    optimisation (to restore type correctness), this setting is
-    unnecessary.
-  *)
-  let ignore_type_errors = Settings.add_bool("ir_ignore_type_errors", false, `User)
-  let deconstruct f t =
-    if not (Settings.get_value ignore_type_errors) then
-      f t
-    else
-      try
-        f t
-      with
-          TypeDestructionError _ -> t
+  let deconstruct f t = f t
 
   module Env = Env.Int
 
@@ -429,6 +412,7 @@ struct
             let t = Types.for_all (tyvars, t) in
               `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
+(*             Debug.print ("tapp: "^Show_value.show (`TApp (v, ts))); *)
             let v, t, o = o#value v in
             let t = Instantiate.apply_type t ts in
               `TApp (v, ts), t, o
@@ -609,6 +593,8 @@ struct
 (*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
+
+    method get_type_environment : environment = tyenv
   end
 end
 
@@ -891,4 +877,139 @@ struct
     let p, _, _ = (eliminator tyenv envs)#computation p in
 (*      Debug.print ("after elim dead defs: " ^ Show_computation.show p);*)
       p
+end
+
+(* Compute free variables *)
+module FreeVars =
+struct
+  class visitor tenv =
+  object (o)
+    inherit Transform.visitor(tenv) as super
+      
+    val free_vars = IntSet.empty
+    val bound_vars = IntSet.empty
+
+    method bound x =
+      {< bound_vars = IntSet.add x bound_vars >}
+
+    method free x =
+      if IntSet.mem x bound_vars then o
+      else {< free_vars = IntSet.add x free_vars >}
+
+    method binder =
+      fun b ->
+        let b, o = super#binder b in
+          b, o#bound (Var.var_of_binder b)
+            
+    method var =
+      fun x ->
+        let x, t, o = super#var x in
+          x, t, o#free x
+            
+    method get_free_vars = free_vars
+  end
+
+  let value tyenv v =
+    let _, _, o = (new visitor tyenv)#value v in
+      o#get_free_vars
+
+  let tail_computation tyenv e =
+    let _, _, o = (new visitor tyenv)#tail_computation e in
+      o#get_free_vars
+
+  let bindings tyenv bs =
+    let _, o = (new visitor tyenv)#bindings bs in
+      o#get_free_vars
+
+  let computation tyenv e =
+    let _, _, o = (new visitor tyenv)#computation e in
+      o#get_free_vars
+
+  let program = computation
+end
+
+(* The closures type represents the set of free variables of a
+collection of functions *)
+type closures = intset intmap
+    deriving (Show, Pickle)
+
+(* Compute the closures in an IR expression *)
+module ClosureTable =
+struct
+  type t = closures
+
+  class visitor tyenv =
+  object (o)
+    inherit Transform.visitor(tyenv) as super
+      
+    val relevant_vars = IntMap.empty
+
+    method close f vars =
+      {< relevant_vars = IntMap.add (Var.var_of_binder f) vars relevant_vars >}
+
+    method binding b =
+      match b with
+        | `Fun (f, (tyvars, xs, body), location) ->             
+            let xs, body, o =
+              let (xs, o) =
+                List.fold_right
+                  (fun x (xs, o) ->
+                     let x, o = o#binder x in
+                       (x::xs, o))
+                  xs
+                  ([], o) in
+              let o = o#close f (FreeVars.computation o#get_type_environment body) in
+              let body, _, o = o#computation body in
+                xs, body, o in
+            let f, o = o#binder f in
+              `Fun (f, (tyvars, xs, body), location), o
+        | `Rec defs ->
+            let _, o =
+              List.fold_right
+                (fun (f, _, _) (fs, o) ->
+                   let f, o = o#binder f in
+                     (f::fs, o))
+                defs
+                ([], o) in
+
+            let defs, o =
+              List.fold_left
+                (fun (defs, o) (f, (tyvars, xs, body), location) ->
+                   let xs, o =
+                     List.fold_right
+                       (fun x (xs, o) ->
+                          let (x, o) = o#binder x in
+                            (x::xs, o))
+                       xs
+                       ([], o) in
+                   let o = o#close f (FreeVars.computation o#get_type_environment body) in
+                   let body, _, o = o#computation body in
+                     (f, (tyvars, xs, body), location)::defs, o)
+                ([], o)
+                defs in
+            let defs = List.rev defs in
+              `Rec defs, o
+        | _ -> super#binding b
+            
+    method get_relevant_vars = relevant_vars
+  end
+
+  let value tyenv v =
+    let _, _, o = (new visitor tyenv)#value v in
+      o#get_relevant_vars
+
+  let tail_computation tyenv e =
+    let _, _, o = (new visitor tyenv)#tail_computation e in
+      o#get_relevant_vars
+
+  let bindings tyenv bs =
+    let o = new visitor tyenv in
+    let _, o = o#bindings bs in
+      o#get_relevant_vars
+
+  let computation tyenv e =
+    let _, _, o = (new visitor tyenv)#computation e in
+      o#get_relevant_vars
+
+  let program = computation
 end

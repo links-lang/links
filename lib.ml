@@ -137,7 +137,8 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 
-  | `List _ as c -> `List [`XML (Text (charlist_as_string c))]
+  | `List _ as c ->
+      `List [`XML (Text (charlist_as_string c))]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
 let char_test_op fn pure = 
@@ -1020,7 +1021,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching *)
   ("tilde",
    (p2 (fun s r -> 
-          let regex = assert false (*Regex.compile_ocaml (Linksregex.Regex.ofLinks r)*)
+          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     datatype "(String, Regex) -> Bool",
@@ -1029,7 +1030,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
   ("ntilde",
    (p2 (fun s r -> 
-          let regex = assert false (*Regex.compile_ocaml (Linksregex.Regex.ofLinks r)*)
+          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
     datatype "(NativeString, Regex) -> Bool",
@@ -1038,7 +1039,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
     (`Server (p2 (fun s r ->
-        let (re, ngroups) = assert false (*(Linksregex.Regex.ofLinksNGroups r) *)
+        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = unbox_string s in
 	let regex = assert false (*Regex.compile_ocaml re*) in
 	match (Str.string_match regex string 0) with
@@ -1058,7 +1059,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("lntilde",	
    (`Server (p2 (fun s r ->
-        let (re, ngroups) = assert false (*(Linksregex.Regex.ofLinksNGroups r) *)
+        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	let regex = assert false (*Regex.compile_ocaml re *)in
 	match (Str.string_match regex string 0) with
@@ -1079,7 +1080,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace (l, t) = assert false (*Linksregex.Regex.ofLinks r*) in 
+	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = assert false (*Regex.compile_ocaml l, t*) in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
@@ -1088,8 +1089,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("sntilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = assert false (*Linksregex.Regex.ofLinks r *) in 
-	let (regex, tmpl) = assert false (*Regex.compile_ocaml l, t *) in
+	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
     datatype "(NativeString, Regex) -> NativeString",
@@ -1123,7 +1124,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "((a) -> b) -> String",
+    datatype "(() -> a) -> String",
     IMPURE));
 
   (* Serialize values to DB *)
@@ -1238,11 +1239,15 @@ let primitive_arity (name : string) =
   let _, t, _ = assoc name env in
     function_arity t
 
-let primitive_stub (var : Var.var): Value.t =
-  match Env.Int.lookup (!value_env) var with
-    | Some (#Value.t as r) -> r
-    | Some _ -> `PrimitiveFunction (primitive_name var)
-    | None  -> `ClientFunction (primitive_name var)
+let primitive_stub (name : string) : Value.t =
+  match Env.String.find nenv name with
+    | Some var ->
+        begin
+          match Env.Int.lookup (!value_env) var with
+            | Some (#Value.t as r) -> r
+            | _ -> `PrimitiveFunction name
+        end
+    | None  -> `ClientFunction name
 
 let apply_pfun name args = 
   match Env.Int.lookup (!value_env) (Env.String.lookup nenv name) with

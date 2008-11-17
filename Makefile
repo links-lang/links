@@ -97,6 +97,7 @@ SOURCES = $(OPC)                		\
           desugarDbs.mli desugarDbs.ml                  \
           desugarFuns.mli desugarFuns.ml                \
           desugarProcesses.mli desugarProcesses.ml      \
+          desugarInners.mli desugarInners.ml            \
           typeSugar.mli typeSugar.ml			\
           sugar.mli sugar.ml    		\
           frontend.ml                           \
@@ -104,25 +105,30 @@ SOURCES = $(OPC)                		\
           $(DB_CODE)            		\
           database.mli database.ml 		\
           inference.mli inference.ml 		\
-          jsonparse.mly         		\
-          jsonlex.mll           		\
-          json.ml               		\
-          linksregex.ml                         \
+          oldjsonparse.mly         		\
+          oldjsonlex.mll           		\
+          oldjson.ml               		\
+          oldlinksregex.ml                      \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
           var.ml                                \
           ir.mli ir.ml                          \
           compilePatterns.ml                    \
           value.mli value.ml                    \
+          jsonparse.mly         		\
+          jsonlex.mll           		\
+          json.ml                               \
           compileir.ml                          \
           sugartoir.mli sugartoir.ml            \
           oldloader.mli oldloader.ml            \
           loader.mli loader.ml                  \
           irtojs.mli irtojs.ml                  \
           interpreter.mli interpreter.ml 	\
+          linksregex.ml                         \
           lib.mli lib.ml                        \
           evalir.ml                             \
-          webif.mli webif.ml           	        \
+          oldwebif.mli oldwebif.ml           	\
+          webif.mli webif.ml                    \
           test.ml                               \
           tests.ml                              \
           sqlcompileTest.ml                     \

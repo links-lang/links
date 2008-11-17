@@ -135,7 +135,7 @@ type unop = MkColl
 		
 let string_of_unop = Show_unop.show
 
-type binop = [ `Union | `App | `RecExt of string | `MkTableHandle of Types.row 
+type binop = [ `Union | `RecExt of string | `MkTableHandle of Types.row 
              | Syntaxutils.comparison ]
                  deriving (Typeable, Show, Pickle, Eq, Shelve)
 
@@ -193,7 +193,6 @@ type result = [
                      string (* the distinguished func rep'd by this value *))
   | `Record of ((string * result) list)
   | `Variant of (string * result)
-  | `Abs of result
   | `List of (result list)
   | `Continuation of continuation
   |  primitive_value
@@ -314,16 +313,15 @@ and string_of_result : result -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `PrimitiveFunction (name) -> name
   | `ClientFunction (name) -> name
-  | `Abs result -> "abs " ^ string_of_result result
     (* Choose from fancy or simple printing of functions: *)
   | `RecFunction(defs, env, name) -> 
       if Settings.get_value(Basicsettings.printing_functions) then
         "{ " ^ (mapstrcat " "
                   (fun (name, Syntax.Abstr(formals, body, _)) ->
-                     "fun (" ^ String.concat "," formals ^ ") {" ^
+                     "fun " ^name ^ "(" ^ String.concat "," formals ^ ") {" ^
                        Syntax.string_of_expression body ^ "}")
                   defs) ^
-          " " ^ name ^ " }[" ^ string_of_environment env ^ "]"
+          " " ^ name ^ " }" (* "[" ^ string_of_environment env ^ "]" *)
       else
         "fun"
   | `Record fields ->
@@ -377,8 +375,6 @@ let rec map_result result_f expr_f contframe_f : result -> result = function
   | #primitive_value as x -> result_f x
   | `PrimitiveFunction (str) ->
       result_f (`PrimitiveFunction str)
-  | `Abs (result) ->
-      result_f (`Abs (map_result result_f expr_f contframe_f result))
   | `ClientFunction (str) ->
       result_f (`ClientFunction str)
   | `RecFunction (defs, env, name) ->
@@ -449,7 +445,6 @@ let rec extract_code_from_result : result -> 'a expression' list =
     | #primitive_value -> []
     | `PrimitiveFunction _ -> []
     | `ClientFunction _ -> []
-    | `Abs result -> extract_code_from_result result
     | `RecFunction (defs, locals, name) ->
         extract_code_from_env locals @ map snd defs
     | `Record fields -> concat_map (snd ->- extract_code_from_result) fields

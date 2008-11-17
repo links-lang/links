@@ -276,8 +276,12 @@ struct
   let shelve  _ = failwith "shelve stringmap nyi"
 end
 
+type intset = IntSet.t
+    deriving (Show)
 type 'a intmap = 'a IntMap.t
     deriving (Show)
+
+module Pickle_intset = Pickle.Pickle_unpicklable (struct type a = intset let tname ="intset" end)
 
 module Typeable_intmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a intmap = 
 Typeable.Typeable_defaults(struct
@@ -482,7 +486,7 @@ struct
   let map2alist f list = List.map (fun x -> (x, f x)) list
   let graph_func = map2alist
 
-  let rng alist = List.map snd alist
+  let range alist = List.map snd alist
   let dom alist = List.map fst alist
 
 end

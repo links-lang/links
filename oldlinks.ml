@@ -206,7 +206,7 @@ let run_file prelude envs filename =
       program, (bindings, expr)
   in
     if Settings.get_value web_mode then 
-      Webif.serve_request prelude envs filename
+      Oldwebif.serve_request prelude envs filename
     else
       ignore (evaluate parse_and_desugar envs filename)
 

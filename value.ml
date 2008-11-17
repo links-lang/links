@@ -131,15 +131,20 @@ and string_of_item : xmlitem -> string =
 type table = (database * string) * string * Types.row
   deriving (Show, Pickle)    
 
-type primitive_value = [
+type primitive_value_basis =  [
 | `Bool of bool
 | `Char of char
-| `Database of (database * string)
 | `Table of table
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
 | `NativeString of string ]
+  deriving (Show, Pickle)
+
+type primitive_value = [
+| primitive_value_basis
+| `Database of (database * string)
+]
   deriving (Show, Pickle)
         
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
@@ -151,21 +156,204 @@ and t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Abs of t
 | `Continuation of continuation ]
-and env = (t * Ir.scope) Utility.intmap
+and env = (t * Ir.scope) Utility.intmap * Ir.closures
   deriving (Show, Pickle)
+
+(* compressed types for more efficient pickling *)
+type compressed_primitive_value = [
+| primitive_value_basis
+| `Database of string
+]
+  deriving (Show, Pickle)
+
+type compressed_continuation = (Ir.var * compressed_env) list
+and compressed_t = [
+| compressed_primitive_value
+| `List of compressed_t list
+| `Record of (string * compressed_t) list
+| `Variant of string * compressed_t 
+| `RecFunction of (Ir.var list * compressed_env * Ir.var)
+| `PrimitiveFunction of string
+| `ClientFunction of string
+| `Continuation of compressed_continuation ]
+and compressed_env = (Ir.var * compressed_t) list
+  deriving (Show, Pickle)
+
+let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
+  function
+    | #primitive_value_basis as v -> v
+    | `Database (_database, s) -> `Database s
+
+let rec compress_continuation cont : compressed_continuation =
+  List.map (fun (_scope, var, env, _body) -> (var, compress_env env)) cont
+and compress_t v : compressed_t =
+  let cv = compress_t in
+    match v with
+      | #primitive_value as v -> compress_primitive_value v
+      | `List vs -> `List (List.map cv vs)
+      | `Record fields -> `Record (List.map (fun (name, v) -> (name, cv v)) fields)
+      | `Variant (name, v) -> `Variant (name, cv v)
+      | `RecFunction (defs, env, f) ->
+          let valenv, closures = env in
+          let locals =
+            List.fold_left
+              (fun locals (f, (_xs, _body)) ->
+                 IntSet.fold
+                   (fun name locals ->
+                      if IntMap.mem name valenv then
+                        IntMap.add name (IntMap.find name valenv) locals
+                      else
+                        locals)
+                   (IntMap.find f closures)
+                   locals)
+              IntMap.empty
+              defs
+          in                                                 
+            `RecFunction (List.map (fun (f, (_xs, _body)) -> f) defs, compress_env (locals, closures), f)
+      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `ClientFunction f -> `ClientFunction f
+      | `Continuation cont -> `Continuation (compress_continuation cont)
+and compress_env (env, closures) : compressed_env =
+  List.rev
+    (IntMap.fold
+       (fun name (v, _scope) compressed ->
+          (name, compress_t v)::compressed)
+       env
+       [])
+
+let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
+  function
+    | #primitive_value_basis as v -> v
+    | `Database s ->
+        let driver, params = parse_db_string s in
+        let database = db_connect driver params in 
+          `Database database
+
+let rec uncompress_continuation (closures, scopes, conts, recs) cont : continuation =
+  List.map
+    (fun (var, env) ->
+       let scope = IntMap.find var scopes in
+       let body = IntMap.find var conts in
+       let env = uncompress_env (closures, scopes, conts, recs) env in
+         (scope, var, env, body))
+    cont
+and uncompress_t (closures, scopes, conts, funs) v : t =
+  let uv = uncompress_t (closures, scopes, conts, funs) in
+    match v with
+      | #compressed_primitive_value as v -> uncompress_primitive_value v
+      | `List vs -> `List (List.map uv vs)
+      | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
+      | `Variant (name, v) -> `Variant (name, uv v)
+      | `RecFunction (defs, env, var) ->
+          `RecFunction (List.map (fun f -> (f, IntMap.find var funs)) defs,
+                        uncompress_env (closures, scopes, conts, funs) env,
+                        var)
+      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `ClientFunction f -> `ClientFunction f
+      | `Continuation cont -> `Continuation (uncompress_continuation (closures, scopes, conts, funs) cont)
+and uncompress_env (closures, scopes, conts, funs) env : env =
+  (List.fold_left
+     (fun env (name, v) ->
+        IntMap.add name (uncompress_t (closures, scopes, conts, funs) v, IntMap.find name scopes) env)
+     IntMap.empty
+     env), closures
+
+type unmarshal_envs = Ir.ClosureTable.t * Ir.scope IntMap.t * Ir.computation IntMap.t * (Ir.var list * Ir.computation) IntMap.t
+
+let build_unmarshal_envs ((_, closures), nenv, tyenv) program : unmarshal_envs =
+  let tyenv =
+    Env.String.fold
+      (fun name t tyenv -> Env.Int.bind tyenv (Env.String.lookup nenv name, t))    
+      tyenv.Types.var_env
+      Env.Int.empty in
+  let build =
+  object (o)
+    inherit Ir.Transform.visitor(tyenv) as super
+      
+    val scopes = IntMap.empty
+    val conts = IntMap.empty
+    val funs = IntMap.empty
+
+    method with_scopes scopes =
+      {< scopes = scopes >}
+
+    method with_conts conts =
+      {< conts = conts >}
+
+    method with_funs funs =
+      {< funs = funs >}
+  
+    method bind_scope xb =
+      let x = Var.var_of_binder xb in
+      let scopes = IntMap.add x (Var.scope_of_binder xb) scopes in
+        o#with_scopes scopes
+
+    method bind_cont (xb, e) =
+      let x = Var.var_of_binder xb in
+      let conts = IntMap.add x e conts in
+        o#with_conts conts
+
+    method bind_fun (fb, (xsb, e)) =
+      let f = Var.var_of_binder fb in
+      let xs = List.map Var.var_of_binder xsb in
+      let funs = IntMap.add f (xs, e) funs in
+        o#with_funs funs
+
+    method binder =
+      fun b ->
+        let b, o = super#binder b in
+          b, o#bind_scope b
+
+    method computation =
+      fun e ->
+        let (bs, main), t, o = super#computation e in
+        let rec bind o =
+          function
+            | [] -> o
+            | (`Let (x, (_tyvars, e)))::bs ->
+                bind (o#bind_cont (x, (bs, main))) bs
+            | (`Fun (f, (_tyvars, xs, e), _))::bs ->
+                bind (o#bind_fun (f, (xs, e))) bs
+            | (`Rec defs)::bs ->
+                let o =
+                  List.fold_left
+                    (fun o (f, (_tyvars, xs, e), _) ->
+                       o#bind_fun (f, (xs, e)))
+                    o
+                    defs
+                in
+                  bind o bs
+            | _::bs -> bind o bs
+        in
+          (bs, main), t, bind o bs
+
+    method get_envs = (closures, scopes, conts, funs)
+  end in
+  let _, _, o = build#computation program in
+    o#get_envs
 
 let toplevel_cont : continuation = []
 
-let bind = IntMap.add
-let find name env = fst (IntMap.find name env)
-let lookup name env = opt_map fst (IntMap.lookup name env)
-let shadow outers ~by = IntMap.fold IntMap.add by outers
-let globals env = IntMap.fold (fun name ((_, scope) as v) globals ->
-                                 match scope with
-                                   | `Global -> IntMap.add name v globals
-                                   | _ -> globals) env (IntMap.empty)
+let empty_env = IntMap.empty, IntMap.empty
+let bind name v (env, closures) = IntMap.add name v env, closures
+let find name (env, _closures) = fst (IntMap.find name env)
+let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env)
+let shadow (outers, closures) ~by:(by, closures') =
+  let closures =
+    IntMap.fold
+      (fun name xs closures ->
+         IntMap.add name xs closures)
+      closures'
+      closures
+  in
+    IntMap.fold (fun name v env -> IntMap.add name v env) by outers, closures
+let globals (env, closures) =
+  IntMap.fold (fun name ((_, scope) as v) globals ->
+                 match scope with
+                   | _ -> IntMap.add name v globals
+                   | _ -> globals) env (IntMap.empty), closures
+let with_closures (env, _) closures = (env, closures)
 
 let string_as_charlist s : t =
   `List (List.map (fun x -> (`Char x)) (explode s))
@@ -181,7 +369,8 @@ exception Not_tuple
 
 let rec char_of_primchar = function 
     `Char c -> c
-  | o -> raise (Match (string_of_value o))
+  | o ->
+      raise (Match (Show_t.show o))
 
 and charlist_as_string chlist = 
   match chlist with
@@ -194,7 +383,6 @@ and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `PrimitiveFunction (name) -> name
   | `ClientFunction (name) -> name
-  | `Abs v -> "abs " ^ string_of_value v
     (* Choose from fancy or simple printing of functions: *)
   | `RecFunction(defs, env, name) -> 
       if Settings.get_value(Basicsettings.printing_functions) then
@@ -302,19 +490,36 @@ let links_project name = function
   | (`Record fields) -> List.assoc name fields
   | _ -> failwith ("Match failure in record projection")
 
-let marshal_continuation (c : continuation) : string
-  = 
-  let pickle = Pickle_continuation.pickleS c in
+let marshal_continuation (c : continuation) : string = 
+  let pickle = Pickle_compressed_continuation.pickleS (compress_continuation c) in
     Debug.print("marshalled continuation size: " ^
                   string_of_int(String.length pickle));
     if (String.length pickle > 4096) then (
       prerr_endline "Marshalled continuation larger than 4K:";
-      Debug.print("marshaling:"^ string_of_cont c)
+      Debug.print("marshalling:"^ string_of_cont c)
     );
     let result = base64encode pickle in
       result
 
-let marshal_value : t -> string
-  = Pickle_t.pickleS ->- base64encode
+let marshal_value : t -> string =
+  (fun v ->
+     Debug.print "marshalling value";
+     let compressed_v = compress_t v in
+     let r =
+       (compress_t ->- Pickle_compressed_t.pickleS ->- base64encode)(v) in
+       Debug.print "marshalled value";
+       r)
+
+exception UnrealizableContinuation
+
+let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
+  base64decode
+  ->- Pickle_compressed_continuation.unpickleS
+  ->- (uncompress_continuation envs)
+
+let unmarshal_value envs : string -> t =
+  base64decode
+  ->- Pickle_compressed_t.unpickleS
+  ->- (uncompress_t envs)
 
 let minimize _ = assert false

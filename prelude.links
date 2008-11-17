@@ -611,7 +611,7 @@ fun formP(f, h, attributes) {
 }
 
 sig pickleCont : (() -> Page) -> String
-fun pickleCont(cont) {unsafePickleCont(fun (_) {cont()})}
+fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
 
 sig mkForm : ((Env) -> Page, Xml, Attributes) -> Xml
 fun mkForm(cont, contents, attributes) {

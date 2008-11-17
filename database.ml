@@ -95,4 +95,10 @@ let execute_select (field_types:(string * Types.datatype) list) (query:string) (
                                         row_fields rowvalue))
                         result#get_all_lst)
        | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
-      
+
+let execute_untyped_select (query:string) (db: database) : result =
+  let result = (db#exec query) in
+    (match result#status with
+       | QueryOk -> 
+           `List (map (fun row -> `List (map box_string row)) result#get_all_lst)
+       | QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

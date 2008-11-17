@@ -30,7 +30,7 @@ object (o : 'self_type)
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "spawn", dp), [`Type inner_mbt; `Type outer_mbt; `Type body_type]), dp),
-             [(`FunLit (Some [(Types.unit_type, inner_mbt)], ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [Types.unit_type], inner_mbt)], ([[]], body)), dp)])
         in
           (o, e, inner_mbt)
     | `SpawnWait (body, Some inner_mbt) ->
@@ -44,7 +44,7 @@ object (o : 'self_type)
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "spawnWait", dp), [ `Type body_type; `Type outer_mbt; `Type inner_mbt]), dp),
-             [(`FunLit (Some [(Types.unit_type, inner_mbt)], ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [Types.unit_type], inner_mbt)], ([[]], body)), dp)])
         in
           (o, e, body_type)
     | `Receive (cases, Some t) ->

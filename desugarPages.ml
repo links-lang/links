@@ -21,11 +21,11 @@ let rec is_raw (phrase, pos) =
      - the mailbox type is the same throughout the page literal
      - the environment is unchanged after calling o#phrase formlet
 *)
-let rec desugar_page o =
+let rec desugar_page (o, page_type) =
   let desugar_nodes pos : phrase list -> phrase =
     fun children ->
       (`FnAppl ((`TAppl ((`Var "joinManyP", pos), [`Type (o#lookup_mb ())]), pos),
-                [`ListLit (List.map (desugar_page o) children, None), pos]), pos)
+                [`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type), pos]), pos)
   in
     fun (e, pos) ->
       match e with
@@ -56,7 +56,7 @@ let rec desugar_page o =
             let x = Utility.gensym ~prefix:"xml" () in
               (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Type (o#lookup_mb ())]), pos),
                         [(`FunLit
-                            (Some ([Types.xml_type, o#lookup_mb ()]),
+                            (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_mb ()]),
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
                                      [`Block ([], (`Var x, pos)), pos]), pos))), pos);
@@ -64,15 +64,16 @@ let rec desugar_page o =
         | _ ->
             raise (ConcreteSyntaxError ("Invalid element in page literal", pos))
 
-and desugar_pages {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+and desugar_pages env =
 object
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform (env.Types.var_env, env.Types.tycon_env)) as super
 
   method phrasenode = function
     | `Page e ->
         let (o, e, t) = super#phrase e in
-        let (e, _) = desugar_page o e in
-          (o, e, Instantiate.alias "Page" [] tycon_env)
+        let page_type = Instantiate.alias "Page" [] env.Types.tycon_env in
+        let (e, _) = desugar_page (o, page_type) e in
+          (o, e, page_type)
     | e -> super#phrasenode e
 end
 

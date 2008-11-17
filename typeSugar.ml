@@ -1758,15 +1758,24 @@ and type_binding : context -> binding -> binding * context =
                    let inner = Env.lookup inner_env name in
                    let inner, outer, tyvars =
                      match inner with
-                       | `ForAll (_inner_tyvars, inner_body) ->
+                       | `ForAll (inner_tyvars, inner_body) ->
                            let (tyvars, _tyargs), outer = Utils.generalise context.var_env inner_body in
+                           let extras =
+                             let has q =
+                               let n = Types.type_var_number q in
+                                 List.exists (fun q -> Types.type_var_number q = n) inner_tyvars
+                             in
+                               List.map (fun q ->
+                                           if has q then None
+                                           else Some q) tyvars in
                            let outer = Instantiate.freshen_quantifiers outer in
                            let inner = Instantiate.freshen_quantifiers inner in
-                             inner, outer, tyvars
+                             (inner, extras), outer, tyvars
                        | _ ->
                            let (tyvars, _tyargs), outer = Utils.generalise context.var_env inner in
+                           let extras = List.map (fun q -> Some q) tyvars in
                            let outer = Instantiate.freshen_quantifiers outer in
-                             inner, outer, tyvars in
+                             (inner, extras), outer, tyvars in
 
 (*                      Debug.print ("inner: "^Types.string_of_datatype inner); *)
 (*                      Debug.print ("outer: "^Types.string_of_datatype outer); *)

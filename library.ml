@@ -27,7 +27,7 @@ let alias_env : Types.tycon_environment =
 
 let alias_env : Types.tycon_environment =
   Env.bind alias_env
-    ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
+    ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Oldlinksregex.Regex.datatype)))
 
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
@@ -859,6 +859,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(TableHandle(r, w)) -> [r]",
   IMPURE);
 
+  (* untyped SQL query function
+
+     This is vulnerable to all of your favourite script injection
+     attacks, but it can be useful for testing purposes.
+  *)
+  
+  (*   "sqlQuery", *)
+  (*   (`Server  *)
+  (*      (p2 (fun db query -> *)
+  (*             let db = *)
+  (*               match db with *)
+  (*                 | `Database (db, _) -> db *)
+  (*                 | _ -> assert false in *)
+  (*             let query = unbox_string query in *)
+  (*               Database.execute_untyped_select query db)), *)
+  (*    datatype "(Database, String) -> [[String]]", *)
+  (*    IMPURE); *)
+
   "insertrows",
   (`Server 
      (p2 (fun table rows -> 
@@ -982,7 +1000,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching *)
   ("tilde",
    (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+          let regex = Regex.compile_ocaml (Oldlinksregex.Regex.ofLinks r)
           and string = unbox_string s in
             box_bool (Str.string_match regex string 0)),
     datatype "(String, Regex) -> Bool",
@@ -991,7 +1009,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
   ("ntilde",
    (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
+          let regex = Regex.compile_ocaml (Oldlinksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
     datatype "(NativeString, Regex) -> Bool",
@@ -1000,7 +1018,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
     (`Server (p2 (fun s r ->
-        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        let (re, ngroups) = (Oldlinksregex.Regex.ofLinksNGroups r) 
         and string = unbox_string s in
 	let regex = Regex.compile_ocaml re in
 	match (Str.string_match regex string 0) with
@@ -1020,7 +1038,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("lntilde",	
    (`Server (p2 (fun s r ->
-        let (re, ngroups) = (Linksregex.Regex.ofLinksNGroups r) 
+        let (re, ngroups) = (Oldlinksregex.Regex.ofLinksNGroups r) 
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	let regex = Regex.compile_ocaml re in
 	match (Str.string_match regex string 0) with
@@ -1041,7 +1059,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
+	let Regex.Replace (l, t) = Oldlinksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
@@ -1050,7 +1068,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("sntilde",	
    (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
+	let Regex.Replace(l, t) = Oldlinksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
@@ -1085,7 +1103,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
   ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "((a) -> b) -> String",
+    datatype "(() -> b) -> String",
     IMPURE));
 
   (* Serialize values to DB *)

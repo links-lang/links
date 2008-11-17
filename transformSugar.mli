@@ -62,3 +62,4 @@ object ('self)
   method unary_op        : unary_op -> 'self * unary_op * Types.datatype
 end
 
+val fun_mailbox : Types.datatype -> Sugartypes.pattern list list -> Types.datatype

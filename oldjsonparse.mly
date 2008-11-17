@@ -3,8 +3,8 @@ open Utility
 
 let unparse_label = function
   | `Char c -> String.make 1 c
-  | `List (`Char _::_) as s -> Value.unbox_string s
-  | r -> (failwith "(json) error decoding label " ^ Value.Show_t.show r)
+  | `List (`Char _::_) as s -> Result.unbox_string s
+  | r -> (failwith "(json) error decoding label " ^ Result.Show_result.show r)
 
 %}
 
@@ -14,7 +14,7 @@ let unparse_label = function
 %token <float> FLOAT
 
 %start parse_json
-%type <Value.t> parse_json
+%type <Result.result> parse_json
 
 %% 
 
@@ -30,12 +30,12 @@ object_:
                                 begin
                                   match db with
                                     | `Record bs ->
-                                        let driver = Value.unbox_string (List.assoc "driver" bs)
+                                        let driver = Result.unbox_string (List.assoc "driver" bs)
                                         and params =
-                                          Value.reconstruct_db_string
-                                            (Value.unbox_string (List.assoc "name" bs),
-                                             Value.unbox_string (List.assoc "args" bs)) in
-                                          `Database (Value.db_connect driver params) 
+                                          Result.reconstruct_db_string
+                                            (Result.unbox_string (List.assoc "name" bs),
+                                             Result.unbox_string (List.assoc "args" bs)) in
+                                          `Database (Result.db_connect driver params) 
                                     | _ -> failwith ("jsonparse: database value must be a record")
                                 end
                             | ["_table", t] ->
@@ -48,10 +48,10 @@ object_:
                                               | `Database db -> db
                                               | _ -> failwith ("jsonparse: first argument to a table must be a database")
                                           end
-                                        and name = Value.unbox_string (List.assoc "name" bs)
+                                        and name = Result.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
-                                            match DesugarDatatypes.read ~aliases:Env.String.empty (Value.unbox_string (List.assoc "row" bs)) with
+                                            match DesugarDatatypes.read ~aliases:Env.String.empty (Result.unbox_string (List.assoc "row" bs)) with
                                                 | `Record row -> row
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end
@@ -62,15 +62,15 @@ object_:
                             | ["_xml", t] ->
                                 let unbox_string_or_char r =
                                   match r with
-                                    | `List _ -> Value.unbox_string r
+                                    | `List _ -> Result.unbox_string r
                                     | `Char c -> String.make 1 c
-                                    | _ -> failwith ("Cannot unbox '"^ Value.string_of_value r ^"' as a string") in
+                                    | _ -> failwith ("Cannot unbox '"^ Result.string_of_result r ^"' as a string") in
                                   begin
                                     match t with
-                                      | `List [node_type; s] when (Value.unbox_string node_type = "TEXT") ->
-                                          `XML (Value.Text (unbox_string_or_char s))
+                                      | `List [node_type; s] when (Result.unbox_string node_type = "TEXT") ->
+                                          `XML (Result.Text (unbox_string_or_char s))
                                       | `List [node_type; tag; attrs; body]
-                                          when (Value.unbox_string node_type = "ELEMENT") ->
+                                          when (Result.unbox_string node_type = "ELEMENT") ->
                                           let tag = unbox_string_or_char tag in
                                           let attrs =
                                             match attrs with
@@ -79,7 +79,7 @@ object_:
                                             let attrs =
                                               List.fold_left
                                                 (fun attrs (label, value) ->
-                                                   Value.Attr (label, unbox_string_or_char value) :: attrs)
+                                                   Result.Attr (label, unbox_string_or_char value) :: attrs)
                                                 [] attrs in
                                               let body =
                                                 match body with
@@ -90,10 +90,10 @@ object_:
                                                         body
                                                   | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
                                               in
-                                                `XML (Value.Node (tag, attrs @ body))
+                                                `XML (Result.Node (tag, attrs @ body))
                                       | _ ->
                                           failwith ("jsonparse: xml should be either a text node or an element node. Got: "
-                                                    ^ Value.string_of_value t)
+                                                    ^ Result.string_of_result t)
                                   end
                             | _ -> `Record (List.rev $2)
                         }
@@ -120,8 +120,8 @@ value:
 | NULL                               { `Record [] (* Or an error? *) } 
 
 string:
-| STRING                             { if String.length $1 == 1 then Value.box_char (String.get $1 0)
-                                       else Value.box_string $1 }
+| STRING                             { if String.length $1 == 1 then Result.char (String.get $1 0)
+                                       else Result.box_string $1 }
 id:
 | STRING                             { $1 }
 

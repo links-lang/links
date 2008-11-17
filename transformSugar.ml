@@ -424,7 +424,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let o = {< var_env=var_env;
                      formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
             (o, `FormBinding (f, p), Types.xml_type)
-(*      | e -> failwith ("oops: "^Sugartypes.Show_phrasenode.show e) *)
+      | e -> failwith ("oops: "^Sugartypes.Show_phrasenode.show e)
       
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
@@ -514,7 +514,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
               let rec list o =
                 function
                   | [] -> o
-                  | (f, ((_tyvars, Some inner), lam), location, t, pos)::defs ->
+                  | (f, ((_tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
                       let (o, _) = o#binder (bt f inner) in
                         list o defs
               in
@@ -525,12 +525,12 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
               let rec list o =
                 function
                   | [] -> (o, [])
-                  | (f, ((tyvars, Some inner), lam), location, t, pos)::defs ->
+                  | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
                       let ft = inner in
                       let inner_mb = fun_mailbox ft (fst lam) in
                       let (o, lam, _) = o#funlit inner_mb lam in
                       let (o, defs) = list o defs in
-                        (o, (f, ((tyvars, Some inner), lam), location, t, pos)::defs)
+                        (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
             in
               list o defs in
               

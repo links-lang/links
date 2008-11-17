@@ -174,7 +174,7 @@ let do_query globals locals (query : SqlQuery.sqlQuery) =
 let has_client_context = ref false
 
 let serialize_call_to_client (continuation, name, arg) = 
-  Json.jsonize_call continuation name arg
+  Oldjson.jsonize_call continuation name arg
 
 let program_source = ref(Program([], Syntax.unit_expression no_expr_data))
 
@@ -282,16 +282,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                       assert (length args == 1);
                       apply_cont globals cont (List.hd args)
 
-                  | `Abs f -> 
-                      apply_cont globals (ArgEvalCont (locals, f, [], [])::cont) 
-                        (`Record
-                           (snd 
-                              (List.fold_right
-                                 (fun field (n,tuple) ->
-                                    (n+1,
-                                     (string_of_int n, field)::tuple))
-                                 args_rev
-                                 (1, []))))
                   | _ -> raise (Runtime_error("Applied non-function value: " ^
                                                 string_of_result value))
                 end
@@ -347,14 +337,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                                  (`Table((db, params), charlist_as_string value, row))
 			   | _ -> failwith("Runtime type error: argument to table was not a database.")
                          end
-                     | `App -> 
-                         begin match untuple value with
-                           | [] -> 
-                               apply_cont globals (ApplyCont([], [])::cont) lhsVal
-                           | _::_ as v -> 
-                               let firsts, last = unsnoc v in
-                                 apply_cont globals (ArgEvalCont ([], lhsVal, [], firsts)::cont) last
-                         end
                   end
 	        in
 	          apply_cont globals cont result
@@ -364,8 +346,6 @@ and apply_cont (globals : environment) : continuation -> result -> result =
                      MkColl -> apply_cont globals cont (`List [(value)])
 	           | MkVariant(label) -> 
 	               apply_cont globals cont (`Variant (label, value))
-                   | Result.Abs ->
-                       apply_cont globals cont (`Abs value)
                    | VrntSelect(case_label, case_variable, case_body, variable, body) ->
 	               (match value with
                           | `Variant (label, value) when label = case_label ->
@@ -485,6 +465,7 @@ and interpret_definition :
 
 and interpret : environment -> environment -> expression -> continuation -> result =
 fun globals locals expr cont ->
+(*  Debug.print ("expr: "^string_of_expression expr); *)
   let eval = interpret globals locals in
   let box_constant = function
     | `Bool b -> bool b

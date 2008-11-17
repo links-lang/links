@@ -26,7 +26,7 @@ val typing_env : Types.typing_environment
 val nenv : Var.var Env.String.t
 val prelude_env : Types.typing_environment option ref
 val apply_pfun : string -> Value.t list -> Value.t
-val primitive_stub : Var.var -> Value.t
+val primitive_stub : string -> Value.t
 
 val primitive_name : Var.var -> string
 val primitive_location : string -> Syntax.location

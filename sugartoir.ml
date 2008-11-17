@@ -349,14 +349,39 @@ struct
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
-  let rec concat (nil, cons, ss) =
-    List.fold_right (fun s ss -> apply_pure (cons, [s; ss])) ss nil
+(*   let rec concat (nil, cons, ss) = *)
+(*     List.fold_right (fun s ss -> apply_pure (cons, [s; ss])) ss nil *)
 
-  let xml (nil, cons, name, attrs, children) =
+(*   let xml (nil, cons, name, attrs, children) = *)
+(*     let lift_attrs attrs = *)
+(*       List.fold_right *)
+(*         (fun (name, ss) attrs -> *)
+(*            bind (concat (nil, cons, ss)) *)
+(*              (fun v -> *)
+(*                 M.bind attrs *)
+(*                   (fun bs -> lift ((name, v) :: bs)))) *)
+(*         attrs (lift []) in *)
+(*     let attrs = lift_attrs attrs in *)
+(*     let children = lift_list children in   *)
+(*       M.bind attrs *)
+(*         (fun attrs -> *)
+(*            M.bind children *)
+(*              (fun children -> *)
+(*                 let attrs = StringMap.from_alist attrs in                     *)
+(*                   lift (`XmlNode (name, attrs, children), `Primitive `XmlItem))) *)
+
+  let rec concat (nil, append, ss) =
+    match ss with 
+      | [] -> nil
+      | [s] -> s
+      | s::ss ->
+          List.fold_left (fun s s' -> apply_pure (append, [s; s'])) s ss
+
+  let xml (nil, append, name, attrs, children) =
     let lift_attrs attrs =
       List.fold_right
         (fun (name, ss) attrs ->
-           bind (concat (nil, cons, ss))
+           bind (concat (nil, append, ss))
              (fun v ->
                 M.bind attrs
                   (fun bs -> lift ((name, v) :: bs))))
@@ -369,6 +394,7 @@ struct
              (fun children ->
                 let attrs = StringMap.from_alist attrs in                    
                   lift (`XmlNode (name, attrs, children), `Primitive `XmlItem)))
+
 
   let record (fields, r) =
     let field_types =
@@ -686,6 +712,7 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
           | `Switch (e, cases, Some t) ->
+(*               Debug.print ("switch: "^Sugartypes.Show_phrasenode.show (`Switch (e, cases, Some t))); *)
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -728,16 +755,20 @@ struct
                                            "XML forest literals cannot have attributes"))
                   else
                     cofv
-                      (I.concat (instantiate "Nil" [`Type (`Primitive `XmlItem)],
-                                 instantiate "Cons" [`Type (`Primitive `XmlItem); `Type mbt],
+                      (I.concat (instantiate "Nil" [`Type Types.xml_type],
+                                 instantiate "Concat" [`Type Types.xml_type; `Type mbt],
                                  List.map ev children))
                 else
                   let attrs = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
                   let body =
-                    I.xml (instantiate "Nil" [`Type Types.string_type],
-                           instantiate "Cons" [`Type Types.string_type; `Type mbt],
-                           tag, attrs, children) in
+                    I.apply_pure
+                      (instantiate "Cons" [`Type (`Primitive `XmlItem); `Type mbt],
+                       [I.xml (instantiate "Nil" [`Type Types.char_type],
+                               instantiate "Concat" [`Type Types.char_type; `Type mbt],
+                               tag, attrs, children);
+                        instantiate "Nil" [`Type (`Primitive `XmlItem)]])
+                  in
                     begin
                       match attrexp with
                         | None -> cofv body
@@ -791,6 +822,7 @@ struct
                         ps
                         ([], env) in
                     let body = eval body_env body in
+(*                       Debug.print ("f: "^f); *)
                       I.letfun
                         env
                         ((ft, f, scope), (tyvars, (ps, body)), location)
@@ -800,13 +832,14 @@ struct
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun ((f, Some outer, _), ((_tyvars, Some inner), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun ((f, Some outer, _), ((_tyvars, Some (inner, _extras)), _), _, _, _) (fs, inner_fts, outer_fts) ->
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         defs 
                         ([], [], []) in
                     let defs =
                       List.map
                         (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
+(*                            Debug.print ("rec f: "^f); *)
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -832,33 +865,79 @@ struct
   and evalv env e =
     I.value_of_comp (eval env e)
 
+  (* TODO: work out the right thing to do with global bindings *)
   let rec get_global_names : binding list -> nenv =
     fun defs ->
       List.fold_left
         (fun nenv ->
            function
-             | `Let ((x, (_xt, x_name, `Global)), _) ->
+             | `Let ((x, (_xt, x_name, _)), _) ->
                  Env.String.bind nenv (x_name, x)
-             | `Fun ((f, (_ft, f_name, `Global)), _, _) ->
+             | `Fun ((f, (_ft, f_name, _)), _, _) ->
                  Env.String.bind nenv (f_name, f)
              | `Rec defs ->
                  List.fold_left
                    (fun nenv ((f, (_ft, f_name, scope)), _, _) ->
                       match scope with
-                        | `Global -> Env.String.bind nenv (f_name, f)
+                        | _ -> Env.String.bind nenv (f_name, f)
                         | `Local -> nenv)
                    nenv defs
-             | `Alien ((f, (_ft, f_name, `Global)), _) ->
+             | `Alien ((f, (_ft, f_name, _)), _) ->
                  Env.String.bind nenv (f_name, f)
-             | `Module (_, defs) ->
-                 opt_app get_global_names nenv defs
              | _ -> nenv)
         NEnv.empty
         defs
 
+  (* Given a program, return a triple consisting of:
+     
+     - globals
+     - the main computation (a list of locals and a tail computation)
+     - an environment mapping source names of global bindings to IR names
+
+     The globals list contains all top-level bindings on which global
+     bindings may depend, i.e., all top-level bindings from the start
+     of the file up to and including the last global binding.
+
+     The locals list contains all top-level binding on which global
+     bindings may not depend, i.e., all top-level bindings after the
+     last global binding. *)
+  let partition_program : program -> binding list * computation * nenv = fun (bs, main) ->
+    let rec partition (globals, locals, nenv) =
+      function
+        | [] -> List.rev globals, List.rev locals, nenv
+        | b::bs ->
+            begin
+              match b with
+                | `Let ((x, (_xt, x_name, `Global)), _) ->
+                    partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
+                | `Fun ((f, (_ft, f_name, `Global)), _, _) ->
+                    partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
+                | `Rec defs ->
+                    let scope, nenv =
+                      List.fold_left
+                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _) ->
+                           match f_scope with
+                             | `Global -> `Global, Env.String.bind nenv (f_name, f)
+                             | `Local -> scope, nenv)
+                        (`Local, nenv) defs
+                    in
+                      begin
+                        match scope with
+                          | `Global ->
+                              partition (b::globals, locals, nenv) bs
+                          | `Local ->
+                              partition (globals, b::locals, nenv) bs
+                      end
+                | `Alien ((f, (_ft, f_name, `Global)), _) ->
+                    partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
+                | _ -> partition (globals, b::locals, nenv) bs
+            end in
+    let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
+      globals, (locals, main), nenv
+
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
-(*    Debug.print (Sugartypes.Show_program.show (bindings, body));*)
+    (*    Debug.print (Sugartypes.Show_program.show (bindings, body));*)
     let body =
       match body with
         | None -> (`RecordLit ([], None), dp)
@@ -866,23 +945,23 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*          Debug.print (Ir.Show_program.show r);*)
+(*           Debug.print (Ir.Show_program.show r); *)
           r, I.sem_type s
 end
 
 module C = Eval(Interpretation(BindingListMonad))
 
-let desugar_expression : env -> Sugartypes.phrase -> Ir.computation * nenv =
+let desugar_expression : env -> Sugartypes.phrase -> Ir.computation =
   fun env e ->
     let (bs, body), _ = C.compile env ([], Some e) in
-      (bs, body), NEnv.empty
+      (bs, body)
 
-let desugar_program : env -> Sugartypes.program -> Ir.computation * nenv =
+let desugar_program : env -> Sugartypes.program -> Ir.binding list * Ir.computation * nenv =
   fun env p ->
     let (bs, body), _ = C.compile env p in
-      (bs, body), C.get_global_names bs
+      C.partition_program (bs, body)
 
 let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
   fun env bs ->
-    let (bs, _), _ = C.compile env (bs, None) in
-      bs, C.get_global_names bs
+    let globals, _, nenv = desugar_program env (bs, None) in
+      globals, nenv

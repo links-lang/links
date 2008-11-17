@@ -52,7 +52,6 @@ type unop = | MkColl
 type binop = 
     [ Syntaxutils.comparison
     | `Union
-    | `App
     | `RecExt of string
     | `MkTableHandle of Types.row]
 type xmlitem =
@@ -80,7 +79,6 @@ type result = [ primitive_value
 | `ClientFunction of string
 | `List of result list
 | `Record of (string * result) list
-| `Abs of result
 | `Variant of string * result ]
 and contin_frame =
     | Definition of (environment * string)

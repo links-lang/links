@@ -69,19 +69,20 @@ type t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Abs of t
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and env = (t * Ir.scope) Utility.intmap
+and env = (t * Ir.scope) Utility.intmap * Ir.closures
     deriving (Show, Pickle)
 
 val toplevel_cont : continuation
 
+val empty_env : env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
 val find : Ir.var -> env -> t
 val lookup : Ir.var -> env -> t option
 val shadow : env -> by:env -> env
 val globals : env -> env
+val with_closures : env -> Ir.closures -> env
 
 val project : string -> [> `Record of (string * 'b) list ] -> 'b
 val untuple : t -> t list
@@ -117,5 +118,12 @@ val string_of_tuple : (string * t) list -> string
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
+
+type unmarshal_envs = Ir.closures * Ir.scope Utility.IntMap.t * Ir.computation Utility.IntMap.t * (Ir.var list * Ir.computation) Utility.IntMap.t
+
+val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment -> Ir.program -> unmarshal_envs
+
+val unmarshal_continuation : unmarshal_envs -> string -> continuation
+val unmarshal_value : unmarshal_envs -> string -> t
 
 val minimize : continuation -> continuation

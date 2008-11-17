@@ -154,7 +154,7 @@ object (o : 'self_type)
               let context : phrase =
                 let var = Utility.gensym ~prefix:"_formlet_" () in
                 let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var var), dp) in
-                  (`FunLit (Some [Types.xml_type, mb],
+                  (`FunLit (Some [Types.make_tuple_type [Types.xml_type], mb],
                             ([[`Variable xb, dp]],
                              (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp))), dp) in
               let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in

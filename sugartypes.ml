@@ -205,7 +205,7 @@ and bindingnode = [
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * ((tyvar list * Types.datatype option) * funlit) * location * datatype' option * position) list
+| `Funs    of (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (name * int option) list * datatype'

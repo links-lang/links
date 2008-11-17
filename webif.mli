@@ -1,7 +1,6 @@
 (* Web interface *)
 
 val serve_request : 
-  Syntax.definition list ->
-  (Result.environment * Types.typing_environment) -> 
-  string -> 
+  (Value.env * Ir.var Env.String.t * Types.typing_environment) -> 
+  (Ir.binding list * Ir.computation) ->
   unit
