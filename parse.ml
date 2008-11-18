@@ -100,7 +100,7 @@ let normalize_context = function
   | None -> fresh_context ()
   | Some c -> c
 
-let default_preprocessor = (Settings.get_value Basicsettings.pp) 
+let default_preprocessor () = (Settings.get_value Basicsettings.pp) 
 
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs. 
@@ -110,7 +110,7 @@ let default_preprocessor = (Settings.get_value Basicsettings.pp)
     intercept and retain the code that has been read (in order to give
     better error messages).
 **)
-let parse_string ?(pp=default_preprocessor) ?in_context:context grammar string =
+let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar string =
   let pp = normalize_pp pp
   and context = normalize_context context in 
     read ?nlhook:None ~parse:grammar ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
@@ -119,7 +119,7 @@ let parse_channel ?interactive ?in_context:context grammar (channel, name) =
   let context = normalize_context context in
     read ?nlhook:interactive ~parse:grammar ~infun:(reader_of_channel channel) ~name:name ~context
 
-let parse_file ?(pp=default_preprocessor) ?in_context:context grammar filename =
+let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
     | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
     | Some pp ->
