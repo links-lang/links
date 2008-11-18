@@ -140,6 +140,8 @@ sig
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
 
+    method program : program -> (program * Types.datatype * 'self_type)
+
     method get_type_environment : environment
   end
 end
@@ -594,6 +596,8 @@ struct
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
 
+    method program : program -> (program * datatype * 'self_type) = o#computation
+
     method get_type_environment : environment = tyenv
   end
 end
@@ -882,12 +886,12 @@ end
 (* Compute free variables *)
 module FreeVars =
 struct
-  class visitor tenv =
+  class visitor tenv bound_vars =
   object (o)
     inherit Transform.visitor(tenv) as super
       
     val free_vars = IntSet.empty
-    val bound_vars = IntSet.empty
+    val bound_vars = bound_vars
 
     method bound x =
       {< bound_vars = IntSet.add x bound_vars >}
@@ -909,20 +913,20 @@ struct
     method get_free_vars = free_vars
   end
 
-  let value tyenv v =
-    let _, _, o = (new visitor tyenv)#value v in
+  let value tyenv bound_vars v =
+    let _, _, o = (new visitor tyenv bound_vars)#value v in
       o#get_free_vars
 
-  let tail_computation tyenv e =
-    let _, _, o = (new visitor tyenv)#tail_computation e in
+  let tail_computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
       o#get_free_vars
 
-  let bindings tyenv bs =
-    let _, o = (new visitor tyenv)#bindings bs in
+  let bindings tyenv bound_vars bs =
+    let _, o = (new visitor tyenv bound_vars)#bindings bs in
       o#get_free_vars
 
-  let computation tyenv e =
-    let _, _, o = (new visitor tyenv)#computation e in
+  let computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#computation e in
       o#get_free_vars
 
   let program = computation
@@ -942,10 +946,21 @@ struct
   object (o)
     inherit Transform.visitor(tyenv) as super
       
+    val globals = IntSet.empty
     val relevant_vars = IntMap.empty
 
     method close f vars =
       {< relevant_vars = IntMap.add (Var.var_of_binder f) vars relevant_vars >}
+
+    method global x =
+      {< globals = IntSet.add x globals >}
+
+    method binder b =
+      let b, o = super#binder b in
+        if Var.scope_of_binder b = `Global then
+          b, o#global (Var.var_of_binder b)
+        else
+          b, o
 
     method binding b =
       match b with
@@ -958,7 +973,7 @@ struct
                        (x::xs, o))
                   xs
                   ([], o) in
-              let o = o#close f (FreeVars.computation o#get_type_environment body) in
+              let o = o#close f (FreeVars.computation o#get_type_environment globals body) in
               let body, _, o = o#computation body in
                 xs, body, o in
             let f, o = o#binder f in
@@ -982,7 +997,7 @@ struct
                             (x::xs, o))
                        xs
                        ([], o) in
-                   let o = o#close f (FreeVars.computation o#get_type_environment body) in
+                   let o = o#close f (FreeVars.computation o#get_type_environment globals body) in
                    let body, _, o = o#computation body in
                      (f, (tyvars, xs, body), location)::defs, o)
                 ([], o)

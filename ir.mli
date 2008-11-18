@@ -126,6 +126,8 @@ sig
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
 
+    method program : program -> (program * Types.datatype * 'self_type)
+
     method get_type_environment : environment
   end  
 end
